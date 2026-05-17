@@ -272,6 +272,93 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         return stats;
     }
 
+    /// <summary>
+    /// Computes windowed transition stats directly from context_event raw rows.
+    /// Uses aggregation_limit (count window) and optional recent_days (date window).
+    /// For each source event, finds the next event in the same session via LATERAL.
+    /// </summary>
+    public override async Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(
+        string prevOperation,
+        string? role,
+        TransitionAggregationPolicy aggregationPolicy,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "WITH " +
+            "  recent_events AS ( " +
+            "    SELECT session_id, operation, created_at, " +
+            "           COALESCE(role, 'GLOBAL') AS role, " +
+            "           COALESCE(user_id, 'GLOBAL') AS user_id " +
+            "    FROM context_event " +
+            "    WHERE (@recentDays::int IS NULL OR created_at >= now() - (@recentDays * interval '1 day')) " +
+            "    ORDER BY created_at DESC " +
+            "    LIMIT @aggregationLimit " +
+            "  ), " +
+            "  transitions AS ( " +
+            "    SELECT " +
+            "      re.operation   AS prev_op, " +
+            "      re.role        AS role, " +
+            "      re.user_id     AS user_id, " +
+            "      next_e.operation AS next_op, " +
+            "      COUNT(*)       AS hit_count " +
+            "    FROM recent_events re " +
+            "    JOIN LATERAL ( " +
+            "      SELECT ce2.operation " +
+            "      FROM context_event ce2 " +
+            "      WHERE ce2.session_id = re.session_id " +
+            "        AND ce2.created_at > re.created_at " +
+            "      ORDER BY ce2.created_at ASC " +
+            "      LIMIT 1 " +
+            "    ) next_e ON TRUE " +
+            "    GROUP BY re.operation, re.role, re.user_id, next_e.operation " +
+            "  ), " +
+            "  scope_totals AS ( " +
+            "    SELECT prev_op, role, user_id, SUM(hit_count) AS total_hits " +
+            "    FROM transitions " +
+            "    GROUP BY prev_op, role, user_id " +
+            "  ) " +
+            "SELECT " +
+            "  t.prev_op, " +
+            "  t.next_op, " +
+            "  t.hit_count::int    AS count_events, " +
+            "  t.hit_count::float  AS count_hits, " +
+            "  t.hit_count::float / NULLIF(st.total_hits, 0) AS prob01 " +
+            "FROM transitions t " +
+            "JOIN scope_totals st " +
+            "  ON st.prev_op = t.prev_op AND st.role = t.role AND st.user_id = t.user_id " +
+            "WHERE t.prev_op = @prevOp " +
+            "  AND (t.role = @role OR t.role = 'GLOBAL') " +
+            "ORDER BY prob01 DESC " +
+            "LIMIT 100";
+
+        cmd.Parameters.AddWithValue("prevOp", prevOperation);
+        cmd.Parameters.AddWithValue("role", role ?? "GLOBAL");
+        cmd.Parameters.AddWithValue("aggregationLimit", aggregationPolicy.AggregationLimit);
+        cmd.Parameters.Add(new NpgsqlParameter("recentDays", System.Data.DbType.Int32)
+        {
+            Value = aggregationPolicy.RecentDays.HasValue ? (object)aggregationPolicy.RecentDays.Value : DBNull.Value
+        });
+
+        var stats = new List<ContextTransitionStat>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            stats.Add(new ContextTransitionStat(
+                PrevOperation: reader.GetString(0),
+                NextOperation: reader.GetString(1),
+                CountEvents:   reader.GetInt32(2),
+                CountHits:     (float)reader.GetDouble(3),
+                Prob01:        (float)reader.GetDouble(4)
+            ));
+        }
+
+        return stats;
+    }
+
     // ---------------------------------------------------------------------------
     // context_event_vector_cache
     // ---------------------------------------------------------------------------

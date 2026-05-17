@@ -148,9 +148,11 @@ public class ContextRouteRecommendationResolver
             _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
         }
 
-        // Load prefix vector candidates
+        // Load prefix vector candidates.
+        // 3650 days used when RecentDays is null — mechanical upper bound, not a runtime policy constant.
+        // The actual policy window comes from stored topology data; null means "no date constraint".
         var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, policy.RecentDays, ct);
+            tableName, role, policy.RecentDays ?? 3650, ct);
 
         if (prefixCandidates.Count == 0)
         {
@@ -170,18 +172,29 @@ public class ContextRouteRecommendationResolver
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
         }
 
-        // Load transition stats for baseline
+        // Load transition stats for baseline.
+        // When TransitionAggregation policy is set, compute windowed stats from raw context_event rows
+        // instead of reading from the pre-aggregated context_transition_stats table.
         var transitionStats = new List<ContextTransitionStat>();
         if (!string.IsNullOrWhiteSpace(currentOperation))
         {
             try
             {
-                var stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, ct);
+                IReadOnlyList<ContextTransitionStat> stats;
+                if (policy.TransitionAggregation is not null)
+                {
+                    stats = await _contextRouteRepository.GetWindowedTransitionStatsAsync(
+                        currentOperation, role, policy.TransitionAggregation, ct);
+                }
+                else
+                {
+                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, ct);
+                }
                 transitionStats.AddRange(stats);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ContextRouteRepository.GetTransitionStatsAsync failed — continuing without baseline.");
+                _logger.LogError(ex, "ContextRouteRepository transition stats query failed — continuing without baseline.");
             }
         }
 
@@ -339,14 +352,23 @@ public class ContextRouteRecommendationResolver
     {
         var dto = JsonSerializer.Deserialize<PolicyDto>(json, _jsonOptions)
             ?? throw new InvalidOperationException("Policy JSON deserialized to null.");
+
+        TransitionAggregationPolicy? transitionAggregation = dto.TransitionAggregation is not null
+            ? new TransitionAggregationPolicy(
+                AggregationLimit: dto.TransitionAggregation.AggregationLimit,
+                PreferRecent:     dto.TransitionAggregation.PreferRecent,
+                RecentDays:       dto.TransitionAggregation.RecentDays)
+            : null;
+
         return new ContextRoutePolicy(
-            MinSimilarity:      dto.MinSimilarity,
-            TopK:               dto.TopK,
-            MinNeighbors:       dto.MinNeighbors,
-            RecentDays:         dto.RecentDays,
-            MaxCandidatesShown: dto.MaxCandidatesShown,
-            BaselineWeight:     dto.BaselineWeight,
-            NeighborWeight:     dto.NeighborWeight
+            MinSimilarity:        dto.MinSimilarity,
+            TopK:                 dto.TopK,
+            MinNeighbors:         dto.MinNeighbors,
+            RecentDays:           dto.RecentDays,
+            MaxCandidatesShown:   dto.MaxCandidatesShown,
+            BaselineWeight:       dto.BaselineWeight,
+            NeighborWeight:       dto.NeighborWeight,
+            TransitionAggregation: transitionAggregation
         );
     }
 
@@ -356,14 +378,21 @@ public class ContextRouteRecommendationResolver
         NumberHandling = JsonNumberHandling.AllowReadingFromString
     };
 
+    private record TransitionAggregationDto(
+        [property: JsonPropertyName("aggregation_limit")] int  AggregationLimit,
+        [property: JsonPropertyName("prefer_recent")]     bool PreferRecent,
+        [property: JsonPropertyName("recent_days")]       int? RecentDays
+    );
+
     private record PolicyDto(
-        [property: JsonPropertyName("min_similarity")]       float MinSimilarity,
-        [property: JsonPropertyName("top_k")]                int   TopK,
-        [property: JsonPropertyName("min_neighbors")]        int   MinNeighbors,
-        [property: JsonPropertyName("recent_days")]          int   RecentDays,
-        [property: JsonPropertyName("max_candidates_shown")] int   MaxCandidatesShown,
-        [property: JsonPropertyName("baseline_weight")]      float BaselineWeight,
-        [property: JsonPropertyName("neighbor_weight")]      float NeighborWeight
+        [property: JsonPropertyName("min_similarity")]         float MinSimilarity,
+        [property: JsonPropertyName("top_k")]                  int   TopK,
+        [property: JsonPropertyName("min_neighbors")]          int   MinNeighbors,
+        [property: JsonPropertyName("recent_days")]            int?  RecentDays,
+        [property: JsonPropertyName("max_candidates_shown")]   int   MaxCandidatesShown,
+        [property: JsonPropertyName("baseline_weight")]        float BaselineWeight,
+        [property: JsonPropertyName("neighbor_weight")]        float NeighborWeight,
+        [property: JsonPropertyName("transition_aggregation")] TransitionAggregationDto? TransitionAggregation = null
     );
 
     // ---------------------------------------------------------------------------

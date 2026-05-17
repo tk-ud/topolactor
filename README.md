@@ -76,6 +76,20 @@ stored_topology_data
 → emission_or_projection
 ```
 
+## Demo
+
+A public scaffold demo is available at the `/demo` route after starting the frontend.
+
+It shows fake/demo data from `db/demo_seed.sql` and illustrates how DB Registry changes → Runtime resolution changes → UI projection changes:
+
+1. Change a token `value` in `context_token_registry` → cosine similarity and recommendation scores shift.
+2. Change `context_route_policy_ref` in `structure_maps.state_policy` → a different policy key is loaded from `function_parameters`.
+3. Change `transition_aggregation.aggregation_limit` in `function_parameters` → windowed transition stats scope changes.
+
+See `docs/demo-walkthrough.md` for step-by-step instructions.
+
+No real business data is used. The canonical runtime route is maintained throughout.
+
 ## Start Here
 
 - `docs/framework-core.yaml` — core concepts, topology model, and layer responsibilities.

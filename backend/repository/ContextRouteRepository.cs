@@ -77,6 +77,21 @@ public class ContextRouteRepository
     }
 
     /// <summary>
+    /// Computes windowed transition stats directly from context_event raw rows.
+    /// Uses aggregation_limit (count window) and optional recent_days (date window).
+    /// In-memory skeleton: returns empty list. Override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(
+        string prevOperation,
+        string? role,
+        TransitionAggregationPolicy aggregationPolicy,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.GetWindowedTransitionStatsAsync: in-memory skeleton — returning empty.");
+        return Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
+    }
+
+    /// <summary>
     /// Upserts an event vector cache entry into context_event_vector_cache.
     /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>

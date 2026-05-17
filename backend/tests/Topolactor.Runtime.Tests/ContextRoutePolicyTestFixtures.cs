@@ -17,11 +17,16 @@ internal static class ContextRoutePolicyTestFixtures
         RecentDays:         90,
         MaxCandidatesShown: 5,
         BaselineWeight:     0.5f,
-        NeighborWeight:     0.5f
+        NeighborWeight:     0.5f,
+        TransitionAggregation: new TransitionAggregationPolicy(
+            AggregationLimit: 10000,
+            PreferRecent:     true,
+            RecentDays:       null
+        )
     );
 
     internal static string ValidPolicyJson() =>
-        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}""";
+        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}""";
 }
 
 /// <summary>
