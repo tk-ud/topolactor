@@ -93,10 +93,10 @@ run_sql_file "db/seed_empty.sql"
 echo "=== Validating required default rows ==="
 query_equals_one "structure_maps contains attractor_key='default:entity:search'" \
   "SELECT COUNT(*) FROM structure_maps WHERE attractor_key = 'default:entity:search';"
-query_equals_one "package_registry contains package_key='default_package'" \
-  "SELECT COUNT(*) FROM package_registry WHERE package_key = 'default_package';"
-query_equals_one "schema_registry contains schema_key='default_schema'" \
-  "SELECT COUNT(*) FROM schema_registry WHERE schema_key = 'default_schema';"
+query_equals_one "package_registry contains name='default_package'" \
+  "SELECT COUNT(*) FROM package_registry WHERE name = 'default_package';"
+query_equals_one "schema_registry contains name='default_schema'" \
+  "SELECT COUNT(*) FROM schema_registry WHERE name = 'default_schema';"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== DB schema check passed ==="

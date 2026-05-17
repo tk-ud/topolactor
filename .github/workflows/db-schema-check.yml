@@ -40,4 +40,4 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Run DB schema check
-        run: .agent/tests/check-db-schema.sh
+        run: bash .agent/tests/check-db-schema.sh
