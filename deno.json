@@ -8,7 +8,9 @@
   "imports": {
     "$fresh/": "https://deno.land/x/fresh@1.7.3/",
     "preact": "npm:preact@10.25.4",
-    "preact/": "npm:preact@10.25.4/"
+    "preact/hooks": "npm:preact@10.25.4/hooks",
+    "preact/jsx-runtime": "npm:preact@10.25.4/jsx-runtime",
+    "preact/jsx-dev-runtime": "npm:preact@10.25.4/jsx-dev-runtime"
   },
   "exclude": ["backend/**", "db/**"]
 }
