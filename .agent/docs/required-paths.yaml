@@ -48,10 +48,12 @@ required_files:
     - .agent/rules/rule.md
     - .agent/skills/structure-check.md
     - .agent/tests/check-structure.sh
+    - .agent/tests/check-backend-tests.sh
     - .agent/tasks/todo.md
     - .agent/reports/README.md
   ci:
     - .github/workflows/structure-check.yml
+    - .github/workflows/backend-tests.yml
   db:
     - db/schema.sql
     - db/topology_tables.sql
@@ -73,6 +75,10 @@ required_files:
     - backend/guard/RuntimeGuard.cs
     - backend/schema/Contracts.cs
     - backend/README.md
+    - backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj
+    - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+    - backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs
+    - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
   frontend:
     - frontend/routes/index.tsx
     - frontend/routes/admin/index.tsx
@@ -122,6 +128,5 @@ required_content_terms:
 
 future_checks:
   - DB schema execution CI (requires credentials — out of scope for structure check)
-  - Backend unit tests for dummy topology resolution
   - Frontend Fresh/Deno type check
   - Integration test for default:entity:search emission flow

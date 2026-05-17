@@ -13,7 +13,7 @@
 
 ## Remaining
 
-- [ ] Backend build / unit tests
+- [x] Backend build / unit tests (`backend/tests/Topolactor.Runtime.Tests`, `.agent/tests/check-backend-tests.sh`, `.github/workflows/backend-tests.yml`)
 - [ ] Frontend Fresh/Deno type check
 - [ ] default:entity:search integration test
 - [ ] Registrar admin UI specification
