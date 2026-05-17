@@ -11,7 +11,6 @@
 - Broken refs are explicit errors, not silent fallback. Any unresolved reference must return a validation error.
 - Real business data is out of scope for the public skeleton.
 - Structure check must pass before completion report.
-- Reports must include remaining TODO.
 
 ## Runtime Policy / Magic Number Rules
 
@@ -79,6 +78,18 @@ Local CI policy:
 - A missing required tool means the check was not executed, not that it passed.
 - Completion reports must distinguish actual passes from environment-limited non-execution.
 
+## Agent Report and Task Surfaces
+
+`.agent/reports/` is for routine, scheduled, or automatically executed agent reports.
+
+`.agent/tasks/todo.md` is for unresolved tasks discovered by routine automation, or residual tasks that must survive beyond the current PR or conversation.
+
+Normal PR work must not use `.agent/reports/` as a summary/log output surface.
+
+Normal PR work must not update `.agent/tasks/todo.md` unless a real remaining task must be carried forward after merge.
+
+When no residual task exists, keep `.agent/tasks/todo.md` present but empty of task items.
+
 ## Canonical Runtime Route
 
 ```text
@@ -99,7 +110,7 @@ Do not bypass any step. Do not add silent fallbacks anywhere in this route.
 
 - Read `.agent/docs/required-paths.yaml` to understand required structure.
 - Run `.agent/tests/check-structure.sh` before reporting task completion.
-- Write outputs to `.agent/reports/`.
-- Update `.agent/tasks/todo.md` with remaining tasks.
+- Use `.agent/reports/` only for routine / scheduled / automated agent reports.
+- Update `.agent/tasks/todo.md` only for residual tasks that must survive beyond the current PR or conversation.
 - Do not convert topolactor to CRUD or MVC.
 - Do not add build steps, DB execution, or integration tests under the structure check surface.
