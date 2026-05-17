@@ -27,6 +27,7 @@ psql -d <database> -f db/schema.sql
 psql -d <database> -f db/topology_tables.sql
 psql -d <database> -f db/promotion_tables.sql
 psql -d <database> -f db/context_route_tables.sql
+psql -d <database> -f db/context_route_config.sql
 psql -d <database> -f db/seed_empty.sql
 ```
 
@@ -34,6 +35,7 @@ psql -d <database> -f db/seed_empty.sql
 `topology_tables.sql` creates `hubs`, `entities`, `hub_relations`, `structure_maps`.
 `promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
 `context_route_tables.sql` creates the context route recommendation runtime tables.
+`context_route_config.sql` creates the SSOT registry for recommendation engine tuning parameters.
 `seed_empty.sql` inserts the minimum default topology rows including the
 `default:entity:search` structure map needed for the dummy canonical flow.
 
@@ -47,6 +49,7 @@ psql -d <database> -f db/seed_empty.sql
 | `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, sparse vector caches, transition stats. Optional cluster/drift tables isolated at bottom. |
+| `context_route_config.sql` | SSOT registry for recommendation engine tuning parameters. Editable via admin UI. Seed values match `ContextRouteConfig.Default`. |
 | `seed_empty.sql` | Minimal default seed rows. No real business data. |
 
 ---

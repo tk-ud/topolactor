@@ -31,7 +31,8 @@ public class RuntimeExecutorTests
                 NullLogger<ContextRouteRecommendationResolver>.Instance,
                 contextRouteRepository,
                 new ContextVectorBuilder(),
-                new ContextNeighborSearch()));
+                new ContextNeighborSearch(),
+                ContextRouteConfig.Default));
     }
 
     [Fact]

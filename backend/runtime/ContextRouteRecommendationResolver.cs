@@ -16,33 +16,32 @@ namespace Topolactor.Runtime;
 ///   InsufficientHistory — not enough history to recommend (not an error; expected cold start)
 ///   ExplicitError       — resolver pipeline failure
 ///
+/// All tuning parameters come from the injected ContextRouteConfig — no numeric
+/// literals in this class.  ContextRouteConfig is the SSOT; values originate
+/// from context_route_config (DB registry) and are editable via admin UI.
+///
 /// No silent fallback. No business-specific naming in this layer.
 /// </summary>
 public class ContextRouteRecommendationResolver
 {
-    private const float MinSimilarity = 0.05f;
-    private const int TopK = 50;
-    private const int MinNeighbors = 10;
-    private const int RecentDays = 90;
-    private const int MaxCandidatesShown = 5;
-    private const float BaselineWeight = 0.5f;
-    private const float NeighborWeight = 0.5f;
-
     private readonly ILogger<ContextRouteRecommendationResolver> _logger;
     private readonly ContextRouteRepository _contextRouteRepository;
     private readonly ContextVectorBuilder _vectorBuilder;
     private readonly ContextNeighborSearch _neighborSearch;
+    private readonly ContextRouteConfig _config;
 
     public ContextRouteRecommendationResolver(
         ILogger<ContextRouteRecommendationResolver> logger,
         ContextRouteRepository contextRouteRepository,
         ContextVectorBuilder vectorBuilder,
-        ContextNeighborSearch neighborSearch)
+        ContextNeighborSearch neighborSearch,
+        ContextRouteConfig config)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
         _vectorBuilder = vectorBuilder ?? throw new ArgumentNullException(nameof(vectorBuilder));
         _neighborSearch = neighborSearch ?? throw new ArgumentNullException(nameof(neighborSearch));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
     }
 
     /// <summary>
@@ -112,7 +111,7 @@ public class ContextRouteRecommendationResolver
 
         // Load prefix vector candidates
         var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, RecentDays, ct);
+            tableName, role, _config.RecentDays, ct);
 
         if (prefixCandidates.Count == 0)
         {
@@ -122,13 +121,13 @@ public class ContextRouteRecommendationResolver
 
         // Find nearest prefixes
         var neighbors = _neighborSearch.FindNearestPrefixes(
-            eventVector, eventNorm, prefixCandidates, MinSimilarity, TopK);
+            eventVector, eventNorm, prefixCandidates, _config.MinSimilarity, _config.TopK);
 
-        if (neighbors.Count < MinNeighbors)
+        if (neighbors.Count < _config.MinNeighbors)
         {
             _logger.LogDebug(
                 "ContextRouteRecommendationResolver: {Count} neighbors < min {Min} — InsufficientHistory.",
-                neighbors.Count, MinNeighbors);
+                neighbors.Count, _config.MinNeighbors);
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
         }
 
@@ -149,7 +148,7 @@ public class ContextRouteRecommendationResolver
 
         var nextOperations = ResolveNextOperations(neighbors, transitionStats);
         var nextTokens = ResolveNextTokens(neighbors);
-        var nearestIds = neighbors.Take(MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
+        var nearestIds = neighbors.Take(_config.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
 
         return new ContextRouteRecommendationResult(
@@ -179,12 +178,12 @@ public class ContextRouteRecommendationResolver
             if (string.IsNullOrWhiteSpace(n.NextOperation))
                 continue;
             var (s, c) = neighborVotes.GetValueOrDefault(n.NextOperation);
-            neighborVotes[n.NextOperation] = (s + n.Similarity * NeighborWeight, c + 1);
+            neighborVotes[n.NextOperation] = (s + n.Similarity * _config.NeighborWeight, c + 1);
         }
 
         var baselineVotes = new Dictionary<string, float>();
         foreach (var stat in transitionStats)
-            baselineVotes[stat.NextOperation] = stat.Prob01 * BaselineWeight;
+            baselineVotes[stat.NextOperation] = stat.Prob01 * _config.BaselineWeight;
 
         var merged = new Dictionary<string, float>();
         foreach (var (op, score) in neighborVotes)
@@ -194,7 +193,7 @@ public class ContextRouteRecommendationResolver
 
         return merged
             .OrderByDescending(kv => kv.Value)
-            .Take(MaxCandidatesShown)
+            .Take(_config.MaxCandidatesShown)
             .Select(kv =>
             {
                 var evidence = new List<string>();
@@ -234,7 +233,7 @@ public class ContextRouteRecommendationResolver
 
         return votes
             .OrderByDescending(kv => kv.Value.Score)
-            .Take(MaxCandidatesShown)
+            .Take(_config.MaxCandidatesShown)
             .Select(kv => new RecommendationCandidate(
                 Value: kv.Key.ToString(),
                 Score: kv.Value.Score,

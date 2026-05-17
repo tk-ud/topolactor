@@ -12,14 +12,17 @@ public class ContextRouteRecommendationResolverTests
     private static ContextNeighborSearch NeighborSearch() => new();
 
     private static ContextRouteRecommendationResolver CreateResolver(
-        ContextRouteRepository? repo = null)
+        ContextRouteRepository? repo = null,
+        ContextRouteConfig? config = null)
     {
         repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
+        config ??= ContextRouteConfig.Default;
         return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             repo,
             VectorBuilder(),
-            NeighborSearch());
+            NeighborSearch(),
+            config);
     }
 
     // --- ContextVectorBuilder tests ---

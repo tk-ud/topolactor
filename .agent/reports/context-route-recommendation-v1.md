@@ -147,6 +147,62 @@ stored_topology_data
 
 structure-check は全項目 OK を確認。backend/frontend テストは CI で実行される。
 
+---
+
+## SSOT Config Registry リファクタリング（後続）
+
+### 問題
+`ContextRouteRecommendationResolver` にチューニング定数が7つハードコードされていた。
+
+```csharp
+private const float MinSimilarity = 0.05f;
+private const int TopK = 50;
+...
+```
+
+### 対応
+
+#### SSOT 抽象化
+- `backend/schema/ContextRouteConfigContracts.cs` 追加 — `ContextRouteConfig` レコード（全7パラメータ + `Default` 静的プロパティ）
+- Runtime コードへの数値リテラル直書きを完全に排除
+
+#### DB Registry（SSOT の永続化）
+- `db/context_route_config.sql` 追加 — `context_route_config` テーブル（key-value レジストリ形式）
+- 7パラメータのシード値を `INSERT ... ON CONFLICT DO NOTHING` で投入
+
+#### Repository
+- `backend/repository/ContextRouteConfigRepository.cs` 追加
+  - `LoadConfigAsync` — スケルトン: `ContextRouteConfig.Default` を返す
+  - `SaveConfigAsync` — スケルトン: no-op
+
+#### Resolver への注入
+- `ContextRouteRecommendationResolver` のコンストラクタ引数に `ContextRouteConfig config` 追加
+- 全使用箇所を `_config.Xxx` に置き換え
+
+#### テスト更新
+- `RuntimeExecutorTests.CreateExecutor()` に `ContextRouteConfig.Default` を追加
+- `ContextRouteRecommendationResolverTests.CreateResolver()` に `ContextRouteConfig.Default` を追加
+- `DefaultEntitySearchIntegrationTests.CreateEndpoint()` に `ContextRouteConfig.Default` を追加
+
+#### 管理 UI（UIで操作できる）
+
+| ファイル | 役割 |
+|---|---|
+| `frontend/api/adminApi.ts` | Admin API クライアント型と fetch 関数 |
+| `frontend/routes/api/admin/context-route-config.ts` | GET/PUT エンドポイント（スケルトン） |
+| `frontend/routes/api/admin/context-token-registry.ts` | GET/POST エンドポイント（スケルトン） |
+| `frontend/islands/ContextRouteConfigEditor.tsx` | 設定編集 Island（インタラクティブ） |
+| `frontend/islands/ContextTokenRegistryEditor.tsx` | トークン Registry 管理 Island |
+| `frontend/routes/admin/context-route-config.tsx` | `/admin/context-route-config` ページ |
+| `frontend/routes/admin/context-token-registry.tsx` | `/admin/context-token-registry` ページ |
+| `frontend/routes/admin/index.tsx` | Admin トップに Registry へのリンク追加 |
+
+#### 設計原則遵守
+- Runtime に定数直書きなし — `ContextRouteConfig` が唯一の数値ソース
+- 自動学習（キャッシュ再構築）・レコメンドともに `context_token_registry` ハブ Registry 参照
+- UI から設定を操作可能（`/admin/context-route-config`, `/admin/context-token-registry`）
+- Frontend は projection のみ — 計算ロジックはすべて Backend Runtime
+
 ## 残 TODO
 
 `.agent/tasks/todo.md` 参照。
