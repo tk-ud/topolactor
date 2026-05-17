@@ -97,6 +97,16 @@
       → 本番用途ではない。公開 scaffold のローカル確認用。
       → 作成済み: `infra/docker-compose.yml`。
 
+- [x] `infra/nginx.conf` を追加する
+      → demo 用 reverse proxy scaffold として `/` を frontend、`/api/` を backend へ流す雛形を追加済み。
+      → 本番TLSや本番ドメイン設定ではない。
+      → 作成済み: `infra/nginx.conf`。
+
+- [ ] nginx service を docker compose に接続する
+      → frontend / backend service が `infra/docker-compose.yml` に追加されたタイミングで nginx service を有効化する。
+      → 現時点では Postgres / Adminer のみなので、未定義 upstream を compose に接続しない。
+      → 対象: infra/docker-compose.yml, infra/nginx.conf, docs/demo-walkthrough.md。
+
 - [ ] docker compose の seed 適用順と実行確認を行う
       → `docker compose -f infra/docker-compose.yml up` で schema / topology / promotion / context route / seed_empty が適用されることを確認する。
       → `db/demo_seed.sql` 追加後は compose init mount に含めるか、walkthrough 側で明示実行にするか判断する。
