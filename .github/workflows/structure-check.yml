@@ -1,0 +1,16 @@
+name: Structure Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  structure-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run structure check
+        run: bash .agent/tests/check-structure.sh

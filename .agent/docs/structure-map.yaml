@@ -1,0 +1,82 @@
+# structure-map.yaml — Repository Structure Overview
+#
+# Agent-facing SSOT for understanding the topolactor repository layout.
+# For executable path requirements, see required-paths.yaml.
+# For architecture rules, see .agent/rules/rule.md.
+
+repository: topolactor
+description: >
+  Data-driven topology runtime for business systems.
+  Architecture subject: data-defined topology.
+  Not CRUD, not MVC, not conventional layered architecture.
+
+layers:
+  db:
+    role: semantic_topology_space
+    path: db/
+    description: >
+      Stores registries, relations, schemas, packages, function parameters,
+      converged entity data, diff logs, and promotion policies.
+      Authority for data-defined topology.
+    files:
+      - db/schema.sql
+      - db/topology_tables.sql
+      - db/promotion_tables.sql
+      - db/seed_empty.sql
+
+  backend:
+    role: abstract_runtime
+    path: backend/
+    description: >
+      Receives user operations, resolves operation vectors and attractors,
+      binds stored function parameters, validates runtime state, emits responses.
+      No physical UI rendering. No silent fallback.
+    directories:
+      endpoint: backend/endpoint/       # thin HTTP boundary
+      runtime:  backend/runtime/        # canonical runtime executor
+      mapper:   backend/mapper/         # semantic mapping (not ORM)
+      repository: backend/repository/   # persistence boundary
+      guard:    backend/guard/          # permission and safety guards
+      schema:   backend/schema/         # data and runtime contract schemas
+
+  frontend:
+    role: physical_projection_space
+    path: frontend/
+    description: >
+      Fresh / Deno / Preact physical projection layer.
+      Projects UI from packages, schemas, and component expansions.
+      Route is a projection entrypoint, not business logic.
+    directories:
+      routes:     frontend/routes/      # Fresh route projection entrypoints
+      islands:    frontend/islands/     # local interaction points
+      components: frontend/components/  # atomic UI components
+      package:    frontend/package/     # UI component package groups
+      schema:     frontend/schema/      # UI element and wiring schemas
+      registry:   frontend/registry/    # frontend runtime registry
+      runtime:    frontend/runtime/     # frontend runtime executor
+      api:        frontend/api/         # backend contract clients
+
+  agent:
+    role: local_structure_guard
+    path: .agent/
+    description: >
+      Agent-facing documentation, rules, skills, checks, tasks, and reports.
+      The check script is the executable SSOT for structure validation.
+    directories:
+      docs:     .agent/docs/      # agent-facing SSOT documents
+      rules:    .agent/rules/     # architecture behavior rules
+      skills:   .agent/skills/    # agent skill notes
+      tests:    .agent/tests/     # local check scripts
+      tasks:    .agent/tasks/     # remaining task list
+      reports:  .agent/reports/   # check results, issue drafts, audits
+
+canonical_flow:
+  - stored_topology_data
+  - user_operation
+  - operation_vector
+  - attractor_resolve
+  - structure_map_resolve
+  - package_resolve
+  - schema_resolve
+  - component_expand
+  - emission_or_projection

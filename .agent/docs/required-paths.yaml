@@ -1,0 +1,127 @@
+# required-paths.yaml — Structure Check SSOT Reference
+#
+# This file documents the required paths and content terms that
+# .agent/tests/check-structure.sh enforces.
+# The shell script is the executable SSOT; this file is the human-readable reference.
+
+required_directories:
+  agent:
+    - .agent/docs
+    - .agent/rules
+    - .agent/skills
+    - .agent/tests
+    - .agent/tasks
+    - .agent/reports
+  docs:
+    - docs
+  db:
+    - db
+  backend:
+    - backend/endpoint
+    - backend/runtime
+    - backend/mapper
+    - backend/repository
+    - backend/guard
+    - backend/schema
+  frontend:
+    - frontend/routes
+    - frontend/islands
+    - frontend/components
+    - frontend/package
+    - frontend/schema
+    - frontend/registry
+    - frontend/runtime
+    - frontend/api
+
+required_files:
+  root:
+    - README.md
+    - NOTICE.md
+    - AGENTS.md
+  docs:
+    - docs/framework-core.yaml
+    - docs/framework-policy.yaml
+    - docs/file-structure.yaml
+  agent:
+    - .agent/docs/structure-map.yaml
+    - .agent/docs/required-paths.yaml
+    - .agent/rules/rule.md
+    - .agent/skills/structure-check.md
+    - .agent/tests/check-structure.sh
+    - .agent/tasks/todo.md
+    - .agent/reports/README.md
+  ci:
+    - .github/workflows/structure-check.yml
+  db:
+    - db/schema.sql
+    - db/topology_tables.sql
+    - db/promotion_tables.sql
+    - db/seed_empty.sql
+    - db/README.md
+  backend:
+    - backend/endpoint/DispatchEndpoint.cs
+    - backend/runtime/RuntimeExecutor.cs
+    - backend/runtime/OperationVectorResolver.cs
+    - backend/runtime/AttractorResolver.cs
+    - backend/runtime/StructureMapResolver.cs
+    - backend/runtime/PackageResolver.cs
+    - backend/runtime/SchemaResolver.cs
+    - backend/runtime/EmissionBuilder.cs
+    - backend/mapper/SemanticMapper.cs
+    - backend/repository/TopologyRepository.cs
+    - backend/repository/DiffLogRepository.cs
+    - backend/guard/RuntimeGuard.cs
+    - backend/schema/Contracts.cs
+    - backend/README.md
+  frontend:
+    - frontend/routes/index.tsx
+    - frontend/routes/admin/index.tsx
+    - frontend/routes/runtime-status.tsx
+    - frontend/islands/OperationPanel.tsx
+    - frontend/components/ProjectionView.tsx
+    - frontend/components/EmissionView.tsx
+    - frontend/package/defaultPackage.ts
+    - frontend/schema/defaultSchema.ts
+    - frontend/registry/componentRegistry.ts
+    - frontend/runtime/resolveOperationVector.ts
+    - frontend/runtime/renderEmission.ts
+    - frontend/runtime/restoreResume.ts
+    - frontend/api/dispatch.ts
+    - frontend/structure_map.ts
+    - frontend/README.md
+
+required_content_terms:
+  README.md:
+    - "data-driven topology runtime"
+  AGENTS.md:
+    - ".agent/rules/rule.md"
+    - ".agent/tests/check-structure.sh"
+  .agent/rules/rule.md:
+    - "Data-defined topology is the architecture subject"
+    - "OperationVector is internal runtime representation"
+    - "Broken refs are explicit errors"
+  docs/file-structure.yaml:
+    - "data_defined_topology_is_the_architecture_subject"
+    - "operation_vector_is_internal_runtime_representation"
+  backend/runtime/RuntimeExecutor.cs:
+    - "RuntimeExecutor"
+    - "OperationVectorResolver"
+    - "AttractorResolver"
+    - "StructureMapResolver"
+    - "PackageResolver"
+    - "SchemaResolver"
+    - "EmissionBuilder"
+  frontend/runtime/resolveOperationVector.ts:
+    - "OperationVector"
+    - "attractorKey"
+  db/topology_tables.sql:
+    - "structure_maps"
+    - "attractor_key"
+  .github/workflows/structure-check.yml:
+    - ".agent/tests/check-structure.sh"
+
+future_checks:
+  - DB schema execution CI (requires credentials — out of scope for structure check)
+  - Backend unit tests for dummy topology resolution
+  - Frontend Fresh/Deno type check
+  - Integration test for default:entity:search emission flow
