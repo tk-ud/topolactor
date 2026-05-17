@@ -203,6 +203,64 @@ private const int TopK = 50;
 - UI から設定を操作可能（`/admin/context-route-config`, `/admin/context-token-registry`）
 - Frontend は projection のみ — 計算ロジックはすべて Backend Runtime
 
+## SSOT 統一リファクタリング（PR #19 追加修正）
+
+### 問題（修正前の状態）
+
+Config の SSOT が3箇所に分散していた（data-defined topology 原則違反）:
+
+1. `ContextRouteConfig.Default` — C# static fallback（production コードに hardcode）
+2. `frontend/routes/api/admin/context-route-config.ts` の `DEFAULT_CONFIG` — Frontend 擬似 SSOT
+3. `frontend/routes/api/admin/context-token-registry.ts` の `SEED_TOKENS` — Frontend が Registry として機能
+
+### 修正内容
+
+#### Backend schema
+- `ContextRouteConfigContracts.cs` から `Default` 静的プロパティを完全削除
+- `ConfigLoadResult` 判別共用体を追加: `Loaded(Config)` / `MissingPolicy` / `InvalidPolicy(Reason)`
+
+#### Repository
+- `LoadConfigAsync` の戻り値を `Task<ContextRouteConfig>` → `Task<ConfigLoadResult>` に変更
+- スケルトンは `Default` ではなく `MissingPolicy` を返す — policy-missing が明示的状態になった
+
+#### Resolver
+- コンストラクタ引数を `ContextRouteConfig config` → `ContextRouteConfigRepository configRepository` に変更
+- `ResolveAsync` の先頭で `LoadConfigAsync` を呼び出し、`MissingPolicy` / `InvalidPolicy` なら `ExplicitError` を返す
+- `ResolveNextOperations` / `ResolveNextTokens` の引数に `ContextRouteConfig config` を追加（caller が渡す）
+
+#### テスト
+- `ContextRouteConfigTestFixtures.cs` を新規追加: `ValidConfig()` / `StubLoadedConfigRepository` / `StubMissingConfigRepository`
+- `CreateResolver()` / `CreateExecutor()` / `CreateEndpoint()` が `ContextRouteConfig.Default` を参照しなくなった
+- 新テスト追加: `ResolveAsync_MissingPolicy_ReturnsExplicitError_NotDefault`
+
+#### Frontend API routes → 501
+- `context-route-config.ts`: `DEFAULT_CONFIG` 削除 → GET/PUT が 501 `CONFIG_REGISTRY_ENDPOINT_NOT_BOUND`
+- `context-token-registry.ts`: `SEED_TOKENS` 削除 → GET/POST が 501 `TOKEN_REGISTRY_ENDPOINT_NOT_BOUND`
+
+#### Frontend client (`adminApi.ts`)
+- `defaultContextRouteConfig` 定数を削除
+- `fetchContextRouteConfig` の戻り値を `ContextRouteConfig | null`（501 → null）
+- `fetchContextTokens` の戻り値を `ContextToken[] | null`（501 → null）
+
+#### Islands
+- `ContextRouteConfigEditor`: 初期値を `null`、501 時は「レジストリ未接続」表示。「デフォルトに戻す」ボタン削除
+- `ContextTokenRegistryEditor`: 501 時は「レジストリ未接続」表示
+
+#### ドキュメント更新
+- `docs/design/context-route-recommendation.md`: Default fallback 禁止ルール明示追加
+- `.agent/docs/design-ssot-index.md`: SSOT を DB registry 単一に統一（`ContextRouteConfig.Default` の記述削除）
+- `db/context_route_config.sql`: コメントを「Default との同期」から「DB が唯一の正解ソース」に修正
+- `db/README.md`: 同様修正
+
+### 設計原則の回復
+
+| 修正前 | 修正後 |
+|---|---|
+| DB 空 → `Default` で継続（silent fallback） | DB 空 → `MissingPolicy` → `ExplicitError` |
+| Frontend API → hardcode data 返却 | Frontend API → 501（Registry 未接続を明示） |
+| `ContextRouteConfig.Default` が擬似 SSOT | `context_route_config` テーブルが唯一 SSOT |
+| test が production Default に依存 | test は fixture (`ValidConfig()`) を使用 |
+
 ## 残 TODO
 
 `.agent/tasks/todo.md` 参照。

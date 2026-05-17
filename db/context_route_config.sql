@@ -8,7 +8,8 @@
 --
 -- Editable via the admin UI (/admin/context-route-config).
 -- Loaded by ContextRouteConfigRepository at runtime.
--- ContextRouteConfig.Default is the canonical fallback when this table is empty.
+-- If this table is empty, ContextRouteConfigRepository returns MissingPolicy — no silent fallback.
+-- The INSERT below seeds initial values; they are the canonical source, not a C# Default static.
 --
 -- Key reference (from enum-session-cos-route-theory spec):
 --   min_similarity       — neighborhood_inference.min_similarity
@@ -32,7 +33,7 @@ CREATE TABLE IF NOT EXISTS context_route_config (
 COMMENT ON TABLE context_route_config IS
     'SSOT registry for context route recommendation engine tuning parameters. '
     'Editable via admin UI. Loaded by ContextRouteConfigRepository. '
-    'ContextRouteConfig.Default is the fallback when this table is empty.';
+    'Empty table → MissingPolicy (explicit error) — no silent hardcoded fallback.';
 
 COMMENT ON COLUMN context_route_config.config_key IS
     'Stable identifier matching the ContextRouteConfig record field name (snake_case).';
@@ -43,7 +44,7 @@ COMMENT ON COLUMN context_route_config.float_value IS
 COMMENT ON COLUMN context_route_config.int_value IS
     'Used for int parameters (top_k, min_neighbors, recent_days, max_candidates_shown). NULL for float params.';
 
--- Default seed values — canonical source is ContextRouteConfig.Default
+-- Bootstrap seed values — this table is the canonical SSOT; no C# Default mirrors these
 INSERT INTO context_route_config (config_key, float_value, int_value, description) VALUES
     ('min_similarity',
      0.05, NULL,

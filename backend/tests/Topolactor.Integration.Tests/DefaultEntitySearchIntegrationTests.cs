@@ -37,7 +37,7 @@ public class DefaultEntitySearchIntegrationTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                ContextRouteConfig.Default));
+                new StubLoadedConfigRepository()));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
     }
 
@@ -84,4 +84,22 @@ public class DefaultEntitySearchIntegrationTests
         Assert.Null(response.Emission);
         Assert.Contains(response.Errors, e => e.Code == "REQUEST_NULL");
     }
+}
+
+/// <summary>
+/// Stub ContextRouteConfigRepository that returns a known-good config for integration tests.
+/// </summary>
+file sealed class StubLoadedConfigRepository()
+    : ContextRouteConfigRepository(NullLogger<ContextRouteConfigRepository>.Instance, "dummy")
+{
+    public override Task<ConfigLoadResult> LoadConfigAsync(CancellationToken ct = default)
+        => Task.FromResult<ConfigLoadResult>(
+            new ConfigLoadResult.Loaded(new ContextRouteConfig(
+                MinSimilarity: 0.05f,
+                TopK: 50,
+                MinNeighbors: 10,
+                RecentDays: 90,
+                MaxCandidatesShown: 5,
+                BaselineWeight: 0.5f,
+                NeighborWeight: 0.5f)));
 }

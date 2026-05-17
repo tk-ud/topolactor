@@ -54,7 +54,7 @@
 
 | 対象 | SSOT の場所 |
 |---|---|
-| 推薦エンジンのチューニングパラメータ | `context_route_config` テーブル / `ContextRouteConfig.Default` |
+| 推薦エンジンのチューニングパラメータ | `context_route_config` テーブル（DB registry が唯一のSSOT） |
 | トークン辞書（意味方向ベクトル） | `context_token_registry` テーブル |
 | コミット済みの操作ログ | `operation_log` + `operation_log_item` |
 | Runtime コードの定数 | **禁止** — すべてレジストリまたはコンフィグから読む |

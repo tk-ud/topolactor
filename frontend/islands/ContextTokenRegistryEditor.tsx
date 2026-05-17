@@ -14,15 +14,12 @@ import {
  * form the sparse cosine vectors used by the recommendation engine.
  * Each token has a value in [-1.0, 1.0] that defines its meaning direction.
  *
- * This island lets operators:
- *   - View the current active token set
- *   - Add new tokens (label, group, value)
- *   - Deprecate existing tokens
- *
- * Skeleton: API calls are accepted but not persisted to DB.
+ * When the backend registry endpoint is not yet bound (501), this island
+ * shows a "レジストリ未接続" notice rather than displaying seed tokens.
  */
 export default function ContextTokenRegistryEditor(): JSX.Element {
   const [tokens, setTokens] = useState<ContextToken[]>([]);
+  const [notBound, setNotBound] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newGroup, setNewGroup] = useState("");
   const [newValue, setNewValue] = useState("0.0");
@@ -30,8 +27,24 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetchContextTokens().then(setTokens);
+    fetchContextTokens().then((result) => {
+      if (result === null) {
+        setNotBound(true);
+      } else {
+        setTokens(result);
+      }
+    }).catch((err: unknown) => {
+      setStatus(err instanceof Error ? err.message : String(err));
+    });
   }, []);
+
+  if (notBound) {
+    return (
+      <p style={{ fontFamily: "monospace", color: "#888" }}>
+        レジストリ未接続 — context_token_registry エンドポイントは未実装です (501)。
+      </p>
+    );
+  }
 
   async function handleAdd(e: Event): Promise<void> {
     e.preventDefault();

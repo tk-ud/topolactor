@@ -7,9 +7,9 @@ namespace Topolactor.Repository;
 /// Repository for context_route_config — the SSOT registry table for
 /// recommendation engine tuning parameters.
 ///
-/// In-memory skeleton: LoadConfigAsync returns ContextRouteConfig.Default
-/// and SaveConfigAsync is a no-op.  Production implementation replaces these
-/// stubs with real DB reads/writes against context_route_config.sql.
+/// In-memory skeleton: LoadConfigAsync returns MissingPolicy (not a hardcoded Default).
+/// Policy-missing is surfaced explicitly to the caller; no silent fallback.
+/// Production implementation replaces the stub with real DB reads/writes.
 /// </summary>
 public class ContextRouteConfigRepository
 {
@@ -25,17 +25,17 @@ public class ContextRouteConfigRepository
     }
 
     /// <summary>
-    /// Loads all config rows from context_route_config and maps them to
-    /// ContextRouteConfig.  Returns ContextRouteConfig.Default when the table
-    /// is empty or the DB is unavailable.
+    /// Loads all config rows from context_route_config and maps them to ContextRouteConfig.
+    /// Returns MissingPolicy when the table is empty; InvalidPolicy when required keys are absent.
+    /// Never returns a hardcoded fallback.
     ///
-    /// In-memory skeleton: always returns Default.
+    /// In-memory skeleton: always returns MissingPolicy.
     /// </summary>
-    public virtual Task<ContextRouteConfig> LoadConfigAsync(CancellationToken ct = default)
+    public virtual Task<ConfigLoadResult> LoadConfigAsync(CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteConfigRepository.LoadConfigAsync: in-memory skeleton — returning Default.");
-        return Task.FromResult(ContextRouteConfig.Default);
+            "ContextRouteConfigRepository.LoadConfigAsync: in-memory skeleton — MissingPolicy.");
+        return Task.FromResult<ConfigLoadResult>(new ConfigLoadResult.MissingPolicy());
     }
 
     /// <summary>

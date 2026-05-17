@@ -13,16 +13,16 @@ public class ContextRouteRecommendationResolverTests
 
     private static ContextRouteRecommendationResolver CreateResolver(
         ContextRouteRepository? repo = null,
-        ContextRouteConfig? config = null)
+        ContextRouteConfigRepository? configRepo = null)
     {
         repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
-        config ??= ContextRouteConfig.Default;
+        configRepo ??= new StubLoadedConfigRepository();
         return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             repo,
             VectorBuilder(),
             NeighborSearch(),
-            config);
+            configRepo);
     }
 
     // --- ContextVectorBuilder tests ---
@@ -248,7 +248,7 @@ public class ContextRouteRecommendationResolverTests
     [Fact]
     public async Task ResolveAsync_NoContextHistory_ReturnsInsufficientHistory()
     {
-        // In-memory skeleton returns empty prefix vectors → InsufficientHistory
+        // Stub loaded config + in-memory skeleton returns empty prefix vectors → InsufficientHistory
         var resolver = CreateResolver();
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
@@ -256,6 +256,21 @@ public class ContextRouteRecommendationResolverTests
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Equal("NO_CONTEXT_HISTORY", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_MissingPolicy_ReturnsExplicitError_NotDefault()
+    {
+        // Policy-missing must surface as ExplicitError — no silent fallback to hardcoded values.
+        var resolver = CreateResolver(configRepo: new StubMissingConfigRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
         Assert.Empty(result.NextOperations);
         Assert.Empty(result.NextTokens);
     }
@@ -282,7 +297,8 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_EmptyNeighbors_ReturnsEmpty()
     {
         var resolver = CreateResolver();
-        var result = resolver.ResolveNextOperations([], []);
+        var config = ContextRouteConfigTestFixtures.ValidConfig();
+        var result = resolver.ResolveNextOperations([], [], config);
         Assert.Empty(result);
     }
 
@@ -290,6 +306,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_NeighborVoting_RanksCorrectly()
     {
         var resolver = CreateResolver();
+        var config = ContextRouteConfigTestFixtures.ValidConfig();
 
         var neighbors = new List<ContextNeighborResult>
         {
@@ -298,7 +315,7 @@ public class ContextRouteRecommendationResolverTests
             new(Guid.NewGuid(), 0, 0.5f, "action_b", null),
         };
 
-        var result = resolver.ResolveNextOperations(neighbors, []);
+        var result = resolver.ResolveNextOperations(neighbors, [], config);
 
         Assert.NotEmpty(result);
         Assert.Equal("action_a", result[0].Value); // higher total sim wins
@@ -308,6 +325,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_TransitionStatsMerged()
     {
         var resolver = CreateResolver();
+        var config = ContextRouteConfigTestFixtures.ValidConfig();
 
         var neighbors = new List<ContextNeighborResult>
         {
@@ -319,7 +337,7 @@ public class ContextRouteRecommendationResolverTests
             new("prev", "action_b", 100, 90f, 0.9f),
         };
 
-        var result = resolver.ResolveNextOperations(neighbors, stats);
+        var result = resolver.ResolveNextOperations(neighbors, stats, config);
 
         // Both action_a (from neighbors) and action_b (from stats) should appear
         Assert.Contains(result, r => r.Value == "action_a");
@@ -330,7 +348,8 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextTokens_EmptyNeighbors_ReturnsEmpty()
     {
         var resolver = CreateResolver();
-        var result = resolver.ResolveNextTokens([]);
+        var config = ContextRouteConfigTestFixtures.ValidConfig();
+        var result = resolver.ResolveNextTokens([], config);
         Assert.Empty(result);
     }
 
@@ -338,6 +357,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextTokens_VotesFromNextTokenIdsHint()
     {
         var resolver = CreateResolver();
+        var config = ContextRouteConfigTestFixtures.ValidConfig();
         var tokenId = Guid.NewGuid();
 
         var neighbors = new List<ContextNeighborResult>
@@ -346,7 +366,7 @@ public class ContextRouteRecommendationResolverTests
             new(Guid.NewGuid(), 0, 0.7f, null, [tokenId]),
         };
 
-        var result = resolver.ResolveNextTokens(neighbors);
+        var result = resolver.ResolveNextTokens(neighbors, config);
 
         Assert.Single(result);
         Assert.Equal(tokenId.ToString(), result[0].Value);
@@ -390,8 +410,7 @@ public class ContextRouteRecommendationResolverTests
     [Fact]
     public void FrontendIsolation_RecommendationIsDataOnly()
     {
-        // This test documents the contract: ContextRouteRecommendationResult is a
-        // pure data record. It has no methods that perform calculations.
+        // ContextRouteRecommendationResult is a pure data record — no calculation methods.
         // Calculation is done only in ContextVectorBuilder, ContextNeighborSearch,
         // and ContextRouteRecommendationResolver (all backend-only).
         var result = new ContextRouteRecommendationResult(
@@ -403,7 +422,6 @@ public class ContextRouteRecommendationResolverTests
             StatusDetail: "test"
         );
 
-        // ContextRouteRecommendationResult is a record — no calculation methods
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Empty(result.NextOperations);
     }

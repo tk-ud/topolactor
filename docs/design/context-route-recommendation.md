@@ -89,6 +89,12 @@ silent fallback は存在しない。status は常に明示。
 ### やってはいけないこと
 - Runtime コード（ContextRouteRecommendationResolver）に数値定数を直書きする
   → `ContextRouteConfig` 経由で読むこと
+- `ContextRouteConfig.Default` を production fallback として使う
+  → `ContextRouteConfig.Default` は存在させない。DB registry が空なら MissingPolicy（明示的エラー）
+- DB unavailable または registry 未登録の状態でデフォルト値で継続する
+  → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す。silent fallback 禁止
+- Frontend API（`/api/admin/context-route-config` 等）にハードコード値を持たせる
+  → 未接続なら 501 を返す。Frontend は registry の代替ではない
 - `context_token_registry.group` をベクトル計算に使う
   → group は UI グルーピング専用。計算対象は `value` のみ
 - セッションの explicit end を想定したロジックを書く

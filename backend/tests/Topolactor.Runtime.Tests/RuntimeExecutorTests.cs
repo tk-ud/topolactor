@@ -32,7 +32,7 @@ public class RuntimeExecutorTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                ContextRouteConfig.Default));
+                new StubLoadedConfigRepository()));
     }
 
     [Fact]
