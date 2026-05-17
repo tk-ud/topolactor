@@ -1,24 +1,34 @@
 import { Handlers } from "$fresh/server.ts";
+import pg from "npm:pg";
 
-/**
- * GET  /api/admin/context-token-registry  — not yet bound to backend registry
- * POST /api/admin/context-token-registry  — not yet bound to backend registry
- *
- * Returns 501 until this route is wired to context_token_registry on the backend.
- * Frontend must handle 501 explicitly — no seed token list stored here.
- */
+const { Pool } = pg;
+const pool = new Pool({ connectionString: Deno.env.get("DATABASE_URL") });
+
 export const handler: Handlers = {
-  GET(_req) {
-    return Response.json(
-      { ok: false, code: "TOKEN_REGISTRY_ENDPOINT_NOT_BOUND", message: "Not implemented." },
-      { status: 501 },
-    );
+  async GET() {
+    const client = await pool.connect();
+    try {
+      const result = await client.query(`SELECT token_id, label, "group", value, status FROM context_token_registry ORDER BY created_at DESC`);
+      return Response.json(result.rows.map((r) => ({ tokenId: r.token_id, label: r.label, group: r.group, value: Number(r.value), status: r.status })));
+    } finally { client.release(); }
   },
-
-  POST(_req) {
-    return Response.json(
-      { ok: false, code: "TOKEN_REGISTRY_ENDPOINT_NOT_BOUND", message: "Not implemented." },
-      { status: 501 },
-    );
+  async POST(req) {
+    const body = await req.json();
+    const label = String(body?.label ?? "").trim();
+    const value = Number(body?.value);
+    const group = body?.group == null || body?.group === "" ? null : String(body.group);
+    if (!label || !Number.isFinite(value) || value < -1 || value > 1) {
+      return Response.json({ ok: false, message: "label と value（-1.0〜1.0）は必須です。" }, { status: 400 });
+    }
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        `INSERT INTO context_token_registry(label, "group", value, status) VALUES ($1,$2,$3,'active') RETURNING token_id`,
+        [label, group, value],
+      );
+      return Response.json({ ok: true, message: "created", tokenId: result.rows[0].token_id });
+    } catch {
+      return Response.json({ ok: false, message: "create failed" }, { status: 400 });
+    } finally { client.release(); }
   },
 };

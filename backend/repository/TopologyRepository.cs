@@ -1,3 +1,4 @@
+using Npgsql;
 using Microsoft.Extensions.Logging;
 
 namespace Topolactor.Repository;
@@ -115,15 +116,38 @@ public class TopologyRepository
     ///   LIMIT 1
     /// Returns null when no active row exists — caller must treat null as policy-missing.
     /// </summary>
-    public virtual Task<string?> LoadFunctionParameterAsync(
+    public virtual async Task<string?> LoadFunctionParameterAsync(
         string functionName,
         string parameterKey,
         CancellationToken ct = default)
     {
-        _logger.LogDebug(
-            "TopologyRepository.LoadFunctionParameterAsync: no parameter found for '{FunctionName}/{ParameterKey}'.",
-            functionName, parameterKey);
-        return Task.FromResult<string?>(null);
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"""
+            SELECT parameter_value::text
+            FROM function_parameters
+            WHERE function_name = @functionName
+              AND parameter_key = @parameterKey
+              AND active = true
+            LIMIT 1;
+            """;
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("functionName", functionName);
+        cmd.Parameters.AddWithValue("parameterKey", parameterKey);
+
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null or DBNull)
+        {
+            _logger.LogDebug(
+                "TopologyRepository.LoadFunctionParameterAsync: no active parameter found for '{FunctionName}/{ParameterKey}'.",
+                functionName,
+                parameterKey);
+            return null;
+        }
+
+        return Convert.ToString(scalar);
     }
 }
 

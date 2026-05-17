@@ -10,10 +10,6 @@ Context Route Recommendation v1 は main に統合済み。
 
 ### Persistence / Repository
 
-- [ ] `ContextRouteRepository` を in-memory skeleton から実 DB クエリへ置換する
-- [ ] `TopologyRepository.LoadFunctionParameterAsync` を `function_parameters` 実読みに置換する
-- [ ] `context-token-registry` API を 501 から実 DB 接続へ置換する
-- [ ] `context-token-registry` の deprecate エンドポイントを実装する
 
 ### Cache / Aggregation Pipeline
 

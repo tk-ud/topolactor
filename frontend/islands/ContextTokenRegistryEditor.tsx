@@ -19,7 +19,6 @@ import {
  */
 export default function ContextTokenRegistryEditor(): JSX.Element {
   const [tokens, setTokens] = useState<ContextToken[]>([]);
-  const [notBound, setNotBound] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newGroup, setNewGroup] = useState("");
   const [newValue, setNewValue] = useState("0.0");
@@ -28,23 +27,11 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
 
   useEffect(() => {
     fetchContextTokens().then((result) => {
-      if (result === null) {
-        setNotBound(true);
-      } else {
-        setTokens(result);
-      }
+      setTokens(result);
     }).catch((err: unknown) => {
       setStatus(err instanceof Error ? err.message : String(err));
     });
   }, []);
-
-  if (notBound) {
-    return (
-      <p style={{ fontFamily: "monospace", color: "#888" }}>
-        レジストリ未接続 — context_token_registry エンドポイントは未実装です (501)。
-      </p>
-    );
-  }
 
   async function handleAdd(e: Event): Promise<void> {
     e.preventDefault();

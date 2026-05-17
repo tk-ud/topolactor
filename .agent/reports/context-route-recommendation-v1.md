@@ -192,3 +192,10 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING
 ## Remaining TODO
 
 See `.agent/tasks/todo.md`.
+
+## 2026-05-17 Persistence Update
+- TopologyRepository.LoadFunctionParameterAsync を function_parameters 実読みに移行。
+- ContextRouteRepository の append/load/stats/upsert を context_route_tables 実DBクエリに置換。
+- frontend API /api/admin/context-token-registry の 501 を廃止し、一覧取得・作成をDB接続で実装。
+- /api/admin/context-token-registry/[id]/deprecate を追加し、status=deprecated 更新を実装。
+- policy fallback / hardcoded seed は追加していない。

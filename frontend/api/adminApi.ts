@@ -23,9 +23,8 @@ export type ContextToken = {
 };
 
 /** Returns null when the registry endpoint is not yet bound (501). */
-export async function fetchContextTokens(): Promise<ContextToken[] | null> {
+export async function fetchContextTokens(): Promise<ContextToken[]> {
   const res = await fetch("/api/admin/context-token-registry");
-  if (res.status === 501) return null;
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json() as ContextToken[];
 }
