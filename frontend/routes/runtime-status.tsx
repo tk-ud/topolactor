@@ -34,7 +34,7 @@ export default function RuntimeStatus() {
       </ul>
 
       <h2>Boundary Check</h2>
-      <table border="1" cellPadding="6">
+      <table cellPadding="6">
         <thead>
           <tr>
             <th>Boundary</th>
