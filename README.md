@@ -42,141 +42,31 @@ User operations, payloads, and responses rotate the interaction axes like a quat
 
 UI is not treated as a fixed screen, but as a projection generated from component packages, schemas, agenda, and resume context.
 
-Frontend owns:
-
-- user interaction
-- visual projection
-- component package expansion
-- agenda execution
-- resume restoration
-- response projection
-
-Frontend must not own:
-
-- business meaning decisions
-- database topology authority
-- backend internal runtime state
-
----
-
 ### Backend = Abstract Vector Runtime
 
 Backend is the abstract vector execution space.
 
 It receives a user operation vector, resolves the attractor, binds parameters stored in the database, validates the runtime state, and emits a response.
 
-Backend owns:
-
-- vector resolution
-- attractor resolution
-- abstract function parameter binding
-- runtime validation
-- mapper execution
-- repository command generation
-- emission generation
-
-Backend must not own:
-
-- physical UI rendering
-- unvalidated schema mutation
-- silent fallback
-
----
-
 ### Database = Semantic Topology Space
 
 Database is the semantic topology space.
 
-It stores registries, relations, schemas, packages, function parameters, and converged entity data.
-
-The database is not merely a table store. It is the space where business meaning, relations, and runtime parameters are accumulated.
-
-Database stores:
-
-- registrar
-- registry
-- relation registry
-- structure map
-- schema
-- package
-- component refs
-- abstract function parameters
-- converged entity data
-- diff logs
-- usage metrics
-- promotion policy
+It stores registries, relations, schemas, packages, function parameters, converged entity data, diff logs, usage metrics, and promotion policies.
 
 ---
 
 ## Runtime Terms
 
-### Vector
-
-A compressed direction of operation.
-
-It contains user action, target, context, role, payload, current hub/entity, and requested projection.
-
-### Attractor
-
-The semantic convergence point of a vector.
-
-It is resolved through hub, relation registry, manifest, package, schema, and state context.
-
-### Structure Map
-
-A runtime topology map.
-
-It connects:
-
-```text
-vector
-→ attractor
-→ package
-→ schema
-→ components
-→ relation
-→ state policy
-```
-
-### Package
-
-A bundle of executable components.
-
-Frontend packages contain UI components.
-
-Backend packages contain resolvers, mappers, validators, and repository commands.
-
-### Schema
-
-The definition of elements and wiring.
-
-Schema defines shape, validation, fields, relations, component refs, API contracts, and repository command shape.
-
-### Component
-
-An atomic executable unit.
-
-Frontend components are UI parts.
-
-Backend components are runtime execution units such as resolvers, validators, mappers, diff appenders, and schedulers.
-
-### Agenda
-
-Execution plan.
-
-It defines which vector, package, schema, and components should run in which order.
-
-### Resume
-
-Restoration context.
-
-It restores current vector, attractor, hub, entity, selected package, selected schema, and relation context.
-
-### Emission
-
-Validated runtime output.
-
-Frontend receives emissions and expands them into UI projection.
+- **Vector**: compressed direction of operation.
+- **Attractor**: semantic convergence point of a vector.
+- **Structure Map**: runtime topology map connecting vector, attractor, package, schema, components, relation, and state policy.
+- **Package**: bundle of executable frontend or backend components.
+- **Schema**: definition of elements and wiring.
+- **Component**: atomic executable unit.
+- **Agenda**: execution plan.
+- **Resume**: restoration context.
+- **Emission**: validated runtime output.
 
 ---
 
@@ -224,8 +114,6 @@ backend/
 
 topolactor follows a registrar-driven extension model.
 
-New data structures do not require immediate physical DDL.
-
 ```text
 raw/entity_jsonb
 → registrar
@@ -269,8 +157,6 @@ vector
 → emission
 ```
 
-DTOs exist to support endpoint shape, validation, and transport boundaries.
-
 ---
 
 ## Runtime Rules
@@ -292,17 +178,14 @@ DTOs exist to support endpoint shape, validation, and transport boundaries.
 
 ---
 
-## Initial Goal
+## Public Design Documents
 
-The first goal of topolactor is to build a business management runtime where:
+This repository currently publishes design documents only.
 
-- admins can define logical tables through registrars
-- relations can be added as data
-- UI can be projected from schemas and packages
-- backend behavior can be expanded through runtime packages
-- frequently used jsonb fields can be promoted safely
-- audit logs remain append-only
-- business data evolves from usage, not from premature schema fixation
+- `docs/framework-core.yaml` — core framework philosophy, topology model, and layer definitions.
+- `docs/framework-policy.yaml` — registry, state, search, manifest, data, log, and promotion policies.
+- `docs/file-structure.yaml` — vector-driven runtime directory structure and wiring routes.
+- `NOTICE.md` — documentation-only publication notice.
 
 ---
 
@@ -312,8 +195,16 @@ Experimental design phase.
 
 This repository starts as a structural and runtime design reference for a vector-driven business management system.
 
+The reference implementation, production runtime, database schema, admin UI, and private business application code are developed outside this repository.
+
 ---
 
-## License
+## License / Notice
 
-TBD
+This repository contains public design documents only.
+
+All rights reserved unless explicitly stated otherwise.
+
+No source code license is granted by this repository at this time.
+
+See `NOTICE.md`.
