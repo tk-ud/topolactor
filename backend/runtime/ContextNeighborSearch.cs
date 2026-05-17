@@ -64,7 +64,7 @@ public class ContextNeighborSearch
             var sim = ComputeCosineSimilarity(currentVector, currentNorm, c.SparseVector, c.L2Norm);
             if (sim >= minSimilarity)
                 scored.Add((
-                    new ContextNeighborResult(c.SessionId, c.PrefixIndex, sim, null, null),
+                    new ContextNeighborResult(c.SessionId, c.PrefixIndex, sim, c.NextOperation, c.NextTokenIdsHint),
                     sim,
                     c.UpdatedAt
                 ));

@@ -44,6 +44,10 @@ public record ContextEventVector(
 /// <summary>
 /// Cached prefix vector for (session_id, prefix_index).
 /// SparseVector = SUM(event_vectors[0..prefix_index]).
+/// NextOperation and NextTokenIdsHint carry the event that follows this prefix
+/// in the original session. These are populated by the repository when loading
+/// candidates for nearest-prefix search so neighbor-derived candidates can be
+/// produced without a second round-trip.
 /// </summary>
 public record ContextPrefixVectorRecord(
     Guid SessionId,
@@ -51,7 +55,9 @@ public record ContextPrefixVectorRecord(
     Guid LastEventId,
     IReadOnlyDictionary<Guid, float> SparseVector,
     float L2Norm,
-    DateTimeOffset UpdatedAt
+    DateTimeOffset UpdatedAt,
+    string? NextOperation = null,
+    IReadOnlyList<Guid>? NextTokenIdsHint = null
 );
 
 /// <summary>

@@ -19,6 +19,7 @@ public class DefaultEntitySearchIntegrationTests
     private static DispatchEndpoint CreateEndpoint()
     {
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
         var executor = new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -30,7 +31,12 @@ public class DefaultEntitySearchIntegrationTests
             semanticMapper: new SemanticMapper(),
             topologyRepository: topologyRepository,
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
-            runtimeGuard: new RuntimeGuard());
+            runtimeGuard: new RuntimeGuard(),
+            contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
+                NullLogger<ContextRouteRecommendationResolver>.Instance,
+                contextRouteRepository,
+                new ContextVectorBuilder(),
+                new ContextNeighborSearch()));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
     }
 

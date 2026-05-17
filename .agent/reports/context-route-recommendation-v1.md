@@ -113,14 +113,39 @@ stored_topology_data
 - cosine 計算・nearest search・遷移確率計算はすべて Backend Runtime のみ
 - Frontend は `ContextRouteRecommendation` を data として受け取り表示するだけ
 
-## 実行チェック
+## PR #18 follow-up fixes（後続修正）
 
-| チェック | 結果 |
-|---|---|
-| `bash .agent/tests/check-structure.sh` | 実行予定（コミット前に確認） |
-| `bash .agent/tests/check-db-schema.sh` | 実行予定（DB ツールの有無による） |
-| `bash .agent/tests/check-backend-tests.sh` | 実行予定（dotnet 環境の有無による） |
-| `bash .agent/tests/check-frontend-types.sh` | 実行予定（deno 環境の有無による） |
+### Fix #2: DefaultEntitySearchIntegrationTests — 依存追加
+
+`RuntimeExecutor` に `ContextRouteRecommendationResolver` を第12引数として追加した際、
+`DefaultEntitySearchIntegrationTests.CreateEndpoint()` の構築コードが未更新だった。
+`ContextRouteRepository` + `ContextRouteRecommendationResolver` の構築チェーンを追加して修正。
+
+### Fix #3: 最近傍 prefix から next operation 候補が生成されない問題
+
+**原因**: `ContextPrefixVectorRecord` は pure vector cache として設計され、後続イベントのデータを持っていなかった。
+`FindNearestPrefixes` 内で `ContextNeighborResult` を生成する際に `NextOperation=null, NextTokenIdsHint=null` をハードコードしていた。
+
+**修正**:
+1. `ContextPrefixVectorRecord` に `NextOperation` と `NextTokenIdsHint` を optional フィールドとして追加（DB 側で後続イベントを JOIN してセット）
+2. `FindNearestPrefixes` を `c.NextOperation` / `c.NextTokenIdsHint` を `ContextNeighborResult` に転送するよう修正
+3. `LoadRecentPrefixVectorsAsync` を `virtual` に変更（テスト上書き可能）
+4. `LoadActiveTokensAsync` を `virtual` に変更（テスト上書き可能）
+5. `ResolveAsync_WithPrefixHistory_ReturnsOkWithNextOperationCandidates` テスト追加:
+   stub subclass が 15 件のプレフィックス候補（`NextOperation="action_next"` 付き）を返し、
+   `ResolveAsync` が `Status=Ok` かつ `NextOperations` に `"action_next"` を含むことを検証
+
+## 実行チェック結果
+
+| チェック | 結果 | 備考 |
+|---|---|---|
+| `bash .agent/tests/check-structure.sh` | PASS（全84項目） | dotnet/deno 不要。bash のみで実行 |
+| `bash .agent/tests/check-db-schema.sh` | SKIP | PostgreSQL 接続情報が環境に存在しない |
+| `bash .agent/tests/check-backend-tests.sh` | SKIP | dotnet がこの実行環境に存在しない（CI では実行） |
+| `bash .agent/tests/check-frontend-types.sh` | SKIP | deno がこの実行環境に存在しない（CI では実行） |
+| `bash .agent/tests/check-default-entity-search.sh` | SKIP | dotnet / deno 両方必要（CI では実行） |
+
+structure-check は全項目 OK を確認。backend/frontend テストは CI で実行される。
 
 ## 残 TODO
 

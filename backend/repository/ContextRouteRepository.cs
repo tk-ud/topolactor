@@ -36,9 +36,9 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Loads active token records for the given token IDs from context_token_registry.
-    /// In-memory skeleton: returns empty list.
+    /// In-memory skeleton: returns empty list. Override in tests or production.
     /// </summary>
-    public Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
+    public virtual Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
         IEnumerable<Guid> tokenIds,
         CancellationToken ct = default)
     {
@@ -48,10 +48,12 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Loads recent prefix vector cache entries for nearest-prefix cosine search.
-    /// Scoped by tableName and/or role for candidate narrowing.
-    /// In-memory skeleton: returns empty list.
+    /// Each record includes NextOperation and NextTokenIdsHint from the event
+    /// that follows the prefix in the original session, enabling neighbor-derived
+    /// next operation and token candidates without a second round-trip.
+    /// In-memory skeleton: returns empty list. Override in tests or production.
     /// </summary>
-    public Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
+    public virtual Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
         string? tableName,
         string? role,
         int maxDays,

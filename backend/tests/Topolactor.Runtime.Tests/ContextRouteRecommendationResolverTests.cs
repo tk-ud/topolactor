@@ -405,9 +405,32 @@ public class ContextRouteRecommendationResolverTests
         Assert.Empty(result.NextOperations);
     }
 
+    // --- End-to-end: next operation candidates flow from loaded prefix history ---
+
+    [Fact]
+    public async Task ResolveAsync_WithPrefixHistory_ReturnsOkWithNextOperationCandidates()
+    {
+        // Stub repository returns 15 prefix candidates each carrying NextOperation="action_next"
+        // with matching sparse vectors (cosine similarity = 1.0) → passes MinNeighbors=10 gate
+        var tokenId = Guid.NewGuid();
+        var stub = new StubPrefixRepository(tokenId);
+        var resolver = CreateResolver(stub);
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString()
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.NotEmpty(result.NextOperations);
+        Assert.Contains(result.NextOperations, c => c.Value == "action_next");
+    }
+
     // --- Helper ---
 
-    private static RuntimeWorkingShape MakeShape(string? sessionId)
+    private static RuntimeWorkingShape MakeShape(string? sessionId, string? contextTokenIds = null)
     {
         var vector = new OperationVector(
             Target: "default",
@@ -419,7 +442,7 @@ public class ContextRouteRecommendationResolverTests
             RequestedProjection: null,
             ContextSessionId: sessionId,
             ContextUserId: null,
-            ContextTokenIds: null,
+            ContextTokenIds: contextTokenIds,
             ContextRecordId: null
         );
 
@@ -434,5 +457,44 @@ public class ContextRouteRecommendationResolverTests
             ResolvedData: null,
             Errors: []
         );
+    }
+
+    /// <summary>
+    /// Stub repository that returns a fixed token record and 15 prefix candidates
+    /// all carrying NextOperation="action_next" with a known sparse vector.
+    /// </summary>
+    private sealed class StubPrefixRepository(Guid tokenId) : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
+            IEnumerable<Guid> tokenIds,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<ContextTokenRecord> result =
+                [new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")];
+            return Task.FromResult(result);
+        }
+
+        public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
+            string? tableName,
+            string? role,
+            int maxDays,
+            CancellationToken ct = default)
+        {
+            var vector = new Dictionary<Guid, float> { [tokenId] = 1.0f };
+            IReadOnlyList<ContextPrefixVectorRecord> result = Enumerable.Range(0, 15)
+                .Select(i => new ContextPrefixVectorRecord(
+                    SessionId: Guid.NewGuid(),
+                    PrefixIndex: i,
+                    LastEventId: Guid.NewGuid(),
+                    SparseVector: vector,
+                    L2Norm: 1.0f,
+                    UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i),
+                    NextOperation: "action_next",
+                    NextTokenIdsHint: null
+                ))
+                .ToList();
+            return Task.FromResult(result);
+        }
     }
 }
