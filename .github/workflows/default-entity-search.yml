@@ -1,0 +1,28 @@
+name: default-entity-search
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  default-entity-search:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v1.x
+
+      - name: Run default entity search local CI
+        run: bash .agent/tests/check-default-entity-search.sh

@@ -92,12 +92,14 @@ check_file ".agent/skills/structure-check.md"
 check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tests/check-frontend-types.sh"
+check_file ".agent/tests/check-default-entity-search.sh"
 check_file ".agent/tasks/todo.md"
 check_file ".agent/reports/README.md"
 
 check_file ".github/workflows/structure-check.yml"
 check_file ".github/workflows/backend-tests.yml"
 check_file ".github/workflows/frontend-types.yml"
+check_file ".github/workflows/default-entity-search.yml"
 
 check_file "db/schema.sql"
 check_file "db/topology_tables.sql"
@@ -123,6 +125,8 @@ check_file "backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.cspr
 check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs"
 check_file "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs"
 check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs"
+check_file "backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj"
+check_file "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs"
 
 check_file "deno.json"
 check_file "frontend/routes/index.tsx"
@@ -140,6 +144,7 @@ check_file "frontend/runtime/restoreResume.ts"
 check_file "frontend/api/dispatch.ts"
 check_file "frontend/structure_map.ts"
 check_file "frontend/README.md"
+check_file "frontend/tests/defaultEntitySearch.test.ts"
 
 # ─── Required content terms ───────────────────────────────────────────────────
 
@@ -180,6 +185,14 @@ check_content ".agent/tests/check-frontend-types.sh" "deno check"
 check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "default:entity:search"
 check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "ATTRACTOR_RESOLVE_FAILED"
 check_content "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs" "default:entity:search"
+
+check_content ".agent/tests/check-default-entity-search.sh" "dotnet test"
+check_content ".agent/tests/check-default-entity-search.sh" "deno test"
+check_content ".github/workflows/default-entity-search.yml" "bash .agent/tests/check-default-entity-search.sh"
+check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs" "default:entity:search"
+check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs" "ATTRACTOR_RESOLVE_FAILED"
+check_content "frontend/tests/defaultEntitySearch.test.ts" "renderEmission"
+check_content "frontend/tests/defaultEntitySearch.test.ts" "ATTRACTOR_RESOLVE_FAILED"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
