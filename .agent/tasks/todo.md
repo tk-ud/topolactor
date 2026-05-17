@@ -78,6 +78,27 @@
       → Docs: `docs/demo-walkthrough.md`, `README.md`
       → 実際の変更対象は最小化し、未変更ファイルは理由付きで除外判断を残す。
 
+## Context Recommendation Aggregation Policy
+
+- [ ] `context_transition_stats` の集計窓パラメータを `function_parameters` 正本で追加する
+      → 設定正本は `function_parameters` の `context_route_recommendation_resolve` policy JSON とする。
+      → 例: `parameter_key = default_policy / demo_policy / <scoped_policy>` の `parameter_value.transition_aggregation` に保持する。
+      → `structure_maps.state_policy` は値を直接持たず、`context_route_policy_ref` で policy key を参照する。
+      → 将来 Registry option 側に持たせる場合も、実値ではなく `aggregation_policy_ref` などの policy ref として `function_parameters` を読む。
+      → 対象候補: `function_parameters`, `structure_maps.state_policy`, registry option / parameter column, `db/seed_empty.sql`, `db/demo_seed.sql`, `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/repository/NpgsqlContextRouteRepository.cs`。
+
+- [ ] 集計窓のデフォルトを件数上限主軸で定義する
+      → データ増加時の all-time 再集計を避けるため、`aggregation_limit = 10000` を default policy に登録する。
+      → `prefer_recent = true` の場合は `created_at DESC LIMIT aggregation_limit` の最新N件を集計対象にする。
+      → `recent_days` は必須にせず optional。指定された場合のみ日付条件を追加する。
+      → 日付固定を主軸にすると低頻度業務の有効遷移が消えるため、デフォルトは件数窓とする。
+      → Runtime に `10000` や `recent_days` を直書きしない。
+
+- [ ] transition stats 再計算を all-time scope ではなく windowed scope に置換する
+      → `prob01 = count_hits / SUM(count_hits)` の意味は維持しつつ、分母・分子は policy で指定された集計窓内に限定する。
+      → policy missing の場合は production fallback せず、明示エラーまたは未適用状態を返す方針を決める。
+      → demo seed では公開用 policy として `aggregation_limit=10000`, `prefer_recent=true`, `recent_days=null` 相当を登録する。
+
 ## Auth / Demo Login
 
 - [ ] JWT login scaffold を追加する
