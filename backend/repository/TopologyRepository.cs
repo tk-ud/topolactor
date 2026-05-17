@@ -2,23 +2,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Topolactor.Repository;
 
-// function_name constant used by the context route recommendation resolver
-// to load its policy from function_parameters.
-file static class FunctionNames
-{
-    internal const string ContextRouteRecommendationResolve = "context_route_recommendation_resolve";
-    internal const string ContextRoutePolicyKey = "default_policy";
-    // JSON matches the INSERT in db/seed_empty.sql function_parameters row.
-    internal const string ContextRoutePolicySeedJson =
-        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}""";
-}
-
 /// <summary>
-/// Repository for loading stored topology data: structure maps, packages, and schemas.
+/// Repository for loading stored topology data: structure maps, packages, schemas,
+/// and runtime function parameters.
 ///
 /// In-memory skeleton: the default dummy topology path (attractor key "default:entity:search")
-/// returns seeded records without a real DB connection. All other keys return null.
-/// This proves the canonical route without requiring a running database.
+/// returns seeded structure/package/schema records without a real DB connection.
+/// Function parameters are not seeded in production repository code; missing policy
+/// returns null so callers can surface explicit policy-missing errors.
 /// </summary>
 public class TopologyRepository
 {
@@ -116,9 +107,8 @@ public class TopologyRepository
     /// Loads a function_parameters row by (function_name, parameter_key) and returns
     /// the parameter_value as a raw JSON string, or null if no active row is found.
     ///
-    /// In-memory skeleton: returns the context route recommendation policy JSON that
-    /// matches the INSERT row added to function_parameters in db/seed_empty.sql.
-    /// All other function_name / parameter_key combinations return null.
+    /// In-memory skeleton: returns null for all function parameters. Production
+    /// policy values must come from stored topology data, not repository constants.
     ///
     /// Real DB implementation: SELECT parameter_value FROM function_parameters
     ///   WHERE function_name = @fn AND parameter_key = @key AND active = true
@@ -130,15 +120,6 @@ public class TopologyRepository
         string parameterKey,
         CancellationToken ct = default)
     {
-        if (functionName == FunctionNames.ContextRouteRecommendationResolve &&
-            parameterKey == FunctionNames.ContextRoutePolicyKey)
-        {
-            _logger.LogDebug(
-                "TopologyRepository.LoadFunctionParameterAsync: returning seed policy for '{FunctionName}/{ParameterKey}'.",
-                functionName, parameterKey);
-            return Task.FromResult<string?>(FunctionNames.ContextRoutePolicySeedJson);
-        }
-
         _logger.LogDebug(
             "TopologyRepository.LoadFunctionParameterAsync: no parameter found for '{FunctionName}/{ParameterKey}'.",
             functionName, parameterKey);
