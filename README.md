@@ -81,6 +81,7 @@ stored_topology_data
 - `docs/framework-core.yaml` — core concepts, topology model, and layer responsibilities.
 - `docs/framework-policy.yaml` — registry, state, search, manifest, data, log, and promotion policies.
 - `docs/file-structure.yaml` — repository layout and canonical runtime wiring.
+- `docs/design/context-route-recommendation.md` — self-learning DB and recommendation runtime SSOT.
 - `docs/registrar-admin-ui-specification.md` — boundary for topology registration admin UI.
 - `docs/promotion-manifest-editor-specification.md` — boundary for promotion manifest editing.
 - `AGENTS.md` — entrypoint instructions for coding agents.
