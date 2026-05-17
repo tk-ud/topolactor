@@ -67,7 +67,7 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
       setEmission(response.emission);
     } else {
       setEmission({
-        errors: response.errors ?? ["dispatch: no emission returned"],
+        errors: response.errors ?? [{ message: "dispatch: no emission returned" }],
       });
     }
   }

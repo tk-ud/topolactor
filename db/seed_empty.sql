@@ -4,111 +4,108 @@
 --
 -- PURPOSE:
 --   Inserts the minimum set of well-known default rows needed to bootstrap
---   the topology space. Contains NO real business data — only structural
---   defaults that the backend runtime and topology tables reference.
+--   the topology space and prove the canonical dummy flow end-to-end.
+--   Contains NO real business data.
 --
--- SCOPE:
---   Real business data (domains, products, users, workflows, etc.) is
---   out of scope for this seed. That data is introduced through the
---   canonical flow: user_operation → operation_vector → attractor_resolve
---   → structure_map_resolve → … → emission_or_projection.
+-- DETERMINISTIC IDs:
+--   The four topology nodes below use fixed UUIDs so the backend in-memory
+--   skeleton and the DB seed reference the same IDs without coordination:
 --
--- HOW TO RUN (after schema.sql):
+--     default_package:             00000000-0000-0000-0000-000000000001
+--     default_schema:              00000000-0000-0000-0000-000000000002
+--     default_projection_component:00000000-0000-0000-0000-000000000003
+--     structure_map (default):     00000000-0000-0000-0000-000000000004
+--
+--   These IDs are skeleton-only. They are not meaningful outside this seed.
+--
+-- HOW TO RUN (in order):
+--   psql -d <database> -f db/schema.sql
+--   psql -d <database> -f db/topology_tables.sql
+--   psql -d <database> -f db/promotion_tables.sql
 --   psql -d <database> -f db/seed_empty.sql
 -- =============================================================================
 
 
 -- ---------------------------------------------------------------------------
 -- state_registry defaults
--- Two baseline states are seeded:
---   system / 'active'     — the default system-managed operational state.
---   business / 'operating' — the default business-managed operational state.
--- All hubs and entities that do not yet have a specific state assigned will
--- implicitly relate to one of these.
 -- ---------------------------------------------------------------------------
 INSERT INTO state_registry (state_id, name, owner)
 VALUES
-    -- system 'active': the canonical "live and operational" state managed
-    -- by the abstract backend runtime.
     (gen_random_uuid(), 'active',    'system'),
-
-    -- business 'operating': the canonical "business-layer operational" state
-    -- managed by the product/business logic layer.
     (gen_random_uuid(), 'operating', 'business')
 ON CONFLICT DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
 -- relation_registry defaults
--- One baseline relation named 'default' is seeded.
--- This serves as the fallback relation_registry reference for hubs,
--- hub_relations, and structure_maps that are not yet bound to a specific
--- named relation.
 -- ---------------------------------------------------------------------------
 INSERT INTO relation_registry (
     relation_registry_id,
-    name,
-    master_ids,
-    category,
-    type,
-    "order",
-    weight,
-    manifest_candidate,
-    active
+    name, master_ids, category, type, "order", weight, manifest_candidate, active
 )
 VALUES (
     gen_random_uuid(),
-    'default',      -- fallback relation for unbound topology references
-    '{}',           -- no master_registry linkage in default seed
-    'default',
-    'structural',
-    0,
-    1.0,
-    false,
-    true
+    'default', '{}', 'default', 'structural', 0, 1.0, false, true
 )
 ON CONFLICT DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
--- package_registry defaults
--- One baseline package named 'default_package' is seeded.
--- Acts as the fallback package resolved during package_resolve when no
--- specific package_id is set on a structure_map.
+-- package_registry — deterministic ID so structure_maps can reference it
 -- ---------------------------------------------------------------------------
-INSERT INTO package_registry (
+INSERT INTO package_registry (package_id, name, type, package_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000001',
+    'default_package', 'core', '{}', true
+)
+ON CONFLICT (package_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- schema_registry — deterministic ID so structure_maps can reference it
+-- ---------------------------------------------------------------------------
+INSERT INTO schema_registry (schema_id, name, schema_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'default_schema', '{"fields":[{"key":"label","type":"text","label":"Label"}]}', true
+)
+ON CONFLICT (schema_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- component_registry — deterministic ID so structure_maps can reference it
+-- ---------------------------------------------------------------------------
+INSERT INTO component_registry (component_id, name, component_type, component_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000003',
+    'default_projection_component', 'renderer',
+    '{"renders":"emission_data"}', true
+)
+ON CONFLICT (component_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- structure_maps — connects attractor_key "default:entity:search" to the
+-- default package, schema, and component.
+-- attractor_key is stored lowercase to match backend normalization
+-- (OperationVectorResolver lowercases Target:Layer:Action).
+-- ---------------------------------------------------------------------------
+INSERT INTO structure_maps (
+    structure_map_id,
+    name,
+    attractor_key,
     package_id,
-    name,
-    type,
-    package_def,
-    active
-)
-VALUES (
-    gen_random_uuid(),
-    'default_package',  -- fallback package for unbound structure_map references
-    'core',
-    '{}',               -- empty definition; no real package config in seed
-    true
-)
-ON CONFLICT DO NOTHING;
-
-
--- ---------------------------------------------------------------------------
--- schema_registry defaults
--- One baseline schema named 'default_schema' is seeded.
--- Acts as the fallback schema resolved during schema_resolve when no
--- specific schema_id is set on a structure_map.
--- ---------------------------------------------------------------------------
-INSERT INTO schema_registry (
     schema_id,
-    name,
-    schema_def,
+    component_ids,
     active
 )
 VALUES (
-    gen_random_uuid(),
-    'default_schema',   -- fallback schema for unbound structure_map references
-    '{}',               -- empty definition; no real schema shape in seed
+    '00000000-0000-0000-0000-000000000004',
+    'default',
+    'default:entity:search',
+    '00000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002',
+    ARRAY['00000000-0000-0000-0000-000000000003']::uuid[],
     true
 )
-ON CONFLICT DO NOTHING;
+ON CONFLICT (structure_map_id) DO NOTHING;

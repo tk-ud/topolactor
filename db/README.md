@@ -20,18 +20,20 @@ stored_topology_data
 
 ## How to run
 
-Apply the schema first, then the seed:
+Apply all four files in this order:
 
 ```bash
 psql -d <database> -f db/schema.sql
+psql -d <database> -f db/topology_tables.sql
+psql -d <database> -f db/promotion_tables.sql
 psql -d <database> -f db/seed_empty.sql
 ```
 
-`schema.sql` is the top-level entrypoint. It creates all registry, topology,
-and function parameter tables. It also contains `\i` comments indicating where
-`topology_tables.sql` and `promotion_tables.sql` slot in — run those files
-separately in the order shown, or adapt the `\i` directives for your psql
-workflow.
+`schema.sql` creates all registry tables and `function_parameters`.
+`topology_tables.sql` creates `hubs`, `entities`, `hub_relations`, `structure_maps`.
+`promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
+`seed_empty.sql` inserts the minimum default topology rows including the
+`default:entity:search` structure map needed for the dummy canonical flow.
 
 ---
 

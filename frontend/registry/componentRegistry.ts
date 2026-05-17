@@ -21,6 +21,12 @@ export const defaultComponentRegistry: ComponentRegistry = {
     componentType: "view",
     def: {},
   },
+  // Matches the deterministic component ID in seed_empty.sql and TopologyRepository.
+  "00000000-0000-0000-0000-000000000003": {
+    componentId: "00000000-0000-0000-0000-000000000003",
+    componentType: "renderer",
+    def: { renders: "emission_data" },
+  },
 };
 
 /**

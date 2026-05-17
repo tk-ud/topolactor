@@ -24,11 +24,11 @@ export type StructureMap = Record<string, StructureMapEntry>;
  * application startup (stored_topology_data → structure_map_resolve).
  */
 export const defaultStructureMap: StructureMap = {
-  "default:entity:Search": {
-    attractorKey: "default:entity:Search",
-    packageId: "default-package",
-    schemaId: "default-schema",
-    componentIds: ["default-view"],
+  "default:entity:search": {
+    attractorKey: "default:entity:search",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    componentIds: ["00000000-0000-0000-0000-000000000003"],
   },
 };
 

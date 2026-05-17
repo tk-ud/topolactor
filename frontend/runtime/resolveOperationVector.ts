@@ -34,7 +34,8 @@ export type OperationVector = {
  * consumed here as needed before the vector enters the attractor pipeline.
  */
 export function resolveOperationVector(op: UserOperation): OperationVector {
-  const attractorKey = `${op.target}:${op.layer}:${op.action}`;
+  // Normalize to lowercase to match backend OperationVectorResolver behavior.
+  const attractorKey = `${op.target}:${op.layer}:${op.action}`.toLowerCase();
 
   return {
     target: op.target,

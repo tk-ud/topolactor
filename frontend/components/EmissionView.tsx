@@ -1,5 +1,6 @@
 import { JSX } from "preact";
-import type { Emission } from "../api/dispatch.ts";
+import type { Emission, ValidationError } from "../api/dispatch.ts";
+import { validationErrorText } from "../api/dispatch.ts";
 
 type Props = {
   emission: Emission;
@@ -13,6 +14,8 @@ type Props = {
  * projection components are wired up.
  */
 export function EmissionView({ emission }: Props): JSX.Element {
+  const errorLines = emission.errors?.map(validationErrorText).join("\n");
+
   return (
     <div class="emission-view" style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
       <h4>Emission</h4>
@@ -36,11 +39,7 @@ export function EmissionView({ emission }: Props): JSX.Element {
           />
           <Row
             label="errors"
-            value={
-              emission.errors && emission.errors.length > 0
-                ? emission.errors.join("\n")
-                : undefined
-            }
+            value={errorLines}
             error={Boolean(emission.errors && emission.errors.length > 0)}
           />
         </tbody>
