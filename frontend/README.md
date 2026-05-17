@@ -55,3 +55,13 @@ Requires backend running for dispatch operations.
 ## Note
 
 This is an empty skeleton. Real business screens are out of scope for this skeleton issue.
+
+## Local type check
+
+Run the local frontend type check wrapper (Deno-only, no Node/npm, no backend build):
+
+```sh
+bash .agent/tests/check-frontend-types.sh
+```
+
+This validates the Fresh/Deno/Preact skeleton entrypoints with `deno check` only.
