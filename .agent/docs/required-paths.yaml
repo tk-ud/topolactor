@@ -49,11 +49,13 @@ required_files:
     - .agent/skills/structure-check.md
     - .agent/tests/check-structure.sh
     - .agent/tests/check-backend-tests.sh
+    - .agent/tests/check-frontend-types.sh
     - .agent/tasks/todo.md
     - .agent/reports/README.md
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
+    - .github/workflows/frontend-types.yml
   db:
     - db/schema.sql
     - db/topology_tables.sql
@@ -80,6 +82,7 @@ required_files:
     - backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs
     - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
   frontend:
+    - deno.json
     - frontend/routes/index.tsx
     - frontend/routes/admin/index.tsx
     - frontend/routes/runtime-status.tsx
@@ -129,6 +132,10 @@ required_content_terms:
     - "bash .agent/tests/check-backend-tests.sh"
   .agent/tests/check-backend-tests.sh:
     - "dotnet test"
+  .agent/tests/check-frontend-types.sh:
+    - "deno check"
+  .github/workflows/frontend-types.yml:
+    - "bash .agent/tests/check-frontend-types.sh"
   backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs:
     - "default:entity:search"
     - "ATTRACTOR_RESOLVE_FAILED"
@@ -136,5 +143,4 @@ required_content_terms:
     - "default:entity:search"
 
 future_checks:
-  - Frontend Fresh/Deno type check
   - Integration test for default:entity:search emission flow

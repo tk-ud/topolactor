@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "lib": ["deno.window", "dom", "dom.iterable", "esnext"],
+    "strict": true
+  },
+  "imports": {
+    "$fresh/": "https://deno.land/x/fresh@1.7.3/",
+    "preact": "https://esm.sh/preact@10.25.4",
+    "preact/": "https://esm.sh/preact@10.25.4/"
+  },
+  "exclude": ["backend/**", "db/**"]
+}
