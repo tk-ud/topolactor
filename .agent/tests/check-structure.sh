@@ -90,10 +90,12 @@ check_file ".agent/docs/required-paths.yaml"
 check_file ".agent/rules/rule.md"
 check_file ".agent/skills/structure-check.md"
 check_file ".agent/tests/check-structure.sh"
+check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tasks/todo.md"
 check_file ".agent/reports/README.md"
 
 check_file ".github/workflows/structure-check.yml"
+check_file ".github/workflows/backend-tests.yml"
 
 check_file "db/schema.sql"
 check_file "db/topology_tables.sql"
@@ -115,6 +117,10 @@ check_file "backend/repository/DiffLogRepository.cs"
 check_file "backend/guard/RuntimeGuard.cs"
 check_file "backend/schema/Contracts.cs"
 check_file "backend/README.md"
+check_file "backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj"
+check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs"
+check_file "backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs"
 
 check_file "frontend/routes/index.tsx"
 check_file "frontend/routes/admin/index.tsx"
@@ -163,6 +169,12 @@ check_content "db/topology_tables.sql" "structure_maps"
 check_content "db/topology_tables.sql" "attractor_key"
 
 check_content ".github/workflows/structure-check.yml" ".agent/tests/check-structure.sh"
+
+check_content ".github/workflows/backend-tests.yml" "bash .agent/tests/check-backend-tests.sh"
+check_content ".agent/tests/check-backend-tests.sh" "dotnet test"
+check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "default:entity:search"
+check_content "backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs" "ATTRACTOR_RESOLVE_FAILED"
+check_content "backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs" "default:entity:search"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

@@ -35,6 +35,9 @@ public class RuntimeExecutorTests
 
         var response = await executor.ExecuteAsync(request);
 
+        var vector = new OperationVectorResolver().Resolve(request);
+        Assert.Equal("default:entity:search", vector.AttractorKey);
+
         Assert.True(response.Success);
         Assert.NotNull(response.Emission);
         Assert.Equal("00000000-0000-0000-0000-000000000004", response.Emission!.StructureMapId);
