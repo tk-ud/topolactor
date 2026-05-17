@@ -20,14 +20,22 @@ public class OperationVectorResolver
 
         var attractorKey = DeriveAttractorKey(request.Target, request.Layer, request.Action);
 
-        // UserRole and RequestedProjection sourced from Context if present
+        // Standard and context route fields sourced from Context if present
         string? userRole = null;
         string? requestedProjection = null;
+        string? contextSessionId = null;
+        string? contextUserId = null;
+        string? contextTokenIds = null;
+        string? contextRecordId = null;
 
         if (request.Context is not null)
         {
             request.Context.TryGetValue("UserRole", out userRole);
             request.Context.TryGetValue("RequestedProjection", out requestedProjection);
+            request.Context.TryGetValue("ContextSessionId", out contextSessionId);
+            request.Context.TryGetValue("ContextUserId", out contextUserId);
+            request.Context.TryGetValue("ContextTokenIds", out contextTokenIds);
+            request.Context.TryGetValue("ContextRecordId", out contextRecordId);
         }
 
         return new OperationVector(
@@ -37,7 +45,11 @@ public class OperationVectorResolver
             AttractorKey: attractorKey,
             UserRole: userRole,
             Payload: request.Payload,
-            RequestedProjection: requestedProjection
+            RequestedProjection: requestedProjection,
+            ContextSessionId: contextSessionId,
+            ContextUserId: contextUserId,
+            ContextTokenIds: contextTokenIds,
+            ContextRecordId: contextRecordId
         );
     }
 

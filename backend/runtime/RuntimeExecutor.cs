@@ -24,6 +24,7 @@ public class RuntimeExecutor
     private readonly TopologyRepository _topologyRepository;
     private readonly DiffLogRepository _diffLogRepository;
     private readonly RuntimeGuard _runtimeGuard;
+    private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -36,7 +37,8 @@ public class RuntimeExecutor
         SemanticMapper semanticMapper,
         TopologyRepository topologyRepository,
         DiffLogRepository diffLogRepository,
-        RuntimeGuard runtimeGuard)
+        RuntimeGuard runtimeGuard,
+        ContextRouteRecommendationResolver contextRouteRecommendationResolver)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -49,6 +51,7 @@ public class RuntimeExecutor
         _topologyRepository = topologyRepository ?? throw new ArgumentNullException(nameof(topologyRepository));
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
+        _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
     }
 
     /// <summary>
@@ -142,7 +145,28 @@ public class RuntimeExecutor
             _logger.LogError(ex, "DiffLogRepository.AppendAsync failed. Continuing execution.");
         }
 
-        // Step 9: Build emission from resolved working shape
+        // Step 9: Context route recommendation (non-fatal — failure yields ExplicitError status)
+        ContextRouteRecommendationResult? recommendation = null;
+        try
+        {
+            recommendation = await _contextRouteRecommendationResolver.ResolveAsync(workingShape, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ContextRouteRecommendationResolver.ResolveAsync failed.");
+            recommendation = new ContextRouteRecommendationResult(
+                NextOperations: [],
+                NextTokens: [],
+                NearestPrefixSessionIds: [],
+                ContributingTokens: [],
+                Status: RecommendationStatus.ExplicitError,
+                StatusDetail: ex.Message
+            );
+        }
+
+        workingShape = workingShape with { ContextRouteRecommendation = recommendation };
+
+        // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
 
         _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");

@@ -10,9 +10,10 @@ namespace Topolactor.Runtime.Tests;
 
 public class RuntimeExecutorTests
 {
-    private static RuntimeExecutor CreateExecutor()
+    internal static RuntimeExecutor CreateExecutor()
     {
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
 
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
@@ -25,7 +26,12 @@ public class RuntimeExecutorTests
             semanticMapper: new SemanticMapper(),
             topologyRepository: topologyRepository,
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
-            runtimeGuard: new RuntimeGuard());
+            runtimeGuard: new RuntimeGuard(),
+            contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
+                NullLogger<ContextRouteRecommendationResolver>.Instance,
+                contextRouteRepository,
+                new ContextVectorBuilder(),
+                new ContextNeighborSearch()));
     }
 
     [Fact]
@@ -46,6 +52,9 @@ public class RuntimeExecutorTests
         Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000002"), response.Emission.SchemaId);
         Assert.Contains("00000000-0000-0000-0000-000000000003", response.Emission.ComponentIds ?? []);
         Assert.Empty(response.Errors);
+        // Recommendation is always present in emission; InsufficientHistory with no session context
+        Assert.NotNull(response.Emission.ContextRouteRecommendation);
+        Assert.Equal(RecommendationStatus.InsufficientHistory, response.Emission.ContextRouteRecommendation!.Status);
     }
 
     [Fact]

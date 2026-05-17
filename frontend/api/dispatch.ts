@@ -17,6 +17,22 @@ export function validationErrorText(e: ValidationError): string {
   return msg ?? code ?? "unknown error";
 }
 
+export type RecommendationCandidate = {
+  value: string;
+  score: number;
+  probability?: number;
+  evidence: string[];
+};
+
+export type ContextRouteRecommendation = {
+  nextOperations: RecommendationCandidate[];
+  nextTokens: RecommendationCandidate[];
+  nearestPrefixSessionIds: string[];
+  contributingTokens: string[];
+  status: "Ok" | "InsufficientHistory" | "ExplicitError";
+  statusDetail?: string;
+};
+
 export type Emission = {
   structureMapId?: string;
   packageId?: string;
@@ -24,6 +40,7 @@ export type Emission = {
   componentIds?: string[];
   data?: Record<string, unknown>;
   errors?: ValidationError[];
+  contextRouteRecommendation?: ContextRouteRecommendation;
 };
 
 export type DispatchRequest = {
