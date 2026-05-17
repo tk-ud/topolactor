@@ -33,7 +33,7 @@ context_token_registry   ← トークン辞書（Hub Registry）— /admin/cont
 function_parameters      ← 推薦エンジンチューニングパラメータ（topology データストア）
 context_event            ← 唯一の必須ログ（追記専用）
 context_prefix_vector_cache ← 近傍検索用プレフィックスベクトルキャッシュ
-context_transition_stats ← 遷移確率集計（構成比 prob01 = count_hits / count_events）
+context_transition_stats ← 遷移確率集計（prob01 = count_hits / SUM(count_hits) over same scope）
 ```
 
 推薦エンジンのポリシーは独立した設定テーブルではなく、既存 topology の

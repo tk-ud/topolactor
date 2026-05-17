@@ -250,9 +250,8 @@ CREATE INDEX IF NOT EXISTS idx_cpvc_updated
 -- context_transition_stats
 -- Workflow transition probability aggregate.
 -- Stores P(next_operation | prev_operation) segmented by role and user_id.
--- prob01 = count_hits / count_events (true conditional proportion).
--- count_events is the shared denominator over all next_operations in the same
--- (prev_operation, role, user_id) scope.
+-- prob01 = count_hits / SUM(count_hits) over same (prev_operation, role, user_id) scope.
+-- count_events mirrors SUM(count_hits) and is updated atomically with prob01.
 -- Fallback hierarchy: user_id → role → GLOBAL.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_transition_stats (
@@ -271,15 +270,18 @@ CREATE TABLE IF NOT EXISTS context_transition_stats (
 COMMENT ON TABLE context_transition_stats IS
     'Workflow transition probability: P(next_operation | prev_operation). '
     'Segmented by role and user_id with GLOBAL fallback. '
-    'prob01 = count_hits / count_events (true conditional proportion). '
-    'count_events is the shared denominator across all next_operations with the '
-    'same (prev_operation, role, user_id) scope.';
+    'prob01 = count_hits / SUM(count_hits) over the same (prev_operation, role, user_id) scope. '
+    'count_events mirrors the scope SUM(count_hits) and is kept in sync atomically.';
 
 COMMENT ON COLUMN context_transition_stats.prob01 IS
-    'Conditional proportion: count_hits / count_events. '
-    'count_events is shared across all next_operations in the same (prev, role, user_id) scope, '
-    'making this a true P(next | prev). Smoothing parameters, if required, must come from '
-    'function_parameters — not hardcoded.';
+    'Conditional proportion: count_hits / SUM(count_hits across scope). '
+    'Recomputed for ALL rows in the same (prev, role, user_id) scope on every update, '
+    'so new edges get the correct denominator immediately. '
+    'Smoothing parameters, if required, must come from function_parameters — not hardcoded.';
+
+COMMENT ON COLUMN context_transition_stats.count_events IS
+    'Mirrors SUM(count_hits) across all next_operations in the same (prev, role, user_id) scope. '
+    'Updated atomically with prob01. Not incremented independently.';
 
 CREATE INDEX IF NOT EXISTS idx_cts_prev_role
     ON context_transition_stats (prev_operation, role, user_id);

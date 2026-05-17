@@ -17,10 +17,10 @@ namespace Topolactor.Repository;
 ///
 /// Transition stats aggregation (near-realtime pipeline):
 ///   When AppendContextEventAsync is called, the immediately preceding event in the same
-///   session is queried and the (prev_operation → current_operation) transition stat is updated
-///   as a true conditional proportion: prob01 = count_hits / count_events, where count_events
-///   is the shared denominator over all next_operations in the same (prev, role, user_id) scope.
-///   This runs as a 3-step transaction inline on each event append.
+///   session is queried and the (prev_operation → current_operation) transition stat is updated.
+///   prob01 = count_hits / SUM(count_hits) over the same (prev, role, user_id) scope.
+///   count_events mirrors SUM(count_hits) so the column always equals the scope total.
+///   Runs as a 2-step transaction (upsert edge hits, then recompute scope totals) inline on each event append.
 ///
 /// Wiring: inject NpgsqlContextRouteRepository wherever ContextRouteRepository is required
 /// in production DI. Tests continue to use in-memory stubs via virtual method overrides.
@@ -346,16 +346,15 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
 
     /// <summary>
     /// Finds the preceding event in the same session and updates the (prev→current)
-    /// transition stat as a true conditional probability P(next | prev, role, user_id).
+    /// transition stat as a true conditional proportion P(next | prev, role, user_id).
     ///
-    /// Three-step transaction:
+    /// Two-step transaction:
     ///   Step 1: Upsert (prev, next) edge — count_hits += 1.
-    ///   Step 2: Increment count_events for ALL rows with same (prev, role, user_id) scope.
-    ///   Step 3: Recompute prob01 = count_hits / count_events for ALL rows in scope.
+    ///   Step 2: Recompute count_events = SUM(count_hits) and
+    ///           prob01 = count_hits / SUM(count_hits) for ALL rows in the same (prev, role, user_id) scope.
     ///
-    /// count_events is the shared denominator across all next_operations in the same
-    /// (prev, role, user_id) scope, making prob01 a true conditional proportion.
-    /// Smoothing constants must come from function_parameters — not hardcoded here.
+    /// count_events mirrors SUM(count_hits) across the scope so that new edges get
+    /// the correct denominator immediately on first insertion (avoids prob01=1.0 on new edges).
     /// </summary>
     private static async Task UpsertTransitionStatAsync(
         NpgsqlConnection conn,
@@ -404,32 +403,28 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                 await step1.ExecuteNonQueryAsync(ct);
             }
 
-            // Step 2: Increment count_events for ALL (prev, role, user_id) rows — shared denominator.
+            // Step 2: Recompute count_events = SUM(count_hits) and prob01 for ALL rows in scope.
+            // Using a CTE to ensure the new edge's count_hits is included in the denominator,
+            // which prevents prob01=1.0 on a newly inserted edge.
             await using (var step2 = conn.CreateCommand())
             {
                 step2.Transaction = tx;
                 step2.CommandText =
-                    "UPDATE context_transition_stats " +
-                    "SET count_events = count_events + 1, updated_at = now() " +
-                    "WHERE prev_operation = @prev AND role = @role AND user_id = @userId";
+                    "WITH total AS ( " +
+                    "  SELECT SUM(count_hits)::int AS total_hits " +
+                    "  FROM context_transition_stats " +
+                    "  WHERE prev_operation = @prev AND role = @role AND user_id = @userId " +
+                    ") " +
+                    "UPDATE context_transition_stats c " +
+                    "SET count_events = total.total_hits, " +
+                    "    prob01 = c.count_hits::float / NULLIF(total.total_hits, 0), " +
+                    "    updated_at = now() " +
+                    "FROM total " +
+                    "WHERE c.prev_operation = @prev AND c.role = @role AND c.user_id = @userId";
                 step2.Parameters.AddWithValue("prev",   prevOperation);
                 step2.Parameters.AddWithValue("role",   role);
                 step2.Parameters.AddWithValue("userId", userId);
                 await step2.ExecuteNonQueryAsync(ct);
-            }
-
-            // Step 3: Recompute prob01 = count_hits / count_events for ALL rows in scope.
-            await using (var step3 = conn.CreateCommand())
-            {
-                step3.Transaction = tx;
-                step3.CommandText =
-                    "UPDATE context_transition_stats " +
-                    "SET prob01 = count_hits::float / NULLIF(count_events, 0), updated_at = now() " +
-                    "WHERE prev_operation = @prev AND role = @role AND user_id = @userId";
-                step3.Parameters.AddWithValue("prev",   prevOperation);
-                step3.Parameters.AddWithValue("role",   role);
-                step3.Parameters.AddWithValue("userId", userId);
-                await step3.ExecuteNonQueryAsync(ct);
             }
 
             await tx.CommitAsync(ct);

@@ -26,8 +26,10 @@ Context Route Recommendation v1 は main に統合済み。
 ### Policy Scope
 
 - [ ] `context_transition_stats` に coverage / confidence threshold の仕組みを導入する
-      → prob01 が信頼できる最小サンプル数（min_events_for_stats）を function_parameters から読む。
-        不十分なサンプルの行は推薦に使用しないか、信頼度を下げて出力する。
+      → 方針: observed enum item count / registry enum item count で coverage を算出。
+        coverage が低い（= 未観測の next_operation が多い）スコープは信頼度を下げて出力するか除外する。
+        閾値（min_events_for_stats, min_coverage_ratio）は function_parameters から読む。
+        不十分なサンプルの行は推薦に使用しないか、信頼度スコアを下げて出力する。
 
 ### Optional Analytics
 
