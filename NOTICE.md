@@ -1,8 +1,8 @@
 # Notice
 
-This repository contains public design documents only.
+This repository is published as a public design and scaffold reference for Topolactor.
 
-The reference implementation, production runtime, database schema, admin UI, and private business application code are developed outside this repository.
+Concrete product implementations, private business data, deployment settings, and product-specific application code should be developed in separate scaffolded repositories.
 
 All rights reserved unless explicitly stated otherwise.
 
