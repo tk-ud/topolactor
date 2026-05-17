@@ -53,7 +53,9 @@ business_management_system_framework:
   tech_stack:
     database: PostgreSQL
     backend: C#
-    frontend: Next.js
+    frontend: Fresh
+    frontend_runtime: Deno
+    frontend_ui: Preact
     batch: cron_or_background_service
 
   actions:
