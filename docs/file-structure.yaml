@@ -1,15 +1,19 @@
 business_management_system_file_structure:
-  name: topolactor_vector_runtime_structure
-  version: 0.1.0
+  name: topolactor_data_driven_topology_structure
+  version: 0.2.0
   status: public_design_document
 
   design_subject:
     summary: >
-      This structure is not MVC, CRUD, or ordinary layered architecture.
-      A user operation is resolved as a vector, converged through an attractor,
+      This structure is not MVC, CRUD, ordinary layered architecture, or vector database architecture.
+      The architecture subject is data-defined topology.
+      Registries, schemas, packages, relations, structure maps, and function parameters are stored as data.
+      User operations are converted into operation vectors internally, converged through attractors,
       and expanded through structure_map, package, schema, and components.
     canonical_flow:
-      - user_operation_vector
+      - stored_topology_data
+      - user_operation
+      - operation_vector
       - attractor_resolve
       - structure_map_resolve
       - package_resolve
@@ -23,11 +27,12 @@ business_management_system_file_structure:
       metaphor: quaternion_space
       description: >
         Frontend is a physical projection layer.
-        User operations, payloads, and responses rotate interaction axes.
+        Ordinary UI operations such as buttons, forms, selects, table clicks, and route transitions
+        become operation inputs. These operations are converted into operation vectors internally.
         UI is projected from component packages, schemas, agenda, and resume context.
       owns:
         - user_operation
-        - interaction_vector
+        - operation_input
         - visual_projection
         - component_package_expansion
         - agenda_execution
@@ -39,13 +44,13 @@ business_management_system_file_structure:
         - backend_internal_runtime_dto
 
     backend:
-      role: abstract_vector_runtime
+      role: abstract_runtime
       description: >
-        Backend receives user_operation_vector, resolves attractors,
+        Backend receives user operations, derives operation vectors, resolves attractors,
         binds database-stored abstract function parameters,
         validates runtime state, and emits validated responses.
       owns:
-        - vector_resolution
+        - operation_vector_resolution
         - attractor_resolution
         - abstract_function_parameter_binding
         - runtime_validation
@@ -63,6 +68,7 @@ business_management_system_file_structure:
       description: >
         Database stores registries, relations, schemas, packages, function parameters,
         converged entity data, diff logs, metrics, and promotion policy.
+        It is the authority for data-defined topology.
       stores:
         - semantic_topology
         - registrar
@@ -79,15 +85,21 @@ business_management_system_file_structure:
         - promotion_policy
 
   runtime_terms:
-    vector:
-      role: operation_direction
-      description: Compressed direction of user operation, context, role, payload, and requested projection.
+    stored_topology_data:
+      role: architecture_subject
+      description: Registries, schemas, packages, relations, structure maps, and function parameters stored as data.
+    user_operation:
+      role: input_surface
+      description: Button, form, select, table click, route transition, or optional text input.
+    operation_vector:
+      role: internal_operation_direction
+      description: Internal direction derived from user operation, context, role, payload, and requested projection.
     attractor:
       role: convergence_point
-      description: Semantic center where a vector converges.
+      description: Semantic center where an operation converges.
     structure_map:
-      role: vector_to_runtime_topology_map
-      description: Connects vector, attractor, package, schema, component, relation, and state policy.
+      role: data_topology_to_runtime_map
+      description: Connects attractor, package, schema, component, relation, and state policy.
     package:
       role: executable_component_bundle
       description: Frontend UI component bundle or backend runtime component bundle.
@@ -96,20 +108,41 @@ business_management_system_file_structure:
       description: Defines fields, layout, validation, relation, component refs, API contract, and repository command shape.
     agenda:
       role: execution_plan
-      description: Defines which vector, package, schema, and components run in which order.
+      description: Defines which package, schema, and components run in which order.
     resume:
       role: restoration_context
-      description: Restores current vector, attractor, hub, entity, package, schema, and relation context.
+      description: Restores current operation, attractor, hub, entity, package, schema, and relation context.
     emission:
       role: validated_runtime_output
       description: Validated backend output expanded by frontend runtime into UI projection.
 
+  input_model:
+    default:
+      description: Ordinary UI operations are the primary input model.
+      flow:
+        - button_or_form_or_select_or_table_click_or_route_transition
+        - user_operation
+        - operation_vector
+        - attractor
+        - schema_package_component_expansion
+    optional_text_input:
+      description: Natural language input is optional and normalized into operation candidates.
+      flow:
+        - text_input
+        - intent_entity_relation_candidate_extraction
+        - operation_vector
+        - attractor
+
   frontend:
     root: frontend/
+    implementation_target:
+      framework: Fresh
+      runtime: Deno
+      ui: Preact
     principle:
       - frontend_is_physical_interaction_space
       - ui_is_component_package_projection
-      - page_is_route_shell_not_business_logic
+      - route_is_projection_entrypoint_not_business_logic
       - structure_map_controls_component_expansion
       - agenda_controls_execution_order
       - resume_controls_restoration
@@ -135,9 +168,12 @@ business_management_system_file_structure:
       api:
         path: frontend/api/
         role: backend_contract_client
-      pages:
-        path: frontend/pages/
-        role: route_shell
+      routes:
+        path: frontend/routes/
+        role: Fresh_route_projection_entrypoints
+      islands:
+        path: frontend/islands/
+        role: local_interaction_points
       util:
         path: frontend/util/
         role: pure_abstract_functions
@@ -146,16 +182,16 @@ business_management_system_file_structure:
         role: client_side_safety_and_contract_guard
     top_level_files:
       structure_map.ts:
-        role: vector_to_package_schema_component_map
+        role: data_topology_to_package_schema_component_map
       layout.tsx:
         role: global_physical_shell
 
   backend:
     root: backend/
     principle:
-      - backend_is_abstract_vector_runtime
+      - backend_is_abstract_runtime
       - endpoint_is_thin_boundary
-      - runtime_resolves_vector_and_attractor
+      - runtime_resolves_operation_vector_and_attractor
       - mapper_performs_semantic_mapping
       - repository_owns_persistence_boundary
       - schema_defines_shape
@@ -237,7 +273,7 @@ business_management_system_file_structure:
     user_operation_to_frontend_projection:
       flow:
         - user_operation
-        - frontend.runtime.resolveVector
+        - frontend.runtime.resolveOperationVector
         - frontend.structure_map.lookup
         - frontend.package.resolve
         - frontend.schema.resolve
@@ -249,9 +285,9 @@ business_management_system_file_structure:
         - frontend.api.dispatch
         - backend.endpoint.DispatchEndpoint
         - backend.guard.auth_guard
-        - backend.runtime.resolveVector
+        - backend.runtime.resolveOperationVector
         - backend.runtime.resolveAttractor
-        - backend.mapper.vector_to_package
+        - backend.mapper.operation_to_package
         - backend.package.resolve
         - backend.schema.resolve
         - backend.runtime.bindFunctionParameters
@@ -271,8 +307,8 @@ business_management_system_file_structure:
         - frontend.components.project
 
   contracts:
-    UserOperationVector:
-      role: operation_direction_contract
+    UserOperation:
+      role: input_contract
       fields:
         - operation_type
         - target
@@ -282,8 +318,13 @@ business_management_system_file_structure:
         - current_entity
         - relation_context
         - user_role
-        - payload_summary
+        - payload
         - requested_projection
+    OperationVector:
+      role: internal_operation_direction_contract
+      rule:
+        - internal_runtime_representation
+        - not_the_architecture_subject
     Agenda:
       role: execution_plan_contract
     Resume:
@@ -305,10 +346,11 @@ business_management_system_file_structure:
       role: validated_runtime_output
 
   rules:
-    - vector_is_the_runtime_entry_subject
+    - data_defined_topology_is_the_architecture_subject
+    - operation_vector_is_internal_runtime_representation
     - attractor_is_the_semantic_convergence_point
     - frontend_projects_physical_interaction_space
-    - backend_executes_abstract_vector_functions
+    - backend_executes_abstract_functions_against_stored_topology_data
     - database_stores_semantic_topology_and_function_parameters
     - package_groups_components
     - schema_defines_elements_and_wiring
