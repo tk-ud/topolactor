@@ -20,6 +20,27 @@ Always run the local structure check before reporting that a task is complete:
 
 The check must pass with zero failures. Do not report completion if the check fails.
 
+## Agent Local CI Gate
+
+`.agent/tests/*.sh` are local CI gates for agents.
+GitHub Actions workflows are audit wrappers for PR verification.
+
+Required checks:
+
+- Always run `bash .agent/tests/check-structure.sh`.
+- For DB or SQL changes, run `bash .agent/tests/check-db-schema.sh`.
+- For backend or C# runtime changes, run `bash .agent/tests/check-backend-tests.sh`.
+- For frontend or Fresh/Deno/Preact changes, run `bash .agent/tests/check-frontend-types.sh`.
+
+Local CI policy:
+
+- CI red means no commit and no push.
+- If local CI is red, fix the error first.
+- After fixing, rerun the relevant local CI.
+- Only green local CI may proceed to commit and push.
+- A missing required tool means the check was not executed, not that it passed.
+- Completion reports must distinguish actual passes from environment-limited non-execution.
+
 ## Report and Task Surface
 
 - Write reports and issue drafts under `.agent/reports/`
