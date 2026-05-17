@@ -1,0 +1,321 @@
+business_management_system_file_structure:
+  name: topolactor_vector_runtime_structure
+  version: 0.1.0
+  status: public_design_document
+
+  design_subject:
+    summary: >
+      This structure is not MVC, CRUD, or ordinary layered architecture.
+      A user operation is resolved as a vector, converged through an attractor,
+      and expanded through structure_map, package, schema, and components.
+    canonical_flow:
+      - user_operation_vector
+      - attractor_resolve
+      - structure_map_resolve
+      - package_resolve
+      - schema_resolve
+      - component_expand
+      - emission_or_projection
+
+  architecture_philosophy:
+    frontend:
+      role: physical_interaction_space
+      metaphor: quaternion_space
+      description: >
+        Frontend is a physical projection layer.
+        User operations, payloads, and responses rotate interaction axes.
+        UI is projected from component packages, schemas, agenda, and resume context.
+      owns:
+        - user_operation
+        - interaction_vector
+        - visual_projection
+        - component_package_expansion
+        - agenda_execution
+        - resume_restoration
+        - response_projection
+      must_not_own:
+        - business_meaning_decision
+        - database_topology_authority
+        - backend_internal_runtime_dto
+
+    backend:
+      role: abstract_vector_runtime
+      description: >
+        Backend receives user_operation_vector, resolves attractors,
+        binds database-stored abstract function parameters,
+        validates runtime state, and emits validated responses.
+      owns:
+        - vector_resolution
+        - attractor_resolution
+        - abstract_function_parameter_binding
+        - runtime_validation
+        - package_execution
+        - mapper_execution
+        - repository_command_generation
+        - emission_generation
+      must_not_own:
+        - physical_ui_rendering
+        - unvalidated_schema_mutation
+        - silent_fallback
+
+    database:
+      role: semantic_topology_space
+      description: >
+        Database stores registries, relations, schemas, packages, function parameters,
+        converged entity data, diff logs, metrics, and promotion policy.
+      stores:
+        - semantic_topology
+        - registrar
+        - registry
+        - relation_registry
+        - structure_map
+        - schema
+        - package
+        - component_refs
+        - abstract_function_parameters
+        - converged_entity_data
+        - diff_log
+        - usage_metrics
+        - promotion_policy
+
+  runtime_terms:
+    vector:
+      role: operation_direction
+      description: Compressed direction of user operation, context, role, payload, and requested projection.
+    attractor:
+      role: convergence_point
+      description: Semantic center where a vector converges.
+    structure_map:
+      role: vector_to_runtime_topology_map
+      description: Connects vector, attractor, package, schema, component, relation, and state policy.
+    package:
+      role: executable_component_bundle
+      description: Frontend UI component bundle or backend runtime component bundle.
+    schema:
+      role: element_and_wiring_definition
+      description: Defines fields, layout, validation, relation, component refs, API contract, and repository command shape.
+    agenda:
+      role: execution_plan
+      description: Defines which vector, package, schema, and components run in which order.
+    resume:
+      role: restoration_context
+      description: Restores current vector, attractor, hub, entity, package, schema, and relation context.
+    emission:
+      role: validated_runtime_output
+      description: Validated backend output expanded by frontend runtime into UI projection.
+
+  frontend:
+    root: frontend/
+    principle:
+      - frontend_is_physical_interaction_space
+      - ui_is_component_package_projection
+      - page_is_route_shell_not_business_logic
+      - structure_map_controls_component_expansion
+      - agenda_controls_execution_order
+      - resume_controls_restoration
+    directories:
+      components:
+        path: frontend/components/
+        role: atomic_ui_components
+      package:
+        path: frontend/package/
+        role: ui_component_package_groups
+      schema:
+        path: frontend/schema/
+        role: ui_element_and_wiring_schema
+      registry:
+        path: frontend/registry/
+        role: frontend_runtime_registry
+      runtime:
+        path: frontend/runtime/
+        role: frontend_runtime_executor
+      state:
+        path: frontend/state/
+        role: client_runtime_state
+      api:
+        path: frontend/api/
+        role: backend_contract_client
+      pages:
+        path: frontend/pages/
+        role: route_shell
+      util:
+        path: frontend/util/
+        role: pure_abstract_functions
+      guard:
+        path: frontend/guard/
+        role: client_side_safety_and_contract_guard
+    top_level_files:
+      structure_map.ts:
+        role: vector_to_package_schema_component_map
+      layout.tsx:
+        role: global_physical_shell
+
+  backend:
+    root: backend/
+    principle:
+      - backend_is_abstract_vector_runtime
+      - endpoint_is_thin_boundary
+      - runtime_resolves_vector_and_attractor
+      - mapper_performs_semantic_mapping
+      - repository_owns_persistence_boundary
+      - schema_defines_shape
+      - registry_defines_lookup_surface
+      - guard_blocks_broken_refs_and_invalid_mutation
+    directories:
+      endpoint:
+        path: backend/endpoint/
+        role: thin_http_boundary
+      components:
+        path: backend/components/
+        role: atomic_backend_runtime_components
+      package:
+        path: backend/package/
+        role: backend_component_package_groups
+      schema:
+        path: backend/schema/
+        role: data_and_runtime_contract_schema
+      registry:
+        path: backend/registry/
+        role: backend_runtime_registry
+      mapper:
+        path: backend/mapper/
+        role: semantic_mapping_layer
+        distinction:
+          orm_mapper:
+            belongs_to: backend/schema
+            role: database_shape_mapping
+          semantic_mapper:
+            belongs_to: backend/mapper
+            role: meaning_space_mapping
+      runtime:
+        path: backend/runtime/
+        role: backend_runtime_executor
+      repository:
+        path: backend/repository/
+        role: persistence_boundary
+      state:
+        path: backend/state/
+        role: state_policy_layer
+      guard:
+        path: backend/guard/
+        role: permission_and_runtime_safety
+      util:
+        path: backend/util/
+        role: pure_abstract_functions
+      jobs:
+        path: backend/jobs/
+        role: asynchronous_runtime_maintenance
+
+  database:
+    role: semantic_topology_space
+    principle:
+      - db_stores_topology_not_fixed_screen
+      - db_stores_function_parameters
+      - db_stores_registrar_and_registry
+      - db_extracts_converged_data_only
+      - jsonb_first_promote_when_needed
+      - diff_log_append_only
+    logical_spaces:
+      registrar:
+        role: data_extension_entrypoint
+      registry:
+        role: named_lookup_and_runtime_registry
+      topology:
+        role: semantic_connection_space
+      runtime_parameters:
+        role: abstract_function_parameter_storage
+      business_data:
+        role: converged_entity_data_storage
+      audit:
+        role: append_only_observation_log
+      usage_metrics:
+        role: promotion_and_optimization_signal
+      promotion:
+        role: runtime_schema_evolution
+
+  runtime_wiring:
+    user_operation_to_frontend_projection:
+      flow:
+        - user_operation
+        - frontend.runtime.resolveVector
+        - frontend.structure_map.lookup
+        - frontend.package.resolve
+        - frontend.schema.resolve
+        - frontend.components.expand
+        - frontend.agenda.execute
+        - api.dispatch_if_backend_required
+    frontend_to_backend_dispatch:
+      flow:
+        - frontend.api.dispatch
+        - backend.endpoint.DispatchEndpoint
+        - backend.guard.auth_guard
+        - backend.runtime.resolveVector
+        - backend.runtime.resolveAttractor
+        - backend.mapper.vector_to_package
+        - backend.package.resolve
+        - backend.schema.resolve
+        - backend.runtime.bindFunctionParameters
+        - backend.runtime.validateRuntime
+        - backend.mapper.schema_to_repository_command
+        - backend.repository.execute
+        - backend.repository.diff_log_append
+        - backend.runtime.expandEmission
+        - backend.endpoint.return_response
+    backend_to_frontend_response:
+      flow:
+        - backend.emission
+        - frontend.api.receive
+        - frontend.runtime.parseEmission
+        - frontend.runtime.restoreResume
+        - frontend.runtime.renderEmission
+        - frontend.components.project
+
+  contracts:
+    UserOperationVector:
+      role: operation_direction_contract
+      fields:
+        - operation_type
+        - target
+        - layer
+        - action
+        - current_hub
+        - current_entity
+        - relation_context
+        - user_role
+        - payload_summary
+        - requested_projection
+    Agenda:
+      role: execution_plan_contract
+    Resume:
+      role: restoration_context_contract
+    EndpointDTO:
+      role: endpoint_contract_nutrient
+      rule:
+        - required_for_endpoint
+        - required_for_validation
+        - required_for_frontend_backend_contract
+        - not_the_architecture_subject
+    RuntimeWorkingShape:
+      role: backend_internal_working_shape
+      rule:
+        - internal_only
+        - not_returned_to_frontend
+        - not_persisted_as_business_fact
+    Emission:
+      role: validated_runtime_output
+
+  rules:
+    - vector_is_the_runtime_entry_subject
+    - attractor_is_the_semantic_convergence_point
+    - frontend_projects_physical_interaction_space
+    - backend_executes_abstract_vector_functions
+    - database_stores_semantic_topology_and_function_parameters
+    - package_groups_components
+    - schema_defines_elements_and_wiring
+    - mapper_maps_meaning_not_orm
+    - repository_persists_without_business_branching
+    - registry_is_the_registrar_surface
+    - structure_map_is_the_runtime_navigation_map
+    - agenda_executes
+    - resume_restores
+    - broken_refs_are_errors_not_silent_noops
