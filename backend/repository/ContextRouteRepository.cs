@@ -14,8 +14,8 @@ namespace Topolactor.Repository;
 /// </summary>
 public class ContextRouteRepository
 {
-    private readonly ILogger<ContextRouteRepository> _logger;
-    private readonly string _connectionString;
+    protected readonly ILogger<ContextRouteRepository> _logger;
+    protected readonly string _connectionString;
 
     public ContextRouteRepository(ILogger<ContextRouteRepository> logger, string connectionString)
     {
@@ -25,9 +25,9 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Appends a context event to context_event (append-only).
-    /// In-memory skeleton: no-op.
+    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+    public virtual Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ev);
         _logger.LogDebug("ContextRouteRepository.AppendContextEventAsync: in-memory skeleton — no-op for event={EventId}.", ev.EventId);
@@ -65,9 +65,9 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Loads transition statistics for a given previous operation.
-    /// In-memory skeleton: returns empty list.
+    /// In-memory skeleton: returns empty list. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
+    public virtual Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
         string prevOperation,
         string? role,
         CancellationToken ct = default)
@@ -78,9 +78,9 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Upserts an event vector cache entry into context_event_vector_cache.
-    /// In-memory skeleton: no-op.
+    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public Task UpsertEventVectorCacheAsync(ContextEventVector vec, CancellationToken ct = default)
+    public virtual Task UpsertEventVectorCacheAsync(ContextEventVector vec, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(vec);
         _logger.LogDebug("ContextRouteRepository.UpsertEventVectorCacheAsync: in-memory skeleton — no-op for event={EventId}.", vec.EventId);
@@ -89,9 +89,9 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Upserts a prefix vector cache entry into context_prefix_vector_cache.
-    /// In-memory skeleton: no-op.
+    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public Task UpsertPrefixVectorCacheAsync(ContextPrefixVectorRecord vec, CancellationToken ct = default)
+    public virtual Task UpsertPrefixVectorCacheAsync(ContextPrefixVectorRecord vec, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(vec);
         _logger.LogDebug("ContextRouteRepository.UpsertPrefixVectorCacheAsync: in-memory skeleton — no-op for session={SessionId} prefix={PrefixIndex}.", vec.SessionId, vec.PrefixIndex);

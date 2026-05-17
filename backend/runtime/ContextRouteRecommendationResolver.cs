@@ -59,15 +59,17 @@ public class ContextRouteRecommendationResolver
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        // Resolve policy from topology function_parameters.
+        // Resolve policy key: use context_route_policy_ref from structure_maps.state_policy
+        // when present, otherwise fall back to the global default_policy key.
+        var policyKey = ResolvePolicyKey(shape.StructureMapStatePolicyJson);
         var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
-            PolicyFunctionName, PolicyParameterKey, ct);
+            PolicyFunctionName, policyKey, ct);
 
         if (policyJson is null)
         {
             _logger.LogWarning(
                 "ContextRouteRecommendationResolver: function_parameter '{FunctionName}/{Key}' not found — CONTEXT_ROUTE_POLICY_NOT_FOUND.",
-                PolicyFunctionName, PolicyParameterKey);
+                PolicyFunctionName, policyKey);
             return ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
         }
 
@@ -273,6 +275,37 @@ public class ContextRouteRecommendationResolver
                 Evidence: [$"neighbor_count={kv.Value.Count}", $"total_sim={kv.Value.Score:F3}"]
             ))
             .ToList();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Policy key resolution
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Resolves the function_parameters key for this recommendation resolver.
+    /// When structure_maps.state_policy contains "context_route_policy_ref", that key
+    /// is used instead of the global "default_policy" — enabling per-structure-map,
+    /// per-relation, and per-hub scoped policy without code changes.
+    /// Falls back to PolicyParameterKey ("default_policy") when not set or on parse error.
+    /// </summary>
+    private static string ResolvePolicyKey(string? statePolicyJson)
+    {
+        if (string.IsNullOrWhiteSpace(statePolicyJson))
+            return PolicyParameterKey;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(statePolicyJson);
+            if (doc.RootElement.TryGetProperty("context_route_policy_ref", out var refEl) &&
+                refEl.GetString() is { Length: > 0 } policyRef)
+                return policyRef;
+        }
+        catch (JsonException)
+        {
+            // Malformed state_policy JSON: fall through to default key.
+        }
+
+        return PolicyParameterKey;
     }
 
     // ---------------------------------------------------------------------------
