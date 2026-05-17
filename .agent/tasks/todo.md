@@ -27,14 +27,14 @@
 
 - [ ] 2. Runtime policy 値の配置方針を先に確定
       → 設定値・閾値・候補数・優先度など Runtime behavior へ影響する値は hardcode せず、DB Registry / Manifest / structure_map / package-schema parameter へ寄せる。
-      → 対象: db/context_route_config.sql, db/context_route_tables.sql, db/demo_seed.sql, frontend/package/*, frontend/schema/*。
+      → 対象: db/context_route_tables.sql, db/demo_seed.sql, frontend/package/*, frontend/schema/*。
       → 判断点: 既存テーブルで表現可能か、追加カラム/追加registryが必要か。未実装なら missing-policy を明示する。
 
 - [ ] 3. DB デモシード追加（public fake data 限定）
-      → `db/demo_seed.sql` を追加し、実ビジネスデータを含まない fake/demo data のみで、hub / entities / topology registry / structure_map / package-schema-component refs / context token / context route config / recommendation policy / context events / prefix vector examples の関係が追えるようにする。
+      → `db/demo_seed.sql` を追加し、実ビジネスデータを含まない fake/demo data のみで、hub / entities / topology registry / structure_map / package-schema-component refs / context token / recommendation policy / context events / prefix vector examples の関係が追えるようにする。
       → コメントで「どの registry 変更が runtime 解決へどう効くか」を追跡可能にする。
       → SQL 実行可能性より既存 schema 整合を優先し、矛盾がある場合は理由を記録する。
-      → 対象: db/demo_seed.sql, db/README.md（seed適用意図の追記）, 必要に応じて db/context_route_tables.sql・db/context_route_config.sql。
+      → 対象: db/demo_seed.sql, db/README.md（seed適用意図の追記）, 必要に応じて db/context_route_tables.sql。
 
 - [ ] 4. Frontend demo components 追加（projection 専用）
       → 以下の component を追加し、runtime resolved data の表示に徹する（ローカル業務ロジックを持たせない）。
@@ -59,27 +59,45 @@
       → `README.md` に短い Demo セクションを追加し、walkthrough への入口を作る。
       → 必須説明: fake/demo data であること、production business data 非依存、runtime canonical route を維持していること。
 
-- [ ] 8. Agent surface 更新（必要最小限）
-      → `/.agent/reports/demo-scaffold-v1.md` を作成し、routine/監査向けに demo scaffold の構成確認結果を残す。
-      → `/.agent/tasks/todo.md` は、本タスク完了後に残作業がある場合のみ更新（完了済み実装ログは残さない）。
-      → 必要なら `/.agent/docs/required-paths.yaml` と `/.agent/tests/check-structure.sh` に demo required paths を追加。
-
-- [ ] 9. 構造チェック・ローカルCIゲート通過
+- [ ] 8. 構造チェック・ローカルCIゲート通過
       → 必須: `bash .agent/tests/check-structure.sh`。
       → DB/SQL を変更した場合: `bash .agent/tests/check-db-schema.sh`。
       → Frontend（Fresh/Deno/Preact）を変更した場合: `bash .agent/tests/check-frontend-types.sh`。
       → いずれか失敗時は修正→再実行。CI red のまま commit/push しない。
 
-- [ ] 10. 受け入れ確認（デモ価値の判定）
+- [ ] 9. 受け入れ確認（デモ価値の判定）
       → 以下が一目で確認できることを受け入れ条件とする。
       → (a) DB/Registry を変えると Runtime 解決が変わる。
       → (b) Runtime 解決が変わると UI projection が変わる。
       → (c) context recommendation が変わる。
       → 判断点: 最小変更シナリオ（例: token/priority/route policy 1点変更）で差分が説明可能か。
 
-- [ ] 11. 対象ファイル計画の棚卸し（実装前チェックリスト）
-      → DB: `db/demo_seed.sql`, `db/README.md`, `db/context_route_tables.sql`, `db/context_route_config.sql`
+- [ ] 10. 対象ファイル計画の棚卸し（実装前チェックリスト）
+      → DB: `db/demo_seed.sql`, `db/README.md`, `db/context_route_tables.sql`
       → Frontend: `frontend/components/HubOverviewCard.tsx`, `frontend/components/EntityTableProjection.tsx`, `frontend/components/RecommendationPanel.tsx`, `frontend/components/ContextTokenBadgeList.tsx`, `frontend/package/*`, `frontend/schema/*`, `frontend/routes/demo.tsx` or `frontend/routes/admin/demo.tsx`, `frontend/runtime/renderEmission.ts`
       → Docs: `docs/demo-walkthrough.md`, `README.md`
-      → Agent: `.agent/reports/demo-scaffold-v1.md`, `.agent/tasks/todo.md`, `.agent/docs/required-paths.yaml`, `.agent/tests/check-structure.sh`
       → 実際の変更対象は最小化し、未変更ファイルは理由付きで除外判断を残す。
+
+## Auth / Demo Login
+
+- [ ] JWT login scaffold を追加する
+      → public demo / admin demo の最小ログイン導線として実装する。実ビジネス認証ではなく demo scaffold 用。
+      → JWT secret / issuer / expiry など Runtime/Auth behavior に影響する値は hardcode せず、環境変数または demo policy surface に寄せる。
+      → 対象候補: backend/endpoint/*, backend/guard/*, backend/schema/*, frontend/routes/*, frontend/api/*。
+
+- [ ] password hash を bcrypt 系で扱う
+      → demo user の password は平文保存しない。demo credential は公開用でも hash 済み seed / config とする。
+      → bcrypt 採用可否、C# 側 library、seed 生成方法を確認する。
+      → 対象候補: db/demo_seed.sql, backend auth endpoint, auth repository/guard。
+
+## Infra / Demo Runtime
+
+- [x] `infra/docker-compose.yml` を追加する
+      → demo 用 Postgres / Adminer を `topolactor_demo` 固定credentialで起動する最小 compose を追加済み。
+      → 本番用途ではない。公開 scaffold のローカル確認用。
+      → 作成済み: `infra/docker-compose.yml`。
+
+- [ ] docker compose の seed 適用順と実行確認を行う
+      → `docker compose -f infra/docker-compose.yml up` で schema / topology / promotion / context route / seed_empty が適用されることを確認する。
+      → `db/demo_seed.sql` 追加後は compose init mount に含めるか、walkthrough 側で明示実行にするか判断する。
+      → 対象: infra/docker-compose.yml, db/README.md, docs/demo-walkthrough.md。
