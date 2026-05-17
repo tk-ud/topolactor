@@ -1,12 +1,14 @@
 # topolactor
 
-**Topology + Attractor runtime for vector-driven business systems.**
+**Data-driven topology runtime for business systems.**
 
-topolactor is a vector-driven topology runtime for business management systems.
+topolactor is a data-driven topology runtime for business management systems.
 
-It treats frontend as a physical interaction space, backend as an abstract vector runtime, and database as a semantic topology space.
+It treats frontend as a physical interaction space, backend as an abstract runtime, and database as a semantic topology space.
 
-ユーザー操作を `vector` として解釈し、`attractor` に収束させ、`structure_map / package / schema / components` を通じて業務データと UI を展開するための実験的フレームワークです。
+registry / schema / package に保存されたデータ定義から、業務データと UI を展開するための実験的フレームワークです。
+
+User operations are converted into operation vectors internally, but vector is not the subject of the architecture. The subject is data-defined topology.
 
 ---
 
@@ -17,7 +19,9 @@ topolactor is not a conventional CRUD / MVC / layered architecture.
 The core flow is:
 
 ```text
-user_operation_vector
+stored_topology_data
+→ user_operation
+→ operation_vector
 → attractor_resolve
 → structure_map_resolve
 → package_resolve
@@ -28,7 +32,7 @@ user_operation_vector
 
 The system does not start from fixed tables or fixed screens.
 
-Instead, it stores topology, registries, schemas, packages, and function parameters, then expands only the converged data required by the current operation.
+Instead, it stores topology, registries, schemas, packages, and function parameters as data, then expands only the converged data required by the current operation.
 
 ---
 
@@ -42,11 +46,11 @@ User operations, payloads, and responses rotate the interaction axes like a quat
 
 UI is not treated as a fixed screen, but as a projection generated from component packages, schemas, agenda, and resume context.
 
-### Backend = Abstract Vector Runtime
+### Backend = Abstract Runtime
 
-Backend is the abstract vector execution space.
+Backend is the abstract execution space.
 
-It receives a user operation vector, resolves the attractor, binds parameters stored in the database, validates the runtime state, and emits a response.
+It receives a user operation, derives an operation vector, resolves the attractor, binds parameters stored in the database, validates the runtime state, and emits a response.
 
 ### Database = Semantic Topology Space
 
@@ -58,15 +62,39 @@ It stores registries, relations, schemas, packages, function parameters, converg
 
 ## Runtime Terms
 
-- **Vector**: compressed direction of operation.
-- **Attractor**: semantic convergence point of a vector.
-- **Structure Map**: runtime topology map connecting vector, attractor, package, schema, components, relation, and state policy.
+- **Stored Topology Data**: registries, schemas, packages, relations, function parameters, and structure maps stored in the database.
+- **Operation Vector**: compressed direction derived from button operations, form submissions, route transitions, or text input.
+- **Attractor**: semantic convergence point of an operation.
+- **Structure Map**: runtime topology map connecting attractor, package, schema, components, relation, and state policy.
 - **Package**: bundle of executable frontend or backend components.
 - **Schema**: definition of elements and wiring.
 - **Component**: atomic executable unit.
 - **Agenda**: execution plan.
 - **Resume**: restoration context.
 - **Emission**: validated runtime output.
+
+---
+
+## Input Model
+
+The default input model is ordinary UI operation.
+
+```text
+button / form / select / table click / route transition
+→ user_operation
+→ operation_vector
+→ attractor
+→ schema / package / component expansion
+```
+
+Natural language input is optional.
+
+```text
+text input
+→ intent / entity / relation candidate extraction
+→ operation_vector
+→ attractor
+```
 
 ---
 
@@ -86,7 +114,7 @@ frontend/
   pages/           # Route shells
   util/            # Pure abstract utility functions
   guard/           # Client-side schema/component guards
-  structure_map.ts # Vector to package/schema/component map
+  structure_map.ts # Data topology to package/schema/component map
   layout.tsx       # Global physical shell
 ```
 
@@ -100,7 +128,7 @@ backend/
   schema/          # Data and runtime contract schemas
   registry/        # Runtime registries and registrar surface
   mapper/          # Semantic mapping layer
-  runtime/         # Backend vector runtime executor
+  runtime/         # Backend topology runtime executor
   repository/      # Persistence boundary
   state/           # State policy layer
   guard/           # Permission and runtime safety guards
@@ -148,9 +176,9 @@ DTOs are endpoint contracts — essential nutrients for safe communication betwe
 The subject is:
 
 ```text
-vector
+data-defined topology
+→ operation
 → attractor
-→ topology
 → package
 → schema
 → components
@@ -161,10 +189,11 @@ vector
 
 ## Runtime Rules
 
-- Vector is the runtime entry subject.
+- Data-defined topology is the architecture subject.
+- Operation vector is an internal runtime representation.
 - Attractor is the semantic convergence point.
 - Frontend projects physical interaction space.
-- Backend executes abstract vector functions.
+- Backend executes abstract functions against stored topology data.
 - Database stores semantic topology and function parameters.
 - Package groups components.
 - Schema defines elements and wiring.
@@ -184,7 +213,7 @@ This repository currently publishes design documents only.
 
 - `docs/framework-core.yaml` — core framework philosophy, topology model, and layer definitions.
 - `docs/framework-policy.yaml` — registry, state, search, manifest, data, log, and promotion policies.
-- `docs/file-structure.yaml` — vector-driven runtime directory structure and wiring routes.
+- `docs/file-structure.yaml` — data-driven topology runtime directory structure and wiring routes.
 - `NOTICE.md` — documentation-only publication notice.
 
 ---
@@ -193,7 +222,7 @@ This repository currently publishes design documents only.
 
 Experimental design phase.
 
-This repository starts as a structural and runtime design reference for a vector-driven business management system.
+This repository starts as a structural and runtime design reference for a data-driven topology business management system.
 
 The reference implementation, production runtime, database schema, admin UI, and private business application code are developed outside this repository.
 
