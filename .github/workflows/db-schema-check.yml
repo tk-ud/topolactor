@@ -1,0 +1,43 @@
+name: db-schema-check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  db-schema-check:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: topolactor
+          POSTGRES_USER: topolactor
+          POSTGRES_PASSWORD: topolactor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U topolactor -d topolactor"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: topolactor
+      POSTGRES_USER: topolactor
+      POSTGRES_PASSWORD: topolactor
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run DB schema check
+        run: .agent/tests/check-db-schema.sh
