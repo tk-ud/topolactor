@@ -1,29 +1,39 @@
 # Agent Task List — Remaining TODO
 
-## Context Route Recommendation Runtime (Issue #17) — v1 以降
-
-以下は v1 スコープ外として意図的に延期した項目。
-実装時は `context_route_tables.sql` の optional テーブル群（isolated section）を使用すること。
-
-- [ ] context clustering — k-means による session prefix クラスタリング
-- [ ] cluster labeling — human/LLM によるクラスタラベル付け（external API は naming のみ）
-- [ ] drift / spike detection — Bollinger band による推薦傾向変化検知
-- [ ] Bollinger band monitoring — `context_drift_signal` テーブルへの出力
-- [ ] user opt-in personalization UI — 個人ビューの opt-in / access-control UI
-- [ ] archive / retention policy — `context_event` hot/cold 分離（90日 hot → cold archive）
-- [ ] large-scale nearest search optimization — HNSW / ivfflat 等の近似最近傍対応
-- [ ] ContextRouteRepository 実装 — in-memory skeleton から実 DB クエリへの置換
-- [ ] TopologyRepository.LoadFunctionParameterAsync 実装 — `function_parameters` テーブルを実際に読む（現在 in-memory skeleton）
-- [ ] context-token-registry API エンドポイント実装 — 501 → 実 DB 接続
-- [ ] UpsertEventVectorCacheAsync / UpsertPrefixVectorCacheAsync の deferred batch 実装
-- [ ] context_transition_stats の near-realtime 集計パイプライン
-- [ ] tag_scope 対応の cache_part_lifecycle_stats 相当（context 版）
-- [ ] Context Route Recommendation の policy_ref を `structure_maps.state_policy` から解決できるようにする
-      （現在は `PolicyFunctionName = "context_route_recommendation_resolve"` 固定参照）
-- [ ] default_policy 固定参照を将来、structure_map / relation / hub scoped policy に拡張する
-      （function_name と parameter_key を呼び出し元の context から決定できるようにする）
-
----
-
 このファイルは agent task surface として使用する。
-新しい issue または follow-up が開かれた場合のみ追記する。
+完了済み作業・PR修正履歴・旧方針の残骸は残さない。
+
+## Context Route Recommendation Runtime
+
+Context Route Recommendation v1 は main に統合済み。
+以下は v1 以降の未実装項目のみ。
+
+### Persistence / Repository
+
+- [ ] `ContextRouteRepository` を in-memory skeleton から実 DB クエリへ置換する
+- [ ] `TopologyRepository.LoadFunctionParameterAsync` を `function_parameters` 実読みに置換する
+- [ ] `context-token-registry` API を 501 から実 DB 接続へ置換する
+- [ ] `context-token-registry` の deprecate エンドポイントを実装する
+
+### Cache / Aggregation Pipeline
+
+- [ ] `UpsertEventVectorCacheAsync` / `UpsertPrefixVectorCacheAsync` の deferred batch 実装
+- [ ] `context_transition_stats` の near-realtime 集計パイプライン実装
+- [ ] `context_event` の hot/cold archive retention policy を定義する
+
+### Policy Scope
+
+- [ ] Context Route Recommendation の `policy_ref` を `structure_maps.state_policy` から解決できるようにする
+- [ ] `default_policy` 固定参照を structure_map / relation / hub scoped policy に拡張する
+
+### Optional Analytics
+
+- [ ] context clustering — session prefix の k-means クラスタリング
+- [ ] cluster labeling — human / LLM によるクラスタラベル付け（LLM は naming のみ）
+- [ ] drift / spike detection — Bollinger band による推薦傾向変化検知
+- [ ] `context_drift_signal` への monitoring output 実装
+- [ ] large-scale nearest search optimization — HNSW / ivfflat 等の近似最近傍対応
+
+### Personalization
+
+- [ ] user opt-in personalization UI — 個人ビューの opt-in / access-control UI
