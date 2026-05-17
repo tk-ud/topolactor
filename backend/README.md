@@ -37,7 +37,7 @@ Every step either succeeds and passes its output to the next step, or returns an
 | `SchemaResolver` | `Topolactor.Runtime` | Loads the schema definition by `SchemaId` from the working shape. Throws if missing or not found. |
 | `EmissionBuilder` | `Topolactor.Runtime` | Constructs the final `Emission` from the fully resolved `RuntimeWorkingShape`. |
 | `SemanticMapper` | `Topolactor.Mapper` | Translates a resolved `RuntimeWorkingShape` into a `RepositoryCommand`. Maps domain meaning — not an ORM mapper. |
-| `TopologyRepository` | `Topolactor.Repository` | Loads stored topology data (structure maps, packages, schemas) from the database. Stub implementations return null. |
+| `TopologyRepository` | `Topolactor.Repository` | Loads stored topology data (structure maps, packages, schemas). In this skeleton it provides an in-memory default topology path for `default:entity:search`, while all other keys return null as explicit broken references. |
 | `DiffLogRepository` | `Topolactor.Repository` | Append-only log of topology mutations. Records before/after state for each operation. Stub logs to `ILogger`. |
 
 ### Key Types (in `Topolactor.Schema`)
@@ -52,16 +52,13 @@ Every step either succeeds and passes its output to the next step, or returns an
 
 ## How to Run
 
-```bash
-cd backend/
-dotnet run
-```
-
-Requires .NET 8 or later.
+This PR provides source-level runtime skeleton files only. A runnable .NET host, DI wiring, and HTTP server entrypoint are intentionally out of scope and should be added in a later issue.
 
 ## Database Dependency
 
-All `TopologyRepository` methods are stubs that return `null`. A real implementation requires a database connection. Pass the connection string via the `TopologyRepository` constructor or configure it via dependency injection. The expected schema is defined in `/db/schema.sql` and `/db/topology_tables.sql`.
+`TopologyRepository` provides an in-memory default topology path: the `default:entity:search` attractor key resolves through the full canonical route and returns a dummy emission without a database connection. All other keys return null and produce explicit `ValidationError` responses — no silent fallback.
+
+Real DB-backed repository loading is future work. When wired to a database, pass the connection string via the `TopologyRepository` constructor or configure it via dependency injection. The expected schema is defined in `db/schema.sql`, `db/topology_tables.sql`, and `db/promotion_tables.sql`.
 
 ## Scope Note
 
