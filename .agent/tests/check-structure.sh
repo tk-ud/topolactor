@@ -204,6 +204,17 @@ check_content "docs/registrar-admin-ui-specification.md" "Broken refs are explic
 check_content "docs/registrar-admin-ui-specification.md" "not CRUD"
 check_content "docs/registrar-admin-ui-specification.md" "frontend must not become source of truth"
 
+check_file "docs/promotion-manifest-editor-specification.md"
+check_content "docs/promotion-manifest-editor-specification.md" "Promotion manifest editor"
+check_content "docs/promotion-manifest-editor-specification.md" "controlled manifest editing boundary"
+check_content "docs/promotion-manifest-editor-specification.md" "Draft manifest"
+check_content "docs/promotion-manifest-editor-specification.md" "Validate refs and disclosure requirements"
+check_content "docs/promotion-manifest-editor-specification.md" "Promote manifest version"
+check_content "docs/promotion-manifest-editor-specification.md" "Broken refs must remain explicit validation errors"
+check_content "docs/promotion-manifest-editor-specification.md" "frontend must not become source of truth"
+check_content "docs/promotion-manifest-editor-specification.md" "disclosure text must be explicit"
+check_content "docs/promotion-manifest-editor-specification.md" "editor does not execute runtime"
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""

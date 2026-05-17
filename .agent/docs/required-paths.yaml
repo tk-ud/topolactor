@@ -43,6 +43,7 @@ required_files:
     - docs/framework-policy.yaml
     - docs/file-structure.yaml
     - docs/registrar-admin-ui-specification.md
+    - docs/promotion-manifest-editor-specification.md
   agent:
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
@@ -167,3 +168,13 @@ required_content_terms:
     - "Broken refs are explicit validation errors"
     - "not CRUD"
     - "frontend must not become source of truth"
+  docs/promotion-manifest-editor-specification.md:
+    - "Promotion manifest editor"
+    - "controlled manifest editing boundary"
+    - "Draft manifest"
+    - "Validate refs and disclosure requirements"
+    - "Promote manifest version"
+    - "Broken refs must remain explicit validation errors"
+    - "frontend must not become source of truth"
+    - "disclosure text must be explicit"
+    - "editor does not execute runtime"
