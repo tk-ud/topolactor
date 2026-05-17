@@ -1,17 +1,24 @@
 # Reports
 
-This directory is the output surface for agent-generated reports and issue drafts.
+This directory is the persistent report surface for routine or automatically executed agents.
 
-Agents may place here:
+Use this directory for:
 
-- **PR audit reports** — analysis of pull request changes against architecture rules.
-- **Issue drafts** — proposed issues for structural gaps, missing implementations, or policy violations.
-- **Remaining TODO summaries** — snapshots of `.agent/tasks/todo.md` at a point in time.
-- **Local check reports** — output from `.agent/tests/check-structure.sh` captured for review.
+- routine inspection reports
+- scheduled maintenance reports
+- automated agent run outputs
+- periodic structure / policy / dependency check results
+
+Do not use this directory as the default place for normal PR summaries, implementation logs, or temporary review notes.
+
+PR review results should normally stay in the review, conversation, or PR comment surface.
+Implementation summaries should normally stay in the PR description or completion message.
+
+If a routine or automated report creates residual work that must survive beyond the current run, place that work in `.agent/tasks/todo.md`.
 
 ## Naming Convention
 
-Use descriptive filenames with a date prefix where relevant:
+Use descriptive filenames with a date prefix for routine or scheduled reports:
 
 ```text
 YYYY-MM-DD-<topic>.md
@@ -21,10 +28,5 @@ Example:
 
 ```text
 2026-05-17-structure-check-pass.md
-2026-05-17-pr-audit-issue-3.md
+2026-05-17-policy-check.md
 ```
-
-## Not Required by This Issue
-
-Generated reports are not required for issue #3.
-This directory and README are created to establish the surface for future agent output.
