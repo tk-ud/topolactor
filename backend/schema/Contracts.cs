@@ -25,10 +25,11 @@ public record EndpointResponseDto(
 );
 
 /// <summary>
-/// Internal resolved operation vector. Never returned to the frontend.
+/// Internal runtime concept. Public only for C# accessibility consistency.
+/// Must not be returned to the frontend or exposed through EndpointResponseDto.
 /// Derived from EndpointRequestDto after input mapping.
 /// </summary>
-internal record OperationVector(
+public record OperationVector(
     string? Target,
     string? Layer,
     string? Action,
@@ -39,11 +40,12 @@ internal record OperationVector(
 );
 
 /// <summary>
-/// Internal-only backend working shape used during a single execution pass.
-/// Never returned to the frontend. Never persisted as a business fact.
+/// Internal runtime concept. Public only for C# accessibility consistency.
+/// Must not be returned to the frontend, exposed through EndpointResponseDto,
+/// or persisted as a business fact.
 /// Holds intermediate resolved state as the runtime progresses through the pipeline.
 /// </summary>
-internal record RuntimeWorkingShape(
+public record RuntimeWorkingShape(
     OperationVector? Vector,
     string? StructureMapId,
     Guid? PackageId,

@@ -36,8 +36,10 @@
 --     Track usage patterns and advisory structural change suggestions.
 --       usage_metrics, promotion_candidates
 --
--- HOW TO RUN:
+-- HOW TO RUN (in order):
 --   psql -d <database> -f db/schema.sql
+--   psql -d <database> -f db/topology_tables.sql
+--   psql -d <database> -f db/promotion_tables.sql
 --   psql -d <database> -f db/seed_empty.sql
 -- =============================================================================
 
@@ -46,6 +48,7 @@
 -- Extensions
 -- ---------------------------------------------------------------------------
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 
 -- ---------------------------------------------------------------------------
