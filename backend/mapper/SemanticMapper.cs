@@ -34,7 +34,7 @@ public class SemanticMapper
 /// Represents a semantic repository command derived from a resolved working shape.
 /// Not an ORM entity — encodes domain intent.
 /// </summary>
-internal record RepositoryCommand(
+public record RepositoryCommand(
     string? StructureMapId,
     Guid? PackageId,
     Guid? SchemaId,
