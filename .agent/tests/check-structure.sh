@@ -84,6 +84,7 @@ check_file "AGENTS.md"
 check_file "docs/framework-core.yaml"
 check_file "docs/framework-policy.yaml"
 check_file "docs/file-structure.yaml"
+check_file "docs/registrar-admin-ui-specification.md"
 
 check_file ".agent/docs/structure-map.yaml"
 check_file ".agent/docs/required-paths.yaml"
@@ -193,6 +194,15 @@ check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchInt
 check_content "backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs" "ATTRACTOR_RESOLVE_FAILED"
 check_content "frontend/tests/defaultEntitySearch.test.ts" "renderEmission"
 check_content "frontend/tests/defaultEntitySearch.test.ts" "ATTRACTOR_RESOLVE_FAILED"
+
+check_content "docs/registrar-admin-ui-specification.md" "Registrar admin UI"
+check_content "docs/registrar-admin-ui-specification.md" "controlled registration boundary"
+check_content "docs/registrar-admin-ui-specification.md" "Draft registration"
+check_content "docs/registrar-admin-ui-specification.md" "Validate refs"
+check_content "docs/registrar-admin-ui-specification.md" "Promote to active registry state"
+check_content "docs/registrar-admin-ui-specification.md" "Broken refs are explicit validation errors"
+check_content "docs/registrar-admin-ui-specification.md" "not CRUD"
+check_content "docs/registrar-admin-ui-specification.md" "frontend must not become source of truth"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
