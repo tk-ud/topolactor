@@ -21,8 +21,14 @@ public class OperationVectorResolver
         var attractorKey = DeriveAttractorKey(request.Target, request.Layer, request.Action);
 
         // UserRole and RequestedProjection sourced from Context if present
-        request.Context?.TryGetValue("UserRole", out var userRole);
-        request.Context?.TryGetValue("RequestedProjection", out var requestedProjection);
+        string? userRole = null;
+        string? requestedProjection = null;
+
+        if (request.Context is not null)
+        {
+            request.Context.TryGetValue("UserRole", out userRole);
+            request.Context.TryGetValue("RequestedProjection", out requestedProjection);
+        }
 
         return new OperationVector(
             Target: request.Target,
