@@ -15,7 +15,7 @@ export default function AdminIndex() {
 
       <section>
         <h2>Structure Map</h2>
-        <table border={1} cellPadding={6}>
+        <table border="1" cellPadding="6">
           <thead>
             <tr>
               <th>attractorKey</th>
