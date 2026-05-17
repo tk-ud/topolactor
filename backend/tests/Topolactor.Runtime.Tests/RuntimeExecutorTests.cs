@@ -13,6 +13,7 @@ public class RuntimeExecutorTests
     internal static RuntimeExecutor CreateExecutor()
     {
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
 
         return new RuntimeExecutor(
@@ -32,7 +33,7 @@ public class RuntimeExecutorTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                topologyRepository));
+                contextRoutePolicyRepository));
     }
 
     [Fact]
@@ -53,7 +54,6 @@ public class RuntimeExecutorTests
         Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000002"), response.Emission.SchemaId);
         Assert.Contains("00000000-0000-0000-0000-000000000003", response.Emission.ComponentIds ?? []);
         Assert.Empty(response.Errors);
-        // Recommendation is always present in emission; InsufficientHistory with no session context
         Assert.NotNull(response.Emission.ContextRouteRecommendation);
         Assert.Equal(RecommendationStatus.InsufficientHistory, response.Emission.ContextRouteRecommendation!.Status);
     }
@@ -93,9 +93,11 @@ public class RuntimeExecutorTests
         var structureMap = await repository.LoadStructureMapAsync("missing:entity:search");
         var package = await repository.LoadPackageAsync(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
         var schema = await repository.LoadSchemaAsync(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"));
+        var functionParameter = await repository.LoadFunctionParameterAsync("context_route_recommendation_resolve", "default_policy");
 
         Assert.Null(structureMap);
         Assert.Null(package);
         Assert.Null(schema);
+        Assert.Null(functionParameter);
     }
 }
