@@ -43,8 +43,25 @@ Local CI policy:
 
 ## Report and Task Surface
 
-- Write reports and issue drafts under `.agent/reports/`
-- Update `.agent/tasks/todo.md` to reflect remaining work
+`.agent/reports/` and `.agent/tasks/todo.md` are persistent surfaces for routine / scheduled / automatically executed agents.
+
+Use `.agent/reports/` for:
+
+- routine inspection reports
+- scheduled maintenance reports
+- automated agent run outputs
+- periodic structure / policy / dependency audit results
+
+Use `.agent/tasks/todo.md` for:
+
+- unresolved tasks discovered by routine or automated agents
+- residual tasks that must survive beyond the current PR or conversation
+
+Do not use `.agent/reports/` as the default place for PR summaries, PR audit notes, or normal implementation logs.
+Do not update `.agent/tasks/todo.md` during normal PR work unless a real remaining task must be carried forward after merge.
+
+PR audit results should normally stay in the review / conversation / PR comment surface.
+Implementation summaries should normally stay in the PR description or completion message.
 
 ## Architecture Constraints
 
@@ -59,5 +76,5 @@ Local CI policy:
 DB        = semantic topology space
 Backend   = abstract runtime / function execution space
 Frontend  = Fresh / Deno / Preact physical projection space
-Agent     = local structure guard / report / task surface
+Agent     = local structure guard / routine report / residual task surface
 ```
