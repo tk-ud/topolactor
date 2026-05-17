@@ -449,9 +449,78 @@ public class ContextRouteRecommendationResolverTests
         Assert.Contains(result.NextOperations, c => c.Value == "action_next");
     }
 
+    // --- Policy scope tests ---
+
+    [Fact]
+    public async Task ResolveAsync_MalformedStatePolicyJson_ReturnsExplicitError()
+    {
+        var resolver = CreateResolver();
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            statePolicyJson: "{ not valid json !!!"
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_STATE_POLICY_INVALID", result.StatusDetail);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_EmptyPolicyRef_ReturnsExplicitError()
+    {
+        var resolver = CreateResolver();
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            statePolicyJson: """{"context_route_policy_ref": ""}"""
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_POLICY_REF_INVALID", result.StatusDetail);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ScopedPolicyRef_UsesKeyFromStatePolicy()
+    {
+        // Scoped key "customer_portal_policy" is present in state_policy → must be passed to repo.
+        // StubScopedPolicyTopologyRepository returns valid policy only for "customer_portal_policy".
+        const string scopedKey = "customer_portal_policy";
+        var resolver = CreateResolver(topologyRepo: new StubScopedPolicyTopologyRepository(scopedKey));
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            statePolicyJson: $$$"""{"context_route_policy_ref": "{{{scopedKey}}}"}"""
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        // Policy loaded successfully → InsufficientHistory (no history), not ExplicitError.
+        Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_ScopedPolicyRef_MissingInRepo_ReturnsExplicitError()
+    {
+        // Scoped key "unknown_policy" not in repo → ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND).
+        var resolver = CreateResolver(topologyRepo: new StubScopedPolicyTopologyRepository("other_policy"));
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            statePolicyJson: """{"context_route_policy_ref": "unknown_policy"}"""
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
+    }
+
     // --- Helper ---
 
-    private static RuntimeWorkingShape MakeShape(string? sessionId, string? contextTokenIds = null)
+    private static RuntimeWorkingShape MakeShape(
+        string? sessionId,
+        string? contextTokenIds = null,
+        string? statePolicyJson = null)
     {
         var vector = new OperationVector(
             Target: "default",
@@ -476,7 +545,8 @@ public class ContextRouteRecommendationResolverTests
             PackageDef: null,
             SchemaDef: null,
             ResolvedData: null,
-            Errors: []
+            Errors: [],
+            StructureMapStatePolicyJson: statePolicyJson
         );
     }
 

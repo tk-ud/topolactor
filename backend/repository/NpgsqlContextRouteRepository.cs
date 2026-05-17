@@ -17,8 +17,10 @@ namespace Topolactor.Repository;
 ///
 /// Transition stats aggregation (near-realtime pipeline):
 ///   When AppendContextEventAsync is called, the immediately preceding event in the same
-///   session is queried and the (prev_operation → current_operation) stat row is upserted.
-///   This implements the near-realtime aggregation without a separate background job.
+///   session is queried and the (prev_operation → current_operation) transition stat is updated
+///   as a true conditional proportion: prob01 = count_hits / count_events, where count_events
+///   is the shared denominator over all next_operations in the same (prev, role, user_id) scope.
+///   This runs as a 3-step transaction inline on each event append.
 ///
 /// Wiring: inject NpgsqlContextRouteRepository wherever ContextRouteRepository is required
 /// in production DI. Tests continue to use in-memory stubs via virtual method overrides.
@@ -343,9 +345,17 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     // ---------------------------------------------------------------------------
 
     /// <summary>
-    /// Finds the preceding event in the same session and upserts the (prev→current) transition stat.
-    /// Uses Bayesian smoothing: prob01 = (count_hits + 1) / (count_events + 11), alpha=1, beta=10.
-    /// This is the near-realtime aggregation pipeline — runs inline on each event append.
+    /// Finds the preceding event in the same session and updates the (prev→current)
+    /// transition stat as a true conditional probability P(next | prev, role, user_id).
+    ///
+    /// Three-step transaction:
+    ///   Step 1: Upsert (prev, next) edge — count_hits += 1.
+    ///   Step 2: Increment count_events for ALL rows with same (prev, role, user_id) scope.
+    ///   Step 3: Recompute prob01 = count_hits / count_events for ALL rows in scope.
+    ///
+    /// count_events is the shared denominator across all next_operations in the same
+    /// (prev, role, user_id) scope, making prob01 a true conditional proportion.
+    /// Smoothing constants must come from function_parameters — not hardcoded here.
     /// </summary>
     private static async Task UpsertTransitionStatAsync(
         NpgsqlConnection conn,
@@ -373,22 +383,62 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         var role   = ev.Role   ?? "GLOBAL";
         var userId = ev.UserId ?? "GLOBAL";
 
-        await using var statCmd = conn.CreateCommand();
-        statCmd.CommandText =
-            "INSERT INTO context_transition_stats " +
-            "(prev_operation, next_operation, role, user_id, count_events, count_hits, prob01) " +
-            "VALUES (@prev, @next, @role, @userId, 1, 1.0, 2.0 / 12.0) " +
-            "ON CONFLICT (prev_operation, next_operation, role, user_id) DO UPDATE " +
-            "  SET count_events = context_transition_stats.count_events + 1, " +
-            "      count_hits   = context_transition_stats.count_hits + 1, " +
-            "      prob01 = (context_transition_stats.count_hits + 1 + 1) " +
-            "             / (context_transition_stats.count_events + 1 + 11.0), " +
-            "      updated_at = now()";
-        statCmd.Parameters.AddWithValue("prev",   prevOperation);
-        statCmd.Parameters.AddWithValue("next",   ev.Operation);
-        statCmd.Parameters.AddWithValue("role",   role);
-        statCmd.Parameters.AddWithValue("userId", userId);
-        await statCmd.ExecuteNonQueryAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            // Step 1: Upsert (prev, next) edge — increment count_hits only.
+            await using (var step1 = conn.CreateCommand())
+            {
+                step1.Transaction = tx;
+                step1.CommandText =
+                    "INSERT INTO context_transition_stats " +
+                    "(prev_operation, next_operation, role, user_id, count_events, count_hits, prob01) " +
+                    "VALUES (@prev, @next, @role, @userId, 0, 1.0, 0.0) " +
+                    "ON CONFLICT (prev_operation, next_operation, role, user_id) DO UPDATE " +
+                    "  SET count_hits = context_transition_stats.count_hits + 1, " +
+                    "      updated_at = now()";
+                step1.Parameters.AddWithValue("prev",   prevOperation);
+                step1.Parameters.AddWithValue("next",   ev.Operation);
+                step1.Parameters.AddWithValue("role",   role);
+                step1.Parameters.AddWithValue("userId", userId);
+                await step1.ExecuteNonQueryAsync(ct);
+            }
+
+            // Step 2: Increment count_events for ALL (prev, role, user_id) rows — shared denominator.
+            await using (var step2 = conn.CreateCommand())
+            {
+                step2.Transaction = tx;
+                step2.CommandText =
+                    "UPDATE context_transition_stats " +
+                    "SET count_events = count_events + 1, updated_at = now() " +
+                    "WHERE prev_operation = @prev AND role = @role AND user_id = @userId";
+                step2.Parameters.AddWithValue("prev",   prevOperation);
+                step2.Parameters.AddWithValue("role",   role);
+                step2.Parameters.AddWithValue("userId", userId);
+                await step2.ExecuteNonQueryAsync(ct);
+            }
+
+            // Step 3: Recompute prob01 = count_hits / count_events for ALL rows in scope.
+            await using (var step3 = conn.CreateCommand())
+            {
+                step3.Transaction = tx;
+                step3.CommandText =
+                    "UPDATE context_transition_stats " +
+                    "SET prob01 = count_hits::float / NULLIF(count_events, 0), updated_at = now() " +
+                    "WHERE prev_operation = @prev AND role = @role AND user_id = @userId";
+                step3.Parameters.AddWithValue("prev",   prevOperation);
+                step3.Parameters.AddWithValue("role",   role);
+                step3.Parameters.AddWithValue("userId", userId);
+                await step3.ExecuteNonQueryAsync(ct);
+            }
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
     }
 
     // ---------------------------------------------------------------------------

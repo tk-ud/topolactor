@@ -259,21 +259,20 @@ entities:
     description: >
       Workflow transition probability: P(next_operation | prev_operation).
       Segmented by role and user_id with GLOBAL fallback.
-      Bayesian smoothing: prob01 = (count_hits + alpha) / (count_events + alpha + beta).
+      prob01 = count_hits / count_events (true conditional proportion).
+      count_events is the shared denominator across all next_operations with the same
+      (prev_operation, role, user_id) scope.
     fields:
       id:             { type: uuid, pk: true }
       prev_operation: { type: string }
       next_operation: { type: string }
       role:           { type: string, default: "GLOBAL" }
       user_id:        { type: string, default: "GLOBAL" }
-      count_events:   { type: int, default: 0 }
+      count_events:   { type: int, default: 0, note: "shared denominator across all next_operations in scope" }
       count_hits:     { type: float, default: 0.0 }
-      prob01:         { type: float, note: "(hits + alpha) / (events + alpha + beta)" }
+      prob01:         { type: float, note: "count_hits / count_events (true proportion; no hardcoded smoothing)" }
       updated_at:     { type: timestamp }
     unique_keys: [[prev_operation, next_operation, role, user_id]]
-    bayesian_params:
-      alpha: 1
-      beta: 10
 
   topology_policy_source:
     description: >
@@ -360,10 +359,6 @@ pipelines:
 
   aggregate_context_transition_stats:
     schedule: "batch or near-realtime"
-    smoothing:
-      method: "bayesian"
-      alpha: 1
-      beta: 10
     personalization_hierarchy: ["user_id", "role", "GLOBAL"]
     global_overlay_rule:
       - "if user_id == 'GLOBAL': increment only GLOBAL bucket"
@@ -371,9 +366,14 @@ pipelines:
     steps:
       - "for each session_id, order events by created_at"
       - "for i in 0..n-2: prev=operation[i], next=operation[i+1]"
-      - "count_events += 1; count_hits += 1"
-      - "prob01 = (count_hits + alpha) / (count_events + alpha + beta)"
+      - "step 1: upsert (prev, next, role, user_id) edge — count_hits += 1"
+      - "step 2: UPDATE all rows with same (prev, role, user_id) scope — count_events += 1"
+      - "step 3: UPDATE all rows in scope — prob01 = count_hits::float / count_events"
       - "upsert context_transition_stats"
+    note: >
+      count_events is the shared denominator across all next_operations in the same scope,
+      making prob01 a true conditional proportion P(next | prev).
+      Smoothing parameters, if needed, must come from function_parameters — not hardcoded.
 
   cluster_sessions_for_labeling:
     schedule: "monthly (optional)"

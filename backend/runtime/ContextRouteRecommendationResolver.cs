@@ -61,9 +61,17 @@ public class ContextRouteRecommendationResolver
 
         // Resolve policy key: use context_route_policy_ref from structure_maps.state_policy
         // when present, otherwise fall back to the global default_policy key.
-        var policyKey = ResolvePolicyKey(shape.StructureMapStatePolicyJson);
+        var (policyKey, policyKeyError) = ResolvePolicyKey(shape.StructureMapStatePolicyJson);
+        if (policyKeyError is not null)
+        {
+            _logger.LogWarning(
+                "ContextRouteRecommendationResolver: state_policy resolution failed — {ErrorCode}.",
+                policyKeyError);
+            return ExplicitError(policyKeyError);
+        }
+
         var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
-            PolicyFunctionName, policyKey, ct);
+            PolicyFunctionName, policyKey!, ct);
 
         if (policyJson is null)
         {
@@ -286,26 +294,41 @@ public class ContextRouteRecommendationResolver
     /// When structure_maps.state_policy contains "context_route_policy_ref", that key
     /// is used instead of the global "default_policy" — enabling per-structure-map,
     /// per-relation, and per-hub scoped policy without code changes.
-    /// Falls back to PolicyParameterKey ("default_policy") when not set or on parse error.
+    ///
+    /// Return semantics:
+    ///   (key, null)                              — success; use key to load policy
+    ///   (null, "CONTEXT_ROUTE_STATE_POLICY_INVALID") — malformed JSON
+    ///   (null, "CONTEXT_ROUTE_POLICY_REF_INVALID")   — context_route_policy_ref exists but is empty/whitespace
+    ///
+    /// Null/empty/`{}` state_policy with no context_route_policy_ref → (default_policy, null).
+    /// No silent fallback on broken refs.
     /// </summary>
-    private static string ResolvePolicyKey(string? statePolicyJson)
+    private static (string? Key, string? ErrorCode) ResolvePolicyKey(string? statePolicyJson)
     {
         if (string.IsNullOrWhiteSpace(statePolicyJson))
-            return PolicyParameterKey;
+            return (PolicyParameterKey, null);
 
+        JsonDocument doc;
         try
         {
-            using var doc = JsonDocument.Parse(statePolicyJson);
-            if (doc.RootElement.TryGetProperty("context_route_policy_ref", out var refEl) &&
-                refEl.GetString() is { Length: > 0 } policyRef)
-                return policyRef;
+            doc = JsonDocument.Parse(statePolicyJson);
         }
         catch (JsonException)
         {
-            // Malformed state_policy JSON: fall through to default key.
+            return (null, "CONTEXT_ROUTE_STATE_POLICY_INVALID");
         }
 
-        return PolicyParameterKey;
+        using (doc)
+        {
+            if (!doc.RootElement.TryGetProperty("context_route_policy_ref", out var refEl))
+                return (PolicyParameterKey, null);
+
+            var policyRef = refEl.GetString();
+            if (string.IsNullOrWhiteSpace(policyRef))
+                return (null, "CONTEXT_ROUTE_POLICY_REF_INVALID");
+
+            return (policyRef, null);
+        }
     }
 
     // ---------------------------------------------------------------------------

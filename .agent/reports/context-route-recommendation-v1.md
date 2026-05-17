@@ -36,11 +36,14 @@ Policy is stored in the existing topology definition surface:
 ```text
 function_parameters
   function_name  = context_route_recommendation_resolve
-  parameter_key  = default_policy
+  parameter_key  = default_policy  (or a scoped key from structure_maps.state_policy)
   parameter_value = JSONB policy blob
 ```
 
 `ContextRoutePolicy` is a resolved policy record only. It does not own production defaults.
+
+Per-structure-map policy scoping is supported via `structure_maps.state_policy.context_route_policy_ref`.
+When present, that key overrides `default_policy` for the given structure map.
 
 ### No production fallback
 
@@ -50,17 +53,49 @@ If policy cannot be resolved from topology data, the resolver returns an explici
 ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)
 ```
 
-Invalid policy JSON returns:
+Invalid policy JSON in `function_parameters` returns:
 
 ```text
 ExplicitError(CONTEXT_ROUTE_POLICY_INVALID:...)
 ```
 
+Malformed `structure_maps.state_policy` JSON returns:
+
+```text
+ExplicitError(CONTEXT_ROUTE_STATE_POLICY_INVALID)
+```
+
+Empty or whitespace `context_route_policy_ref` returns:
+
+```text
+ExplicitError(CONTEXT_ROUTE_POLICY_REF_INVALID)
+```
+
 Silent fallback and production default config are prohibited.
 
-`TopologyRepository.LoadFunctionParameterAsync` does not return hardcoded context route policy values. Until real DB access is implemented, missing function parameters return `null` and the resolver surfaces explicit policy-missing status.
-
 Test policy values are isolated in `ContextRoutePolicyTestFixtures` / test stubs only.
+
+### Persistence
+
+Production DB access is provided by:
+
+- `NpgsqlTopologyRepository` — overrides all `Load*` methods in `TopologyRepository` with real Npgsql queries.
+- `NpgsqlContextRouteRepository` — overrides all methods in `ContextRouteRepository` with real Npgsql queries.
+
+Tests continue to use in-memory stubs via virtual method overrides on the base classes.
+
+### Transition statistics are a true conditional proportion
+
+`context_transition_stats.prob01` is maintained as `count_hits / count_events`, where `count_events`
+is the shared denominator across all `next_operations` in the same `(prev_operation, role, user_id)` scope.
+
+Near-realtime update runs as a 3-step transaction inline on each `AppendContextEventAsync` call:
+
+1. Upsert `(prev, next)` edge — `count_hits += 1`.
+2. `UPDATE` all rows with same `(prev, role, user_id)` scope — `count_events += 1`.
+3. `UPDATE` all rows in scope — `prob01 = count_hits::float / count_events`.
+
+Smoothing parameters are not hardcoded. If smoothing is needed, parameters must come from `function_parameters`.
 
 ### Frontend is projection only
 
@@ -82,7 +117,7 @@ Frontend does not compute:
 |---|---|
 | `db/context_route_tables.sql` | Context route tables: token registry, events, vector caches, transition stats, optional analytics tables |
 | `db/schema.sql` | `function_parameters` topology policy table, including unique `(function_name, parameter_key)` constraint |
-| `db/seed_empty.sql` | Bootstrap topology seed, including context route `default_policy` row |
+| `db/seed_empty.sql` | Bootstrap topology seed, including context route `default_policy` row and `context_event_retention / retention_policy` row |
 
 ### Backend
 
@@ -90,8 +125,10 @@ Frontend does not compute:
 |---|---|
 | `backend/schema/ContextRouteContracts.cs` | Data contracts for context route events, vectors, neighbors, and recommendation output |
 | `backend/schema/ContextRoutePolicyContracts.cs` | Resolved `ContextRoutePolicy` record; no production defaults |
-| `backend/repository/ContextRouteRepository.cs` | Context route repository skeleton |
-| `backend/repository/TopologyRepository.cs` | Topology repository skeleton; function parameters return missing until real DB access is implemented |
+| `backend/repository/ContextRouteRepository.cs` | Context route repository base class (in-memory skeleton; used by tests) |
+| `backend/repository/NpgsqlContextRouteRepository.cs` | Production Npgsql implementation of ContextRouteRepository |
+| `backend/repository/TopologyRepository.cs` | Topology repository base class (in-memory skeleton; used by tests) |
+| `backend/repository/NpgsqlTopologyRepository.cs` | Production Npgsql implementation of TopologyRepository |
 | `backend/runtime/ContextVectorBuilder.cs` | Sparse event/prefix vector builder and L2 norm computation |
 | `backend/runtime/ContextNeighborSearch.cs` | Cosine similarity and nearest-prefix search |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver inserted after component expansion |
@@ -107,13 +144,14 @@ Frontend does not compute:
 | `frontend/routes/admin/context-token-registry.tsx` | Token registry admin page shell |
 | `frontend/islands/ContextTokenRegistryEditor.tsx` | Token registry admin island; no hardcoded token seed |
 | `frontend/routes/api/admin/context-token-registry.ts` | Explicit 501 until real DB endpoint is implemented |
+| `frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts` | Deprecate endpoint with UUID validation; 501 until real DB update is implemented |
 
 ### Tests
 
 | File | Role |
 |---|---|
-| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | Test-only valid policy JSON and policy stubs |
-| `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | Resolver/vector/neighbor tests using explicit policy fixture |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | Test-only valid policy JSON and policy stubs (StubValidPolicyTopologyRepository, StubMissingPolicyTopologyRepository, StubScopedPolicyTopologyRepository) |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | Resolver/vector/neighbor tests including policy scope and explicit error tests |
 | `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs` | Runtime executor tests with policy fixture injected only for recommendation branch |
 
 ### Design / Agent Docs
@@ -138,7 +176,7 @@ Frontend does not compute:
 | `context_record_snapshot_cache` | Current token snapshot cache by record |
 | `context_event_vector_cache` | Event sparse vector + L2 norm cache |
 | `context_prefix_vector_cache` | Session prefix vector cache for nearest-prefix search |
-| `context_transition_stats` | Transition probability aggregate |
+| `context_transition_stats` | Transition probability aggregate (prob01 = count_hits / count_events) |
 
 ### Optional tables
 
@@ -150,13 +188,14 @@ Frontend does not compute:
 
 ## Runtime Behavior
 
-1. Resolve policy from topology `function_parameters`.
-2. Build current sparse event vector from context tokens.
-3. Append context event.
-4. Load recent prefix vectors.
-5. Compute nearest prefixes by cosine similarity.
-6. Produce `next_operations` and `next_tokens`.
-7. Attach recommendation result and evidence to emission.
+1. Resolve policy key from `structure_maps.state_policy.context_route_policy_ref` (or fall back to `default_policy`).
+2. Load policy from topology `function_parameters` using the resolved key.
+3. Build current sparse event vector from context tokens.
+4. Append context event and update transition stats (3-step transaction).
+5. Load recent prefix vectors.
+6. Compute nearest prefixes by cosine similarity.
+7. Produce `next_operations` and `next_tokens`.
+8. Attach recommendation result and evidence to emission.
 
 Status is explicit:
 
@@ -164,30 +203,14 @@ Status is explicit:
 |---|---|
 | `Ok` | Candidates are available |
 | `InsufficientHistory` | Cold start or not enough context history |
-| `ExplicitError` | Missing/invalid policy or runtime failure |
+| `ExplicitError` | Missing/invalid policy, malformed state_policy, empty policy_ref, or runtime failure |
 
-## Checks
+## CI Status
 
-CI passed after merge of PR #19:
+`check-structure.sh`: PASS
 
-- `Structure Check`
-- `backend-tests`
-- `default-entity-search`
-- `frontend-types`
-- `db-schema-check`
-
-The DB schema issue was resolved by adding a unique constraint to `function_parameters`:
-
-```sql
-CONSTRAINT uq_function_parameters_function_key
-    UNIQUE (function_name, parameter_key)
-```
-
-This matches the seed behavior:
-
-```sql
-ON CONFLICT (function_name, parameter_key) DO NOTHING
-```
+`check-backend-tests.sh`, `check-frontend-types.sh`, `check-default-entity-search.sh`:
+not executed — `dotnet` / `deno` not available in agent environment.
 
 ## Remaining TODO
 
