@@ -1,0 +1,207 @@
+framework_policy:
+  registries:
+    master_registry:
+      role: table_name_and_id_dictionary
+    state_registry:
+      role: state_label_dictionary
+    relation_registry:
+      role: abstract_space_and_ui_projection_registry
+    package_registry:
+      role: runtime_package_registry
+    schema_registry:
+      role: runtime_and_ui_schema_registry
+    promotion_registry:
+      role: schema_evolution_registry
+
+  state_policy:
+    hub_state:
+      owner: system_side
+      examples:
+        - provisional
+        - active
+        - merge_waiting
+        - conflict
+        - logically_deleted
+    entity_state:
+      owner: business_side
+      examples:
+        - operating
+        - stopped
+        - maintenance_waiting
+        - billed
+        - archived
+    syslog_state:
+      owner: none
+      rule: no_state
+
+  search_policy:
+    search_node: hub
+    display_subject: entity
+    natural_language_source:
+      - entity_jsonb
+      - entity.business_attributes
+      - entity.business_state
+      - relation_ids
+    matching:
+      initial:
+        - regex_over_master_not_null_fields
+        - master_candidate_selection
+        - relation_registry_resolution
+      later:
+        - hub_state_statistics
+        - relation_cooccurrence
+        - entity_state_prediction
+    role_weighting:
+      examples:
+        administrator: broad_search
+        office_staff: billing_and_customer_priority
+        worker: machine_and_maintenance_priority
+
+  manifest:
+    style: manifest_driven
+    responsibilities:
+      - form_schema
+      - detail_schema
+      - field_types
+      - labels
+      - jsonb_shape
+      - tree_labels
+      - relation_link_candidates
+      - ui_order
+      - ui_conditions
+      - ui_grouping
+    resolution:
+      - relation_registry_candidates_select_manifest
+      - manifest_is_ui_ssot
+      - api_schema_is_confirmed_from_manifest
+
+  backend_flow:
+    style: vector_runtime_and_dispatcher_based
+    request_json:
+      keys:
+        - target
+        - layer
+        - action
+        - id_or_hub_id
+        - payload
+        - context
+    dispatcher_axes:
+      - target
+      - layer
+      - action
+    layer_examples:
+      - entity
+      - hub
+      - relation_registry
+      - diff_log
+    processing_flow:
+      - validate_request
+      - resolve_vector
+      - resolve_attractor
+      - resolve_manifest
+      - dispatch_handler
+      - update_current_data
+      - append_diff_log
+      - schedule_or_update_cache
+      - return_emission
+
+  data_policy:
+    raw_input:
+      rule: raw_input_can_be_stored_and_later_normalized_by_regex_and_registry_resolution
+      flow:
+        - raw
+        - regex_candidate_extraction
+        - master_selection
+        - entity_resolution
+        - hub_resolution
+        - relation_registration
+    normalized_input:
+      rule: normalized_ui_can_directly_construct_relation_hub_entity
+      flow:
+        - relation_ui
+        - hub_registration
+        - entity_registration
+    jsonb:
+      use_for:
+        - machine_details
+        - billing_breakdown
+        - variable_inventory_payloads
+      rule: variable_details_are_stored_in_jsonb_first
+    promotion:
+      rule: promote_from_jsonb_to_registry_relation_or_physical_structure_when_statistical_connection_or_operation_value_is_clear
+    diff_log:
+      rule: inline_edit_changes_are_saved_as_append_only_log_separate_from_current_data
+
+  promotion_policy:
+    role: runtime_schema_evolution_policy
+    principle: >
+      Promotion conditions for tables, columns, indexes, and registries are not fixed in code.
+      They are controlled by external manifests and admin UI.
+    flow:
+      - jsonb_or_registrar_first
+      - collect_usage_metrics
+      - evaluate_promotion_manifest
+      - show_admin_candidates
+      - admin_approval
+      - apply_index_or_generated_column_or_registry_or_physical_table
+      - keep_rollback_plan
+    managed_by_manifest:
+      - read_frequency_threshold
+      - filter_usage_threshold
+      - aggregation_usage_threshold
+      - join_usage_threshold
+      - jsonb_path_hotspot_threshold
+      - promotion_action_priority
+    promotion_actions:
+      - suggest_index
+      - suggest_generated_column
+      - suggest_registry_promotion
+      - suggest_physical_table_promotion
+    admin_ui:
+      responsibilities:
+        - show_usage_metrics
+        - show_promotion_candidates
+        - edit_thresholds
+        - approve_promotion
+        - reject_promotion
+        - view_migration_plan
+        - view_rollback_plan
+    rule:
+      - schema_evolution_is_manifest_driven
+      - db_optimization_is_admin_approved
+      - jsonb_flexibility_must_not_become_performance_debt
+
+  logs:
+    policy:
+      description: Logs are partitioned by relation_registry to avoid a single enormous log domain.
+      rules:
+        - avoid_single_hub_domain_log_table
+        - use_relation_registry_id_as_log_partition_key
+        - separate_common_logs_and_relation_scoped_logs
+        - search_aggregation_and_maintenance_are_relation_registry_scoped
+    common:
+      - raw
+      - diff
+      - error
+    scoped_by_relation_registry: true
+    relation_scoped_examples:
+      - invoice_log
+      - machine_log
+      - maintenance_log
+      - asset_log
+
+  open_issues:
+    - define_manifest_schema
+    - define_dispatcher_request_contract
+    - define_repository_boundaries
+    - define_state_transition_rules
+    - define_tree_projection_rules
+    - define_diff_grouping_rules
+    - define_hub_statistics_update_timing
+    - define_auth_and_permissions
+    - define_master_registry_schema
+    - define_manifest_resolution_rules
+    - define_relation_registry_partition_strategy
+    - define_promotion_manifest_schema
+    - define_admin_promotion_ui
+    - define_schema_evolution_approval_flow
