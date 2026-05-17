@@ -25,6 +25,7 @@ Context Route Recommendation v1 は main に統合済み。
 
 - [ ] Context Route Recommendation の `policy_ref` を `structure_maps.state_policy` から解決できるようにする
 - [ ] `default_policy` 固定参照を structure_map / relation / hub scoped policy に拡張する
+- [ ] Runtime behavior に影響する設定値・マジックナンバーの判断ルールを `.agent/rules/rule.md` に追加し、Registry / Manifest / policy 管理方針を明文化する
 
 ### Optional Analytics
 
