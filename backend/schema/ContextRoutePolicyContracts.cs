@@ -1,0 +1,33 @@
+namespace Topolactor.Schema;
+
+/// <summary>
+/// Resolved policy record for the context route recommendation engine.
+/// This is NOT an independent config record — it is a resolved view of
+/// function_parameters stored in the topology (function_name =
+/// 'context_route_recommendation_resolve', parameter_key = 'default_policy').
+///
+/// Values originate from the topology data store; no production defaults
+/// exist in runtime code.  Policy-missing → ExplicitError.
+/// </summary>
+public record ContextRoutePolicy(
+    /// <summary>Minimum cosine similarity for a prefix candidate to be included as a neighbor.</summary>
+    float MinSimilarity,
+
+    /// <summary>Maximum number of prefix candidates to retrieve for cosine search.</summary>
+    int TopK,
+
+    /// <summary>Minimum neighbor count required before producing recommendations.</summary>
+    int MinNeighbors,
+
+    /// <summary>History window in days for prefix vector candidate search.</summary>
+    int RecentDays,
+
+    /// <summary>Maximum number of recommendation candidates returned in output.</summary>
+    int MaxCandidatesShown,
+
+    /// <summary>Weight of transition stat baseline in operation scoring (sum with NeighborWeight = 1.0).</summary>
+    float BaselineWeight,
+
+    /// <summary>Weight of neighbor votes in operation scoring (sum with BaselineWeight = 1.0).</summary>
+    float NeighborWeight
+);

@@ -35,7 +35,8 @@ psql -d <database> -f db/seed_empty.sql
 `promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
 `context_route_tables.sql` creates the context route recommendation runtime tables.
 `seed_empty.sql` inserts the minimum default topology rows including the
-`default:entity:search` structure map needed for the dummy canonical flow.
+`default:entity:search` structure map and the context route recommendation policy
+row in `function_parameters` needed for the dummy canonical flow.
 
 ---
 
@@ -47,7 +48,7 @@ psql -d <database> -f db/seed_empty.sql
 | `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, sparse vector caches, transition stats. Optional cluster/drift tables isolated at bottom. |
-| `seed_empty.sql` | Minimal default seed rows. No real business data. |
+| `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`. No real business data. |
 
 ---
 

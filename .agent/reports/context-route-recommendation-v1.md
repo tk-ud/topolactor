@@ -1,4 +1,4 @@
-# Implementation Report: Context Route Recommendation Runtime (Issue #17)
+# Implementation Report: Context Route Recommendation Runtime
 
 ## 実装概要
 
@@ -24,17 +24,24 @@ stored_topology_data
 
 ## 変更ファイル
 
-### 新規追加
+### 新規追加（現在の状態 — fix 3 適用後）
 
 | ファイル | 役割 |
 |---|---|
 | `db/context_route_tables.sql` | context route recommendation 用 DB テーブル群 |
 | `backend/schema/ContextRouteContracts.cs` | 抽象 Runtime 用データコントラクト |
+| `backend/schema/ContextRoutePolicyContracts.cs` | `ContextRoutePolicy` 純粋 DTO（defaults なし） |
 | `backend/repository/ContextRouteRepository.cs` | コンテキストルートリポジトリ（in-memory skeleton） |
 | `backend/runtime/ContextVectorBuilder.cs` | sparse vector ビルダー（event vector / prefix vector / l2 norm） |
 | `backend/runtime/ContextNeighborSearch.cs` | cosine similarity + nearest prefix search |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | 推薦解決 resolver（canonical route 挿入点） |
 | `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | テスト群 |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | テスト専用 fixture / stub |
+| `docs/design/context-route-recommendation.yaml` | 抽象設計 YAML（SSOT） |
+| `docs/design/context-route-recommendation.md` | 設計思想・取り扱い方針 |
+| `docs/design/commit-inference-engine.yaml` | 関連設計 YAML（SSOT） |
+| `docs/design/commit-inference-engine.md` | 関連設計思想 |
+| `.agent/docs/design-ssot-index.md` | 設計 SSOT 参照インデックス |
 
 ### 変更
 
@@ -45,11 +52,9 @@ stored_topology_data
 | `backend/runtime/RuntimeExecutor.cs` | `ContextRouteRecommendationResolver` を Step 9 として組み込み |
 | `backend/runtime/EmissionBuilder.cs` | `ContextRouteRecommendation` を `Emission` に転送 |
 | `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs` | `CreateExecutor()` に新依存を追加、emission 内 recommendation 確認アサーション追加 |
-| `backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj` | schema glob を `../../schema/*.cs` に変更 |
-| `backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj` | schema glob を `../../schema/*.cs` に変更 |
+| `backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs` | `CreateEndpoint()` に新依存を追加 |
 | `frontend/api/dispatch.ts` | `ContextRouteRecommendation` / `RecommendationCandidate` 型を追加、`Emission` に追加 |
 | `frontend/components/EmissionView.tsx` | `RecommendationSection` コンポーネント追加（projection のみ、計算ロジックなし） |
-| `db/README.md` | `context_route_tables.sql` を追加 |
 
 ## 追加テーブル（context_route_tables.sql）
 
@@ -84,14 +89,68 @@ stored_topology_data
 | `ComputeCosineSimilarity` | `ContextNeighborSearch` |
 | `FindNearestPrefixes` | `ContextNeighborSearch` |
 | `ResolveAsync` | `ContextRouteRecommendationResolver` |
-| `ResolveNextOperations` | `ContextRouteRecommendationResolver` |
-| `ResolveNextTokens` | `ContextRouteRecommendationResolver` |
+| `ResolveNextOperations(neighbors, stats, config)` | `ContextRouteRecommendationResolver` |
+| `ResolveNextTokens(neighbors, config)` | `ContextRouteRecommendationResolver` |
 | `AppendContextEventAsync` | `ContextRouteRepository` |
 | `LoadActiveTokensAsync` | `ContextRouteRepository` |
 | `LoadRecentPrefixVectorsAsync` | `ContextRouteRepository` |
 | `GetTransitionStatsAsync` | `ContextRouteRepository` |
-| `UpsertEventVectorCacheAsync` | `ContextRouteRepository` |
-| `UpsertPrefixVectorCacheAsync` | `ContextRouteRepository` |
+| `LoadFunctionParameterAsync` | `TopologyRepository` |
+
+## Policy SSOT 設計（fix 3 以降の現状）
+
+### 原則
+
+Runtime コードへの数値リテラル直書きは禁止。チューニングパラメータは
+`function_parameters` テーブル（topology 定義テーブル）に格納される。
+Context Route Recommendation は独立した設定サブシステムではなく、
+既存 topology の **optional capability**。
+
+- `function_name = 'context_route_recommendation_resolve'`
+- `parameter_key = 'default_policy'`
+- `parameter_value = JSONB blob`
+
+policy-missing は `ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")` として明示される。
+production fallback は Runtime コードに存在しない。
+
+### In-memory skeleton の動作（DB 接続前）
+
+`TopologyRepository.LoadFunctionParameterAsync` は `db/seed_empty.sql` の
+function_parameters INSERT と一致する seed JSON を返す。
+
+```
+LoadFunctionParameterAsync("context_route_recommendation_resolve", "default_policy")
+  → seed JSON (string)  # skeleton
+  → null                # skeleton: 上記以外の function_name / parameter_key
+  → null なら ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")
+```
+
+### Resolver での policy-missing ハンドリング
+
+```
+LoadFunctionParameterAsync → null    → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")
+LoadFunctionParameterAsync → 不正JSON → ExplicitError("CONTEXT_ROUTE_POLICY_INVALID:...")
+LoadFunctionParameterAsync → 正常JSON → ParsePolicy → 通常処理継続
+```
+
+## Admin UI（token registry のみ）
+
+Admin UI ページ:
+- `/admin/context-token-registry` — context_token_registry 管理（島コンポーネントあり）
+- `/admin/context-route-config` — **廃止**（fix 3 で削除）
+
+**現在の状態**:
+- フロントエンド API ルート `/api/admin/context-token-registry` は **501 Not Implemented** を返す
+- token registry Island は 501 受信時に「レジストリ未接続」を表示（ハードコード値なし）
+- 推薦エンジン設定の UI はない — `function_parameters` を直接操作する
+
+**TODO（実装が必要な残作業）**:
+- `ContextRouteRepository` の実 DB 接続（`context_token_registry` 読み書き）
+- `TopologyRepository.LoadFunctionParameterAsync` の実 DB 接続（`function_parameters` SELECT）
+- フロントエンド API ルートの実装（501 → 実 DB 接続）
+- deprecate エンドポイント実装（`/api/admin/context-token-registry/:id/deprecate`）
+
+詳細は `.agent/tasks/todo.md` 参照。
 
 ## business-specific naming の排除
 
@@ -100,11 +159,11 @@ stored_topology_data
 - `action_transition_stats` → `context_transition_stats`
 - maintenance / work_content / parts / maint_log 等の業務語彙は Runtime 層に一切存在しない
 
-## fallback の不存在
+## status の明示性
 
 - `InsufficientHistory` は status の一値であり、silent fallback ではない
 - 候補なしは `StatusDetail` に明示コード（`NO_SESSION_ID` / `NO_CONTEXT_HISTORY` / `INSUFFICIENT_CONTEXT_HISTORY`）を返す
-- `ExplicitError` は resolver 内部例外時に返す明示状態
+- `ExplicitError` は resolver 内部例外時または policy-missing 時に返す明示状態
 - null status は存在しない
 
 ## Frontend 計算ロジック隔離
@@ -112,28 +171,6 @@ stored_topology_data
 - `EmissionView.tsx` の `RecommendationSection` は projection のみ（JSON 表示）
 - cosine 計算・nearest search・遷移確率計算はすべて Backend Runtime のみ
 - Frontend は `ContextRouteRecommendation` を data として受け取り表示するだけ
-
-## PR #18 follow-up fixes（後続修正）
-
-### Fix #2: DefaultEntitySearchIntegrationTests — 依存追加
-
-`RuntimeExecutor` に `ContextRouteRecommendationResolver` を第12引数として追加した際、
-`DefaultEntitySearchIntegrationTests.CreateEndpoint()` の構築コードが未更新だった。
-`ContextRouteRepository` + `ContextRouteRecommendationResolver` の構築チェーンを追加して修正。
-
-### Fix #3: 最近傍 prefix から next operation 候補が生成されない問題
-
-**原因**: `ContextPrefixVectorRecord` は pure vector cache として設計され、後続イベントのデータを持っていなかった。
-`FindNearestPrefixes` 内で `ContextNeighborResult` を生成する際に `NextOperation=null, NextTokenIdsHint=null` をハードコードしていた。
-
-**修正**:
-1. `ContextPrefixVectorRecord` に `NextOperation` と `NextTokenIdsHint` を optional フィールドとして追加（DB 側で後続イベントを JOIN してセット）
-2. `FindNearestPrefixes` を `c.NextOperation` / `c.NextTokenIdsHint` を `ContextNeighborResult` に転送するよう修正
-3. `LoadRecentPrefixVectorsAsync` を `virtual` に変更（テスト上書き可能）
-4. `LoadActiveTokensAsync` を `virtual` に変更（テスト上書き可能）
-5. `ResolveAsync_WithPrefixHistory_ReturnsOkWithNextOperationCandidates` テスト追加:
-   stub subclass が 15 件のプレフィックス候補（`NextOperation="action_next"` 付き）を返し、
-   `ResolveAsync` が `Status=Ok` かつ `NextOperations` に `"action_next"` を含むことを検証
 
 ## 実行チェック結果
 
@@ -150,3 +187,116 @@ structure-check は全項目 OK を確認。backend/frontend テストは CI で
 ## 残 TODO
 
 `.agent/tasks/todo.md` 参照。
+
+---
+
+## context_route_config 廃止 / topology 統合（PR #19 follow-up fix 3）
+
+### 変更の目的
+
+`context_route_config` を独立した設定テーブルとして扱っていた構造を廃止し、
+context route recommendation を topolactor topology の **optional capability** として統合した。
+
+### 削除ファイル
+
+| ファイル | 理由 |
+|---|---|
+| `db/context_route_config.sql` | 独立 SSOT テーブル廃止 |
+| `backend/repository/ContextRouteConfigRepository.cs` | 独立設定リポジトリ廃止 |
+| `backend/schema/ContextRouteConfigContracts.cs` | `ContextRouteConfig` → `ContextRoutePolicy` に移行 |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteConfigTestFixtures.cs` | `ContextRoutePolicyTestFixtures.cs` に置換 |
+| `frontend/routes/api/admin/context-route-config.ts` | 独立設定 API 廃止 |
+| `frontend/islands/ContextRouteConfigEditor.tsx` | 独立設定 editor island 廃止 |
+| `frontend/routes/admin/context-route-config.tsx` | 独立設定 admin page 廃止 |
+
+### 新規 / 変更ファイル
+
+| ファイル | 変更内容 |
+|---|---|
+| `backend/schema/ContextRoutePolicyContracts.cs` | `ContextRoutePolicy` 純粋 DTO（defaults なし） |
+| `backend/repository/TopologyRepository.cs` | `LoadFunctionParameterAsync` 追加（seed JSON 返す） |
+| `backend/runtime/ContextRouteRecommendationResolver.cs` | `TopologyRepository` から policy 読み込みに変更 |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | `ValidPolicy()` + `StubMissingPolicyTopologyRepository` |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | `ContextRoutePolicy` / `TopologyRepository` に更新 |
+| `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs` | `topologyRepository` を共有して渡すように更新 |
+| `backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs` | `topologyRepository` を共有して渡すように更新 |
+| `db/seed_empty.sql` | `function_parameters` に policy INSERT 追加 |
+| `db/README.md` | `context_route_config.sql` 参照削除 |
+| `frontend/api/adminApi.ts` | `context_route_config` 関連型・関数削除 |
+| `frontend/routes/admin/index.tsx` | context-route-config リンク削除 |
+| `frontend/routes/admin/context-token-registry.tsx` | context-route-config リンク削除 |
+| `docs/design/context-route-recommendation.md` | topology policy source に更新 |
+| `docs/design/context-route-recommendation.yaml` | `context_route_config` entity 削除、`topology_policy_source` 追加 |
+| `.agent/docs/design-ssot-index.md` | SSOT テーブル更新 |
+
+### Policy SSOT の変更
+
+| 変更前 | 変更後 |
+|---|---|
+| `context_route_config` テーブル（独立） | `function_parameters` テーブル（topology 統合） |
+| `ContextRouteConfigRepository.LoadConfigAsync` | `TopologyRepository.LoadFunctionParameterAsync` |
+| `ConfigLoadResult` 判別共用体 | `string?` null-check（null → ExplicitError） |
+| `ContextRouteConfig` レコード | `ContextRoutePolicy` レコード（defaults なし） |
+
+### Policy-missing の動作
+
+`TopologyRepository.LoadFunctionParameterAsync` が null を返した場合:
+→ `ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")`
+
+production fallback は Runtime コードに存在しない。
+
+---
+
+## CI red 修正（PR #19 follow-up fix 4）
+
+### CI red 原因
+
+GitHub Actions の `db-schema-check` が以下のエラーで失敗していた。
+
+```
+there is no unique or exclusion constraint matching the ON CONFLICT specification
+```
+
+`db/seed_empty.sql` で
+
+```sql
+ON CONFLICT (function_name, parameter_key) DO NOTHING
+```
+
+を使用しているが、`db/schema.sql` の `function_parameters` テーブルに
+`(function_name, parameter_key)` の UNIQUE constraint が存在しなかった。
+
+### 修正内容
+
+`db/schema.sql` の `function_parameters` 定義に UNIQUE constraint を追加した。
+
+```sql
+CONSTRAINT uq_function_parameters_function_key
+    UNIQUE (function_name, parameter_key)
+```
+
+これにより:
+- `seed_empty.sql` の `ON CONFLICT (function_name, parameter_key) DO NOTHING` が成功する
+- 同一 `(function_name, parameter_key)` に複数行が挿入されることを DB 側で防止する
+- topology policy SSOT が分裂しない（function_parameters は per-function one policy row）
+
+### PR description 修正
+
+PR #19 の description が旧実装（context_route_config、ContextRouteConfig.Default 等）の
+説明のままだったため、現状の実装方針（function_parameters SSOT、ContextRoutePolicy、
+policy-missing → ExplicitError）を正確に反映した内容に全面更新した。
+
+### 実行チェック結果
+
+| チェック | 結果 | 備考 |
+|---|---|---|
+| `bash .agent/tests/check-structure.sh` | PASS（全84項目） | 実行済み |
+| `bash .agent/tests/check-db-schema.sh` | SKIP | PostgreSQL 接続情報がこの実行環境に存在しない（CI で実行） |
+| `bash .agent/tests/check-backend-tests.sh` | SKIP | dotnet がこの実行環境に存在しない（CI で実行） |
+| `bash .agent/tests/check-frontend-types.sh` | SKIP | deno がこの実行環境に存在しない（CI で実行） |
+
+### 残 TODO
+
+`.agent/tasks/todo.md` 参照。
+構造的な TODO として、`PolicyFunctionName` / `PolicyParameterKey` の固定参照を
+将来 `structure_maps.state_policy` scoped policy に拡張する項目を追加済み。

@@ -12,14 +12,18 @@ public class ContextRouteRecommendationResolverTests
     private static ContextNeighborSearch NeighborSearch() => new();
 
     private static ContextRouteRecommendationResolver CreateResolver(
-        ContextRouteRepository? repo = null)
+        ContextRouteRepository? repo = null,
+        TopologyRepository? topologyRepo = null)
     {
         repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
+        // Default: use the in-memory skeleton which returns the seeded policy JSON.
+        topologyRepo ??= new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             repo,
             VectorBuilder(),
-            NeighborSearch());
+            NeighborSearch(),
+            topologyRepo);
     }
 
     // --- ContextVectorBuilder tests ---
@@ -258,6 +262,21 @@ public class ContextRouteRecommendationResolverTests
     }
 
     [Fact]
+    public async Task ResolveAsync_MissingPolicy_ReturnsExplicitError_NotDefault()
+    {
+        // Policy-missing must surface as ExplicitError — no silent fallback to hardcoded values.
+        var resolver = CreateResolver(topologyRepo: new StubMissingPolicyTopologyRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
+    }
+
+    [Fact]
     public async Task ResolveAsync_NoSilentFallback_StatusIsAlwaysExplicit()
     {
         var resolver = CreateResolver();
@@ -279,7 +298,8 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_EmptyNeighbors_ReturnsEmpty()
     {
         var resolver = CreateResolver();
-        var result = resolver.ResolveNextOperations([], []);
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+        var result = resolver.ResolveNextOperations([], [], policy);
         Assert.Empty(result);
     }
 
@@ -287,6 +307,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_NeighborVoting_RanksCorrectly()
     {
         var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
 
         var neighbors = new List<ContextNeighborResult>
         {
@@ -295,7 +316,7 @@ public class ContextRouteRecommendationResolverTests
             new(Guid.NewGuid(), 0, 0.5f, "action_b", null),
         };
 
-        var result = resolver.ResolveNextOperations(neighbors, []);
+        var result = resolver.ResolveNextOperations(neighbors, [], policy);
 
         Assert.NotEmpty(result);
         Assert.Equal("action_a", result[0].Value); // higher total sim wins
@@ -305,6 +326,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextOperations_TransitionStatsMerged()
     {
         var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
 
         var neighbors = new List<ContextNeighborResult>
         {
@@ -316,7 +338,7 @@ public class ContextRouteRecommendationResolverTests
             new("prev", "action_b", 100, 90f, 0.9f),
         };
 
-        var result = resolver.ResolveNextOperations(neighbors, stats);
+        var result = resolver.ResolveNextOperations(neighbors, stats, policy);
 
         // Both action_a (from neighbors) and action_b (from stats) should appear
         Assert.Contains(result, r => r.Value == "action_a");
@@ -327,7 +349,8 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextTokens_EmptyNeighbors_ReturnsEmpty()
     {
         var resolver = CreateResolver();
-        var result = resolver.ResolveNextTokens([]);
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+        var result = resolver.ResolveNextTokens([], policy);
         Assert.Empty(result);
     }
 
@@ -335,6 +358,7 @@ public class ContextRouteRecommendationResolverTests
     public void ResolveNextTokens_VotesFromNextTokenIdsHint()
     {
         var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
         var tokenId = Guid.NewGuid();
 
         var neighbors = new List<ContextNeighborResult>
@@ -343,7 +367,7 @@ public class ContextRouteRecommendationResolverTests
             new(Guid.NewGuid(), 0, 0.7f, null, [tokenId]),
         };
 
-        var result = resolver.ResolveNextTokens(neighbors);
+        var result = resolver.ResolveNextTokens(neighbors, policy);
 
         Assert.Single(result);
         Assert.Equal(tokenId.ToString(), result[0].Value);
@@ -387,8 +411,7 @@ public class ContextRouteRecommendationResolverTests
     [Fact]
     public void FrontendIsolation_RecommendationIsDataOnly()
     {
-        // This test documents the contract: ContextRouteRecommendationResult is a
-        // pure data record. It has no methods that perform calculations.
+        // ContextRouteRecommendationResult is a pure data record — no calculation methods.
         // Calculation is done only in ContextVectorBuilder, ContextNeighborSearch,
         // and ContextRouteRecommendationResolver (all backend-only).
         var result = new ContextRouteRecommendationResult(
@@ -400,7 +423,6 @@ public class ContextRouteRecommendationResolverTests
             StatusDetail: "test"
         );
 
-        // ContextRouteRecommendationResult is a record — no calculation methods
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Empty(result.NextOperations);
     }

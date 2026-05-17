@@ -36,7 +36,8 @@ public class DefaultEntitySearchIntegrationTests
                 NullLogger<ContextRouteRecommendationResolver>.Instance,
                 contextRouteRepository,
                 new ContextVectorBuilder(),
-                new ContextNeighborSearch()));
+                new ContextNeighborSearch(),
+                topologyRepository));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
     }
 

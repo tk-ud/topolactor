@@ -13,6 +13,28 @@ export default function AdminIndex() {
         out of scope for this skeleton.
       </p>
 
+      <section style={{ marginBottom: "24px" }}>
+        <h2>Context Route Registry (推薦エンジン)</h2>
+        <ul>
+          <li>
+            <a href="/admin/context-token-registry">
+              context_token_registry — ハブ Registry（トークン管理）
+            </a>
+            <br />
+            <small style={{ color: "#666" }}>
+              自動学習・レコメンドが参照する離散トークン辞書（value: [-1.0, 1.0]）
+            </small>
+          </li>
+          <li style={{ marginTop: "8px" }}>
+            <small style={{ color: "#888" }}>
+              推薦エンジン設定（min_similarity / top_k 等）は
+              function_parameters（topology データストア）に格納されます。
+              独立した設定UIはありません。
+            </small>
+          </li>
+        </ul>
+      </section>
+
       <section>
         <h2>Structure Map</h2>
         <table cellPadding="6">

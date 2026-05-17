@@ -2,6 +2,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Topolactor.Repository;
 
+// function_name constant used by the context route recommendation resolver
+// to load its policy from function_parameters.
+file static class FunctionNames
+{
+    internal const string ContextRouteRecommendationResolve = "context_route_recommendation_resolve";
+    internal const string ContextRoutePolicyKey = "default_policy";
+    // JSON matches the INSERT in db/seed_empty.sql function_parameters row.
+    internal const string ContextRoutePolicySeedJson =
+        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}""";
+}
+
 /// <summary>
 /// Repository for loading stored topology data: structure maps, packages, and schemas.
 ///
@@ -99,6 +110,39 @@ public class TopologyRepository
 
         _logger.LogDebug("TopologyRepository.LoadSchemaAsync: no record found for schemaId='{SchemaId}'.", schemaId);
         return Task.FromResult<SchemaRecord?>(null);
+    }
+
+    /// <summary>
+    /// Loads a function_parameters row by (function_name, parameter_key) and returns
+    /// the parameter_value as a raw JSON string, or null if no active row is found.
+    ///
+    /// In-memory skeleton: returns the context route recommendation policy JSON that
+    /// matches the INSERT row added to function_parameters in db/seed_empty.sql.
+    /// All other function_name / parameter_key combinations return null.
+    ///
+    /// Real DB implementation: SELECT parameter_value FROM function_parameters
+    ///   WHERE function_name = @fn AND parameter_key = @key AND active = true
+    ///   LIMIT 1
+    /// Returns null when no active row exists — caller must treat null as policy-missing.
+    /// </summary>
+    public virtual Task<string?> LoadFunctionParameterAsync(
+        string functionName,
+        string parameterKey,
+        CancellationToken ct = default)
+    {
+        if (functionName == FunctionNames.ContextRouteRecommendationResolve &&
+            parameterKey == FunctionNames.ContextRoutePolicyKey)
+        {
+            _logger.LogDebug(
+                "TopologyRepository.LoadFunctionParameterAsync: returning seed policy for '{FunctionName}/{ParameterKey}'.",
+                functionName, parameterKey);
+            return Task.FromResult<string?>(FunctionNames.ContextRoutePolicySeedJson);
+        }
+
+        _logger.LogDebug(
+            "TopologyRepository.LoadFunctionParameterAsync: no parameter found for '{FunctionName}/{ParameterKey}'.",
+            functionName, parameterKey);
+        return Task.FromResult<string?>(null);
     }
 }
 
