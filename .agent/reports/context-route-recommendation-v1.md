@@ -58,6 +58,10 @@ ExplicitError(CONTEXT_ROUTE_POLICY_INVALID:...)
 
 Silent fallback and production default config are prohibited.
 
+`TopologyRepository.LoadFunctionParameterAsync` does not return hardcoded context route policy values. Until real DB access is implemented, missing function parameters return `null` and the resolver surfaces explicit policy-missing status.
+
+Test policy values are isolated in `ContextRoutePolicyTestFixtures` / test stubs only.
+
 ### Frontend is projection only
 
 Frontend receives `ContextRouteRecommendation` as emitted data and displays it.
@@ -87,7 +91,7 @@ Frontend does not compute:
 | `backend/schema/ContextRouteContracts.cs` | Data contracts for context route events, vectors, neighbors, and recommendation output |
 | `backend/schema/ContextRoutePolicyContracts.cs` | Resolved `ContextRoutePolicy` record; no production defaults |
 | `backend/repository/ContextRouteRepository.cs` | Context route repository skeleton |
-| `backend/repository/TopologyRepository.cs` | Topology repository skeleton, including `LoadFunctionParameterAsync` |
+| `backend/repository/TopologyRepository.cs` | Topology repository skeleton; function parameters return missing until real DB access is implemented |
 | `backend/runtime/ContextVectorBuilder.cs` | Sparse event/prefix vector builder and L2 norm computation |
 | `backend/runtime/ContextNeighborSearch.cs` | Cosine similarity and nearest-prefix search |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver inserted after component expansion |
@@ -103,6 +107,14 @@ Frontend does not compute:
 | `frontend/routes/admin/context-token-registry.tsx` | Token registry admin page shell |
 | `frontend/islands/ContextTokenRegistryEditor.tsx` | Token registry admin island; no hardcoded token seed |
 | `frontend/routes/api/admin/context-token-registry.ts` | Explicit 501 until real DB endpoint is implemented |
+
+### Tests
+
+| File | Role |
+|---|---|
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | Test-only valid policy JSON and policy stubs |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | Resolver/vector/neighbor tests using explicit policy fixture |
+| `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs` | Runtime executor tests with policy fixture injected only for recommendation branch |
 
 ### Design / Agent Docs
 
