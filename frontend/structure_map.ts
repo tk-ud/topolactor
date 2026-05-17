@@ -1,0 +1,44 @@
+export type StructureMapEntry = {
+  attractorKey: string;
+  packageId: string;
+  schemaId: string;
+  componentIds: string[];
+  statePolicies?: Record<string, unknown>;
+};
+
+/**
+ * The StructureMap is the central routing table of the topolactor frontend.
+ * Each key is an attractorKey (`target:layer:action`) and its value is the
+ * resolved set of pipeline nodes (package, schema, components) that should
+ * handle that operation.
+ *
+ * The structure_map_resolve step in the canonical flow consults this table
+ * after the attractor_resolve step has produced an attractorKey from the
+ * OperationVector.
+ */
+export type StructureMap = Record<string, StructureMapEntry>;
+
+/**
+ * The default structure map shipped with the skeleton.
+ * Real structure maps will be populated from backend topology data at
+ * application startup (stored_topology_data → structure_map_resolve).
+ */
+export const defaultStructureMap: StructureMap = {
+  "default:entity:Search": {
+    attractorKey: "default:entity:Search",
+    packageId: "default-package",
+    schemaId: "default-schema",
+    componentIds: ["default-view"],
+  },
+};
+
+/**
+ * Look up a StructureMapEntry by attractorKey.
+ * Returns null when no entry exists for that key.
+ */
+export function lookupStructureMap(
+  map: StructureMap,
+  attractorKey: string,
+): StructureMapEntry | null {
+  return map[attractorKey] ?? null;
+}
