@@ -1,5 +1,5 @@
 import { JSX } from "preact";
-import type { Emission, ValidationError } from "../api/dispatch.ts";
+import type { ContextRouteRecommendation, Emission, ValidationError } from "../api/dispatch.ts";
 import { validationErrorText } from "../api/dispatch.ts";
 
 type Props = {
@@ -42,6 +42,9 @@ export function EmissionView({ emission }: Props): JSX.Element {
             value={errorLines}
             error={Boolean(emission.errors && emission.errors.length > 0)}
           />
+          {emission.contextRouteRecommendation && (
+            <RecommendationSection rec={emission.contextRouteRecommendation} />
+          )}
         </tbody>
       </table>
     </div>
@@ -54,6 +57,46 @@ type RowProps = {
   pre?: boolean;
   error?: boolean;
 };
+
+type RecommendationSectionProps = { rec: ContextRouteRecommendation };
+
+function RecommendationSection({ rec }: RecommendationSectionProps): JSX.Element {
+  const cellStyle = {
+    border: "1px solid #ccc",
+    padding: "4px 8px",
+    verticalAlign: "top" as const,
+  };
+
+  return (
+    <>
+      <tr>
+        <td style={{ ...cellStyle, fontWeight: "bold" }} colSpan={2}>
+          context_route_recommendation
+        </td>
+      </tr>
+      <tr>
+        <td style={{ ...cellStyle, fontWeight: "bold" }}>status</td>
+        <td style={cellStyle}>{rec.status}{rec.statusDetail ? ` — ${rec.statusDetail}` : ""}</td>
+      </tr>
+      <tr>
+        <td style={{ ...cellStyle, fontWeight: "bold" }}>next_operations</td>
+        <td style={cellStyle}>
+          {rec.nextOperations.length === 0
+            ? <em style={{ color: "#999" }}>—</em>
+            : <pre style={{ margin: 0 }}>{JSON.stringify(rec.nextOperations, null, 2)}</pre>}
+        </td>
+      </tr>
+      <tr>
+        <td style={{ ...cellStyle, fontWeight: "bold" }}>next_tokens</td>
+        <td style={cellStyle}>
+          {rec.nextTokens.length === 0
+            ? <em style={{ color: "#999" }}>—</em>
+            : <pre style={{ margin: 0 }}>{JSON.stringify(rec.nextTokens, null, 2)}</pre>}
+        </td>
+      </tr>
+    </>
+  );
+}
 
 function Row({ label, value, pre, error }: RowProps): JSX.Element {
   const cellStyle = {

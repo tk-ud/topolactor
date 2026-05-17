@@ -28,6 +28,8 @@ public record EndpointResponseDto(
 /// Internal runtime concept. Public only for C# accessibility consistency.
 /// Must not be returned to the frontend or exposed through EndpointResponseDto.
 /// Derived from EndpointRequestDto after input mapping.
+/// Context route fields (ContextSessionId, ContextUserId, ContextTokenIds, ContextRecordId)
+/// are extracted from EndpointRequestDto.Context for use by the recommendation resolver.
 /// </summary>
 public record OperationVector(
     string? Target,
@@ -36,7 +38,12 @@ public record OperationVector(
     string? AttractorKey,
     string? UserRole,
     JsonElement? Payload,
-    string? RequestedProjection
+    string? RequestedProjection,
+    // Context route recommendation fields — nullable, no guard enforcement
+    string? ContextSessionId = null,
+    string? ContextUserId = null,
+    string? ContextTokenIds = null,     // comma-separated Guid list
+    string? ContextRecordId = null
 );
 
 /// <summary>
@@ -44,6 +51,8 @@ public record OperationVector(
 /// Must not be returned to the frontend, exposed through EndpointResponseDto,
 /// or persisted as a business fact.
 /// Holds intermediate resolved state as the runtime progresses through the pipeline.
+/// ContextRouteRecommendation is populated by context_route_recommendation_resolve
+/// and forwarded to EmissionBuilder.
 /// </summary>
 public record RuntimeWorkingShape(
     OperationVector? Vector,
@@ -54,11 +63,15 @@ public record RuntimeWorkingShape(
     object? PackageDef,
     object? SchemaDef,
     JsonElement? ResolvedData,
-    IReadOnlyList<ValidationError>? Errors
+    IReadOnlyList<ValidationError>? Errors,
+    ContextRouteRecommendationResult? ContextRouteRecommendation = null
 );
 
 /// <summary>
 /// Validated output returned in the response. Contains resolved identifiers and data.
+/// ContextRouteRecommendation carries next operation and token candidates derived
+/// from the context route recommendation runtime. Status is always explicit —
+/// InsufficientHistory when not enough history exists, never silently null.
 /// </summary>
 public record Emission(
     string? StructureMapId,
@@ -66,7 +79,8 @@ public record Emission(
     Guid? SchemaId,
     IReadOnlyList<string>? ComponentIds,
     JsonElement? Data,
-    IReadOnlyList<ValidationError> Errors
+    IReadOnlyList<ValidationError> Errors,
+    ContextRouteRecommendationResult? ContextRouteRecommendation = null
 );
 
 /// <summary>

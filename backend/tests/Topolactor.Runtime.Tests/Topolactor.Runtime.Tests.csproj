@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../../schema/Contracts.cs" Link="RuntimeSource/Contracts.cs" />
+    <Compile Include="../../schema/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../runtime/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />

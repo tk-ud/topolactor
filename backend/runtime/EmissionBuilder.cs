@@ -25,7 +25,8 @@ public class EmissionBuilder
             SchemaId: shape.SchemaId,
             ComponentIds: shape.ComponentIds,
             Data: shape.ResolvedData,
-            Errors: errors
+            Errors: errors,
+            ContextRouteRecommendation: shape.ContextRouteRecommendation
         );
     }
 }
