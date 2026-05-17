@@ -1,0 +1,95 @@
+# topolactor — database layer
+
+The database is the semantic topology space for the topolactor system. It is
+not a conventional CRUD/MVC datastore. Tables fall into distinct categories
+with different roles in the canonical flow:
+
+```
+stored_topology_data
+  → user_operation
+  → operation_vector
+  → attractor_resolve
+  → structure_map_resolve
+  → package_resolve
+  → schema_resolve
+  → component_expand
+  → emission_or_projection
+```
+
+---
+
+## How to run
+
+Apply all four files in this order:
+
+```bash
+psql -d <database> -f db/schema.sql
+psql -d <database> -f db/topology_tables.sql
+psql -d <database> -f db/promotion_tables.sql
+psql -d <database> -f db/seed_empty.sql
+```
+
+`schema.sql` creates all registry tables and `function_parameters`.
+`topology_tables.sql` creates `hubs`, `entities`, `hub_relations`, `structure_maps`.
+`promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
+`seed_empty.sql` inserts the minimum default topology rows including the
+`default:entity:search` structure map needed for the dummy canonical flow.
+
+---
+
+## Files
+
+| File | Purpose |
+|---|---|
+| `schema.sql` | Top-level entrypoint. Extensions, all registry tables, `function_parameters`. References `topology_tables.sql` and `promotion_tables.sql` via `\i` comments. |
+| `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
+| `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
+| `seed_empty.sql` | Minimal default seed rows. No real business data. |
+
+---
+
+## Table categories
+
+### Topology definition tables
+
+These define the shape and rules of the topology space. They are the
+authoritative source of truth for how the system resolves operations. Changes
+here alter topology behaviour for all future canonical flow traversals.
+
+- `registrar_entries` — meta-registry of all topology tables
+- `master_registry` — top-level domain concept taxonomy
+- `state_registry` — named operational states
+- `relation_registry` — named relations; primary structuring mechanism
+- `package_registry` — versioned/typed package definitions (resolved in `package_resolve`)
+- `schema_registry` — schema definitions governing converged entity shape (resolved in `schema_resolve`)
+- `component_registry` — discrete reusable behaviour units (expanded in `component_expand`)
+- `structure_maps` — binds `attractor_key` → package → schema → components; the central topology definition artifact
+- `hub_relations` — weighted relation bindings between hubs and `relation_registry` entries
+- `function_parameters` — data-driven configuration parameters for canonical flow functions
+
+### Converged entity data tables
+
+These hold the runtime-converged state produced by traversing the topology.
+They are outputs of the canonical flow, not source-of-truth business data.
+Data here reflects the current resolved projection of operations against the
+topology definition.
+
+- `hubs` — resolved grouping points, populated during `attractor_resolve`
+- `entities` — resolved data nodes within hubs, populated by `schema_resolve` + `component_expand`
+- `diff_logs` — (future) change log of entity convergence transitions
+
+### Promotion policy tables
+
+These track observed usage patterns and hold advisory structural change
+suggestions. No migrations are executed by these tables.
+
+- `usage_metrics` — observed read/filter/aggregation/join patterns per table/column/jsonb-path
+- `promotion_candidates` — advisory suggestions (index, generated column, registry promotion, physical table promotion)
+
+---
+
+## Real business data
+
+Real business data is out of scope for this layer. The seed (`seed_empty.sql`)
+inserts only the minimum structural defaults required to bootstrap the topology
+space. Business data is introduced through the canonical flow at runtime.
