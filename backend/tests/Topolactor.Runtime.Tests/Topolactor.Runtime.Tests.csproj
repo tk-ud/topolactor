@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../schema/Contracts.cs" Link="RuntimeSource/Contracts.cs" />
+    <Compile Include="../../runtime/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>
