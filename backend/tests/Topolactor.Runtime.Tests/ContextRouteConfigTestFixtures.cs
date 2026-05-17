@@ -6,14 +6,14 @@ namespace Topolactor.Runtime.Tests;
 
 /// <summary>
 /// Test-only fixtures for ContextRouteConfig.
-/// Production code must never reference these; they exist only to supply
-/// known-good config values for unit and integration tests.
+/// Production code must never reference these.
 /// </summary>
 internal static class ContextRouteConfigTestFixtures
 {
     /// <summary>
-    /// Returns a valid ContextRouteConfig for use in tests.
-    /// Values match the context_route_config seed rows in context_route_config.sql.
+    /// Returns a valid ContextRouteConfig for use in tests that call
+    /// ResolveNextOperations / ResolveNextTokens directly and need an explicit config.
+    /// Values match the context_route_config.sql seed rows and the skeleton _seedConfig.
     /// </summary>
     internal static ContextRouteConfig ValidConfig() => new(
         MinSimilarity: 0.05f,
@@ -24,18 +24,6 @@ internal static class ContextRouteConfigTestFixtures
         BaselineWeight: 0.5f,
         NeighborWeight: 0.5f
     );
-}
-
-/// <summary>
-/// Stub ContextRouteConfigRepository that always returns a loaded ValidConfig.
-/// For use in unit and integration tests only.
-/// </summary>
-internal sealed class StubLoadedConfigRepository()
-    : ContextRouteConfigRepository(NullLogger<ContextRouteConfigRepository>.Instance, "dummy")
-{
-    public override Task<ConfigLoadResult> LoadConfigAsync(CancellationToken ct = default)
-        => Task.FromResult<ConfigLoadResult>(
-            new ConfigLoadResult.Loaded(ContextRouteConfigTestFixtures.ValidConfig()));
 }
 
 /// <summary>

@@ -16,7 +16,8 @@ public class ContextRouteRecommendationResolverTests
         ContextRouteConfigRepository? configRepo = null)
     {
         repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
-        configRepo ??= new StubLoadedConfigRepository();
+        // Default: use the in-memory skeleton which returns the seeded config values.
+        configRepo ??= new ContextRouteConfigRepository(NullLogger<ContextRouteConfigRepository>.Instance, "dummy");
         return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             repo,

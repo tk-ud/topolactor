@@ -32,7 +32,7 @@ public class RuntimeExecutorTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                new StubLoadedConfigRepository()));
+                new ContextRouteConfigRepository(NullLogger<ContextRouteConfigRepository>.Instance, "dummy")));
     }
 
     [Fact]
