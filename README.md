@@ -4,18 +4,22 @@ Topolactor is a data-driven topology runtime scaffold.
 
 Use this repository as a seed for a separate product repository.
 
+**Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
+
 ## What You Can Build
 
-Topolactor is designed for applications where UI, data shape, and runtime behavior should be expanded from stored definitions instead of hard-coded screens.
+Topolactor is designed for applications where UI, data shape, and runtime behavior are expanded from stored definitions instead of hard-coded screens.
 
 With this scaffold, you can build:
 
-- registry-driven business systems
-- schema-driven admin tools
-- package/component-driven UI projection
-- hub-centered composite data views
+- business systems whose screens are driven by registry and schema definitions
+- admin tools that can grow from JSONB data into promoted tables
+- UI projections assembled from packages and components
+- composite business views centered around a resolved hub
 - operation-to-runtime dispatch flows
-- agent-assisted scaffold repositories
+- agent-assisted scaffold repositories with local CI guardrails
+
+In this project, a **hub** is a resolved grouping point in the topology space. It lets related business data be assembled as a view without making a fixed physical table or screen the architecture subject.
 
 The intended extension model is:
 
@@ -45,13 +49,13 @@ stored_topology_data
 
 ## Start Here
 
-- `docs/framework-core.yaml`
-- `docs/framework-policy.yaml`
-- `docs/file-structure.yaml`
-- `docs/registrar-admin-ui-specification.md`
-- `docs/promotion-manifest-editor-specification.md`
-- `AGENTS.md`
-- `.agent/`
+- `docs/framework-core.yaml` — core concepts, topology model, and layer responsibilities.
+- `docs/framework-policy.yaml` — registry, state, search, manifest, data, log, and promotion policies.
+- `docs/file-structure.yaml` — repository layout and canonical runtime wiring.
+- `docs/registrar-admin-ui-specification.md` — boundary for topology registration admin UI.
+- `docs/promotion-manifest-editor-specification.md` — boundary for promotion manifest editing.
+- `AGENTS.md` — entrypoint instructions for coding agents.
+- `.agent/` — agent rules, structure checks, skills, tasks, and reports surface.
 
 ## Agent Workflow
 
