@@ -1,0 +1,495 @@
+system:
+  name: commit-inference-engine
+  version: "1.3"
+  concept: >
+    A unified, offline-first statistical inference engine for operation logging.
+    Production-ready with normalized item facts and event typing.
+
+    Three inference stages:
+      S1 (Language): Token-based item recommendation via canonical signature cache.
+      S2 (Physics):  Fact-based resolution binding derived from confirmed items.
+      S3 (Time):     Subject-aware replacement recommendation from lifecycle history.
+
+    Output is normalized via resolution_master for downstream consistency.
+    Raw/manual notes are preserved separately and never overwrite master content.
+
+design_principles:
+  offline_first: true
+  cpu_only: true
+  append_only_logs: true
+  human_in_the_loop: true
+  determinism: "Canonical signatures ensure stable caching."
+  normalization_for_facts: >
+    Physical events are stored in normalized child tables for efficient indexing.
+  cache_key_safety:
+    resolution_cache_key_explosion_avoidance:
+      policy: >
+        cache_resolutions_by_context uses items_sig only;
+        tokens are used for weak reranking only.
+      rationale: >
+        Including tokens_sig in the cache key explodes cardinality and reduces
+        cache hit rate.
+
+flow_definition:
+  S1_hybrid_diagnosis:
+    description: "Input → Item Selection (combines repair-path and prevention-path)"
+    inputs:
+      - model
+      - subject_id
+      - current_lifecycle_metric
+      - input_text
+      - input_tokens
+    logic:
+      repair_path: >
+        Recommend items based on input_tokens similarity
+        (token cache / Muscle SQL).
+      prevention_path: >
+        Recommend items where
+        (current_lifecycle_metric - last_replaced_metric) > median_interval
+        (S3; normalized logs).
+    output:
+      - confirmed_items
+      - item_events: "Per-item event_type chosen by user (replaced/inspected/installed)"
+    session_boundary:
+      start_condition: "user starts input"
+      end_condition: "items_commit_done == true"
+
+  S2_resolution_binding:
+    description: "Confirmed Items → Resolution Selection → Output"
+    inputs:
+      - confirmed_items
+      - input_tokens
+    logic:
+      inference: >
+        Lookup resolution_codes by items_sig;
+        then weakly rerank using token context.
+      binding: >
+        Force-map selected code to
+        resolution_master(content, label, cost_weight).
+      preserve_raw: >
+        Any manual free text is stored separately and never overwrites
+        resolution_master content.
+    session_boundary:
+      start_condition: "items_commit_done == true"
+      end_condition: "resolution_commit_done == true"
+
+ui_definition:
+  sections:
+    S1_items:
+      title: "Item candidates"
+      outputs:
+        - item_key
+        - sources: "[token_match | time_alert | manual]"
+        - time_alert_flag: boolean
+        - evidence:
+            - token_score
+            - median_interval
+            - last_replaced_metric
+
+    S2_resolutions:
+      title: "Resolution code candidates"
+      outputs:
+        - resolution_code
+        - score
+        - bound_content_preview: "resolution_master.content"
+        - cost_weight: "resolution_master.cost_weight"
+
+    S2_resolution_content:
+      title: "Resolution content"
+      outputs:
+        - official_content: "resolution_master.content"
+        - raw_manual_addition: "operation_log_note.manual_text (optional)"
+
+    S3_replacement:
+      title: "Replacement recommendations"
+      outputs:
+        - item_key
+        - median_interval
+        - last_replaced_metric
+        - elapsed_since_last
+        - recommended_now
+        - reliability:
+            - intervals_n
+            - subjects_n
+
+entities:
+  # -----------------------------------------------------------
+  # 0) Session State + Events (Append-only)
+  # -----------------------------------------------------------
+
+  session_s1:
+    description: "S1 session state — UI transaction boundary for item selection."
+    fields:
+      s1_id:                 { type: uuid, pk: true }
+      model:                 { type: string }
+      subject_id:            { type: string }
+      lifecycle_metric_start: { type: int }
+      input_text:            { type: string }
+      input_tokens:          { type: "text[]" }
+      token_sig:             { type: string }
+      created_at:            { type: timestamp }
+      committed_at:          { type: timestamp, nullable: true }
+    indexes:
+      - { name: idx_s1_subject_time, on: [subject_id, created_at] }
+      - { name: idx_s1_model_time,   on: [model, created_at] }
+
+  session_s1_item_event:
+    description: >
+      Append-only selection events for items in S1.
+      This is the audit trail and the source for confirmed_items when S1 commits.
+    fields:
+      event_id:   { type: uuid, pk: true }
+      s1_id:      { type: uuid, fk: session_s1.s1_id }
+      item_key:   { type: string }
+      source:     { type: enum, values: [token_match, time_alert, manual] }
+      event_type: { type: enum, values: [installed, replaced, inspected] }
+      category:   { type: enum, values: [failure, preventive, incidental, other], nullable: true }
+      created_at: { type: timestamp }
+    indexes:
+      - { name: idx_s1ie_s1_time, on: [s1_id, created_at] }
+      - { name: idx_s1ie_item,    on: [item_key] }
+
+  session_s2:
+    description: "S2 session state — resolution code selection."
+    fields:
+      s2_id:             { type: uuid, pk: true }
+      s1_id:             { type: uuid, fk: session_s1.s1_id }
+      model:             { type: string }
+      subject_id:        { type: string }
+      lifecycle_metric_start: { type: int }
+      input_tokens:      { type: "text[]" }
+      token_sig:         { type: string }
+      confirmed_items:   { type: "text[]" }
+      items_sig:         { type: string }
+      created_at:        { type: timestamp }
+      committed_at:      { type: timestamp, nullable: true }
+    indexes:
+      - { name: idx_s2_s1,           on: [s1_id] }
+      - { name: idx_s2_subject_time,  on: [subject_id, created_at] }
+
+  session_s2_resolution_event:
+    description: >
+      Append-only selection events for resolution codes in S2.
+      This is the audit trail and the source for confirmed resolution_codes when S2 commits.
+    fields:
+      event_id:        { type: uuid, pk: true }
+      s2_id:           { type: uuid, fk: session_s2.s2_id }
+      resolution_code: { type: string }
+      source:          { type: enum, values: [recommend, manual] }
+      created_at:      { type: timestamp }
+    indexes:
+      - { name: idx_s2re_s2_time,    on: [s2_id, created_at] }
+      - { name: idx_s2re_resolution, on: [resolution_code] }
+
+  # -----------------------------------------------------------
+  # 1) Single Source of Truth (Committed Header)
+  # -----------------------------------------------------------
+
+  operation_log:
+    description: >
+      Unified committed log header. Authoritative for downstream output context.
+      Written only when S2 commits.
+    fields:
+      record_id:          { type: uuid, pk: true }
+      model:              { type: string }
+      subject_id:         { type: string }
+      lifecycle_metric_at_event: { type: int }
+      input_text:         { type: string }
+      input_tokens:       { type: "text[]" }
+      token_sig:          { type: string }
+      item_keys:
+        type: "text[]"
+        note: >
+          Denormalized display-only. MUST be derived from operation_log_item
+          (DISTINCT item_key) and rebuildable; do not use for correctness queries.
+      items_sig:          { type: string }
+      resolution_codes:   { type: "text[]" }
+      created_at:         { type: timestamp }
+      source_session:
+        s1_id: { type: uuid, nullable: true }
+        s2_id: { type: uuid, nullable: true }
+    indexes:
+      - { name: idx_oplog_model_time,      on: [model, created_at] }
+      - { name: idx_oplog_subject_time,    on: [subject_id, created_at] }
+      - { name: idx_oplog_tokens_gin,      on: [input_tokens], type: gin }
+      - { name: idx_oplog_items_sig,       on: [model, items_sig] }
+
+  operation_log_note:
+    description: >
+      Raw/manual notes preserved separately.
+      Never overwrites resolution_master-bound content; for internal context only.
+    fields:
+      id:            { type: uuid, pk: true }
+      record_id:     { type: uuid, fk: operation_log.record_id }
+      manual_text:   { type: string, nullable: true }
+      internal_memo: { type: string, nullable: true }
+      created_at:    { type: timestamp }
+    indexes:
+      - { name: idx_oln_record, on: [record_id] }
+
+  # -----------------------------------------------------------
+  # 2) Normalized Facts (Committed Detail)
+  # -----------------------------------------------------------
+
+  operation_log_item:
+    description: >
+      Normalized item events (facts). CRITICAL for S3 correctness and DB performance.
+      Written only when S2 commits, derived from S1 item events + final confirmation.
+    fields:
+      id:                          { type: uuid, pk: true }
+      record_id:                   { type: uuid, fk: operation_log.record_id }
+      model:                       { type: string }
+      subject_id:                  { type: string }
+      lifecycle_metric_at_event:   { type: int }
+      item_key:                    { type: string }
+      event_type:  { type: enum, values: [installed, replaced, inspected] }
+      category:    { type: enum, values: [failure, preventive, incidental, other], nullable: true }
+      created_at:  { type: timestamp }
+    indexes:
+      - { name: idx_oli_subject_item_metric, on: [subject_id, item_key, lifecycle_metric_at_event] }
+      - { name: idx_oli_model_item_metric,   on: [model, item_key, lifecycle_metric_at_event] }
+      - { name: idx_oli_record,              on: [record_id] }
+
+  # -----------------------------------------------------------
+  # 3) Master Data
+  # -----------------------------------------------------------
+
+  resolution_master:
+    description: "Downstream coding and reporting master."
+    fields:
+      id:              { type: int, pk: true }
+      model:           { type: string }
+      resolution_code: { type: string }
+      content:         { type: string }
+      cost_weight:     { type: float }
+      label:           { type: string }
+      note:            { type: string, nullable: true }
+    unique_keys: [model, resolution_code]
+
+  # -----------------------------------------------------------
+  # 4) Caches (Intelligence)
+  # -----------------------------------------------------------
+
+  cache_items_by_token_sig:
+    description: "S1: Maps token signatures to item ranking."
+    fields:
+      model:      { type: string }
+      token_sig:  { type: string }
+      item_key:   { type: string }
+      score:      { type: float }
+      updated_at: { type: timestamp }
+    unique_keys: [model, token_sig, item_key]
+    indexes:
+      - { name: idx_citk_lookup, on: [model, token_sig] }
+
+  cache_item_lifecycle_stats:
+    description: "S3: Population-level median intervals (replacement)."
+    fields:
+      model:           { type: string }
+      item_key:        { type: string }
+      category_scope:
+        type: enum
+        values: [ALL, failure, preventive, incidental, other]
+        default: ALL
+        note: "Optional expansion. Default ALL is sufficient for v1."
+      median_interval: { type: float }
+      intervals_n:     { type: int }
+      subjects_n:      { type: int }
+      updated_at:      { type: timestamp }
+    unique_keys: [model, item_key, category_scope]
+    definition:
+      interval_source: "operation_log_item where event_type='replaced'"
+      interval_calc: >
+        For each (model, item_key, subject_id):
+          sort lifecycle_metric_at_event ASC,
+          interval = lifecycle_metric_at_event - LAG(lifecycle_metric_at_event),
+          then compute per-subject median(interval),
+          then pool per-subject medians across subject_id and take median (P50).
+      rationale: >
+        Pooling per-subject medians prevents bias from subjects with many
+        replacement events dominating the population.
+    counts_definition:
+      intervals_n: "pooled interval count (rows after LAG, before per-subject median)"
+      subjects_n:  "distinct subject_id contributing at least 1 interval"
+    reliability_rule:
+      default:  "use median_interval only if subjects_n >= 3 AND intervals_n >= 3"
+      fallback: "if insufficient, hide time_alert or fallback to category_scope=ALL"
+
+  cache_resolutions_by_context:
+    description: "S2: Maps item sets to resolution codes (co-occurrence)."
+    fields:
+      model:           { type: string }
+      items_sig:       { type: string }   # Key excludes tokens to prevent explosion
+      resolution_code: { type: string }
+      score:           { type: float }
+      updated_at:      { type: timestamp }
+    unique_keys: [model, items_sig, resolution_code]
+    indexes:
+      - { name: idx_crc_lookup, on: [model, items_sig] }
+
+scoring_rules:
+  # --- S1: Language ---
+  token_score:
+    formula: "score = sum(2^|q_tokens|) for matched records"
+    notes:
+      - "Prefix-boost: larger q_tokens set → exponentially larger weight."
+      - "Implementation pre-aggregated into cache_items_by_token_sig."
+
+  # --- S3: Time ---
+  time_alert:
+    condition: >
+      (current_lifecycle_metric - last_replaced_metric) > median_interval
+    impl: >
+      Query operation_log_item where subject_id=? AND item_key=? AND
+      event_type='replaced' ORDER BY lifecycle_metric_at_event DESC LIMIT 1
+    null_policy:
+      policy: "no_alert"
+      rationale: >
+        Subjects with no replacement history require human judgment
+        (avoid false recommendations).
+    reliability_gate:
+      use_only_if: "cache_item_lifecycle_stats.subjects_n >= 3 AND intervals_n >= 3"
+      else: "hide time alert (or show as 'insufficient population data')"
+    output: "boolean flag (recommended_now)"
+
+  # --- S2: Physics ---
+  resolution_score:
+    formula: "score = count(hit_items)"
+    token_adjust:
+      note: "tokens used only for weak reranking to avoid cache key explosion"
+      strategy: >
+        Fetch candidates by items_sig, then add small bonus if resolution_code
+        historically matches input_tokens.
+      token_cooccur_score_definition: >
+        count of historical records where
+        (resolution_code in record.resolution_codes) AND
+        (input_tokens overlaps current input_tokens),
+        optionally weighted by 2^|matched_tokens|.
+      example: "final_score = cache_score + (0.1 * token_cooccur_score)"
+
+canonicalization:
+  separator: "|"
+  tokens_sig:
+    base_rule: "sort + dedupe + join with separator"
+    empty_policy:
+      value: "__EMPTY__"
+      rationale: "empty signature must be a stable key"
+    escaping_policy:
+      forbid_separator_in_token: true
+      fallback_escape: "replace '|' with '%7C' if needed"
+    prefix_policy:
+      description: >
+        token_sig is set-based canonical and does not preserve order.
+        For progressive prefixes, create prefix_sig per step and cache separately.
+      prefix_sig_rule: "q_tokens_current (set) -> tokens_sig rule applied"
+  items_sig:
+    base_rule: "sort + dedupe + join with separator"
+    empty_policy:
+      value: "__EMPTY__"
+    escaping_policy:
+      forbid_separator_in_item_key: true
+      fallback_escape: "replace '|' with '%7C' if needed"
+
+pipelines:
+  # --- Inference (Read) ---
+
+  infer_S1_items:
+    steps:
+      - "token_sig = canonical(input_tokens)"
+      - "Language: Query cache_items_by_token_sig(model, token_sig)"
+      - "Time: Query cache_item_lifecycle_stats(model, category_scope=ALL) + per-item last_replaced_metric from operation_log_item"
+      - "Apply reliability_gate (subjects_n/intervals_n) before time alerts"
+      - "Merge: union lists, highlight time-alert items"
+    fallbacks:
+      - "If no cache hit: run Muscle SQL aggregation on operation_log (historical committed records)"
+
+  infer_S2_resolutions:
+    steps:
+      - "items_sig = canonical(confirmed_items)"
+      - "Candidates = Query cache_resolutions_by_context(model, items_sig)"
+      - "Rerank: boost candidates with token_cooccur_score (light SQL against operation_log)"
+      - "Output Top-K resolution_codes"
+      - "Bind: resolution_master(content, label, cost_weight) for output display"
+
+  infer_S3_replacement_items:
+    steps:
+      - "Fetch population stats: cache_item_lifecycle_stats(model, category_scope=ALL)"
+      - "For each candidate item_key, get last_replaced_metric from operation_log_item(subject_id, item_key, event_type='replaced')"
+      - "If last_replaced_metric is NULL -> apply null_policy(no_alert)"
+      - "Compute elapsed = current_lifecycle_metric - last_replaced_metric"
+      - "Recommend if elapsed > median_interval AND reliability_gate passes"
+
+  # --- Learning / Write / Commit ---
+
+  on_input:
+    steps:
+      - "input_text -> tokenize -> input_tokens"
+      - "token_sig = canonical(input_tokens)"
+      - "create session_s1(model, subject_id, lifecycle_metric_start, input_text, input_tokens, token_sig)"
+
+  on_item_select:
+    steps:
+      - "append session_s1_item_event(s1_id, item_key, source, event_type, category?)"
+
+  on_items_commit:
+    steps:
+      - "set session_s1.committed_at"
+      - "confirmed_items = DISTINCT(item_key) from session_s1_item_event"
+      - "items_sig = canonical(confirmed_items)"
+      - "create session_s2(s1_id, model, subject_id, lifecycle_metric_start, input_tokens, token_sig, confirmed_items, items_sig)"
+
+  on_resolution_select:
+    steps:
+      - "append session_s2_resolution_event(s2_id, resolution_code, source)"
+
+  on_resolution_commit:
+    trigger: "resolution_commit_done == true"
+    steps:
+      - "set session_s2.committed_at"
+      - "record_id = new uuid"
+      - "Insert operation_log (Header) from session_s1/session_s2 + selected resolution_codes"
+      - "Insert operation_log_item (Details) from session_s1_item_event with event_type"
+      - "Insert operation_log_note if any manual free text exists"
+      - "Deferred update: Update caches (offline-safe)."
+
+  cache_update_policy:
+    mode: "deferred_batch_or_lazy"
+    options:
+      - "batch: rebuild caches nightly/weekly"
+      - "lazy: update only affected keys at next read"
+    affected_keys:
+      - "cache_items_by_token_sig:     (model, token_sig)"
+      - "cache_resolutions_by_context: (model, items_sig)"
+      - "cache_item_lifecycle_stats:   (model, item_key, category_scope) for replaced events"
+
+  rebuild_cache_items_by_token_sig:
+    schedule: "nightly/weekly"
+    steps:
+      - "Aggregate operation_log by (model, token_sig, item_key) using token_score logic"
+      - "Upsert cache_items_by_token_sig"
+
+  rebuild_cache_resolutions_by_context:
+    schedule: "nightly/weekly"
+    steps:
+      - "Aggregate operation_log by (model, items_sig, resolution_code) with score=count(hit_items)"
+      - "Upsert cache_resolutions_by_context"
+
+  rebuild_cache_item_lifecycle_stats:
+    schedule: "weekly (or nightly if volume small)"
+    steps:
+      - "From operation_log_item where event_type='replaced': compute intervals by LAG per (model, item_key, subject_id)"
+      - "Compute per-subject median(interval)"
+      - "Pool per-subject medians across subject_id and take P50 as median_interval"
+      - "Compute intervals_n (raw interval rows) and subjects_n"
+      - "Upsert cache_item_lifecycle_stats"
+
+notes:
+  correctness:
+    - "S3 MUST use operation_log_item with event_type='replaced' (not operation_log.item_keys)."
+    - "operation_log.item_keys is display-only and rebuildable."
+  explainability:
+    - "S1 shows why: token_match vs time_alert vs manual."
+    - "S3 shows evidence: median_interval, last_replaced_metric, elapsed, reliability counts."
+  auditability:
+    - "session_* tables provide an append-only audit trail for UI choices before commitment."
+    - "operation_log + operation_log_item represent committed truth."

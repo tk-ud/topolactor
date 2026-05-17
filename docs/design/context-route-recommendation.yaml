@@ -1,0 +1,479 @@
+system:
+  name: context-route-recommendation
+  version: "6.4"
+  concept: >
+    Lightweight, offline-capable statistical inference engine using only discrete
+    tokens + append-only logs.
+
+    Operational context is represented as sparse vectors (token numeric values)
+    accumulated over sessions.  Prediction is done by cosine similarity over
+    session prefixes + simple transition aggregates.
+
+    No neural training, no backprop; learning is pure aggregation.
+    Optional: periodic clustering for human-readable naming (external LLM for labeling only).
+
+design_principles:
+  offline_first: true
+  cpu_only: true
+  append_only_logs: true
+  statistical_learning: true
+  explainability:
+    - "show nearest sessions/prefixes"
+    - "show top contributing tokens (dot-product contributors)"
+  meaning_definition:
+    default: >
+      token.value is human-defined discrete numeric in a cosine-compatible range
+      (recommended [-1, 1]).
+    note: >
+      The system does NOT require predefined semantic axes or factors.
+      "Meaning direction" is the emergent neighborhood structure created by cosine
+      similarity over session vectors (token-value aggregation).
+  separation_of_concerns:
+    write_path:  "append event -> update minimal caches (cheap)"
+    read_path:   "fast lookup + sparse cosine on limited candidate sets"
+    learn_path:  "batch/near-realtime aggregation over logs"
+
+ui:
+  sections:
+    reference_info:
+      id: 1
+      title: "参考情報（次の情報候補）"
+      goal: "この状態ならこの情報が必要"
+      output: "token candidates ranked (top K) + strength"
+      strength_display:
+        - "cosine similarity"
+        - "sigmoid strength (relative evidence, not a hard decision)"
+
+    next_action:
+      id: 2
+      title: "次アクション候補"
+      goal: "この作業してるなら次はこれ"
+      output: "next_action ranked (top K) + probability"
+
+  view_switch:
+    - "GLOBAL"
+    - "role"
+    - "user (opt-in, access-controlled)"
+
+core_ideas:
+  token_context:
+    definition: >
+      Factual operational flow represented by session-ordered events (created_at).
+      token_context is the ordered sequence itself; it is not a separate model.
+
+  meaning_direction:
+    definition: >
+      Each event contributes a sparse vector of token values.
+      A session (or its prefix) is represented as an aggregated vector (SUM).
+      Similarity is cosine similarity over these vectors.
+
+  prediction:
+    definition: >
+      Given current context vector, find similar past context prefixes and infer:
+        A: next_action (workflow)
+        B: next_info tokens (reference/info)
+
+  discovery:
+    definition: >
+      "Axis/meaning discovery" is optional and comes from clustering similar sessions.
+      Naming is a human/LLM labeling layer, not required for function.
+
+vector_model:
+  token_value_schema:
+    domain: "token.group is UI grouping tag; not used in computation"
+    value_range:
+      recommended: [-1.0, 1.0]
+      alternative: [0.0, 1.0]
+    value_assignment:
+      method: "human discrete ordering (spacing non-uniform allowed)"
+      examples:
+        status:
+          - { label: "critical",  value: -1.0 }
+          - { label: "warning",   value: -0.5 }
+          - { label: "caution",   value:  0.0 }
+          - { label: "normal",    value:  1.0 }
+        task:
+          - { label: "failed",    value: -1.0 }
+          - { label: "aborted",   value: -0.5 }
+          - { label: "pending",   value:  0.0 }
+          - { label: "in_progress", value: 0.5 }
+          - { label: "completed", value:  1.0 }
+    notes:
+      - "Only cosine similarity prediction is required; per-token cos(theta) is not required."
+
+aggregation_rules:
+  event_vector:
+    definition: >
+      v_event is sparse map(token_id -> token_value).
+      Missing tokens are treated as 0.
+
+  session_vector:
+    definition: >
+      v_session_prefix = SUM(v_event) over events in the session prefix up to current time.
+      (SUM chosen for low compute and statistical meaning)
+
+  cosine_similarity:
+    definition: "cos(v_a, v_b) = dot(v_a, v_b) / (||v_a|| * ||v_b||)"
+    zero_norm_policy: "if norm == 0 then similarity = 0"
+
+  neighborhood_inference:
+    k_nearest_sessions: 50       # → ContextRouteConfig.TopK
+    min_similarity: 0.05         # → ContextRouteConfig.MinSimilarity
+    tie_breaker: "recency_weighted"
+
+  strength_sigmoid:
+    intent: "evidence strength display (not accept/reject)"
+    definition: >
+      strength = sigmoid((cos_sim - tau) / s)
+      where tau is derived from the local neighborhood (kth similarity),
+      and s is a scale factor.
+    default_params:
+      s: 0.05
+      tau_policy:
+        - "tau = similarity_of_kth_neighbor (k = min_neighbors) if enough neighbors"
+        - "else tau = min_similarity"
+
+recommendation_targets:
+  A_next_action:
+    goal: "この作業してるなら次はこれ"
+    from:
+      - "session transitions (action[i] -> action[i+1])"
+      - "neighbor sessions vote on next_action after matching prefix"
+    output: "next_action ranked"
+
+  B_next_info:
+    goal: "この状態ならこの情報が必要"
+    from:
+      - "neighbor sessions vote on next_token_ids_hint"
+      - "or tokens newly appearing after current prefix (delta tokens)"
+    note: >
+      State is not a separate entity; state is the current context vector itself.
+
+entities:
+  # --- Definitions ---
+
+  context_token_registry:
+    description: >
+      Discrete token dictionary.
+      token_id is used in context_event.token_ids.
+      value is the meaning direction component in [-1.0, 1.0] (cosine-compatible).
+      group is UI grouping only — not used in vector computation.
+      Missing tokens are treated as 0 in the sparse vector.
+    fields:
+      token_id:   { type: uuid, pk: true }
+      label:      { type: string }
+      group:      { type: string, note: "UI grouping tag; not used in computation" }
+      value:      { type: float, note: "meaning direction component [-1.0, 1.0]" }
+      status:     { type: enum, values: [active, deprecated], default: active }
+      created_at: { type: timestamp }
+      updated_at: { type: timestamp }
+    unique_keys: [[label, group]]
+    admin_ui: "/admin/context-token-registry"
+
+  context_token_binding:
+    description: >
+      Optional domain/table scoping for token candidate filtering.
+      Not required for recommendation computation; used for candidate narrowing in UI.
+    fields:
+      binding_id:   { type: uuid, pk: true }
+      table_name:   { type: string }
+      domain:       { type: string, nullable: true }
+      token_group:  { type: string, note: "binds by context_token_registry.group" }
+      enabled:      { type: boolean, default: true }
+      created_at:   { type: timestamp }
+    indexes:
+      - { name: idx_ctb_table,  on: [table_name] }
+      - { name: idx_ctb_domain, on: [domain] }
+
+  context_session:
+    description: "Implicit session grouping. No explicit end required."
+    fields:
+      session_id:   { type: uuid, pk: true }
+      user_id:      { type: string, nullable: true }
+      role:         { type: string, nullable: true }
+      class:        { type: string, nullable: true }
+      created_at:   { type: timestamp }
+      last_seen_at: { type: timestamp }
+    indexes:
+      - { name: idx_cs_user_time, on: [user_id, last_seen_at] }
+      - { name: idx_cs_role_time, on: [role, last_seen_at] }
+
+  context_event:
+    description: >
+      Append-only operation event log. The only required log table.
+      Each event records the active token_ids snapshot at the time of the operation.
+      The ordered event sequence within a session defines the token_context.
+    fields:
+      event_id:              { type: uuid, pk: true }
+      session_id:            { type: uuid, fk: context_session.session_id }
+      user_id:               { type: string, nullable: true, default: "GLOBAL" }
+      role:                  { type: string, nullable: true }
+      class:                 { type: string, nullable: true }
+      table_name:            { type: string }
+      record_id:             { type: string, nullable: true }
+      operation:             { type: string, note: "screen/action token" }
+      token_ids:             { type: "uuid[]", nullable: false }
+      created_at:            { type: timestamp }
+      next_operation_hint:   { type: string, nullable: true, note: "supervision signal (optional)" }
+      next_token_ids_hint:   { type: "uuid[]", nullable: true, note: "supervision signal (optional)" }
+    indexes:
+      - { name: idx_ce_session_time,   on: [session_id, created_at] }
+      - { name: idx_ce_operation_time, on: [operation, created_at] }
+      - { name: idx_ce_table_record,   on: [table_name, record_id] }
+      - { name: idx_ce_role_operation, on: [role, operation] }
+      - { name: idx_ce_token_ids,      on: [token_ids], type: gin }
+
+  context_record_snapshot_cache:
+    description: >
+      Cache of current token_ids for a record to avoid expensive joins at display time.
+      Rebuilt from context_event on record insert/update or token registry changes.
+    fields:
+      table_name:  { type: string, pk: true }
+      record_id:   { type: string, pk: true }
+      token_ids:   { type: "uuid[]", nullable: false }
+      updated_at:  { type: timestamp }
+
+  context_event_vector_cache:
+    description: "Cache of sparse event vector and l2_norm per event."
+    fields:
+      event_id:       { type: uuid, pk: true, fk: context_event.event_id }
+      vector_sparse:  { type: json, note: "{token_id: value, ...}" }
+      l2_norm:        { type: float }
+      updated_at:     { type: timestamp }
+
+  context_prefix_vector_cache:
+    description: >
+      Cache of aggregated prefix vector for (session_id, prefix_index).
+      prefix_vector = SUM(event_vectors[0..prefix_index]).
+      Used for nearest-prefix cosine search.
+    fields:
+      session_id:    { type: uuid, pk: true, fk: context_session.session_id }
+      prefix_index:  { type: int, pk: true, note: "event order within session (0..n-1)" }
+      last_event_id: { type: uuid, fk: context_event.event_id }
+      vector_sparse: { type: json }
+      l2_norm:       { type: float }
+      created_at:    { type: timestamp }
+      updated_at:    { type: timestamp }
+
+  context_transition_stats:
+    description: >
+      Workflow transition probability: P(next_operation | prev_operation).
+      Segmented by role and user_id with GLOBAL fallback.
+      Bayesian smoothing: prob01 = (count_hits + alpha) / (count_events + alpha + beta).
+    fields:
+      id:             { type: uuid, pk: true }
+      prev_operation: { type: string }
+      next_operation: { type: string }
+      role:           { type: string, default: "GLOBAL" }
+      user_id:        { type: string, default: "GLOBAL" }
+      count_events:   { type: int, default: 0 }
+      count_hits:     { type: float, default: 0.0 }
+      prob01:         { type: float, note: "(hits + alpha) / (events + alpha + beta)" }
+      updated_at:     { type: timestamp }
+    unique_keys: [[prev_operation, next_operation, role, user_id]]
+    bayesian_params:
+      alpha: 1
+      beta: 10
+
+  context_route_config:
+    description: >
+      SSOT registry for recommendation engine tuning parameters.
+      All constants used by ContextRouteRecommendationResolver live here.
+      No numeric literals in runtime code.
+    fields:
+      config_key:  { type: text, pk: true }
+      float_value: { type: float, nullable: true }
+      int_value:   { type: int, nullable: true }
+      description: { type: text }
+      updated_at:  { type: timestamp }
+    seed_keys:
+      - { key: min_similarity,       float_value: 0.05 }
+      - { key: top_k,                int_value: 50 }
+      - { key: min_neighbors,        int_value: 10 }
+      - { key: recent_days,          int_value: 90 }
+      - { key: max_candidates_shown, int_value: 5 }
+      - { key: baseline_weight,      float_value: 0.5 }
+      - { key: neighbor_weight,      float_value: 0.5 }
+    admin_ui: "/admin/context-route-config"
+
+  # --- Optional (v1 deferred) ---
+
+  context_cluster:
+    description: "Optional: cluster assignment for sessions for interpretability."
+    optional: true
+    fields:
+      session_id:  { type: uuid, pk: true, fk: context_session.session_id }
+      cluster_id:  { type: string }
+      updated_at:  { type: timestamp }
+
+  context_cluster_label:
+    description: "Optional: human/LLM-proposed labels for clusters."
+    optional: true
+    fields:
+      cluster_id:   { type: string, pk: true }
+      label:        { type: string }
+      description:  { type: string, nullable: true }
+      updated_at:   { type: timestamp }
+
+  context_drift_signal:
+    description: "Optional: Bollinger-band drift/spike detection output."
+    optional: true
+    fields:
+      signal_id:   { type: uuid, pk: true }
+      signal_type: { type: enum, values: [spike, drift] }
+      target:      { type: string }
+      role:        { type: string, default: "GLOBAL" }
+      detected_at: { type: timestamp }
+      detail:      { type: json }
+
+pipelines:
+  # --- Write path ---
+
+  write_flow:
+    steps:
+      - "Predict Display (use caches + aggregates + neighbor search)"
+      - "User selects -> append context_event"
+      - "Update caches for this event/session (cheap)"
+    notes:
+      - "Session starts when user clicks a search output (issue session_id)."
+      - "Session ends implicitly; no explicit termination required."
+
+  update_context_record_snapshot_cache:
+    trigger: "record insert/update OR token changes"
+    steps:
+      - "extract current token_ids for (table, record)"
+      - "upsert context_record_snapshot_cache"
+
+  build_context_event_vector_cache:
+    trigger: "on context_event insert"
+    steps:
+      - "join context_token_registry by token_ids"
+      - "vector_sparse = {token_id: context_token_registry.value}"
+      - "l2_norm = sqrt(sum(value^2))"
+      - "upsert context_event_vector_cache"
+
+  build_context_prefix_vector_cache:
+    trigger: "on context_event insert"
+    steps:
+      - "within session_id, order by created_at"
+      - "prefix_vector = previous_prefix_vector + current_event_vector (SUM)"
+      - "compute l2_norm"
+      - "upsert context_prefix_vector_cache (session_id, prefix_index)"
+
+  aggregate_context_transition_stats:
+    schedule: "batch or near-realtime"
+    smoothing:
+      method: "bayesian"
+      alpha: 1
+      beta: 10
+    personalization_hierarchy: ["user_id", "role", "GLOBAL"]
+    global_overlay_rule:
+      - "if user_id == 'GLOBAL': increment only GLOBAL bucket"
+      - "else: increment (prev, next, role, user_id) and overlay (prev, next, role, 'GLOBAL')"
+    steps:
+      - "for each session_id, order events by created_at"
+      - "for i in 0..n-2: prev=operation[i], next=operation[i+1]"
+      - "count_events += 1; count_hits += 1"
+      - "prob01 = (count_hits + alpha) / (count_events + alpha + beta)"
+      - "upsert context_transition_stats"
+
+  cluster_sessions_for_labeling:
+    schedule: "monthly (optional)"
+    method: "kmeans"
+    params: { k: 5 }
+    vector_source: "context_prefix_vector_cache (full session or fixed prefix)"
+    outputs:
+      - "context_cluster"
+      - "cluster centroids (implementation-specific)"
+    notes:
+      - "External LLM is used ONLY to propose cluster label names — not for runtime logic."
+
+routing:
+  inputs:
+    - current_table_name
+    - current_record_id
+    - current_operation
+    - session_id
+    - user_id
+    - role
+
+  contextualize:
+    steps:
+      - "token_ids = context_record_snapshot_cache(table, record); if missing compute once and cache"
+      - "current_event_vector = sparse vector from context_token_registry for token_ids"
+      - "current_prefix_vector = context_prefix_vector_cache(session_id, current_prefix_index); if missing, SUM events so far"
+
+  recommend_section_2_next_action:
+    ui_section: 2
+    method: "blend of (transition stats baseline) + (neighbor session voting)"
+    weights:
+      baseline_weight: 0.5   # → ContextRouteConfig.BaselineWeight
+      neighbor_weight: 0.5   # → ContextRouteConfig.NeighborWeight
+    steps:
+      - "A_baseline: fetch context_transition_stats where prev_operation=current_operation and role=role"
+      - "  choose bucket by fallback: (user_id=user_id) -> (user_id='GLOBAL')"
+      - "A_neighbor: neighbor search over past prefixes by cosine(current_prefix_vector, past_prefix_vector)"
+      - "  neighbors = top K with sim >= min_similarity, tie-break recency"
+      - "  vote next_operation from neighbors"
+      - "merge baseline + neighbor votes by weights"
+    output:
+      - "next_operation ranked (top max_candidates_shown)"
+      - "prob01 (baseline), cos_sim evidence (neighbor), nearest session ids"
+
+  recommend_section_1_reference_info:
+    ui_section: 1
+    method: "neighbor session voting on next_info tokens (or delta tokens)"
+    steps:
+      - "neighbor search over past prefixes by cosine(current_prefix_vector, past_prefix_vector)"
+      - "collect candidates:"
+      - "  B1: next_token_ids_hint from neighbors (if exists)"
+      - "  B2: tokens newly appearing in neighbor session after current step (delta tokens)"
+      - "rank by weighted vote = sum(similarity * recency_weight)"
+      - "compute strength_sigmoid for UI display using tau_policy"
+    output:
+      - "token candidates ranked (top max_candidates_shown)"
+      - "cos_sim, sigmoid_strength, top contributing tokens"
+
+personalization_and_segmentation:
+  strategy:
+    hierarchy: ["user_id", "role", "GLOBAL"]
+  notes:
+    - "UI allows switching view: GLOBAL vs role vs individual."
+    - "Individual view is opt-in and access-controlled."
+
+drift_and_spike_detection:
+  purpose: "detect changes in recommendation tendency over time"
+  target_signal:
+    - "distribution of top-k cosine similarities (neighbor evidence)"
+    - "context_transition_stats.prob01 time series"
+    - "top token candidates frequency"
+  method: "bollinger_band"
+  bollinger_params:
+    window_n: 20
+    sigma: 2.0
+  segmentation:
+    - "track per role and per GLOBAL to avoid population mixing"
+
+limits:
+  thresholds:
+    min_neighbors: 10           # → ContextRouteConfig.MinNeighbors
+    min_similarity: 0.05        # → ContextRouteConfig.MinSimilarity
+    min_events_for_stats: 30
+    max_candidates_shown: 5     # → ContextRouteConfig.MaxCandidatesShown
+  performance:
+    similarity_search_scope:
+      default: "recent prefixes within last X_days or same table/domain"
+      X_days: 90                # → ContextRouteConfig.RecentDays
+    compute_budget:
+      note: "sparse dot products only; no dense embeddings required"
+  data_retention:
+    context_event:
+      hot_retention_days: 90
+      cold_archive: true
+    caches:
+      rebuildable: true
+      ttl_days: 30
+  safety:
+    privacy:
+      - "monitoring is statistical; UI defaults to role/GLOBAL views"
+      - "individual view is opt-in and access-controlled"
