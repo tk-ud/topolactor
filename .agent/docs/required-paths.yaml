@@ -125,8 +125,16 @@ required_content_terms:
     - "attractor_key"
   .github/workflows/structure-check.yml:
     - ".agent/tests/check-structure.sh"
+  .github/workflows/backend-tests.yml:
+    - "bash .agent/tests/check-backend-tests.sh"
+  .agent/tests/check-backend-tests.sh:
+    - "dotnet test"
+  backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs:
+    - "default:entity:search"
 
 future_checks:
-  - DB schema execution CI (requires credentials — out of scope for structure check)
   - Frontend Fresh/Deno type check
   - Integration test for default:entity:search emission flow
