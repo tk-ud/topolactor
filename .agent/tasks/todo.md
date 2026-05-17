@@ -17,4 +17,4 @@
 - [x] Frontend Fresh/Deno type check (`deno.json`, `.agent/tests/check-frontend-types.sh`, `.github/workflows/frontend-types.yml`)
 - [x] default:entity:search integration test
 - [x] Registrar admin UI specification
-- [ ] Promotion manifest editor specification
+- [x] Promotion manifest editor specification
