@@ -1,0 +1,125 @@
+business_management_system_framework:
+  name: topolactor_business_management_framework
+  version: 0.4.0
+  status: public_design_document
+
+  purpose:
+    - freely_saved_data_then_system_normalization
+    - topology_based_management
+    - manifest_driven_ui_and_dispatcher_backend
+    - hub_centered_composite_business_data
+    - relation_registry_driven_ui_projection
+    - registrar_driven_extension
+    - runtime_schema_evolution_policy
+
+  concept:
+    summary: >
+      topolactor is a topology-based business management framework.
+      It does not treat hierarchy, screens, or fixed physical tables as the primary design subject.
+      relation_registry defines abstract spaces, hub connects abstract space and concrete data,
+      and entity stores business-side concrete data.
+
+  philosophy:
+    principles:
+      - hub_is_connection_layer_between_abstract_and_concrete
+      - relation_registry_defines_abstract_space
+      - entity_is_concrete_data
+      - all_relations_are_registry_driven
+      - hub_state_is_system_side
+      - entity_state_is_business_side
+      - syslog_has_no_state
+      - search_node_is_hub
+      - display_subject_is_entity
+      - natural_language_source_is_entity
+      - tree_view_is_projection_not_storage
+      - save_first_normalize_later
+      - jsonb_first_promote_when_needed
+      - master_ids_are_registry_managed
+      - ui_is_registry_projection
+      - schema_evolution_is_manifest_driven
+
+    rationale:
+      topology_based_management: >
+        Management is not fixed as a tree. relation_registry defines abstract condition spaces,
+        and hub connects concrete business data to those spaces.
+      freely_saved_data_then_system_normalization: >
+        Input does not have to be fully normalized at the time of entry.
+        Later system processing normalizes and promotes useful structures.
+      relation_registry_driven_ui_projection: >
+        UI candidate order, display order, links, and branches are controlled by relation_registry and manifest.
+      hub_centered_composite_business_data: >
+        Composite data such as invoices is assembled around hub as a convergence point.
+
+  tech_stack:
+    database: PostgreSQL
+    backend: C#
+    frontend: Next.js
+    batch: cron_or_background_service
+
+  actions:
+    - Search
+    - Create
+    - diffUpdate
+    - logicalDelete
+
+  topology_model:
+    description: >
+      This is not a simple graph in a single flat space.
+      relation_registry defines abstract condition spaces, and each hub has a local context space.
+      Predictions and recommendations appear as conditional statistics of entity.state inside hub space.
+    distinctions:
+      - each_hub_has_local_context_space
+      - entity_state_distribution_forms_meaning_in_hub_space
+      - prediction_is_conditional_statistics_from_hub
+      - structure_connection_and_state_statistics_form_effective_vector_space
+      - not_a_simple_single_space_graph
+    input_flows:
+      - raw_to_entity_to_hub_to_relation
+      - entity_to_hub_to_relation
+      - relation_ui_to_hub_to_entity
+
+  layers:
+    relation_registry:
+      role: abstract_space_definition
+      description: Defines abstract spaces by combining master tables, relation axes, and ordering metadata.
+      fields:
+        - relation_registry_id
+        - name
+        - master_ids
+        - category
+        - type
+        - order
+        - weight
+        - manifest_candidate
+        - active
+      behavior:
+        - defines_abstract_condition_space
+        - drives_ui_candidates_and_projection
+        - supports_group_by_and_aggregation
+
+    hub:
+      role: abstract_concrete_connection_layer
+      description: System-side connection point between abstract spaces and concrete entities.
+      fields:
+        - hub_id
+        - relation_registry_id
+        - entity_id
+        - state_id
+      behavior:
+        - landing_point_in_abstract_space
+        - system_side_search_node
+        - convergence_point_for_local_context_space
+        - statistical_attractor_for_entity_state
+
+    entity:
+      role: concrete_business_data_layer
+      description: Business-side concrete data body.
+      fields:
+        - relation_ids
+        - entity_jsonb
+        - hub_id
+        - state_id
+      behavior:
+        - stores_variable_payload_in_jsonb
+        - has_local_context_through_relation_ids
+        - connects_to_abstract_space_through_hub
