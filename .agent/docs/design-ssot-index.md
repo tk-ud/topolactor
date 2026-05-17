@@ -38,15 +38,16 @@
 
 **対応実装**:
 - `db/context_route_tables.sql` — コアテーブル
-- `db/context_route_config.sql` — チューニングパラメータ SSOT レジストリ
+- `db/seed_empty.sql` — `function_parameters` に policy シード値
 - `backend/runtime/ContextRouteRecommendationResolver.cs` — 推薦解決 Resolver
-- `backend/schema/ContextRouteConfigContracts.cs` — `ContextRouteConfig` レコード
+- `backend/schema/ContextRoutePolicyContracts.cs` — `ContextRoutePolicy` レコード（純粋 DTO）
+- `backend/repository/TopologyRepository.cs` — `LoadFunctionParameterAsync` 経由で policy 読み込み
 
 **参照すべき場面**:
 - `ContextRouteRecommendationResolver` の推薦ロジックを変更するとき
 - チューニングパラメータ（min_similarity / top_k 等）の意味を確認するとき
 - `context_token_registry` にトークンを追加するとき（value の範囲 [-1, 1] を守る）
-- Admin UI ページ (`/admin/context-route-config`, `/admin/context-token-registry`) の仕様を変更するとき
+- Admin UI ページ (`/admin/context-token-registry`) の仕様を変更するとき
 
 ---
 
@@ -54,7 +55,7 @@
 
 | 対象 | SSOT の場所 |
 |---|---|
-| 推薦エンジンのチューニングパラメータ | `context_route_config` テーブル（DB registry が唯一のSSOT） |
+| 推薦エンジンのチューニングパラメータ | `function_parameters` テーブル（`function_name='context_route_recommendation_resolve'`, `parameter_key='default_policy'`） |
 | トークン辞書（意味方向ベクトル） | `context_token_registry` テーブル |
 | コミット済みの操作ログ | `operation_log` + `operation_log_item` |
 | Runtime コードの定数 | **禁止** — すべてレジストリまたはコンフィグから読む |

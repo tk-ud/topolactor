@@ -192,3 +192,60 @@ structure-check は全項目 OK を確認。backend/frontend テストは CI で
 ## 残 TODO
 
 `.agent/tasks/todo.md` 参照。
+
+---
+
+## context_route_config 廃止 / topology 統合（PR #19 follow-up fix 3）
+
+### 変更の目的
+
+`context_route_config` を独立した設定テーブルとして扱っていた構造を廃止し、
+context route recommendation を topolactor topology の **optional capability** として統合した。
+
+### 削除ファイル
+
+| ファイル | 理由 |
+|---|---|
+| `db/context_route_config.sql` | 独立 SSOT テーブル廃止 |
+| `backend/repository/ContextRouteConfigRepository.cs` | 独立設定リポジトリ廃止 |
+| `backend/schema/ContextRouteConfigContracts.cs` | `ContextRouteConfig` → `ContextRoutePolicy` に移行 |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteConfigTestFixtures.cs` | `ContextRoutePolicyTestFixtures.cs` に置換 |
+| `frontend/routes/api/admin/context-route-config.ts` | 独立設定 API 廃止 |
+| `frontend/islands/ContextRouteConfigEditor.tsx` | 独立設定 editor island 廃止 |
+| `frontend/routes/admin/context-route-config.tsx` | 独立設定 admin page 廃止 |
+
+### 新規 / 変更ファイル
+
+| ファイル | 変更内容 |
+|---|---|
+| `backend/schema/ContextRoutePolicyContracts.cs` | `ContextRoutePolicy` 純粋 DTO（defaults なし） |
+| `backend/repository/TopologyRepository.cs` | `LoadFunctionParameterAsync` 追加（seed JSON 返す） |
+| `backend/runtime/ContextRouteRecommendationResolver.cs` | `TopologyRepository` から policy 読み込みに変更 |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | `ValidPolicy()` + `StubMissingPolicyTopologyRepository` |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | `ContextRoutePolicy` / `TopologyRepository` に更新 |
+| `backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs` | `topologyRepository` を共有して渡すように更新 |
+| `backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs` | `topologyRepository` を共有して渡すように更新 |
+| `db/seed_empty.sql` | `function_parameters` に policy INSERT 追加 |
+| `db/README.md` | `context_route_config.sql` 参照削除 |
+| `frontend/api/adminApi.ts` | `context_route_config` 関連型・関数削除 |
+| `frontend/routes/admin/index.tsx` | context-route-config リンク削除 |
+| `frontend/routes/admin/context-token-registry.tsx` | context-route-config リンク削除 |
+| `docs/design/context-route-recommendation.md` | topology policy source に更新 |
+| `docs/design/context-route-recommendation.yaml` | `context_route_config` entity 削除、`topology_policy_source` 追加 |
+| `.agent/docs/design-ssot-index.md` | SSOT テーブル更新 |
+
+### Policy SSOT の変更
+
+| 変更前 | 変更後 |
+|---|---|
+| `context_route_config` テーブル（独立） | `function_parameters` テーブル（topology 統合） |
+| `ContextRouteConfigRepository.LoadConfigAsync` | `TopologyRepository.LoadFunctionParameterAsync` |
+| `ConfigLoadResult` 判別共用体 | `string?` null-check（null → ExplicitError） |
+| `ContextRouteConfig` レコード | `ContextRoutePolicy` レコード（defaults なし） |
+
+### Policy-missing の動作
+
+`TopologyRepository.LoadFunctionParameterAsync` が null を返した場合:
+→ `ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")`
+
+production fallback は Runtime コードに存在しない。

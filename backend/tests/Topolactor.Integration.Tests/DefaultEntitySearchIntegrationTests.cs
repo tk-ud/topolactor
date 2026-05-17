@@ -20,7 +20,6 @@ public class DefaultEntitySearchIntegrationTests
     {
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
-        var configRepository = new ContextRouteConfigRepository(NullLogger<ContextRouteConfigRepository>.Instance, "dummy");
         var executor = new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -38,7 +37,7 @@ public class DefaultEntitySearchIntegrationTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                configRepository));
+                topologyRepository));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
     }
 

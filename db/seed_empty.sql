@@ -109,3 +109,21 @@ VALUES (
     true
 )
 ON CONFLICT (structure_map_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- function_parameters — context route recommendation policy
+--
+-- Policy source for ContextRouteRecommendationResolver.
+-- Loaded via TopologyRepository.LoadFunctionParameterAsync(
+--   "context_route_recommendation_resolve", "default_policy").
+-- Policy-missing → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND").
+-- ---------------------------------------------------------------------------
+INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'context_route_recommendation_resolve',
+    'default_policy',
+    '{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO NOTHING;

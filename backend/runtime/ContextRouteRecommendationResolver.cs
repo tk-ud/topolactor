@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -11,22 +13,25 @@ namespace Topolactor.Runtime;
 /// Insertion point in the canonical runtime route:
 ///   ... → component_expand → context_route_recommendation_resolve → emission_or_projection
 ///
+/// Policy source: function_parameters (function_name = 'context_route_recommendation_resolve',
+/// parameter_key = 'default_policy') stored in the topology data store.
+/// Policy is NOT read from an independent config table — it is resolved from stored topology data.
+///
 /// Status is always explicit:
 ///   Ok                  — candidates available
 ///   InsufficientHistory — not enough history to recommend (not an error; expected cold start)
-///   ExplicitError       — resolver pipeline failure, including policy-missing
-///
-/// Tuning parameters are resolved from context_route_config (DB registry) via
-/// ContextRouteConfigRepository on every call.  Policy-missing returns ExplicitError —
-/// no silent fallback to hardcoded values.
+///   ExplicitError       — pipeline failure, including policy-missing and policy-invalid
 ///
 /// No silent fallback. No business-specific naming in this layer.
 /// </summary>
 public class ContextRouteRecommendationResolver
 {
+    private const string PolicyFunctionName = "context_route_recommendation_resolve";
+    private const string PolicyParameterKey = "default_policy";
+
     private readonly ILogger<ContextRouteRecommendationResolver> _logger;
     private readonly ContextRouteRepository _contextRouteRepository;
-    private readonly ContextRouteConfigRepository _configRepository;
+    private readonly TopologyRepository _topologyRepository;
     private readonly ContextVectorBuilder _vectorBuilder;
     private readonly ContextNeighborSearch _neighborSearch;
 
@@ -35,19 +40,18 @@ public class ContextRouteRecommendationResolver
         ContextRouteRepository contextRouteRepository,
         ContextVectorBuilder vectorBuilder,
         ContextNeighborSearch neighborSearch,
-        ContextRouteConfigRepository configRepository)
+        TopologyRepository topologyRepository)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
         _vectorBuilder = vectorBuilder ?? throw new ArgumentNullException(nameof(vectorBuilder));
         _neighborSearch = neighborSearch ?? throw new ArgumentNullException(nameof(neighborSearch));
-        _configRepository = configRepository ?? throw new ArgumentNullException(nameof(configRepository));
+        _topologyRepository = topologyRepository ?? throw new ArgumentNullException(nameof(topologyRepository));
     }
 
     /// <summary>
     /// Resolves context route recommendations for the given working shape.
-    /// Returns ExplicitError with CONTEXT_ROUTE_POLICY_NOT_FOUND if config registry is empty.
-    /// Returns InsufficientHistory if no session context or no prefix history exists.
+    /// Loads policy from function_parameters; returns ExplicitError if policy is absent or invalid.
     /// </summary>
     public async Task<ContextRouteRecommendationResult> ResolveAsync(
         RuntimeWorkingShape shape,
@@ -55,18 +59,29 @@ public class ContextRouteRecommendationResolver
     {
         ArgumentNullException.ThrowIfNull(shape);
 
-        var configResult = await _configRepository.LoadConfigAsync(ct);
-        switch (configResult)
+        // Resolve policy from topology function_parameters.
+        var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
+            PolicyFunctionName, PolicyParameterKey, ct);
+
+        if (policyJson is null)
         {
-            case ConfigLoadResult.MissingPolicy:
-                _logger.LogWarning("ContextRouteRecommendationResolver: config registry is empty — CONTEXT_ROUTE_POLICY_NOT_FOUND.");
-                return ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
-            case ConfigLoadResult.InvalidPolicy inv:
-                _logger.LogWarning("ContextRouteRecommendationResolver: config invalid ({Reason}) — CONTEXT_ROUTE_POLICY_INCOMPLETE.", inv.Reason);
-                return ExplicitError($"CONTEXT_ROUTE_POLICY_INCOMPLETE:{inv.Reason}");
+            _logger.LogWarning(
+                "ContextRouteRecommendationResolver: function_parameter '{FunctionName}/{Key}' not found — CONTEXT_ROUTE_POLICY_NOT_FOUND.",
+                PolicyFunctionName, PolicyParameterKey);
+            return ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND");
         }
 
-        var config = ((ConfigLoadResult.Loaded)configResult).Config;
+        ContextRoutePolicy policy;
+        try
+        {
+            policy = ParsePolicy(policyJson);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "ContextRouteRecommendationResolver: policy JSON is invalid — CONTEXT_ROUTE_POLICY_INVALID.");
+            return ExplicitError($"CONTEXT_ROUTE_POLICY_INVALID:{ex.Message}");
+        }
 
         var vector = shape.Vector;
         if (vector is null)
@@ -125,7 +140,7 @@ public class ContextRouteRecommendationResolver
 
         // Load prefix vector candidates
         var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, config.RecentDays, ct);
+            tableName, role, policy.RecentDays, ct);
 
         if (prefixCandidates.Count == 0)
         {
@@ -135,13 +150,13 @@ public class ContextRouteRecommendationResolver
 
         // Find nearest prefixes
         var neighbors = _neighborSearch.FindNearestPrefixes(
-            eventVector, eventNorm, prefixCandidates, config.MinSimilarity, config.TopK);
+            eventVector, eventNorm, prefixCandidates, policy.MinSimilarity, policy.TopK);
 
-        if (neighbors.Count < config.MinNeighbors)
+        if (neighbors.Count < policy.MinNeighbors)
         {
             _logger.LogDebug(
                 "ContextRouteRecommendationResolver: {Count} neighbors < min {Min} — InsufficientHistory.",
-                neighbors.Count, config.MinNeighbors);
+                neighbors.Count, policy.MinNeighbors);
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
         }
 
@@ -160,9 +175,9 @@ public class ContextRouteRecommendationResolver
             }
         }
 
-        var nextOperations = ResolveNextOperations(neighbors, transitionStats, config);
-        var nextTokens = ResolveNextTokens(neighbors, config);
-        var nearestIds = neighbors.Take(config.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
+        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);
+        var nextTokens = ResolveNextTokens(neighbors, policy);
+        var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
 
         return new ContextRouteRecommendationResult(
@@ -181,11 +196,11 @@ public class ContextRouteRecommendationResolver
     public IReadOnlyList<RecommendationCandidate> ResolveNextOperations(
         IReadOnlyList<ContextNeighborResult> neighbors,
         IReadOnlyList<ContextTransitionStat> transitionStats,
-        ContextRouteConfig config)
+        ContextRoutePolicy policy)
     {
         ArgumentNullException.ThrowIfNull(neighbors);
         ArgumentNullException.ThrowIfNull(transitionStats);
-        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(policy);
 
         var neighborVotes = new Dictionary<string, (float Score, int Count)>();
         foreach (var n in neighbors)
@@ -193,12 +208,12 @@ public class ContextRouteRecommendationResolver
             if (string.IsNullOrWhiteSpace(n.NextOperation))
                 continue;
             var (s, c) = neighborVotes.GetValueOrDefault(n.NextOperation);
-            neighborVotes[n.NextOperation] = (s + n.Similarity * config.NeighborWeight, c + 1);
+            neighborVotes[n.NextOperation] = (s + n.Similarity * policy.NeighborWeight, c + 1);
         }
 
         var baselineVotes = new Dictionary<string, float>();
         foreach (var stat in transitionStats)
-            baselineVotes[stat.NextOperation] = stat.Prob01 * config.BaselineWeight;
+            baselineVotes[stat.NextOperation] = stat.Prob01 * policy.BaselineWeight;
 
         var merged = new Dictionary<string, float>();
         foreach (var (op, score) in neighborVotes)
@@ -208,7 +223,7 @@ public class ContextRouteRecommendationResolver
 
         return merged
             .OrderByDescending(kv => kv.Value)
-            .Take(config.MaxCandidatesShown)
+            .Take(policy.MaxCandidatesShown)
             .Select(kv =>
             {
                 var evidence = new List<string>();
@@ -231,10 +246,10 @@ public class ContextRouteRecommendationResolver
     /// </summary>
     public IReadOnlyList<RecommendationCandidate> ResolveNextTokens(
         IReadOnlyList<ContextNeighborResult> neighbors,
-        ContextRouteConfig config)
+        ContextRoutePolicy policy)
     {
         ArgumentNullException.ThrowIfNull(neighbors);
-        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(policy);
 
         var votes = new Dictionary<Guid, (float Score, int Count)>();
         foreach (var n in neighbors)
@@ -250,7 +265,7 @@ public class ContextRouteRecommendationResolver
 
         return votes
             .OrderByDescending(kv => kv.Value.Score)
-            .Take(config.MaxCandidatesShown)
+            .Take(policy.MaxCandidatesShown)
             .Select(kv => new RecommendationCandidate(
                 Value: kv.Key.ToString(),
                 Score: kv.Value.Score,
@@ -259,6 +274,45 @@ public class ContextRouteRecommendationResolver
             ))
             .ToList();
     }
+
+    // ---------------------------------------------------------------------------
+    // Policy parsing
+    // ---------------------------------------------------------------------------
+
+    private static ContextRoutePolicy ParsePolicy(string json)
+    {
+        var dto = JsonSerializer.Deserialize<PolicyDto>(json, _jsonOptions)
+            ?? throw new InvalidOperationException("Policy JSON deserialized to null.");
+        return new ContextRoutePolicy(
+            MinSimilarity:      dto.MinSimilarity,
+            TopK:               dto.TopK,
+            MinNeighbors:       dto.MinNeighbors,
+            RecentDays:         dto.RecentDays,
+            MaxCandidatesShown: dto.MaxCandidatesShown,
+            BaselineWeight:     dto.BaselineWeight,
+            NeighborWeight:     dto.NeighborWeight
+        );
+    }
+
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString
+    };
+
+    private record PolicyDto(
+        [property: JsonPropertyName("min_similarity")]       float MinSimilarity,
+        [property: JsonPropertyName("top_k")]                int   TopK,
+        [property: JsonPropertyName("min_neighbors")]        int   MinNeighbors,
+        [property: JsonPropertyName("recent_days")]          int   RecentDays,
+        [property: JsonPropertyName("max_candidates_shown")] int   MaxCandidatesShown,
+        [property: JsonPropertyName("baseline_weight")]      float BaselineWeight,
+        [property: JsonPropertyName("neighbor_weight")]      float NeighborWeight
+    );
+
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
 
     private static IReadOnlyList<Guid> ParseTokenIds(string? raw)
     {

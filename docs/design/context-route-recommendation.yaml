@@ -117,8 +117,8 @@ aggregation_rules:
     zero_norm_policy: "if norm == 0 then similarity = 0"
 
   neighborhood_inference:
-    k_nearest_sessions: 50       # → ContextRouteConfig.TopK
-    min_similarity: 0.05         # → ContextRouteConfig.MinSimilarity
+    k_nearest_sessions: 50       # → function_parameters default_policy.top_k
+    min_similarity: 0.05         # → function_parameters default_policy.min_similarity
     tie_breaker: "recency_weighted"
 
   strength_sigmoid:
@@ -275,26 +275,24 @@ entities:
       alpha: 1
       beta: 10
 
-  context_route_config:
+  topology_policy_source:
     description: >
-      SSOT registry for recommendation engine tuning parameters.
-      All constants used by ContextRouteRecommendationResolver live here.
-      No numeric literals in runtime code.
-    fields:
-      config_key:  { type: text, pk: true }
-      float_value: { type: float, nullable: true }
-      int_value:   { type: int, nullable: true }
-      description: { type: text }
-      updated_at:  { type: timestamp }
-    seed_keys:
-      - { key: min_similarity,       float_value: 0.05 }
-      - { key: top_k,                int_value: 50 }
-      - { key: min_neighbors,        int_value: 10 }
-      - { key: recent_days,          int_value: 90 }
-      - { key: max_candidates_shown, int_value: 5 }
-      - { key: baseline_weight,      float_value: 0.5 }
-      - { key: neighbor_weight,      float_value: 0.5 }
-    admin_ui: "/admin/context-route-config"
+      Recommendation engine tuning parameters are NOT stored in an independent
+      config table. They are stored in the existing topology function_parameters
+      table as a JSON blob:
+        function_name = 'context_route_recommendation_resolve'
+        parameter_key = 'default_policy'
+      This makes context route recommendation an optional capability of the
+      existing topology, not a separate config subsystem.
+      Policy-missing → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND").
+      No production default exists in runtime code.
+    table: function_parameters
+    function_name: context_route_recommendation_resolve
+    parameter_key: default_policy
+    seed_json: >
+      {"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,
+       "max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}
+    resolver: TopologyRepository.LoadFunctionParameterAsync
 
   # --- Optional (v1 deferred) ---
 
@@ -407,8 +405,8 @@ routing:
     ui_section: 2
     method: "blend of (transition stats baseline) + (neighbor session voting)"
     weights:
-      baseline_weight: 0.5   # → ContextRouteConfig.BaselineWeight
-      neighbor_weight: 0.5   # → ContextRouteConfig.NeighborWeight
+      baseline_weight: 0.5   # → function_parameters default_policy.baseline_weight
+      neighbor_weight: 0.5   # → function_parameters default_policy.neighbor_weight
     steps:
       - "A_baseline: fetch context_transition_stats where prev_operation=current_operation and role=role"
       - "  choose bucket by fallback: (user_id=user_id) -> (user_id='GLOBAL')"
@@ -456,14 +454,14 @@ drift_and_spike_detection:
 
 limits:
   thresholds:
-    min_neighbors: 10           # → ContextRouteConfig.MinNeighbors
-    min_similarity: 0.05        # → ContextRouteConfig.MinSimilarity
+    min_neighbors: 10           # → function_parameters default_policy.min_neighbors
+    min_similarity: 0.05        # → function_parameters default_policy.min_similarity
     min_events_for_stats: 30
-    max_candidates_shown: 5     # → ContextRouteConfig.MaxCandidatesShown
+    max_candidates_shown: 5     # → function_parameters default_policy.max_candidates_shown
   performance:
     similarity_search_scope:
       default: "recent prefixes within last X_days or same table/domain"
-      X_days: 90                # → ContextRouteConfig.RecentDays
+      X_days: 90                # → function_parameters default_policy.recent_days
     compute_budget:
       note: "sparse dot products only; no dense embeddings required"
   data_retention:

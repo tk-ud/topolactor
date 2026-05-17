@@ -1,7 +1,7 @@
 # Context Route Recommendation — 設計思想と取り扱い方針
 
 対応 YAML: `context-route-recommendation.yaml`
-対応実装: `db/context_route_tables.sql`, `db/context_route_config.sql`,
+対応実装: `db/context_route_tables.sql`,
          `backend/runtime/ContextRouteRecommendationResolver.cs`
 
 ---
@@ -30,11 +30,16 @@
 
 ```
 context_token_registry   ← トークン辞書（Hub Registry）— /admin/context-token-registry で管理
-context_route_config     ← チューニングパラメータ SSOT — /admin/context-route-config で管理
+function_parameters      ← 推薦エンジンチューニングパラメータ（topology データストア）
 context_event            ← 唯一の必須ログ（追記専用）
 context_prefix_vector_cache ← 近傍検索用プレフィックスベクトルキャッシュ
 context_transition_stats ← 遷移確率集計（Bayesian smoothing α=1, β=10）
 ```
+
+推薦エンジンのポリシーは独立した設定テーブルではなく、既存 topology の
+`function_parameters` テーブルに格納される（`function_name = 'context_route_recommendation_resolve'`,
+`parameter_key = 'default_policy'`）。これは context route recommendation が
+topolactor topology の **optional capability** であることを示す。
 
 ---
 
@@ -48,11 +53,13 @@ SUM を採用する理由: 低計算コスト + 統計的安定性。
 
 ---
 
-## チューニングパラメータ（ContextRouteConfig SSOT）
+## チューニングパラメータ（function_parameters SSOT）
 
-Runtime コードへの直書き禁止。すべて `context_route_config` テーブルから読む。
+Runtime コードへの直書き禁止。すべて `function_parameters` テーブルから読む。
+`function_name = 'context_route_recommendation_resolve'`, `parameter_key = 'default_policy'`
+に JSON ブロブとして格納される。
 
-| パラメータ | デフォルト | 意味 |
+| パラメータ | シード値 | 意味 |
 |---|---|---|
 | `min_similarity` | 0.05 | 近傍候補の最小コサイン類似度 |
 | `top_k` | 50 | 取得するプレフィックス候補数の上限 |
@@ -62,7 +69,7 @@ Runtime コードへの直書き禁止。すべて `context_route_config` テー
 | `baseline_weight` | 0.5 | 遷移統計ベースラインの重み |
 | `neighbor_weight` | 0.5 | 近傍投票の重み |
 
-管理UI: `/admin/context-route-config`
+管理UI: なし（topology データストア直接操作）
 
 ---
 
@@ -71,7 +78,7 @@ Runtime コードへの直書き禁止。すべて `context_route_config` テー
 ```
 Ok                  — 候補あり
 InsufficientHistory — 履歴不足（エラーではない; cold start で想定内）
-ExplicitError       — リゾルバー内部エラー
+ExplicitError       — リゾルバー内部エラー（policy missing 含む）
 ```
 
 silent fallback は存在しない。status は常に明示。
@@ -82,19 +89,19 @@ silent fallback は存在しない。status は常に明示。
 
 ### やってよいこと
 - `context_token_registry` の value 範囲は `[-1.0, 1.0]` 内で人間が設定
-- `context_route_config` の値を admin UI から変更（デプロイ不要）
+- `function_parameters` の policy JSON を直接更新（デプロイ不要）
 - キャッシュは rebuildable として扱う（再構築可能、削除しても回復できる）
 - Bollinger band drift/spike 検出は optional — v1 では不要
 
 ### やってはいけないこと
 - Runtime コード（ContextRouteRecommendationResolver）に数値定数を直書きする
-  → `ContextRouteConfig` 経由で読むこと
-- `ContextRouteConfig.Default` を production fallback として使う
-  → `ContextRouteConfig.Default` は存在させない。DB registry が空なら MissingPolicy（明示的エラー）
-- DB unavailable または registry 未登録の状態でデフォルト値で継続する
+  → `function_parameters` 経由で読むこと
+- production fallback を C# コードに持たせる
   → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す。silent fallback 禁止
-- Frontend API（`/api/admin/context-route-config` 等）にハードコード値を持たせる
-  → 未接続なら 501 を返す。Frontend は registry の代替ではない
+- DB unavailable または policy 未登録の状態でデフォルト値で継続する
+  → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す
+- context route recommendation 専用の独立した設定テーブルを作る
+  → policy は topology の `function_parameters` に統合する
 - `context_token_registry.group` をベクトル計算に使う
   → group は UI グルーピング専用。計算対象は `value` のみ
 - セッションの explicit end を想定したロジックを書く
@@ -118,6 +125,7 @@ canonical route への挿入位置:
 - Runtime 層に業務固有語彙（maintenance / parts / work_code 等）は一切混入しない
 - `ContextRouteRecommendationResult` は純粋なデータレコード（計算メソッドなし）
 - Frontend は受け取ったデータを projection するだけ（cosine 計算は Backend のみ）
+- Policy は `TopologyRepository.LoadFunctionParameterAsync` 経由で読む
 
 ---
 

@@ -38,8 +38,6 @@ export default function ContextTokenRegistryPage() {
       <hr style={{ margin: "24px 0" }} />
       <p>
         <a href="/admin">&larr; Admin トップへ</a>
-        {" | "}
-        <a href="/admin/context-route-config">context_route_config (設定編集) &rarr;</a>
       </p>
     </main>
   );
