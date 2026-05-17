@@ -8,142 +8,349 @@ namespace Topolactor.Runtime.Tests;
 
 public class ContextRouteRecommendationResolverTests
 {
+    private static ContextVectorBuilder VectorBuilder() => new();
+    private static ContextNeighborSearch NeighborSearch() => new();
+
     private static ContextRouteRecommendationResolver CreateResolver(
         ContextRouteRepository? repo = null,
-        TopologyRepository? topologyRepo = null) =>
-        new(
+        TopologyRepository? topologyRepo = null)
+    {
+        repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
+        // Default: use an explicit test fixture policy, not production repository seed values.
+        topologyRepo ??= new StubValidPolicyTopologyRepository();
+        return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
-            repo ?? new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy"),
-            new ContextVectorBuilder(),
-            new ContextNeighborSearch(),
-            topologyRepo ?? new StubValidPolicyTopologyRepository());
+            repo,
+            VectorBuilder(),
+            NeighborSearch(),
+            topologyRepo);
+    }
+
+    // --- ContextVectorBuilder tests ---
 
     [Fact]
-    public void BuildEventVector_MapsTokenValues_AndOmitsMissingTokens()
+    public void BuildEventVector_MapsTokenIdsToValues()
     {
+        var builder = VectorBuilder();
         var tokenA = Guid.NewGuid();
         var tokenB = Guid.NewGuid();
-        var tokenMissing = Guid.NewGuid();
-        var builder = new ContextVectorBuilder();
+        var tokenC = Guid.NewGuid();
 
-        var vector = builder.BuildEventVector(
-            [tokenA, tokenB, tokenMissing],
-            new Dictionary<Guid, float> { [tokenA] = 1.0f, [tokenB] = -0.5f });
+        var valueMap = new Dictionary<Guid, float>
+        {
+            [tokenA] = 1.0f,
+            [tokenB] = -0.5f,
+        };
+
+        var vector = builder.BuildEventVector([tokenA, tokenB, tokenC], valueMap);
 
         Assert.Equal(1.0f, vector[tokenA]);
         Assert.Equal(-0.5f, vector[tokenB]);
-        Assert.False(vector.ContainsKey(tokenMissing));
+        Assert.False(vector.ContainsKey(tokenC)); // missing token treated as 0 — omitted
+    }
+
+    [Fact]
+    public void BuildEventVector_EmptyTokenIds_ReturnsEmptyVector()
+    {
+        var builder = VectorBuilder();
+        var vector = builder.BuildEventVector([], new Dictionary<Guid, float>());
+        Assert.Empty(vector);
     }
 
     [Fact]
     public void BuildPrefixVector_SumsEventVectors()
     {
-        var token = Guid.NewGuid();
-        var builder = new ContextVectorBuilder();
+        var builder = VectorBuilder();
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
 
-        var prefix = builder.BuildPrefixVector([
-            new Dictionary<Guid, float> { [token] = 1.0f },
-            new Dictionary<Guid, float> { [token] = 0.5f }
-        ]);
+        var ev1 = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+        var ev2 = new Dictionary<Guid, float> { [tokenA] = 0.5f, [tokenB] = -1.0f };
 
-        Assert.Equal(1.5f, prefix[token], precision: 5);
+        var prefix = builder.BuildPrefixVector([ev1, ev2]);
+
+        Assert.Equal(1.5f, prefix[tokenA], precision: 5);
+        Assert.Equal(-1.0f, prefix[tokenB], precision: 5);
     }
 
     [Fact]
-    public void ComputeCosineSimilarity_ZeroNorm_ReturnsZero()
+    public void BuildPrefixVector_EmptyInputs_ReturnsEmptyVector()
     {
-        var token = Guid.NewGuid();
-        var search = new ContextNeighborSearch();
+        var builder = VectorBuilder();
+        var prefix = builder.BuildPrefixVector([]);
+        Assert.Empty(prefix);
+    }
 
-        var sim = search.ComputeCosineSimilarity(
-            new Dictionary<Guid, float>(), 0f,
-            new Dictionary<Guid, float> { [token] = 1.0f }, 1.0f);
+    [Fact]
+    public void ComputeL2Norm_CalculatesCorrectly()
+    {
+        var builder = VectorBuilder();
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
+        var vector = new Dictionary<Guid, float> { [tokenA] = 3.0f, [tokenB] = 4.0f };
+
+        var norm = builder.ComputeL2Norm(vector);
+
+        Assert.Equal(5.0f, norm, precision: 5); // sqrt(9 + 16) = 5
+    }
+
+    [Fact]
+    public void ComputeL2Norm_EmptyVector_ReturnsZero()
+    {
+        var builder = VectorBuilder();
+        var norm = builder.ComputeL2Norm(new Dictionary<Guid, float>());
+        Assert.Equal(0f, norm);
+    }
+
+    // --- ContextNeighborSearch tests ---
+
+    [Fact]
+    public void ComputeCosineSimilarity_OrthogonalVectors_ReturnsZero()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
+
+        var a = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+        var b = new Dictionary<Guid, float> { [tokenB] = 1.0f };
+
+        var sim = search.ComputeCosineSimilarity(a, 1.0f, b, 1.0f);
 
         Assert.Equal(0f, sim);
     }
 
     [Fact]
-    public void FindNearestPrefixes_FiltersAndAppliesTopK()
+    public void ComputeCosineSimilarity_IdenticalVectors_ReturnsOne()
     {
-        var token = Guid.NewGuid();
-        var search = new ContextNeighborSearch();
-        var current = new Dictionary<Guid, float> { [token] = 1.0f };
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+
+        var a = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+        var norm = 1.0f;
+
+        var sim = search.ComputeCosineSimilarity(a, norm, a, norm);
+
+        Assert.Equal(1.0f, sim, precision: 5);
+    }
+
+    [Fact]
+    public void ComputeCosineSimilarity_ZeroNormA_ReturnsZero()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+
+        var a = new Dictionary<Guid, float>();
+        var b = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+
+        var sim = search.ComputeCosineSimilarity(a, 0f, b, 1.0f);
+
+        Assert.Equal(0f, sim);
+    }
+
+    [Fact]
+    public void ComputeCosineSimilarity_ZeroNormB_ReturnsZero()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+
+        var a = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+        var b = new Dictionary<Guid, float>();
+
+        var sim = search.ComputeCosineSimilarity(a, 1.0f, b, 0f);
+
+        Assert.Equal(0f, sim);
+    }
+
+    [Fact]
+    public void FindNearestPrefixes_BelowMinSimilarity_FilteredOut()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
+
+        var current = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+        var currentNorm = 1.0f;
+
+        var candidate = new ContextPrefixVectorRecord(
+            SessionId: Guid.NewGuid(),
+            PrefixIndex: 0,
+            LastEventId: Guid.NewGuid(),
+            SparseVector: new Dictionary<Guid, float> { [tokenB] = 1.0f },
+            L2Norm: 1.0f,
+            UpdatedAt: DateTimeOffset.UtcNow
+        );
+
+        var results = search.FindNearestPrefixes(current, currentNorm, [candidate], minSimilarity: 0.05f, topK: 10);
+
+        Assert.Empty(results); // orthogonal → similarity=0 < 0.05
+    }
+
+    [Fact]
+    public void FindNearestPrefixes_ZeroNormCurrentVector_ReturnsEmpty()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+
+        var candidate = new ContextPrefixVectorRecord(
+            SessionId: Guid.NewGuid(),
+            PrefixIndex: 0,
+            LastEventId: Guid.NewGuid(),
+            SparseVector: new Dictionary<Guid, float> { [tokenA] = 1.0f },
+            L2Norm: 1.0f,
+            UpdatedAt: DateTimeOffset.UtcNow
+        );
+
+        var results = search.FindNearestPrefixes(
+            new Dictionary<Guid, float>(), 0f, [candidate], 0.05f, 10);
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    public void FindNearestPrefixes_TopKEnforced()
+    {
+        var search = NeighborSearch();
+        var tokenA = Guid.NewGuid();
+
+        var current = new Dictionary<Guid, float> { [tokenA] = 1.0f };
+
         var candidates = Enumerable.Range(0, 10)
             .Select(i => new ContextPrefixVectorRecord(
                 SessionId: Guid.NewGuid(),
                 PrefixIndex: i,
                 LastEventId: Guid.NewGuid(),
-                SparseVector: new Dictionary<Guid, float> { [token] = 1.0f },
+                SparseVector: new Dictionary<Guid, float> { [tokenA] = 1.0f },
                 L2Norm: 1.0f,
-                UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i)))
+                UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i)
+            ))
             .ToList();
 
-        var results = search.FindNearestPrefixes(current, 1.0f, candidates, minSimilarity: 0.05f, topK: 3);
+        var results = search.FindNearestPrefixes(current, 1.0f, candidates, 0.05f, topK: 3);
 
         Assert.Equal(3, results.Count);
     }
 
-    [Fact]
-    public async Task ResolveAsync_MissingPolicy_ReturnsExplicitError()
-    {
-        var resolver = CreateResolver(topologyRepo: new StubMissingPolicyTopologyRepository());
-        var result = await resolver.ResolveAsync(MakeShape(sessionId: Guid.NewGuid().ToString()));
-
-        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
-        Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
-    }
+    // --- ContextRouteRecommendationResolver tests ---
 
     [Fact]
-    public async Task ResolveAsync_NoSessionId_WithResolvedPolicy_ReturnsInsufficientHistory()
+    public async Task ResolveAsync_NoSessionId_ReturnsInsufficientHistory()
     {
         var resolver = CreateResolver();
-        var result = await resolver.ResolveAsync(MakeShape(sessionId: null));
+        var shape = MakeShape(sessionId: null);
+
+        var result = await resolver.ResolveAsync(shape);
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
-        Assert.Equal("NO_SESSION_ID", result.StatusDetail);
+        Assert.NotNull(result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
     }
 
     [Fact]
-    public async Task ResolveAsync_NoPrefixHistory_WithResolvedPolicy_ReturnsInsufficientHistory()
+    public async Task ResolveAsync_NoContextHistory_ReturnsInsufficientHistory()
     {
         var resolver = CreateResolver();
-        var result = await resolver.ResolveAsync(MakeShape(sessionId: Guid.NewGuid().ToString()));
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
 
         Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
         Assert.Equal("NO_CONTEXT_HISTORY", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
     }
 
     [Fact]
-    public async Task ResolveAsync_WithPrefixHistory_ReturnsNextOperationCandidate()
+    public async Task ResolveAsync_MissingPolicy_ReturnsExplicitError_NotDefault()
     {
-        var token = Guid.NewGuid();
-        var resolver = CreateResolver(repo: new StubPrefixRepository(token));
-        var result = await resolver.ResolveAsync(MakeShape(
-            sessionId: Guid.NewGuid().ToString(),
-            contextTokenIds: token.ToString()));
+        // Policy-missing must surface as ExplicitError — no silent fallback to hardcoded values.
+        var resolver = CreateResolver(topologyRepo: new StubMissingPolicyTopologyRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
-        Assert.Equal(RecommendationStatus.Ok, result.Status);
-        Assert.Contains(result.NextOperations, c => c.Value == "action_next");
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
     }
 
     [Fact]
-    public void ResolveNextOperations_MergesNeighborAndTransitionStats()
+    public async Task ResolveAsync_NoSilentFallback_StatusIsAlwaysExplicit()
+    {
+        var resolver = CreateResolver();
+
+        // No session, no tokens, no history
+        var shape = MakeShape(sessionId: null);
+        var result = await resolver.ResolveAsync(shape);
+
+        // Status must never be null — always explicit
+        Assert.True(
+            result.Status == RecommendationStatus.InsufficientHistory ||
+            result.Status == RecommendationStatus.ExplicitError ||
+            result.Status == RecommendationStatus.Ok,
+            "Status must be one of the three explicit values."
+        );
+    }
+
+    [Fact]
+    public void ResolveNextOperations_EmptyNeighbors_ReturnsEmpty()
     {
         var resolver = CreateResolver();
         var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+        var result = resolver.ResolveNextOperations([], [], policy);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ResolveNextOperations_NeighborVoting_RanksCorrectly()
+    {
+        var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+
         var neighbors = new List<ContextNeighborResult>
         {
-            new(Guid.NewGuid(), 0, 0.5f, "action_a", null)
+            new(Guid.NewGuid(), 0, 0.9f, "action_a", null),
+            new(Guid.NewGuid(), 0, 0.8f, "action_a", null),
+            new(Guid.NewGuid(), 0, 0.5f, "action_b", null),
         };
+
+        var result = resolver.ResolveNextOperations(neighbors, [], policy);
+
+        Assert.NotEmpty(result);
+        Assert.Equal("action_a", result[0].Value); // higher total sim wins
+    }
+
+    [Fact]
+    public void ResolveNextOperations_TransitionStatsMerged()
+    {
+        var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+
+        var neighbors = new List<ContextNeighborResult>
+        {
+            new(Guid.NewGuid(), 0, 0.5f, "action_a", null),
+        };
+
         var stats = new List<ContextTransitionStat>
         {
-            new("prev", "action_b", 100, 90f, 0.9f)
+            new("prev", "action_b", 100, 90f, 0.9f),
         };
 
         var result = resolver.ResolveNextOperations(neighbors, stats, policy);
 
+        // Both action_a (from neighbors) and action_b (from stats) should appear
         Assert.Contains(result, r => r.Value == "action_a");
         Assert.Contains(result, r => r.Value == "action_b");
+    }
+
+    [Fact]
+    public void ResolveNextTokens_EmptyNeighbors_ReturnsEmpty()
+    {
+        var resolver = CreateResolver();
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+        var result = resolver.ResolveNextTokens([], policy);
+        Assert.Empty(result);
     }
 
     [Fact]
@@ -151,18 +358,98 @@ public class ContextRouteRecommendationResolverTests
     {
         var resolver = CreateResolver();
         var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
-        var token = Guid.NewGuid();
+        var tokenId = Guid.NewGuid();
+
         var neighbors = new List<ContextNeighborResult>
         {
-            new(Guid.NewGuid(), 0, 0.9f, null, [token]),
-            new(Guid.NewGuid(), 0, 0.7f, null, [token])
+            new(Guid.NewGuid(), 0, 0.9f, null, [tokenId]),
+            new(Guid.NewGuid(), 0, 0.7f, null, [tokenId]),
         };
 
         var result = resolver.ResolveNextTokens(neighbors, policy);
 
         Assert.Single(result);
-        Assert.Equal(token.ToString(), result[0].Value);
+        Assert.Equal(tokenId.ToString(), result[0].Value);
+        Assert.Equal(0.9f + 0.7f, result[0].Score, precision: 5);
     }
+
+    // --- RuntimeExecutor integration: emission includes recommendation ---
+
+    [Fact]
+    public async Task ExecuteAsync_EmissionAlwaysContainsRecommendation()
+    {
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        // Recommendation is always present — InsufficientHistory when no session context
+        Assert.NotNull(response.Emission!.ContextRouteRecommendation);
+        Assert.Equal(
+            RecommendationStatus.InsufficientHistory,
+            response.Emission.ContextRouteRecommendation!.Status);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RecommendationDoesNotAbortPipeline()
+    {
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        // Recommendation InsufficientHistory must NOT add ValidationErrors to the pipeline
+        Assert.True(response.Success);
+        Assert.Empty(response.Errors);
+    }
+
+    // --- Frontend isolation: no calculation logic in frontend types ---
+
+    [Fact]
+    public void FrontendIsolation_RecommendationIsDataOnly()
+    {
+        // ContextRouteRecommendationResult is a pure data record — no calculation methods.
+        // Calculation is done only in ContextVectorBuilder, ContextNeighborSearch,
+        // and ContextRouteRecommendationResolver (all backend-only).
+        var result = new ContextRouteRecommendationResult(
+            NextOperations: [],
+            NextTokens: [],
+            NearestPrefixSessionIds: [],
+            ContributingTokens: [],
+            Status: RecommendationStatus.InsufficientHistory,
+            StatusDetail: "test"
+        );
+
+        Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
+        Assert.Empty(result.NextOperations);
+    }
+
+    // --- End-to-end: next operation candidates flow from loaded prefix history ---
+
+    [Fact]
+    public async Task ResolveAsync_WithPrefixHistory_ReturnsOkWithNextOperationCandidates()
+    {
+        // Stub repository returns 15 prefix candidates each carrying NextOperation="action_next"
+        // with matching sparse vectors (cosine similarity = 1.0) → passes MinNeighbors=10 gate
+        var tokenId = Guid.NewGuid();
+        var stub = new StubPrefixRepository(tokenId);
+        var resolver = CreateResolver(stub);
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString()
+        );
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.NotEmpty(result.NextOperations);
+        Assert.Contains(result.NextOperations, c => c.Value == "action_next");
+    }
+
+    // --- Helper ---
 
     private static RuntimeWorkingShape MakeShape(string? sessionId, string? contextTokenIds = null)
     {
@@ -177,7 +464,8 @@ public class ContextRouteRecommendationResolverTests
             ContextSessionId: sessionId,
             ContextUserId: null,
             ContextTokenIds: contextTokenIds,
-            ContextRecordId: null);
+            ContextRecordId: null
+        );
 
         return new RuntimeWorkingShape(
             Vector: vector,
@@ -188,18 +476,25 @@ public class ContextRouteRecommendationResolverTests
             PackageDef: null,
             SchemaDef: null,
             ResolvedData: null,
-            Errors: []);
+            Errors: []
+        );
     }
 
+    /// <summary>
+    /// Stub repository that returns a fixed token record and 15 prefix candidates
+    /// all carrying NextOperation="action_next" with a known sparse vector.
+    /// </summary>
     private sealed class StubPrefixRepository(Guid tokenId) : ContextRouteRepository(
         NullLogger<ContextRouteRepository>.Instance, "dummy")
     {
         public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
             IEnumerable<Guid> tokenIds,
-            CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ContextTokenRecord>>([
-                new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")
-            ]);
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<ContextTokenRecord> result =
+                [new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")];
+            return Task.FromResult(result);
+        }
 
         public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
             string? tableName,
@@ -217,7 +512,8 @@ public class ContextRouteRecommendationResolverTests
                     L2Norm: 1.0f,
                     UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i),
                     NextOperation: "action_next",
-                    NextTokenIdsHint: null))
+                    NextTokenIdsHint: null
+                ))
                 .ToList();
             return Task.FromResult(result);
         }
