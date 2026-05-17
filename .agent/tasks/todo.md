@@ -10,21 +10,26 @@ Context Route Recommendation v1 は main に統合済み。
 
 ### Persistence / Repository
 
-- [ ] `ContextRouteRepository` を in-memory skeleton から実 DB クエリへ置換する
-- [ ] `TopologyRepository.LoadFunctionParameterAsync` を `function_parameters` 実読みに置換する
 - [ ] `context-token-registry` API を 501 から実 DB 接続へ置換する
-- [ ] `context-token-registry` の deprecate エンドポイントを実装する
+      → GET/POST の実 DB 接続は未実装。
+        Deno postgres クライアントの追加またはバックエンド AdminEndpoint 経由での実装が必要。
+- [ ] `context-token-registry` の deprecate エンドポイントを実 DB 接続へ置換する
+      → `frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts` は定義済み（501）。
+        UUID バリデーション済み。実 DB 更新は GET/POST と同様の方針で実装予定。
 
 ### Cache / Aggregation Pipeline
 
-- [ ] `UpsertEventVectorCacheAsync` / `UpsertPrefixVectorCacheAsync` の deferred batch 実装
-- [ ] `context_transition_stats` の near-realtime 集計パイプライン実装
-- [ ] `context_event` の hot/cold archive retention policy を定義する
+- [ ] `context_event` の retention job を実装する
+      → `function_parameters` の `context_event_retention / retention_policy` からポリシーを読み込み、
+        hot_days / cold_days / archive_strategy / batch_size に従って古いイベントを削除またはアーカイブ。
 
 ### Policy Scope
 
-- [ ] Context Route Recommendation の `policy_ref` を `structure_maps.state_policy` から解決できるようにする
-- [ ] `default_policy` 固定参照を structure_map / relation / hub scoped policy に拡張する
+- [ ] `context_transition_stats` に coverage / confidence threshold の仕組みを導入する
+      → 方針: observed enum item count / registry enum item count で coverage を算出。
+        coverage が低い（= 未観測の next_operation が多い）スコープは信頼度を下げて出力するか除外する。
+        閾値（min_events_for_stats, min_coverage_ratio）は function_parameters から読む。
+        不十分なサンプルの行は推薦に使用しないか、信頼度スコアを下げて出力する。
 
 ### Optional Analytics
 

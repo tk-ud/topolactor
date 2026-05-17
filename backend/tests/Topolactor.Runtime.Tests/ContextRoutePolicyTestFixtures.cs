@@ -53,3 +53,20 @@ internal sealed class StubMissingPolicyTopologyRepository()
         CancellationToken ct = default)
         => Task.FromResult<string?>(null);
 }
+
+/// <summary>
+/// Stub TopologyRepository that returns ValidPolicyJson only when the expected
+/// parameter key is used; returns null for any other key.
+/// Used to assert that a context_route_policy_ref in state_policy overrides default_policy
+/// and that the scoped key is actually passed through to the repository.
+/// </summary>
+internal sealed class StubScopedPolicyTopologyRepository(string expectedKey)
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy")
+{
+    public override Task<string?> LoadFunctionParameterAsync(
+        string functionName,
+        string parameterKey,
+        CancellationToken ct = default)
+        => Task.FromResult<string?>(
+            parameterKey == expectedKey ? ContextRoutePolicyTestFixtures.ValidPolicyJson() : null);
+}

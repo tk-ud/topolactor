@@ -33,7 +33,7 @@ context_token_registry   ← トークン辞書（Hub Registry）— /admin/cont
 function_parameters      ← 推薦エンジンチューニングパラメータ（topology データストア）
 context_event            ← 唯一の必須ログ（追記専用）
 context_prefix_vector_cache ← 近傍検索用プレフィックスベクトルキャッシュ
-context_transition_stats ← 遷移確率集計（Bayesian smoothing α=1, β=10）
+context_transition_stats ← 遷移確率集計（prob01 = count_hits / SUM(count_hits) over same scope）
 ```
 
 推薦エンジンのポリシーは独立した設定テーブルではなく、既存 topology の
@@ -94,10 +94,14 @@ silent fallback は存在しない。status は常に明示。
 - Bollinger band drift/spike 検出は optional — v1 では不要
 
 ### やってはいけないこと
-- Runtime コード（ContextRouteRecommendationResolver）に数値定数を直書きする
-  → `function_parameters` 経由で読むこと
+- Runtime コード（ContextRouteRecommendationResolver / NpgsqlContextRouteRepository）に数値定数を直書きする
+  → `function_parameters` 経由で読むこと。smoothing α/β 等も直書き禁止
 - production fallback を C# コードに持たせる
   → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す。silent fallback 禁止
+- malformed な `structure_maps.state_policy` を `default_policy` に silent fallback させる
+  → JSON パースエラーは `ExplicitError(CONTEXT_ROUTE_STATE_POLICY_INVALID)` を返す
+- `context_route_policy_ref` に空文字を設定して通過させる
+  → 空 ref は `ExplicitError(CONTEXT_ROUTE_POLICY_REF_INVALID)` を返す
 - DB unavailable または policy 未登録の状態でデフォルト値で継続する
   → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す
 - context route recommendation 専用の独立した設定テーブルを作る

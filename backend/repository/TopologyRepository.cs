@@ -26,7 +26,8 @@ public class TopologyRepository
         AttractorKey:   DefaultAttractorKey,
         PackageId:      DefaultPackageId,
         SchemaId:       DefaultSchemaId,
-        ComponentIds:   [DefaultComponentId]
+        ComponentIds:   [DefaultComponentId],
+        StatePolicyJson: null
     );
 
     private static readonly PackageRecord DefaultPackage = new(
@@ -43,8 +44,8 @@ public class TopologyRepository
         RawDefinition: """{"fields":[{"key":"label","type":"text","label":"Label"}]}"""
     );
 
-    private readonly ILogger<TopologyRepository> _logger;
-    private readonly string _connectionString;
+    protected readonly ILogger<TopologyRepository> _logger;
+    protected readonly string _connectionString;
 
     public TopologyRepository(ILogger<TopologyRepository> logger, string connectionString)
     {
@@ -56,8 +57,9 @@ public class TopologyRepository
     /// Loads a structure map record by attractor key or structure map ID.
     /// Returns the default dummy record for the "default:entity:search" path.
     /// Returns null for all other keys (broken reference — caller must error).
+    /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
-    public Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    public virtual Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
     {
         if (key == DefaultAttractorKey || key == DefaultStructureMapId)
         {
@@ -73,8 +75,9 @@ public class TopologyRepository
     /// Loads a package record by its ID.
     /// Returns the default dummy package for the default package ID.
     /// Returns null for all other IDs (broken reference — caller must error).
+    /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
-    public Task<PackageRecord?> LoadPackageAsync(Guid packageId, CancellationToken ct = default)
+    public virtual Task<PackageRecord?> LoadPackageAsync(Guid packageId, CancellationToken ct = default)
     {
         if (packageId == DefaultPackageId)
         {
@@ -90,8 +93,9 @@ public class TopologyRepository
     /// Loads a schema record by its ID.
     /// Returns the default dummy schema for the default schema ID.
     /// Returns null for all other IDs (broken reference — caller must error).
+    /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
-    public Task<SchemaRecord?> LoadSchemaAsync(Guid schemaId, CancellationToken ct = default)
+    public virtual Task<SchemaRecord?> LoadSchemaAsync(Guid schemaId, CancellationToken ct = default)
     {
         if (schemaId == DefaultSchemaId)
         {
@@ -130,13 +134,16 @@ public class TopologyRepository
 /// <summary>
 /// Stored structure map data loaded from topology storage.
 /// Maps an attractor key to its associated package, schema, and component definitions.
+/// StatePolicyJson holds the raw JSONB from structure_maps.state_policy, used by
+/// ContextRouteRecommendationResolver to resolve a scoped policy_ref.
 /// </summary>
 public record StructureMapRecord(
     string StructureMapId,
     string AttractorKey,
     Guid PackageId,
     Guid SchemaId,
-    IReadOnlyList<string> ComponentIds
+    IReadOnlyList<string> ComponentIds,
+    string? StatePolicyJson = null
 );
 
 /// <summary>

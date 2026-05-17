@@ -64,6 +64,9 @@ public record RuntimeWorkingShape(
     object? SchemaDef,
     JsonElement? ResolvedData,
     IReadOnlyList<ValidationError>? Errors,
+    // Raw JSONB from structure_maps.state_policy — used by ContextRouteRecommendationResolver
+    // to resolve a scoped context_route_policy_ref instead of the global default_policy.
+    string? StructureMapStatePolicyJson = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null
 );
 

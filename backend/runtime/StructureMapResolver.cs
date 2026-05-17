@@ -32,6 +32,8 @@ public class StructureMapResolver
 
         // Build the initial working shape from the structure map record.
         // Vector is set later by RuntimeExecutor after this step returns.
+        // StatePolicyJson is forwarded to allow ContextRouteRecommendationResolver
+        // to resolve a scoped policy_ref from structure_maps.state_policy.
         return new RuntimeWorkingShape(
             Vector: null,
             StructureMapId: record.StructureMapId,
@@ -41,7 +43,8 @@ public class StructureMapResolver
             PackageDef: null,
             SchemaDef: null,
             ResolvedData: null,
-            Errors: null
+            Errors: null,
+            StructureMapStatePolicyJson: record.StatePolicyJson
         );
     }
 }
