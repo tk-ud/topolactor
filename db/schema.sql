@@ -316,7 +316,9 @@ CREATE TABLE IF NOT EXISTS function_parameters (
     parameter_key          TEXT        NOT NULL,          -- parameter name within that function
     parameter_value        JSONB,                         -- value (any JSONB scalar or object)
     active                 BOOLEAN     NOT NULL DEFAULT true,
-    created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_function_parameters_function_key
+        UNIQUE (function_name, parameter_key)             -- one policy row per (function, key)
 );
 
 COMMENT ON TABLE function_parameters IS

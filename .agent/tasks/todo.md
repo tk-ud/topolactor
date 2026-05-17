@@ -18,6 +18,10 @@
 - [ ] UpsertEventVectorCacheAsync / UpsertPrefixVectorCacheAsync の deferred batch 実装
 - [ ] context_transition_stats の near-realtime 集計パイプライン
 - [ ] tag_scope 対応の cache_part_lifecycle_stats 相当（context 版）
+- [ ] Context Route Recommendation の policy_ref を `structure_maps.state_policy` から解決できるようにする
+      （現在は `PolicyFunctionName = "context_route_recommendation_resolve"` 固定参照）
+- [ ] default_policy 固定参照を将来、structure_map / relation / hub scoped policy に拡張する
+      （function_name と parameter_key を呼び出し元の context から決定できるようにする）
 
 ---
 

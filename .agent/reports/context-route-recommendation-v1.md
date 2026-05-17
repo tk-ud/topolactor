@@ -24,21 +24,19 @@ stored_topology_data
 
 ## 変更ファイル
 
-### 新規追加
+### 新規追加（現在の状態 — fix 3 適用後）
 
 | ファイル | 役割 |
 |---|---|
 | `db/context_route_tables.sql` | context route recommendation 用 DB テーブル群 |
-| `db/context_route_config.sql` | context_route_config レジストリテーブル + シード値 |
 | `backend/schema/ContextRouteContracts.cs` | 抽象 Runtime 用データコントラクト |
-| `backend/schema/ContextRouteConfigContracts.cs` | `ContextRouteConfig` レコード + `ConfigLoadResult` 判別共用体 |
+| `backend/schema/ContextRoutePolicyContracts.cs` | `ContextRoutePolicy` 純粋 DTO（defaults なし） |
 | `backend/repository/ContextRouteRepository.cs` | コンテキストルートリポジトリ（in-memory skeleton） |
-| `backend/repository/ContextRouteConfigRepository.cs` | 設定レジストリリポジトリ（in-memory skeleton） |
 | `backend/runtime/ContextVectorBuilder.cs` | sparse vector ビルダー（event vector / prefix vector / l2 norm） |
 | `backend/runtime/ContextNeighborSearch.cs` | cosine similarity + nearest prefix search |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | 推薦解決 resolver（canonical route 挿入点） |
 | `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs` | テスト群 |
-| `backend/tests/Topolactor.Runtime.Tests/ContextRouteConfigTestFixtures.cs` | テスト専用 fixture / stub |
+| `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs` | テスト専用 fixture / stub |
 | `docs/design/context-route-recommendation.yaml` | 抽象設計 YAML（SSOT） |
 | `docs/design/context-route-recommendation.md` | 設計思想・取り扱い方針 |
 | `docs/design/commit-inference-engine.yaml` | 関連設計 YAML（SSOT） |
@@ -97,62 +95,59 @@ stored_topology_data
 | `LoadActiveTokensAsync` | `ContextRouteRepository` |
 | `LoadRecentPrefixVectorsAsync` | `ContextRouteRepository` |
 | `GetTransitionStatsAsync` | `ContextRouteRepository` |
-| `LoadConfigAsync` | `ContextRouteConfigRepository` |
-| `SaveConfigAsync` | `ContextRouteConfigRepository` |
+| `LoadFunctionParameterAsync` | `TopologyRepository` |
 
-## ContextRouteConfig SSOT 設計
+## Policy SSOT 設計（fix 3 以降の現状）
 
 ### 原則
 
-Runtime コードへの数値リテラル直書きは禁止。全チューニングパラメータは
-`context_route_config` テーブル（DB registry）が唯一の SSOT。
+Runtime コードへの数値リテラル直書きは禁止。チューニングパラメータは
+`function_parameters` テーブル（topology 定義テーブル）に格納される。
+Context Route Recommendation は独立した設定サブシステムではなく、
+既存 topology の **optional capability**。
 
-`ContextRouteConfig.Default` 静的プロパティは存在しない。
-policy-missing は `ConfigLoadResult.MissingPolicy` として明示される。
+- `function_name = 'context_route_recommendation_resolve'`
+- `parameter_key = 'default_policy'`
+- `parameter_value = JSONB blob`
 
-### ConfigLoadResult 判別共用体
-
-```csharp
-ConfigLoadResult.Loaded(Config)      — 正常ロード
-ConfigLoadResult.MissingPolicy       — テーブルが空（seed 未実行）
-ConfigLoadResult.InvalidPolicy(Reason) — 必須キー欠損
-```
+policy-missing は `ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")` として明示される。
+production fallback は Runtime コードに存在しない。
 
 ### In-memory skeleton の動作（DB 接続前）
 
-`ContextRouteConfigRepository.LoadConfigAsync` は `db/context_route_config.sql` の
-INSERT 行に対応する seed 値を返す（`TopologyRepository` が `db/seed_empty.sql` に対応する
-in-memory レコードを返すのと同じパターン）。
+`TopologyRepository.LoadFunctionParameterAsync` は `db/seed_empty.sql` の
+function_parameters INSERT と一致する seed JSON を返す。
 
 ```
-LoadConfigAsync → Loaded(seedConfig)   # skeleton
-                                       # 実 DB: SELECT → Loaded / MissingPolicy / InvalidPolicy
-SaveConfigAsync → no-op               # skeleton
-                                       # 実 DB: INSERT ... ON CONFLICT DO UPDATE
+LoadFunctionParameterAsync("context_route_recommendation_resolve", "default_policy")
+  → seed JSON (string)  # skeleton
+  → null                # skeleton: 上記以外の function_name / parameter_key
+  → null なら ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")
 ```
 
 ### Resolver での policy-missing ハンドリング
 
 ```
-LoadConfigAsync → MissingPolicy  → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")
-LoadConfigAsync → InvalidPolicy  → ExplicitError("CONTEXT_ROUTE_POLICY_INCOMPLETE:...")
-LoadConfigAsync → Loaded(config) → 通常処理継続
+LoadFunctionParameterAsync → null    → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")
+LoadFunctionParameterAsync → 不正JSON → ExplicitError("CONTEXT_ROUTE_POLICY_INVALID:...")
+LoadFunctionParameterAsync → 正常JSON → ParsePolicy → 通常処理継続
 ```
 
-## Admin UI（未接続・プレースホルダー）
+## Admin UI（token registry のみ）
 
-Admin UI ページ（`/admin/context-route-config`, `/admin/context-token-registry`）は
-**表示層のプレースホルダー**として実装済み。
+Admin UI ページ:
+- `/admin/context-token-registry` — context_token_registry 管理（島コンポーネントあり）
+- `/admin/context-route-config` — **廃止**（fix 3 で削除）
 
 **現在の状態**:
-- フロントエンド API ルート (`/api/admin/context-route-config`, `/api/admin/context-token-registry`) は **501 Not Implemented** を返す
-- Island は 501 受信時に「レジストリ未接続」を表示（ハードコード値なし）
-- 管理者による設定変更は**まだ機能しない**
+- フロントエンド API ルート `/api/admin/context-token-registry` は **501 Not Implemented** を返す
+- token registry Island は 501 受信時に「レジストリ未接続」を表示（ハードコード値なし）
+- 推薦エンジン設定の UI はない — `function_parameters` を直接操作する
 
 **TODO（実装が必要な残作業）**:
-- `ContextRouteConfigRepository` の実 DB 接続（`LoadConfigAsync` / `SaveConfigAsync`）
 - `ContextRouteRepository` の実 DB 接続（`context_token_registry` 読み書き）
-- フロントエンド API ルートの実装（501 → 実バックエンド呼び出し）
+- `TopologyRepository.LoadFunctionParameterAsync` の実 DB 接続（`function_parameters` SELECT）
+- フロントエンド API ルートの実装（501 → 実 DB 接続）
 - deprecate エンドポイント実装（`/api/admin/context-token-registry/:id/deprecate`）
 
 詳細は `.agent/tasks/todo.md` 参照。
@@ -249,3 +244,59 @@ context route recommendation を topolactor topology の **optional capability**
 → `ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND")`
 
 production fallback は Runtime コードに存在しない。
+
+---
+
+## CI red 修正（PR #19 follow-up fix 4）
+
+### CI red 原因
+
+GitHub Actions の `db-schema-check` が以下のエラーで失敗していた。
+
+```
+there is no unique or exclusion constraint matching the ON CONFLICT specification
+```
+
+`db/seed_empty.sql` で
+
+```sql
+ON CONFLICT (function_name, parameter_key) DO NOTHING
+```
+
+を使用しているが、`db/schema.sql` の `function_parameters` テーブルに
+`(function_name, parameter_key)` の UNIQUE constraint が存在しなかった。
+
+### 修正内容
+
+`db/schema.sql` の `function_parameters` 定義に UNIQUE constraint を追加した。
+
+```sql
+CONSTRAINT uq_function_parameters_function_key
+    UNIQUE (function_name, parameter_key)
+```
+
+これにより:
+- `seed_empty.sql` の `ON CONFLICT (function_name, parameter_key) DO NOTHING` が成功する
+- 同一 `(function_name, parameter_key)` に複数行が挿入されることを DB 側で防止する
+- topology policy SSOT が分裂しない（function_parameters は per-function one policy row）
+
+### PR description 修正
+
+PR #19 の description が旧実装（context_route_config、ContextRouteConfig.Default 等）の
+説明のままだったため、現状の実装方針（function_parameters SSOT、ContextRoutePolicy、
+policy-missing → ExplicitError）を正確に反映した内容に全面更新した。
+
+### 実行チェック結果
+
+| チェック | 結果 | 備考 |
+|---|---|---|
+| `bash .agent/tests/check-structure.sh` | PASS（全84項目） | 実行済み |
+| `bash .agent/tests/check-db-schema.sh` | SKIP | PostgreSQL 接続情報がこの実行環境に存在しない（CI で実行） |
+| `bash .agent/tests/check-backend-tests.sh` | SKIP | dotnet がこの実行環境に存在しない（CI で実行） |
+| `bash .agent/tests/check-frontend-types.sh` | SKIP | deno がこの実行環境に存在しない（CI で実行） |
+
+### 残 TODO
+
+`.agent/tasks/todo.md` 参照。
+構造的な TODO として、`PolicyFunctionName` / `PolicyParameterKey` の固定参照を
+将来 `structure_maps.state_policy` scoped policy に拡張する項目を追加済み。
