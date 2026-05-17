@@ -50,12 +50,14 @@ required_files:
     - .agent/tests/check-structure.sh
     - .agent/tests/check-backend-tests.sh
     - .agent/tests/check-frontend-types.sh
+    - .agent/tests/check-default-entity-search.sh
     - .agent/tasks/todo.md
     - .agent/reports/README.md
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml
     - .github/workflows/frontend-types.yml
+    - .github/workflows/default-entity-search.yml
   db:
     - db/schema.sql
     - db/topology_tables.sql
@@ -81,6 +83,8 @@ required_files:
     - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
     - backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs
     - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
+    - backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj
+    - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
   frontend:
     - deno.json
     - frontend/routes/index.tsx
@@ -98,6 +102,7 @@ required_files:
     - frontend/api/dispatch.ts
     - frontend/structure_map.ts
     - frontend/README.md
+    - frontend/tests/defaultEntitySearch.test.ts
 
 required_content_terms:
   README.md:
@@ -141,6 +146,14 @@ required_content_terms:
     - "ATTRACTOR_RESOLVE_FAILED"
   backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs:
     - "default:entity:search"
-
-future_checks:
-  - Integration test for default:entity:search emission flow
+  .agent/tests/check-default-entity-search.sh:
+    - "dotnet test"
+    - "deno test"
+  .github/workflows/default-entity-search.yml:
+    - "bash .agent/tests/check-default-entity-search.sh"
+  backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  frontend/tests/defaultEntitySearch.test.ts:
+    - "renderEmission"
+    - "ATTRACTOR_RESOLVE_FAILED"
