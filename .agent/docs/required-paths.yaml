@@ -132,6 +132,7 @@ required_content_terms:
   README.md:
     - "data-driven topology runtime"
   AGENTS.md:
+    - "Recursive Verification Gate"
     - ".agent/rules/rule.md"
     - ".agent/tests/check-structure.sh"
     - "Agent Contract"
@@ -148,15 +149,20 @@ required_content_terms:
     - "Policy Judgment Gate"
   .agent/protocols/completion.md:
     - "Completion Sequence"
+    - "Recursive Verification Gate"
   .agent/protocols/policy-judgment.md:
     - "Policy Judgment Gate"
+    - "Recursive Verification Gate"
   .agent/protocols/scenario-contract.md:
     - "Temporary Scenario Contract"
+    - "Recursive Verification Gate"
   .agent/protocols/runtime-boundary-matrix.md:
     - "Runtime Boundary Failure Matrix"
+    - "Recursive Verification Gate"
   .agent/protocols/reports-and-todos.md:
     - "routine inspection reports"
   .agent/scripts/create-tmp.sh:
+    - "Blocking failures found:"
     - "Runtime Boundary Failure Matrix"
     - "Temporary Scenario Contract"
     - "Expected read / write / append / cache / return order"
@@ -208,6 +214,7 @@ required_content_terms:
     - "dotnet test"
     - "deno test"
   .agent/checklists/policy-judgment.md:
+    - "recursion to fix phase"
     - "Q1"
     - "Q15"
     - "Answer:"

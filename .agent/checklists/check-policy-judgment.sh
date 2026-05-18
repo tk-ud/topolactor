@@ -109,7 +109,7 @@ done < <(grep "^Answer: " "$CHECKLIST" || true)
 TOTAL="${#ANSWERS[@]}"
 
 echo ""
-echo "=== Policy Judgment Gate ==="
+echo "=== Policy Judgment Gate (Recursive Verification Gate enforced) ==="
 echo "File: $CHECKLIST"
 echo "Answers found: $TOTAL / 15"
 echo ""

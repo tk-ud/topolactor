@@ -41,6 +41,11 @@ cat > "$TMP_FILE" <<'EOF'
 # 9. UI-visible error state
 # 10. post-write read consistency
 #
+# Recursive Verification Gate:
+# - Blocking failures found:
+# - Fix recursion performed:
+# - Remaining out-of-scope TODO:
+#
 # After implementation:
 # 10) Full branch diff verification result
 #

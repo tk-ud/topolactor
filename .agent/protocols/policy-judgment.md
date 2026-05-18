@@ -9,12 +9,19 @@ Policy Judgment Gate trigger:
 
 Checklist is fixed at 15 questions. Q additions are prohibited.
 
+Recursive Verification Gate requirement:
+
+- Any Policy Judgment violation is a blocking failure; completion is not allowed.
+- If violation is fixable in the same task scope, return to fix phase and rerun policy judgment.
+- If not fixable in scope, keep task incomplete and record explicit remaining TODO.
+
 Q12/Q13 meaning:
 
 - answers must be based on full branch diff inspection
 - when required, answers must include scenario contract verification
 - when required, answers must include Runtime Boundary Failure Matrix verification
 - missing required verification forces Q12=no and Q13=no
+- any detected mismatch or missing verification in these surfaces triggers recursion to fix phase before completion
 
 Delegated or split work does not inherit verification. Each agent making implementation/policy/completion decisions must verify independently.
 

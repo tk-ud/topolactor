@@ -84,3 +84,12 @@ canonical_flow:
   - schema_resolve
   - component_expand
   - emission_or_projection
+
+
+recursive_verification_gate:
+  role: "blocks completion on audit failures and forces fix-and-reverify loop within scope"
+  surfaces:
+    - ".agent/protocols/completion.md"
+    - ".agent/protocols/policy-judgment.md"
+    - ".agent/protocols/scenario-contract.md"
+    - ".agent/protocols/runtime-boundary-matrix.md"

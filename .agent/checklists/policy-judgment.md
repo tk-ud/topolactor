@@ -18,6 +18,8 @@ changes — unless those changes also contain a runtime or policy behavior claim
 
 Answer each question with exactly one of: `yes` / `no` / `n/a`
 
+Any NO on blocking items requires recursion to fix phase before completion.
+
 Audit order reminder: create tmp scenario contract when required → implement → inspect full branch diff → verify full diff against tmp scenario contract when required → checklist → scope/claim audits → relevant local CI → `bash .agent/tests/check-structure.sh` (last).
 
 ---
@@ -159,6 +161,7 @@ Answer:
 
 Did you inspect the full branch diff before answering this checklist, and verify
 that full diff against `.agent/tmp/tmp.txt` scenario contract when tmp is required?
+If a mismatch or missing required verification is found, recurse to fix phase before completion.
 
 Use `git diff main...HEAD` or an equivalent full branch diff — not only the
 latest commit or edited files.
@@ -171,6 +174,7 @@ Answer:
 
 Are these checklist answers based on the full branch diff and scenario contract
 verification when required, not only the latest commit or edited files?
+Any boundary-matrix or scenario-contract verification gap here is a recursive blocking failure.
 
 Answer:
 

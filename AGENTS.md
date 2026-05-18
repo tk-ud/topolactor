@@ -5,6 +5,7 @@
 3. Runtime / persistence / projection changes require a temporary scenario contract (`.agent/tmp/tmp.txt`).
 4. Before completion, verify the full branch diff against the scenario contract and Runtime Boundary Failure Matrix.
 5. Run required local checks; run `bash .agent/tests/check-structure.sh` last.
+Recursive Verification Gate: any blocking failure in CI, scenario contract, boundary matrix, full diff verification, or policy judgment recursively returns the agent to the fix phase; do not mark tasks complete until the gate passes.
 
 Detailed rules and judgment criteria live under `.agent/rules/` (`.agent/rules/rule.md`).
 Executable checks and expanded verification live under `.agent/protocols/`, `.agent/scripts/`, `.agent/checklists/`, and `.agent/tests/`.
