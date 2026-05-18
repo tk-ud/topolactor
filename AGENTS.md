@@ -58,19 +58,13 @@ PR audit results should normally stay in the review / conversation / PR comment 
 Implementation summaries should normally stay in the PR description or completion message.
 
 
-## Temporary Planning Surface
+## Temporary Scenario Contract
 
-When task volume is high, agents may optionally use `.agent/tmp/tmp.txt` as a short-lived initial-constraint memo.
+For tasks that touch runtime behavior, recommendation, routing, persistence, append-only logs, cache rebuilds, policy resolution, demo observability, or frontend projection claims, `.agent/tmp/tmp.txt` is a temporary scenario contract, not a free-form planning memo.
 
-Rules:
-- `.agent/tmp/tmp.txt` is temporary and must not be committed.
-- Create only when needed via `bash .agent/scripts/create-tmp.sh`.
-- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'` to detect scope drift.
-- If drift exists, either fix scope or explicitly document intentional scope change in completion report / PR summary.
-- After comparison, delete memo via `bash .agent/scripts/delete-tmp.sh`.
-- `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
-- Keep `bash .agent/tests/check-structure.sh` as the final check before completion report.
-- Completion report should state whether tmp was used and confirm deletion status.
+Agents must create it before implementation, verify the full branch diff against it before Policy Judgment Checklist and local CI, then delete it before the final structure check.
+
+See `.agent/rules/rule.md` for required scenario contract fields, verification rules, and completion sequence.
 
 ## Policy Judgment Gate
 
