@@ -335,12 +335,14 @@ ON CONFLICT (event_id) DO UPDATE
 -- next_operation for each prefix is resolved at query time via LATERAL JOIN on
 -- context_event (first event after last_event_id in the same session):
 --   prefix 0 (last=event_overview)    → next: demo:entity:list  (always stable)
---   prefix 1 (last=event_entity_list) → next: NULL at recommendation time
+--   prefix 1 (last=event_entity_list) → next: NULL at recommendation candidate read time
 --
--- The NULL for prefix 1 holds because ContextRouteRecommendationResolver loads
--- prefix candidates BEFORE appending the current dispatch to context_event.
--- Appending after recommendation preserves this NULL invariant: prefix 1 has no
--- known successor at the time candidates are evaluated, and will not vote.
+-- The NULL for prefix 1 holds at recommendation candidate read time because
+-- ContextRouteRecommendationResolver runs LoadRecentPrefixVectorsAsync before
+-- AppendContextEventAsync. At the point the LATERAL JOIN executes, no event follows
+-- demo_event_entity_list in the session — prefix 1 finds NULL and does not vote.
+-- AppendContextEventAsync runs after all reads on every dispatch path (including
+-- cold-start), so the current operation is recorded for future recommendations.
 --
 -- With demo_policy min_neighbors=1, a dispatch with ContextSessionId=demo_session
 -- and token_ids including token_active (0021) will find prefix 0 at similarity=1.0

@@ -241,9 +241,11 @@ Prefix_index=1 has `next_operation=NULL` at that point (no event after it yet) a
 which matches the `operation` column in seeded `context_event` rows. `tableName` is not used as
 a filter — prefix candidates are scoped by `session_id` and `recent_days`, not by `table_name`.
 
-**Ordering guarantee:** `LoadRecentPrefixVectorsAsync` is called before `AppendContextEventAsync`.
-Without this ordering, the current dispatch would appear as the next event after the most-recent
-prefix entry, injecting `demo:hub:overview` as a second candidate alongside `demo:entity:list`.
+**Ordering guarantee:** All recommendation reads (`LoadRecentPrefixVectorsAsync`, transition stats)
+complete before `AppendContextEventAsync`. This preserves the prefix → next_operation relationship:
+at candidate read time, prefix_index=1's `last_event_id` has no successor, so it holds `next_operation=NULL`
+and does not vote. The append runs on every path — including cold-start — so that history grows across
+subsequent dispatches and the session eventually reaches `Ok` status.
 
 > **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
 > `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.

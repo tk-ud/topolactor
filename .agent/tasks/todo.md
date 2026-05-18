@@ -33,8 +33,9 @@
          currentOperation を vector.Action ではなく vector.AttractorKey（完全キー形式）に修正。
          LoadRecentPrefixVectorsAsync の tableName filter を null（全候補対象）に修正。
          frontend/api/dispatch.ts の status union を snake_case に統一（RecommendationPanel と一致）。
-         ResolveAsync の処理順を変更: AppendContextEventAsync を LoadRecentPrefixVectorsAsync より後に移動。
-         prefix LATERAL JOIN が current dispatch で汚染されないことを OrderTrackingRepository テストで検証。
+         ResolveAsync の処理順を変更: 全読み取り → append → status return の順序を確立。
+         prefix LATERAL JOIN 汚染なし (OrderTrackingRepository) を含む3テストで検証。
+         NO_CONTEXT_HISTORY / INSUFFICIENT_CONTEXT_HISTORY でも append が実行されることをテストで検証。
          docs/demo-walkthrough.md に Scenario E 追加・route identity・ordering guarantee を明記。
          dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で
          recommendation status:ok + nextOperations:[{value:demo:entity:list, score:0.6}] が安定して得られる。

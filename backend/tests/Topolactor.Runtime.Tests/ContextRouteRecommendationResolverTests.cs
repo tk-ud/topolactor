@@ -606,6 +606,52 @@ public class ContextRouteRecommendationResolverTests
             $"before AppendContextEventAsync (seq={tracking.AppendSequence}).");
     }
 
+    [Fact]
+    public async Task ResolveAsync_NoContextHistory_AppendContextEventStillCalled()
+    {
+        // When prefix candidate history is empty (NO_CONTEXT_HISTORY), the current
+        // dispatch must still be appended so cold-start history can grow.
+        var repo = new AppendTrackingNoPrefixRepository();
+        var resolver = CreateResolver(
+            repo: repo,
+            topologyRepo: new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
+        Assert.Equal("NO_CONTEXT_HISTORY", result.StatusDetail);
+        Assert.True(repo.WasAppendCalled, "AppendContextEventAsync must be called even on NO_CONTEXT_HISTORY.");
+    }
+
+    [Fact]
+    public async Task ResolveAsync_InsufficientContextHistory_AppendContextEventStillCalled()
+    {
+        // When prefix candidates exist but no neighbor passes min_similarity
+        // (INSUFFICIENT_CONTEXT_HISTORY), the current dispatch must still be appended.
+        // Uses OrderTrackingRepository (15 candidates) with an empty event vector
+        // (no contextTokenIds → norm=0 → all cosine similarities = 0 → 0 neighbors < 10).
+        var tokenId = Guid.NewGuid();
+        var tracking = new OrderTrackingRepository(tokenId);
+        var resolver = CreateResolver(
+            repo: tracking,
+            topologyRepo: new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: null); // empty event vector → norm=0 → no neighbors pass min_similarity
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.InsufficientHistory, result.Status);
+        Assert.Equal("INSUFFICIENT_CONTEXT_HISTORY", result.StatusDetail);
+        Assert.True(tracking.AppendSequence > 0, "AppendContextEventAsync must be called even on INSUFFICIENT_CONTEXT_HISTORY.");
+        Assert.True(
+            tracking.LoadPrefixSequence < tracking.AppendSequence,
+            "LoadRecentPrefixVectorsAsync must still run before AppendContextEventAsync.");
+    }
+
     /// <summary>
     /// Stub repository that returns a fixed token record and 15 prefix candidates
     /// all carrying NextOperation="action_next" with a known sparse vector.
@@ -691,6 +737,23 @@ public class ContextRouteRecommendationResolverTests
         public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
         {
             AppendSequence = Interlocked.Increment(ref _seq);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Stub repository with no prefix candidates (base class returns empty) that tracks
+    /// whether AppendContextEventAsync was called. Used to verify that cold-start
+    /// dispatches (NO_CONTEXT_HISTORY) are still recorded for future history growth.
+    /// </summary>
+    private sealed class AppendTrackingNoPrefixRepository() : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public bool WasAppendCalled { get; private set; }
+
+        public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+        {
+            WasAppendCalled = true;
             return Task.CompletedTask;
         }
     }
