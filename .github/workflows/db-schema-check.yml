@@ -7,8 +7,38 @@ on:
       - main
 
 jobs:
+  detect-db-schema-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      run_db_schema_check: ${{ steps.changes.outputs.run_db_schema_check }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect db schema-related changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+          git diff --name-only "$BASE_SHA" "$GITHUB_SHA" > changed_files.txt
+          if rg -q '^(db/.*\.sql|\.agent/tests/check-db-schema\.sh|\.github/workflows/db-schema-check\.yml)$' changed_files.txt; then
+            echo "run_db_schema_check=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_db_schema_check=false" >> "$GITHUB_OUTPUT"
+          fi
+
   db-schema-check:
     runs-on: ubuntu-latest
+    needs: detect-db-schema-scope
+    if: needs.detect-db-schema-scope.outputs.run_db_schema_check == 'true'
 
     services:
       postgres:
@@ -35,34 +65,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Detect db schema-related changes
-        id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE_SHA="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE_SHA="${{ github.event.before }}"
-          fi
-          git diff --name-only "$BASE_SHA" "$GITHUB_SHA" > changed_files.txt
-          if rg -q '^(db/.*\.sql|\.agent/tests/check-db-schema\.sh|\.github/workflows/db-schema-check\.yml)$' changed_files.txt; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Install PostgreSQL client
-        if: steps.changes.outputs.run == 'true'
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
       - name: Run DB schema check
-        if: steps.changes.outputs.run == 'true'
         run: bash .agent/tests/check-db-schema.sh
 
+  db-schema-check-not-required:
+    runs-on: ubuntu-latest
+    needs: detect-db-schema-scope
+    if: needs.detect-db-schema-scope.outputs.run_db_schema_check != 'true'
+    steps:
       - name: DB schema check not required for this change
-        if: steps.changes.outputs.run != 'true'
         run: echo "No db/sql scope change detected; db-schema-check marked success by scope gating."
