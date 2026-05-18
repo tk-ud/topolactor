@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
@@ -167,6 +168,13 @@ public class RuntimeExecutor
         workingShape = workingShape with { ContextRouteRecommendation = recommendation };
 
         // Step 10: Build emission from resolved working shape
+        if (vector.Target == "demo" && vector.Layer == "entity")
+        {
+            var stateResult = await ApplyDemoStateLoopAsync(vector, ct);
+            if (stateResult.error is not null) return ErrorResponse(stateResult.error.Code, stateResult.error.Message);
+            workingShape = workingShape with { ResolvedData = stateResult.data };
+        }
+
         var emission = _emissionBuilder.Build(workingShape);
 
         _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");
@@ -182,4 +190,27 @@ public class RuntimeExecutor
             Success: false,
             Emission: null,
             Errors: [new ValidationError(code, message)]);
+
+    private async Task<(JsonElement? data, ValidationError? error)> ApplyDemoStateLoopAsync(OperationVector vector, CancellationToken ct)
+    {
+        var action = vector.Action?.ToLowerInvariant();
+        if (action is "create" or "advance")
+        {
+            if (vector.Payload is null || !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) || !Guid.TryParse(entityIdEl.GetString(), out var id))
+                return (null, new ValidationError("INVALID_PAYLOAD", "entityId is required for create/advance"));
+            var title = vector.Payload.Value.TryGetProperty("title", out var titleEl) ? titleEl.GetString() : null;
+            var apply = await _topologyRepository.ApplyDemoTransitionAsync(id, action, title, ct);
+            if (!apply.Success) return (null, new ValidationError(apply.ErrorCode ?? "TRANSITION_FAILED", apply.ErrorMessage ?? "transition failed"));
+        }
+        var list = await _topologyRepository.LoadDemoEntityListAsync(ct);
+        DemoEntityProjection? detail = null;
+        if (vector.Payload is not null && vector.Payload.Value.TryGetProperty("entityId", out var detailIdEl) && Guid.TryParse(detailIdEl.GetString(), out var detailId))
+        {
+            detail = await _topologyRepository.LoadDemoEntityDetailAsync(detailId, ct);
+            if (detail is null && action == "detail") return (null, new ValidationError("STATE_NOT_FOUND", "requested entity does not exist"));
+        }
+        var history = detail is null ? Array.Empty<object>() : await _topologyRepository.LoadDemoTransitionHistoryAsync(detail.EntityId, ct);
+        var data = JsonSerializer.SerializeToElement(new { items = list, detail, history });
+        return (data, null);
+    }
 }

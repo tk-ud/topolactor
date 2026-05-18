@@ -177,3 +177,17 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_active
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
     ON structure_maps USING GIN (component_ids);
+
+CREATE TABLE IF NOT EXISTS demo_state_transitions (
+    transition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_id UUID NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    before_state TEXT,
+    after_state TEXT,
+    diff_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    event_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
+    ON demo_state_transitions (entity_id, created_at DESC);

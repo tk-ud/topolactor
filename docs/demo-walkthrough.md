@@ -324,3 +324,8 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 | `frontend/schema/demoSchema.ts` | Demo schema definitions |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver (policy from function_parameters) |
 | `backend/repository/NpgsqlContextRouteRepository.cs` | Windowed transition stats query |
+
+## Scenario F: demo entity state loop
+- Dispatch `target=demo, layer=entity, action=detail|advance|create` with payload `{ "entityId": "<uuid>", "title": "..." }`.
+- Runtime applies DB-backed transition (`entities` + `demo_state_transitions`) and returns emission data with `items` (list), `detail`, and `history`.
+- Invalid payload/transition/missing entity are explicit errors (`INVALID_PAYLOAD`, `INVALID_TRANSITION`, `STATE_NOT_FOUND`).
