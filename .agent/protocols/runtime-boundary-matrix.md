@@ -28,3 +28,13 @@ Recursive Verification Gate requirements:
 - If fixable in the same scope, return to fix phase and re-verify matrix coverage.
 - Out-of-scope is allowed only with explicit reason in completion report or PR summary.
 - For write-path additions, persistence constraint failure and post-write read consistency are mandatory checks, not optional coverage.
+
+
+For boundary-expanding changes, matrix verification must also include End-to-End Boundary Identity propagation across:
+
+- DB identity
+- Backend contract/event identity
+- API payload identity
+- Frontend projection identity
+- UI action identity
+

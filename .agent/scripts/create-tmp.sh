@@ -29,6 +29,26 @@ cat > "$TMP_FILE" <<'EOF'
 # 8) Runtime Boundary Failure Matrix coverage (1-10) and intentional out-of-scope reasons
 # 9) Known non-goals / out-of-scope paths
 #
+# Boundary Extension Scenario:
+# - Existing boundary being extended:
+# - DB identity / unique key / FK / CHECK:
+# - Contract / event / DTO identity:
+# - API request / response identity:
+# - Repository INSERT / UPSERT conflict identity:
+# - Repository UPDATE / DELETE WHERE identity:
+# - Frontend projection identity:
+#   - list key:
+#   - cache key:
+#   - selected item key:
+#   - form state key:
+# - UI action identity:
+#   - button click:
+#   - feedback:
+#   - update:
+#   - delete:
+# - Multi-instance leakage scenario:
+# - Intentionally omitted identity fields and reason:
+#
 # Runtime Boundary Failure Matrix:
 # 1. success path
 # 2. authentication / authorization failure

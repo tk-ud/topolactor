@@ -37,3 +37,33 @@ Rules:
 
 - tmp is commit-prohibited
 - tmp remaining must fail structure check
+
+## Boundary Extension Scenario
+
+When creating the Scenario Contract, agents must explicitly answer before implementation:
+
+- Which existing boundary identity / state / policy / projection / UI action this change extends
+- Whether boundary multi-instance operation could cause cross-boundary leakage in DB / Backend / API / Frontend projection / UI action
+- What the minimum leakage-detection scenario is
+
+Required verification items:
+
+- existing boundary being extended
+- DB primary key / unique key / FK / CHECK identity
+- contract / event / DTO identity
+- API request / response identity
+- repository INSERT / UPSERT conflict identity
+- repository UPDATE / DELETE WHERE identity
+- Frontend projection identity
+  - list key
+  - cache key
+  - selected item key
+  - form state key
+- UI action identity
+  - button click
+  - feedback
+  - update
+  - delete
+- Multi-instance leakage scenario where omitted identity columns would cause cross-boundary leakage
+- explanation for any intentionally omitted identity field
+

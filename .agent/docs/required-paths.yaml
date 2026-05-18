@@ -151,6 +151,8 @@ required_content_terms:
     - "Runtime Boundary Failure Matrix"
     - "scenario contract"
     - "Policy Judgment Gate"
+    - "End-to-End Boundary Identity"
+    - "Multi-instance leakage"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
@@ -165,9 +167,16 @@ required_content_terms:
   .agent/protocols/scenario-contract.md:
     - "Temporary Scenario Contract"
     - "Recursive Verification Gate"
+    - "Boundary Extension Scenario"
+    - "Multi-instance leakage"
+    - "Frontend projection identity"
+    - "UI action identity"
   .agent/protocols/runtime-boundary-matrix.md:
     - "Runtime Boundary Failure Matrix"
     - "Recursive Verification Gate"
+    - "End-to-End Boundary Identity"
+    - "Frontend projection identity"
+    - "UI action identity"
   .agent/protocols/reports-and-todos.md:
     - "routine inspection reports"
     - "Recursive Verification Gate"
@@ -177,6 +186,10 @@ required_content_terms:
     - "Temporary Scenario Contract"
     - "Expected read / write / append / cache / return order"
     - "Remote CI Equivalence Gate"
+    - "Boundary Extension Scenario"
+    - "Multi-instance leakage scenario"
+    - "Frontend projection identity"
+    - "UI action identity"
   .agent/docs/structure-map.yaml:
     - "temporary scenario contract"
     - "periodic audit"
