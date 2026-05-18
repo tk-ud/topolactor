@@ -26,9 +26,10 @@ export default function ContextTokenRegistryPage() {
         推奨範囲: <code>[-1.0, 1.0]</code>。
         値の割り当ては人間による離散順序付けです（ニューラル訓練不要）。
       </p>
-      <p style={{ color: "#888" }}>
+      <p style={{ color: "#555" }}>
         自動学習（キャッシュ再構築）とレコメンドはこのレジストリを参照します。
-        スケルトンモード: 追加・非推奨操作は受付のみ、DB への永続化なし。
+        操作には <a href="/login">ログイン</a> が必要です（JWT Bearer）。
+        DEMO_BACKEND_URL と DATABASE_URL が設定された環境では DB に永続化されます。
       </p>
 
       <hr style={{ margin: "16px 0" }} />

@@ -14,12 +14,14 @@ import {
  * form the sparse cosine vectors used by the recommendation engine.
  * Each token has a value in [-1.0, 1.0] that defines its meaning direction.
  *
- * When the backend registry endpoint is not yet bound (501), this island
- * shows a "レジストリ未接続" notice rather than displaying seed tokens.
+ * Requires login (JWT in sessionStorage under demo_jwt_token).
+ * When the backend is not configured (DEMO_BACKEND_URL unset), shows 501 notice.
+ * When no JWT is available, shows a login-required notice.
  */
 export default function ContextTokenRegistryEditor(): JSX.Element {
   const [tokens, setTokens] = useState<ContextToken[]>([]);
   const [notBound, setNotBound] = useState(false);
+  const [notAuthed, setNotAuthed] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newGroup, setNewGroup] = useState("");
   const [newValue, setNewValue] = useState("0.0");
@@ -34,14 +36,29 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
         setTokens(result);
       }
     }).catch((err: unknown) => {
-      setStatus(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("HTTP 401")) {
+        setNotAuthed(true);
+      } else {
+        setStatus(msg);
+      }
     });
   }, []);
 
   if (notBound) {
     return (
       <p style={{ fontFamily: "monospace", color: "#888" }}>
-        レジストリ未接続 — context_token_registry エンドポイントは未実装です (501)。
+        レジストリ未接続 — DEMO_BACKEND_URL が未設定です (501)。
+        <br />
+        Docker Compose 起動後に <a href="/">ログイン</a> してください。
+      </p>
+    );
+  }
+
+  if (notAuthed) {
+    return (
+      <p style={{ fontFamily: "monospace", color: "#888" }}>
+        ログインが必要です — <a href="/login">ログインページ</a> で認証してから再度アクセスしてください。
       </p>
     );
   }

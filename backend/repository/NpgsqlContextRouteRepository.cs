@@ -38,7 +38,90 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     }
 
     // ---------------------------------------------------------------------------
-    // context_token_registry
+    // context_token_registry — admin operations
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns all tokens from context_token_registry regardless of status.
+    /// Ordered by created_at ASC so seed tokens appear first.
+    /// </summary>
+    public override async Task<IReadOnlyList<ContextTokenRecord>> ListAllContextTokensAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT token_id, label, \"group\", value, status " +
+            "FROM context_token_registry " +
+            "ORDER BY created_at ASC";
+
+        var records = new List<ContextTokenRecord>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            records.Add(new ContextTokenRecord(
+                TokenId: reader.GetGuid(0),
+                Label:   reader.GetString(1),
+                Group:   reader.IsDBNull(2) ? null : reader.GetString(2),
+                Value:   (float)reader.GetDouble(3),
+                Status:  reader.GetString(4)
+            ));
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// Inserts a new token into context_token_registry with status='active'.
+    /// Returns the new tokenId on success.
+    /// value must be in [-1.0, 1.0]; caller is responsible for validation.
+    /// </summary>
+    public override async Task<Guid?> CreateContextTokenAsync(
+        string label, string? group, float value, CancellationToken ct = default)
+    {
+        var tokenId = Guid.NewGuid();
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO context_token_registry (token_id, label, \"group\", value, status) " +
+            "VALUES (@tokenId, @label, @group, @value, 'active')";
+        cmd.Parameters.AddWithValue("tokenId", tokenId);
+        cmd.Parameters.AddWithValue("label",   label);
+        cmd.Parameters.AddWithValue("group",   group is not null ? (object)group : DBNull.Value);
+        cmd.Parameters.AddWithValue("value",   (double)value);
+
+        await cmd.ExecuteNonQueryAsync(ct);
+        return tokenId;
+    }
+
+    /// <summary>
+    /// Sets context_token_registry status to 'deprecated' for the given tokenId.
+    /// Idempotent: already-deprecated tokens are accepted.
+    /// Returns true when the token was found, false when it does not exist.
+    /// </summary>
+    public override async Task<bool> DeprecateContextTokenAsync(
+        Guid tokenId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE context_token_registry SET status = 'deprecated' " +
+            "WHERE token_id = @tokenId";
+        cmd.Parameters.AddWithValue("tokenId", tokenId);
+
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        return rows > 0;
+    }
+
+    // ---------------------------------------------------------------------------
+    // context_token_registry — runtime read
     // ---------------------------------------------------------------------------
 
     /// <summary>

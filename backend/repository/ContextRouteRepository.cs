@@ -142,4 +142,44 @@ public class ContextRouteRepository
             coldDays, batchSize, hotDays);
         return Task.FromResult(0);
     }
+
+    // ---------------------------------------------------------------------------
+    // Admin — context_token_registry
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns all tokens from context_token_registry regardless of status.
+    /// In-memory skeleton: returns empty list. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<ContextTokenRecord>> ListAllContextTokensAsync(
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.ListAllContextTokensAsync: in-memory skeleton — returning empty.");
+        return Task.FromResult<IReadOnlyList<ContextTokenRecord>>([]);
+    }
+
+    /// <summary>
+    /// Inserts a new token into context_token_registry with status='active'.
+    /// Returns the new tokenId on success, null on failure.
+    /// In-memory skeleton: returns null. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<Guid?> CreateContextTokenAsync(
+        string label, string? group, float value, CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.CreateContextTokenAsync: in-memory skeleton — no-op.");
+        return Task.FromResult<Guid?>(null);
+    }
+
+    /// <summary>
+    /// Sets context_token_registry status to 'deprecated' for the given tokenId.
+    /// Returns true when the token was found and updated (or was already deprecated).
+    /// Returns false when the token does not exist.
+    /// In-memory skeleton: returns false. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<bool> DeprecateContextTokenAsync(
+        Guid tokenId, CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.DeprecateContextTokenAsync: in-memory skeleton — no-op for tokenId={TokenId}.", tokenId);
+        return Task.FromResult(false);
+    }
 }
