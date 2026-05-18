@@ -83,6 +83,24 @@ P(next_operation | prev_operation)
 
 This keeps learning behavior explainable, auditable, and data-defined.
 
+## Topology Attention Scope
+
+Topolactor is not a CRUD generator and not a screen-transition recommender.
+
+The full registrar — `master_registry`, `relation_registry`, `schema_registry`, `package_registry`, `component_registry`, `state_registry`, `structure_maps`, `hub_relations` — is treated as a **topology-wide Key-Value Memory**. Attention queries are generated from operational pressure signals in the data itself, not only from explicit operation sequences:
+
+- tables with high record_count
+- tables with high edit_diff_count or recent_diff_rate
+- tables with frequent state transitions
+- tables with frequent re-edits, rollbacks, or corrections
+- the current hub / operation / record / state
+
+These signals indicate where the domain is placing semantic load. The topology runtime attends over the full registrar space to surface registry candidates, relation candidates, schema candidates, component candidates, state candidates, and operation candidates.
+
+Screen transition and operation recommendation are one part of this attention model, not its limit.
+
+**Note:** edit diff log (`topology_edit_log` / `entity_edit_log`) is not yet implemented. Query generation from edit diff activity is a planned future capability. State transition log and edit diff log have distinct semantic boundaries and must not be conflated.
+
 ## Core Flow
 
 ```text
