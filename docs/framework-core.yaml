@@ -1,5 +1,5 @@
-business_management_system_framework:
-  name: topolactor_business_management_framework
+data_driven_topology_runtime_framework:
+  name: topolactor_data_driven_topology_runtime_framework
   version: 0.4.0
   status: public_design_document
 
@@ -7,17 +7,17 @@ business_management_system_framework:
     - freely_saved_data_then_system_normalization
     - topology_based_management
     - manifest_driven_ui_and_dispatcher_backend
-    - hub_centered_composite_business_data
+    - hub_centered_composite_domain_data
     - relation_registry_driven_ui_projection
     - registrar_driven_extension
     - runtime_schema_evolution_policy
 
   concept:
     summary: >
-      topolactor is a topology-based business management framework.
+      topolactor is a topology-based data-driven runtime framework.
       It does not treat hierarchy, screens, or fixed physical tables as the primary design subject.
       relation_registry defines abstract spaces, hub connects abstract space and concrete data,
-      and entity stores business-side concrete data.
+      and entity stores domain-specific concrete state.
 
   philosophy:
     principles:
@@ -26,7 +26,7 @@ business_management_system_framework:
       - entity_is_concrete_data
       - all_relations_are_registry_driven
       - hub_state_is_system_side
-      - entity_state_is_business_side
+      - entity_state_is_domain_side
       - syslog_has_no_state
       - search_node_is_hub
       - display_subject_is_entity
@@ -41,13 +41,13 @@ business_management_system_framework:
     rationale:
       topology_based_management: >
         Management is not fixed as a tree. relation_registry defines abstract condition spaces,
-        and hub connects concrete business data to those spaces.
+        and hub connects concrete domain data to those spaces.
       freely_saved_data_then_system_normalization: >
         Input does not have to be fully normalized at the time of entry.
         Later system processing normalizes and promotes useful structures.
       relation_registry_driven_ui_projection: >
         UI candidate order, display order, links, and branches are controlled by relation_registry and manifest.
-      hub_centered_composite_business_data: >
+      hub_centered_composite_domain_data: >
         Composite data such as invoices is assembled around hub as a convergence point.
 
   tech_stack:
@@ -114,8 +114,8 @@ business_management_system_framework:
         - statistical_attractor_for_entity_state
 
     entity:
-      role: concrete_business_data_layer
-      description: Business-side concrete data body.
+      role: concrete_domain_data_layer
+      description: Domain-side concrete data body.
       fields:
         - relation_ids
         - entity_jsonb

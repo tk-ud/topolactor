@@ -10,7 +10,7 @@ Runtime は **passive な executor** である。Runtime は自律的に処理�
 ```text
 Runtime is passive.
 Runtime is awakened by an excitation trigger.
-The trigger does not contain business logic.
+The trigger does not contain domain-specific logic.
 The trigger provides context.
 Runtime resolves topology.
 Topology selects package.
@@ -28,7 +28,7 @@ The selected package runtime executes concrete operation.
 | `event` | UI / ユーザー操作 | UI / 操作トリガ。frontend 操作または内部操作イベントが発行する |
 
 **Trigger 層は context を Runtime に渡すだけである。**
-Trigger 層に business logic を置いてはならない。
+Trigger 層に domain-specific logic を置いてはならない。
 package 選択・validation・routing・retention の判断はすべて Runtime が行う。
 
 ---
@@ -149,7 +149,7 @@ cleanup が無効（disabled）の場合も `Disabled` status を返し、silent
 - `Disabled` を明示 status として扱い、policy 変更で動的に有効/無効を切り替える
 
 ### やってはいけないこと
-- cron / webhook / event receiver に business logic を直書きする
+- cron / webhook / event receiver に domain-specific logic を直書きする
 - External API integration を trigger として扱う（trigger 種別ごとに runtime が分岐しない）
 - package selection / enabled state / frequency / retry / routing / retention を Runtime コードに hardcode する
 - policy missing / malformed policy のとき production fallback 定数で継続する（`MissingPolicy` / `MalformedPolicy` を返す）
@@ -178,6 +178,6 @@ excitation trigger
 → emission_or_projection
 ```
 
-- Trigger layer: context 生成のみ。business logic なし
+- Trigger layer: context 生成のみ。domain-specific logic なし
 - Runtime layer: Manifest / Registry / function_parameters / structure_map を解決し package を選択
 - Package runtime layer: 選択された package（External API / delete / emit など）を実行

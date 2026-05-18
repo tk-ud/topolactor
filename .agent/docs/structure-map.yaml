@@ -6,7 +6,7 @@
 
 repository: topolactor
 description: >
-  Data-driven topology runtime for business systems.
+  Data-driven topology runtime for DB-backed applications.
   Architecture subject: data-defined topology.
   Not CRUD, not MVC, not conventional layered architecture.
 
@@ -46,7 +46,7 @@ layers:
     description: >
       Fresh / Deno / Preact physical projection layer.
       Projects UI from packages, schemas, and component expansions.
-      Route is a projection entrypoint, not business logic.
+      Route is a projection entrypoint, not domain logic.
     directories:
       routes:     frontend/routes/      # Fresh route projection entrypoints
       islands:    frontend/islands/     # local interaction points

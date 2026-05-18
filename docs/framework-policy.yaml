@@ -23,7 +23,7 @@ framework_policy:
         - conflict
         - logically_deleted
     entity_state:
-      owner: business_side
+      owner: domain_side
       examples:
         - operating
         - stopped
@@ -39,8 +39,8 @@ framework_policy:
     display_subject: entity
     natural_language_source:
       - entity_jsonb
-      - entity.business_attributes
-      - entity.business_state
+      - entity.domain_attributes
+      - entity.domain_state
       - relation_ids
     matching:
       initial:
@@ -182,7 +182,7 @@ framework_policy:
     topology_recommendation_ci_gate:
       role: ci_verification_gate_before_admin_approval
       subject: C# package runtime validation runner
-      trigger: cron excitation trigger (context only; no business logic in trigger)
+      trigger: cron excitation trigger (context only; no domain-specific logic in trigger)
       package: topology_recommendation_ci
       policy_surface: function_parameters
       candidate_types:

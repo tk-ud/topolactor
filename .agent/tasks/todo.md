@@ -41,11 +41,11 @@
       → 対象ファイル: frontend/routes/admin/context-token-registry.tsx, frontend/islands/ContextTokenRegistryEditor.tsx, frontend/routes/api/admin/context-token-registry.ts, frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts, backend/repository/NpgsqlContextRouteRepository.cs
       → 次の判断点: admin API をbackendへ集約するか、Fresh API route をbackend proxyとして維持するか。
 
-- [ ] 業務管理アプリとしての最小業務ループを定義し、demo seed から実データ入力ループへ移行する
-      → 目的: topolactor を単なる runtime scaffold ではなく、受付→task→在庫/履歴→一覧/詳細の業務ループを持つプロダクトへ進める。
-      → 改善方針: 受付、作業task、部品/在庫、履歴diff、一覧projection の最小schema/package/componentを定義し、runtime route に載せる。
+- [ ] DB-backed application runtimeとしての最小状態遷移ループを定義し、demo seed から実データ入力ループへ移行する
+      → 目的: topolactor を単なる runtime scaffold ではなく、任意ドメインの application state loop を持つ runtime へ進める。
+      → 改善方針: state transition、event/diff履歴、list/detail projection を含む最小schema/package/componentを定義し、runtime route に載せる。
       → 対象ファイル: db/schema.sql, db/topology_tables.sql, db/demo_seed.sql, backend/runtime/*, frontend/routes/*, frontend/components/*, docs/demo-walkthrough.md
-      → 次の判断点: 最初の業務対象を「受付→整備task」へ絞るか、「master/detail/diff履歴」基盤を先に閉じるか。
+      → 次の判断点: initial use case を単一ドメインへ絞るか、複数ドメインに流用可能な master/detail/diff 基盤を先に閉じるか。
 
 - [ ] production運用に必要な環境変数・secret・起動手順・失敗時表示を整理する
       → 理由: Docker Compose demo は立つが、DEMO_JWT_SECRET / DEMO_BACKEND_URL / DATABASE_URL / nginx経由などの正規導線が混在しやすい。

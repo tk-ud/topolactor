@@ -12,15 +12,15 @@ Topolactor is designed for applications where UI, data shape, and runtime behavi
 
 With this scaffold, you can build:
 
-- business systems whose screens are driven by registry and schema definitions
+- DB-backed applications whose screens are driven by registry and schema definitions
 - admin tools that can grow from JSONB data into promoted tables
 - UI projections assembled from packages and components
-- composite business views centered around a resolved hub
+- composite domain projections centered around a resolved hub
 - operation-to-runtime dispatch flows
 - context-aware recommendation surfaces based on accumulated operation history
 - agent-assisted scaffold repositories with local CI guardrails
 
-In this project, a **hub** is a resolved grouping point in the topology space. It lets related business data be assembled as a view without making a fixed physical table or screen the architecture subject.
+In this project, a **hub** is a resolved grouping point in the topology space. It lets related domain data be assembled as a view without making a fixed physical table or screen the architecture subject.
 
 The intended extension model is:
 
@@ -32,7 +32,7 @@ add topology data
 → frontend projects UI
 ```
 
-This makes it possible to add new business surfaces by extending runtime definitions, packages, components, schemas, and structure maps instead of creating a fixed CRUD screen for every table.
+This makes it possible to add new runtime surfaces by extending runtime definitions, packages, components, schemas, and structure maps instead of creating a fixed CRUD screen for every table.
 
 ## Repository Surfaces
 
@@ -108,7 +108,7 @@ The walkthrough (`docs/demo-walkthrough.md`) covers 4 scenarios:
 - **Scenario C** — `aggregation_limit` change → windowed transition stats scope changes (backend/DB, via dispatch panel)
 - **Scenario D** — `defaultStructureMap` or `defaultComponentRegistry` change → `/demo` projection changes (frontend only, no DB)
 
-No real business data is used.
+No real domain data is used.
 
 ## Demo Status
 
@@ -144,7 +144,7 @@ The agent flow separates:
 - Policy Judgment Gate checks for architecture and policy decisions
 - residual task tracking in `.agent/tasks/todo.md`
 
-This helps prevent accidental conversion into CRUD/MVC code, silent runtime fallbacks, frontend business logic, or hidden production policy constants.
+This helps prevent accidental conversion into CRUD/MVC code, silent runtime fallbacks, frontend domain-specific logic, or hidden production policy constants.
 
 ## Agent Workflow
 
