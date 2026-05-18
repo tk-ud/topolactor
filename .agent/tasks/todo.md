@@ -13,19 +13,3 @@
 ```
 
 ## Current TODO
-
-## Runtime Log Retention
-
-- [ ] archive_strategy="archive" を実装する（context_event を cold table へ移動）
-      → 現時点では archive_strategy="delete" のみ対応。"archive" が指定された場合は
-         LogRetentionRuntime が MalformedPolicy を返す（silent fallback なし）。
-      → cold table スキーマ設計と NpgsqlContextRouteRepository への archival メソッド追加が必要。
-      → 対象: db/context_route_tables.sql (cold table), backend/runtime/LogRetentionRuntime.cs,
-               backend/repository/NpgsqlContextRouteRepository.cs
-
-- [ ] hot_days ウィンドウ内の event を context_event に保持する最適化を実装する
-      → seed_empty.sql の retention_policy に hot_days フィールドは定義済みだが、
-         v1 では ContextEventRetentionPolicy に含まれておらず実行時に無視される。
-      → 実装時は ContextEventRetentionPolicy に HotDays を追加し、
-         LogRetentionRuntime で hot_days < created_at 条件を DELETE 句に反映する。
-      → 対象: backend/schema/RetentionContracts.cs, backend/runtime/LogRetentionRuntime.cs

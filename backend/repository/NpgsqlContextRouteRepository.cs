@@ -559,6 +559,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
 
     /// <summary>
     /// Deletes context_event rows older than coldDays in a single batch of at most batchSize rows.
+    /// If hotDays is specified, events within the hot window (created_at >= NOW() - hotDays) are excluded.
     /// FK-safe and cache-consistent: collects affected session_ids, drops all
     /// context_prefix_vector_cache rows for those sessions, then deletes
     /// context_event_vector_cache and context_event rows.
@@ -578,7 +579,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     /// Returns the number of context_event rows deleted.
     /// </summary>
     public override async Task<int> DeleteOldContextEventsAsync(
-        int coldDays, int batchSize, CancellationToken ct = default)
+        int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -592,11 +593,16 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             selectCmd.CommandText =
                 "SELECT event_id, session_id FROM context_event " +
                 "WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
+                "  AND (@hot_days::int IS NULL OR created_at < NOW() - (@hot_days || ' days')::INTERVAL) " +
                 "ORDER BY created_at ASC " +
                 "LIMIT @batch_size " +
                 "FOR UPDATE SKIP LOCKED";
             selectCmd.Parameters.AddWithValue("cold_days", coldDays);
             selectCmd.Parameters.AddWithValue("batch_size", batchSize);
+            selectCmd.Parameters.Add(new NpgsqlParameter("hot_days", System.Data.DbType.Int32)
+            {
+                Value = hotDays.HasValue ? (object)hotDays.Value : DBNull.Value
+            });
 
             var eventIds = new List<Guid>();
             var sessionIds = new HashSet<Guid>();
@@ -645,8 +651,157 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             await txn.CommitAsync(ct);
 
             _npgsqlLogger.LogDebug(
-                "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} context_event row(s) older than {ColdDays} days.",
-                rows, coldDays);
+                "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} context_event row(s) older than {ColdDays} days (hot_days={HotDays}).",
+                rows, coldDays, hotDays);
+            return rows;
+        }
+        catch
+        {
+            await txn.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Moves context_event rows older than coldDays to context_event_cold (cold storage).
+    /// If hotDays is specified, events within the hot window (created_at >= NOW() - hotDays) are excluded.
+    /// FK-safe and cache-consistent: collects affected session_ids, drops all
+    /// context_prefix_vector_cache rows for those sessions, then deletes
+    /// context_event_vector_cache and context_event rows after archiving.
+    ///
+    /// Archive order within a transaction:
+    ///   1. Select candidates (FOR UPDATE SKIP LOCKED).
+    ///   2. INSERT INTO context_event_cold (ON CONFLICT DO NOTHING for idempotency).
+    ///   3. DROP prefix cache rows for affected sessions.
+    ///   4. DELETE context_event_vector_cache rows.
+    ///   5. DELETE context_event rows.
+    ///
+    /// context_event_cold has no FK to context_event so the insert may precede the delete.
+    /// Returns the number of context_event rows archived and removed from the hot table.
+    /// </summary>
+    public override async Task<int> ArchiveOldContextEventsAsync(
+        int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var txn = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            // Step 1: collect candidates (locked, skip if busy)
+            await using var selectCmd = conn.CreateCommand();
+            selectCmd.Transaction = txn;
+            selectCmd.CommandText =
+                "SELECT event_id, session_id, user_id, role, class, table_name, record_id, " +
+                "       operation, token_ids, created_at, next_operation_hint, next_token_ids_hint " +
+                "FROM context_event " +
+                "WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
+                "  AND (@hot_days::int IS NULL OR created_at < NOW() - (@hot_days || ' days')::INTERVAL) " +
+                "ORDER BY created_at ASC " +
+                "LIMIT @batch_size " +
+                "FOR UPDATE SKIP LOCKED";
+            selectCmd.Parameters.AddWithValue("cold_days", coldDays);
+            selectCmd.Parameters.AddWithValue("batch_size", batchSize);
+            selectCmd.Parameters.Add(new NpgsqlParameter("hot_days", System.Data.DbType.Int32)
+            {
+                Value = hotDays.HasValue ? (object)hotDays.Value : DBNull.Value
+            });
+
+            var eventIds = new List<Guid>();
+            var sessionIds = new HashSet<Guid>();
+            var archiveRows = new List<(Guid EventId, Guid SessionId, object? UserId, object? Role,
+                object? Class, string TableName, object? RecordId, string Operation,
+                Guid[] TokenIds, DateTime CreatedAt, object? NextOpHint, object? NextTokenIdsHint)>();
+
+            await using (var reader = await selectCmd.ExecuteReaderAsync(ct))
+            {
+                while (await reader.ReadAsync(ct))
+                {
+                    var eventId   = reader.GetGuid(0);
+                    var sessionId = reader.GetGuid(1);
+                    eventIds.Add(eventId);
+                    sessionIds.Add(sessionId);
+                    archiveRows.Add((
+                        EventId:            eventId,
+                        SessionId:          sessionId,
+                        UserId:             reader.IsDBNull(2)  ? DBNull.Value : reader.GetString(2),
+                        Role:               reader.IsDBNull(3)  ? DBNull.Value : reader.GetString(3),
+                        Class:              reader.IsDBNull(4)  ? DBNull.Value : reader.GetString(4),
+                        TableName:          reader.GetString(5),
+                        RecordId:           reader.IsDBNull(6)  ? DBNull.Value : reader.GetString(6),
+                        Operation:          reader.GetString(7),
+                        TokenIds:           reader.GetValue(8) as Guid[] ?? [],
+                        CreatedAt:          reader.GetDateTime(9),
+                        NextOpHint:         reader.IsDBNull(10) ? DBNull.Value : reader.GetString(10),
+                        NextTokenIdsHint:   reader.IsDBNull(11) ? DBNull.Value : reader.GetValue(11)
+                    ));
+                }
+            }
+
+            if (eventIds.Count == 0)
+            {
+                await txn.CommitAsync(ct);
+                return 0;
+            }
+
+            // Step 2: INSERT INTO context_event_cold (ON CONFLICT DO NOTHING for idempotency)
+            foreach (var row in archiveRows)
+            {
+                await using var archCmd = conn.CreateCommand();
+                archCmd.Transaction = txn;
+                archCmd.CommandText =
+                    "INSERT INTO context_event_cold " +
+                    "(event_id, session_id, user_id, role, class, table_name, record_id, operation, " +
+                    " token_ids, created_at, next_operation_hint, next_token_ids_hint) " +
+                    "VALUES (@eventId, @sessionId, @userId, @role, @class, @tableName, @recordId, @operation, " +
+                    "        @tokenIds, @createdAt, @nextOp, @nextTokenIds) " +
+                    "ON CONFLICT (event_id) DO NOTHING";
+                archCmd.Parameters.AddWithValue("eventId",    row.EventId);
+                archCmd.Parameters.AddWithValue("sessionId",  row.SessionId);
+                archCmd.Parameters.AddWithValue("userId",     row.UserId);
+                archCmd.Parameters.AddWithValue("role",       row.Role);
+                archCmd.Parameters.AddWithValue("class",      row.Class);
+                archCmd.Parameters.AddWithValue("tableName",  row.TableName);
+                archCmd.Parameters.AddWithValue("recordId",   row.RecordId);
+                archCmd.Parameters.AddWithValue("operation",  row.Operation);
+                archCmd.Parameters.Add(
+                    new NpgsqlParameter("tokenIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+                    { Value = row.TokenIds });
+                archCmd.Parameters.AddWithValue("createdAt",      row.CreatedAt);
+                archCmd.Parameters.AddWithValue("nextOp",         row.NextOpHint);
+                archCmd.Parameters.AddWithValue("nextTokenIds",   row.NextTokenIdsHint);
+                await archCmd.ExecuteNonQueryAsync(ct);
+            }
+
+            // Step 3: drop ALL prefix cache rows for affected sessions
+            await using var delPrefixCmd = conn.CreateCommand();
+            delPrefixCmd.Transaction = txn;
+            delPrefixCmd.CommandText =
+                "DELETE FROM context_prefix_vector_cache WHERE session_id = ANY(@sessions)";
+            delPrefixCmd.Parameters.AddWithValue("sessions", sessionIds.ToArray());
+            await delPrefixCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 4: delete event vector cache rows
+            await using var delVecCmd = conn.CreateCommand();
+            delVecCmd.Transaction = txn;
+            delVecCmd.CommandText =
+                "DELETE FROM context_event_vector_cache WHERE event_id = ANY(@ids)";
+            delVecCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            await delVecCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 5: delete the parent context_event rows
+            await using var delEvtCmd = conn.CreateCommand();
+            delEvtCmd.Transaction = txn;
+            delEvtCmd.CommandText =
+                "DELETE FROM context_event WHERE event_id = ANY(@ids)";
+            delEvtCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            var rows = await delEvtCmd.ExecuteNonQueryAsync(ct);
+
+            await txn.CommitAsync(ct);
+
+            _npgsqlLogger.LogDebug(
+                "NpgsqlContextRouteRepository.ArchiveOldContextEventsAsync: archived {Rows} context_event row(s) older than {ColdDays} days to cold storage (hot_days={HotDays}).",
+                rows, coldDays, hotDays);
             return rows;
         }
         catch

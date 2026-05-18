@@ -117,13 +117,29 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Deletes context_event rows older than coldDays in batches of batchSize.
+    /// If hotDays is specified, events within the hot window are excluded from deletion.
     /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public virtual Task<int> DeleteOldContextEventsAsync(int coldDays, int batchSize, CancellationToken ct = default)
+    public virtual Task<int> DeleteOldContextEventsAsync(
+        int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.DeleteOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}).",
-            coldDays, batchSize);
+            "ContextRouteRepository.DeleteOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
+            coldDays, batchSize, hotDays);
+        return Task.FromResult(0);
+    }
+
+    /// <summary>
+    /// Moves context_event rows older than coldDays to context_event_cold (cold storage).
+    /// If hotDays is specified, events within the hot window are excluded from archival.
+    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<int> ArchiveOldContextEventsAsync(
+        int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.ArchiveOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
+            coldDays, batchSize, hotDays);
         return Task.FromResult(0);
     }
 }
