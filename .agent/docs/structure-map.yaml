@@ -23,6 +23,7 @@ layers:
       - db/topology_tables.sql
       - db/promotion_tables.sql
       - db/seed_empty.sql
+      - docs/design/relation-registry-fk-audit-and-abstract-migration.md
 
   backend:
     role: abstract_runtime

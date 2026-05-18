@@ -128,6 +128,7 @@ Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
 - `docs/design/context-route-recommendation.md` — self-learning DB and recommendation runtime SSOT.
 - `docs/design/runtime-excitation-and-package-dispatch.md` — runtime excitation trigger and package dispatch SSOT.
 - `docs/design/topology-recommendation-ci-runtime.md` — topology recommendation CI runtime SSOT.
+- `docs/design/relation-registry-fk-audit-and-abstract-migration.md` — relation_registry authority FK audit / abstract migration SSOT.
 - `docs/registrar-admin-ui-specification.md` — boundary for topology registration admin UI.
 - `docs/promotion-manifest-editor-specification.md` — boundary for promotion manifest editing.
 - `AGENTS.md` — entrypoint instructions for coding agents.

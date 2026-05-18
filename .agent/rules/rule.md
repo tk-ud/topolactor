@@ -90,6 +90,7 @@ Required before completion report on any change that:
 - touches recommendation, scoring, threshold, retention, routing, validation,
   promotion, disclosure, emission, or projection behavior
 - modifies Registry, Manifest, function_parameters, structure_map, package, schema
+- defines or changes relation_registry FK audit / abstract migration policy
 - makes a runtime or policy behavior claim in docs / README / PR summary
 
 Judgment gate rules:
