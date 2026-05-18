@@ -295,6 +295,34 @@ VALUES
 
 
 -- ---------------------------------------------------------------------------
+-- function_parameters — demo_auth / demo_users
+-- Demo-only credentials for the JWT login scaffold.
+--
+-- Stored as a JSON array of {username, password_hash, role} objects.
+-- password_hash values are bcrypt (cost 12) hashes of the demo passwords below.
+-- These are PUBLIC demo credentials — not real business credentials.
+--
+--   demo_admin  / demo_admin_password   → role: admin
+--   demo_public / demo_public_password  → role: public
+--
+-- To regenerate hashes (Python):
+--   import bcrypt
+--   bcrypt.hashpw(b'demo_admin_password', bcrypt.gensalt(rounds=12)).decode()
+--
+-- JWT config (not stored here): DEMO_JWT_SECRET / DEMO_JWT_ISSUER / DEMO_JWT_EXPIRY_HOURS
+-- env vars consumed by AuthEndpoint and JwtGuard.
+-- ---------------------------------------------------------------------------
+INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'demo_auth',
+    'demo_users',
+    '[{"username":"demo_admin","password_hash":"$2b$12$E5kCP8.xxEW.yYdCow49DebJ1sRmjx5ihWTnhJ32iViIoP7Seclx2","role":"admin"},{"username":"demo_public","password_hash":"$2b$12$8FMsfslui6GEEmi7YRb8UeuH1IOJcye0R3s/4fSYHmYJIzHrOwKo.","role":"public"}]',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- function_parameters — demo_policy
 -- Demo-scoped recommendation policy referenced by demo structure_maps via
 -- context_route_policy_ref = 'demo_policy'.

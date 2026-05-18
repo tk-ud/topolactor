@@ -16,6 +16,7 @@ services:
       - ../db/promotion_tables.sql:/docker-entrypoint-initdb.d/03-promotion_tables.sql:ro
       - ../db/context_route_tables.sql:/docker-entrypoint-initdb.d/04-context_route_tables.sql:ro
       - ../db/seed_empty.sql:/docker-entrypoint-initdb.d/05-seed_empty.sql:ro
+      - ../db/demo_seed.sql:/docker-entrypoint-initdb.d/06-demo_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U topolactor_demo -d topolactor_demo"]
       interval: 10s

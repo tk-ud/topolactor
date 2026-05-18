@@ -44,9 +44,14 @@ To also load the public scaffold demo data (fake data only, no real business dat
 psql -d <database> -f db/demo_seed.sql
 ```
 
-`demo_seed.sql` adds demo hub / entities / context tokens / demo policy and demo structure maps.
+`demo_seed.sql` adds demo hub / entities / context tokens / demo policy, demo structure maps,
+and demo auth credentials (bcrypt-hashed) for the JWT login scaffold.
 It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING`.
 See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
+
+**docker compose:** On a fresh volume, `docker compose -f infra/docker-compose.yml up -d`
+applies all files above (01–06) automatically via `docker-entrypoint-initdb.d`.
+On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manually.
 
 ---
 

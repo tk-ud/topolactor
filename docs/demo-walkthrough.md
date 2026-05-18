@@ -8,18 +8,30 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 
 ## Prerequisites
 
-1. PostgreSQL running (e.g. via `docker compose -f infra/docker-compose.yml up -d`)
-2. Schema and seed applied:
+1. PostgreSQL running and seeded:
    ```bash
-   psql -d topolactor_demo -f db/schema.sql
-   psql -d topolactor_demo -f db/topology_tables.sql
-   psql -d topolactor_demo -f db/promotion_tables.sql
-   psql -d topolactor_demo -f db/context_route_tables.sql
-   psql -d topolactor_demo -f db/seed_empty.sql
+   docker compose -f infra/docker-compose.yml up -d
+   ```
+   On a **fresh volume**, `docker-entrypoint-initdb.d` automatically applies (in order):
+   `schema.sql` → `topology_tables.sql` → `promotion_tables.sql` →
+   `context_route_tables.sql` → `seed_empty.sql` → `demo_seed.sql`
+
+   On an **existing volume**, the init scripts do not re-run. Apply the demo seed manually:
+   ```bash
    psql -d topolactor_demo -f db/demo_seed.sql
    ```
-3. Frontend running: `deno task start` (from repository root)
-4. Open `http://localhost:8000/demo`
+
+2. Frontend running: `deno task start` (from repository root)
+3. Open `http://localhost:8000/demo`
+
+> **Note — nginx:** The nginx reverse proxy service (`infra/nginx.conf`) is not yet added
+> to `infra/docker-compose.yml`. It will be enabled once frontend and backend Docker services
+> are defined in the compose file. Currently only `postgres` and `adminer` are active.
+
+> **Note — demo login:** The JWT login scaffold is at `/login`. Credential verification
+> requires a running backend (`DEMO_BACKEND_URL` env var). Demo credentials are stored as
+> bcrypt hashes in `function_parameters` (`demo_auth / demo_users`) via `db/demo_seed.sql`.
+> JWT config from `DEMO_JWT_SECRET` / `DEMO_JWT_ISSUER` / `DEMO_JWT_EXPIRY_HOURS` env vars.
 
 ---
 
