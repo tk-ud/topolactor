@@ -14,6 +14,14 @@
 
 ## Current TODO
 
+## Runtime Stub / Dummy / Skeleton Residue Audit
+
+- [ ] runtime正規導線と静的・テスト専用 scaffold の境界を再点検し、stub / dummy / skeleton 残骸を削除または明確隔離する
+      → 理由: /demo と Program.cs の正規導線は backend runtime / DB-backed に寄っている一方、runtime-status・frontend default registry/map/schema/package・base TopologyRepository・DiffLogRepository・SemanticMapper に skeleton/dummy/stub 表記または挙動が残っており、完了済みruntime化との意味整合が崩れる。
+      → 改善方針: runtime-status は実runtime検証表示へ移すか静的診断ページとして明示隔離する。frontend defaultStructureMap/defaultPackage/defaultSchema/defaultComponentRegistry は runtime結果ではないことを再確認し、正規導線で参照されない形へ隔離する。TopologyRepository base の dummy path はテスト専用境界を明示するか削除し、NpgsqlTopologyRepositoryをruntime正規導線として固定する。DiffLogRepository.AppendAsync は永続化diff log未完了として実装方針を切る。SemanticMapper の stub 表記は実態に合わせて削除または未完了扱いにする。
+      → 対象ファイル: frontend/routes/runtime-status.tsx, frontend/structure_map.ts, frontend/package/defaultPackage.ts, frontend/schema/defaultSchema.ts, frontend/registry/componentRegistry.ts, backend/repository/TopologyRepository.cs, backend/repository/NpgsqlTopologyRepository.cs, backend/repository/DiffLogRepository.cs, backend/mapper/SemanticMapper.cs, backend/Program.cs, docs/demo-walkthrough.md
+      → 次の判断点: 残す scaffold を /demo-static・tests 専用に限定するか、runtime正規導線への全面移行として default/dummy 経路を削除するか。
+
 ## Product Completion Roadmap (暫定)
 
 - [x] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
