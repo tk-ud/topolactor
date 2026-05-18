@@ -43,6 +43,16 @@
       → 実装時の対象候補: db schema / backend scheduled runtime / admin manifest UI / retention policy seed / docs/design/context-route-recommendation.md / local CI test。
       → 未解決点: raw log を完全削除するか、匿名化・集計済み状態へ promotion してから削除するかを決める。
 
+## Promotion CI / SQL Patch Recommendation
+
+- [ ] jsonb → DB化候補を CI 検証済み SQL patch candidate として扱う設計SSOTを追加する
+      → 現状の promotion flow は jsonb / usage metrics / promotion manifest / admin approval を前提としているが、SQL patch candidate を CI で検証し、checked=true/false によって promote / reject / recommend delete へ分岐する導線が未定義。
+      → cron excitation trigger は context を Runtime に渡すだけとし、Runtime が promotion_ci package を選択する。
+      → DB は「何を検査するか」の Registry / Manifest / policy を持ち、C# Runtime が許可された C# 関数を実行し、その C# 関数が必要に応じて allowlisted sh を実行する。
+      → CI 結果は promotion_check_result として記録し、checked=true の候補だけ update / promote 対象にする。checked=false は reject / recommend delete / expire 候補にする。
+      → 直接 DB から任意 sh を実行しない。sh 実行は C# package runtime の明示関数に閉じる。
+      → 対象候補: docs/design/promotion-ci-sql-patch-runtime.md, docs/framework-policy.yaml, .agent/tasks/todo.md。
+
 ## Infra / Demo Runtime
 
 - [ ] nginx service を docker compose に接続する
