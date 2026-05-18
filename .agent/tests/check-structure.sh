@@ -52,6 +52,7 @@ echo ""
 echo "=== Directory checks ==="
 check_dir ".agent/docs"
 check_dir ".agent/rules"
+check_dir ".agent/protocols"
 check_dir ".agent/skills"
 check_dir ".agent/tests"
 check_dir ".agent/tasks"
@@ -91,6 +92,11 @@ check_file "docs/registrar-admin-ui-specification.md"
 check_file ".agent/docs/structure-map.yaml"
 check_file ".agent/docs/required-paths.yaml"
 check_file ".agent/rules/rule.md"
+check_file ".agent/protocols/completion.md"
+check_file ".agent/protocols/policy-judgment.md"
+check_file ".agent/protocols/scenario-contract.md"
+check_file ".agent/protocols/runtime-boundary-matrix.md"
+check_file ".agent/protocols/reports-and-todos.md"
 check_file ".agent/skills/structure-check.md"
 check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
@@ -173,7 +179,11 @@ check_content "AGENTS.md" ".agent/tests/check-structure.sh"
 check_content "AGENTS.md" "Agent Contract"
 check_content "AGENTS.md" "Runtime Boundary Failure Matrix"
 check_content ".agent/rules/rule.md" "Runtime Boundary Failure Matrix"
-check_content ".agent/rules/rule.md" "boundary matrix verification"
+check_content ".agent/protocols/runtime-boundary-matrix.md" "Runtime Boundary Failure Matrix"
+check_content ".agent/protocols/completion.md" "Completion Sequence"
+check_content ".agent/protocols/policy-judgment.md" "Policy Judgment Gate"
+check_content ".agent/protocols/scenario-contract.md" "Temporary Scenario Contract"
+check_content ".agent/protocols/reports-and-todos.md" "routine inspection reports"
 check_content ".agent/scripts/create-tmp.sh" "Runtime Boundary Failure Matrix"
 check_content ".agent/docs/structure-map.yaml" "temporary scenario contract"
 check_content ".agent/docs/structure-map.yaml" "periodic audit"
@@ -274,4 +284,12 @@ if [ "$FAILURES" -eq 0 ]; then
 else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
+fi
+
+
+# Protocol split guard
+if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
+  fail "rule.md must not contain long-form Completion Sequence section; keep procedure in .agent/protocols/completion.md"
+else
+  echo "OK  [split] rule.md completion procedure remains split"
 fi

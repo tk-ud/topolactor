@@ -66,6 +66,7 @@ layers:
     directories:
       docs:     .agent/docs/      # agent-facing SSOT documents
       rules:    .agent/rules/     # architecture behavior rules
+      protocols: .agent/protocols/ # procedure protocols / expanded verification guidance
       skills:   .agent/skills/    # agent skill notes
       tests:    .agent/tests/     # local check scripts
       scripts:  .agent/scripts/   # agent helper scripts

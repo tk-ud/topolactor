@@ -8,6 +8,7 @@ required_directories:
   agent:
     - .agent/docs
     - .agent/rules
+    - .agent/protocols
     - .agent/skills
     - .agent/tests
     - .agent/tasks
@@ -53,6 +54,11 @@ required_files:
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
     - .agent/rules/rule.md
+    - .agent/protocols/completion.md
+    - .agent/protocols/policy-judgment.md
+    - .agent/protocols/scenario-contract.md
+    - .agent/protocols/runtime-boundary-matrix.md
+    - .agent/protocols/reports-and-todos.md
     - .agent/skills/structure-check.md
     - .agent/tests/check-structure.sh
     - .agent/tests/check-backend-tests.sh
@@ -210,3 +216,12 @@ required_content_terms:
     - "frontend must not become source of truth"
     - "disclosure text must be explicit"
     - "editor does not execute runtime"
+
+    - file: .agent/protocols/completion.md
+      term: Completion Sequence
+    - file: .agent/protocols/policy-judgment.md
+      term: Policy Judgment Gate
+    - file: .agent/protocols/scenario-contract.md
+      term: Temporary Scenario Contract
+    - file: .agent/protocols/reports-and-todos.md
+      term: routine inspection reports
