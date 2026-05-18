@@ -209,6 +209,36 @@ Each scenario shows how a single Registry or policy change propagates through th
 
 > **Note:** This change affects the recommendation resolver when called via the dispatch API, not the static seed-reference display in `/demo`.
 
+### Scenario E — context fields in dispatch panel → recommendation results visible
+
+`db/demo_seed.sql` seeds pre-computed prefix vectors and a windowed transition from
+`demo:hub:overview` → `demo:entity:list`. With the demo policy (`min_neighbors=1`), a
+single matching prefix is enough to return a recommendation.
+
+1. **Log in** at `/login` with demo credentials.
+2. **Open the dispatch panel** at `/`.
+3. **Expand "Context fields (optional)"** in the operation form.
+4. Enter the demo session ID in *Context Session ID*:
+   ```
+   00000000-0000-0000-0000-000000000031
+   ```
+5. Enter the demo token ID in *Context Token IDs* (comma-separated):
+   ```
+   00000000-0000-0000-0000-000000000021
+   ```
+6. Set target=`demo`, layer=`hub`, action=`overview`, and submit.
+7. The emission's `context_route_recommendation` section shows:
+   - `status: ok`
+   - `next_operations: [{value: "demo:entity:list", score: ~1.0, ...}]`
+
+**Why it works:** `demo_seed.sql` inserts fixed-UUID events and their pre-computed prefix
+vectors (`context_prefix_vector_cache`). The resolver finds prefix_index=0 (similarity=1.0
+for token_active) and the windowed transition stats compute `demo:entity:list` as the likely
+next operation from the seeded context events.
+
+> **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
+> `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.
+
 ### Scenario D — structure_map or componentRegistry change → /demo projection changes
 
 1. Open `frontend/structure_map.ts` and modify the `"demo:hub:overview"` entry — for example, change `componentIds` to include an additional component ID, or update `packageId`/`schemaId`.

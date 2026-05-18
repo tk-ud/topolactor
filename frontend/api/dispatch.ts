@@ -50,7 +50,7 @@ export type DispatchRequest = {
   action: string;
   idOrHubId?: string;
   payload?: Record<string, unknown>;
-  context?: Record<string, unknown>;
+  context?: Record<string, string>;
 };
 
 export type DispatchResponse = {

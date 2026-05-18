@@ -110,13 +110,17 @@ export default function Demo(): JSX.Element {
 
       <h2>Context Route Recommendation</h2>
       <p style={{ color: "#555", fontSize: "0.9em" }}>
-        Backend resolution via the dispatch API is required for live recommendations.
-        Use the <a href="/">dispatch panel</a> with a <code>demo:hub:overview</code> operation
-        and a context session ID.
+        Live recommendations require the backend runtime and seeded prefix vectors.
+        Use the <a href="/">dispatch panel</a> with target <code>demo</code>, layer <code>hub</code>,
+        action <code>overview</code>, and expand{" "}
+        <em>Context fields</em> to enter the demo session ID{" "}
+        (<code>00000000-0000-0000-0000-000000000031</code>) and token ID{" "}
+        (<code>00000000-0000-0000-0000-000000000021</code>).
+        See <code>docs/demo-walkthrough.md</code> Scenario E for the full walkthrough.
       </p>
       <RecommendationPanel
         status="insufficient_history"
-        statusDetail="NO_CONTEXT_HISTORY — backend dispatch required for live recommendations"
+        statusDetail="NO_SESSION_ID — context session required; see dispatch panel Context fields"
         nextOperations={[]}
         nextTokens={[]}
       />

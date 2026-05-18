@@ -25,12 +25,13 @@
 - [x] ログイン済みユーザーが dispatch panel から backend /dispatch を実行できる導線を閉じる
       → 完了: frontend/routes/api/dispatch.ts 新規作成、LoginPanel が sessionStorage に JWT を保存、OperationPanel が token を読み取り Bearer 送信、未ログイン時は明示案内表示。Fresh単体 localhost:8000 でも /api/dispatch proxy を提供。
 
-- [ ] context_route recommendation を demo で観測可能な状態まで閉じる
-      → 理由: demo_seed.sql は context_event をseedするが、context_prefix_vector_cache は直接seedせず、推薦が NO_CONTEXT_HISTORY に寄る可能性がある。
-      → 改善方針: prefix vector cache の生成/再構築導線を実装するか、cold-start を正式なdemo状態としてUI/Docsに明示する。
-      → 対象ファイル: backend/runtime/ContextRouteRecommendationResolver.cs, backend/repository/NpgsqlContextRouteRepository.cs, db/demo_seed.sql, frontend/components/RecommendationPanel.tsx, docs/demo-walkthrough.md
-      → 対象関数: ContextRouteRecommendationResolver.ResolveAsync, LoadRecentPrefixVectorsAsync, UpsertEventVectorCacheAsync, UpsertPrefixVectorCacheAsync
-      → 次の判断点: 推薦結果まで出すdemoにするか、履歴不足を明示するruntime health demoに留めるか。
+- [x] context_route recommendation を demo で観測可能な状態まで閉じる
+      → 完了: demo_seed.sql を固定UUID event IDに変更し context_event_vector_cache / context_prefix_vector_cache をseed。
+         demo_policy の min_neighbors を 3→1 に変更（ON CONFLICT DO UPDATE）。
+         OperationPanel に Context フィールド（Session ID / Token IDs）を追加。
+         backend JSON ポリシーを SnakeCaseLower → CamelCase + JsonStringEnumConverter に修正。
+         docs/demo-walkthrough.md に Scenario E 追加（dispatch panel → recommendation 導線）。
+         dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で recommendation ok 結果が得られる。
 
 - [ ] admin / registry 操作を skeleton 受付からDB永続化へ移行する
       → 理由: context_token_registry admin は画面とAPI shapeがあるが、未接続時501やスケルトン説明が残る。
