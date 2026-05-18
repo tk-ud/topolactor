@@ -43,15 +43,17 @@
       → 実装時の対象候補: db schema / backend scheduled runtime / admin manifest UI / retention policy seed / docs/design/context-route-recommendation.md / local CI test。
       → 未解決点: raw log を完全削除するか、匿名化・集計済み状態へ promotion してから削除するかを決める。
 
-## Promotion CI / SQL Patch Recommendation
+## Topology Recommendation CI
 
-- [ ] jsonb → DB化候補を CI 検証済み SQL patch candidate として扱う設計SSOTを追加する
-      → 現状の promotion flow は jsonb / usage metrics / promotion manifest / admin approval を前提としているが、SQL patch candidate を CI で検証し、checked=true/false によって promote / reject / recommend delete へ分岐する導線が未定義。
-      → cron excitation trigger は context を Runtime に渡すだけとし、Runtime が promotion_ci package を選択する。
+- [ ] 自己学習統計から topology 更新候補を生成し、CI 検証済み recommendation candidate として扱う設計SSOTを追加する
+      → 現状の promotion flow は jsonb / usage metrics / promotion manifest / admin approval を前提としているが、自己学習統計から生成される topology recommendation candidate を CI で検証し、checked=true/false によって promote / update / reject / recommend delete へ分岐する導線が未定義。
+      → 対象候補は SQL patch / physical table promotion に限定しない。registry_addition / relation_registry_promotion / enum_axis_registration / schema_patch / manifest_patch / package_binding / generated_column / index / physical_table / sql_patch などを扱う。
+      → 例: 統計的に連続・共起する Enum ベクトルが多い場合、hub への registry candidate 追加を推薦し、既存 registry / relation / schema / package との整合を CI で検証する。
+      → cron excitation trigger は context を Runtime に渡すだけとし、Runtime が topology_recommendation_ci package を選択する。
       → DB は「何を検査するか」の Registry / Manifest / policy を持ち、C# Runtime が許可された C# 関数を実行し、その C# 関数が必要に応じて allowlisted sh を実行する。
-      → CI 結果は promotion_check_result として記録し、checked=true の候補だけ update / promote 対象にする。checked=false は reject / recommend delete / expire 候補にする。
+      → CI 結果は recommendation_check_result として記録し、checked=true の候補だけ update / promote 対象にする。checked=false は reject / recommend delete / expire 候補にする。
       → 直接 DB から任意 sh を実行しない。sh 実行は C# package runtime の明示関数に閉じる。
-      → 対象候補: docs/design/promotion-ci-sql-patch-runtime.md, docs/framework-policy.yaml, .agent/tasks/todo.md。
+      → 対象候補: docs/design/topology-recommendation-ci-runtime.md, docs/framework-policy.yaml, .agent/tasks/todo.md。
 
 ## Infra / Demo Runtime
 
