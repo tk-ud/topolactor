@@ -53,8 +53,8 @@ internal static class TestJwtBuilder
     /// </summary>
     public static string BuildTokenWithStringExp(string secret)
     {
-        var rawPayloadJson = """{"sub":"testuser","role":"test","exp":"not-a-number"}""";
-        return BuildTokenFromRawPayload(secret, rawPayloadJson);
+        // exp serialized as a JSON string (not a number) — triggers AUTH_TOKEN_EXP_INVALID.
+        return BuildTokenFromPayloadObject(secret, new { sub = "testuser", role = "test", exp = "not-a-number" });
     }
 
     private static string BuildTokenFromPayloadObject(string secret, object payloadObj)
