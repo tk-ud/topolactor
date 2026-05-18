@@ -114,6 +114,44 @@ Policy:
 Fixtures in `.agent/checklists/fixtures/policy-judgment/` define expected PASS /
 FAIL outcomes and serve as a reference for correct checklist completion.
 
+
+## Policy Judgment Checklist Scope
+
+Policy Judgment Checklist is a **compliance-signature gate**, not the full policy rule body.
+Detailed applicability and design judgment must be governed by this AGENTS.md and `.agent/rules/rule.md`, while the checklist stays lightweight.
+
+### Runtime-family changes (trigger scope examples)
+
+- `backend/runtime/*`
+- `backend/endpoint/*`
+- `backend/guard/*`
+- `backend/repository/*`
+- `backend/schema/*`
+- `frontend/routes/api/*`
+- `frontend/package/*`
+- `frontend/schema/*`
+- `frontend/registry/*`
+- `db/*seed*.sql`
+- Any change to Registry / Manifest / `function_parameters` / `structure_map` policy
+
+### Runtime-family required checks
+
+- New endpoint → request / success / failure behavior test, or explicit `NOT WIRED`.
+- New guard → accept / reject / missing config / malformed input test.
+- New runtime resolver → success / missing-policy / invalid-policy test.
+- New repository policy read → found / missing / malformed test.
+- New frontend API proxy → backend route wired, or PR summary with `NOT WIRED` + follow-up TODO.
+- New policy field → consumed by runtime / policy executor, or explicitly document unused reason.
+
+### Order and reporting requirements
+
+- Policy / Checklist / Prompt-claim audit must be completed **before** local CI.
+- Local CI is not a substitute for Policy Judgment.
+- GitHub Actions success is not a substitute for local execution reporting.
+- Completion report must include local check commands and results.
+- Distinguish `NOT EXECUTED` / `PASS` / `FAIL` explicitly.
+- Run `bash .agent/tests/check-structure.sh` last before completion report.
+
 ## Architecture Constraints
 
 - Do not convert topolactor into a CRUD or MVC application.
