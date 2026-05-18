@@ -7,8 +7,19 @@ namespace Topolactor.Runtime;
 
 /// <summary>
 /// Package runtime for context_event log retention cleanup.
-/// Activated by a cron excitation trigger (RetentionScheduler).
+/// Activated by the cron excitation trigger RetentionScheduler.
 /// Loads retention policy entirely from function_parameters — no production defaults in code.
+///
+/// Design boundary:
+///   RetentionScheduler is the cron excitation trigger.
+///   LogRetentionRuntime is the package runtime selected for the retention operation.
+///   Package selection is trivially resolved in v1: there is one retention package.
+///   Policy (cold_days, batch_size, archive_strategy, enabled, schedule_interval_hours)
+///   comes from function_parameters, not from runtime code.
+///   This is intentionally a direct cron → package runtime path and does not route
+///   through the user-facing dispatch canonical route
+///   (stored_topology_data → user_operation → … → emission_or_projection).
+///   Background maintenance operations are not user-facing dispatches.
 ///
 /// Policy source: function_parameters (function_name='context_event_retention', parameter_key='retention_policy').
 /// Supported archive_strategy values: "delete" (purge rows older than cold_days).
@@ -17,10 +28,8 @@ namespace Topolactor.Runtime;
 ///   Ok              — cleanup executed (rows_affected may be 0 if nothing expired)
 ///   Disabled        — policy.enabled = false; logged, not silently skipped
 ///   MissingPolicy   — no active function_parameters row found
-///   MalformedPolicy — JSON parse failure or unknown archive_strategy
-///
-/// Canonical excitation route:
-///   cron trigger → trigger context → RuntimeExecutor → select package → LogRetentionRuntime
+///   MalformedPolicy — JSON parse failure, unsupported archive_strategy,
+///                     or any required integer field ≤ 0
 /// </summary>
 public class LogRetentionRuntime
 {
@@ -54,9 +63,9 @@ public class LogRetentionRuntime
             _logger.LogError(
                 "LogRetentionRuntime: MissingPolicy — no active function_parameters row for '{Fn}/{Key}'.",
                 FunctionName, PolicyKey);
-            return new RetentionRunResult(RetentionExecutionStatus.MissingPolicy,
+            return Fail(RetentionExecutionStatus.MissingPolicy,
                 $"No active function_parameters row for '{FunctionName}/{PolicyKey}'.",
-                0, executedAt, 0);
+                executedAt, 0);
         }
 
         ContextEventRetentionPolicy policy;
@@ -70,9 +79,49 @@ public class LogRetentionRuntime
             _logger.LogError(ex,
                 "LogRetentionRuntime: MalformedPolicy — '{Fn}/{Key}' could not be parsed.",
                 FunctionName, PolicyKey);
-            return new RetentionRunResult(RetentionExecutionStatus.MalformedPolicy,
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
                 $"Policy JSON for '{FunctionName}/{PolicyKey}' could not be parsed: {ex.Message}",
-                0, executedAt, 0);
+                executedAt, 0);
+        }
+
+        // Explicit validation — deserialize defaults (0 for int, null for string) are not
+        // valid production values and must not silently proceed.
+        if (policy.ColdDays <= 0)
+        {
+            _logger.LogError(
+                "LogRetentionRuntime: MalformedPolicy — cold_days={ColdDays} must be a positive integer.",
+                policy.ColdDays);
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
+                $"cold_days={policy.ColdDays} is invalid: must be a positive integer.",
+                executedAt, 0);
+        }
+
+        if (policy.BatchSize <= 0)
+        {
+            _logger.LogError(
+                "LogRetentionRuntime: MalformedPolicy — batch_size={BatchSize} must be a positive integer.",
+                policy.BatchSize);
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
+                $"batch_size={policy.BatchSize} is invalid: must be a positive integer.",
+                executedAt, 0);
+        }
+
+        if (policy.ScheduleIntervalHours <= 0)
+        {
+            _logger.LogError(
+                "LogRetentionRuntime: MalformedPolicy — schedule_interval_hours={Hours} must be a positive integer.",
+                policy.ScheduleIntervalHours);
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
+                $"schedule_interval_hours={policy.ScheduleIntervalHours} is invalid: must be a positive integer.",
+                executedAt, 0);
+        }
+
+        if (string.IsNullOrWhiteSpace(policy.ArchiveStrategy))
+        {
+            _logger.LogError("LogRetentionRuntime: MalformedPolicy — archive_strategy is missing or empty.");
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
+                "archive_strategy is missing or empty.",
+                executedAt, policy.ScheduleIntervalHours);
         }
 
         if (!policy.Enabled)
@@ -90,9 +139,9 @@ public class LogRetentionRuntime
             _logger.LogError(
                 "LogRetentionRuntime: MalformedPolicy — archive_strategy='{Strategy}' is not supported.",
                 policy.ArchiveStrategy);
-            return new RetentionRunResult(RetentionExecutionStatus.MalformedPolicy,
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
                 $"archive_strategy='{policy.ArchiveStrategy}' is not a supported strategy. Supported: 'delete'.",
-                0, executedAt, policy.ScheduleIntervalHours);
+                executedAt, policy.ScheduleIntervalHours);
         }
 
         var rowsAffected = await _contextRouteRepository.DeleteOldContextEventsAsync(
@@ -106,4 +155,9 @@ public class LogRetentionRuntime
             $"Deleted {rowsAffected} row(s) older than {policy.ColdDays} days.",
             rowsAffected, executedAt, policy.ScheduleIntervalHours);
     }
+
+    private static RetentionRunResult Fail(
+        RetentionExecutionStatus status, string detail,
+        DateTimeOffset executedAt, int scheduleIntervalHours) =>
+        new(status, detail, 0, executedAt, scheduleIntervalHours);
 }

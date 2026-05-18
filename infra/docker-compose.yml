@@ -42,9 +42,13 @@ services:
     environment:
       DATABASE_URL: "Host=postgres;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo"
       BACKEND_PORT: "5000"
-      # Set DEMO_JWT_SECRET and DEMO_JWT_EXPIRY_HOURS in a .env file or override here
-      # DEMO_JWT_SECRET: changeme
-      # DEMO_JWT_EXPIRY_HOURS: 8
+      # Required — set in infra/.env (copy infra/.env.example and fill in values).
+      # /dispatch is always JWT-guarded; AUTH_JWT_SECRET_NOT_CONFIGURED is returned
+      # when DEMO_JWT_SECRET is absent so the endpoint is never silently unauthenticated.
+      DEMO_JWT_SECRET: "${DEMO_JWT_SECRET}"
+      DEMO_JWT_EXPIRY_HOURS: "${DEMO_JWT_EXPIRY_HOURS}"
+      # Optional — defaults to "topolactor-demo" if not set
+      DEMO_JWT_ISSUER: "${DEMO_JWT_ISSUER:-topolactor-demo}"
     depends_on:
       postgres:
         condition: service_healthy

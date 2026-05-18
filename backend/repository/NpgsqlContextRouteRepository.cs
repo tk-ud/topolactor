@@ -559,32 +559,86 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
 
     /// <summary>
     /// Deletes context_event rows older than coldDays in a single batch of at most batchSize rows.
-    /// Uses SKIP LOCKED to avoid contention with concurrent reads or appends.
-    /// Returns the number of rows deleted.
+    /// FK-safe: deletes referencing rows from context_event_vector_cache and
+    /// context_prefix_vector_cache (by last_event_id) in the same transaction before
+    /// removing the parent context_event rows.
+    ///
+    /// FK constraints honoured:
+    ///   context_event_vector_cache.event_id     → context_event.event_id
+    ///   context_prefix_vector_cache.last_event_id → context_event.event_id
+    ///
+    /// SKIP LOCKED on the candidate selection avoids blocking concurrent event appends.
+    /// Returns the number of context_event rows deleted.
     /// </summary>
     public override async Task<int> DeleteOldContextEventsAsync(
         int coldDays, int batchSize, CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var txn = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "DELETE FROM context_event " +
-            "WHERE event_id IN (" +
-            "  SELECT event_id FROM context_event " +
-            "  WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
-            "  ORDER BY created_at ASC " +
-            "  LIMIT @batch_size " +
-            "  FOR UPDATE SKIP LOCKED" +
-            ")";
-        cmd.Parameters.AddWithValue("cold_days", coldDays);
-        cmd.Parameters.AddWithValue("batch_size", batchSize);
+        try
+        {
+            // Step 1: collect the candidate event_ids to delete (locked, skip if busy)
+            await using var selectCmd = conn.CreateCommand();
+            selectCmd.Transaction = txn;
+            selectCmd.CommandText =
+                "SELECT event_id FROM context_event " +
+                "WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
+                "ORDER BY created_at ASC " +
+                "LIMIT @batch_size " +
+                "FOR UPDATE SKIP LOCKED";
+            selectCmd.Parameters.AddWithValue("cold_days", coldDays);
+            selectCmd.Parameters.AddWithValue("batch_size", batchSize);
 
-        var rows = await cmd.ExecuteNonQueryAsync(ct);
-        _npgsqlLogger.LogDebug(
-            "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} row(s) older than {ColdDays} days.",
-            rows, coldDays);
-        return rows;
+            var eventIds = new List<Guid>();
+            await using (var reader = await selectCmd.ExecuteReaderAsync(ct))
+            {
+                while (await reader.ReadAsync(ct))
+                    eventIds.Add(reader.GetGuid(0));
+            }
+
+            if (eventIds.Count == 0)
+            {
+                await txn.CommitAsync(ct);
+                return 0;
+            }
+
+            // Step 2: delete child FK rows (context_event_vector_cache)
+            await using var delVecCmd = conn.CreateCommand();
+            delVecCmd.Transaction = txn;
+            delVecCmd.CommandText =
+                "DELETE FROM context_event_vector_cache WHERE event_id = ANY(@ids)";
+            delVecCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            await delVecCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 3: delete child FK rows (context_prefix_vector_cache.last_event_id)
+            await using var delPrefixCmd = conn.CreateCommand();
+            delPrefixCmd.Transaction = txn;
+            delPrefixCmd.CommandText =
+                "DELETE FROM context_prefix_vector_cache WHERE last_event_id = ANY(@ids)";
+            delPrefixCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            await delPrefixCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 4: delete the parent context_event rows
+            await using var delEvtCmd = conn.CreateCommand();
+            delEvtCmd.Transaction = txn;
+            delEvtCmd.CommandText =
+                "DELETE FROM context_event WHERE event_id = ANY(@ids)";
+            delEvtCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            var rows = await delEvtCmd.ExecuteNonQueryAsync(ct);
+
+            await txn.CommitAsync(ct);
+
+            _npgsqlLogger.LogDebug(
+                "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} context_event row(s) older than {ColdDays} days.",
+                rows, coldDays);
+            return rows;
+        }
+        catch
+        {
+            await txn.RollbackAsync(ct);
+            throw;
+        }
     }
 }

@@ -90,23 +90,22 @@ var app = builder.Build();
 // Health check — used by Docker healthcheck and nginx upstream check
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-// POST /dispatch — guarded by demo JWT when DEMO_JWT_SECRET is set
+// POST /dispatch — always JWT-guarded.
+// JwtGuard.Validate returns AUTH_JWT_SECRET_NOT_CONFIGURED when DEMO_JWT_SECRET
+// is not set, so the endpoint is never silently unauthenticated.
 app.MapPost("/dispatch", async (
     HttpContext ctx,
     EndpointRequestDto request,
     DispatchEndpoint dispatch,
     JwtGuard jwtGuard) =>
 {
-    if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DEMO_JWT_SECRET")))
-    {
-        var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-        var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-            ? authHeader[7..]
-            : null;
-        var authErrors = jwtGuard.Validate(token);
-        if (authErrors.Count > 0)
-            return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
-    }
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
     var result = await dispatch.HandleAsync(request, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);

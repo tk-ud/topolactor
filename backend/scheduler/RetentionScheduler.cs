@@ -7,11 +7,18 @@ namespace Topolactor.Scheduler;
 
 /// <summary>
 /// Cron excitation trigger for the log retention package runtime.
-/// Awakens LogRetentionRuntime on a policy-defined interval.
 ///
-/// Role: trigger layer only — passes context to LogRetentionRuntime, which reads
-/// all retention decisions (hot_days, cold_days, archive_strategy, batch_size,
-/// enabled, schedule_interval_hours) from function_parameters.
+/// Design boundary:
+///   This class is the cron trigger layer — it wakes up on a schedule and calls
+///   LogRetentionRuntime (the package runtime). All retention policy decisions
+///   (cold_days, batch_size, archive_strategy, enabled, schedule_interval_hours)
+///   live in function_parameters, not here.
+///
+///   In v1, package selection for the retention operation is trivially resolved
+///   (LogRetentionRuntime is the only retention package). The trigger calls the
+///   package runtime directly; it does not route through the user-facing dispatch
+///   canonical route (stored_topology_data → user_operation → … → emission_or_projection)
+///   because retention is a background maintenance operation, not a user dispatch.
 ///
 /// This class contains no retention business logic.
 /// Disabled / MissingPolicy / MalformedPolicy results are logged and retried;

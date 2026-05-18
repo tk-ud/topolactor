@@ -24,21 +24,31 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 2. Frontend running: `deno task start` (from repository root)
 3. Open `http://localhost:8000/demo`
 
-> **Note — full stack (Docker Compose):** All five services are now defined in
+> **Note — full stack (Docker Compose):** All five services are defined in
 > `infra/docker-compose.yml`: `postgres`, `adminer`, `backend`, `frontend`, `nginx`.
-> Run `docker compose -f infra/docker-compose.yml up -d` to start the full stack.
-> nginx listens on port 80 and routes `/api/*` to the backend (port 5000) and `/`
-> to the frontend (port 8000). The backend healthcheck at `/health` must pass before
-> the frontend and nginx services start.
 >
-> Required env vars for the backend (set in a `.env` file or via docker-compose override):
-> - `DEMO_JWT_SECRET` — required for JWT signing (dispatch guard + auth token)
-> - `DEMO_JWT_EXPIRY_HOURS` — required, positive integer (token lifetime)
-> - `DEMO_JWT_ISSUER` — optional, display-only (defaults to `"topolactor-demo"`)
+> Before starting the stack, create `infra/.env` from the template:
+> ```bash
+> cp infra/.env.example infra/.env
+> # Fill in DEMO_JWT_SECRET (required) and DEMO_JWT_EXPIRY_HOURS (required).
+> # Example: DEMO_JWT_SECRET=$(openssl rand -hex 32)
+> ```
+>
+> Then start the full stack:
+> ```bash
+> docker compose --env-file infra/.env -f infra/docker-compose.yml up -d
+> ```
+>
+> nginx listens on port 80 and routes `/api/*` → backend (port 5000), `/` → frontend (port 8000).
+> The backend healthcheck at `GET /health` must pass before frontend and nginx start.
+>
+> `/dispatch` is always JWT-guarded. When `DEMO_JWT_SECRET` is not set,
+> all `/dispatch` calls return `AUTH_JWT_SECRET_NOT_CONFIGURED` — the endpoint is
+> never silently unauthenticated.
 
 > **Note — demo login:** The JWT login scaffold is at `/login`. The login form calls
-> `/api/auth/login` (Fresh route → nginx → backend `/auth/login`).
-> The backend HTTP host is implemented in `backend/Program.cs` (`Topolactor.Host.csproj`).
+> `/api/auth/login` (Fresh route → nginx → `POST /auth/login` on the backend).
+> Backend auth is implemented in `AuthEndpoint.cs` (wired via `backend/Program.cs`).
 > Demo credentials are stored as bcrypt hashes in `function_parameters`
 > (`demo_auth / demo_users`) via `db/demo_seed.sql`.
 
