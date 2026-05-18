@@ -40,11 +40,23 @@
          dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で
          recommendation status:ok + nextOperations:[{value:demo:entity:list, score:0.6}] が安定して得られる。
 
-- [ ] admin / registry 操作を skeleton 受付からDB永続化へ移行する
-      → 理由: context_token_registry admin は画面とAPI shapeがあるが、未接続時501やスケルトン説明が残る。
-      → 改善方針: context_token_registry のGET/POST/deprecateをbackendまたはFresh API経由でDBへ接続し、seed表示ではなく実データを編集する。
-      → 対象ファイル: frontend/routes/admin/context-token-registry.tsx, frontend/islands/ContextTokenRegistryEditor.tsx, frontend/routes/api/admin/context-token-registry.ts, frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts, backend/repository/NpgsqlContextRouteRepository.cs
-      → 次の判断点: admin API をbackendへ集約するか、Fresh API route をbackend proxyとして維持するか。
+- [x] admin / registry 操作を skeleton 受付からDB永続化へ移行する
+      → 完了 (PR #47 + 追加修正込み):
+         backend/endpoint/AdminEndpoint.cs 新規追加、backend/schema/AdminContracts.cs 追加。
+         ContextRouteRepository に ListAllContextTokensAsync / CreateContextTokenAsync / DeprecateContextTokenAsync を追加。
+         NpgsqlContextRouteRepository で DB 実装。
+         CreateContextTokenAsync 戻り型を Guid? → CreateTokenResult(Code, TokenId) に変更し、
+         UNIQUE(label,"group") 違反 (Postgres 23505) を Code.Conflict として明示返却 → HTTP 409。
+         AdminEndpoint.HandleCreateTokenAsync が Code switch で LABEL_REQUIRED / VALUE_OUT_OF_RANGE /
+         DUPLICATE_LABEL_GROUP / NOT_CONNECTED を個別 ErrorCode として返す。
+         Program.cs に GET/POST /admin/context-token-registry および POST /admin/.../deprecate を JWT ガード付きで追加。
+         frontend/routes/api/admin/context-token-registry.ts をbackend proxy に変更。
+         frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts をbackend proxy に変更。
+         frontend/api/adminApi.ts に JWT Bearer ヘッダー送信 + create/deprecate の 401 throw を追加。
+         frontend/islands/ContextTokenRegistryEditor.tsx に未ログイン時の明示案内および
+         handleAdd/handleDeprecate 中の 401 throw → setNotAuthed(true) を追加。
+         AdminEndpointTests.cs: list/create/deprecate の success/failure/conflict/boundary/idempotent テスト追加。
+         frontend/tests/adminApi.test.ts: 501/401/200/409/422/404 の応答マッピングテスト追加。
 
 - [ ] DB-backed application runtimeとしての最小状態遷移ループを定義し、demo seed から実データ入力ループへ移行する
       → 目的: topolactor を単なる runtime scaffold ではなく、任意ドメインの application state loop を持つ runtime へ進める。

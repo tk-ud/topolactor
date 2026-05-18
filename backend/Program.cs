@@ -73,6 +73,7 @@ builder.Services.AddSingleton<LogRetentionRuntime>();
 // ---------------------------------------------------------------------------
 builder.Services.AddSingleton<DispatchEndpoint>();
 builder.Services.AddSingleton<AuthEndpoint>();
+builder.Services.AddSingleton<AdminEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
@@ -120,6 +121,70 @@ app.MapPost("/auth/login", async (
 {
     var result = await auth.HandleAsync(request, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+// Admin routes — JWT-guarded, same guard as /dispatch.
+// GET  /admin/context-token-registry  — list all tokens
+// POST /admin/context-token-registry  — create a token
+// POST /admin/context-token-registry/{tokenId}/deprecate — deprecate a token
+
+app.MapGet("/admin/context-token-registry", async (
+    HttpContext ctx,
+    AdminEndpoint admin,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    var tokens = await admin.HandleListTokensAsync(ctx.RequestAborted);
+    return Results.Json(tokens);
+});
+
+app.MapPost("/admin/context-token-registry", async (
+    HttpContext ctx,
+    AdminCreateTokenRequestDto request,
+    AdminEndpoint admin,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    var result = await admin.HandleCreateTokenAsync(request, ctx.RequestAborted);
+    int createStatus = result.Ok ? 200
+        : result.ErrorCode == "DUPLICATE_LABEL_GROUP" ? 409
+        : 422;
+    return Results.Json(result, statusCode: createStatus);
+});
+
+app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (
+    HttpContext ctx,
+    string tokenId,
+    AdminEndpoint admin,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    if (!Guid.TryParse(tokenId, out var tokenGuid))
+        return Results.Json(new { ok = false, message = "tokenId must be a valid UUID." }, statusCode: 400);
+
+    var (result, found) = await admin.HandleDeprecateTokenAsync(tokenGuid, ctx.RequestAborted);
+    return Results.Json(result, statusCode: found ? 200 : 404);
 });
 
 app.Run();
