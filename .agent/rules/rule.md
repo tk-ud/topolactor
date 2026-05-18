@@ -83,6 +83,12 @@ Judgment gate rules:
   Answering from only the latest commit or only edited files is a violation (V10).
 - **Partial diff judgment is prohibited.** If the branch diff was not inspected,
   Q12 must be `no` — which triggers V10 automatically.
+- **Delegated or split work does not inherit checklist verification.** When work is
+  delegated, split, or continued by another agent, every agent that makes
+  implementation, policy, summary, or completion decisions must independently use
+  the Policy Judgment Checklist if the task falls within its trigger scope. An
+  agent must not treat another agent's checklist answer or summary as its own
+  verified judgment.
 - **Workflow non-connection.** This gate must not be called from `.github/workflows/`.
 - **NOT EXECUTED ≠ PASS.** Missing tools → report NOT EXECUTED, not yes.
 - **All green before completion report.** Gate red → no completion report.
