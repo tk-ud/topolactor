@@ -24,19 +24,31 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 2. Frontend running: `deno task start` (from repository root)
 3. Open `http://localhost:8000/demo`
 
-> **Note — nginx:** The nginx reverse proxy service (`infra/nginx.conf`) is not yet added
-> to `infra/docker-compose.yml`. It will be enabled once frontend and backend Docker services
-> are defined in the compose file. Currently only `postgres` and `adminer` are active.
+> **Note — full stack (Docker Compose):** All five services are now defined in
+> `infra/docker-compose.yml`: `postgres`, `adminer`, `backend`, `frontend`, `nginx`.
+> Run `docker compose -f infra/docker-compose.yml up -d` to start the full stack.
+> nginx listens on port 80 and routes `/api/*` to the backend (port 5000) and `/`
+> to the frontend (port 8000). The backend healthcheck at `/health` must pass before
+> the frontend and nginx services start.
+>
+> Required env vars for the backend (set in a `.env` file or via docker-compose override):
+> - `DEMO_JWT_SECRET` — required for JWT signing (dispatch guard + auth token)
+> - `DEMO_JWT_EXPIRY_HOURS` — required, positive integer (token lifetime)
+> - `DEMO_JWT_ISSUER` — optional, display-only (defaults to `"topolactor-demo"`)
 
 > **Note — demo login:** The JWT login scaffold is at `/login`. The login form calls
-> `/api/auth/login` (Fresh route), which proxies to `DEMO_BACKEND_URL/auth/login`.
-> **The backend HTTP route is not yet implemented** — `AuthEndpoint.cs` contains the auth
-> logic class but the backend has no HTTP host or route-binding layer yet.
+> `/api/auth/login` (Fresh route → nginx → backend `/auth/login`).
+> The backend HTTP host is implemented in `backend/Program.cs` (`Topolactor.Host.csproj`).
 > Demo credentials are stored as bcrypt hashes in `function_parameters`
 > (`demo_auth / demo_users`) via `db/demo_seed.sql`.
-> Required env vars: `DEMO_JWT_SECRET` (required), `DEMO_JWT_EXPIRY_HOURS` (required,
-> positive integer), `DEMO_JWT_ISSUER` (optional, display-only, defaults to
-> `"topolactor-demo"`), `DEMO_BACKEND_URL` (required when using login).
+
+> **Note — log retention:** The backend runs a `RetentionScheduler` background service
+> that calls `LogRetentionRuntime` to delete `context_event` rows older than `cold_days`.
+> Retention policy (`enabled`, `cold_days`, `archive_strategy`, `batch_size`,
+> `schedule_interval_hours`) is stored in `function_parameters`
+> (`context_event_retention / retention_policy`) and seeded by `db/seed_empty.sql`.
+> Set `enabled: false` in the policy row to disable cleanup. The scheduler logs an
+> explicit `Disabled` status rather than silently skipping.
 
 ---
 

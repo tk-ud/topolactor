@@ -552,4 +552,39 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                 kv => Guid.Parse(kv.Key),
                 kv => (float)kv.Value);
     }
+
+    // ---------------------------------------------------------------------------
+    // Retention — context_event cleanup
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Deletes context_event rows older than coldDays in a single batch of at most batchSize rows.
+    /// Uses SKIP LOCKED to avoid contention with concurrent reads or appends.
+    /// Returns the number of rows deleted.
+    /// </summary>
+    public override async Task<int> DeleteOldContextEventsAsync(
+        int coldDays, int batchSize, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "DELETE FROM context_event " +
+            "WHERE event_id IN (" +
+            "  SELECT event_id FROM context_event " +
+            "  WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
+            "  ORDER BY created_at ASC " +
+            "  LIMIT @batch_size " +
+            "  FOR UPDATE SKIP LOCKED" +
+            ")";
+        cmd.Parameters.AddWithValue("cold_days", coldDays);
+        cmd.Parameters.AddWithValue("batch_size", batchSize);
+
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        _npgsqlLogger.LogDebug(
+            "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} row(s) older than {ColdDays} days.",
+            rows, coldDays);
+        return rows;
+    }
 }
