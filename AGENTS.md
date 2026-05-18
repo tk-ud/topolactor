@@ -65,7 +65,7 @@ When task volume is high, agents may optionally use `.agent/tmp/tmp.txt` as a sh
 Rules:
 - `.agent/tmp/tmp.txt` is temporary and must not be committed.
 - Create only when needed via `bash .agent/scripts/create-tmp.sh`.
-- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git diff main...HEAD` to detect scope drift.
+- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git status --short / git diff / git diff --cached` to detect scope drift.
 - If drift exists, either fix scope or explicitly document intentional scope change in completion report / PR summary.
 - After comparison, delete memo via `bash .agent/scripts/delete-tmp.sh`.
 - `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
@@ -91,7 +91,7 @@ contain a runtime or policy behavior claim.
 
 ```sh
 # 1. Inspect full branch diff first
-git diff main...HEAD
+git status --short / git diff / git diff --cached
 
 # 2. Copy checklist template and fill in all Q1–Q15 answers
 cp .agent/checklists/policy-judgment.md /tmp/my-task-checklist.md
@@ -107,7 +107,7 @@ bash .agent/checklists/check-policy-judgment.sh --self-test
 Policy:
 
 - **Checklist answers must be based on the full branch diff**, not only the latest
-  commit or edited files. Run `git diff main...HEAD` first.
+  commit or edited files. Run `git status --short / git diff / git diff --cached` first.
 - **All green before reporting completion.** If any local check or the judgment gate
   fails, fix first.
 - **NOT EXECUTED ≠ PASS.** If a required tool is missing, report NOT EXECUTED in
