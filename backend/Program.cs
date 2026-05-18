@@ -160,7 +160,10 @@ app.MapPost("/admin/context-token-registry", async (
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
 
     var result = await admin.HandleCreateTokenAsync(request, ctx.RequestAborted);
-    return Results.Json(result, statusCode: result.Ok ? 200 : 422);
+    int createStatus = result.Ok ? 200
+        : result.ErrorCode == "DUPLICATE_LABEL_GROUP" ? 409
+        : 422;
+    return Results.Json(result, statusCode: createStatus);
 });
 
 app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (

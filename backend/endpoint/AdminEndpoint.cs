@@ -36,26 +36,35 @@ public class AdminEndpoint
 
     /// <summary>
     /// Creates a new context token with status='active'.
-    /// Returns an error response when input is invalid.
+    /// Returns an error response when input is invalid, when the repository is not connected,
+    /// or when UNIQUE(label, "group") is violated.
     /// </summary>
     public async Task<AdminCreateTokenResponseDto> HandleCreateTokenAsync(
         AdminCreateTokenRequestDto request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Label))
-            return new AdminCreateTokenResponseDto(false, null, "label is required.");
+            return new AdminCreateTokenResponseDto(false, null, "label is required.", "LABEL_REQUIRED");
 
         if (request.Value < -1.0f || request.Value > 1.0f)
-            return new AdminCreateTokenResponseDto(false, null, "value must be in [-1.0, 1.0].");
+            return new AdminCreateTokenResponseDto(false, null, "value must be in [-1.0, 1.0].", "VALUE_OUT_OF_RANGE");
 
         _logger.LogDebug("AdminEndpoint.HandleCreateTokenAsync: label={Label}", request.Label);
 
-        var tokenId = await _contextRouteRepository.CreateContextTokenAsync(
+        var result = await _contextRouteRepository.CreateContextTokenAsync(
             request.Label, request.Group, request.Value, ct);
 
-        if (tokenId is null)
-            return new AdminCreateTokenResponseDto(false, null, "Token registry not connected.");
-
-        return new AdminCreateTokenResponseDto(true, tokenId.Value.ToString(), "Token created.");
+        return result.Code switch
+        {
+            CreateTokenCode.Success =>
+                new AdminCreateTokenResponseDto(true, result.TokenId!.Value.ToString(), "Token created."),
+            CreateTokenCode.Conflict =>
+                new AdminCreateTokenResponseDto(false, null,
+                    "A token with this label and group already exists.", "DUPLICATE_LABEL_GROUP"),
+            CreateTokenCode.NotConnected =>
+                new AdminCreateTokenResponseDto(false, null, "Token registry not connected.", "NOT_CONNECTED"),
+            _ =>
+                new AdminCreateTokenResponseDto(false, null, "Unexpected error.", "UNEXPECTED_ERROR"),
+        };
     }
 
     /// <summary>

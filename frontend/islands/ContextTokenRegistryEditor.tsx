@@ -72,39 +72,57 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
     }
     setLoading(true);
     setStatus(null);
-    const result = await createContextToken({
-      label: newLabel,
-      group: newGroup || null,
-      value,
-    });
-    if (result.ok) {
-      setTokens((prev) => [
-        ...prev,
-        {
-          tokenId: result.tokenId ?? crypto.randomUUID(),
-          label: newLabel,
-          group: newGroup || null,
-          value,
-          status: "active",
-        },
-      ]);
-      setNewLabel("");
-      setNewGroup("");
-      setNewValue("0.0");
+    try {
+      const result = await createContextToken({
+        label: newLabel,
+        group: newGroup || null,
+        value,
+      });
+      if (result.ok) {
+        setTokens((prev) => [
+          ...prev,
+          {
+            tokenId: result.tokenId ?? crypto.randomUUID(),
+            label: newLabel,
+            group: newGroup || null,
+            value,
+            status: "active",
+          },
+        ]);
+        setNewLabel("");
+        setNewGroup("");
+        setNewValue("0.0");
+      }
+      setStatus(result.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("HTTP 401")) {
+        setNotAuthed(true);
+      } else {
+        setStatus(msg);
+      }
     }
-    setStatus(result.message);
     setLoading(false);
   }
 
   async function handleDeprecate(tokenId: string): Promise<void> {
     setLoading(true);
-    const result = await deprecateContextToken(tokenId);
-    if (result.ok) {
-      setTokens((prev) =>
-        prev.map((t) => t.tokenId === tokenId ? { ...t, status: "deprecated" } : t)
-      );
+    try {
+      const result = await deprecateContextToken(tokenId);
+      if (result.ok) {
+        setTokens((prev) =>
+          prev.map((t) => t.tokenId === tokenId ? { ...t, status: "deprecated" } : t)
+        );
+      }
+      setStatus(result.message);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("HTTP 401")) {
+        setNotAuthed(true);
+      } else {
+        setStatus(msg);
+      }
     }
-    setStatus(result.message);
     setLoading(false);
   }
 

@@ -22,12 +22,28 @@ public record AdminCreateTokenRequestDto(
 );
 
 /// <summary>
+/// Result code for CreateContextTokenAsync.
+/// Success:      token inserted, TokenId is set.
+/// NotConnected: in-memory skeleton — no DB wired.
+/// Conflict:     UNIQUE(label, "group") violated.
+/// </summary>
+public enum CreateTokenCode { Success, NotConnected, Conflict }
+
+/// <summary>
+/// Result of CreateContextTokenAsync.
+/// TokenId is non-null only when Code = Success.
+/// </summary>
+public record CreateTokenResult(CreateTokenCode Code, Guid? TokenId);
+
+/// <summary>
 /// Admin API response for a create-token operation.
+/// ErrorCode carries a machine-readable failure reason when Ok=false.
 /// </summary>
 public record AdminCreateTokenResponseDto(
     bool Ok,
     string? TokenId,
-    string Message
+    string Message,
+    string? ErrorCode = null
 );
 
 /// <summary>

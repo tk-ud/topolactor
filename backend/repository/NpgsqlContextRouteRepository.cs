@@ -75,10 +75,12 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
 
     /// <summary>
     /// Inserts a new token into context_token_registry with status='active'.
-    /// Returns the new tokenId on success.
-    /// value must be in [-1.0, 1.0]; caller is responsible for validation.
+    /// Returns CreateTokenResult.Success with the new tokenId on success.
+    /// Returns CreateTokenResult.Conflict when UNIQUE(label, "group") is violated (Postgres 23505).
+    /// Other DB exceptions are rethrown.
+    /// value must be in [-1.0, 1.0]; caller is responsible for range validation.
     /// </summary>
-    public override async Task<Guid?> CreateContextTokenAsync(
+    public override async Task<CreateTokenResult> CreateContextTokenAsync(
         string label, string? group, float value, CancellationToken ct = default)
     {
         var tokenId = Guid.NewGuid();
@@ -95,8 +97,16 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         cmd.Parameters.AddWithValue("group",   group is not null ? (object)group : DBNull.Value);
         cmd.Parameters.AddWithValue("value",   (double)value);
 
-        await cmd.ExecuteNonQueryAsync(ct);
-        return tokenId;
+        try
+        {
+            await cmd.ExecuteNonQueryAsync(ct);
+        }
+        catch (Npgsql.PostgresException ex) when (ex.SqlState == "23505")
+        {
+            return new CreateTokenResult(CreateTokenCode.Conflict, null);
+        }
+
+        return new CreateTokenResult(CreateTokenCode.Success, tokenId);
     }
 
     /// <summary>

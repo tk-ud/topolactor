@@ -6,9 +6,9 @@
  * Policy lives in function_parameters (topology data store) and is loaded
  * by the backend resolver via TopologyRepository.LoadFunctionParameterAsync.
  *
- * When DEMO_BACKEND_URL is not set, endpoints return 501 — functions return null.
- * When no JWT is available, endpoints return 401 — functions throw.
- * Callers must handle null (not bound) and errors (unauth / network) explicitly.
+ * When DEMO_BACKEND_URL is not set, endpoints return 501 — fetchContextTokens returns null.
+ * When no JWT is available, endpoints return 401 — all functions throw "HTTP 401".
+ * Callers must handle null (not bound) and errors (unauth / network / conflict) explicitly.
  */
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
@@ -35,7 +35,7 @@ export type ContextToken = {
   status: "active" | "deprecated";
 };
 
-/** Returns null when the registry endpoint is not yet bound (501). */
+/** Returns null when the registry endpoint is not yet bound (501). Throws on other errors including 401. */
 export async function fetchContextTokens(): Promise<ContextToken[] | null> {
   const res = await fetch("/api/admin/context-token-registry", {
     headers: getAuthHeaders(),
@@ -45,22 +45,26 @@ export async function fetchContextTokens(): Promise<ContextToken[] | null> {
   return await res.json() as ContextToken[];
 }
 
+/** Throws "HTTP 401" when unauthenticated. Returns response body for other statuses including errors. */
 export async function createContextToken(
   token: Omit<ContextToken, "tokenId" | "status">,
-): Promise<{ ok: boolean; message: string; tokenId?: string }> {
+): Promise<{ ok: boolean; message: string; tokenId?: string; errorCode?: string }> {
   const res = await fetch("/api/admin/context-token-registry", {
     method: "POST",
     headers: getAuthHeaders(),
     body: JSON.stringify(token),
   });
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
   const body = await res.json() as {
     ok: boolean;
     message: string;
     tokenId?: string;
+    errorCode?: string;
   };
   return body;
 }
 
+/** Throws "HTTP 401" when unauthenticated. Returns response body for other statuses including errors. */
 export async function deprecateContextToken(
   tokenId: string,
 ): Promise<{ ok: boolean; message: string }> {
@@ -71,6 +75,7 @@ export async function deprecateContextToken(
       headers: getAuthHeaders(),
     },
   );
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
   const body = await res.json() as { ok: boolean; message: string };
   return body;
 }

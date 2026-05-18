@@ -27,5 +27,6 @@
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../endpoint/AdminEndpoint.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

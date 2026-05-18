@@ -41,17 +41,22 @@
          recommendation status:ok + nextOperations:[{value:demo:entity:list, score:0.6}] が安定して得られる。
 
 - [x] admin / registry 操作を skeleton 受付からDB永続化へ移行する
-      → 完了: backend/endpoint/AdminEndpoint.cs 新規追加、backend/schema/AdminContracts.cs 追加。
+      → 完了 (PR #47 + 追加修正込み):
+         backend/endpoint/AdminEndpoint.cs 新規追加、backend/schema/AdminContracts.cs 追加。
          ContextRouteRepository に ListAllContextTokensAsync / CreateContextTokenAsync / DeprecateContextTokenAsync を追加。
          NpgsqlContextRouteRepository で DB 実装。
-         backend/Program.cs に GET/POST /admin/context-token-registry および POST /admin/.../deprecate を JWT ガード付きで追加。
+         CreateContextTokenAsync 戻り型を Guid? → CreateTokenResult(Code, TokenId) に変更し、
+         UNIQUE(label,"group") 違反 (Postgres 23505) を Code.Conflict として明示返却 → HTTP 409。
+         AdminEndpoint.HandleCreateTokenAsync が Code switch で LABEL_REQUIRED / VALUE_OUT_OF_RANGE /
+         DUPLICATE_LABEL_GROUP / NOT_CONNECTED を個別 ErrorCode として返す。
+         Program.cs に GET/POST /admin/context-token-registry および POST /admin/.../deprecate を JWT ガード付きで追加。
          frontend/routes/api/admin/context-token-registry.ts をbackend proxy に変更。
          frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts をbackend proxy に変更。
-         frontend/api/adminApi.ts に JWT Bearer ヘッダー送信を追加。
-         frontend/islands/ContextTokenRegistryEditor.tsx に未ログイン時の明示案内を追加。
-         DEMO_BACKEND_URL 未設定時: 501 (ADMIN_BACKEND_NOT_CONFIGURED)。
-         JWT 未設定時: 401 → island に「ログインが必要です」表示。
-         DB 接続時: context_token_registry テーブルへ実データ読み書き。
+         frontend/api/adminApi.ts に JWT Bearer ヘッダー送信 + create/deprecate の 401 throw を追加。
+         frontend/islands/ContextTokenRegistryEditor.tsx に未ログイン時の明示案内および
+         handleAdd/handleDeprecate 中の 401 throw → setNotAuthed(true) を追加。
+         AdminEndpointTests.cs: list/create/deprecate の success/failure/conflict/boundary/idempotent テスト追加。
+         frontend/tests/adminApi.test.ts: 501/401/200/409/422/404 の応答マッピングテスト追加。
 
 - [ ] DB-backed application runtimeとしての最小状態遷移ループを定義し、demo seed から実データ入力ループへ移行する
       → 目的: topolactor を単なる runtime scaffold ではなく、任意ドメインの application state loop を持つ runtime へ進める。
