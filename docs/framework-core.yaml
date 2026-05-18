@@ -14,10 +14,10 @@ business_management_system_framework:
 
   concept:
     summary: >
-      topolactor is a topology-based business management framework.
+      topolactor is a topology-based data-driven runtime framework.
       It does not treat hierarchy, screens, or fixed physical tables as the primary design subject.
       relation_registry defines abstract spaces, hub connects abstract space and concrete data,
-      and entity stores business-side concrete data.
+      and entity stores domain-specific concrete state.
 
   philosophy:
     principles:
@@ -41,7 +41,7 @@ business_management_system_framework:
     rationale:
       topology_based_management: >
         Management is not fixed as a tree. relation_registry defines abstract condition spaces,
-        and hub connects concrete business data to those spaces.
+        and hub connects concrete domain data to those spaces.
       freely_saved_data_then_system_normalization: >
         Input does not have to be fully normalized at the time of entry.
         Later system processing normalizes and promotes useful structures.

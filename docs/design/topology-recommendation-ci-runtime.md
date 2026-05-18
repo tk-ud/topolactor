@@ -253,7 +253,7 @@ ExternalError    — 外部 adapter からのエラー、または未 allowliste
 - `Disabled` を silent skip にする（`Disabled` status を記録する）
 - `ExternalError` を飲み込んで正常完了として扱う
 - candidate_type を SQL patch / physical_table のみに限定する
-- cron trigger に business logic や validation ロジックを置く
+- cron trigger に domain-specific logic や validation ロジックを置く
 - `topology_recommendation_ci` 専用の独立した設定テーブルを作る（`function_parameters` に統合する）
 
 ---
@@ -277,7 +277,7 @@ cron excitation trigger
 → emission_or_projection → audit log
 ```
 
-- Trigger layer: context 生成のみ。business logic なし。
+- Trigger layer: context 生成のみ。domain-specific logic なし。
 - Runtime layer: Manifest / Registry / function_parameters から package を選択。
 - Package runtime layer: C# validation runner が candidate を検証し、`recommendation_check_result` を記録。
 

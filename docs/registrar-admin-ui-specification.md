@@ -237,7 +237,7 @@ The following are explicitly out of scope for this specification:
 - DB migration
 - auth/permission implementation
 - browser E2E tests
-- real business data
+- real domain data
 - production admin console
 - promotion manifest editor implementation
 

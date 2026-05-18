@@ -2,7 +2,7 @@
 
 This walkthrough shows how to observe the canonical runtime route in action using the public scaffold demo data.
 
-**This demo uses fake/demo data only. No real business data is required.**
+**This demo uses fake/demo data only. No real domain data is required.**
 
 ---
 
@@ -193,11 +193,11 @@ Each scenario shows how a single Registry or policy change propagates through th
 
 ## Architecture Constraints Maintained
 
-- **canonical runtime route preserved:** `/demo` is a projection entrypoint, not business logic.
+- **canonical runtime route preserved:** `/demo` is a projection entrypoint, not domain logic.
 - **no silent fallback:** broken policy refs → `CONTEXT_ROUTE_POLICY_NOT_FOUND` error.
 - **no hardcoded runtime policy:** all scoring, thresholds, and aggregation window values are in `function_parameters`.
 - **frontend is projection only:** demo components accept resolved data as props; no local computation.
-- **demo data is fake:** `db/demo_seed.sql` contains no real business data.
+- **demo data is fake:** `db/demo_seed.sql` contains no real domain data.
 
 ---
 
