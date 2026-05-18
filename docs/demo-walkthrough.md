@@ -331,3 +331,5 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 - Invalid payload/transition/missing entity are explicit errors (`INVALID_PAYLOAD`, `INVALID_TRANSITION`, `STATE_NOT_FOUND`).
 
 - `action=detail` requires payload `entityId` UUID; missing/malformed is `INVALID_PAYLOAD`, unknown action is `INVALID_OPERATION`.
+
+- Runtime reachability: DB seed contains structure_maps for `demo:entity:list`, `demo:entity:detail`, `demo:entity:create`, `demo:entity:advance`, so these operations pass attractor/structure-map resolution before state-loop execution.

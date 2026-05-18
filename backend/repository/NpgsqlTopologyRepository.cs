@@ -217,11 +217,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 cmd.CommandText = "INSERT INTO entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,'00000000-0000-0000-0000-000000000010',jsonb_build_object('label',@title,'state','active','hub_id','00000000-0000-0000-0000-000000000010'),ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],(SELECT state_id FROM state_registry WHERE name='active' LIMIT 1))";
                 cmd.Parameters.AddWithValue("id", entityId); cmd.Parameters.AddWithValue("title", title ?? "Untitled");
                 await cmd.ExecuteNonQueryAsync(ct);
-                var hist = conn.CreateCommand(); hist.Transaction = tx;
-                hist.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";
-                hist.Parameters.AddWithValue("id", entityId);
-                hist.Parameters.AddWithValue("title", title ?? "Untitled");
-                await hist.ExecuteNonQueryAsync(ct);
+                var createHistoryCmd = conn.CreateCommand(); createHistoryCmd.Transaction = tx;
+                createHistoryCmd.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";
+                createHistoryCmd.Parameters.AddWithValue("id", entityId);
+                createHistoryCmd.Parameters.AddWithValue("title", title ?? "Untitled");
+                await createHistoryCmd.ExecuteNonQueryAsync(ct);
                 await tx.CommitAsync(ct); return new(true, null, null);
             }
             var read = conn.CreateCommand(); read.Transaction = tx;
@@ -241,11 +241,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
             up.Parameters.AddWithValue("id", entityId); up.Parameters.AddWithValue("next", next);
             up.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await up.ExecuteNonQueryAsync(ct);
-            var hist = conn.CreateCommand(); hist.Transaction = tx;
-            hist.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after),'state_id',jsonb_build_object('after',@stateId::text)),jsonb_build_object('action',@action,'entity_id',@id::text,'before_state',@before,'after_state',@after))";
-            hist.Parameters.AddWithValue("id", entityId); hist.Parameters.AddWithValue("action", action); hist.Parameters.AddWithValue("before", current); hist.Parameters.AddWithValue("after", next);
-            hist.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
-            await hist.ExecuteNonQueryAsync(ct);
+            var advanceHistoryCmd = conn.CreateCommand(); advanceHistoryCmd.Transaction = tx;
+            advanceHistoryCmd.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after),'state_id',jsonb_build_object('after',@stateId::text)),jsonb_build_object('action',@action,'entity_id',@id::text,'before_state',@before,'after_state',@after))";
+            advanceHistoryCmd.Parameters.AddWithValue("id", entityId); advanceHistoryCmd.Parameters.AddWithValue("action", action); advanceHistoryCmd.Parameters.AddWithValue("before", current); advanceHistoryCmd.Parameters.AddWithValue("after", next);
+            advanceHistoryCmd.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
+            await advanceHistoryCmd.ExecuteNonQueryAsync(ct);
             await tx.CommitAsync(ct); return new(true, null, null);
         }
         catch (PostgresException ex) when (ex.SqlState == "23505") { await tx.RollbackAsync(ct); return new(false, "PERSISTENCE_CONFLICT", ex.MessageText); }
