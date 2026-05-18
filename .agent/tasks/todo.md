@@ -43,18 +43,6 @@
       → 実装時の対象候補: db schema / backend scheduled runtime / admin manifest UI / retention policy seed / docs/design/context-route-recommendation.md / local CI test。
       → 未解決点: raw log を完全削除するか、匿名化・集計済み状態へ promotion してから削除するかを決める。
 
-## Temporary Planning Surface
-
-- [ ] agent が任意で使える一時方針メモ `.agent/tmp/tmp.txt` の運用と配線を追加する
-      → 目的: 作業量が多いと agent が判断した場合に、初期構想時の制約だけを `.agent/tmp/tmp.txt` へ短く記録し、Policy Judgment Checklist 前に最終差分との scope drift を確認する。
-      → tmp は永続成果物ではなく、初期方針の一時参照点として扱う。長い reasoning log やPR summary代替にしない。
-      → `.agent/tmp/tmp.txt` は commit 対象にしない。作業開始時に必要なら `create-tmp.sh` で作成し、Policy Judgment Checklist 前の確認後に `delete-tmp.sh` で削除する。
-      → checklist 前に tmp が存在する場合は、tmp の初期制約と `git diff main...HEAD` の最終差分を比較し、方針通りなら tmp を削除して local CI へ進む。ズレがある場合は修正するか、意図的な方針変更理由を completion report / PR summary に明記する。
-      → local CI は tmp 確認と削除が完了した後に実行する。`bash .agent/tests/check-structure.sh` は従来通り最後に実行する。
-      → `check-structure.sh` は `.agent/tmp/tmp.txt` が残存している場合に fail させる。tmp 未使用時は pass する。
-      → 配線対象候補: AGENTS.md, .agent/rules/rule.md, .gitignore, .agent/scripts/create-tmp.sh, .agent/scripts/delete-tmp.sh, .agent/tmp/.gitkeep, .agent/tests/check-structure.sh, .agent/docs/required-paths.yaml。
-      → 受け入れ条件: tmp 利用は任意、tmp は commit されない、tmp 残存は structure check で検出される、completion report で tmp 使用有無と削除済み状態を報告できる。
-
 ## Infra / Demo Runtime
 
 - [ ] nginx service を docker compose に接続する
