@@ -22,4 +22,9 @@ Verify at least:
 9. UI-visible error state
 10. post-write read consistency
 
-If any item is out of scope, state reason in completion report or PR summary.
+Recursive Verification Gate requirements:
+
+- Any matrix item marked failure, unverified, or unjustified out-of-scope is a blocking failure; completion is not allowed.
+- If fixable in the same scope, return to fix phase and re-verify matrix coverage.
+- Out-of-scope is allowed only with explicit reason in completion report or PR summary.
+- For write-path additions, persistence constraint failure and post-write read consistency are mandatory checks, not optional coverage.

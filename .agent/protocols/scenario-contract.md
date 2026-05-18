@@ -21,8 +21,17 @@ Required fields:
 7. required side effects including failure paths
 8. Runtime Boundary Failure Matrix coverage and intentional out-of-scope reasons
 9. known non-goals
+10. Recursive Verification Gate notes (blocking failures found / fix recursion performed / remaining out-of-scope TODO)
 
 Before completion, verify full branch diff against this contract.
+
+Recursive verification requirements:
+
+- Scenario-contract verification failure is blocking; completion is not allowed.
+- If tmp contract and actual diff conflict, either:
+  - fix implementation and re-verify, or
+  - when the contract was wrong, update contract with explicit reason and re-verify.
+- Complete recursive verification before deleting tmp.txt.
 
 Rules:
 
