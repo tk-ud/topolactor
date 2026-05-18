@@ -161,6 +161,7 @@ required_content_terms:
     - "Recursive Verification Gate"
   .agent/protocols/reports-and-todos.md:
     - "routine inspection reports"
+    - "Recursive Verification Gate"
   .agent/scripts/create-tmp.sh:
     - "Blocking failures found:"
     - "Runtime Boundary Failure Matrix"
