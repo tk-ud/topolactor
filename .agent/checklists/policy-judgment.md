@@ -14,12 +14,11 @@ Not required for: documentation-only, comment-only, README-only, purely
 mechanical refactor, display-only copy / style changes, or test-fixture-only
 changes — unless those changes also contain a runtime or policy behavior claim.
 
-**Before answering: run `git diff main...HEAD` (or equivalent full branch diff)
-and base your answers on the complete branch state, not only the latest commit.**
+**Before answering: run `git diff main...HEAD` (or equivalent full branch diff), verify the diff against `.agent/tmp/tmp.txt` scenario contract when required, and base answers on the complete branch state.**
 
 Answer each question with exactly one of: `yes` / `no` / `n/a`
 
-Audit order reminder: full branch diff → checklist → scope/claim audits → relevant local CI → `bash .agent/tests/check-structure.sh` (last).
+Audit order reminder: create tmp scenario contract when required → implement → inspect full branch diff → verify full diff against tmp scenario contract when required → checklist → scope/claim audits → relevant local CI → `bash .agent/tests/check-structure.sh` (last).
 
 ---
 
@@ -156,9 +155,10 @@ Answer:
 
 ---
 
-## Q12 — Full branch diff inspected?
+## Q12 — Full branch diff inspected, and tmp scenario contract verified when required?
 
-Did you inspect the full branch diff before answering this checklist?
+Did you inspect the full branch diff before answering this checklist, and verify
+that full diff against `.agent/tmp/tmp.txt` scenario contract when tmp is required?
 
 Use `git diff main...HEAD` or an equivalent full branch diff — not only the
 latest commit or edited files.
@@ -167,10 +167,10 @@ Answer:
 
 ---
 
-## Q13 — Checklist based on full branch diff?
+## Q13 — Checklist based on full branch diff and scenario contract verification when required?
 
-Is this checklist answer based on the full branch diff, not only the latest
-commit or edited files?
+Are these checklist answers based on the full branch diff and scenario contract
+verification when required, not only the latest commit or edited files?
 
 Answer:
 
@@ -216,9 +216,9 @@ Answer:
 | V7 | Q9 = yes — broken reference swallowed |
 | V8 | Q10 = no — policy fields not consumed by runtime/policy executor |
 | V9 | Q11 = no — demo/mock/static values not isolated |
-| V10 | Q12 = no — full branch diff not inspected |
+| V10 | Q12 = no — full branch diff not inspected and/or required scenario contract verification missing |
 | V11 | Q14 = no — required local checks not passed |
-| V12 | Q13 = no — checklist answers not based on full branch diff |
+| V12 | Q13 = no — checklist answers not based on full branch diff and required scenario contract verification |
 | V13 | Q15 = no — remaining TODOs not listed in completion report or PR summary |
 | V14 | Any answer not in {yes, no, n/a} |
 | V15 | Missing answer |

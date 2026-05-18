@@ -13,14 +13,25 @@ if [ -f "$TMP_FILE" ]; then
 fi
 
 cat > "$TMP_FILE" <<'EOF'
-# Temporary Planning Surface
-# Keep this short: initial constraints/policy only.
-# Do NOT use as reasoning log, PR summary, or implementation log.
+# Temporary Scenario Contract
+# This file is a temporary scenario contract, not a free-form planning memo.
+# Fill this out BEFORE implementation; update only if intended scenario changes.
 #
-# Before Policy Judgment Checklist:
-# 1) Compare this memo with: git diff main...HEAD
-# 2) Resolve scope drift or document intentional scope change in completion/PR summary
-# 3) Delete this file via: bash .agent/scripts/delete-tmp.sh
+# 1) User-visible scenario or runtime claim
+# 2) Entry operation / request shape
+# 3) Expected canonical runtime route
+# 4) Expected read / write / append / cache / return order
+# 5) Seed / fixture / policy data involved
+# 6) Expected emission / projection / status
+# 7) Required side effects, including failure / cold-start / insufficient paths
+# 8) Known non-goals / out-of-scope paths
+#
+# After implementation:
+# 9) Full branch diff verification result
+#
+# Before completion:
+# - Verify full branch diff against this scenario contract
+# - Delete this file via: bash .agent/scripts/delete-tmp.sh
 EOF
 
 echo "created: .agent/tmp/tmp.txt"

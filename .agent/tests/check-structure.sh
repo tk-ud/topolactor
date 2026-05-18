@@ -239,9 +239,17 @@ check_content "AGENTS.md" "Policy Judgment Gate"
 check_content ".agent/rules/rule.md" "Policy Judgment Gate"
 
 
+check_content "AGENTS.md" "Temporary Scenario Contract"
+check_content ".agent/rules/rule.md" "Temporary Scenario Contract"
+check_content ".agent/rules/rule.md" "scenario contract"
+check_content ".agent/scripts/create-tmp.sh" "Temporary Scenario Contract"
+check_content ".agent/scripts/create-tmp.sh" "Expected read / write / append / cache / return order"
+check_content ".agent/checklists/policy-judgment.md" "scenario contract"
+check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
+
 TMP_MEMO_PATH="$REPO_ROOT/.agent/tmp/tmp.txt"
 if [ -f "$TMP_MEMO_PATH" ]; then
-  fail "Temporary planning memo must be deleted before completion: .agent/tmp/tmp.txt"
+  fail "Temporary scenario contract must be deleted before completion: .agent/tmp/tmp.txt"
 else
   echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
 fi

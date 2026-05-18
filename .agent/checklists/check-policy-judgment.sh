@@ -234,9 +234,9 @@ else
   ok_v "V9: Q11=${Q11}"
 fi
 
-# V10: Full branch diff not inspected
+# V10: Full branch diff not inspected / scenario contract not verified
 if [ "$Q12" = "no" ]; then
-  vfail "V10 (Q12=no): full branch diff not inspected — run 'git diff main...HEAD' before completing checklist"
+  vfail "V10 (Q12=no): full branch diff not inspected and/or required scenario contract verification missing — run 'git diff main...HEAD' and verify against .agent/tmp/tmp.txt when required before completing checklist"
 else
   ok_v "V10: Q12=${Q12}"
 fi
@@ -248,9 +248,9 @@ else
   ok_v "V11: Q14=${Q14}"
 fi
 
-# V12: Checklist not based on full branch diff
+# V12: Checklist not based on full branch diff / scenario contract verification
 if [ "$Q13" = "no" ]; then
-  vfail "V12 (Q13=no): checklist answers not based on full branch diff — answers must reflect the complete branch state"
+  vfail "V12 (Q13=no): checklist answers not based on full branch diff and required scenario contract verification — answers must reflect the complete branch state"
 else
   ok_v "V12: Q13=${Q13}"
 fi

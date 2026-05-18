@@ -72,13 +72,13 @@ Answer: n/a
 
 ---
 
-## Q12 — Full branch diff inspected?
+## Q12 — Full branch diff inspected, and tmp scenario contract verified when required?
 
 Answer: yes
 
 ---
 
-## Q13 — Checklist based on full branch diff?
+## Q13 — Checklist based on full branch diff and scenario contract verification when required?
 
 Answer: yes
 

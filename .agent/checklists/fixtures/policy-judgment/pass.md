@@ -3,7 +3,7 @@
 All 15 questions answered. No violations triggered.
 
 Scenario: change adds a windowed aggregation limit resolved from function_parameters.
-Full branch diff inspected. Local checks passed. No remaining TODOs.
+Full branch diff inspected and required scenario contract verification completed. Local checks passed. No remaining TODOs.
 
 ---
 
@@ -73,13 +73,13 @@ Answer: n/a
 
 ---
 
-## Q12 — Full branch diff inspected?
+## Q12 — Full branch diff inspected, and tmp scenario contract verified when required?
 
 Answer: yes
 
 ---
 
-## Q13 — Checklist based on full branch diff?
+## Q13 — Checklist based on full branch diff and scenario contract verification when required?
 
 Answer: yes
 

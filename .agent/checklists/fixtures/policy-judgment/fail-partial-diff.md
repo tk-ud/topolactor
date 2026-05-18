@@ -1,7 +1,7 @@
 # Policy Judgment Checklist — fixture: FAIL (checklist not based on full branch diff)
 
-Scenario: agent ran git diff and inspected the full branch diff (Q12=yes), but
-the checklist answers are not based on the full branch diff (Q13=no) — the agent
+Scenario: agent ran git diff and completed required scenario contract verification (Q12=yes), but
+the checklist answers are not based on the full branch diff + scenario contract verification (Q13=no) — the agent
 answered based only on the latest commit or edited files.
 Q13=no triggers V12.
 Expected result: FAIL — 1 violation (V12).
@@ -74,13 +74,13 @@ Answer: n/a
 
 ---
 
-## Q12 — Full branch diff inspected?
+## Q12 — Full branch diff inspected, and tmp scenario contract verified when required?
 
 Answer: yes
 
 ---
 
-## Q13 — Checklist based on full branch diff?
+## Q13 — Checklist based on full branch diff and scenario contract verification when required?
 
 Answer: no
 
