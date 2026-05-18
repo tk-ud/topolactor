@@ -597,11 +597,15 @@ topology_vector_runtime:
     context_hub_feedback_event:
       description: >
         Append-only event log for feedback weight updates.
-        Records selected / ignored / missing candidate differences per hub.
+        Records selected / ignored / missing candidate differences per hub per target_table.
+        target_table must match context_hub_recommendation_current.target_table to scope
+        feedback_adjustment update to the exact PK row
+        (hub_id, target_table, candidate_kind, candidate_id, scope_limit).
         Used to rebuild feedback_adjustment in context_hub_recommendation_current.
       fields:
         feedback_id:      { type: uuid, pk: true }
         hub_id:           { type: uuid }
+        target_table:     { type: string, note: "must match context_hub_recommendation_current.target_table; prevents cross-target_table feedback misapplication" }
         candidate_id:     { type: uuid }
         candidate_kind:   { type: enum, values: [registry, hub, entity, relation, operation, token] }
         scope_limit:      { type: int }
@@ -611,6 +615,8 @@ topology_vector_runtime:
       notes:
         - "append-only — never updated or deleted"
         - "aggregate current (feedback_adjustment) is rebuildable from this log"
+        - "target_table scopes feedback to the exact PK row in context_hub_recommendation_current"
+        - "without target_table, same candidate_id under different target_tables would receive erroneous cross-table feedback"
 
   policy_storage:
     table: function_parameters
@@ -685,3 +691,81 @@ topology_vector_runtime:
     - "production fallback on policy missing or invalid"
     - "cosine/topology/MLP judgment in frontend"
     - "treating context_hub_recommendation_current as source of truth"
+
+registrar_wide_topology_attention:
+  role: topology_attention_scope
+  concept: >
+    Topology Attention is not limited to screen transition or sequential enum recommendation.
+    The entire registrar is treated as a topology-wide Key-Value Memory.
+    Operational pressure signals in the data (record counts, edit activity, state transitions)
+    become Query sources. The runtime attends over the full registrar space.
+  query_sources:
+    - high_record_count_table
+    - high_edit_diff_count_table
+    - high_recent_diff_rate_table
+    - high_state_transition_table
+    - high_re_edit_rollback_correction_table
+    - current_hub
+    - current_operation
+    - current_record
+    - current_state
+    - current_table
+  key_space:
+    - master_registry
+    - relation_registry
+    - schema_registry
+    - package_registry
+    - component_registry
+    - state_registry
+    - structure_maps
+    - hub_relations
+  value_space:
+    - topology_node
+    - registry_candidate
+    - relation_candidate
+    - schema_candidate
+    - component_candidate
+    - state_candidate
+    - operation_candidate
+  meaning_definitions:
+    high_pressure_table: >
+      A table where record_count or edit_diff_count is high.
+      Indicates where the domain is placing semantic load.
+      This is a Topology Attention Query candidate.
+    registrar: >
+      Not a named lookup table.
+      Topology-wide Key-Value Memory.
+      The Key space for Topology Attention.
+    registry_id_arrays: >
+      Sparse vector basis for cosine neighbor search.
+      UUID[] = multi-hot sparse vector.
+  log_separation:
+    state_transition_log:
+      role: phase_change_observation_source
+      note: >
+        Records state phase changes. Source of truth for topology phase transitions.
+        Must not be mixed with edit diff log.
+    edit_diff_log:
+      role: value_change_observation_and_query_source
+      status: not_yet_implemented
+      planned_tables:
+        - topology_edit_log
+        - entity_edit_log
+      note: >
+        Records value-level edit diffs (before/after). Will become a Query generation
+        source for Topology Attention when implemented.
+        Must not be mixed with state transition log.
+        Do not treat as implemented until topology_edit_log / entity_edit_log exist.
+  boundary:
+    not_limited_to:
+      - screen_transition
+      - operation_recommendation
+      - sequential_enum_attention
+    requires_separation:
+      state_transition_log: phase_change_observation
+      edit_diff_log: value_change_observation_and_query_source
+  prohibited:
+    - "defining Topology Attention scope as screen_transition or operation_recommendation only"
+    - "mixing state_transition_log and edit_diff_log in the same table"
+    - "describing edit diff as a query source before topology_edit_log is implemented"
+    - "treating Registrar as a static lookup table instead of Key-Value Memory"

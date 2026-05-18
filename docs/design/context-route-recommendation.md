@@ -315,6 +315,10 @@ delta 値は function_parameters (topology_vector_runtime.feedback_weight_update
 feedback は context_hub_feedback_event (append-only) にも記録する。
 aggregate current は再構築可能にする。
 
+feedback の適用粒度は `(hub_id, target_table, candidate_kind, candidate_id, scope_limit)` — context_hub_recommendation_current の PK 全体と一致する。
+
+`target_table` を含めない場合、同一 candidate_id が複数の target_table に存在すると feedback が誤って複数の target_table に適用される。HubFeedbackEvent と context_hub_feedback_event の両方が `target_table` を持つことで、この誤適用を防ぐ。
+
 ### Policy ストレージ
 
 topology_vector_runtime の policy は独立した設定テーブルではなく、
@@ -396,3 +400,80 @@ DB:
 - policy missing / invalid で production fallback する
 - Frontend に cosine / topology / MLP 判定を持たせる
 - `context_hub_recommendation_current` を正本として扱う
+
+---
+
+## Registrar-wide Topology Attention
+
+### スコープ定義
+
+Topology Attention は screen transition や operation recommendation に限定されない。
+
+`enum transition attention` は一部でしかない。
+Registrar 全体を Key-Value Memory として扱い、
+運用圧の高い table / record / diff activity を Query として、
+registry / relation / schema / package / component / state / structure_map 全体へ Attention する。
+
+### Query 源泉
+
+Attention の Query は、以下のような運用圧シグナルから生成できる:
+
+```text
+record_count が多い table
+edit_diff_count が多い table
+recent_diff_rate が高い table
+state_transition が多い table
+re-edit / rollback / correction が多い table
+現在操作中の hub / operation / record / state / table
+```
+
+これらのシグナルは「現場が意味圧をかけている場所」を示す。
+運用圧の高い場所が Topology Attention の Query 候補になる。
+
+### Key Space と Value Space
+
+```text
+Key:
+  master_registry
+  relation_registry
+  schema_registry
+  package_registry
+  component_registry
+  state_registry
+  structure_maps
+  hub_relations
+
+Value:
+  次に参照すべき topology node
+  補完すべき registry
+  分割すべき table
+  追加すべき state
+  接続すべき relation
+  推薦すべき operation
+```
+
+Registrar は named lookup table ではなく、topology-wide Key-Value Memory として機能する。
+
+Registry ID arrays がその sparse vector basis になる。
+
+### State Transition Log と Edit Diff Log の分離
+
+```text
+state transition log  = phase change observation source
+edit diff log         = value change observation source / Query generation source
+```
+
+両者は意味境界が異なる。混在させない。
+
+現時点では edit diff log (`topology_edit_log` / `entity_edit_log`) は未作成である。
+edit diff activity から Query を生成する機能は **TODO** である。
+実装済みのように扱わない。
+
+将来の `topology_edit_log` / `entity_edit_log` が Query generation source になる。
+
+### やってはいけないこと
+
+- screen transition / operation recommendation に閉じた説明で Topology Attention を定義する
+- state transition log と edit diff log を同一テーブルに混在させる
+- edit diff log が未作成のまま「edit diff から Query を生成している」と記述する
+- Registrar を static lookup table として扱う（Key-Value Memory として扱う）

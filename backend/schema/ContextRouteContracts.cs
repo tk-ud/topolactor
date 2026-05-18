@@ -228,9 +228,13 @@ public record TopologyMlpFeature(
 
 /// <summary>
 /// A feedback event to be applied and appended.
+/// TargetTable must match context_hub_recommendation_current.target_table so that
+/// feedback_adjustment is applied to the exact (hub_id, target_table, candidate_kind,
+/// candidate_id, scope_limit) row — never across target_tables.
 /// </summary>
 public record HubFeedbackEvent(
     Guid HubId,
+    string TargetTable,
     Guid CandidateId,
     string CandidateKind,
     int ScopeLimit,
