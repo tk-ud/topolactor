@@ -1,25 +1,29 @@
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
+using Topolactor.Runtime;
 using Topolactor.Schema;
 
 namespace Topolactor.Endpoint;
 
 /// <summary>
-/// Admin endpoint for context_token_registry management.
+/// Admin endpoint for context_token_registry management and Registrar validation.
 /// All methods require a valid JWT (enforced by the HTTP layer in Program.cs).
-/// Contains no business logic — delegates to ContextRouteRepository.
+/// Contains no business logic — delegates to repositories and services.
 /// </summary>
 public class AdminEndpoint
 {
     private readonly ILogger<AdminEndpoint> _logger;
     private readonly ContextRouteRepository _contextRouteRepository;
+    private readonly RegistrarValidationService _registrarValidationService;
 
     public AdminEndpoint(
         ILogger<AdminEndpoint> logger,
-        ContextRouteRepository contextRouteRepository)
+        ContextRouteRepository contextRouteRepository,
+        RegistrarValidationService registrarValidationService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
+        _registrarValidationService = registrarValidationService ?? throw new ArgumentNullException(nameof(registrarValidationService));
     }
 
     /// <summary>
@@ -80,5 +84,85 @@ public class AdminEndpoint
             return (new AdminDeprecateTokenResponseDto(false, "Token not found."), false);
 
         return (new AdminDeprecateTokenResponseDto(true, "Token deprecated."), true);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Registrar vector validation
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Validates a candidate registry ID array against existing registry rows.
+    /// Returns a structured AdminRegistryVectorValidateResponseDto.
+    ///
+    /// registryTable: must be non-empty.
+    /// queryIds: each element must be a valid UUID string.
+    ///
+    /// Returns explicit error on policy missing, invalid, or DB unavailability.
+    /// Never returns a silent fallback result.
+    /// </summary>
+    public async Task<(AdminRegistryVectorValidateResponseDto Response, int StatusCode)>
+        HandleValidateRegistryVectorAsync(
+            AdminRegistryVectorValidateRequestDto request,
+            CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.RegistryTable))
+        {
+            return (new AdminRegistryVectorValidateResponseDto(
+                ValidationClass: "explicit_error",
+                IsBlocking: true,
+                Neighbors: [],
+                StatusDetail: "REGISTRY_TABLE_REQUIRED"), 400);
+        }
+
+        var parsedIds = new List<Guid>();
+        foreach (var raw in request.QueryIds ?? [])
+        {
+            if (!Guid.TryParse(raw, out var id))
+            {
+                return (new AdminRegistryVectorValidateResponseDto(
+                    ValidationClass: "explicit_error",
+                    IsBlocking: true,
+                    Neighbors: [],
+                    StatusDetail: $"INVALID_QUERY_ID:{raw}"), 400);
+            }
+            parsedIds.Add(id);
+        }
+
+        _logger.LogDebug(
+            "AdminEndpoint.HandleValidateRegistryVectorAsync: table={Table} queryIds={Count}",
+            request.RegistryTable, parsedIds.Count);
+
+        var result = await _registrarValidationService.ValidateAsync(
+            request.RegistryTable, parsedIds, ct);
+
+        var validationClass = result.ValidationClass switch
+        {
+            RegistryVectorValidationClass.Pass                   => "pass",
+            RegistryVectorValidationClass.RelatedExistingRegistry => "related_existing_registry",
+            RegistryVectorValidationClass.NearDuplicateVector    => "near_duplicate_vector",
+            RegistryVectorValidationClass.DuplicateVector        => "duplicate_vector",
+            RegistryVectorValidationClass.ZeroVector             => "zero_vector",
+            RegistryVectorValidationClass.ExplicitError          => "explicit_error",
+            _ => "explicit_error"
+        };
+
+        var neighbors = result.Neighbors
+            .Select(n => new AdminRegistryVectorNeighborDto(
+                RegistryId:  n.RegistryId.ToString(),
+                Name:        n.Name,
+                CosineScore: n.CosineScore,
+                MatchedIds:  n.MatchedIds.Select(id => id.ToString()).ToList(),
+                Reason:      n.Reason))
+            .ToList();
+
+        var statusCode = result.IsBlocking && result.ValidationClass == RegistryVectorValidationClass.ExplicitError
+            ? 422
+            : 200;
+
+        return (new AdminRegistryVectorValidateResponseDto(
+            ValidationClass: validationClass,
+            IsBlocking:      result.IsBlocking,
+            Neighbors:       neighbors,
+            StatusDetail:    result.StatusDetail), statusCode);
     }
 }

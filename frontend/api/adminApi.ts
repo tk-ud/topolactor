@@ -1,6 +1,7 @@
 /**
  * Admin API types and client functions for:
  *   - context_token_registry (hub Registry for discrete tokens)
+ *   - registry vector validation (Registrar draft/promote flow)
  *
  * Context route recommendation policy is NOT managed here.
  * Policy lives in function_parameters (topology data store) and is loaded
@@ -78,4 +79,48 @@ export async function deprecateContextToken(
   if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
   const body = await res.json() as { ok: boolean; message: string };
   return body;
+}
+
+// ---------------------------------------------------------------------------
+// Registry vector validation
+// ---------------------------------------------------------------------------
+
+export type RegistryVectorNeighbor = {
+  registryId: string;
+  name: string;
+  cosineScore: number;
+  matchedIds: string[];
+  reason: string;
+};
+
+export type RegistryVectorValidationResult = {
+  validationClass:
+    | "pass"
+    | "related_existing_registry"
+    | "near_duplicate_vector"
+    | "duplicate_vector"
+    | "zero_vector"
+    | "explicit_error";
+  isBlocking: boolean;
+  neighbors: RegistryVectorNeighbor[];
+  statusDetail?: string;
+};
+
+/**
+ * Validates a candidate registry ID array against existing registry rows.
+ * Returns null when the backend is not configured (501).
+ * Throws "HTTP 401" when unauthenticated.
+ */
+export async function validateRegistryVector(
+  registryTable: string,
+  queryIds: string[],
+): Promise<RegistryVectorValidationResult | null> {
+  const res = await fetch("/api/admin/registry-vector-validate", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ registryTable, queryIds }),
+  });
+  if (res.status === 501) return null;
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
+  return await res.json() as RegistryVectorValidationResult;
 }

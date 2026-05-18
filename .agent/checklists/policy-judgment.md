@@ -30,7 +30,7 @@ Does this change introduce or modify a value that controls runtime behavior,
 policy behavior, scoring, thresholds, limits, retention windows, sort order,
 routing, validation, promotion, disclosure, projection shape, or emission?
 
-Answer:
+Answer: yes
 
 ---
 
@@ -47,7 +47,7 @@ Examples:
 
 If Q1=no or n/a, answer n/a.
 
-Answer:
+Answer: no
 
 ---
 
@@ -58,7 +58,7 @@ invalid-policy status instead of substituting the fallback constant?
 
 If Q2=no or n/a, answer n/a.
 
-Answer:
+Answer: n/a
 
 ---
 
@@ -76,7 +76,7 @@ Examples:
 
 If Q1=no or n/a, answer n/a.
 
-Answer:
+Answer: yes
 
 ---
 
@@ -85,7 +85,7 @@ Answer:
 Does this change introduce a silent fallback where missing runtime / policy data
 is automatically replaced without surfacing an explicit error or status?
 
-Answer:
+Answer: no
 
 ---
 
@@ -98,7 +98,7 @@ disclosure, or projection behavior?
 Test fixtures, loop counters, protocol constants, and display-only values are
 exempt.
 
-Answer:
+Answer: no
 
 ---
 
@@ -112,7 +112,7 @@ stored_topology_data → user_operation → operation_vector → attractor_resol
 → component_expand → emission_or_projection
 ```
 
-Answer:
+Answer: no
 
 ---
 
@@ -121,7 +121,7 @@ Answer:
 Does this change add data computation, business logic, or state derivation to
 the frontend projection layer beyond rendering resolved data as props?
 
-Answer:
+Answer: no
 
 ---
 
@@ -130,7 +130,7 @@ Answer:
 Does this change suppress a broken-reference error or resolve a missing ref
 silently instead of returning an explicit validation error or status?
 
-Answer:
+Answer: no
 
 ---
 
@@ -142,7 +142,7 @@ relevant policy executor?
 
 If no policy field is added or modified, answer n/a.
 
-Answer:
+Answer: yes
 
 ---
 
@@ -153,7 +153,7 @@ runtime / policy behavior claims?
 
 If no demo / mock / static values are added, answer n/a.
 
-Answer:
+Answer: n/a
 
 ---
 
@@ -166,7 +166,7 @@ If a mismatch or missing required verification is found, recurse to fix phase be
 Use `git diff main...HEAD` or an equivalent full branch diff — not only the
 latest commit or edited files.
 
-Answer:
+Answer: yes
 
 ---
 
@@ -176,7 +176,7 @@ Are these checklist answers based on the full branch diff and scenario contract
 verification when required, not only the latest commit or edited files?
 Any boundary-matrix or scenario-contract verification gap here is a recursive blocking failure.
 
-Answer:
+Answer: yes
 
 ---
 
@@ -195,7 +195,7 @@ summary. Do not answer `yes` for a check that was not actually run.
 Relevant local CI includes domain checks (db-schema, backend-tests, frontend-types)
 and change-triggered custom agent tests such as `check-default-entity-search.sh`.
 
-Answer:
+Answer: n/a
 
 ---
 
@@ -203,7 +203,7 @@ Answer:
 
 Are remaining TODOs explicitly listed in the completion report or PR summary?
 
-Answer:
+Answer: yes
 
 ---
 

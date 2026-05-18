@@ -40,7 +40,10 @@ builder.Services.AddSingleton<ContextRouteRepository>(sp =>
 // ---------------------------------------------------------------------------
 // Runtime layer
 // ---------------------------------------------------------------------------
-builder.Services.AddSingleton<DiffLogRepository>();
+builder.Services.AddSingleton<DiffLogRepository>(sp =>
+    new NpgsqlDiffLogRepository(
+        sp.GetRequiredService<ILogger<NpgsqlDiffLogRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<OperationVectorResolver>();
 builder.Services.AddSingleton<AttractorResolver>();
 builder.Services.AddSingleton<StructureMapResolver>();
@@ -52,6 +55,8 @@ builder.Services.AddSingleton<RuntimeGuard>();
 builder.Services.AddSingleton<ContextVectorBuilder>();
 builder.Services.AddSingleton<ContextNeighborSearch>();
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
+builder.Services.AddSingleton<TopologyVectorRuntime>();
+builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<RuntimeExecutor>();
 builder.Services.AddSingleton<LogRetentionRuntime>();
 
@@ -151,6 +156,28 @@ app.MapPost("/admin/context-token-registry", async (
         : result.ErrorCode == "DUPLICATE_LABEL_GROUP" ? 409
         : 422;
     return Results.Json(result, statusCode: createStatus);
+});
+
+// POST /admin/registry-vector-validate — validate a candidate registry ID array.
+// Returns RegistryVectorValidationResult. Policy from function_parameters.
+// Policy missing → 422 REGISTRY_VALIDATION_POLICY_NOT_FOUND.
+// DB unavailable → 422 REGISTRY_VECTOR_VALIDATION_DB_UNAVAILABLE (blocking).
+app.MapPost("/admin/registry-vector-validate", async (
+    HttpContext ctx,
+    AdminRegistryVectorValidateRequestDto request,
+    AdminEndpoint admin,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    var (result, statusCode) = await admin.HandleValidateRegistryVectorAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: statusCode);
 });
 
 app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (

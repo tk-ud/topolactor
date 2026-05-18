@@ -139,17 +139,20 @@ public class RuntimeExecutor
         // Step 8: Append diff log (append-only, non-blocking for response)
         try
         {
-            await _diffLogRepository.AppendAsync(
-                hubId: request.IdOrHubId,
-                action: vector.Action ?? "unknown",
-                before: null,
-                after: repositoryCommand,
+            await _diffLogRepository.AppendEditAsync(
+                targetTable: vector.AttractorKey ?? "dispatch",
+                targetId: request.IdOrHubId?.ToString(),
+                operation: vector.Action ?? "unknown",
+                beforeJson: null,
+                afterJson: JsonSerializer.Serialize(repositoryCommand),
+                diffJson: null,
+                actor: vector.ContextUserId,
                 ct: ct);
         }
         catch (Exception ex)
         {
             // Log but do not abort — diff log failure is non-fatal to the emission
-            _logger.LogError(ex, "DiffLogRepository.AppendAsync failed. Continuing execution.");
+            _logger.LogError(ex, "DiffLogRepository.AppendEditAsync failed. Continuing execution.");
         }
 
         // Step 9: Context route recommendation (non-fatal — failure yields ExplicitError status)

@@ -178,6 +178,45 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_active
 CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
     ON structure_maps USING GIN (component_ids);
 
+-- ---------------------------------------------------------------------------
+-- topology_edit_log
+-- Converged entity data table (append-only audit).
+-- Records topology mutations as an append-only edit diff log.
+-- Distinct from demo_state_transitions (which records state machine transitions).
+-- Used for runtime audit, recommendation feedback, and persistence tracing.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology_edit_log (
+    log_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    target_table TEXT        NOT NULL,   -- attractor_key or domain scope identifier
+    target_id    TEXT,                   -- record primary key being edited (nullable for creates/lists)
+    operation    TEXT        NOT NULL,   -- action name (e.g. "create", "update", "advance")
+    before_json  JSONB,                  -- state before the operation (null for creates)
+    after_json   JSONB,                  -- state after the operation (null for deletes)
+    diff_json    JSONB,                  -- diff between before and after (null when not computed)
+    actor        TEXT,                   -- user_id or service identifier
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE topology_edit_log IS
+    'Append-only audit log for topology mutations. Distinct from demo_state_transitions '
+    'which records state machine transitions. Each row is immutable once inserted. '
+    'Used for runtime audit, recommendation feedback, and persistence tracing.';
+
+COMMENT ON COLUMN topology_edit_log.target_table IS
+    'Attractor key or domain scope identifier (e.g. default:entity:create). '
+    'Not a literal DB table name; identifies the topology operation scope.';
+
+COMMENT ON COLUMN topology_edit_log.diff_json IS
+    'JSON diff between before_json and after_json. Null when not computed '
+    '(e.g. on first-version logging before before-state capture is implemented).';
+
+CREATE INDEX IF NOT EXISTS idx_topology_edit_log_target
+    ON topology_edit_log (target_table, target_id);
+
+CREATE INDEX IF NOT EXISTS idx_topology_edit_log_created_at
+    ON topology_edit_log (created_at DESC);
+
+
 CREATE TABLE IF NOT EXISTS demo_state_transitions (
     transition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_id UUID NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE,

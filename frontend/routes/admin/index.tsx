@@ -26,6 +26,15 @@ export default function AdminIndex() {
             </small>
           </li>
           <li style={{ marginTop: "8px" }}>
+            <a href="/admin/registry-vector-validate">
+              registry-vector-validate — Registrar ベクター検証
+            </a>
+            <br />
+            <small style={{ color: "#666" }}>
+              候補 Registry ID 配列のマルチホットコサイン類似度検証（重複・近似重複・関連レジストリ検出）
+            </small>
+          </li>
+          <li style={{ marginTop: "8px" }}>
             <small style={{ color: "#888" }}>
               推薦エンジン設定（min_similarity / top_k 等）は
               function_parameters（topology データストア）に格納されます。
