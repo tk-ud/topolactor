@@ -209,6 +209,47 @@ Each scenario shows how a single Registry or policy change propagates through th
 
 > **Note:** This change affects the recommendation resolver when called via the dispatch API, not the static seed-reference display in `/demo`.
 
+### Scenario E — context fields in dispatch panel → recommendation results visible
+
+`db/demo_seed.sql` seeds pre-computed prefix vectors and a windowed transition from
+`demo:hub:overview` → `demo:entity:list`. With the demo policy (`min_neighbors=1`), a
+single matching prefix is enough to return a recommendation.
+
+1. **Log in** at `/login` with demo credentials.
+2. **Open the dispatch panel** at `/`.
+3. **Expand "Context fields (optional)"** in the operation form.
+4. Enter the demo session ID in *Context Session ID*:
+   ```
+   00000000-0000-0000-0000-000000000031
+   ```
+5. Enter the demo token ID in *Context Token IDs* (comma-separated):
+   ```
+   00000000-0000-0000-0000-000000000021
+   ```
+6. Set target=`demo`, layer=`hub`, action=`overview`, and submit.
+7. The emission's `context_route_recommendation` section shows:
+   - `status: "ok"`
+   - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
+
+**Why it works:** `demo_seed.sql` inserts fixed-UUID events and their pre-computed prefix
+vectors (`context_prefix_vector_cache`). The resolver loads prefix candidates first (before
+appending the current dispatch), so prefix_index=0 finds `next_operation=demo:entity:list`
+cleanly. Neighbor voting at similarity=1.0 with `neighbor_weight=0.6` gives score=0.6.
+Prefix_index=1 has `next_operation=NULL` at that point (no event after it yet) and does not vote.
+
+**Route identity:** the resolver uses the full attractor key (`demo:hub:overview`) as `currentOperation`,
+which matches the `operation` column in seeded `context_event` rows. `tableName` is not used as
+a filter — prefix candidates are scoped by `session_id` and `recent_days`, not by `table_name`.
+
+**Ordering guarantee:** All recommendation reads (`LoadRecentPrefixVectorsAsync`, transition stats)
+complete before `AppendContextEventAsync`. This preserves the prefix → next_operation relationship:
+at candidate read time, prefix_index=1's `last_event_id` has no successor, so it holds `next_operation=NULL`
+and does not vote. The append runs on every path — including cold-start — so that history grows across
+subsequent dispatches and the session eventually reaches `Ok` status.
+
+> **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
+> `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.
+
 ### Scenario D — structure_map or componentRegistry change → /demo projection changes
 
 1. Open `frontend/structure_map.ts` and modify the `"demo:hub:overview"` entry — for example, change `componentIds` to include an additional component ID, or update `packageId`/`schemaId`.

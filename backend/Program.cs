@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Topolactor.Endpoint;
 using Topolactor.Guard;
 using Topolactor.Mapper;
@@ -15,9 +16,9 @@ builder.Logging.AddConsole();
 
 builder.Services.Configure<JsonOptions>(o =>
 {
-    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
-    o.SerializerOptions.DefaultIgnoreCondition =
-        System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+    o.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
 });
 
 // ---------------------------------------------------------------------------

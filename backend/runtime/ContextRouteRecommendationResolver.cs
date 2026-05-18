@@ -105,9 +105,9 @@ public class ContextRouteRecommendationResolver
         }
 
         var tokenIds = ParseTokenIds(vector.ContextTokenIds);
-        var currentOperation = vector.Action ?? "";
+        var currentOperation = vector.AttractorKey ?? "";
         var role = vector.UserRole;
-        var tableName = vector.Target;
+        var tableName = (string?)null;
 
         // Load token registry values for the current event
         IReadOnlyDictionary<Guid, float> tokenValueMap;
@@ -124,7 +124,48 @@ public class ContextRouteRecommendationResolver
         var eventVector = _vectorBuilder.BuildEventVector(tokenIds, tokenValueMap);
         var eventNorm = _vectorBuilder.ComputeL2Norm(eventVector);
 
-        // Append context event — non-fatal
+        // Read 1: prefix candidates — MUST run before AppendContextEventAsync.
+        // The LATERAL JOIN resolves next_operation by finding the event immediately
+        // following last_event_id in the same session. Appending first would make the
+        // current dispatch appear as that successor, corrupting next_operation.
+        var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
+            tableName, role, policy.RecentDays, ct);
+
+        // Read 2: nearest prefixes (pure in-memory; skipped when no candidates).
+        var neighbors = prefixCandidates.Count > 0
+            ? _neighborSearch.FindNearestPrefixes(
+                eventVector, eventNorm, prefixCandidates, policy.MinSimilarity, policy.TopK)
+            : (IReadOnlyList<ContextNeighborResult>)[];
+
+        // Read 3: transition stats — only loaded when neighbor count already satisfies
+        // MinNeighbors, since transition stats are only used in the Ok path.
+        var transitionStats = new List<ContextTransitionStat>();
+        if (neighbors.Count >= policy.MinNeighbors && !string.IsNullOrWhiteSpace(currentOperation))
+        {
+            try
+            {
+                IReadOnlyList<ContextTransitionStat> stats;
+                if (policy.TransitionAggregation is not null)
+                {
+                    stats = await _contextRouteRepository.GetWindowedTransitionStatsAsync(
+                        currentOperation, role, policy.TransitionAggregation, policy.MaxCandidatesShown, ct);
+                }
+                else
+                {
+                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, policy.MaxCandidatesShown, ct);
+                }
+                transitionStats.AddRange(stats);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ContextRouteRepository transition stats query failed — continuing without baseline.");
+            }
+        }
+
+        // Append current dispatch AFTER all recommendation reads, before any status return.
+        // Ordering constraint: LoadRecentPrefixVectorsAsync already ran — LATERAL JOIN is not corrupted.
+        // Appends on every path (including InsufficientHistory) so cold-start history can grow
+        // and subsequent dispatches can eventually produce Ok recommendations.
         var contextEvent = new ContextEventRecord(
             EventId: Guid.NewGuid(),
             SessionId: sessionId,
@@ -148,19 +189,11 @@ public class ContextRouteRecommendationResolver
             _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
         }
 
-        // Load prefix vector candidates.
-        var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, policy.RecentDays, ct);
-
         if (prefixCandidates.Count == 0)
         {
             _logger.LogDebug("ContextRouteRecommendationResolver: no prefix candidates — InsufficientHistory.");
             return InsufficientHistory("NO_CONTEXT_HISTORY");
         }
-
-        // Find nearest prefixes
-        var neighbors = _neighborSearch.FindNearestPrefixes(
-            eventVector, eventNorm, prefixCandidates, policy.MinSimilarity, policy.TopK);
 
         if (neighbors.Count < policy.MinNeighbors)
         {
@@ -168,32 +201,6 @@ public class ContextRouteRecommendationResolver
                 "ContextRouteRecommendationResolver: {Count} neighbors < min {Min} — InsufficientHistory.",
                 neighbors.Count, policy.MinNeighbors);
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
-        }
-
-        // Load transition stats for baseline.
-        // When TransitionAggregation policy is set, compute windowed stats from raw context_event rows
-        // instead of reading from the pre-aggregated context_transition_stats table.
-        var transitionStats = new List<ContextTransitionStat>();
-        if (!string.IsNullOrWhiteSpace(currentOperation))
-        {
-            try
-            {
-                IReadOnlyList<ContextTransitionStat> stats;
-                if (policy.TransitionAggregation is not null)
-                {
-                    stats = await _contextRouteRepository.GetWindowedTransitionStatsAsync(
-                        currentOperation, role, policy.TransitionAggregation, policy.MaxCandidatesShown, ct);
-                }
-                else
-                {
-                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, policy.MaxCandidatesShown, ct);
-                }
-                transitionStats.AddRange(stats);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "ContextRouteRepository transition stats query failed — continuing without baseline.");
-            }
         }
 
         var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);

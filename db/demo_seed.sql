@@ -29,6 +29,8 @@
 --     demo_token_warning:          00000000-0000-0000-0000-000000000022
 --     demo_token_critical:         00000000-0000-0000-0000-000000000023
 --     demo_session:                00000000-0000-0000-0000-000000000031
+--     demo_event_overview:         00000000-0000-0000-0000-000000000051
+--     demo_event_entity_list:      00000000-0000-0000-0000-000000000052
 --
 -- HOW TO RUN (after seed_empty.sql):
 --   psql -d <database> -f db/schema.sql
@@ -263,8 +265,8 @@ ON CONFLICT (session_id) DO NOTHING;
 -- context_event — demo operation events (prefix vector source)
 -- Two sequential events in the demo session showing a demo:hub:overview →
 -- demo:entity:list transition.
--- These events seed context_prefix_vector_cache (after vector build pipeline)
--- and context_transition_stats (near-realtime on each append).
+-- Fixed UUIDs allow context_event_vector_cache and context_prefix_vector_cache
+-- to be seeded deterministically below.
 -- ---------------------------------------------------------------------------
 INSERT INTO context_event (
     event_id, session_id, user_id, role,
@@ -272,7 +274,7 @@ INSERT INTO context_event (
 )
 VALUES
     (
-        gen_random_uuid(),
+        '00000000-0000-0000-0000-000000000051',
         '00000000-0000-0000-0000-000000000031',
         'demo_user', 'demo_role',
         'hubs',
@@ -281,17 +283,95 @@ VALUES
         now() - interval '2 minutes'
     ),
     (
-        gen_random_uuid(),
+        '00000000-0000-0000-0000-000000000052',
         '00000000-0000-0000-0000-000000000031',
         'demo_user', 'demo_role',
         'entities',
         'demo:entity:list',
         ARRAY['00000000-0000-0000-0000-000000000021', '00000000-0000-0000-0000-000000000022']::uuid[],
         now() - interval '1 minute'
-    );
--- Note: context_prefix_vector_cache and context_transition_stats are populated
--- by the backend pipeline (AppendContextEventAsync + UpsertPrefixVectorCacheAsync).
--- They are NOT seeded directly here; they rebuild from context_event on restart.
+    )
+ON CONFLICT (event_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- context_event_vector_cache — pre-computed event vectors for demo events
+--
+-- vector_sparse: {token_id_string: value} derived from context_token_registry.
+--   demo_token_active  (0021): value=1.0  → contributes to l2_norm
+--   demo_token_warning (0022): value=0.0  → present but does not affect l2_norm
+--
+-- l2_norm = sqrt(SUM(value^2)):
+--   event_overview:    sqrt(1.0^2)         = 1.0
+--   event_entity_list: sqrt(1.0^2 + 0.0^2) = 1.0
+-- ---------------------------------------------------------------------------
+INSERT INTO context_event_vector_cache (event_id, vector_sparse, l2_norm, updated_at)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000051',
+        '{"00000000-0000-0000-0000-000000000021": 1.0}'::jsonb,
+        1.0,
+        now()
+    ),
+    (
+        '00000000-0000-0000-0000-000000000052',
+        '{"00000000-0000-0000-0000-000000000021": 1.0, "00000000-0000-0000-0000-000000000022": 0.0}'::jsonb,
+        1.0,
+        now()
+    )
+ON CONFLICT (event_id) DO UPDATE
+    SET vector_sparse = EXCLUDED.vector_sparse,
+        l2_norm       = EXCLUDED.l2_norm,
+        updated_at    = now();
+
+
+-- ---------------------------------------------------------------------------
+-- context_prefix_vector_cache — pre-computed prefix vectors for demo session
+--
+-- Prefix vector = SUM(event_vectors[0..prefix_index]).
+--   prefix_index 0: SUM([event_overview])               → {0021: 1.0},           l2_norm=1.0
+--   prefix_index 1: SUM([event_overview, entity_list])  → {0021: 2.0, 0022: 0.0}, l2_norm=2.0
+--
+-- next_operation for each prefix is resolved at query time via LATERAL JOIN on
+-- context_event (first event after last_event_id in the same session):
+--   prefix 0 (last=event_overview)    → next: demo:entity:list  (always stable)
+--   prefix 1 (last=event_entity_list) → next: NULL at recommendation candidate read time
+--
+-- The NULL for prefix 1 holds at recommendation candidate read time because
+-- ContextRouteRecommendationResolver runs LoadRecentPrefixVectorsAsync before
+-- AppendContextEventAsync. At the point the LATERAL JOIN executes, no event follows
+-- demo_event_entity_list in the session — prefix 1 finds NULL and does not vote.
+-- AppendContextEventAsync runs after all reads on every dispatch path (including
+-- cold-start), so the current operation is recorded for future recommendations.
+--
+-- With demo_policy min_neighbors=1, a dispatch with ContextSessionId=demo_session
+-- and token_ids including token_active (0021) will find prefix 0 at similarity=1.0
+-- and recommend demo:entity:list as the sole next operation candidate.
+-- ---------------------------------------------------------------------------
+INSERT INTO context_prefix_vector_cache
+    (session_id, prefix_index, last_event_id, vector_sparse, l2_norm, updated_at)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000031',
+        0,
+        '00000000-0000-0000-0000-000000000051',
+        '{"00000000-0000-0000-0000-000000000021": 1.0}'::jsonb,
+        1.0,
+        now()
+    ),
+    (
+        '00000000-0000-0000-0000-000000000031',
+        1,
+        '00000000-0000-0000-0000-000000000052',
+        '{"00000000-0000-0000-0000-000000000021": 2.0, "00000000-0000-0000-0000-000000000022": 0.0}'::jsonb,
+        2.0,
+        now()
+    )
+ON CONFLICT (session_id, prefix_index) DO UPDATE
+    SET last_event_id = EXCLUDED.last_event_id,
+        vector_sparse = EXCLUDED.vector_sparse,
+        l2_norm       = EXCLUDED.l2_norm,
+        updated_at    = now();
 
 
 -- ---------------------------------------------------------------------------
@@ -333,7 +413,9 @@ INSERT INTO function_parameters (function_name, parameter_key, parameter_value, 
 VALUES (
     'context_route_recommendation_resolve',
     'demo_policy',
-    '{"min_similarity":0.02,"top_k":20,"min_neighbors":3,"recent_days":null,"max_candidates_shown":3,"baseline_weight":0.4,"neighbor_weight":0.6,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}',
+    '{"min_similarity":0.02,"top_k":20,"min_neighbors":1,"recent_days":null,"max_candidates_shown":3,"baseline_weight":0.4,"neighbor_weight":0.6,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}',
     true
 )
-ON CONFLICT (function_name, parameter_key) DO NOTHING;
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;

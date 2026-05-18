@@ -29,7 +29,7 @@ export type ContextRouteRecommendation = {
   nextTokens: RecommendationCandidate[];
   nearestPrefixSessionIds: string[];
   contributingTokens: string[];
-  status: "Ok" | "InsufficientHistory" | "ExplicitError";
+  status: "ok" | "insufficient_history" | "explicit_error";
   statusDetail?: string;
 };
 
@@ -50,7 +50,7 @@ export type DispatchRequest = {
   action: string;
   idOrHubId?: string;
   payload?: Record<string, unknown>;
-  context?: Record<string, unknown>;
+  context?: Record<string, string>;
 };
 
 export type DispatchResponse = {

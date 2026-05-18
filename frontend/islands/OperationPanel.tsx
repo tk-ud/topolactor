@@ -37,6 +37,8 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
   const [operationType, setOperationType] = useState<OperationType>(
     initialOperation?.operationType ?? "Search",
   );
+  const [contextSessionId, setContextSessionId] = useState("");
+  const [contextTokenIds, setContextTokenIds] = useState("");
 
   const [token, setToken] = useState<string | null>(null);
   const [emission, setEmission] = useState<Emission | null>(null);
@@ -65,12 +67,17 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     setEmission(null);
     setLoading(true);
 
+    const context: Record<string, string> = {};
+    if (contextSessionId.trim()) context["ContextSessionId"] = contextSessionId.trim();
+    if (contextTokenIds.trim()) context["ContextTokenIds"] = contextTokenIds.trim();
+
     const response = await dispatchOperation(
       {
         operationType: op.operationType,
         target: op.target,
         layer: op.layer,
         action: op.action,
+        context: Object.keys(context).length > 0 ? context : undefined,
       },
       currentToken ?? undefined,
     );
@@ -192,6 +199,34 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
             ))}
           </select>
         </label>
+
+        <details style={{ marginBottom: "12px" }}>
+          <summary style={{ cursor: "pointer", color: "#555", fontSize: "0.9em" }}>
+            Context fields (optional — enables recommendation)
+          </summary>
+          <div style={{ marginTop: "8px", paddingLeft: "4px" }}>
+            <label style={labelStyle}>
+              Context Session ID
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="e.g. 00000000-0000-0000-0000-000000000031 (demo session)"
+                value={contextSessionId}
+                onInput={(e) => setContextSessionId((e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label style={labelStyle}>
+              Context Token IDs (comma-separated)
+              <input
+                style={inputStyle}
+                type="text"
+                placeholder="e.g. 00000000-0000-0000-0000-000000000021 (token_active)"
+                value={contextTokenIds}
+                onInput={(e) => setContextTokenIds((e.target as HTMLInputElement).value)}
+              />
+            </label>
+          </div>
+        </details>
 
         <button type="submit" disabled={loading}>
           {loading ? "Dispatching…" : "Dispatch operation"}
