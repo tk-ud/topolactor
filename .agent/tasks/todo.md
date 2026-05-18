@@ -16,25 +16,20 @@
 
 ## Auth / Demo Login
 
-- [ ] JWT login scaffold を追加する
-      → public demo / admin demo の最小ログイン導線として実装する。実ビジネス認証ではなく demo scaffold 用。
-      → JWT secret / issuer / expiry など Runtime/Auth behavior に影響する値は hardcode せず、環境変数または demo policy surface に寄せる。
-      → 対象候補: backend/endpoint/*, backend/guard/*, backend/schema/*, frontend/routes/*, frontend/api/*。
-
-- [ ] password hash を bcrypt 系で扱う
-      → demo user の password は平文保存しない。demo credential は公開用でも hash 済み seed / config とする。
-      → bcrypt 採用可否、C# 側 library、seed 生成方法を確認する。
-      → 対象候補: db/demo_seed.sql, backend auth endpoint, auth repository/guard。
+- [ ] backend HTTP host と /auth/login HTTP route を実装する
+      → `backend/endpoint/AuthEndpoint.cs` に認証ロジッククラスは存在するが、
+         backend に HTTP ホスト (ASP.NET Core Program.cs / WebApplication 等) がなく、
+         HTTP route バインドが未実装。
+      → `frontend/routes/api/auth/login.ts` は `DEMO_BACKEND_URL/auth/login` に
+         proxy しているが、この backend エンドポイントが稼働していない限り機能しない。
+      → 実装時の対象候補: backend/Program.cs または backend/Host.cs,
+         MinimalAPI または Controller routing, DEMO_BACKEND_URL 設定手順。
+      → docs/demo-walkthrough.md に「backend HTTP route 未実装」と明記済み。
 
 ## Infra / Demo Runtime
 
 - [ ] nginx service を docker compose に接続する
-      → frontend / backend service が `infra/docker-compose.yml` に追加されたタイミングで nginx service を有効化する。
-      → 現時点では Postgres / Adminer のみなので、未定義 upstream を compose に接続しない。
-      → 対象: infra/docker-compose.yml, infra/nginx.conf, docs/demo-walkthrough.md。
-
-- [ ] docker compose の seed 適用順と実行確認を行う
-      → `docker compose -f infra/docker-compose.yml up` で schema / topology / promotion / context route / seed_empty が適用されることを確認する。
-      → `db/demo_seed.sql` 追加済み。compose init mount に含めるか、walkthrough 側で明示実行にするか判断する。
-      → 対象: infra/docker-compose.yml, db/README.md（手順記載済み）, docs/demo-walkthrough.md。
-
+      → 前提: frontend service と backend service が `infra/docker-compose.yml` に追加されること。
+      → 現時点では postgres / adminer のみ。frontend/backend docker サービスが定義されるまで nginx upstream を compose に追加しない。
+      → 追加時の対象: infra/docker-compose.yml (nginx service + depends_on 追加), docs/demo-walkthrough.md (nginx 有効化手順)。
+      → infra/nginx.conf はすでに frontend:8000 / backend:5000 upstream を定義済み。
