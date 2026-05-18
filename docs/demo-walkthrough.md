@@ -71,6 +71,36 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 
 ---
 
+## Demo Login → Dispatch Flow
+
+To observe the backend canonical flow end-to-end:
+
+1. **Log in:** Open `/login`, enter demo credentials (seeded by `db/demo_seed.sql`).
+   - On success, the JWT token is saved to browser `sessionStorage` under `demo_jwt_token`.
+   - A "Go to dispatch panel" link is shown.
+2. **Open `/`** (the dispatch panel). The OperationPanel reads the token from `sessionStorage`
+   and shows "Authenticated." status.
+3. **Submit a dispatch operation** (e.g. target `default`, layer `entity`, action `Search`).
+   - The panel sends `POST /api/dispatch` with `Authorization: Bearer <token>`.
+   - The backend JwtGuard validates the token, RuntimeExecutor runs the canonical flow,
+     and the emission is returned and displayed by EmissionView.
+
+**Routing — two paths depending on how you access the frontend:**
+
+| Access method | `/api/dispatch` routing |
+|---|---|
+| Docker Compose / nginx (port 80) | nginx `location /api/` → `backend:5000 POST /dispatch` directly. Fresh proxy is bypassed by nginx. |
+| Fresh standalone (port 8000, `deno task start`) | Fresh route `frontend/routes/api/dispatch.ts` → `DEMO_BACKEND_URL/dispatch`. Requires `DEMO_BACKEND_URL` to be set. |
+
+**Without login:** the OperationPanel shows "Not logged in" status and any dispatch attempt
+returns `AUTH_TOKEN_MISSING` from the backend — explicit, not silent.
+
+**Fresh standalone only — `DEMO_BACKEND_URL` not configured:** `/api/dispatch` returns
+`DISPATCH_BACKEND_NOT_CONFIGURED` (501). This error is from the Fresh proxy and does not
+apply when nginx routes the request directly to the backend.
+
+---
+
 ## What the Demo Shows
 
 The `/demo` route exercises the **frontend-side** canonical flow only:

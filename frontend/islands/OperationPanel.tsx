@@ -1,10 +1,12 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import { JSX } from "preact";
 import type { UserOperation, OperationType } from "../runtime/resolveOperationVector.ts";
 import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
 import { dispatchOperation } from "../api/dispatch.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { EmissionView } from "../components/EmissionView.tsx";
+
+const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 const OPERATION_TYPES: OperationType[] = [
   "Search",
@@ -22,10 +24,11 @@ type Props = {
  *
  * It provides a form that lets the user compose a UserOperation, converts it
  * to an OperationVector via resolveOperationVector, dispatches it to the
- * backend via dispatchOperation, and displays the resulting Emission through
- * EmissionView.
+ * backend via dispatchOperation (with JWT token from sessionStorage), and
+ * displays the resulting Emission through EmissionView.
  *
- * This is the primary physical interaction point for the frontend skeleton.
+ * Login is required: the backend /dispatch endpoint is JWT-guarded.
+ * Token is read from sessionStorage (demo_jwt_token) set by LoginPanel after login.
  */
 export default function OperationPanel({ initialOperation }: Props): JSX.Element {
   const [target, setTarget] = useState(initialOperation?.target ?? "default");
@@ -35,12 +38,20 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     initialOperation?.operationType ?? "Search",
   );
 
+  const [token, setToken] = useState<string | null>(null);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [loading, setLoading] = useState(false);
   const [vectorPreview, setVectorPreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    setToken(sessionStorage.getItem(SESSION_TOKEN_KEY));
+  }, []);
+
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
+
+    const currentToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    setToken(currentToken);
 
     const op: UserOperation = {
       operationType,
@@ -54,12 +65,15 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     setEmission(null);
     setLoading(true);
 
-    const response = await dispatchOperation({
-      operationType: op.operationType,
-      target: op.target,
-      layer: op.layer,
-      action: op.action,
-    });
+    const response = await dispatchOperation(
+      {
+        operationType: op.operationType,
+        target: op.target,
+        layer: op.layer,
+        action: op.action,
+      },
+      currentToken ?? undefined,
+    );
 
     setLoading(false);
 
@@ -85,9 +99,49 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     fontFamily: "monospace",
   };
 
+  const authBannerStyle = token
+    ? {
+        background: "#e6f9e6",
+        border: "1px solid #4caf50",
+        borderRadius: "4px",
+        padding: "8px 12px",
+        marginBottom: "16px",
+        fontSize: "0.9em",
+      }
+    : {
+        background: "#fffbe6",
+        border: "1px solid #e6c700",
+        borderRadius: "4px",
+        padding: "8px 12px",
+        marginBottom: "16px",
+        fontSize: "0.9em",
+      };
+
   return (
     <div class="operation-panel" style={{ maxWidth: "640px" }}>
       <h2>Operation Panel</h2>
+
+      <div style={authBannerStyle}>
+        {token
+          ? (
+            <>
+              <strong>Authenticated.</strong> JWT token loaded from sessionStorage.
+              {" "}
+              <a href="/login" style={{ fontSize: "0.9em" }}>Re-login</a>
+            </>
+          )
+          : (
+            <>
+              <strong>Not logged in.</strong> Dispatch requires authentication.{" "}
+              <a href="/login" style={{ fontWeight: "bold" }}>Login →</a>
+              {" "}
+              <span style={{ color: "#888" }}>
+                (Without a token, the backend returns AUTH_TOKEN_MISSING.)
+              </span>
+            </>
+          )}
+      </div>
+
       <form onSubmit={handleSubmit}>
         <label style={labelStyle}>
           target

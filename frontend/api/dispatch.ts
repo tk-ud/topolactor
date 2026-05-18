@@ -63,17 +63,21 @@ export type DispatchResponse = {
  * Sends a DispatchRequest to the backend /api/dispatch endpoint and returns
  * the parsed DispatchResponse.
  *
+ * If token is provided, adds Authorization: Bearer <token> to the request.
  * On any fetch-level error (network failure, JSON parse failure) the function
  * returns a failed DispatchResponse carrying the error as a ValidationError
  * rather than throwing, so the caller can treat all outcomes uniformly.
  */
 export async function dispatchOperation(
   req: DispatchRequest,
+  token?: string,
 ): Promise<DispatchResponse> {
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
     const response = await fetch("/api/dispatch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(req),
     });
 
