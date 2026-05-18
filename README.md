@@ -1,14 +1,29 @@
 # topolactor
 
-Topolactor is a data-driven topology runtime scaffold.
+Topolactor is a **DB-defined application runtime and agent-assisted development OS** built as a data-driven topology runtime.
 
-Use this repository as a seed for a separate product repository.
+It is a public scaffold for building runtime-defined applications where topology, dispatch, projection, and policy are resolved from stored definitions instead of fixed CRUD screens.
 
 **Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
 
+## Application Runtime OS / Agent Development OS
+
+Topolactor is intentionally organized as a two-layer system:
+
+- **Application Runtime OS**
+  - Stores topology semantics in DB surfaces (registries, schemas, packages, relations, structure maps, function parameters).
+  - Resolves user operations through the canonical runtime route.
+  - Emits runtime output and UI projection inputs from data-defined topology.
+- **Agent Development OS**
+  - Governs how AI agents inspect, modify, verify, and report repository changes.
+  - Preserves semantic boundaries (runtime vs projection vs policy) during agent-assisted evolution.
+  - Uses explicit rule, protocol, checklist, script, and test surfaces.
+
+This repository is **not** a CRUD generator. It is a runtime-defined application scaffold where AI agents can safely modify topology-driven behavior while preserving semantic architecture boundaries.
+
 ## What You Can Build
 
-Topolactor is designed for applications where UI, data shape, and runtime behavior are expanded from stored definitions instead of hard-coded screens.
+Topolactor is designed for applications where UI, data shape, and runtime behavior are expanded from stored definitions.
 
 With this scaffold, you can build:
 
@@ -18,9 +33,9 @@ With this scaffold, you can build:
 - composite domain projections centered around a resolved hub
 - operation-to-runtime dispatch flows
 - context-aware recommendation surfaces based on accumulated operation history
-- agent-assisted scaffold repositories with local CI guardrails
+- runtime-defined applications that remain agent-editable under governance constraints
 
-In this project, a **hub** is a resolved grouping point in the topology space. It lets related domain data be assembled as a view without making a fixed physical table or screen the architecture subject.
+In this project, a **hub** is a resolved grouping point in topology space. It lets related domain data be assembled as a view without making a fixed physical table or screen the architecture subject.
 
 The intended extension model is:
 
@@ -32,24 +47,21 @@ add topology data
 → frontend projects UI
 ```
 
-This makes it possible to add new runtime surfaces by extending runtime definitions, packages, components, schemas, and structure maps instead of creating a fixed CRUD screen for every table.
-
 ## Repository Surfaces
 
-Topolactor is organized as three public-facing surfaces:
+Topolactor exposes the following surfaces:
 
-- **Runtime scaffold** — backend, frontend, database, and demo topology definitions.
-- **Demo walkthrough** — fake-data scenarios showing how topology and policy changes propagate.
-- **Agent governance layer** — `.agent/` and `AGENTS.md`, which define how coding agents should inspect, modify, verify, and report changes.
+- **Runtime scaffold** — backend, frontend, database, and topology definitions.
+- **Documentation surface** — architecture, policy, flow, and operating guides.
+- **Agent Development OS surface** — governance assets for AI-agent operation (`AGENTS.md`, `.agent/rules/`, `.agent/protocols/`, `.agent/scripts/`, `.agent/checklists/`, `.agent/tests/`).
 
-The `.agent/` layer is not application runtime code. It is a repository governance layer for preserving the data-defined topology architecture during agent-assisted development.
+The Agent Development OS layer is governance infrastructure, not application runtime logic.
 
 ## Self-Learning DB and Recommendation Runtime
 
 Topolactor includes a lightweight self-learning DB pattern for recommendation.
 
-It does not train a neural network and does not backpropagate model weights.
-Instead, it records append-only context events and derives recommendations from stored topology data, token registries, vector caches, and transition aggregates.
+It does not train a neural network and does not backpropagate model weights. Instead, it records append-only context events and derives recommendations from stored topology data, token registries, vector caches, and transition aggregates.
 
 The basic loop is:
 
@@ -70,7 +82,6 @@ P(next_operation | prev_operation)
 ```
 
 This keeps learning behavior explainable, auditable, and data-defined.
-Runtime thresholds, scoring policy, retention policy, and recommendation behavior should be resolved from Registry / Manifest / function_parameters / structure_map policy surfaces rather than hidden constants.
 
 ## Core Flow
 
@@ -88,37 +99,21 @@ stored_topology_data
 
 ## Demo
 
-A public scaffold demo is available at the `/demo` route after starting the frontend.
+A public scaffold demo is available after starting the frontend runtime.
 
-The `/demo` route exercises the **frontend-side** canonical flow only:
+- `/demo` is the **runtime dispatch entrypoint** used for interactive runtime flow access.
+- `/demo-static` is a **frontend-only static structure diagram** and **not a runtime result**.
+- `/` can also be used to exercise runtime dispatch and related backend-connected behavior depending on environment wiring.
 
-```
-UserOperation → resolveOperationVector → attractorKey
-→ lookupStructureMap → Emission → renderEmission → ComponentSpec[]
-```
-
-Changing `defaultStructureMap` (`frontend/structure_map.ts`) or `defaultComponentRegistry` (`frontend/registry/componentRegistry.ts`) changes what `/demo` resolves and renders — no DB required.
-
-Backend resolution (DB attractor_resolve, live entity data, live recommendations) is exercised at `/` via the dispatch panel.
-
-The walkthrough (`docs/demo-walkthrough.md`) covers 4 scenarios:
-
-- **Scenario A** — token `value` change → recommendation score change (backend/DB, via dispatch panel)
-- **Scenario B** — `context_route_policy_ref` change → different policy loads (backend/DB, via dispatch panel)
-- **Scenario C** — `aggregation_limit` change → windowed transition stats scope changes (backend/DB, via dispatch panel)
-- **Scenario D** — `defaultStructureMap` or `defaultComponentRegistry` change → `/demo` projection changes (frontend only, no DB)
-
-No real domain data is used.
+The walkthrough (`docs/demo-walkthrough.md`) covers representative scenarios around recommendation and policy behavior using fake data.
 
 ## Demo Status
 
 The public demo uses fake data only.
 
-- `/demo` shows the frontend-side canonical projection flow.
-- `/` dispatch panel exercises backend-side runtime resolution when backend and DB services are available.
-- `docs/demo-walkthrough.md` documents observable scenarios for token value changes, policy reference changes, aggregation policy changes, and frontend projection changes.
-
-Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
+- Runtime-connected behavior is exercised through dispatch-capable runtime entry surfaces.
+- `/demo-static` is documentation-style static structure output only, not runtime execution output.
+- Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
 
 ## Start Here
 
@@ -131,34 +126,31 @@ Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
 - `docs/design/relation-registry-fk-audit-and-abstract-migration.md` — relation_registry authority FK audit / abstract migration SSOT.
 - `docs/registrar-admin-ui-specification.md` — boundary for topology registration admin UI.
 - `docs/promotion-manifest-editor-specification.md` — boundary for promotion manifest editing.
-- `AGENTS.md` — entrypoint instructions for coding agents.
-- `.agent/` — agent rules, structure checks, skills, tasks, and routine agent surfaces.
+- `AGENTS.md` — top-level agent entrypoint instructions.
 
 ## Agent Governance
 
-Agent-assisted changes are governed by `AGENTS.md`.
+Agent governance is split across explicit surfaces:
 
-The agent flow separates:
-
-- local CI checks for structure, backend, frontend, and DB verification
-- Policy Judgment Gate checks for architecture and policy decisions
-- residual task tracking in `.agent/tasks/todo.md`
-
-This helps prevent accidental conversion into CRUD/MVC code, silent runtime fallbacks, frontend domain-specific logic, or hidden production policy constants.
+- `AGENTS.md` — root contract and required execution order.
+- `.agent/rules/rule.md` — architecture and policy rules.
+- `.agent/protocols/` — protocol definitions (scenario contract, boundary matrix, completion sequence, policy judgment).
+- `.agent/scripts/` — helper scripts for repeatable protocol operations.
+- `.agent/checklists/` — policy-judgment and related compliance checklist gates.
+- `.agent/tests/` — structure and repository-level guard checks.
 
 ## Agent Workflow
 
 ```text
-READ_AGENTS
+READ_AGENTS_AND_RULES
+→ SELECT_RELEVANT_PROTOCOLS_AND_CHECKLISTS
+→ (IF REQUIRED) CREATE_SCENARIO_CONTRACT
+→ IMPLEMENT_AND_VERIFY_BOUNDARY_MATRIX_SCOPE
 → INSPECT_FULL_BRANCH_DIFF
-→ APPLY_POLICY_JUDGMENT
-→ AUDIT_SCOPE_AND_CLAIMS
-→ RUN_RELEVANT_LOCAL_CI
-→ RUN_STRUCTURE_CHECK_LAST
-→ REPORT_PASS_FAIL_NOT_EXECUTED_AND_TODOS
+→ RUN_REQUIRED_LOCAL_CHECKS
+→ RUN bash .agent/tests/check-structure.sh LAST
+→ REPORT_PASS_FAIL_NOT_EXECUTED_AND_REMAINING_TODOS
 ```
-
-For detailed agent instructions, see `AGENTS.md`.
 
 See `NOTICE.md`.
 
