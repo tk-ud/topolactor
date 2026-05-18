@@ -18,6 +18,7 @@ Topolactor is intentionally organized as a two-layer system:
   - Governs how AI agents inspect, modify, verify, and report repository changes.
   - Preserves semantic boundaries (runtime vs projection vs policy) during agent-assisted evolution.
   - Uses explicit rule, protocol, checklist, script, and test surfaces.
+  - External overview: [`docs/agent-development-os.md`](docs/agent-development-os.md).
 
 This repository is **not** a CRUD generator. It is a runtime-defined application scaffold where AI agents can safely modify topology-driven behavior while preserving semantic architecture boundaries.
 
