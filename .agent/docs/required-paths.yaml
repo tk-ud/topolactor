@@ -13,7 +13,7 @@ required_directories:
     - .agent/tasks
     - .agent/reports
     - .agent/checklists
-    - .agent/tests/fixtures/runtime-policy
+    - .agent/checklists/fixtures/policy-judgment
   docs:
     - docs
   db:
@@ -55,13 +55,15 @@ required_files:
     - .agent/tests/check-backend-tests.sh
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
-    - .agent/tests/check-runtime-policy-local.sh
     - .agent/tasks/todo.md
     - .agent/reports/README.md
-    - .agent/checklists/runtime-policy.md
-    - .agent/tests/fixtures/runtime-policy/pass.md
-    - .agent/tests/fixtures/runtime-policy/fail-unanswered.md
-    - .agent/tests/fixtures/runtime-policy/fail-policy-violation.md
+    - .agent/checklists/policy-judgment.md
+    - .agent/checklists/check-policy-judgment.sh
+    - .agent/checklists/fixtures/policy-judgment/pass.md
+    - .agent/checklists/fixtures/policy-judgment/fail-unanswered.md
+    - .agent/checklists/fixtures/policy-judgment/fail-policy-violation.md
+    - .agent/checklists/fixtures/policy-judgment/fail-partial-diff.md
+    - .agent/checklists/fixtures/policy-judgment/fail-local-checks.md
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml

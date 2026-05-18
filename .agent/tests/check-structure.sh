@@ -39,7 +39,7 @@ check_content() {
     fail "Content check skipped (file missing): $1 — expected term: $term"
     return
   fi
-  if grep -qF "$term" "$file"; then
+  if grep -qF -- "$term" "$file"; then
     echo "OK  [term] $1 → \"$term\""
   else
     fail "Term not found in $1: \"$term\""
@@ -57,7 +57,7 @@ check_dir ".agent/tests"
 check_dir ".agent/tasks"
 check_dir ".agent/reports"
 check_dir ".agent/checklists"
-check_dir ".agent/tests/fixtures/runtime-policy"
+check_dir ".agent/checklists/fixtures/policy-judgment"
 check_dir "docs"
 check_dir "db"
 check_dir "backend/endpoint"
@@ -95,13 +95,15 @@ check_file ".agent/skills/structure-check.md"
 check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tests/check-frontend-types.sh"
-check_file ".agent/tests/check-runtime-policy-local.sh"
 check_file ".agent/tasks/todo.md"
 check_file ".agent/reports/README.md"
-check_file ".agent/checklists/runtime-policy.md"
-check_file ".agent/tests/fixtures/runtime-policy/pass.md"
-check_file ".agent/tests/fixtures/runtime-policy/fail-unanswered.md"
-check_file ".agent/tests/fixtures/runtime-policy/fail-policy-violation.md"
+check_file ".agent/checklists/policy-judgment.md"
+check_file ".agent/checklists/check-policy-judgment.sh"
+check_file ".agent/checklists/fixtures/policy-judgment/pass.md"
+check_file ".agent/checklists/fixtures/policy-judgment/fail-unanswered.md"
+check_file ".agent/checklists/fixtures/policy-judgment/fail-policy-violation.md"
+check_file ".agent/checklists/fixtures/policy-judgment/fail-partial-diff.md"
+check_file ".agent/checklists/fixtures/policy-judgment/fail-local-checks.md"
 
 check_file ".github/workflows/structure-check.yml"
 check_file ".github/workflows/backend-tests.yml"
@@ -222,12 +224,14 @@ check_content "docs/promotion-manifest-editor-specification.md" "frontend must n
 check_content "docs/promotion-manifest-editor-specification.md" "disclosure text must be explicit"
 check_content "docs/promotion-manifest-editor-specification.md" "editor does not execute runtime"
 
-check_content ".agent/checklists/runtime-policy.md" "Q1"
-check_content ".agent/checklists/runtime-policy.md" "Q10"
-check_content ".agent/checklists/runtime-policy.md" "Answer:"
-check_content ".agent/tests/check-runtime-policy-local.sh" "Answer:"
-check_content "AGENTS.md" "check-runtime-policy-local.sh"
-check_content ".agent/rules/rule.md" "Agent Judgment Gate"
+check_content ".agent/checklists/policy-judgment.md" "Q1"
+check_content ".agent/checklists/policy-judgment.md" "Q15"
+check_content ".agent/checklists/policy-judgment.md" "Answer:"
+check_content ".agent/checklists/check-policy-judgment.sh" "Answer:"
+check_content ".agent/checklists/check-policy-judgment.sh" "--self-test"
+check_content "AGENTS.md" "check-policy-judgment.sh"
+check_content "AGENTS.md" "Policy Judgment Gate"
+check_content ".agent/rules/rule.md" "Policy Judgment Gate"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

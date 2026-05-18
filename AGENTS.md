@@ -63,35 +63,50 @@ Do not update `.agent/tasks/todo.md` during normal PR work unless a real remaini
 PR audit results should normally stay in the review / conversation / PR comment surface.
 Implementation summaries should normally stay in the PR description or completion message.
 
-## Runtime Policy Checklist Gate
+## Policy Judgment Gate
 
-For any task that touches runtime behavior, data-defined topology, canonical
-route steps, or frontend projection: complete `.agent/checklists/runtime-policy.md`
-and run the local check before reporting completion.
+`.agent/checklists/` contains a local-only Agent judgment gate for policy-impacting
+changes. It is **not** a GitHub Actions workflow. It is separate from the
+`.agent/tests/*.sh` local CI gates — those verify structure and build correctness;
+this verifies policy design decisions.
+
+**When required:** any change involving runtime behavior, data-defined topology,
+Registry, Manifest, function_parameters, structure_map policy, package / schema /
+component expansion, recommendation, scoring, threshold, retention, routing,
+validation, promotion, disclosure, frontend projection claim, or docs / README /
+PR summary that asserts runtime or policy behavior.
+
+**Not required** for documentation-only, comment-only, purely mechanical refactor,
+display-only copy / style changes, or test-fixture-only changes — unless those
+contain a runtime or policy behavior claim.
 
 ```sh
-# 1. Copy the checklist template and fill in all Q1–Q10 answers
-cp .agent/checklists/runtime-policy.md /tmp/my-task-checklist.md
+# 1. Inspect full branch diff first
+git diff main...HEAD
+
+# 2. Copy checklist template and fill in all Q1–Q15 answers
+cp .agent/checklists/policy-judgment.md /tmp/my-task-checklist.md
 # edit /tmp/my-task-checklist.md — set each Answer: to yes / no / n/a
 
-# 2. Validate locally
-bash .agent/tests/check-runtime-policy-local.sh /tmp/my-task-checklist.md
+# 3. Validate locally
+bash .agent/checklists/check-policy-judgment.sh /tmp/my-task-checklist.md
+
+# 4. Run self-test to verify fixtures
+bash .agent/checklists/check-policy-judgment.sh --self-test
 ```
 
-The check is **local only** — it is not wired to any GitHub Actions workflow.
-Fixtures in `.agent/tests/fixtures/runtime-policy/` define the expected PASS /
-FAIL outcomes and serve as a reference for how to fill in the checklist.
+Policy:
 
-The check script fails on:
-- any answer that is not `yes`, `no`, or `n/a`
-- Q5=yes (silent fallback introduced)
-- Q6=yes (unexplained production runtime constant)
-- Q2=yes AND Q3=no (fallback present, no explicit-error replacement)
-- Q1=yes AND Q4=no (runtime value not from a policy surface)
-- Q7=yes (canonical route bypassed)
-- Q8=yes (business logic in frontend projection layer)
-- Q9=yes (broken reference swallowed)
-- Q10=no (structure check not run or not passing)
+- **Checklist answers must be based on the full branch diff**, not only the latest
+  commit or edited files. Run `git diff main...HEAD` first.
+- **All green before reporting completion.** If any local check or the judgment gate
+  fails, fix first.
+- **NOT EXECUTED ≠ PASS.** If a required tool is missing, report NOT EXECUTED in
+  the completion summary. Never report a check as passing when it was not run.
+- **Remaining TODOs must be listed** in the completion report or PR summary.
+
+Fixtures in `.agent/checklists/fixtures/policy-judgment/` define expected PASS /
+FAIL outcomes and serve as a reference for correct checklist completion.
 
 ## Architecture Constraints
 
