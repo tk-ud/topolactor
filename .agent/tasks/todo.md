@@ -14,6 +14,36 @@
 
 ## Current TODO
 
+## Issue #60 — Topology Vector Runtime Completion
+
+- [ ] TopologyVectorRuntime を canonical context route recommendation runtime に接続する
+      → 理由: PR #61 / #62 で SSOT・contracts・DB・utility・Npgsql persistence は整備済みだが、`ContextRouteRecommendationResolver.ResolveAsync` はまだ従来の prefix vector / nearest prefix / transition stats 導線のまま。TopologyVectorRuntime の transition key evidence / Topology MLP / hub attention current が正規Runtime導線で呼ばれていない。
+      → 改善方針: `ContextRouteRecommendationResolver.ResolveAsync` に TopologyVectorRuntime を接続し、policy enabled 時のみ transition key evidence extraction / MLP feature crossing / hub attention current load-upsert-rank recalculation を実行する。enabled=false / policy missing / invalid / repository unavailable は explicit status とし、silent fallback しない。
+      → 対象ファイル: backend/runtime/ContextRouteRecommendationResolver.cs, backend/runtime/TopologyVectorRuntime.cs, backend/repository/ContextRouteRepository.cs, backend/repository/NpgsqlContextRouteRepository.cs, backend/schema/ContextRouteContracts.cs, backend/schema/ContextRoutePolicyContracts.cs, backend/tests/Topolactor.Runtime.Tests/*
+      → 次の判断点: current 更新タイミングを context event append 後 / recommendation生成後 / feedback反映後のどこに固定するか。既存 Section 1 / Section 2 推薦導線を破壊しないこと。
+      → 推奨担当: Codex
+
+- [ ] Registrar validation flow に registry vector validation を接続する
+      → 理由: SQL cosine neighbor search と `ValidateRegistryVectorAsync` は実装済みだが、Registrar の Draft → Validate refs → Preview → Promote flow にまだ接続されていない。Issue #60 の「registry 作成 / promote 前に意味重複候補を structured validation result として返す」条件が未充足。
+      → 改善方針: registry draft / promote 前に `ValidateRegistryVectorAsync` を呼び、duplicate_vector / near_duplicate_vector / related_existing_registry / topology_outlier / zero_vector を backend structured validation result として返す。UI は判定せず projection のみ行う。
+      → 対象ファイル: backend registrar validation service / repository files if present, backend/repository/NpgsqlContextRouteRepository.cs, backend/schema/*, docs/registrar-admin-ui-specification.md, frontend Registrar admin UI files if projection exists
+      → 次の判断点: Registrar validation endpoint / service が未整備の場合、先に backend validation boundary を作るか、既存 validate flow に最小接続するか。
+      → 推奨担当: Codex
+
+- [ ] Registrar admin UI / frontend projection に topology vector validation result と attention evidence を表示する
+      → 理由: Issue #60 は「Registrar UI が cosine 判定を持たず、backend structured validation result を projection する」ことを受け入れ条件にしている。現状、backend result / evidence のprojection導線は未完了。
+      → 改善方針: Frontend は cosine / topology / MLP / feedback 判定を持たず、backend から返る structured validation result / evidence_json / mlp_feature_json を表示するだけにする。UI action identity / projection identity は scenario contract で確認する。
+      → 対象ファイル: frontend Registrar admin UI files if present, frontend API proxy files, backend response contracts, docs/registrar-admin-ui-specification.md
+      → 次の判断点: 既存UIに最小表示を追加するか、projection contract を先に固定するか。
+      → 推奨担当: Codex
+
+- [ ] Issue #60 close 前の acceptance audit を実施する
+      → 理由: Issue #60 は複数PRに分割して進めているため、最後に SSOT / DB / contracts / Npgsql / runtime route / registrar validation / frontend projection の意味整合をまとめて確認する必要がある。
+      → 改善方針: Issue #60 の受け入れ条件を一つずつ確認し、完了 / 未完了 / out-of-scope を明記する。旧仕様・fallback・magic number・矛盾コメント・テスト残骸が残る場合は削除または隔離する。
+      → 対象ファイル: Issue #60 関連変更全体, docs/design/context-route-recommendation.md, docs/design/context-route-recommendation.yaml, docs/registrar-admin-ui-specification.md, README.md, backend/runtime/*, backend/repository/*, backend/schema/*, db/context_route_tables.sql, db/seed_empty.sql, frontend relevant files
+      → 次の判断点: close可能か、追加PRが必要か。
+      → 推奨担当: Codex
+
 ## Runtime Persistence Completion
 
 - [ ] 汎用編集 diff log を state transition log と分離して定義・永続化する
