@@ -139,7 +139,11 @@ Judgment gate rules:
 
 - **Checklist must be answered from the full branch diff.** Use `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`.
   Answering from only the latest commit or only edited files is a violation (V10).
-- **Partial diff judgment is prohibited.** If the branch diff was not inspected,
+- **When tmp is required, checklist answers must also be based on scenario contract verification.**
+  If required scenario contract verification was not performed, Q12 must be `no` and Q13 must be `no`.
+- **When Runtime Boundary Failure Matrix is required, checklist answers must include matrix verification.**
+  If required matrix verification was not performed, Q12 must be `no` and Q13 must be `no`.
+- **Partial diff or partial verification judgment is prohibited.** If required branch diff / scenario contract / boundary matrix verification was not completed,
   Q12 must be `no` — which triggers V10 automatically.
 - **Delegated or split work does not inherit checklist verification.** When work is
   delegated, split, or continued by another agent, every agent that makes
@@ -164,9 +168,9 @@ Checklist gate violations (any → FAIL):
 | V7 | Q9 = yes — broken reference swallowed |
 | V8 | Q10 = no — policy fields not consumed by runtime/policy executor |
 | V9 | Q11 = no — demo/mock/static values not isolated |
-| V10 | Q12 = no — full branch diff not inspected |
+| V10 | Q12 = no — full branch diff not inspected and/or required scenario contract / boundary matrix verification missing |
 | V11 | Q14 = no — required local checks not passed |
-| V12 | Q13 = no — checklist answers not based on full branch diff |
+| V12 | Q13 = no — checklist answers not based on full branch diff and required scenario contract / boundary matrix verification |
 | V13 | Q15 = no — remaining TODOs not listed in completion report or PR summary |
 | V14 | Any answer not in {yes, no, n/a} |
 | V15 | Missing answer |

@@ -135,6 +135,7 @@ required_content_terms:
     - "OperationVector is internal runtime representation"
     - "Broken refs are explicit errors"
     - "Runtime Boundary Failure Matrix"
+    - "boundary matrix verification"
   docs/file-structure.yaml:
     - "data_defined_topology_is_the_architecture_subject"
     - "operation_vector_is_internal_runtime_representation"
