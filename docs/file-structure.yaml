@@ -1,4 +1,4 @@
-business_management_system_file_structure:
+data_driven_topology_runtime_file_structure:
   name: topolactor_data_driven_topology_structure
   version: 0.2.0
   status: public_design_document
@@ -260,7 +260,7 @@ business_management_system_file_structure:
         role: semantic_connection_space
       runtime_parameters:
         role: abstract_function_parameter_storage
-      business_data:
+      domain_data:
         role: converged_entity_data_storage
       audit:
         role: append_only_observation_log

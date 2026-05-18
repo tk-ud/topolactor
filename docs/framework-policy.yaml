@@ -23,7 +23,7 @@ framework_policy:
         - conflict
         - logically_deleted
     entity_state:
-      owner: business_side
+      owner: domain_side
       examples:
         - operating
         - stopped
@@ -39,8 +39,8 @@ framework_policy:
     display_subject: entity
     natural_language_source:
       - entity_jsonb
-      - entity.business_attributes
-      - entity.business_state
+      - entity.domain_attributes
+      - entity.domain_state
       - relation_ids
     matching:
       initial:
