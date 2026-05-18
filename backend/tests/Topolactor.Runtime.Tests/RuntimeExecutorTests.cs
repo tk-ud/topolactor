@@ -152,6 +152,7 @@ public class RuntimeExecutorTests
         Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_OPERATION");
         Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_PAYLOAD");
         Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "STRUCTURE_MAP_RESOLVE_FAILED");
         Assert.True(repo.DemoEntityListCalled);
     }
 }
@@ -164,11 +165,11 @@ internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepositor
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
     {
-        if (key is "demo:entity:list" or "demo:entity:detail" or "demo:entity:create" or "demo:entity:advance")
+        if (key is "demo:entity:list" or "demo:entity:detail" or "demo:entity:create" or "demo:entity:advance" or "11111111-1111-1111-1111-111111111111")
         {
             return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
                 StructureMapId: "11111111-1111-1111-1111-111111111111",
-                AttractorKey: key,
+                AttractorKey: "demo:entity:list",
                 PackageId: TopologyRepository.DefaultPackageId,
                 SchemaId: TopologyRepository.DefaultSchemaId,
                 ComponentIds: [TopologyRepository.DefaultComponentId],
