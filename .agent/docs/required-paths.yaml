@@ -8,6 +8,7 @@ required_directories:
   agent:
     - .agent/docs
     - .agent/rules
+    - .agent/protocols
     - .agent/skills
     - .agent/tests
     - .agent/tasks
@@ -53,6 +54,11 @@ required_files:
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
     - .agent/rules/rule.md
+    - .agent/protocols/completion.md
+    - .agent/protocols/policy-judgment.md
+    - .agent/protocols/scenario-contract.md
+    - .agent/protocols/runtime-boundary-matrix.md
+    - .agent/protocols/reports-and-todos.md
     - .agent/skills/structure-check.md
     - .agent/tests/check-structure.sh
     - .agent/tests/check-backend-tests.sh
@@ -130,67 +136,43 @@ required_content_terms:
     - ".agent/tests/check-structure.sh"
     - "Agent Contract"
     - "Runtime Boundary Failure Matrix"
+    - "check-policy-judgment.sh"
+    - "Policy Judgment Gate"
+    - "Temporary Scenario Contract"
   .agent/rules/rule.md:
     - "Data-defined topology is the architecture subject"
     - "OperationVector is internal runtime representation"
     - "Broken refs are explicit errors"
     - "Runtime Boundary Failure Matrix"
-    - "boundary matrix verification"
-  docs/file-structure.yaml:
-    - "data_defined_topology_is_the_architecture_subject"
-    - "operation_vector_is_internal_runtime_representation"
-  backend/runtime/RuntimeExecutor.cs:
-    - "RuntimeExecutor"
-    - "OperationVectorResolver"
-    - "AttractorResolver"
-    - "StructureMapResolver"
-    - "PackageResolver"
-    - "SchemaResolver"
-    - "EmissionBuilder"
-  frontend/runtime/resolveOperationVector.ts:
-    - "OperationVector"
-    - "attractorKey"
-  db/topology_tables.sql:
-    - "structure_maps"
-    - "attractor_key"
-  .github/workflows/structure-check.yml:
-    - ".agent/tests/check-structure.sh"
-  .github/workflows/backend-tests.yml:
-    - "bash .agent/tests/check-backend-tests.sh"
-  .agent/tests/check-backend-tests.sh:
-    - "dotnet test"
+    - "scenario contract"
+    - "Policy Judgment Gate"
+  .agent/protocols/completion.md:
+    - "Completion Sequence"
+  .agent/protocols/policy-judgment.md:
+    - "Policy Judgment Gate"
+  .agent/protocols/scenario-contract.md:
+    - "Temporary Scenario Contract"
+  .agent/protocols/runtime-boundary-matrix.md:
+    - "Runtime Boundary Failure Matrix"
+  .agent/protocols/reports-and-todos.md:
+    - "routine inspection reports"
+  .agent/scripts/create-tmp.sh:
+    - "Runtime Boundary Failure Matrix"
+    - "Temporary Scenario Contract"
+    - "Expected read / write / append / cache / return order"
   .agent/docs/structure-map.yaml:
     - "temporary scenario contract"
     - "periodic audit"
-  .agent/scripts/create-tmp.sh:
-    - "Runtime Boundary Failure Matrix"
-  .agent/reports/README.md:
-    - "routine inspection reports"
-    - "Do not use this directory as the default place for normal PR summaries"
   .agent/docs/required-paths.yaml:
     - "Temporary Scenario Contract"
     - "Runtime Boundary Failure Matrix"
     - "routine inspection"
-  .agent/tests/check-frontend-types.sh:
-    - "deno check"
-  .github/workflows/frontend-types.yml:
-    - "bash .agent/tests/check-frontend-types.sh"
-  backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs:
-    - "default:entity:search"
-    - "ATTRACTOR_RESOLVE_FAILED"
-  backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs:
-    - "default:entity:search"
-  .agent/tests/check-default-entity-search.sh:
-    - "dotnet test"
-    - "deno test"
-  .github/workflows/default-entity-search.yml:
-    - "bash .agent/tests/check-default-entity-search.sh"
-  backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs:
-    - "default:entity:search"
-    - "ATTRACTOR_RESOLVE_FAILED"
-  frontend/tests/defaultEntitySearch.test.ts:
-    - "renderEmission"
-    - "ATTRACTOR_RESOLVE_FAILED"
+  .agent/reports/README.md:
+    - "routine inspection reports"
+    - "Do not use this directory as the default place for normal PR summaries"
+  docs/file-structure.yaml:
+    - "data_defined_topology_is_the_architecture_subject"
+    - "operation_vector_is_internal_runtime_representation"
   docs/registrar-admin-ui-specification.md:
     - "Registrar admin UI"
     - "controlled registration boundary"
@@ -210,3 +192,52 @@ required_content_terms:
     - "frontend must not become source of truth"
     - "disclosure text must be explicit"
     - "editor does not execute runtime"
+  .github/workflows/structure-check.yml:
+    - ".agent/tests/check-structure.sh"
+  .github/workflows/backend-tests.yml:
+    - "bash .agent/tests/check-backend-tests.sh"
+  .github/workflows/frontend-types.yml:
+    - "bash .agent/tests/check-frontend-types.sh"
+  .github/workflows/default-entity-search.yml:
+    - "bash .agent/tests/check-default-entity-search.sh"
+  .agent/tests/check-backend-tests.sh:
+    - "dotnet test"
+  .agent/tests/check-frontend-types.sh:
+    - "deno check"
+  .agent/tests/check-default-entity-search.sh:
+    - "dotnet test"
+    - "deno test"
+  .agent/checklists/policy-judgment.md:
+    - "Q1"
+    - "Q15"
+    - "Answer:"
+    - "scenario contract"
+  .agent/checklists/check-policy-judgment.sh:
+    - "Answer:"
+    - "--self-test"
+    - "scenario contract"
+  backend/runtime/RuntimeExecutor.cs:
+    - "RuntimeExecutor"
+    - "OperationVectorResolver"
+    - "AttractorResolver"
+    - "StructureMapResolver"
+    - "PackageResolver"
+    - "SchemaResolver"
+    - "EmissionBuilder"
+  frontend/runtime/resolveOperationVector.ts:
+    - "OperationVector"
+    - "attractorKey"
+  db/topology_tables.sql:
+    - "structure_maps"
+    - "attractor_key"
+  backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs:
+    - "default:entity:search"
+  backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  frontend/tests/defaultEntitySearch.test.ts:
+    - "renderEmission"
+    - "ATTRACTOR_RESOLVE_FAILED"

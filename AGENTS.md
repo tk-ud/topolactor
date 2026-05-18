@@ -6,8 +6,8 @@
 4. Before completion, verify the full branch diff against the scenario contract and Runtime Boundary Failure Matrix.
 5. Run required local checks; run `bash .agent/tests/check-structure.sh` last.
 
-Detailed rules and judgment criteria live under `.agent/rules/`.
-Executable checks and expanded verification live under `.agent/scripts/`, `.agent/checklists/`, and `.agent/tests/`.
+Detailed rules and judgment criteria live under `.agent/rules/` (`.agent/rules/rule.md`).
+Executable checks and expanded verification live under `.agent/protocols/`, `.agent/scripts/`, `.agent/checklists/`, and `.agent/tests/`.
 Persistent inspection reports live under `.agent/reports/`.
 
 ## Runtime Boundary Failure Matrix
@@ -28,5 +28,5 @@ For changes that add or wire endpoint / frontend API proxy / repository write / 
 If any matrix item is intentionally out of scope, state why in the completion report or PR summary.
 
 
-Policy Judgment Gate details and execution are defined in `.agent/rules/rule.md` and `.agent/checklists/check-policy-judgment.sh`.
-Temporary Scenario Contract details are defined under `.agent/rules/rule.md`.
+Policy Judgment Gate details and execution are defined in `.agent/protocols/policy-judgment.md` and `.agent/checklists/check-policy-judgment.sh`.
+Temporary Scenario Contract details are defined in `.agent/protocols/scenario-contract.md`.

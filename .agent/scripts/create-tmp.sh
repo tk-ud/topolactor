@@ -13,6 +13,8 @@ if [ -f "$TMP_FILE" ]; then
 fi
 
 cat > "$TMP_FILE" <<'EOF'
+# Reference: .agent/protocols/scenario-contract.md
+# Reference: .agent/protocols/runtime-boundary-matrix.md
 # Temporary Scenario Contract
 # This file is a temporary scenario contract, not a free-form planning memo.
 # Fill this out BEFORE implementation; update only if intended scenario changes.
