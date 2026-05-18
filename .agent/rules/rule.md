@@ -165,7 +165,7 @@ Do not bypass any step. Do not add silent fallbacks anywhere in this route.
 ## Agent Behavior
 
 - Read `.agent/docs/required-paths.yaml` to understand required structure.
-- Run `.agent/tests/check-structure.sh` before reporting task completion.
+- Run `.agent/tests/check-structure.sh` last before reporting task completion, after policy judgment, scope/claim audits, and relevant local CI.
 - Use `.agent/reports/` only for routine / scheduled / automated agent reports.
 - Update `.agent/tasks/todo.md` only for residual tasks that must survive beyond the current PR or conversation.
 - Do not convert topolactor to CRUD or MVC.
