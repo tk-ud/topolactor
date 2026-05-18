@@ -108,9 +108,11 @@ Checklist gate violations (any → FAIL):
 | V9 | Q11 = no — demo/mock/static values not isolated |
 | V10 | Q12 = no — full branch diff not inspected |
 | V11 | Q14 = no — required local checks not passed |
-| V12 | Any answer not in {yes, no, n/a} |
-| V13 | Missing answer |
-| V14 | Fewer or more than 15 answers |
+| V12 | Q13 = no — checklist answers not based on full branch diff |
+| V13 | Q15 = no — remaining TODOs not listed in completion report or PR summary |
+| V14 | Any answer not in {yes, no, n/a} |
+| V15 | Missing answer |
+| V16 | Fewer or more than 15 answers |
 
 ## Local CI Gate
 
