@@ -6,6 +6,7 @@ import * as $$0 from "./routes/index.tsx";
 import * as $$1 from "./routes/admin/index.tsx";
 import * as $$2 from "./routes/admin/context-token-registry.tsx";
 import * as $$3 from "./routes/demo.tsx";
+import * as $$3b from "./routes/demo-static.tsx";
 import * as $$4 from "./routes/login.tsx";
 import * as $$5 from "./routes/runtime-status.tsx";
 import * as $$6 from "./routes/api/auth/login.ts";
@@ -22,6 +23,7 @@ const manifest = {
     "./routes/admin/index.tsx": $$1,
     "./routes/admin/context-token-registry.tsx": $$2,
     "./routes/demo.tsx": $$3,
+    "./routes/demo-static.tsx": $$3b,
     "./routes/login.tsx": $$4,
     "./routes/runtime-status.tsx": $$5,
     "./routes/api/auth/login.ts": $$6,

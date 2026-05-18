@@ -12,8 +12,7 @@ type Props = {
  *
  * It is a pure display component: it accepts an Emission and an optional
  * resolved StructureMapEntry and renders them without performing any pipeline
- * logic itself.  Business screens built on top of this skeleton will replace
- * or extend this component with real projection logic.
+ * logic itself.
  */
 export function ProjectionView({ emission, structureMap }: Props): JSX.Element {
   const hasErrors = Array.isArray(emission.errors) && emission.errors.length > 0;

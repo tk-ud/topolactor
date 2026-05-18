@@ -16,11 +16,13 @@
 
 ## Product Completion Roadmap (暫定)
 
-- [ ] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
-      → 目的: demoを「説明用の静的表示」ではなく、DB seed + runtime resolver + emission を観測するプロダクト導線にする。
-      → 改善方針: /demo の defaultStructureMap / demoTokens / synthetic Emission を正規runtime導線から外し、必要なら /demo-static 等へ隔離する。
-      → 対象ファイル: frontend/routes/demo.tsx, frontend/components/ProjectionView.tsx, frontend/components/EmissionView.tsx, frontend/api/dispatch.ts, docs/demo-walkthrough.md
-      → 次の判断点: /demo を runtime専用ページへ昇格するか、静的構造説明ページを別routeに分離するか。
+- [x] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
+      → 完了: /demo を runtime dispatch page へ昇格 (OperationPanel island + POST /api/dispatch)。
+         defaultStructureMap / demoTokens / synthetic Emission を /demo から除去。
+         静的構造説明ページを /demo-static として分離 (明示的に "not a runtime result" ラベル付き)。
+         ProjectionView.tsx の "skeleton" 言語、EmissionView.tsx の "before real projection components are wired up" 言語を削除。
+         docs/demo-walkthrough.md を新導線 (/demo = runtime, /demo-static = static diagram) に一致させた。
+         Scenario E の手順を /demo への直接リンクに更新。
 
 - [x] ログイン済みユーザーが dispatch panel から backend /dispatch を実行できる導線を閉じる
       → 完了: frontend/routes/api/dispatch.ts 新規作成、LoginPanel が sessionStorage に JWT を保存、OperationPanel が token を読み取り Bearer 送信、未ログイン時は明示案内表示。Fresh単体 localhost:8000 でも /api/dispatch proxy を提供。

@@ -1,133 +1,72 @@
 import { JSX } from "preact";
-import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
-import { lookupStructureMap, defaultStructureMap } from "../structure_map.ts";
-import { renderEmission } from "../runtime/renderEmission.ts";
-import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import { ProjectionView } from "../components/ProjectionView.tsx";
-import { ContextTokenBadgeList, type ContextToken } from "../components/ContextTokenBadgeList.tsx";
-import { RecommendationPanel } from "../components/RecommendationPanel.tsx";
-import type { Emission } from "../api/dispatch.ts";
+import OperationPanel from "../islands/OperationPanel.tsx";
 
-// Seed reference: mirrors db/demo_seed.sql rows.
-// NOT runtime-resolved — changing these values in the DB does not change this display.
-// Live token state requires the dispatch API + recommendation resolver.
-const demoTokens: ContextToken[] = [
-  { tokenId: "00000000-0000-0000-0000-000000000021", label: "active",   group: "status", value: 1.0,  status: "active" },
-  { tokenId: "00000000-0000-0000-0000-000000000022", label: "warning",  group: "status", value: 0.0,  status: "active" },
-  { tokenId: "00000000-0000-0000-0000-000000000023", label: "critical", group: "status", value: -1.0, status: "active" },
-];
-
+/**
+ * /demo — runtime dispatch entrypoint for the demo flow.
+ *
+ * This page exercises the backend canonical flow end-to-end:
+ *   login → dispatch POST /api/dispatch → backend RuntimeExecutor
+ *   → attractor_resolve → structure_map_resolve → emission → EmissionView
+ *
+ * No synthetic data, no frontend-only resolution.
+ * Static structure explanation is at /demo-static.
+ */
 export default function Demo(): JSX.Element {
-  // Frontend-side canonical flow (no DB / no backend API required):
-  //   UserOperation → resolveOperationVector → attractorKey
-  //   → lookupStructureMap → StructureMapEntry
-  //   → synthetic Emission → renderEmission → ComponentSpec[]
-  //
-  // Backend-side flow (attractor_resolve against DB, entity data) requires the dispatch API.
-  const demoOperation = {
-    operationType: "Search" as const,
-    target: "demo",
-    layer: "hub",
-    action: "overview",
-  };
-
-  const demoVector = resolveOperationVector(demoOperation);
-  const demoMapEntry = lookupStructureMap(defaultStructureMap, demoVector.attractorKey);
-
-  const demoEmission: Emission = {
-    packageId:    demoMapEntry?.packageId,
-    schemaId:     demoMapEntry?.schemaId,
-    componentIds: demoMapEntry?.componentIds ?? [],
-    data:         { note: "demo scaffold — frontend-side resolution only" },
-  };
-
-  const componentSpecs = renderEmission(demoEmission, defaultComponentRegistry);
-
   return (
     <main style={{ fontFamily: "sans-serif", padding: "24px", maxWidth: "900px" }}>
-      <h1>topolactor — public scaffold demo</h1>
+      <h1>topolactor — runtime demo</h1>
 
       <div style={{
-        background: "#fffbe6",
-        border: "1px solid #e6c700",
+        background: "#e8f4fd",
+        border: "1px solid #2196f3",
         borderRadius: "4px",
         padding: "12px 16px",
         marginBottom: "24px",
       }}>
-        <strong>Scaffold notice:</strong> This page exercises the <em>frontend-side</em> canonical
-        flow only. Backend resolution (DB entity data, live recommendations) requires the{" "}
-        <a href="/">dispatch panel</a>. No real business data is used.
-        Demo seed: <code>db/demo_seed.sql</code>. Walkthrough: <code>docs/demo-walkthrough.md</code>.
+        <strong>Runtime page:</strong> This page dispatches to the backend runtime.
+        The emission shown below comes from{" "}
+        <code>backend RuntimeExecutor → DB → emission</code>,
+        not from frontend-only resolution.{" "}
+        Login is required — use <a href="/login">login</a> first.
+        For the static structure diagram, see <a href="/demo-static">/demo-static</a>.
       </div>
 
-      <h2>Frontend Canonical Resolution</h2>
-      <p style={{ color: "#555", fontSize: "0.9em" }}>
-        <code>
-          UserOperation → resolveOperationVector → attractorKey
-          → lookupStructureMap → Emission → renderEmission → ComponentSpec[]
-        </code>
-      </p>
-      <p style={{ color: "#555", fontSize: "0.9em" }}>
-        Changing <code>defaultStructureMap</code> or <code>defaultComponentRegistry</code> entries
-        changes what this page resolves and renders. Backend attractor_resolve (against the DB)
-        is exercised via the <a href="/">dispatch panel</a>.
-      </p>
-
-      <details open style={{ marginBottom: "16px" }}>
-        <summary style={{ cursor: "pointer", fontWeight: "bold" }}>OperationVector</summary>
-        <pre style={{ background: "#f5f5f5", padding: "12px", fontSize: "0.85em" }}>
-          {JSON.stringify(demoVector, null, 2)}
-        </pre>
-      </details>
-
-      <ProjectionView emission={demoEmission} structureMap={demoMapEntry ?? undefined} />
-
-      <h3>Expanded ComponentSpecs</h3>
-      {componentSpecs.length === 0 ? (
-        <p style={{ color: "#888" }}>no components resolved</p>
-      ) : (
-        <ul>
-          {componentSpecs.map((spec) => (
-            <li key={spec.componentId}>
-              <code>{spec.componentId}</code> — <em>{spec.componentType}</em>
-              {spec.componentType === "error" && (
-                <span style={{ color: "crimson" }}> — {String(spec.def.error)}</span>
-              )}
-            </li>
-          ))}
+      <section style={{ marginBottom: "32px" }}>
+        <h2>Demo dispatch</h2>
+        <p style={{ color: "#555", fontSize: "0.9em" }}>
+          Pre-filled with demo defaults: <code>target=demo</code>,{" "}
+          <code>layer=hub</code>, <code>action=overview</code>.
+          To observe recommendation results, expand{" "}
+          <em>Context fields</em> and enter:
+        </p>
+        <ul style={{ fontSize: "0.9em", color: "#555" }}>
+          <li>
+            Context Session ID:{" "}
+            <code>00000000-0000-0000-0000-000000000031</code>
+          </li>
+          <li>
+            Context Token IDs:{" "}
+            <code>00000000-0000-0000-0000-000000000021</code>
+          </li>
         </ul>
-      )}
+        <p style={{ color: "#555", fontSize: "0.9em" }}>
+          See <code>docs/demo-walkthrough.md</code> Scenario E for the full walkthrough.
+        </p>
 
-      <hr style={{ margin: "24px 0" }} />
-
-      <h2>Context Token Registry (seed reference)</h2>
-      <p style={{ color: "#555", fontSize: "0.9em" }}>
-        These mirror <code>db/demo_seed.sql</code> values and are <strong>not</strong> runtime-resolved.
-        Changing token <code>value</code> in the DB changes recommendation scores — but does not
-        update this display. Live token state requires the dispatch API.
-      </p>
-      <ContextTokenBadgeList tokens={demoTokens} activeOnly />
-
-      <h2>Context Route Recommendation</h2>
-      <p style={{ color: "#555", fontSize: "0.9em" }}>
-        Live recommendations require the backend runtime and seeded prefix vectors.
-        Use the <a href="/">dispatch panel</a> with target <code>demo</code>, layer <code>hub</code>,
-        action <code>overview</code>, and expand{" "}
-        <em>Context fields</em> to enter the demo session ID{" "}
-        (<code>00000000-0000-0000-0000-000000000031</code>) and token ID{" "}
-        (<code>00000000-0000-0000-0000-000000000021</code>).
-        See <code>docs/demo-walkthrough.md</code> Scenario E for the full walkthrough.
-      </p>
-      <RecommendationPanel
-        status="insufficient_history"
-        statusDetail="NO_SESSION_ID — context session required; see dispatch panel Context fields"
-        nextOperations={[]}
-        nextTokens={[]}
-      />
+        <OperationPanel
+          initialOperation={{
+            operationType: "Search",
+            target: "demo",
+            layer: "hub",
+            action: "overview",
+          }}
+        />
+      </section>
 
       <hr style={{ marginTop: "32px" }} />
       <p style={{ color: "#888", fontSize: "0.85em" }}>
-        See <a href="/admin">admin</a> for topology inspection,{" "}
+        See <a href="/demo-static">demo-static</a> for the static structure diagram,{" "}
+        <a href="/admin">admin</a> for topology inspection,{" "}
         <a href="/runtime-status">runtime-status</a> for pipeline step validation,{" "}
         <a href="/">index</a> for the dispatch panel.
       </p>
