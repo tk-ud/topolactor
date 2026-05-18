@@ -1,5 +1,8 @@
 # Policy Judgment Checklist
 
+This checklist is a lightweight **compliance-signature gate** for AGENTS.md / rule.md policy judgment requirements.
+Detailed rule definitions belong in `AGENTS.md` and `.agent/rules/rule.md`, not in incident-specific checklist expansion.
+
 Complete this checklist before reporting completion on any change that involves:
 runtime behavior, data-defined topology, Registry, Manifest, function_parameters,
 structure_map policy, package / schema / component expansion, recommendation,
@@ -15,6 +18,8 @@ changes — unless those changes also contain a runtime or policy behavior claim
 and base your answers on the complete branch state, not only the latest commit.**
 
 Answer each question with exactly one of: `yes` / `no` / `n/a`
+
+Audit order reminder: full branch diff → checklist → scope/claim audits → relevant local CI → `bash .agent/tests/check-structure.sh` (last).
 
 ---
 

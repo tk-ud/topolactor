@@ -165,8 +165,36 @@ Do not bypass any step. Do not add silent fallbacks anywhere in this route.
 ## Agent Behavior
 
 - Read `.agent/docs/required-paths.yaml` to understand required structure.
-- Run `.agent/tests/check-structure.sh` before reporting task completion.
+- Run `.agent/tests/check-structure.sh` last before reporting task completion, after policy judgment, scope/claim audits, and relevant local CI.
 - Use `.agent/reports/` only for routine / scheduled / automated agent reports.
 - Update `.agent/tasks/todo.md` only for residual tasks that must survive beyond the current PR or conversation.
 - Do not convert topolactor to CRUD or MVC.
 - Do not add build steps, DB execution, or integration tests under the structure check surface.
+
+## Checklist Anti-Bloat Rule
+
+Policy Judgment Checklist must remain a lightweight compliance-signature gate.
+Do not expand checklist questions for incident-specific one-off cases by default.
+
+When a new policy judgment viewpoint is needed, first evaluate whether it should be captured in:
+1. `AGENTS.md` scope / required-check definitions, or
+2. this `rule.md` as durable judgment order and architecture rule.
+
+Only keep the checklist focused on:
+- yes/no/n/a answer validation
+- major architecture/policy violation detection
+- completion-readiness signature
+
+Checker script responsibility should stay focused on answer-format validation and critical-violation detection, not detailed policy rule proliferation.
+
+## Completion Sequence (Mandatory)
+
+Before completion report, execute in this order:
+
+1. Inspect full branch diff (`git diff main...HEAD`).
+2. Perform Policy Judgment Checklist.
+3. Audit AGENTS.md / rule.md scope applicability and required checks.
+4. Audit prompt / PR summary / docs claims for runtime or policy assertions.
+5. Run relevant local CI checks.
+6. Run `bash .agent/tests/check-structure.sh` **last**.
+7. In completion report, list commands, results (`PASS` / `FAIL` / `NOT EXECUTED`), and remaining TODOs.
