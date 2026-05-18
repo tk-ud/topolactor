@@ -186,6 +186,8 @@ frontend-types).
 
 If a tool is missing, answer `n/a` and report NOT EXECUTED in the completion
 summary. Do not answer `yes` for a check that was not actually run.
+Relevant local CI includes domain checks (db-schema, backend-tests, frontend-types)
+and change-triggered custom agent tests such as `check-default-entity-search.sh`.
 
 Answer:
 

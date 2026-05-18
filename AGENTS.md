@@ -12,13 +12,7 @@ Before taking any action, read:
 
 ## Run Before Reporting Completion
 
-Always run the local structure check before reporting that a task is complete:
-
-```sh
-.agent/tests/check-structure.sh
-```
-
-The check must pass with zero failures. Do not report completion if the check fails.
+Run `bash .agent/tests/check-structure.sh` last before reporting completion. See **Policy Judgment Checklist Scope / Order and reporting requirements** for the full completion sequence.
 
 ## Agent Local CI Gate
 
