@@ -1,0 +1,47 @@
+system:
+  name: runtime-log-retention-scheduler
+  version: "1.0"
+  concept: >
+    Optional backend runtime capability that periodically executes topology-defined
+    log retention operations without bypassing canonical runtime resolution.
+
+ssot:
+  policy_source:
+    table: function_parameters
+    function_name: runtime_log_retention_scheduler_run
+    parameter_key: default_policy
+  operation_route:
+    - operation
+    - vector
+    - attractor
+    - structure_map
+    - package
+    - schema
+    - emission
+
+policy_contract:
+  required_fields:
+    - enabled
+    - schedule
+    - targets
+    - retention_days
+    - mode
+  field_notes:
+    enabled: boolean
+    schedule: "daily | hourly | manual"
+    targets: "non-empty string array"
+    retention_days: "integer > 0"
+    mode: "delete | anonymize | aggregate_then_delete"
+
+status_contract:
+  ok: Ok
+  disabled: Disabled
+  missing_policy: PolicyMissing
+  invalid_policy: PolicyInvalid
+  route_resolve_failed: RouteResolveFailed
+
+constraints:
+  - no_silent_fallback
+  - runtime_has_no_hardcoded_retention_numbers
+  - frontend_must_not_execute_retention
+  - external_cron_must_not_bypass_runtime_route

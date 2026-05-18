@@ -51,6 +51,24 @@
 
 ---
 
+
+---
+
+### 3. Runtime Log Retention Scheduler（ログ保持スケジューラ）
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/runtime-log-retention-scheduler.yaml` |
+| 思想・取り扱い | `docs/design/runtime-log-retention-scheduler.md` |
+
+**概要**: self-learning 系ログの retention を topology policy (`function_parameters`) で管理し、
+backend runtime worker が canonical route を通して delete/anonymize/aggregate を実行する。
+
+**参照すべき場面**:
+- retention 日数や対象ログ種別の追加・変更を議論するとき
+- scheduler 実行導線を cron 直叩きではなく runtime 経路で保つ必要があるとき
+- Disabled / PolicyMissing / PolicyInvalid の status 契約を確認するとき
+
 ## SSOT 原則のまとめ
 
 | 対象 | SSOT の場所 |

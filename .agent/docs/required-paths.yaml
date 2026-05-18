@@ -46,9 +46,12 @@ required_files:
     - docs/file-structure.yaml
     - docs/registrar-admin-ui-specification.md
     - docs/promotion-manifest-editor-specification.md
+    - docs/design/runtime-log-retention-scheduler.md
+    - docs/design/runtime-log-retention-scheduler.yaml
   agent:
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
+    - .agent/docs/design-ssot-index.md
     - .agent/rules/rule.md
     - .agent/skills/structure-check.md
     - .agent/tests/check-structure.sh
@@ -188,3 +191,15 @@ required_content_terms:
     - "frontend must not become source of truth"
     - "disclosure text must be explicit"
     - "editor does not execute runtime"
+
+  docs/design/runtime-log-retention-scheduler.md:
+    - "retention policy"
+    - "silent fallback"
+    - "function_parameters"
+  docs/design/runtime-log-retention-scheduler.yaml:
+    - "runtime_log_retention_scheduler_run"
+    - "status_contract"
+    - "no_silent_fallback"
+  .agent/docs/design-ssot-index.md:
+    - "Runtime Log Retention Scheduler"
+    - "docs/design/runtime-log-retention-scheduler.yaml"
