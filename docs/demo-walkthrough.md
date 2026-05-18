@@ -51,7 +51,7 @@ This repository supports three operation routes. Keep them separated to avoid mi
    ```
 
 2. Frontend running: `deno task start` (from repository root)
-3. Open `http://localhost:8000/demo`
+3. Open `http://localhost:8000/demo` (runtime dispatch page)
 
 > **Note — full stack (Docker Compose):** All five services are defined in
 > `infra/docker-compose.yml`: `postgres`, `adminer`, `backend`, `frontend`, `nginx`.
@@ -132,27 +132,26 @@ apply when nginx routes the request directly to the backend.
 
 ## What the Demo Shows
 
-The `/demo` route exercises the **frontend-side** canonical flow only:
+The `/demo` route is the **runtime dispatch entrypoint**. It pre-fills the dispatch panel
+with demo defaults (`target=demo`, `layer=hub`, `action=overview`) and dispatches to the
+backend on submit:
 
 ```
-UserOperation → resolveOperationVector → attractorKey
-→ lookupStructureMap → StructureMapEntry
-→ synthetic Emission → renderEmission → ComponentSpec[]
-```
-
-Changing `defaultStructureMap` (in `frontend/structure_map.ts`) or `defaultComponentRegistry` (in `frontend/registry/componentRegistry.ts`) entries changes what `/demo` resolves and renders. No DB or backend API is required for this frontend-side flow.
-
-**Backend-side canonical flow** (attractor_resolve against the DB, entity data, live recommendations) is exercised at `/` via the dispatch panel:
-
-```
-stored_topology_data (demo_seed.sql)
+login → POST /api/dispatch (JWT) → backend RuntimeExecutor
 → attractor_resolve  (demo:hub:overview attractor_key)
 → structure_map_resolve  (structure_maps row 00000000-…-0018)
 → package_resolve  (demo_hub_overview_package)
 → schema_resolve  (demo_entity_schema)
 → component_expand  (demo-hub-overview, demo-entity-table, etc.)
-→ emission_or_projection  (frontend projection)
+→ emission → EmissionView (frontend projection)
 ```
+
+No synthetic data is used. The emission displayed is the real backend response.
+
+The `/demo-static` route contains the **static structure diagram**: it runs the
+frontend-only pipeline (`resolveOperationVector → lookupStructureMap → renderEmission`)
+against `defaultStructureMap` and `defaultComponentRegistry` without any backend API call.
+It is a developer reference diagram and is not presented as a runtime result.
 
 ---
 
@@ -245,7 +244,8 @@ Each scenario shows how a single Registry or policy change propagates through th
 single matching prefix is enough to return a recommendation.
 
 1. **Log in** at `/login` with demo credentials.
-2. **Open the dispatch panel** at `/`.
+2. **Open `/demo`** (runtime dispatch page — pre-filled with target=demo, layer=hub, action=overview).
+   Alternatively use the dispatch panel at `/`.
 3. **Expand "Context fields (optional)"** in the operation form.
 4. Enter the demo session ID in *Context Session ID*:
    ```
@@ -255,7 +255,7 @@ single matching prefix is enough to return a recommendation.
    ```
    00000000-0000-0000-0000-000000000021
    ```
-6. Set target=`demo`, layer=`hub`, action=`overview`, and submit.
+6. Submit.
 7. The emission's `context_route_recommendation` section shows:
    - `status: "ok"`
    - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
@@ -277,26 +277,29 @@ and does not vote. The append runs on every path — including cold-start — so
 subsequent dispatches and the session eventually reaches `Ok` status.
 
 > **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
-> `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.
+> `InsufficientHistory — NO_SESSION_ID`. This is expected when submitting from `/demo` without
+> filling in the context fields — it is a real backend response, not a static placeholder.
 
-### Scenario D — structure_map or componentRegistry change → /demo projection changes
+### Scenario D — structure_map or componentRegistry change → /demo-static projection changes
 
 1. Open `frontend/structure_map.ts` and modify the `"demo:hub:overview"` entry — for example, change `componentIds` to include an additional component ID, or update `packageId`/`schemaId`.
-2. Reload `http://localhost:8000/demo`.
+2. Reload `http://localhost:8000/demo-static`.
 3. The OperationVector block, the `ProjectionView` resolved StructureMap entry, and the Expanded ComponentSpecs list all update to reflect the new entry.
 4. Alternatively, open `frontend/registry/componentRegistry.ts` and add or modify an entry for a component ID referenced in `defaultStructureMap`. The rendered ComponentSpec type and definition update on next page load.
-5. **Why it works:** `/demo` calls `resolveOperationVector → lookupStructureMap → renderEmission` entirely in the frontend at render time. No DB or backend API is involved. The pipeline runs against `defaultStructureMap` and `defaultComponentRegistry` as imported — changing those modules changes what `/demo` resolves and displays.
+5. **Why it works:** `/demo-static` calls `resolveOperationVector → lookupStructureMap → renderEmission` entirely in the frontend at render time. No DB or backend API is involved. The pipeline runs against `defaultStructureMap` and `defaultComponentRegistry` as imported — changing those modules changes what `/demo-static` resolves and displays.
 
-> **Note:** This is the only scenario that changes `/demo` output without a backend API call. Scenarios A, B, and C affect backend resolution via the dispatch API and are observable at `/` (dispatch panel), not at `/demo`.
+> **Note:** This is the only scenario that changes `/demo-static` output without a backend API call. Scenarios A, B, C, and E affect backend resolution via the dispatch API and are observable at `/demo` (runtime dispatch page) or `/` (dispatch panel).
 
 ---
 
 ## Architecture Constraints Maintained
 
-- **canonical runtime route preserved:** `/demo` is a projection entrypoint, not domain logic.
-- **no silent fallback:** broken policy refs → `CONTEXT_ROUTE_POLICY_NOT_FOUND` error.
+- **canonical runtime route preserved:** `/demo` dispatches to backend runtime; no frontend-only resolution presented as runtime result.
+- **no synthetic runtime display:** `/demo` uses `OperationPanel` backed by `POST /api/dispatch`; synthetic emission is isolated to `/demo-static` and clearly labelled as static.
+- **no silent fallback:** broken policy refs → `CONTEXT_ROUTE_POLICY_NOT_FOUND` error; backend unreachable → explicit fetch error in EmissionView.
 - **no hardcoded runtime policy:** all scoring, thresholds, and aggregation window values are in `function_parameters`.
 - **frontend is projection only:** demo components accept resolved data as props; no local computation.
+- **static diagram separated:** `/demo-static` clearly labels output as a static structure diagram, not a runtime result.
 - **demo data is fake:** `db/demo_seed.sql` contains no real domain data.
 
 ---
@@ -305,15 +308,18 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 
 | File | Role in demo |
 |---|---|
-| `db/demo_seed.sql` | Source of all demo topology data (backend/DB scenarios A–C) |
-| `frontend/routes/demo.tsx` | Projection entrypoint for the demo route (frontend-side canonical flow) |
-| `frontend/structure_map.ts` | `defaultStructureMap` — change entries to change `/demo` resolution (Scenario D) |
-| `frontend/registry/componentRegistry.ts` | `defaultComponentRegistry` — change entries to change `/demo` ComponentSpecs (Scenario D) |
+| `db/demo_seed.sql` | Source of all demo topology data (backend/DB scenarios A–C, E) |
+| `frontend/routes/demo.tsx` | Runtime dispatch entrypoint — backend emission via OperationPanel |
+| `frontend/routes/demo-static.tsx` | Static structure diagram — frontend-only pipeline, no backend call (Scenario D) |
+| `frontend/structure_map.ts` | `defaultStructureMap` — change entries to change `/demo-static` resolution (Scenario D) |
+| `frontend/registry/componentRegistry.ts` | `defaultComponentRegistry` — change entries to change `/demo-static` ComponentSpecs (Scenario D) |
 | `frontend/runtime/resolveOperationVector.ts` | Converts UserOperation → OperationVector + attractorKey |
 | `frontend/runtime/renderEmission.ts` | Resolves componentIds through ComponentRegistry → ComponentSpec[] |
 | `frontend/components/ProjectionView.tsx` | Renders resolved StructureMapEntry and Emission data |
+| `frontend/components/EmissionView.tsx` | Surfaces all fields of a backend Emission for inspection |
 | `frontend/components/RecommendationPanel.tsx` | Recommendation status projection component |
 | `frontend/components/ContextTokenBadgeList.tsx` | Token registry badge projection component (seed reference display) |
+| `frontend/islands/OperationPanel.tsx` | Interactive dispatch island — sends POST /api/dispatch, shows EmissionView |
 | `frontend/package/demoPackage.ts` | Demo package definitions |
 | `frontend/schema/demoSchema.ts` | Demo schema definitions |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver (policy from function_parameters) |
