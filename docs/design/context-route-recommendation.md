@@ -159,3 +159,240 @@ cron 側に retention 期間や対象 log 種別を直書きしない。
 
 月次 k-means でセッションをクラスタリング。
 外部 LLM はクラスタ名の提案のみに使用（Runtime ロジックには不使用）。
+
+---
+
+## Topology Vector Runtime
+
+### 概念
+
+registry / hub / relation / entity が保持する ID 配列を sparse vector として扱い、
+SQL cosine 近傍検索を runtime / validation / recommendation に統合する拡張。
+
+外部 embedding / pgvector を必要としない。
+PostgreSQL の `UUID[]`, `JSONB`, GIN index, relation weight, transition stats を利用する
+data-defined topology runtime 拡張。
+
+### 設計定義
+
+```text
+Topology Attention:
+  遷移に効いている重要 Key を抽出する
+
+Transition Key Evidence:
+  どの table / relation / state / entity が遷移 Key になっているかを説明する
+
+Topology MLP:
+  抽出された Key 群を組み合わせ、次状態 / 次候補 score へ変換する
+  初期実装は feature crossing + weighted score transform
+  neural network 実装ではない
+
+Feedback Weight Update:
+  推薦結果と実際の選択差分から、統計重みを補正する
+  selected → 重み強化
+  ignored  → 重み弱化
+  missing candidate → 欠落特徴を補正
+```
+
+「BP」という名称は初期実装では使わない。
+explainable statistical feedback として成立させ、将来の gradient / backprop 相当の拡張余地だけ残す。
+
+### Registry Sparse Vector 定義
+
+```text
+UUID[] = multi-hot sparse vector
+UUID + weight = weighted sparse vector
+```
+
+対象:
+- `relation_registry.master_ids`
+- `entities.relation_ids`
+- `structure_maps.component_ids`
+- `hub_relations.relation_registry_id + weight`
+
+注意:
+- registry table 自体は辞書 / 基底定義
+- ID 配列を保持する row が vector を持つ topology node
+- 文字列 label / name は検索補助であり、意味近傍の主軸ではない
+- 既存の GIN index は候補集合の粗探索に利用する
+
+### SQL Cosine Neighbor Search
+
+multi-hot UUID 配列に対する SQL cosine:
+
+```text
+cosine = intersection_count / sqrt(cardinality(a) * cardinality(b))
+```
+
+weighted vector の場合:
+
+```text
+cosine = dot(a, b) / sqrt(norm(a) * norm(b))
+```
+
+要件:
+- 空 vector / zero norm は explicit result として扱う（silent fallback 禁止）
+- candidate search は GIN overlap で粗探索してから cosine score を計算する
+- threshold / top_k / blocking 条件は function_parameters から読む
+- Runtime コードへ magic number を直書きしない
+
+### Registry Vector Validation
+
+Registrar の Draft → Validate → Promote flow に vector neighbor validation を追加する。
+既存の duplicate key check は維持する。
+
+追加する validation class:
+
+| class | cosine 範囲 | 扱い |
+|---|---|---|
+| `duplicate_vector` | >= duplicate_threshold | blocking |
+| `near_duplicate_vector` | >= near_duplicate_threshold | blocking or confirm-required |
+| `related_existing_registry` | >= related_threshold | warning |
+| `pass` | < related_threshold | 通過 |
+| `zero_vector` | zero norm | explicit validation result |
+| `explicit_error` | DB unavailable / infrastructure error | **blocking（fail-closed）** |
+
+threshold は function_parameters (topology_vector_runtime.registry_validation) から読む。
+
+DB unavailable は fail-closed: `ValidationClass.ExplicitError` + `IsBlocking:true` を返す。
+`Pass` + `IsBlocking:false` （fail-open）は禁止。
+
+要件:
+- UI が独自判定しない（backend structured validation result を projection するだけ）
+- Backend が structured validation result を返す
+- broken refs / malformed ids / DB unavailable は silent fallback しない → ExplicitError + blocking
+
+### Hub Attention Recommendation
+
+hub 同士を static relation と統計 recommendation 両方で attention できるようにする。
+
+```text
+current hub = Query
+candidate hub / relation / entity vector = Key
+hub attention weight = static_relation_weight
+                     + cosine_similarity
+                     + statistical_weight
+                     + mlp_feature_score
+                     + feedback_adjustment
+attended hub = Value
+```
+
+信号:
+- 静的接続: `hub_relations.weight`
+- 意味近傍: registry sparse vector cosine
+- 統計接続: co-occurrence / transition stats / recommendation current
+- 短期 trend: EMA fast (alpha from policy)
+- 長期基準: EMA slow (alpha from policy)
+- 転換点: cross_up / cross_down / none
+
+current は正本ではなく rebuildable materialized current として扱う。
+
+`why this hub?` に対して `evidence_json` に relation/cosine/stat/EMA/cross の根拠を返す。
+
+### Topology MLP
+
+```text
+feature crossing 例:
+  relation_id × state_id
+  table_id × operation
+  hub_id × recent_trend
+  cosine_similarity × EMA cross
+  relation_id × table_id × selected_operation
+```
+
+max_feature_cross_order は function_parameters (topology_vector_runtime.topology_mlp) から読む。
+feature crossing の根拠は `mlp_feature_json` に保存する。
+
+### Feedback Weight Update
+
+```text
+推薦した → ユーザーが選んだ   → positive_delta 加算
+推薦した → 無視された         → negative_delta 加算
+推薦しなかった → 選ばれた     → missing_candidate_delta 加算
+```
+
+delta 値は function_parameters (topology_vector_runtime.feedback_weight_update) から読む。
+feedback は context_hub_feedback_event (append-only) にも記録する。
+aggregate current は再構築可能にする。
+
+### Policy ストレージ
+
+topology_vector_runtime の policy は独立した設定テーブルではなく、
+既存の `function_parameters` に統合する:
+
+```
+function_name = 'context_route_recommendation_resolve'
+parameter_key = 'default_policy'
+```
+
+JSON 内の `topology_vector_runtime` サブオブジェクトとして格納する。
+
+```json
+{
+  "topology_vector_runtime": {
+    "enabled": true,
+    "registry_validation": {
+      "enabled": true,
+      "duplicate_threshold": 1.0,
+      "near_duplicate_threshold": 0.85,
+      "related_threshold": 0.60,
+      "top_k": 10
+    },
+    "hub_attention": {
+      "enabled": true,
+      "scope_limits": [1000, 3000, 10000],
+      "ema_fast_alpha": 0.30,
+      "ema_slow_alpha": 0.10,
+      "max_update_candidates_per_event": 10000
+    },
+    "transition_key_evidence": {
+      "enabled": true,
+      "operation_contribution": 1.0,
+      "relation_contribution": 0.8,
+      "state_contribution": 0.7,
+      "table_contribution": 0.6,
+      "neighbor_top_k": 3
+    },
+    "topology_mlp": {
+      "enabled": true,
+      "max_feature_cross_order": 3
+    },
+    "feedback_weight_update": {
+      "enabled": true,
+      "positive_delta": 0.05,
+      "negative_delta": -0.02,
+      "missing_candidate_delta": 0.03
+    }
+  }
+}
+```
+
+policy missing → ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_NOT_FOUND")
+enabled=false → explicit disabled result（silent fallback 禁止）
+policy invalid → ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_INVALID")
+
+### 意味境界
+
+Frontend:
+- cosine 判定しない
+- topology 判定しない
+- MLP feature crossing 判定しない
+- feedback weight update 判定しない
+- backend structured result / evidence を projection するだけ
+
+Backend:
+- structured validation result / recommendation evidence を返す
+
+DB:
+- topology definition / current / append-only event を保持する
+- `context_hub_recommendation_current` = rebuildable materialized current
+- `context_hub_feedback_event` = append-only event
+
+### やってはいけないこと
+
+- Runtime コードに threshold / alpha / delta / limit の magic number を直書きする
+- topology_vector_runtime 専用の独立した設定テーブルを作る
+- enabled=false を silent に skip する
+- policy missing / invalid で production fallback する
+- Frontend に cosine / topology / MLP 判定を持たせる
+- `context_hub_recommendation_current` を正本として扱う

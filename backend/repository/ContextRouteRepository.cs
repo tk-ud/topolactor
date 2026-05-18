@@ -184,4 +184,149 @@ public class ContextRouteRepository
         _logger.LogDebug("ContextRouteRepository.DeprecateContextTokenAsync: in-memory skeleton — no-op for tokenId={TokenId}.", tokenId);
         return Task.FromResult(false);
     }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Registry Vector Validation
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Finds existing registry rows whose ID-array sparse vectors have cosine similarity
+    /// >= minSimilarity with the given queryIds, up to topK results.
+    ///
+    /// Uses GIN overlap for coarse candidate filtering then computes cosine score.
+    /// multi-hot cosine: intersection_count / sqrt(cardinality(a) * cardinality(b))
+    ///
+    /// Returns empty when queryIds is empty (zero_vector case — caller handles explicitly).
+    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<RegistryVectorNeighbor>> FindRegistryVectorNeighborsAsync(
+        string registryTable,
+        IReadOnlyList<Guid> queryIds,
+        float minSimilarity,
+        int topK,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.FindRegistryVectorNeighborsAsync: in-memory skeleton — returning empty for table={Table}.",
+            registryTable);
+        return Task.FromResult<IReadOnlyList<RegistryVectorNeighbor>>([]);
+    }
+
+    /// <summary>
+    /// Validates the registry vector for a candidate ID-array against existing registry rows.
+    /// Returns a structured RegistryVectorValidationResult — never throws on policy error.
+    ///
+    /// ZeroVector: queryIds is empty.
+    /// DuplicateVector: cosine >= duplicateThreshold.
+    /// NearDuplicateVector: cosine >= nearDuplicateThreshold.
+    /// RelatedExistingRegistry: cosine >= relatedThreshold.
+    /// Pass: no neighbor above relatedThreshold.
+    ///
+    /// All thresholds come from caller (read from policy) — never hardcoded here.
+    /// In-memory skeleton: returns Pass with empty neighbors.
+    /// </summary>
+    public virtual Task<RegistryVectorValidationResult> ValidateRegistryVectorAsync(
+        string registryTable,
+        IReadOnlyList<Guid> queryIds,
+        float duplicateThreshold,
+        float nearDuplicateThreshold,
+        float relatedThreshold,
+        int topK,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.ValidateRegistryVectorAsync: in-memory skeleton — returning Pass for table={Table}.",
+            registryTable);
+        if (queryIds.Count == 0)
+        {
+            return Task.FromResult(new RegistryVectorValidationResult(
+                ValidationClass: RegistryVectorValidationClass.ZeroVector,
+                IsBlocking: false,
+                Neighbors: []
+            ));
+        }
+        return Task.FromResult(new RegistryVectorValidationResult(
+            ValidationClass: RegistryVectorValidationClass.Pass,
+            IsBlocking: false,
+            Neighbors: []
+        ));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Hub Attention Current
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads hub attention recommendation current rows for the given hub_id and scope_limit.
+    /// Returns ordered by rank ASC, attention_score DESC.
+    ///
+    /// scope_limit must be one of {1000, 3000, 10000}. Caller validates from policy.
+    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(
+        Guid hubId,
+        int scopeLimit,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.LoadHubAttentionCurrentAsync: in-memory skeleton — returning empty for hub={HubId} scope={Scope}.",
+            hubId, scopeLimit);
+        return Task.FromResult<IReadOnlyList<HubAttentionCurrentRecord>>([]);
+    }
+
+    /// <summary>
+    /// Upserts a hub attention current row into context_hub_recommendation_current.
+    /// ON CONFLICT (hub_id, target_table, candidate_kind, candidate_id, scope_limit) DO UPDATE.
+    ///
+    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task UpsertHubAttentionCurrentAsync(
+        HubAttentionCurrentRecord record,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        _logger.LogDebug(
+            "ContextRouteRepository.UpsertHubAttentionCurrentAsync: in-memory skeleton — no-op for hub={HubId} scope={Scope}.",
+            record.HubId, record.ScopeLimit);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Recalculates and updates rank for all rows with the given hub_id and scope_limit,
+    /// ordered by attention_score DESC. Runs after a batch of upserts.
+    ///
+    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task RecalculateHubAttentionRanksAsync(
+        Guid hubId,
+        int scopeLimit,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.RecalculateHubAttentionRanksAsync: in-memory skeleton — no-op for hub={HubId} scope={Scope}.",
+            hubId, scopeLimit);
+        return Task.CompletedTask;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Feedback Weight Update
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Appends a feedback event to context_hub_feedback_event (append-only) and
+    /// applies the delta to feedback_adjustment in context_hub_recommendation_current.
+    ///
+    /// delta values come from caller (read from FeedbackWeightUpdatePolicy) — never hardcoded.
+    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<int> ApplyFeedbackWeightUpdateAsync(
+        IReadOnlyList<HubFeedbackEvent> events,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        _logger.LogDebug(
+            "ContextRouteRepository.ApplyFeedbackWeightUpdateAsync: in-memory skeleton — no-op for {Count} events.",
+            events.Count);
+        return Task.FromResult(0);
+    }
 }

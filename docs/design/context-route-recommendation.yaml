@@ -476,3 +476,212 @@ limits:
     privacy:
       - "monitoring is statistical; UI defaults to role/GLOBAL views"
       - "individual view is opt-in and access-controlled"
+
+topology_vector_runtime:
+  concept: >
+    Extends the context route recommendation runtime by treating registry ID arrays
+    as sparse vectors and applying SQL cosine neighbor search to registry validation,
+    hub attention recommendation, transition key evidence extraction, topology MLP
+    feature crossing, and feedback weight update.
+
+    No external embedding or pgvector required.
+    Uses existing PostgreSQL UUID[], JSONB, GIN indexes, relation weight, and
+    transition stats.
+
+  design_definitions:
+    topology_attention:
+      definition: "Extract important transition Keys from the current hub/relation context."
+    transition_key_evidence:
+      definition: >
+        Explain which table / relation / state / entity is the transition Key.
+        Stored in evidence_json column of context_hub_recommendation_current.
+    topology_mlp:
+      definition: >
+        Combine extracted Key groups and transform them into next-state / next-candidate scores.
+        Initial implementation: feature crossing + weighted score transform.
+        NOT a neural network.
+    feedback_weight_update:
+      definition: >
+        Correct statistical weights from the diff between recommendation results
+        and actual user selection.
+        selected  → positive_delta
+        ignored   → negative_delta
+        missing candidate → missing_candidate_delta
+
+  registry_sparse_vector:
+    multi_hot: "UUID[] = multi-hot sparse vector (unweighted)"
+    weighted:  "UUID + weight = weighted sparse vector"
+    targets:
+      - relation_registry.master_ids
+      - entities.relation_ids
+      - structure_maps.component_ids
+      - hub_relations.relation_registry_id + weight
+    notes:
+      - "registry table itself is the dictionary / basis definition"
+      - "rows holding ID arrays are topology nodes that carry vectors"
+      - "string label/name is search aid only — not the primary axis for cosine"
+      - "existing GIN indexes are used for coarse candidate filtering"
+
+  sql_cosine_neighbor_search:
+    multi_hot_formula: "cosine = intersection_count / sqrt(cardinality(a) * cardinality(b))"
+    weighted_formula:  "cosine = dot(a, b) / sqrt(norm(a) * norm(b))"
+    zero_norm_policy:  "zero norm → explicit result (zero_vector); no silent fallback"
+    candidate_strategy: "GIN overlap for coarse filter → cosine score on candidate set"
+    policy_source:     "function_parameters (topology_vector_runtime.registry_validation)"
+    magic_number_prohibition: true
+
+  registry_vector_validation:
+    classes:
+      duplicate_vector:
+        cosine_range: ">= duplicate_threshold"
+        disposition: blocking
+      near_duplicate_vector:
+        cosine_range: ">= near_duplicate_threshold"
+        disposition: blocking_or_confirm_required
+      related_existing_registry:
+        cosine_range: ">= related_threshold"
+        disposition: warning
+      pass:
+        cosine_range: "< related_threshold"
+        disposition: pass
+      zero_vector:
+        condition: "zero norm (empty ID array)"
+        disposition: explicit_validation_result
+      explicit_error:
+        condition: "DB unavailable or infrastructure error"
+        disposition: blocking
+        is_blocking: true
+        note: "fail-closed — DB unavailable is always blocking, never fail-open"
+    result_shape:
+      - validation_class
+      - is_blocking
+      - neighbors: [ { registry_id, name, cosine_score, matched_ids, reason } ]
+    ui_responsibility: "projection only — no cosine computation in frontend"
+    error_policy:
+      broken_refs:    ExplicitError
+      malformed_ids:  ExplicitError
+      db_unavailable: ExplicitError("REGISTRY_VECTOR_VALIDATION_DB_UNAVAILABLE")
+
+  entities:
+    context_hub_recommendation_current:
+      description: >
+        Rebuildable materialized current for hub attention recommendations.
+        NOT a source of truth — source is topology definition + append-only event log.
+        Rebuilt from topology data + context_hub_feedback_event on demand.
+      fields:
+        hub_id:                { type: uuid, note: "hub being recommended for" }
+        target_table:          { type: string }
+        candidate_kind:        { type: enum, values: [registry, hub, entity, relation, operation, token] }
+        candidate_id:          { type: uuid }
+        scope_limit:           { type: int, values: [1000, 3000, 10000], note: "1000=UI instant, 3000=normal ops, 10000=wide learning" }
+        base_probability:      { type: float, nullable: true }
+        cosine_similarity:     { type: float, nullable: true }
+        static_relation_weight:{ type: float, nullable: true }
+        statistical_weight:    { type: float, nullable: true }
+        mlp_feature_score:     { type: float, nullable: true }
+        feedback_adjustment:   { type: float, nullable: true, default: 0.0 }
+        ema_fast_30:           { type: float, nullable: true, note: "EMA with fast alpha from policy" }
+        ema_slow_10:           { type: float, nullable: true, note: "EMA with slow alpha from policy" }
+        trend:                 { type: float, nullable: true, note: "ema_fast - ema_slow" }
+        cross_state:           { type: enum, values: [up, down, none], nullable: true }
+        attention_score:       { type: float, nullable: true, note: "composite score" }
+        rank:                  { type: int, nullable: true }
+        evidence_json:         { type: jsonb, note: "transition key evidence: relation/cosine/stat/EMA/cross" }
+        mlp_feature_json:      { type: jsonb, note: "feature crossing contribution breakdown" }
+        updated_at:            { type: timestamp }
+      unique_key: [hub_id, target_table, candidate_kind, candidate_id, scope_limit]
+      scope_limit_isolation: >
+        1000 / 3000 / 10000 current rows are isolated by scope_limit column in the unique key.
+        Scope limits must not be mixed in a single read or upsert operation.
+
+    context_hub_feedback_event:
+      description: >
+        Append-only event log for feedback weight updates.
+        Records selected / ignored / missing candidate differences per hub.
+        Used to rebuild feedback_adjustment in context_hub_recommendation_current.
+      fields:
+        feedback_id:      { type: uuid, pk: true }
+        hub_id:           { type: uuid }
+        candidate_id:     { type: uuid }
+        candidate_kind:   { type: enum, values: [registry, hub, entity, relation, operation, token] }
+        scope_limit:      { type: int }
+        feedback_kind:    { type: enum, values: [selected, ignored, missing_candidate] }
+        delta_applied:    { type: float, note: "actual delta applied from policy at time of event" }
+        created_at:       { type: timestamp }
+      notes:
+        - "append-only — never updated or deleted"
+        - "aggregate current (feedback_adjustment) is rebuildable from this log"
+
+  policy_storage:
+    table: function_parameters
+    function_name: context_route_recommendation_resolve
+    parameter_key: default_policy
+    sub_key: topology_vector_runtime
+    description: >
+      topology_vector_runtime policy is stored as a sub-object inside the existing
+      default_policy JSON blob. Not a separate config table.
+    seed_json_extension: >
+      {
+        "topology_vector_runtime": {
+          "enabled": true,
+          "registry_validation": {
+            "enabled": true,
+            "duplicate_threshold": 1.0,
+            "near_duplicate_threshold": 0.85,
+            "related_threshold": 0.60,
+            "top_k": 10
+          },
+          "hub_attention": {
+            "enabled": true,
+            "scope_limits": [1000, 3000, 10000],
+            "ema_fast_alpha": 0.30,
+            "ema_slow_alpha": 0.10,
+            "max_update_candidates_per_event": 10000
+          },
+          "transition_key_evidence": {
+            "enabled": true,
+            "operation_contribution": 1.0,
+            "relation_contribution": 0.8,
+            "state_contribution": 0.7,
+            "table_contribution": 0.6,
+            "neighbor_top_k": 3
+          },
+          "topology_mlp": {
+            "enabled": true,
+            "max_feature_cross_order": 3
+          },
+          "feedback_weight_update": {
+            "enabled": true,
+            "positive_delta": 0.05,
+            "negative_delta": -0.02,
+            "missing_candidate_delta": 0.03
+          }
+        }
+      }
+    error_policy:
+      missing:  ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_NOT_FOUND")
+      invalid:  ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_INVALID")
+      disabled: explicit_disabled_result
+
+  semantic_boundaries:
+    frontend:
+      must_not:
+        - cosine_computation
+        - topology_judgment
+        - mlp_feature_crossing
+        - feedback_weight_update
+      responsibility: "project backend structured result and evidence"
+    backend:
+      responsibility: "return structured validation result and recommendation evidence"
+    database:
+      responsibility: >
+        store topology definition, context_hub_recommendation_current (rebuildable),
+        context_hub_feedback_event (append-only)
+
+  prohibited:
+    - "magic numbers for threshold/alpha/delta/limit in runtime code"
+    - "independent config table for topology_vector_runtime"
+    - "silent skip when enabled=false"
+    - "production fallback on policy missing or invalid"
+    - "cosine/topology/MLP judgment in frontend"
+    - "treating context_hub_recommendation_current as source of truth"

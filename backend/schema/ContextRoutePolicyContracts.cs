@@ -32,7 +32,10 @@ public record ContextRoutePolicy(
     float NeighborWeight,
 
     /// <summary>Optional windowed transition aggregation policy. When null, uses the pre-aggregated context_transition_stats table.</summary>
-    TransitionAggregationPolicy? TransitionAggregation = null
+    TransitionAggregationPolicy? TransitionAggregation = null,
+
+    /// <summary>Optional Topology Vector Runtime policy. When null, topology vector runtime is not active.</summary>
+    TopologyVectorRuntimePolicy? TopologyVectorRuntime = null
 );
 
 /// <summary>
@@ -45,4 +48,84 @@ public record TransitionAggregationPolicy(
     int AggregationLimit,
     bool PreferRecent,
     int? RecentDays
+);
+
+/// <summary>
+/// Policy for the Topology Vector Runtime extension.
+/// Loaded from function_parameters (function_name='context_route_recommendation_resolve',
+/// parameter_key='default_policy') as the "topology_vector_runtime" sub-object.
+///
+/// All numeric values originate from topology data store.
+/// No production defaults exist in runtime code.
+/// Missing sub-key → ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_NOT_FOUND").
+/// enabled=false → explicit disabled result; not silent fallback.
+/// </summary>
+public record TopologyVectorRuntimePolicy(
+    bool Enabled,
+    RegistryValidationPolicy? RegistryValidation,
+    HubAttentionPolicy? HubAttention,
+    TransitionKeyEvidencePolicy? TransitionKeyEvidence,
+    TopologyMlpPolicy? TopologyMlp,
+    FeedbackWeightUpdatePolicy? FeedbackWeightUpdate
+);
+
+/// <summary>
+/// Policy for registry vector validation (duplicate_vector / near_duplicate_vector /
+/// related_existing_registry / zero_vector detection).
+/// Thresholds are read from policy — never hardcoded in runtime.
+/// </summary>
+public record RegistryValidationPolicy(
+    bool Enabled,
+    float DuplicateThreshold,
+    float NearDuplicateThreshold,
+    float RelatedThreshold,
+    int TopK
+);
+
+/// <summary>
+/// Policy for hub attention recommendation current (EMA, scope limits, update cap).
+/// All numeric values from topology data store — never hardcoded.
+/// scope_limits must be a subset of {1000, 3000, 10000}.
+/// </summary>
+public record HubAttentionPolicy(
+    bool Enabled,
+    IReadOnlyList<int> ScopeLimits,
+    float EmaFastAlpha,
+    float EmaSlowAlpha,
+    int MaxUpdateCandidatesPerEvent
+);
+
+/// <summary>
+/// Policy for transition key evidence extraction.
+/// Contribution scores for each key kind and the neighbor top-k count are read from policy.
+/// All values are scoring behavior — never hardcoded in runtime code.
+/// </summary>
+public record TransitionKeyEvidencePolicy(
+    bool Enabled,
+    float OperationContribution,
+    float RelationContribution,
+    float StateContribution,
+    float TableContribution,
+    int NeighborTopK
+);
+
+/// <summary>
+/// Policy for Topology MLP feature crossing.
+/// max_feature_cross_order: maximum number of Key dimensions combined in a single feature cross.
+/// Read from policy — never hardcoded.
+/// </summary>
+public record TopologyMlpPolicy(
+    bool Enabled,
+    int MaxFeatureCrossOrder
+);
+
+/// <summary>
+/// Policy for feedback weight update (selected / ignored / missing_candidate deltas).
+/// All delta values read from policy — never hardcoded.
+/// </summary>
+public record FeedbackWeightUpdatePolicy(
+    bool Enabled,
+    float PositiveDelta,
+    float NegativeDelta,
+    float MissingCandidateDelta
 );
