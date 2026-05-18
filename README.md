@@ -150,11 +150,19 @@ READ_AGENTS_AND_RULES
 → APPLY_POLICY_JUDGMENT
 → IF_BLOCKING_FAILURE_THEN_FIX_AND_REVERIFY
 → RUN_REQUIRED_LOCAL_CHECKS
+→ IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT
 → RUN bash .agent/tests/check-structure.sh LAST
 → REPORT_PASS_FAIL_NOT_EXECUTED_AND_REMAINING_TODOS
 ```
 
 See `NOTICE.md`.
+
+### CI policy
+
+- Structure Check is the always-on required gate.
+- Heavy CI workflows are path-scoped.
+- Scope-irrelevant skipped heavy CI is not blocking.
+- Branch protection should keep Structure Check as the stable always-on gate.
 
 ## Runtime Environment Routes
 

@@ -2,9 +2,23 @@ name: frontend-types
 
 on:
   pull_request:
+    paths:
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - '.agent/tests/check-frontend-types.sh'
+      - '.github/workflows/frontend-types.yml'
   push:
     branches:
       - main
+    paths:
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - '.agent/tests/check-frontend-types.sh'
+      - '.github/workflows/frontend-types.yml'
 
 jobs:
   check-frontend-types:

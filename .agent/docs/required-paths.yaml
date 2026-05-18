@@ -131,6 +131,10 @@ required_files:
 required_content_terms:
   README.md:
     - "data-driven topology runtime"
+    - "IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT"
+    - "Structure Check is the always-on required gate."
+    - "Heavy CI workflows are path-scoped."
+    - "Scope-irrelevant skipped heavy CI is not blocking."
   AGENTS.md:
     - "Recursive Verification Gate"
     - ".agent/rules/rule.md"
@@ -150,9 +154,14 @@ required_content_terms:
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
+    - "Remote CI Equivalence Gate"
+    - "Structure Check is the always-on required gate."
+    - "scope-irrelevant workflow-level skip is not blocking."
   .agent/protocols/policy-judgment.md:
     - "Policy Judgment Gate"
     - "Recursive Verification Gate"
+    - "CI queued/in_progress is not PASS"
+    - "scope-irrelevant workflow-level skip is not blocking"
   .agent/protocols/scenario-contract.md:
     - "Temporary Scenario Contract"
     - "Recursive Verification Gate"
@@ -167,6 +176,7 @@ required_content_terms:
     - "Runtime Boundary Failure Matrix"
     - "Temporary Scenario Contract"
     - "Expected read / write / append / cache / return order"
+    - "Remote CI Equivalence Gate"
   .agent/docs/structure-map.yaml:
     - "temporary scenario contract"
     - "periodic audit"
@@ -220,6 +230,8 @@ required_content_terms:
     - "Q15"
     - "Answer:"
     - "scenario contract"
+    - "equivalent remote CI success"
+    - "Structure Check is always-on"
   .agent/checklists/check-policy-judgment.sh:
     - "Answer:"
     - "--self-test"

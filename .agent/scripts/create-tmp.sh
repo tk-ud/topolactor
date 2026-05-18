@@ -41,6 +41,12 @@ cat > "$TMP_FILE" <<'EOF'
 # 9. UI-visible error state
 # 10. post-write read consistency
 #
+# Remote CI Equivalence Gate:
+# - Local checks not executed:
+# - Required remote CI equivalent:
+# - Remote CI status:
+# - CI recursion required:
+#
 # Recursive Verification Gate:
 # - Blocking failures found:
 # - Fix recursion performed:

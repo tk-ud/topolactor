@@ -2,9 +2,21 @@ name: backend-tests
 
 on:
   pull_request:
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - '.agent/tests/check-backend-tests.sh'
+      - '.github/workflows/backend-tests.yml'
   push:
     branches:
       - main
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - '.agent/tests/check-backend-tests.sh'
+      - '.github/workflows/backend-tests.yml'
 
 jobs:
   backend-tests:

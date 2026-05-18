@@ -2,9 +2,21 @@ name: default-entity-search
 
 on:
   pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'db/**/*.sql'
+      - '.agent/tests/check-default-entity-search.sh'
+      - '.github/workflows/default-entity-search.yml'
   push:
     branches:
       - main
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'db/**/*.sql'
+      - '.agent/tests/check-default-entity-search.sh'
+      - '.github/workflows/default-entity-search.yml'
 
 jobs:
   default-entity-search:

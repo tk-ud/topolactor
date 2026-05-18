@@ -2,9 +2,17 @@ name: db-schema-check
 
 on:
   pull_request:
+    paths:
+      - 'db/**/*.sql'
+      - '.agent/tests/check-db-schema.sh'
+      - '.github/workflows/db-schema-check.yml'
   push:
     branches:
       - main
+    paths:
+      - 'db/**/*.sql'
+      - '.agent/tests/check-db-schema.sh'
+      - '.github/workflows/db-schema-check.yml'
 
 jobs:
   db-schema-check:
