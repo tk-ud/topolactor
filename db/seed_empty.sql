@@ -131,18 +131,20 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING;
 
 -- ---------------------------------------------------------------------------
 -- context_event retention policy
--- Loaded by a retention job via TopologyRepository.LoadFunctionParameterAsync(
---   "context_event_retention", "retention_policy").
--- hot_days: events within this window are kept in context_event (fast path).
--- cold_days: events older than hot_days but within cold_days are archived.
--- archive_strategy: "delete" (purge) or "archive" (move to cold table).
--- batch_size: rows per deletion/archival batch to avoid long-lock transactions.
+-- Loaded by RetentionScheduler → LogRetentionRuntime via
+--   TopologyRepository.LoadFunctionParameterAsync("context_event_retention", "retention_policy").
+-- hot_days: events within this window are kept (fast path; not yet enforced in v1).
+-- cold_days: events older than cold_days are eligible for cleanup.
+-- archive_strategy: "delete" (purge rows). "archive" (move to cold table) is future work.
+-- batch_size: rows per deletion batch to avoid long-lock transactions.
+-- enabled: false disables cleanup; RetentionScheduler logs Disabled status instead of skipping silently.
+-- schedule_interval_hours: how often RetentionScheduler triggers the runtime.
 -- ---------------------------------------------------------------------------
 INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'context_event_retention',
     'retention_policy',
-    '{"hot_days":90,"cold_days":365,"archive_strategy":"delete","batch_size":1000}',
+    '{"hot_days":90,"cold_days":365,"archive_strategy":"delete","batch_size":1000,"enabled":true,"schedule_interval_hours":24}',
     true
 )
 ON CONFLICT (function_name, parameter_key) DO NOTHING;

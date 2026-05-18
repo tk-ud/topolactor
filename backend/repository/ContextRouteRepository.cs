@@ -114,4 +114,16 @@ public class ContextRouteRepository
         _logger.LogDebug("ContextRouteRepository.UpsertPrefixVectorCacheAsync: in-memory skeleton — no-op for session={SessionId} prefix={PrefixIndex}.", vec.SessionId, vec.PrefixIndex);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Deletes context_event rows older than coldDays in batches of batchSize.
+    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<int> DeleteOldContextEventsAsync(int coldDays, int batchSize, CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.DeleteOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}).",
+            coldDays, batchSize);
+        return Task.FromResult(0);
+    }
 }

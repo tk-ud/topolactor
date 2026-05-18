@@ -552,4 +552,107 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                 kv => Guid.Parse(kv.Key),
                 kv => (float)kv.Value);
     }
+
+    // ---------------------------------------------------------------------------
+    // Retention — context_event cleanup
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Deletes context_event rows older than coldDays in a single batch of at most batchSize rows.
+    /// FK-safe and cache-consistent: collects affected session_ids, drops all
+    /// context_prefix_vector_cache rows for those sessions, then deletes
+    /// context_event_vector_cache and context_event rows.
+    ///
+    /// Why full-session prefix cache invalidation is required:
+    ///   prefix_vector = SUM(event_vectors[0..prefix_index]).
+    ///   Deleting any event from a session makes ALL prefix cache rows for that session
+    ///   stale (every cumulative SUM that included the deleted event is now wrong),
+    ///   not only the row where last_event_id references the deleted event.
+    ///   The cache is rebuildable from context_event, so dropping it is safe.
+    ///
+    /// FK constraints honoured:
+    ///   context_event_vector_cache.event_id       → context_event.event_id
+    ///   context_prefix_vector_cache.last_event_id → context_event.event_id
+    ///
+    /// SKIP LOCKED on the candidate selection avoids blocking concurrent event appends.
+    /// Returns the number of context_event rows deleted.
+    /// </summary>
+    public override async Task<int> DeleteOldContextEventsAsync(
+        int coldDays, int batchSize, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var txn = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            // Step 1: collect event_ids and session_ids for the candidate batch (locked, skip if busy)
+            await using var selectCmd = conn.CreateCommand();
+            selectCmd.Transaction = txn;
+            selectCmd.CommandText =
+                "SELECT event_id, session_id FROM context_event " +
+                "WHERE created_at < NOW() - (@cold_days || ' days')::INTERVAL " +
+                "ORDER BY created_at ASC " +
+                "LIMIT @batch_size " +
+                "FOR UPDATE SKIP LOCKED";
+            selectCmd.Parameters.AddWithValue("cold_days", coldDays);
+            selectCmd.Parameters.AddWithValue("batch_size", batchSize);
+
+            var eventIds = new List<Guid>();
+            var sessionIds = new HashSet<Guid>();
+            await using (var reader = await selectCmd.ExecuteReaderAsync(ct))
+            {
+                while (await reader.ReadAsync(ct))
+                {
+                    eventIds.Add(reader.GetGuid(0));
+                    sessionIds.Add(reader.GetGuid(1));
+                }
+            }
+
+            if (eventIds.Count == 0)
+            {
+                await txn.CommitAsync(ct);
+                return 0;
+            }
+
+            // Step 2: drop ALL prefix cache rows for affected sessions.
+            // prefix_vector = SUM(event_vectors[0..prefix_index]): deleting any event
+            // from a session invalidates every prefix cache row that covered it, not only
+            // the row where last_event_id points to a deleted event.
+            await using var delPrefixCmd = conn.CreateCommand();
+            delPrefixCmd.Transaction = txn;
+            delPrefixCmd.CommandText =
+                "DELETE FROM context_prefix_vector_cache WHERE session_id = ANY(@sessions)";
+            delPrefixCmd.Parameters.AddWithValue("sessions", sessionIds.ToArray());
+            await delPrefixCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 3: delete event vector cache rows
+            await using var delVecCmd = conn.CreateCommand();
+            delVecCmd.Transaction = txn;
+            delVecCmd.CommandText =
+                "DELETE FROM context_event_vector_cache WHERE event_id = ANY(@ids)";
+            delVecCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            await delVecCmd.ExecuteNonQueryAsync(ct);
+
+            // Step 4: delete the parent context_event rows
+            await using var delEvtCmd = conn.CreateCommand();
+            delEvtCmd.Transaction = txn;
+            delEvtCmd.CommandText =
+                "DELETE FROM context_event WHERE event_id = ANY(@ids)";
+            delEvtCmd.Parameters.AddWithValue("ids", eventIds.ToArray());
+            var rows = await delEvtCmd.ExecuteNonQueryAsync(ct);
+
+            await txn.CommitAsync(ct);
+
+            _npgsqlLogger.LogDebug(
+                "NpgsqlContextRouteRepository.DeleteOldContextEventsAsync: deleted {Rows} context_event row(s) older than {ColdDays} days.",
+                rows, coldDays);
+            return rows;
+        }
+        catch
+        {
+            await txn.RollbackAsync(ct);
+            throw;
+        }
+    }
 }

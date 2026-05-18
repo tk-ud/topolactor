@@ -1,0 +1,124 @@
+using Microsoft.AspNetCore.Http.Json;
+using System.Text.Json;
+using Topolactor.Endpoint;
+using Topolactor.Guard;
+using Topolactor.Mapper;
+using Topolactor.Repository;
+using Topolactor.Runtime;
+using Topolactor.Scheduler;
+using Topolactor.Schema;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+
+builder.Services.Configure<JsonOptions>(o =>
+{
+    o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
+    o.SerializerOptions.DefaultIgnoreCondition =
+        System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
+});
+
+// ---------------------------------------------------------------------------
+// Repository layer — in-memory skeleton when DATABASE_URL is not set
+// ---------------------------------------------------------------------------
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") ?? string.Empty;
+var useNpgsql = !string.IsNullOrWhiteSpace(connectionString);
+
+if (useNpgsql)
+{
+    builder.Services.AddSingleton<TopologyRepository>(sp =>
+        new NpgsqlTopologyRepository(
+            sp.GetRequiredService<ILogger<NpgsqlTopologyRepository>>(),
+            connectionString));
+    builder.Services.AddSingleton<ContextRouteRepository>(sp =>
+        new NpgsqlContextRouteRepository(
+            sp.GetRequiredService<ILogger<NpgsqlContextRouteRepository>>(),
+            connectionString));
+}
+else
+{
+    builder.Services.AddSingleton<TopologyRepository>(sp =>
+        new TopologyRepository(
+            sp.GetRequiredService<ILogger<TopologyRepository>>(),
+            "in-memory"));
+    builder.Services.AddSingleton<ContextRouteRepository>(sp =>
+        new ContextRouteRepository(
+            sp.GetRequiredService<ILogger<ContextRouteRepository>>(),
+            "in-memory"));
+}
+
+// ---------------------------------------------------------------------------
+// Runtime layer
+// ---------------------------------------------------------------------------
+builder.Services.AddSingleton<DiffLogRepository>();
+builder.Services.AddSingleton<OperationVectorResolver>();
+builder.Services.AddSingleton<AttractorResolver>();
+builder.Services.AddSingleton<StructureMapResolver>();
+builder.Services.AddSingleton<PackageResolver>();
+builder.Services.AddSingleton<SchemaResolver>();
+builder.Services.AddSingleton<EmissionBuilder>();
+builder.Services.AddSingleton<SemanticMapper>();
+builder.Services.AddSingleton<RuntimeGuard>();
+builder.Services.AddSingleton<ContextVectorBuilder>();
+builder.Services.AddSingleton<ContextNeighborSearch>();
+builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
+builder.Services.AddSingleton<RuntimeExecutor>();
+builder.Services.AddSingleton<LogRetentionRuntime>();
+
+// ---------------------------------------------------------------------------
+// Endpoint layer
+// ---------------------------------------------------------------------------
+builder.Services.AddSingleton<DispatchEndpoint>();
+builder.Services.AddSingleton<AuthEndpoint>();
+builder.Services.AddSingleton<JwtGuard>();
+
+// ---------------------------------------------------------------------------
+// Background services
+// ---------------------------------------------------------------------------
+builder.Services.AddHostedService<RetentionScheduler>();
+
+// ---------------------------------------------------------------------------
+// HTTP layer
+// ---------------------------------------------------------------------------
+var port = Environment.GetEnvironmentVariable("BACKEND_PORT") ?? "5000";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+var app = builder.Build();
+
+// Health check — used by Docker healthcheck and nginx upstream check
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// POST /dispatch — always JWT-guarded.
+// JwtGuard.Validate returns AUTH_JWT_SECRET_NOT_CONFIGURED when DEMO_JWT_SECRET
+// is not set, so the endpoint is never silently unauthenticated.
+app.MapPost("/dispatch", async (
+    HttpContext ctx,
+    EndpointRequestDto request,
+    DispatchEndpoint dispatch,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
+
+    var result = await dispatch.HandleAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 200 : 422);
+});
+
+// POST /auth/login — demo login scaffold
+app.MapPost("/auth/login", async (
+    HttpContext ctx,
+    LoginRequestDto request,
+    AuthEndpoint auth) =>
+{
+    var result = await auth.HandleAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+app.Run();
