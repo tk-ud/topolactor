@@ -173,6 +173,21 @@ SQL cosine 近傍検索を runtime / validation / recommendation に統合する
 PostgreSQL の `UUID[]`, `JSONB`, GIN index, relation weight, transition stats を利用する
 data-defined topology runtime 拡張。
 
+### SQL Attention
+
+SQL Attention は Topology Vector Runtime の説明ラベルであり、別 Runtime 名ではない。
+PostgreSQL 上の `UUID[]` / `JSONB` / GIN index / relation weight / transition stats / EMA trend を使い、
+source of truth の業務データではなく recommendation current / projection 用の materialized signal として扱う。
+外部 embedding / pgvector / learned neural weights / neural attention 実装は必須ではない。
+
+```text
+Query  = current hub / operation / runtime context
+Key    = registry sparse vector / relation / hub / entity / token
+Value  = candidate hub / registry / operation / token
+Score  = cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback
+Output = ranked recommendation current / projection input
+```
+
 ### 設計定義
 
 ```text
