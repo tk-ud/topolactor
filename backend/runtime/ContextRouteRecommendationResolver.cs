@@ -124,31 +124,11 @@ public class ContextRouteRecommendationResolver
         var eventVector = _vectorBuilder.BuildEventVector(tokenIds, tokenValueMap);
         var eventNorm = _vectorBuilder.ComputeL2Norm(eventVector);
 
-        // Append context event — non-fatal
-        var contextEvent = new ContextEventRecord(
-            EventId: Guid.NewGuid(),
-            SessionId: sessionId,
-            UserId: vector.ContextUserId,
-            Role: role,
-            TableName: tableName,
-            RecordId: vector.ContextRecordId,
-            Operation: currentOperation,
-            TokenIds: tokenIds,
-            CreatedAt: DateTimeOffset.UtcNow,
-            NextOperationHint: null,
-            NextTokenIdsHint: null
-        );
-
-        try
-        {
-            await _contextRouteRepository.AppendContextEventAsync(contextEvent, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
-        }
-
-        // Load prefix vector candidates.
+        // Load prefix vector candidates BEFORE appending current event.
+        // The LATERAL JOIN in LoadRecentPrefixVectorsAsync resolves next_operation by
+        // finding the event that immediately follows last_event_id in the same session.
+        // Appending first would make the current dispatch appear as the successor of the
+        // most-recent seeded prefix, corrupting next_operation for that prefix entry.
         var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
             tableName, role, policy.RecentDays, ct);
 
@@ -200,6 +180,32 @@ public class ContextRouteRecommendationResolver
         var nextTokens = ResolveNextTokens(neighbors, policy);
         var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
+
+        // Append current dispatch to context_event AFTER recommendation is resolved.
+        // This preserves the historical prefix → next_operation relationship for the
+        // candidates just computed, and records the current operation for future dispatches.
+        var contextEvent = new ContextEventRecord(
+            EventId: Guid.NewGuid(),
+            SessionId: sessionId,
+            UserId: vector.ContextUserId,
+            Role: role,
+            TableName: tableName,
+            RecordId: vector.ContextRecordId,
+            Operation: currentOperation,
+            TokenIds: tokenIds,
+            CreatedAt: DateTimeOffset.UtcNow,
+            NextOperationHint: null,
+            NextTokenIdsHint: null
+        );
+
+        try
+        {
+            await _contextRouteRepository.AppendContextEventAsync(contextEvent, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
+        }
 
         return new ContextRouteRecommendationResult(
             NextOperations: nextOperations,

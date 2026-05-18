@@ -577,6 +577,35 @@ public class ContextRouteRecommendationResolverTests
         Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
     }
 
+    [Fact]
+    public async Task ResolveAsync_AppendContextEvent_CalledAfterLoadRecentPrefixVectors()
+    {
+        // AppendContextEventAsync must run AFTER LoadRecentPrefixVectorsAsync.
+        // The prefix LATERAL JOIN resolves next_operation from the event following
+        // last_event_id in the session. Appending first would inject the current
+        // dispatch as the successor of the most-recent prefix entry, corrupting
+        // next_operation for that prefix.
+        var tokenId = Guid.NewGuid();
+        var tracking = new OrderTrackingRepository(tokenId);
+        var resolver = CreateResolver(
+            repo: tracking,
+            topologyRepo: new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.True(tracking.LoadPrefixSequence > 0, "LoadRecentPrefixVectorsAsync must have been called.");
+        Assert.True(tracking.AppendSequence > 0, "AppendContextEventAsync must have been called.");
+        Assert.True(
+            tracking.LoadPrefixSequence < tracking.AppendSequence,
+            $"LoadRecentPrefixVectorsAsync (seq={tracking.LoadPrefixSequence}) must be called " +
+            $"before AppendContextEventAsync (seq={tracking.AppendSequence}).");
+    }
+
     /// <summary>
     /// Stub repository that returns a fixed token record and 15 prefix candidates
     /// all carrying NextOperation="action_next" with a known sparse vector.
@@ -613,6 +642,56 @@ public class ContextRouteRecommendationResolverTests
                 ))
                 .ToList();
             return Task.FromResult(result);
+        }
+    }
+
+    /// <summary>
+    /// Stub repository that tracks the call sequence of LoadRecentPrefixVectorsAsync
+    /// and AppendContextEventAsync to verify ordering guarantees in ResolveAsync.
+    /// </summary>
+    private sealed class OrderTrackingRepository(Guid tokenId) : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        private int _seq;
+        public int LoadPrefixSequence { get; private set; }
+        public int AppendSequence { get; private set; }
+
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
+            IEnumerable<Guid> tokenIds,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<ContextTokenRecord> result =
+                [new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")];
+            return Task.FromResult(result);
+        }
+
+        public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
+            string? tableName,
+            string? role,
+            int? maxDays,
+            CancellationToken ct = default)
+        {
+            LoadPrefixSequence = Interlocked.Increment(ref _seq);
+            var vector = new Dictionary<Guid, float> { [tokenId] = 1.0f };
+            IReadOnlyList<ContextPrefixVectorRecord> result = Enumerable.Range(0, 15)
+                .Select(i => new ContextPrefixVectorRecord(
+                    SessionId: Guid.NewGuid(),
+                    PrefixIndex: i,
+                    LastEventId: Guid.NewGuid(),
+                    SparseVector: vector,
+                    L2Norm: 1.0f,
+                    UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i),
+                    NextOperation: "action_next",
+                    NextTokenIdsHint: null
+                ))
+                .ToList();
+            return Task.FromResult(result);
+        }
+
+        public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+        {
+            AppendSequence = Interlocked.Increment(ref _seq);
+            return Task.CompletedTask;
         }
     }
 }

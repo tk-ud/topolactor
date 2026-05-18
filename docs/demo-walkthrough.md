@@ -232,12 +232,18 @@ single matching prefix is enough to return a recommendation.
    - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
 
 **Why it works:** `demo_seed.sql` inserts fixed-UUID events and their pre-computed prefix
-vectors (`context_prefix_vector_cache`). The resolver finds prefix_index=0 (similarity=1.0
-for token_active) and neighbor voting produces `demo:entity:list` as the likely next operation.
+vectors (`context_prefix_vector_cache`). The resolver loads prefix candidates first (before
+appending the current dispatch), so prefix_index=0 finds `next_operation=demo:entity:list`
+cleanly. Neighbor voting at similarity=1.0 with `neighbor_weight=0.6` gives score=0.6.
+Prefix_index=1 has `next_operation=NULL` at that point (no event after it yet) and does not vote.
 
 **Route identity:** the resolver uses the full attractor key (`demo:hub:overview`) as `currentOperation`,
 which matches the `operation` column in seeded `context_event` rows. `tableName` is not used as
 a filter — prefix candidates are scoped by `session_id` and `recent_days`, not by `table_name`.
+
+**Ordering guarantee:** `LoadRecentPrefixVectorsAsync` is called before `AppendContextEventAsync`.
+Without this ordering, the current dispatch would appear as the next event after the most-recent
+prefix entry, injecting `demo:hub:overview` as a second candidate alongside `demo:entity:list`.
 
 > **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
 > `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.

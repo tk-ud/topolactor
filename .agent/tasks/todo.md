@@ -33,8 +33,11 @@
          currentOperation を vector.Action ではなく vector.AttractorKey（完全キー形式）に修正。
          LoadRecentPrefixVectorsAsync の tableName filter を null（全候補対象）に修正。
          frontend/api/dispatch.ts の status union を snake_case に統一（RecommendationPanel と一致）。
-         docs/demo-walkthrough.md に Scenario E 追加・route identity 定義を明記。
-         dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で recommendation ok 結果が得られる。
+         ResolveAsync の処理順を変更: AppendContextEventAsync を LoadRecentPrefixVectorsAsync より後に移動。
+         prefix LATERAL JOIN が current dispatch で汚染されないことを OrderTrackingRepository テストで検証。
+         docs/demo-walkthrough.md に Scenario E 追加・route identity・ordering guarantee を明記。
+         dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で
+         recommendation status:ok + nextOperations:[{value:demo:entity:list, score:0.6}] が安定して得られる。
 
 - [ ] admin / registry 操作を skeleton 受付からDB永続化へ移行する
       → 理由: context_token_registry admin は画面とAPI shapeがあるが、未接続時501やスケルトン説明が残る。
