@@ -40,7 +40,7 @@ services:
     container_name: topolactor-demo-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: "Host=postgres;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo"
+      DATABASE_URL: "${DATABASE_URL}"
       BACKEND_PORT: "5000"
       # Required — set in infra/.env (copy infra/.env.example and fill in values).
       # /dispatch is always JWT-guarded; AUTH_JWT_SECRET_NOT_CONFIGURED is returned
@@ -65,7 +65,7 @@ services:
     container_name: topolactor-demo-frontend
     restart: unless-stopped
     environment:
-      DEMO_BACKEND_URL: "http://backend:5000"
+      DEMO_BACKEND_URL: "${DEMO_BACKEND_URL:-http://backend:5000}"
       PORT: "8000"
     depends_on:
       backend:

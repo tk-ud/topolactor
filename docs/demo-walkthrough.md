@@ -6,6 +6,35 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 
 ---
 
+
+## Environment Routes and Required Variables
+
+This repository supports three operation routes. Keep them separated to avoid mixed backend targets.
+
+### Route A: Local dev (Fresh + backend on host)
+- Backend required env: `DATABASE_URL`, `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS` (`DEMO_JWT_ISSUER` optional, `BACKEND_PORT` optional default 5000 in local dev).
+- Frontend required env: `DEMO_BACKEND_URL=http://localhost:5000` (or your backend port).
+- If `DEMO_BACKEND_URL` is missing, Fresh proxy routes return explicit 501 (`*_BACKEND_NOT_CONFIGURED`).
+
+### Route B: Docker Compose demo
+- Use `infra/.env` (copy from `infra/.env.example`).
+- Required: `DATABASE_URL`, `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS`.
+- Internal compose wiring is fixed for consistency: backend `5000`, frontend `8000`, nginx upstream `backend:5000`/`frontend:8000`, backend healthcheck `localhost:5000`.
+- `DEMO_BACKEND_URL` defaults to `http://backend:5000` in compose unless overridden.
+- nginx handles `/api/*` to backend directly (Fresh proxy bypassed).
+
+### Route C: Production-like reverse proxy
+- Same backend required env as Route A/B.
+- Reverse proxy routes `/api/*` to backend runtime and `/` to frontend runtime.
+- Keep a single canonical backend target to avoid route drift between proxy and app-level forwarding.
+
+### Explicit failures (intended)
+- Backend startup throws configuration error when `DATABASE_URL` is missing (no in-memory fallback).
+- `/dispatch` and `/admin/*` return 401 when auth token or signing secret validation fails.
+- Fresh proxy returns 502 (`*_BACKEND_UNREACHABLE`) when backend cannot be reached.
+
+---
+
 ## Prerequisites
 
 1. PostgreSQL running and seeded:
