@@ -488,6 +488,22 @@ topology_vector_runtime:
     Uses existing PostgreSQL UUID[], JSONB, GIN indexes, relation weight, and
     transition stats.
 
+  sql_attention:
+    role: "descriptive label for Topology Vector Runtime; not a separate runtime"
+    definition: >
+      Uses PostgreSQL UUID[], JSONB, GIN indexes, relation weight, transition stats,
+      EMA trends, and feedback to integrate topology-vector evidence into an
+      attention_score for recommendation current and projection input.
+      It does not require external embeddings, pgvector, learned neural weights,
+      or a neural attention implementation. Recommendation current is a rebuildable
+      materialized signal, not source-of-truth business data.
+    mapping:
+      query: "current hub / operation / runtime context"
+      key: "registry sparse vector / relation / hub / entity / token"
+      value: "candidate hub / registry / operation / token"
+      score: "cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback"
+      output: "ranked recommendation current / projection input"
+
   design_definitions:
     topology_attention:
       definition: "Extract important transition Keys from the current hub/relation context."

@@ -64,6 +64,8 @@ Topolactor includes a lightweight self-learning DB pattern for recommendation.
 
 It does not train a neural network and does not backpropagate model weights. Instead, it records append-only context events and derives recommendations from stored topology data, token registries, vector caches, and transition aggregates.
 
+Topology Vector Runtime can be described as **SQL Attention**: it uses stored topology vectors, relation weights, transition aggregates, and EMA trends in PostgreSQL to rank what the runtime should attend to next.
+
 The basic loop is:
 
 ```text
