@@ -131,6 +131,7 @@ required_files:
 required_content_terms:
   README.md:
     - "data-driven topology runtime"
+    - "IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT"
   AGENTS.md:
     - "Recursive Verification Gate"
     - ".agent/rules/rule.md"
@@ -150,9 +151,11 @@ required_content_terms:
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
+    - "Remote CI Equivalence Gate"
   .agent/protocols/policy-judgment.md:
     - "Policy Judgment Gate"
     - "Recursive Verification Gate"
+    - "CI queued/in_progress is not PASS"
   .agent/protocols/scenario-contract.md:
     - "Temporary Scenario Contract"
     - "Recursive Verification Gate"
@@ -167,6 +170,7 @@ required_content_terms:
     - "Runtime Boundary Failure Matrix"
     - "Temporary Scenario Contract"
     - "Expected read / write / append / cache / return order"
+    - "Remote CI Equivalence Gate"
   .agent/docs/structure-map.yaml:
     - "temporary scenario contract"
     - "periodic audit"
@@ -220,6 +224,7 @@ required_content_terms:
     - "Q15"
     - "Answer:"
     - "scenario contract"
+    - "equivalent remote CI success"
   .agent/checklists/check-policy-judgment.sh:
     - "Answer:"
     - "--self-test"

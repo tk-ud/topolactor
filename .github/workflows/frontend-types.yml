@@ -12,11 +12,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect frontend-related changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+          git diff --name-only "$BASE_SHA" "$GITHUB_SHA" > changed_files.txt
+          if rg -q '^(frontend/.*\.(ts|tsx)|deno\.json|frontend/import_map\.json|\.agent/tests/check-frontend-types\.sh|\.github/workflows/frontend-types\.yml)$' changed_files.txt; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Deno
+        if: steps.changes.outputs.run == 'true'
         uses: denoland/setup-deno@v1
         with:
           deno-version: v1.x
 
       - name: Run frontend type check
+        if: steps.changes.outputs.run == 'true'
         run: bash .agent/tests/check-frontend-types.sh
+
+      - name: Frontend type check not required for this change
+        if: steps.changes.outputs.run != 'true'
+        run: echo "No frontend type scope change detected; frontend-types marked success by scope gating."

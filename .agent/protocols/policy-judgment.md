@@ -17,6 +17,10 @@ Recursive Verification Gate requirement:
 
 Q12/Q13 meaning:
 
+- required NOT EXECUTED local checks must map to equivalent remote CI success before completion
+- CI queued/in_progress is not PASS
+- required NOT EXECUTED without equivalent CI success is a blocking failure
+
 - answers must be based on full branch diff inspection
 - when required, answers must include scenario contract verification
 - when required, answers must include Runtime Boundary Failure Matrix verification

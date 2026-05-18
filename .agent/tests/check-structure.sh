@@ -258,6 +258,11 @@ check_content ".agent/checklists/check-policy-judgment.sh" "Answer:"
 check_content ".agent/checklists/check-policy-judgment.sh" "--self-test"
 check_content "AGENTS.md" "check-policy-judgment.sh"
 check_content "AGENTS.md" "Policy Judgment Gate"
+check_content ".agent/protocols/completion.md" "Remote CI Equivalence Gate"
+check_content ".agent/protocols/policy-judgment.md" "CI queued/in_progress is not PASS"
+check_content ".agent/checklists/policy-judgment.md" "equivalent remote CI success"
+check_content ".agent/scripts/create-tmp.sh" "Remote CI Equivalence Gate"
+check_content "README.md" "IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT"
 check_content ".agent/rules/rule.md" "Policy Judgment Gate"
 
 
@@ -301,4 +306,5 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
+
 
