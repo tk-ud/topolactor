@@ -166,9 +166,14 @@ framework_policy:
         - admin_approval
         - apply
       statuses:
+        - OK
         - MissingPolicy
         - MalformedPolicy
         - ValidationFailed
+        - DanglingReference
+        - InactiveReference
+        - MissingRelation
+        - CandidateMismatch
       db_command_strings: prohibited
       package_runtime_validation_runner: required
       shell_script: optional_allowlisted_adapter_only

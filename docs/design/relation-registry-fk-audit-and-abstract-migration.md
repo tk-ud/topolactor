@@ -110,6 +110,14 @@ No silent fallback is allowed for relation reference integrity or migration deci
 
 ## Remaining TODOs
 
-- Implement `RelationRegistryFkAuditRuntime` with repository query boundaries and status contract.
-- Implement `AbstractMigrationRuntime` candidate builder with Manifest + `function_parameters` resolution.
-- Add automated tests for periodic audit and add/change/deprecate registry flows.
+- Implement C# relation_registry FK CI runtime:
+  - `RelationRegistryFkAuditRuntime`
+  - relation_registry SELECT repository boundary
+  - audit target SELECT repository boundary
+  - explicit status contract tests
+  - CI gate integration as C# package runtime validation runner
+- Implement C# AbstractMigrationRuntime:
+  - Manifest + `function_parameters.parameter_value` JSONB resolution
+  - FK / index / relation binding / structure_map candidate generation
+  - candidate validation before admin approval
+  - no executable DB command strings in DB policy payload
