@@ -12,8 +12,8 @@ export type ComponentDef = {
 export type ComponentRegistry = Record<string, ComponentDef>;
 
 /**
- * The default registry shipped with the skeleton.  Real registries will be
- * built up by registering hub-specific and schema-specific component defs.
+ * Static component registry fixture used for local type/tests.
+ * Runtime component selection is derived from backend runtime responses.
  */
 export const defaultComponentRegistry: ComponentRegistry = {
   "default-view": {

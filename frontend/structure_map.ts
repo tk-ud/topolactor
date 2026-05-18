@@ -19,9 +19,8 @@ export type StructureMapEntry = {
 export type StructureMap = Record<string, StructureMapEntry>;
 
 /**
- * The default structure map shipped with the skeleton.
- * Real structure maps will be populated from backend topology data at
- * application startup (stored_topology_data → structure_map_resolve).
+ * Static fallback map for local type/tests only.
+ * Canonical runtime path resolves structure maps from backend topology data.
  */
 export const defaultStructureMap: StructureMap = {
   "default:entity:search": {

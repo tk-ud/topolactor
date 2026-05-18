@@ -5,7 +5,9 @@ namespace Topolactor.Repository;
 /// <summary>
 /// Append-only log of topology mutations. Records before/after state for each operation.
 /// Writes are never destructive — entries are only ever appended, never updated or deleted.
-/// Stub implementation logs to ILogger; real implementation writes to persistent storage.
+/// Current implementation logs to ILogger and does not persist yet.
+/// Runtime callers must not assume durable diff history until a DB-backed
+/// repository is introduced.
 /// </summary>
 public class DiffLogRepository
 {
@@ -18,7 +20,7 @@ public class DiffLogRepository
 
     /// <summary>
     /// Appends a diff log entry for an operation.
-    /// Stub: writes to ILogger at Information level.
+    /// Current non-persistent path: writes to ILogger at Information level.
     /// </summary>
     /// <param name="hubId">The hub or entity ID affected, if applicable.</param>
     /// <param name="action">The action that was performed (e.g., "create", "update").</param>

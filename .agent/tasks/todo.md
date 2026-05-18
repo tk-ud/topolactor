@@ -16,11 +16,11 @@
 
 ## Runtime Stub / Dummy / Skeleton Residue Audit
 
-- [ ] runtime正規導線と静的・テスト専用 scaffold の境界を再点検し、stub / dummy / skeleton 残骸を削除または明確隔離する
+- [x] runtime正規導線と静的・テスト専用 scaffold の境界を再点検し、stub / dummy / skeleton 残骸を削除または明確隔離する
       → 理由: /demo と Program.cs の正規導線は backend runtime / DB-backed に寄っている一方、runtime-status・frontend default registry/map/schema/package・base TopologyRepository・DiffLogRepository・SemanticMapper に skeleton/dummy/stub 表記または挙動が残っており、完了済みruntime化との意味整合が崩れる。
       → 改善方針: runtime-status は実runtime検証表示へ移すか静的診断ページとして明示隔離する。frontend defaultStructureMap/defaultPackage/defaultSchema/defaultComponentRegistry は runtime結果ではないことを再確認し、正規導線で参照されない形へ隔離する。TopologyRepository base の dummy path はテスト専用境界を明示するか削除し、NpgsqlTopologyRepositoryをruntime正規導線として固定する。DiffLogRepository.AppendAsync は永続化diff log未完了として実装方針を切る。SemanticMapper の stub 表記は実態に合わせて削除または未完了扱いにする。
       → 対象ファイル: frontend/routes/runtime-status.tsx, frontend/structure_map.ts, frontend/package/defaultPackage.ts, frontend/schema/defaultSchema.ts, frontend/registry/componentRegistry.ts, backend/repository/TopologyRepository.cs, backend/repository/NpgsqlTopologyRepository.cs, backend/repository/DiffLogRepository.cs, backend/mapper/SemanticMapper.cs, backend/Program.cs, docs/demo-walkthrough.md
-      → 次の判断点: 残す scaffold を /demo-static・tests 専用に限定するか、runtime正規導線への全面移行として default/dummy 経路を削除するか。
+      → 完了: runtime-statusを静的チェックページとして明示し、default map/package/schema/registry と TopologyRepository の説明を runtime結果と誤認されない test fixture 境界へ更新。DiffLogRepository は非永続の現状態を明記し、SemanticMapper の stub 表記を実態に合わせて修正。
       → 推奨担当: Codex
 
 ## Product Completion Roadmap (暫定)
@@ -81,11 +81,11 @@
       → 対象ファイル: infra/docker-compose.yml, infra/.env.example, frontend/routes/api/*, backend/Program.cs, docs/demo-walkthrough.md, README.md
       → 次の判断点: demo用authを残すか、本番auth境界を別SSOTとして切るか。
 
-- [ ] CI/テストを「構造確認」から「runtime意味確認」へ拡張する
+- [x] CI/テストを「構造確認」から「runtime意味確認」へ拡張する
       → 理由: structure/backend/db のチェックはあるが、ログイン→dispatch→emission、policy変更→runtime反映、registry更新→推薦変化の意味テストが不足している。
       → 改善方針: backend unit/integration、frontend type/API proxy、DB seed smoke、demo runtime smoke を分けて追加する。
       → 対象ファイル: .agent/tests/*, backend/tests/Topolactor.Runtime.Tests/*, frontend/*, db/demo_seed.sql, docs/demo-walkthrough.md
-      → 次の判断点: Docker Compose を使うE2E smokeをCIに入れるか、ローカル任意チェックに留めるか。
+      → 完了: .agent/tests/check-runtime-semantics.sh を追加し、backend runtime/integration と frontend API proxy 意味テストを統合。Docker Compose E2E smoke は現時点ではローカル任意チェックとして docs に明記。
       → 推奨担当: Codex
 
 ## Demo Runtime Dispatch
