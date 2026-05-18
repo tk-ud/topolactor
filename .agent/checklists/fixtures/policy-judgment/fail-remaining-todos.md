@@ -1,10 +1,9 @@
-# Policy Judgment Checklist — fixture: FAIL (checklist not based on full branch diff)
+# Policy Judgment Checklist — fixture: FAIL (remaining TODOs not listed)
 
-Scenario: agent ran git diff and inspected the full branch diff (Q12=yes), but
-the checklist answers are not based on the full branch diff (Q13=no) — the agent
-answered based only on the latest commit or edited files.
-Q13=no triggers V12.
-Expected result: FAIL — 1 violation (V12).
+Scenario: change is otherwise complete, but remaining TODOs are not explicitly
+listed in the completion report or PR summary.
+Q15=no triggers V13.
+Expected result: FAIL — 1 violation (V13).
 
 ---
 
@@ -82,7 +81,7 @@ Answer: yes
 
 ## Q13 — Checklist based on full branch diff?
 
-Answer: no
+Answer: yes
 
 ---
 
@@ -94,4 +93,4 @@ Answer: yes
 
 ## Q15 — Remaining TODOs listed?
 
-Answer: yes
+Answer: no
