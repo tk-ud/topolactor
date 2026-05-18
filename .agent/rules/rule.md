@@ -72,7 +72,8 @@ The scenario contract must define:
 5. Seed / fixture / policy data involved.
 6. Expected emission / projection / status.
 7. Required side effects, including failure / cold-start / insufficient paths.
-8. Known non-goals / out-of-scope paths.
+8. Runtime Boundary Failure Matrix coverage and any intentional out-of-scope reasons.
+9. Known non-goals / out-of-scope paths.
 
 After implementation, full branch diff inspection must compare the actual diff against `.agent/tmp/tmp.txt`.
 
@@ -89,6 +90,28 @@ Rules:
 - `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
 - Keep `bash .agent/tests/check-structure.sh` as the final check before completion report.
 - Completion report must state whether tmp was used, the scenario contract verification result, and tmp deletion status.
+
+
+## Runtime Boundary Failure Matrix
+
+For any change that adds or wires an endpoint, frontend API proxy, repository write,
+admin operation, persistence mutation, or DB-backed registry operation, success tests
+are not sufficient.
+
+The temporary scenario contract and PR audit must verify the full runtime boundary matrix:
+
+1. success path
+2. authentication / authorization failure
+3. request validation failure
+4. malformed id / malformed payload
+5. not found
+6. persistence constraint failure
+7. repository / backend unavailable
+8. frontend proxy status propagation
+9. UI-visible error state
+10. post-write read consistency
+
+If a matrix item is intentionally out of scope, completion reporting must state why.
 
 ## Agent Judgment Gate — Policy Judgment Checklist
 
@@ -231,7 +254,7 @@ Before completion report, execute in this order:
 1. Create `.agent/tmp/tmp.txt` before implementation when the task affects runtime / policy / projection behavior.
 2. Implement the change.
 3. Inspect full branch diff (`git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`).
-4. Verify the full branch diff against `.agent/tmp/tmp.txt` scenario contract when tmp is required.
+4. Verify the full branch diff against `.agent/tmp/tmp.txt` scenario contract and Runtime Boundary Failure Matrix when tmp is required.
 5. Perform Policy Judgment Checklist.
 6. Audit AGENTS.md / rule.md scope applicability and required checks.
 7. Audit prompt / PR summary / docs claims for runtime or policy assertions.

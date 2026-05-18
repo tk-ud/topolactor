@@ -104,6 +104,24 @@ framework_policy:
       - append_diff_log
       - schedule_or_update_cache
       - return_emission
+    runtime_boundary_failure_matrix:
+      required_for:
+        - endpoint_wiring
+        - frontend_api_proxy_wiring
+        - repository_write
+        - admin_operation
+        - persistence_mutation
+      verify:
+        - success_path
+        - authn_authz_failure
+        - request_validation_failure
+        - malformed_id_or_payload
+        - not_found
+        - persistence_constraint_failure
+        - repository_or_backend_unavailable
+        - frontend_proxy_status_propagation
+        - ui_visible_error_state
+        - post_write_read_consistency
 
   data_policy:
     raw_input:
@@ -224,6 +242,8 @@ framework_policy:
         - reject_promotion
         - view_migration_plan
         - view_rollback_plan
+        - preserve_backend_status_propagation
+        - show_structured_validation_and_constraint_failures
     rule:
       - schema_evolution_is_manifest_driven
       - db_optimization_is_admin_approved
@@ -249,6 +269,7 @@ framework_policy:
       - asset_log
 
   open_issues:
+    - define_runtime_boundary_failure_matrix_verification_contract
     - define_manifest_schema
     - define_dispatcher_request_contract
     - define_repository_boundaries

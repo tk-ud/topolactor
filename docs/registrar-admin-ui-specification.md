@@ -228,6 +228,24 @@ The backend:
 Endpoint design and implementation are future issues. This specification does
 not define production endpoint contracts.
 
+
+### Boundary failure handling requirements
+
+For admin UI and registrar backend boundaries, success-path handling alone is insufficient.
+Backend responses must return explicit structured validation results for both validation and
+persistence failures.
+
+Required explicit-result handling includes:
+- request validation failures (missing/invalid fields, malformed id/payload)
+- authorization/authentication failures
+- not found conditions
+- persistence constraint failures (for example UNIQUE constraints such as `(label, group)`)
+- backend/repository unavailable failures
+
+Frontend API proxy and UI must propagate backend status classes without silent rewrites, and
+must present UI-visible error states. Post-write reads must remain consistent with the persisted
+state (or return explicit inconsistency errors).
+
 ## 9. Out of Scope
 
 The following are explicitly out of scope for this specification:
