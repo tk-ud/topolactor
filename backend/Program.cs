@@ -22,33 +22,20 @@ builder.Services.Configure<JsonOptions>(o =>
 });
 
 // ---------------------------------------------------------------------------
-// Repository layer — in-memory skeleton when DATABASE_URL is not set
+// Repository layer — DATABASE_URL is required (no in-memory fallback)
 // ---------------------------------------------------------------------------
 var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") ?? string.Empty;
-var useNpgsql = !string.IsNullOrWhiteSpace(connectionString);
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException("DATABASE_URL is required. Backend runtime must connect to PostgreSQL; in-memory fallback is not allowed.");
 
-if (useNpgsql)
-{
-    builder.Services.AddSingleton<TopologyRepository>(sp =>
-        new NpgsqlTopologyRepository(
-            sp.GetRequiredService<ILogger<NpgsqlTopologyRepository>>(),
-            connectionString));
-    builder.Services.AddSingleton<ContextRouteRepository>(sp =>
-        new NpgsqlContextRouteRepository(
-            sp.GetRequiredService<ILogger<NpgsqlContextRouteRepository>>(),
-            connectionString));
-}
-else
-{
-    builder.Services.AddSingleton<TopologyRepository>(sp =>
-        new TopologyRepository(
-            sp.GetRequiredService<ILogger<TopologyRepository>>(),
-            "in-memory"));
-    builder.Services.AddSingleton<ContextRouteRepository>(sp =>
-        new ContextRouteRepository(
-            sp.GetRequiredService<ILogger<ContextRouteRepository>>(),
-            "in-memory"));
-}
+builder.Services.AddSingleton<TopologyRepository>(sp =>
+    new NpgsqlTopologyRepository(
+        sp.GetRequiredService<ILogger<NpgsqlTopologyRepository>>(),
+        connectionString));
+builder.Services.AddSingleton<ContextRouteRepository>(sp =>
+    new NpgsqlContextRouteRepository(
+        sp.GetRequiredService<ILogger<NpgsqlContextRouteRepository>>(),
+        connectionString));
 
 // ---------------------------------------------------------------------------
 // Runtime layer

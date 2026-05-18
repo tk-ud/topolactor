@@ -64,7 +64,7 @@
       → 対象ファイル: db/schema.sql, db/topology_tables.sql, db/demo_seed.sql, backend/runtime/*, frontend/routes/*, frontend/components/*, docs/demo-walkthrough.md
       → 次の判断点: initial use case を単一ドメインへ絞るか、複数ドメインに流用可能な master/detail/diff 基盤を先に閉じるか。
 
-- [ ] production運用に必要な環境変数・secret・起動手順・失敗時表示を整理する
+- [x] production運用に必要な環境変数・secret・起動手順・失敗時表示を整理する
       → 理由: Docker Compose demo は立つが、DEMO_JWT_SECRET / DEMO_BACKEND_URL / DATABASE_URL / nginx経由などの正規導線が混在しやすい。
       → 改善方針: local dev / docker compose / production-like の3導線を分離し、未設定時は明示エラー、設定済み時は同一runtimeへ到達するようにする。
       → 対象ファイル: infra/docker-compose.yml, infra/.env.example, frontend/routes/api/*, backend/Program.cs, docs/demo-walkthrough.md, README.md

@@ -161,3 +161,35 @@ READ_AGENTS
 For detailed agent instructions, see `AGENTS.md`.
 
 See `NOTICE.md`.
+
+## Runtime Environment Routes
+
+Use one of the three routes below. All configured routes must reach the same canonical runtime: frontend proxy (or nginx) → backend runtime → PostgreSQL.
+
+### 1) Local dev (processes on host)
+
+- Start PostgreSQL and apply `db/schema.sql`, `db/topology_tables.sql`, `db/promotion_tables.sql`, `db/context_route_tables.sql`, `db/seed_empty.sql`, `db/demo_seed.sql`.
+- Set backend env: `DATABASE_URL`, `BACKEND_PORT`, `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS` (`DEMO_JWT_ISSUER` optional).
+- Start backend from `backend/`.
+- Set frontend env: `DEMO_BACKEND_URL=http://localhost:<BACKEND_PORT>` and start Fresh.
+- If `DEMO_BACKEND_URL` is missing in Fresh mode, `/api/*` proxies return 501 explicit configuration errors.
+
+### 2) Docker Compose demo (`infra/docker-compose.yml`)
+
+- Copy `infra/.env.example` to `infra/.env` and fill required values.
+- Run `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`.
+- nginx entrypoint: `http://localhost` (port 80).
+- `/api/*` requests are routed by nginx to backend directly.
+
+### 3) Production-like (reverse proxy + separate services)
+
+- Keep same required backend env as local/compose (`DATABASE_URL`, JWT settings).
+- Route `/api/*` through reverse proxy to backend runtime; route UI traffic to frontend runtime.
+- Avoid mixed routing where some requests use Fresh proxy and others bypass it unintentionally.
+
+### Explicit failure behavior (no silent fallback)
+
+- Backend startup fails immediately when `DATABASE_URL` is missing.
+- JWT-guarded backend routes (`/dispatch`, `/admin/*`) return 401 with explicit auth errors when token/secret is invalid or missing.
+- Fresh proxy routes return 501 when `DEMO_BACKEND_URL` is unset and 502 when backend is unreachable.
+- Backend validation failures remain explicit (400/404/409/422 depending on endpoint contract).
