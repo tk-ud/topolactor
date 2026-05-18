@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using NpgsqlTypes;
+using Topolactor.Runtime;
 using Topolactor.Schema;
 
 namespace Topolactor.Repository;
@@ -902,5 +903,347 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             await txn.RollbackAsync(ct);
             throw;
         }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Registry Vector Neighbors
+    // ---------------------------------------------------------------------------
+
+    private static readonly IReadOnlyDictionary<string, (string IdCol, string NameExpr, string ArrayCol)> _registryVectorTableMap =
+        new Dictionary<string, (string, string, string)>
+        {
+            ["relation_registry"] = ("relation_registry_id", "name",          "master_ids"),
+            ["entities"]          = ("entity_id",            "entity_id::text","relation_ids"),
+            ["structure_maps"]    = ("structure_map_id",      "name",          "component_ids"),
+        };
+
+    /// <summary>
+    /// Fetches existing registry rows whose UUID array overlaps with queryIds (GIN filter),
+    /// then computes multi-hot cosine similarity in-process.
+    /// Returns rows with cosine >= minSimilarity ordered by cosine DESC, limited to topK.
+    ///
+    /// Throws InvalidOperationException for unknown registryTable — caller (TopologyVectorRuntime)
+    /// catches and returns ExplicitError with IsBlocking:true.
+    /// </summary>
+    public override async Task<IReadOnlyList<RegistryVectorNeighbor>> FindRegistryVectorNeighborsAsync(
+        string registryTable,
+        IReadOnlyList<Guid> queryIds,
+        float minSimilarity,
+        int topK,
+        CancellationToken ct = default)
+    {
+        if (!_registryVectorTableMap.TryGetValue(registryTable, out var cols))
+            throw new InvalidOperationException(
+                $"NpgsqlContextRouteRepository.FindRegistryVectorNeighborsAsync: unsupported registry table '{registryTable}'.");
+
+        var (idCol, nameExpr, arrayCol) = cols;
+        var queryArray = queryIds.ToArray();
+        var querySet = new HashSet<Guid>(queryIds);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            $"SELECT {idCol}, {nameExpr}, {arrayCol} " +
+            $"FROM {registryTable} " +
+            $"WHERE {arrayCol} && @queryIds " +
+            $"  AND cardinality({arrayCol}) > 0";
+        cmd.Parameters.Add(new NpgsqlParameter("queryIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid)
+        {
+            Value = queryArray
+        });
+
+        var candidates = new List<(Guid RegistryId, string Name, HashSet<Guid> Ids)>();
+        await using (var reader = await cmd.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                var registryId = reader.GetGuid(0);
+                var name = reader.GetString(1);
+                var ids = reader.GetValue(2) as Guid[] ?? [];
+                candidates.Add((registryId, name, new HashSet<Guid>(ids)));
+            }
+        }
+
+        var results = new List<RegistryVectorNeighbor>(candidates.Count);
+        foreach (var (registryId, name, existingSet) in candidates)
+        {
+            var cosine = TopologyVectorRuntime.ComputeSparseCosineSimilarity(querySet, existingSet);
+            if (cosine < minSimilarity)
+                continue;
+            var matchedIds = existingSet.Where(id => querySet.Contains(id)).ToList();
+            results.Add(new RegistryVectorNeighbor(
+                RegistryId: registryId,
+                Name: name,
+                CosineScore: cosine,
+                MatchedIds: matchedIds,
+                Reason: "cosine_neighbor"
+            ));
+        }
+
+        results.Sort((a, b) => b.CosineScore.CompareTo(a.CosineScore));
+        return results.Count <= topK ? results : results.Take(topK).ToList();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Hub Attention Current
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads hub attention recommendation current rows for the given hub_id and scope_limit.
+    /// Ordered by rank ASC NULLS LAST, attention_score DESC NULLS LAST.
+    /// Returns empty list when no rows exist (cold start).
+    /// </summary>
+    public override async Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(
+        Guid hubId,
+        int scopeLimit,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT hub_id, target_table, candidate_kind, candidate_id, scope_limit, " +
+            "       base_probability, cosine_similarity, static_relation_weight, statistical_weight, " +
+            "       mlp_feature_score, feedback_adjustment, " +
+            "       ema_fast_30, ema_slow_10, trend, cross_state, " +
+            "       attention_score, rank, evidence_json, mlp_feature_json, updated_at " +
+            "FROM context_hub_recommendation_current " +
+            "WHERE hub_id = @hubId AND scope_limit = @scopeLimit " +
+            "ORDER BY rank ASC NULLS LAST, attention_score DESC NULLS LAST";
+        cmd.Parameters.AddWithValue("hubId",      hubId);
+        cmd.Parameters.AddWithValue("scopeLimit", scopeLimit);
+
+        var records = new List<HubAttentionCurrentRecord>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            records.Add(new HubAttentionCurrentRecord(
+                HubId:                reader.GetGuid(0),
+                TargetTable:          reader.GetString(1),
+                CandidateKind:        reader.GetString(2),
+                CandidateId:          reader.GetGuid(3),
+                ScopeLimit:           reader.GetInt32(4),
+                BaseProbability:      reader.IsDBNull(5)  ? null : (float)reader.GetDouble(5),
+                CosineSimilarity:     reader.IsDBNull(6)  ? null : (float)reader.GetDouble(6),
+                StaticRelationWeight: reader.IsDBNull(7)  ? null : (float)reader.GetDouble(7),
+                StatisticalWeight:    reader.IsDBNull(8)  ? null : (float)reader.GetDouble(8),
+                MlpFeatureScore:      reader.IsDBNull(9)  ? null : (float)reader.GetDouble(9),
+                FeedbackAdjustment:   (float)reader.GetDouble(10),
+                EmaFast:              reader.IsDBNull(11) ? null : (float)reader.GetDouble(11),
+                EmaSlow:              reader.IsDBNull(12) ? null : (float)reader.GetDouble(12),
+                Trend:                reader.IsDBNull(13) ? null : (float)reader.GetDouble(13),
+                CrossState:           reader.IsDBNull(14) ? null : reader.GetString(14),
+                AttentionScore:       reader.IsDBNull(15) ? null : (float)reader.GetDouble(15),
+                Rank:                 reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                EvidenceJson:         reader.GetString(17),
+                MlpFeatureJson:       reader.GetString(18),
+                UpdatedAt:            reader.GetDateTime(19)
+            ));
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// Upserts a hub attention current row into context_hub_recommendation_current.
+    /// ON CONFLICT (hub_id, target_table, candidate_kind, candidate_id, scope_limit) DO UPDATE.
+    /// All mutable fields are updated on conflict. updated_at is refreshed to now().
+    /// </summary>
+    public override async Task UpsertHubAttentionCurrentAsync(
+        HubAttentionCurrentRecord record,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO context_hub_recommendation_current " +
+            "(hub_id, target_table, candidate_kind, candidate_id, scope_limit, " +
+            " base_probability, cosine_similarity, static_relation_weight, statistical_weight, " +
+            " mlp_feature_score, feedback_adjustment, " +
+            " ema_fast_30, ema_slow_10, trend, cross_state, " +
+            " attention_score, rank, evidence_json, mlp_feature_json, updated_at) " +
+            "VALUES " +
+            "(@hubId, @targetTable, @candidateKind, @candidateId, @scopeLimit, " +
+            " @baseProbability, @cosineSimilarity, @staticRelationWeight, @statisticalWeight, " +
+            " @mlpFeatureScore, @feedbackAdjustment, " +
+            " @emaFast, @emaSlow, @trend, @crossState, " +
+            " @attentionScore, @rank, @evidenceJson::jsonb, @mlpFeatureJson::jsonb, now()) " +
+            "ON CONFLICT (hub_id, target_table, candidate_kind, candidate_id, scope_limit) DO UPDATE SET " +
+            "  base_probability        = EXCLUDED.base_probability, " +
+            "  cosine_similarity       = EXCLUDED.cosine_similarity, " +
+            "  static_relation_weight  = EXCLUDED.static_relation_weight, " +
+            "  statistical_weight      = EXCLUDED.statistical_weight, " +
+            "  mlp_feature_score       = EXCLUDED.mlp_feature_score, " +
+            "  feedback_adjustment     = EXCLUDED.feedback_adjustment, " +
+            "  ema_fast_30             = EXCLUDED.ema_fast_30, " +
+            "  ema_slow_10             = EXCLUDED.ema_slow_10, " +
+            "  trend                   = EXCLUDED.trend, " +
+            "  cross_state             = EXCLUDED.cross_state, " +
+            "  attention_score         = EXCLUDED.attention_score, " +
+            "  rank                    = EXCLUDED.rank, " +
+            "  evidence_json           = EXCLUDED.evidence_json, " +
+            "  mlp_feature_json        = EXCLUDED.mlp_feature_json, " +
+            "  updated_at              = now()";
+
+        AddNullableDouble(cmd, "baseProbability",       record.BaseProbability);
+        AddNullableDouble(cmd, "cosineSimilarity",      record.CosineSimilarity);
+        AddNullableDouble(cmd, "staticRelationWeight",  record.StaticRelationWeight);
+        AddNullableDouble(cmd, "statisticalWeight",     record.StatisticalWeight);
+        AddNullableDouble(cmd, "mlpFeatureScore",       record.MlpFeatureScore);
+        AddNullableDouble(cmd, "emaFast",               record.EmaFast);
+        AddNullableDouble(cmd, "emaSlow",               record.EmaSlow);
+        AddNullableDouble(cmd, "trend",                 record.Trend);
+        AddNullableDouble(cmd, "attentionScore",        record.AttentionScore);
+        AddNullableInt(cmd,    "rank",                  record.Rank);
+        cmd.Parameters.AddWithValue("hubId",             record.HubId);
+        cmd.Parameters.AddWithValue("targetTable",       record.TargetTable);
+        cmd.Parameters.AddWithValue("candidateKind",     record.CandidateKind);
+        cmd.Parameters.AddWithValue("candidateId",       record.CandidateId);
+        cmd.Parameters.AddWithValue("scopeLimit",        record.ScopeLimit);
+        cmd.Parameters.AddWithValue("feedbackAdjustment",(double)record.FeedbackAdjustment);
+        cmd.Parameters.AddWithValue("crossState",        record.CrossState is not null ? (object)record.CrossState : DBNull.Value);
+        cmd.Parameters.AddWithValue("evidenceJson",      record.EvidenceJson);
+        cmd.Parameters.AddWithValue("mlpFeatureJson",    record.MlpFeatureJson);
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    /// <summary>
+    /// Recalculates rank for all rows with the given hub_id and scope_limit,
+    /// ordered by attention_score DESC NULLS LAST. Runs after a batch of upserts.
+    /// </summary>
+    public override async Task RecalculateHubAttentionRanksAsync(
+        Guid hubId,
+        int scopeLimit,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE context_hub_recommendation_current AS t " +
+            "SET rank = sub.rn " +
+            "FROM ( " +
+            "    SELECT hub_id, target_table, candidate_kind, candidate_id, scope_limit, " +
+            "           ROW_NUMBER() OVER (ORDER BY COALESCE(attention_score, 0.0) DESC) AS rn " +
+            "    FROM context_hub_recommendation_current " +
+            "    WHERE hub_id = @hubId AND scope_limit = @scopeLimit " +
+            ") AS sub " +
+            "WHERE t.hub_id = sub.hub_id " +
+            "  AND t.target_table = sub.target_table " +
+            "  AND t.candidate_kind = sub.candidate_kind " +
+            "  AND t.candidate_id = sub.candidate_id " +
+            "  AND t.scope_limit = sub.scope_limit";
+        cmd.Parameters.AddWithValue("hubId",      hubId);
+        cmd.Parameters.AddWithValue("scopeLimit", scopeLimit);
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Topology Vector Runtime — Feedback Weight Update
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Appends each feedback event to context_hub_feedback_event (append-only) and
+    /// applies the delta to feedback_adjustment in context_hub_recommendation_current.
+    /// Both operations run in a single transaction.
+    ///
+    /// Returns the count of feedback events inserted.
+    /// UPDATE to context_hub_recommendation_current is best-effort: 0 rows updated when
+    /// the candidate is not yet in current (no error; current may not exist yet for this candidate).
+    /// </summary>
+    public override async Task<int> ApplyFeedbackWeightUpdateAsync(
+        IReadOnlyList<HubFeedbackEvent> events,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(events);
+        if (events.Count == 0)
+            return 0;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var txn = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            var inserted = 0;
+            foreach (var ev in events)
+            {
+                await using var insertCmd = conn.CreateCommand();
+                insertCmd.Transaction = txn;
+                insertCmd.CommandText =
+                    "INSERT INTO context_hub_feedback_event " +
+                    "(hub_id, candidate_id, candidate_kind, scope_limit, feedback_kind, delta_applied) " +
+                    "VALUES (@hubId, @candidateId, @candidateKind, @scopeLimit, @feedbackKind, @deltaApplied)";
+                insertCmd.Parameters.AddWithValue("hubId",         ev.HubId);
+                insertCmd.Parameters.AddWithValue("candidateId",   ev.CandidateId);
+                insertCmd.Parameters.AddWithValue("candidateKind", ev.CandidateKind);
+                insertCmd.Parameters.AddWithValue("scopeLimit",    ev.ScopeLimit);
+                insertCmd.Parameters.AddWithValue("feedbackKind",  ev.FeedbackKind);
+                insertCmd.Parameters.AddWithValue("deltaApplied",  (double)ev.DeltaApplied);
+                await insertCmd.ExecuteNonQueryAsync(ct);
+                inserted++;
+
+                await using var updateCmd = conn.CreateCommand();
+                updateCmd.Transaction = txn;
+                updateCmd.CommandText =
+                    "UPDATE context_hub_recommendation_current " +
+                    "SET feedback_adjustment = feedback_adjustment + @delta, " +
+                    "    updated_at = now() " +
+                    "WHERE hub_id = @hubId " +
+                    "  AND candidate_id = @candidateId " +
+                    "  AND candidate_kind = @candidateKind " +
+                    "  AND scope_limit = @scopeLimit";
+                updateCmd.Parameters.AddWithValue("delta",         (double)ev.DeltaApplied);
+                updateCmd.Parameters.AddWithValue("hubId",         ev.HubId);
+                updateCmd.Parameters.AddWithValue("candidateId",   ev.CandidateId);
+                updateCmd.Parameters.AddWithValue("candidateKind", ev.CandidateKind);
+                updateCmd.Parameters.AddWithValue("scopeLimit",    ev.ScopeLimit);
+                await updateCmd.ExecuteNonQueryAsync(ct);
+            }
+
+            await txn.CommitAsync(ct);
+
+            _npgsqlLogger.LogDebug(
+                "NpgsqlContextRouteRepository.ApplyFeedbackWeightUpdateAsync: applied {Count} feedback event(s).",
+                inserted);
+            return inserted;
+        }
+        catch
+        {
+            await txn.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Private helpers
+    // ---------------------------------------------------------------------------
+
+    private static void AddNullableDouble(NpgsqlCommand cmd, string name, float? value)
+    {
+        var p = new NpgsqlParameter(name, System.Data.DbType.Double)
+        {
+            Value = value.HasValue ? (object)(double)value.Value : DBNull.Value
+        };
+        cmd.Parameters.Add(p);
+    }
+
+    private static void AddNullableInt(NpgsqlCommand cmd, string name, int? value)
+    {
+        var p = new NpgsqlParameter(name, System.Data.DbType.Int32)
+        {
+            Value = value.HasValue ? (object)value.Value : DBNull.Value
+        };
+        cmd.Parameters.Add(p);
     }
 }
