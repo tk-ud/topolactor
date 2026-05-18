@@ -57,6 +57,21 @@ Do not update `.agent/tasks/todo.md` during normal PR work unless a real remaini
 PR audit results should normally stay in the review / conversation / PR comment surface.
 Implementation summaries should normally stay in the PR description or completion message.
 
+
+## Temporary Planning Surface
+
+When task volume is high, agents may optionally use `.agent/tmp/tmp.txt` as a short-lived initial-constraint memo.
+
+Rules:
+- `.agent/tmp/tmp.txt` is temporary and must not be committed.
+- Create only when needed via `bash .agent/scripts/create-tmp.sh`.
+- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git diff main...HEAD` to detect scope drift.
+- If drift exists, either fix scope or explicitly document intentional scope change in completion report / PR summary.
+- After comparison, delete memo via `bash .agent/scripts/delete-tmp.sh`.
+- `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
+- Keep `bash .agent/tests/check-structure.sh` as the final check before completion report.
+- Completion report should state whether tmp was used and confirm deletion status.
+
 ## Policy Judgment Gate
 
 `.agent/checklists/` contains a local-only Agent judgment gate for policy-impacting

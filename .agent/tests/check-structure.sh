@@ -112,6 +112,10 @@ check_file ".github/workflows/frontend-types.yml"
 check_file ".github/workflows/default-entity-search.yml"
 check_file ".agent/tests/check-default-entity-search.sh"
 
+check_file ".agent/scripts/create-tmp.sh"
+check_file ".agent/scripts/delete-tmp.sh"
+check_file ".agent/tmp/.gitkeep"
+
 check_file "db/schema.sql"
 check_file "db/topology_tables.sql"
 check_file "db/promotion_tables.sql"
@@ -233,6 +237,14 @@ check_content ".agent/checklists/check-policy-judgment.sh" "--self-test"
 check_content "AGENTS.md" "check-policy-judgment.sh"
 check_content "AGENTS.md" "Policy Judgment Gate"
 check_content ".agent/rules/rule.md" "Policy Judgment Gate"
+
+
+TMP_MEMO_PATH="$REPO_ROOT/.agent/tmp/tmp.txt"
+if [ -f "$TMP_MEMO_PATH" ]; then
+  fail "Temporary planning memo must be deleted before completion: .agent/tmp/tmp.txt"
+else
+  echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
+fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

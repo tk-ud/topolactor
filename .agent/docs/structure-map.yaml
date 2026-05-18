@@ -67,6 +67,8 @@ layers:
       rules:    .agent/rules/     # architecture behavior rules
       skills:   .agent/skills/    # agent skill notes
       tests:    .agent/tests/     # local check scripts
+      scripts:  .agent/scripts/   # agent helper scripts
+      tmp:      .agent/tmp/       # temporary planning surface (tmp.txt is non-persistent)
       tasks:    .agent/tasks/     # remaining task list
       reports:  .agent/reports/   # check results, issue drafts, audits
 

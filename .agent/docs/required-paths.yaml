@@ -14,6 +14,8 @@ required_directories:
     - .agent/reports
     - .agent/checklists
     - .agent/checklists/fixtures/policy-judgment
+    - .agent/scripts
+    - .agent/tmp
   docs:
     - docs
   db:
@@ -55,6 +57,9 @@ required_files:
     - .agent/tests/check-backend-tests.sh
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
+    - .agent/scripts/create-tmp.sh
+    - .agent/scripts/delete-tmp.sh
+    - .agent/tmp/.gitkeep
     - .agent/tasks/todo.md
     - .agent/reports/README.md
     - .agent/checklists/policy-judgment.md
