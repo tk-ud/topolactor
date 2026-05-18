@@ -21,6 +21,7 @@
       → 改善方針: runtime-status は実runtime検証表示へ移すか静的診断ページとして明示隔離する。frontend defaultStructureMap/defaultPackage/defaultSchema/defaultComponentRegistry は runtime結果ではないことを再確認し、正規導線で参照されない形へ隔離する。TopologyRepository base の dummy path はテスト専用境界を明示するか削除し、NpgsqlTopologyRepositoryをruntime正規導線として固定する。DiffLogRepository.AppendAsync は永続化diff log未完了として実装方針を切る。SemanticMapper の stub 表記は実態に合わせて削除または未完了扱いにする。
       → 対象ファイル: frontend/routes/runtime-status.tsx, frontend/structure_map.ts, frontend/package/defaultPackage.ts, frontend/schema/defaultSchema.ts, frontend/registry/componentRegistry.ts, backend/repository/TopologyRepository.cs, backend/repository/NpgsqlTopologyRepository.cs, backend/repository/DiffLogRepository.cs, backend/mapper/SemanticMapper.cs, backend/Program.cs, docs/demo-walkthrough.md
       → 次の判断点: 残す scaffold を /demo-static・tests 専用に限定するか、runtime正規導線への全面移行として default/dummy 経路を削除するか。
+      → 推奨担当: Codex
 
 ## Product Completion Roadmap (暫定)
 
@@ -85,6 +86,7 @@
       → 改善方針: backend unit/integration、frontend type/API proxy、DB seed smoke、demo runtime smoke を分けて追加する。
       → 対象ファイル: .agent/tests/*, backend/tests/Topolactor.Runtime.Tests/*, frontend/*, db/demo_seed.sql, docs/demo-walkthrough.md
       → 次の判断点: Docker Compose を使うE2E smokeをCIに入れるか、ローカル任意チェックに留めるか。
+      → 推奨担当: Codex
 
 ## Demo Runtime Dispatch
 
