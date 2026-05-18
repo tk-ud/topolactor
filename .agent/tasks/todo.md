@@ -14,6 +14,51 @@
 
 ## Current TODO
 
+## Product Completion Roadmap (暫定)
+
+- [ ] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
+      → 目的: demoを「説明用の静的表示」ではなく、DB seed + runtime resolver + emission を観測するプロダクト導線にする。
+      → 改善方針: /demo の defaultStructureMap / demoTokens / synthetic Emission を正規runtime導線から外し、必要なら /demo-static 等へ隔離する。
+      → 対象ファイル: frontend/routes/demo.tsx, frontend/components/ProjectionView.tsx, frontend/components/EmissionView.tsx, frontend/api/dispatch.ts, docs/demo-walkthrough.md
+      → 次の判断点: /demo を runtime専用ページへ昇格するか、静的構造説明ページを別routeに分離するか。
+
+- [ ] ログイン済みユーザーが dispatch panel から backend /dispatch を実行できる導線を閉じる
+      → 理由: backend /dispatch はJWT必須だが、frontend側のtoken保存・Authorization送信・未ログイン時UIが未整理。
+      → 改善方針: demo login 成功時のJWTをdemo限定で保存し、dispatchOperation が Bearer token を送信する。未ログイン時は明示的な導線を表示する。
+      → 対象ファイル: frontend/api/authApi.ts, frontend/api/dispatch.ts, frontend/islands/LoginPanel.tsx, frontend/islands/OperationPanel.tsx, frontend/routes/api/dispatch.ts, frontend/fresh.gen.ts
+      → 次の判断点: nginx経由のみを正とするか、Fresh単体 localhost:8000 でも /api/dispatch proxy を提供するか。
+
+- [ ] context_route recommendation を demo で観測可能な状態まで閉じる
+      → 理由: demo_seed.sql は context_event をseedするが、context_prefix_vector_cache は直接seedせず、推薦が NO_CONTEXT_HISTORY に寄る可能性がある。
+      → 改善方針: prefix vector cache の生成/再構築導線を実装するか、cold-start を正式なdemo状態としてUI/Docsに明示する。
+      → 対象ファイル: backend/runtime/ContextRouteRecommendationResolver.cs, backend/repository/NpgsqlContextRouteRepository.cs, db/demo_seed.sql, frontend/components/RecommendationPanel.tsx, docs/demo-walkthrough.md
+      → 対象関数: ContextRouteRecommendationResolver.ResolveAsync, LoadRecentPrefixVectorsAsync, UpsertEventVectorCacheAsync, UpsertPrefixVectorCacheAsync
+      → 次の判断点: 推薦結果まで出すdemoにするか、履歴不足を明示するruntime health demoに留めるか。
+
+- [ ] admin / registry 操作を skeleton 受付からDB永続化へ移行する
+      → 理由: context_token_registry admin は画面とAPI shapeがあるが、未接続時501やスケルトン説明が残る。
+      → 改善方針: context_token_registry のGET/POST/deprecateをbackendまたはFresh API経由でDBへ接続し、seed表示ではなく実データを編集する。
+      → 対象ファイル: frontend/routes/admin/context-token-registry.tsx, frontend/islands/ContextTokenRegistryEditor.tsx, frontend/routes/api/admin/context-token-registry.ts, frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts, backend/repository/NpgsqlContextRouteRepository.cs
+      → 次の判断点: admin API をbackendへ集約するか、Fresh API route をbackend proxyとして維持するか。
+
+- [ ] 業務管理アプリとしての最小業務ループを定義し、demo seed から実データ入力ループへ移行する
+      → 目的: topolactor を単なる runtime scaffold ではなく、受付→task→在庫/履歴→一覧/詳細の業務ループを持つプロダクトへ進める。
+      → 改善方針: 受付、作業task、部品/在庫、履歴diff、一覧projection の最小schema/package/componentを定義し、runtime route に載せる。
+      → 対象ファイル: db/schema.sql, db/topology_tables.sql, db/demo_seed.sql, backend/runtime/*, frontend/routes/*, frontend/components/*, docs/demo-walkthrough.md
+      → 次の判断点: 最初の業務対象を「受付→整備task」へ絞るか、「master/detail/diff履歴」基盤を先に閉じるか。
+
+- [ ] production運用に必要な環境変数・secret・起動手順・失敗時表示を整理する
+      → 理由: Docker Compose demo は立つが、DEMO_JWT_SECRET / DEMO_BACKEND_URL / DATABASE_URL / nginx経由などの正規導線が混在しやすい。
+      → 改善方針: local dev / docker compose / production-like の3導線を分離し、未設定時は明示エラー、設定済み時は同一runtimeへ到達するようにする。
+      → 対象ファイル: infra/docker-compose.yml, infra/.env.example, frontend/routes/api/*, backend/Program.cs, docs/demo-walkthrough.md, README.md
+      → 次の判断点: demo用authを残すか、本番auth境界を別SSOTとして切るか。
+
+- [ ] CI/テストを「構造確認」から「runtime意味確認」へ拡張する
+      → 理由: structure/backend/db のチェックはあるが、ログイン→dispatch→emission、policy変更→runtime反映、registry更新→推薦変化の意味テストが不足している。
+      → 改善方針: backend unit/integration、frontend type/API proxy、DB seed smoke、demo runtime smoke を分けて追加する。
+      → 対象ファイル: .agent/tests/*, backend/tests/Topolactor.Runtime.Tests/*, frontend/*, db/demo_seed.sql, docs/demo-walkthrough.md
+      → 次の判断点: Docker Compose を使うE2E smokeをCIに入れるか、ローカル任意チェックに留めるか。
+
 ## Demo Runtime Dispatch
 
 - [ ] Public scaffold demo のログイン→dispatch→backend runtime emission 導線を閉じる
