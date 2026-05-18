@@ -82,6 +82,13 @@ When a new policy judgment viewpoint is needed, first evaluate whether it should
 
 Checker script responsibility should stay focused on answer-format validation and critical-violation detection, not detailed policy rule proliferation.
 
+
+When a change extends an existing boundary with a new event, write path, append log, current table, repository mutation, API payload, frontend projection, or UI action, agents must verify End-to-End Boundary Identity.
+
+The verification must compare DB identity, backend contract identity, API payload identity, repository mutation identity, frontend projection identity, and UI action identity.
+
+Any omitted identity field must be explicitly justified. Multi-instance leakage scenarios must be checked before completion.
+
 ## Protocol References
 
 Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:
