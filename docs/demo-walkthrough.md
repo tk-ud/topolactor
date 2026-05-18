@@ -132,17 +132,12 @@ apply when nginx routes the request directly to the backend.
 
 ## What the Demo Shows
 
-The `/demo` route exercises the **frontend-side** canonical flow only:
+The `/demo` route is a **runtime dispatch route**.
 
-```
-UserOperation → resolveOperationVector → attractorKey
-→ lookupStructureMap → StructureMapEntry
-→ synthetic Emission → renderEmission → ComponentSpec[]
-```
+`/demo` embeds the same dispatch panel used on `/` with demo defaults (`target=demo`, `layer=hub`, `action=overview`) and renders backend emission directly.
+No synthetic emission or static token fallback is used on `/demo`.
 
-Changing `defaultStructureMap` (in `frontend/structure_map.ts`) or `defaultComponentRegistry` (in `frontend/registry/componentRegistry.ts`) entries changes what `/demo` resolves and renders. No DB or backend API is required for this frontend-side flow.
-
-**Backend-side canonical flow** (attractor_resolve against the DB, entity data, live recommendations) is exercised at `/` via the dispatch panel:
+Backend-side canonical flow (attractor_resolve against the DB, entity data, live recommendations):
 
 ```
 stored_topology_data (demo_seed.sql)
@@ -180,7 +175,7 @@ Each scenario shows how a single Registry or policy change propagates through th
    the sparse event vector. The resolver reads `context_token_registry` on every call;
    no cache invalidation needed.
 
-> **Note:** This change affects runtime resolution via the dispatch API, not the static `/demo` route.
+> **Note:** This change is observable on `/demo` and `/` through runtime dispatch output.
 
 ### Scenario B — context_route_policy_ref change → different policy loads
 
@@ -212,7 +207,7 @@ Each scenario shows how a single Registry or policy change propagates through th
 5. **Why it works:** `ResolvePolicyKey()` reads `context_route_policy_ref` from
    `structure_maps.state_policy` on every call. No code deployment needed.
 
-> **Note:** This change affects the recommendation resolver when called via the dispatch API, not the static seed-reference display in `/demo`.
+> **Note:** This change is observable via runtime dispatch on `/demo` and `/`.
 
 ### Scenario C — transition_aggregation.aggregation_limit change → windowed scope changes
 
@@ -236,7 +231,7 @@ Each scenario shows how a single Registry or policy change propagates through th
    directly with `LIMIT @aggregation_limit ORDER BY created_at DESC`.
    The policy-missing case returns an explicit error, not a silent fallback.
 
-> **Note:** This change affects the recommendation resolver when called via the dispatch API, not the static seed-reference display in `/demo`.
+> **Note:** This change is observable via runtime dispatch on `/demo` and `/`.
 
 ### Scenario E — context fields in dispatch panel → recommendation results visible
 
@@ -277,17 +272,7 @@ and does not vote. The append runs on every path — including cold-start — so
 subsequent dispatches and the session eventually reaches `Ok` status.
 
 > **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
-> `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.
-
-### Scenario D — structure_map or componentRegistry change → /demo projection changes
-
-1. Open `frontend/structure_map.ts` and modify the `"demo:hub:overview"` entry — for example, change `componentIds` to include an additional component ID, or update `packageId`/`schemaId`.
-2. Reload `http://localhost:8000/demo`.
-3. The OperationVector block, the `ProjectionView` resolved StructureMap entry, and the Expanded ComponentSpecs list all update to reflect the new entry.
-4. Alternatively, open `frontend/registry/componentRegistry.ts` and add or modify an entry for a component ID referenced in `defaultStructureMap`. The rendered ComponentSpec type and definition update on next page load.
-5. **Why it works:** `/demo` calls `resolveOperationVector → lookupStructureMap → renderEmission` entirely in the frontend at render time. No DB or backend API is involved. The pipeline runs against `defaultStructureMap` and `defaultComponentRegistry` as imported — changing those modules changes what `/demo` resolves and displays.
-
-> **Note:** This is the only scenario that changes `/demo` output without a backend API call. Scenarios A, B, and C affect backend resolution via the dispatch API and are observable at `/` (dispatch panel), not at `/demo`.
+> `InsufficientHistory — NO_SESSION_ID`. This is the expected runtime state when ContextSessionId is omitted.
 
 ---
 
@@ -306,15 +291,8 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 | File | Role in demo |
 |---|---|
 | `db/demo_seed.sql` | Source of all demo topology data (backend/DB scenarios A–C) |
-| `frontend/routes/demo.tsx` | Projection entrypoint for the demo route (frontend-side canonical flow) |
-| `frontend/structure_map.ts` | `defaultStructureMap` — change entries to change `/demo` resolution (Scenario D) |
-| `frontend/registry/componentRegistry.ts` | `defaultComponentRegistry` — change entries to change `/demo` ComponentSpecs (Scenario D) |
-| `frontend/runtime/resolveOperationVector.ts` | Converts UserOperation → OperationVector + attractorKey |
-| `frontend/runtime/renderEmission.ts` | Resolves componentIds through ComponentRegistry → ComponentSpec[] |
-| `frontend/components/ProjectionView.tsx` | Renders resolved StructureMapEntry and Emission data |
-| `frontend/components/RecommendationPanel.tsx` | Recommendation status projection component |
-| `frontend/components/ContextTokenBadgeList.tsx` | Token registry badge projection component (seed reference display) |
-| `frontend/package/demoPackage.ts` | Demo package definitions |
-| `frontend/schema/demoSchema.ts` | Demo schema definitions |
+| `frontend/routes/demo.tsx` | Runtime demo entrypoint (dispatch panel with demo defaults) |
+| `frontend/components/EmissionView.tsx` | Emits all runtime fields/error states for inspection |
+| `frontend/islands/OperationPanel.tsx` | Dispatch form + runtime call + emission rendering |
 | `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver (policy from function_parameters) |
 | `backend/repository/NpgsqlContextRouteRepository.cs` | Windowed transition stats query |

@@ -16,7 +16,7 @@
 
 ## Product Completion Roadmap (暫定)
 
-- [ ] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
+- [x] frontend demo から stub / skeleton / synthetic 表示を排除し、backend runtime emission の投影へ一本化する
       → 目的: demoを「説明用の静的表示」ではなく、DB seed + runtime resolver + emission を観測するプロダクト導線にする。
       → 改善方針: /demo の defaultStructureMap / demoTokens / synthetic Emission を正規runtime導線から外し、必要なら /demo-static 等へ隔離する。
       → 対象ファイル: frontend/routes/demo.tsx, frontend/components/ProjectionView.tsx, frontend/components/EmissionView.tsx, frontend/api/dispatch.ts, docs/demo-walkthrough.md

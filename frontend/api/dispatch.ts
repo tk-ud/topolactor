@@ -66,7 +66,7 @@ export type DispatchResponse = {
  * If token is provided, adds Authorization: Bearer <token> to the request.
  * On any fetch-level error (network failure, JSON parse failure) the function
  * returns a failed DispatchResponse carrying the error as a ValidationError
- * rather than throwing, so the caller can treat all outcomes uniformly.
+ * rather than throwing, so callers can render explicit runtime failure states.
  */
 export async function dispatchOperation(
   req: DispatchRequest,

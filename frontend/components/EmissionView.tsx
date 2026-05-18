@@ -10,8 +10,7 @@ type Props = {
  * EmissionView is a debug/inspection component that surfaces all fields of an
  * Emission directly.  It is intentionally plain and carries no business logic.
  *
- * Use this during development to inspect what the backend emits before real
- * projection components are wired up.
+ * Use this to inspect backend runtime emissions directly.
  */
 export function EmissionView({ emission }: Props): JSX.Element {
   const errorLines = emission.errors?.map(validationErrorText).join("\n");
