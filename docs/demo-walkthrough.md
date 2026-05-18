@@ -71,6 +71,29 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 
 ---
 
+## Demo Login → Dispatch Flow
+
+To observe the backend canonical flow end-to-end:
+
+1. **Start the full stack** (see Prerequisites above, Docker Compose).
+2. **Open `/login`** in your browser and log in with demo credentials (seeded by `db/demo_seed.sql`).
+   - On success, the JWT token is saved to browser `sessionStorage` under `demo_jwt_token`.
+   - A "Go to dispatch panel" link is shown.
+3. **Open `/`** (the dispatch panel). The OperationPanel reads the token from `sessionStorage`
+   and shows "Authenticated." status.
+4. **Submit a dispatch operation** (e.g. target `default`, layer `entity`, action `Search`).
+   - The panel sends `POST /api/dispatch` with `Authorization: Bearer <token>`.
+   - The Fresh proxy (`frontend/routes/api/dispatch.ts`) forwards to `DEMO_BACKEND_URL/dispatch`.
+   - The backend JwtGuard validates the token, RuntimeExecutor runs the canonical flow,
+     and the emission is returned and displayed by EmissionView.
+
+**Without login:** the OperationPanel shows "Not logged in" status and any dispatch returns
+`AUTH_TOKEN_MISSING` from the backend — explicit, not silent.
+
+**DEMO_BACKEND_URL not configured:** `/api/dispatch` returns `DISPATCH_BACKEND_NOT_CONFIGURED` (501).
+
+---
+
 ## What the Demo Shows
 
 The `/demo` route exercises the **frontend-side** canonical flow only:

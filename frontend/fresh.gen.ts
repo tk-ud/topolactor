@@ -9,11 +9,12 @@ import * as $$3 from "./routes/demo.tsx";
 import * as $$4 from "./routes/login.tsx";
 import * as $$5 from "./routes/runtime-status.tsx";
 import * as $$6 from "./routes/api/auth/login.ts";
-import * as $$7 from "./routes/api/admin/context-token-registry.ts";
-import * as $$8 from "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts";
-import * as $$9 from "./islands/ContextTokenRegistryEditor.tsx";
-import * as $$10 from "./islands/LoginPanel.tsx";
-import * as $$11 from "./islands/OperationPanel.tsx";
+import * as $$7 from "./routes/api/dispatch.ts";
+import * as $$8 from "./routes/api/admin/context-token-registry.ts";
+import * as $$9 from "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts";
+import * as $$10 from "./islands/ContextTokenRegistryEditor.tsx";
+import * as $$11 from "./islands/LoginPanel.tsx";
+import * as $$12 from "./islands/OperationPanel.tsx";
 
 const manifest = {
   routes: {
@@ -24,13 +25,14 @@ const manifest = {
     "./routes/login.tsx": $$4,
     "./routes/runtime-status.tsx": $$5,
     "./routes/api/auth/login.ts": $$6,
-    "./routes/api/admin/context-token-registry.ts": $$7,
-    "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts": $$8,
+    "./routes/api/dispatch.ts": $$7,
+    "./routes/api/admin/context-token-registry.ts": $$8,
+    "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts": $$9,
   },
   islands: {
-    "./islands/ContextTokenRegistryEditor.tsx": $$9,
-    "./islands/LoginPanel.tsx": $$10,
-    "./islands/OperationPanel.tsx": $$11,
+    "./islands/ContextTokenRegistryEditor.tsx": $$10,
+    "./islands/LoginPanel.tsx": $$11,
+    "./islands/OperationPanel.tsx": $$12,
   },
   baseUrl: import.meta.url,
 };

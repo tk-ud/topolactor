@@ -22,11 +22,8 @@
       → 対象ファイル: frontend/routes/demo.tsx, frontend/components/ProjectionView.tsx, frontend/components/EmissionView.tsx, frontend/api/dispatch.ts, docs/demo-walkthrough.md
       → 次の判断点: /demo を runtime専用ページへ昇格するか、静的構造説明ページを別routeに分離するか。
 
-- [ ] ログイン済みユーザーが dispatch panel から backend /dispatch を実行できる導線を閉じる
-      → 理由: backend /dispatch はJWT必須だが、frontend側のtoken保存・Authorization送信・未ログイン時UIが未整理。
-      → 改善方針: demo login 成功時のJWTをdemo限定で保存し、dispatchOperation が Bearer token を送信する。未ログイン時は明示的な導線を表示する。
-      → 対象ファイル: frontend/api/authApi.ts, frontend/api/dispatch.ts, frontend/islands/LoginPanel.tsx, frontend/islands/OperationPanel.tsx, frontend/routes/api/dispatch.ts, frontend/fresh.gen.ts
-      → 次の判断点: nginx経由のみを正とするか、Fresh単体 localhost:8000 でも /api/dispatch proxy を提供するか。
+- [x] ログイン済みユーザーが dispatch panel から backend /dispatch を実行できる導線を閉じる
+      → 完了: frontend/routes/api/dispatch.ts 新規作成、LoginPanel が sessionStorage に JWT を保存、OperationPanel が token を読み取り Bearer 送信、未ログイン時は明示案内表示。Fresh単体 localhost:8000 でも /api/dispatch proxy を提供。
 
 - [ ] context_route recommendation を demo で観測可能な状態まで閉じる
       → 理由: demo_seed.sql は context_event をseedするが、context_prefix_vector_cache は直接seedせず、推薦が NO_CONTEXT_HISTORY に寄る可能性がある。
@@ -61,9 +58,6 @@
 
 ## Demo Runtime Dispatch
 
-- [ ] Public scaffold demo のログイン→dispatch→backend runtime emission 導線を閉じる
-      → 現状は /demo の frontend-only 構造デモと、backend /dispatch /auth/login 実装は存在するが、JWT保存・Authorization送信・Fresh単体時の /api/dispatch proxy・推薦cold-start表示の扱いが未整理。
-      → 目的: demoを「見るだけ」ではなく、ログイン後に dispatch panel からDB seeded runtime emission を確認できる操作デモへ寄せる。
-      → 対象ファイル: frontend/api/dispatch.ts, frontend/islands/LoginPanel.tsx, frontend/islands/OperationPanel.tsx, frontend/routes/api/dispatch.ts, frontend/fresh.gen.ts, docs/demo-walkthrough.md
-      → 対象関数: loginDemo, dispatchOperation, LoginPanel, OperationPanel, ContextRouteRecommendationResolver.ResolveAsync
-      → 次の判断点: nginx経由を正とするか、Fresh単体 localhost:8000 でも /api/dispatch proxy を提供するか。recommendation は prefix cache 生成まで閉じるか、cold-start 表示を正式なdemo状態として明記するか。
+- [x] Public scaffold demo のログイン→dispatch→backend runtime emission 導線を閉じる
+      → 完了: /api/dispatch proxy 実装、JWT sessionStorage 保存/読み取り、未ログイン時明示案内、docs/demo-walkthrough.md にログイン→dispatch フロー追記。
+      → 残課題: recommendation cold-start 表示の扱い（次の判断点）は未解決。context_route recommendation TODO に委譲。

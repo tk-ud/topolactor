@@ -2,6 +2,8 @@ import { JSX } from "preact";
 import { useState } from "preact/hooks";
 import { loginDemo, authErrorText, type LoginResponse } from "../api/authApi.ts";
 
+const SESSION_TOKEN_KEY = "demo_jwt_token";
+
 type LoginState =
   | { status: "idle" }
   | { status: "loading" }
@@ -10,7 +12,8 @@ type LoginState =
 
 /**
  * Demo login form island.
- * Sends credentials to /api/auth/login and displays the result.
+ * Sends credentials to /api/auth/login, stores the JWT token in sessionStorage
+ * under demo_jwt_token, and displays the result.
  * Not for production use — demo scaffold only.
  */
 export default function LoginPanel(): JSX.Element {
@@ -23,6 +26,7 @@ export default function LoginPanel(): JSX.Element {
     setState({ status: "loading" });
     const result = await loginDemo({ username, password });
     if (result.success && result.token) {
+      sessionStorage.setItem(SESSION_TOKEN_KEY, result.token);
       setState({ status: "success", token: result.token });
     } else {
       setState({ status: "error", errors: result.errors });
@@ -65,9 +69,13 @@ export default function LoginPanel(): JSX.Element {
 
       {state.status === "success" && (
         <div style={{ marginTop: "16px", padding: "12px", background: "#e6f9e6", border: "1px solid #4caf50", borderRadius: "4px" }}>
-          <strong>Login successful.</strong>
+          <strong>Login successful.</strong> Token saved to sessionStorage.
           <br />
-          <small>Token (demo only):</small>
+          <a href="/" style={{ display: "inline-block", marginTop: "8px", fontWeight: "bold" }}>
+            → Go to dispatch panel
+          </a>
+          <br />
+          <small style={{ color: "#555", display: "block", marginTop: "8px" }}>Token (demo only):</small>
           <pre style={{ wordBreak: "break-all", fontSize: "0.8em", marginTop: "4px" }}>{state.token}</pre>
         </div>
       )}
