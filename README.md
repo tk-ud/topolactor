@@ -80,15 +80,25 @@ stored_topology_data
 
 A public scaffold demo is available at the `/demo` route after starting the frontend.
 
-It shows fake/demo data from `db/demo_seed.sql` and illustrates how DB Registry changes → Runtime resolution changes → UI projection changes:
+The `/demo` route exercises the **frontend-side** canonical flow only:
 
-1. Change a token `value` in `context_token_registry` → cosine similarity and recommendation scores shift.
-2. Change `context_route_policy_ref` in `structure_maps.state_policy` → a different policy key is loaded from `function_parameters`.
-3. Change `transition_aggregation.aggregation_limit` in `function_parameters` → windowed transition stats scope changes.
+```
+UserOperation → resolveOperationVector → attractorKey
+→ lookupStructureMap → Emission → renderEmission → ComponentSpec[]
+```
 
-See `docs/demo-walkthrough.md` for step-by-step instructions.
+Changing `defaultStructureMap` (`frontend/structure_map.ts`) or `defaultComponentRegistry` (`frontend/registry/componentRegistry.ts`) changes what `/demo` resolves and renders — no DB required.
 
-No real business data is used. The canonical runtime route is maintained throughout.
+Backend resolution (DB attractor_resolve, live entity data, live recommendations) is exercised at `/` via the dispatch panel.
+
+The walkthrough (`docs/demo-walkthrough.md`) covers 4 scenarios:
+
+- **Scenario A** — token `value` change → recommendation score change (backend/DB, via dispatch panel)
+- **Scenario B** — `context_route_policy_ref` change → different policy loads (backend/DB, via dispatch panel)
+- **Scenario C** — `aggregation_limit` change → windowed transition stats scope changes (backend/DB, via dispatch panel)
+- **Scenario D** — `defaultStructureMap` or `defaultComponentRegistry` change → `/demo` projection changes (frontend only, no DB)
+
+No real business data is used.
 
 ## Start Here
 

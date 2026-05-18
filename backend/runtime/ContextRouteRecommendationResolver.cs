@@ -149,10 +149,8 @@ public class ContextRouteRecommendationResolver
         }
 
         // Load prefix vector candidates.
-        // 3650 days used when RecentDays is null — mechanical upper bound, not a runtime policy constant.
-        // The actual policy window comes from stored topology data; null means "no date constraint".
         var prefixCandidates = await _contextRouteRepository.LoadRecentPrefixVectorsAsync(
-            tableName, role, policy.RecentDays ?? 3650, ct);
+            tableName, role, policy.RecentDays, ct);
 
         if (prefixCandidates.Count == 0)
         {
@@ -184,11 +182,11 @@ public class ContextRouteRecommendationResolver
                 if (policy.TransitionAggregation is not null)
                 {
                     stats = await _contextRouteRepository.GetWindowedTransitionStatsAsync(
-                        currentOperation, role, policy.TransitionAggregation, ct);
+                        currentOperation, role, policy.TransitionAggregation, policy.MaxCandidatesShown, ct);
                 }
                 else
                 {
-                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, ct);
+                    stats = await _contextRouteRepository.GetTransitionStatsAsync(currentOperation, role, policy.MaxCandidatesShown, ct);
                 }
                 transitionStats.AddRange(stats);
             }

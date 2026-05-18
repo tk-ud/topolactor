@@ -164,7 +164,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     public override async Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
         string? tableName,
         string? role,
-        int maxDays,
+        int? maxDays,
         CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -189,7 +189,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             "    ORDER BY ce2.created_at ASC " +
             "    LIMIT 1 " +
             ") next_ce ON true " +
-            "WHERE cpvc.updated_at >= now() - (@days * interval '1 day') " +
+            "WHERE (@days::int IS NULL OR cpvc.updated_at >= now() - (@days * interval '1 day')) " +
             "  AND (@role::text IS NULL OR cs.role = @role) " +
             "  AND (@tableName::text IS NULL OR EXISTS (" +
             "        SELECT 1 FROM context_event ce3 " +
@@ -198,7 +198,10 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             "ORDER BY cpvc.updated_at DESC " +
             "LIMIT 2000";
 
-        cmd.Parameters.AddWithValue("days", maxDays);
+        cmd.Parameters.Add(new NpgsqlParameter("days", System.Data.DbType.Int32)
+        {
+            Value = maxDays.HasValue ? (object)maxDays.Value : DBNull.Value
+        });
         cmd.Parameters.AddWithValue("role", role is not null ? (object)role : DBNull.Value);
         cmd.Parameters.AddWithValue("tableName",
             tableName is not null ? (object)tableName : DBNull.Value);
@@ -240,6 +243,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     public override async Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
         string prevOperation,
         string? role,
+        int candidateLimit,
         CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -252,9 +256,10 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             "WHERE prev_operation = @prev " +
             "  AND (role = @role OR role = 'GLOBAL') " +
             "ORDER BY prob01 DESC " +
-            "LIMIT 100";
+            "LIMIT @candidateLimit";
         cmd.Parameters.AddWithValue("prev", prevOperation);
         cmd.Parameters.AddWithValue("role", role ?? "GLOBAL");
+        cmd.Parameters.AddWithValue("candidateLimit", candidateLimit);
 
         var stats = new List<ContextTransitionStat>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -281,6 +286,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         string prevOperation,
         string? role,
         TransitionAggregationPolicy aggregationPolicy,
+        int candidateLimit,
         CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
@@ -295,7 +301,7 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             "           COALESCE(user_id, 'GLOBAL') AS user_id " +
             "    FROM context_event " +
             "    WHERE (@recentDays::int IS NULL OR created_at >= now() - (@recentDays * interval '1 day')) " +
-            "    ORDER BY created_at DESC " +
+            (aggregationPolicy.PreferRecent ? "    ORDER BY created_at DESC " : "    ORDER BY created_at ASC ") +
             "    LIMIT @aggregationLimit " +
             "  ), " +
             "  transitions AS ( " +
@@ -333,11 +339,12 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
             "WHERE t.prev_op = @prevOp " +
             "  AND (t.role = @role OR t.role = 'GLOBAL') " +
             "ORDER BY prob01 DESC " +
-            "LIMIT 100";
+            "LIMIT @candidateLimit";
 
         cmd.Parameters.AddWithValue("prevOp", prevOperation);
         cmd.Parameters.AddWithValue("role", role ?? "GLOBAL");
         cmd.Parameters.AddWithValue("aggregationLimit", aggregationPolicy.AggregationLimit);
+        cmd.Parameters.AddWithValue("candidateLimit", candidateLimit);
         cmd.Parameters.Add(new NpgsqlParameter("recentDays", System.Data.DbType.Int32)
         {
             Value = aggregationPolicy.RecentDays.HasValue ? (object)aggregationPolicy.RecentDays.Value : DBNull.Value

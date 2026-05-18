@@ -56,7 +56,7 @@ public class ContextRouteRepository
     public virtual Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
         string? tableName,
         string? role,
-        int maxDays,
+        int? maxDays,
         CancellationToken ct = default)
     {
         _logger.LogDebug("ContextRouteRepository.LoadRecentPrefixVectorsAsync: in-memory skeleton — returning empty.");
@@ -70,6 +70,7 @@ public class ContextRouteRepository
     public virtual Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
         string prevOperation,
         string? role,
+        int candidateLimit,
         CancellationToken ct = default)
     {
         _logger.LogDebug("ContextRouteRepository.GetTransitionStatsAsync: in-memory skeleton — returning empty for prevOp='{PrevOp}'.", prevOperation);
@@ -85,6 +86,7 @@ public class ContextRouteRepository
         string prevOperation,
         string? role,
         TransitionAggregationPolicy aggregationPolicy,
+        int candidateLimit,
         CancellationToken ct = default)
     {
         _logger.LogDebug("ContextRouteRepository.GetWindowedTransitionStatsAsync: in-memory skeleton — returning empty.");

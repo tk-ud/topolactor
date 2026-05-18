@@ -1,23 +1,16 @@
 import { JSX } from "preact";
-import { HubOverviewCard } from "../components/HubOverviewCard.tsx";
-import { EntityTableProjection, type EntityRow } from "../components/EntityTableProjection.tsx";
-import { RecommendationPanel } from "../components/RecommendationPanel.tsx";
+import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
+import { lookupStructureMap, defaultStructureMap } from "../structure_map.ts";
+import { renderEmission } from "../runtime/renderEmission.ts";
+import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
+import { ProjectionView } from "../components/ProjectionView.tsx";
 import { ContextTokenBadgeList, type ContextToken } from "../components/ContextTokenBadgeList.tsx";
+import { RecommendationPanel } from "../components/RecommendationPanel.tsx";
+import type { Emission } from "../api/dispatch.ts";
 
-const demoHub = {
-  hubId: "00000000-0000-0000-0000-000000000010",
-  relationName: "demo_relation",
-  stateName: "active",
-  entityCount: 3,
-  note: "Demo hub — resolved from demo_seed.sql via attractor_resolve",
-};
-
-const demoEntities: EntityRow[] = [
-  { entityId: "00000000-0000-0000-0000-000000000041", label: "Alpha Entity",   state: "active",    relations: ["demo_relation"] },
-  { entityId: "00000000-0000-0000-0000-000000000042", label: "Beta Entity",    state: "operating", relations: ["demo_relation"] },
-  { entityId: "00000000-0000-0000-0000-000000000043", label: "Gamma Entity",   state: "active",    relations: ["demo_relation"] },
-];
-
+// Seed reference: mirrors db/demo_seed.sql rows.
+// NOT runtime-resolved — changing these values in the DB does not change this display.
+// Live token state requires the dispatch API + recommendation resolver.
 const demoTokens: ContextToken[] = [
   { tokenId: "00000000-0000-0000-0000-000000000021", label: "active",   group: "status", value: 1.0,  status: "active" },
   { tokenId: "00000000-0000-0000-0000-000000000022", label: "warning",  group: "status", value: 0.0,  status: "active" },
@@ -25,6 +18,31 @@ const demoTokens: ContextToken[] = [
 ];
 
 export default function Demo(): JSX.Element {
+  // Frontend-side canonical flow (no DB / no backend API required):
+  //   UserOperation → resolveOperationVector → attractorKey
+  //   → lookupStructureMap → StructureMapEntry
+  //   → synthetic Emission → renderEmission → ComponentSpec[]
+  //
+  // Backend-side flow (attractor_resolve against DB, entity data) requires the dispatch API.
+  const demoOperation = {
+    operationType: "Search" as const,
+    target: "demo",
+    layer: "hub",
+    action: "overview",
+  };
+
+  const demoVector = resolveOperationVector(demoOperation);
+  const demoMapEntry = lookupStructureMap(defaultStructureMap, demoVector.attractorKey);
+
+  const demoEmission: Emission = {
+    packageId:    demoMapEntry?.packageId,
+    schemaId:     demoMapEntry?.schemaId,
+    componentIds: demoMapEntry?.componentIds ?? [],
+    data:         { note: "demo scaffold — frontend-side resolution only" },
+  };
+
+  const componentSpecs = renderEmission(demoEmission, defaultComponentRegistry);
+
   return (
     <main style={{ fontFamily: "sans-serif", padding: "24px", maxWidth: "900px" }}>
       <h1>topolactor — public scaffold demo</h1>
@@ -36,33 +54,69 @@ export default function Demo(): JSX.Element {
         padding: "12px 16px",
         marginBottom: "24px",
       }}>
-        <strong>Scaffold notice:</strong> This page displays demo scaffold data from{" "}
-        <code>db/demo_seed.sql</code>. It is NOT production UI. No real business data is used.
-        The canonical runtime route (<code>operation → vector → attractor → structure_map → package → schema → emission</code>) is maintained.
+        <strong>Scaffold notice:</strong> This page exercises the <em>frontend-side</em> canonical
+        flow only. Backend resolution (DB entity data, live recommendations) requires the{" "}
+        <a href="/">dispatch panel</a>. No real business data is used.
+        Demo seed: <code>db/demo_seed.sql</code>. Walkthrough: <code>docs/demo-walkthrough.md</code>.
       </div>
 
-      <section style={{ marginBottom: "24px" }}>
-        <h2>What to observe</h2>
-        <ol>
-          <li>Change a token <code>value</code> in <code>context_token_registry</code> → re-run recommendation → score changes.</li>
-          <li>Change <code>context_route_policy_ref</code> in <code>structure_maps.state_policy</code> → different policy loads from <code>function_parameters</code>.</li>
-          <li>Change <code>transition_aggregation.aggregation_limit</code> in <code>function_parameters</code> → windowed stats scope changes.</li>
-        </ol>
-      </section>
+      <h2>Frontend Canonical Resolution</h2>
+      <p style={{ color: "#555", fontSize: "0.9em" }}>
+        <code>
+          UserOperation → resolveOperationVector → attractorKey
+          → lookupStructureMap → Emission → renderEmission → ComponentSpec[]
+        </code>
+      </p>
+      <p style={{ color: "#555", fontSize: "0.9em" }}>
+        Changing <code>defaultStructureMap</code> or <code>defaultComponentRegistry</code> entries
+        changes what this page resolves and renders. Backend attractor_resolve (against the DB)
+        is exercised via the <a href="/">dispatch panel</a>.
+      </p>
 
-      <h2>Hub Projection</h2>
-      <HubOverviewCard {...demoHub} />
+      <details open style={{ marginBottom: "16px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: "bold" }}>OperationVector</summary>
+        <pre style={{ background: "#f5f5f5", padding: "12px", fontSize: "0.85em" }}>
+          {JSON.stringify(demoVector, null, 2)}
+        </pre>
+      </details>
 
-      <h2>Entity Table Projection</h2>
-      <EntityTableProjection entities={demoEntities} schemaName="demo_entity_schema" />
+      <ProjectionView emission={demoEmission} structureMap={demoMapEntry ?? undefined} />
 
-      <h2>Context Token Registry</h2>
+      <h3>Expanded ComponentSpecs</h3>
+      {componentSpecs.length === 0 ? (
+        <p style={{ color: "#888" }}>no components resolved</p>
+      ) : (
+        <ul>
+          {componentSpecs.map((spec) => (
+            <li key={spec.componentId}>
+              <code>{spec.componentId}</code> — <em>{spec.componentType}</em>
+              {spec.componentType === "error" && (
+                <span style={{ color: "crimson" }}> — {String(spec.def.error)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <hr style={{ margin: "24px 0" }} />
+
+      <h2>Context Token Registry (seed reference)</h2>
+      <p style={{ color: "#555", fontSize: "0.9em" }}>
+        These mirror <code>db/demo_seed.sql</code> values and are <strong>not</strong> runtime-resolved.
+        Changing token <code>value</code> in the DB changes recommendation scores — but does not
+        update this display. Live token state requires the dispatch API.
+      </p>
       <ContextTokenBadgeList tokens={demoTokens} activeOnly />
 
-      <h2>Context Route Recommendation (scaffold placeholder)</h2>
+      <h2>Context Route Recommendation</h2>
+      <p style={{ color: "#555", fontSize: "0.9em" }}>
+        Backend resolution via the dispatch API is required for live recommendations.
+        Use the <a href="/">dispatch panel</a> with a <code>demo:hub:overview</code> operation
+        and a context session ID.
+      </p>
       <RecommendationPanel
         status="insufficient_history"
-        statusDetail="NO_CONTEXT_HISTORY — seed context_event rows to see recommendations"
+        statusDetail="NO_CONTEXT_HISTORY — backend dispatch required for live recommendations"
         nextOperations={[]}
         nextTokens={[]}
       />
@@ -72,7 +126,6 @@ export default function Demo(): JSX.Element {
         See <a href="/admin">admin</a> for topology inspection,{" "}
         <a href="/runtime-status">runtime-status</a> for pipeline step validation,{" "}
         <a href="/">index</a> for the dispatch panel.
-        Demo walkthrough: <code>docs/demo-walkthrough.md</code>.
       </p>
     </main>
   );
