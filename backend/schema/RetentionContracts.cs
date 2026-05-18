@@ -8,8 +8,9 @@ namespace Topolactor.Schema;
 /// Values come entirely from the topology data store — no production defaults in runtime code.
 /// Policy-missing or policy-malformed → explicit status, no silent fallback.
 ///
-/// Note: the JSON row in function_parameters may contain 'hot_days' (future use — not consumed in v1).
-/// Extra JSON fields are ignored during deserialization.
+/// HotDays: events within this window (created_at >= NOW() - hot_days) are never deleted or archived,
+/// even if they are older than cold_days. Acts as a safety floor. If null, no hot-window protection.
+/// If present, must be a positive integer — 0 is invalid (MalformedPolicy).
 /// </summary>
 public record ContextEventRetentionPolicy(
     [property: JsonPropertyName("cold_days")]
@@ -25,7 +26,10 @@ public record ContextEventRetentionPolicy(
     bool Enabled,
 
     [property: JsonPropertyName("schedule_interval_hours")]
-    int ScheduleIntervalHours
+    int ScheduleIntervalHours,
+
+    [property: JsonPropertyName("hot_days")]
+    int? HotDays
 );
 
 /// <summary>

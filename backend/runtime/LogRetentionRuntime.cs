@@ -14,7 +14,7 @@ namespace Topolactor.Runtime;
 ///   RetentionScheduler is the cron excitation trigger.
 ///   LogRetentionRuntime is the package runtime selected for the retention operation.
 ///   Package selection is trivially resolved in v1: there is one retention package.
-///   Policy (cold_days, batch_size, archive_strategy, enabled, schedule_interval_hours)
+///   Policy (cold_days, hot_days, batch_size, archive_strategy, enabled, schedule_interval_hours)
 ///   comes from function_parameters, not from runtime code.
 ///   This is intentionally a direct cron → package runtime path and does not route
 ///   through the user-facing dispatch canonical route
@@ -22,14 +22,19 @@ namespace Topolactor.Runtime;
 ///   Background maintenance operations are not user-facing dispatches.
 ///
 /// Policy source: function_parameters (function_name='context_event_retention', parameter_key='retention_policy').
-/// Supported archive_strategy values: "delete" (purge rows older than cold_days).
+/// Supported archive_strategy values:
+///   "delete"  — purge rows older than cold_days (and outside the hot_days window).
+///   "archive" — move rows to context_event_cold cold storage before removing from the hot table.
+///
+/// hot_days: optional safety floor. If set, events within the hot window are never touched,
+/// even if cold_days would otherwise include them. If present, must be a positive integer.
 ///
 /// Explicit status on every execution:
 ///   Ok              — cleanup executed (rows_affected may be 0 if nothing expired)
 ///   Disabled        — policy.enabled = false; logged, not silently skipped
 ///   MissingPolicy   — no active function_parameters row found
 ///   MalformedPolicy — JSON parse failure, unsupported archive_strategy,
-///                     or any required integer field ≤ 0
+///                     any required integer field ≤ 0, or hot_days present but ≤ 0
 /// </summary>
 public class LogRetentionRuntime
 {
@@ -124,6 +129,16 @@ public class LogRetentionRuntime
                 executedAt, policy.ScheduleIntervalHours);
         }
 
+        if (policy.HotDays.HasValue && policy.HotDays.Value <= 0)
+        {
+            _logger.LogError(
+                "LogRetentionRuntime: MalformedPolicy — hot_days={HotDays} must be a positive integer.",
+                policy.HotDays);
+            return Fail(RetentionExecutionStatus.MalformedPolicy,
+                $"hot_days={policy.HotDays} is invalid: must be a positive integer.",
+                executedAt, policy.ScheduleIntervalHours);
+        }
+
         if (!policy.Enabled)
         {
             _logger.LogInformation(
@@ -134,26 +149,40 @@ public class LogRetentionRuntime
                 0, executedAt, policy.ScheduleIntervalHours);
         }
 
-        if (!string.Equals(policy.ArchiveStrategy, "delete", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(policy.ArchiveStrategy, "delete", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogError(
-                "LogRetentionRuntime: MalformedPolicy — archive_strategy='{Strategy}' is not supported.",
-                policy.ArchiveStrategy);
-            return Fail(RetentionExecutionStatus.MalformedPolicy,
-                $"archive_strategy='{policy.ArchiveStrategy}' is not a supported strategy. Supported: 'delete'.",
-                executedAt, policy.ScheduleIntervalHours);
+            var rowsAffected = await _contextRouteRepository.DeleteOldContextEventsAsync(
+                policy.ColdDays, policy.BatchSize, policy.HotDays, ct);
+
+            _logger.LogInformation(
+                "LogRetentionRuntime: Ok — deleted {Rows} context_event row(s) older than {ColdDays} days (batch_size={BatchSize}, hot_days={HotDays}).",
+                rowsAffected, policy.ColdDays, policy.BatchSize, policy.HotDays);
+
+            return new RetentionRunResult(RetentionExecutionStatus.Ok,
+                $"Deleted {rowsAffected} row(s) older than {policy.ColdDays} days.",
+                rowsAffected, executedAt, policy.ScheduleIntervalHours);
         }
 
-        var rowsAffected = await _contextRouteRepository.DeleteOldContextEventsAsync(
-            policy.ColdDays, policy.BatchSize, ct);
+        if (string.Equals(policy.ArchiveStrategy, "archive", StringComparison.OrdinalIgnoreCase))
+        {
+            var rowsAffected = await _contextRouteRepository.ArchiveOldContextEventsAsync(
+                policy.ColdDays, policy.BatchSize, policy.HotDays, ct);
 
-        _logger.LogInformation(
-            "LogRetentionRuntime: Ok — deleted {Rows} context_event row(s) older than {ColdDays} days (batch_size={BatchSize}).",
-            rowsAffected, policy.ColdDays, policy.BatchSize);
+            _logger.LogInformation(
+                "LogRetentionRuntime: Ok — archived {Rows} context_event row(s) older than {ColdDays} days to cold storage (batch_size={BatchSize}, hot_days={HotDays}).",
+                rowsAffected, policy.ColdDays, policy.BatchSize, policy.HotDays);
 
-        return new RetentionRunResult(RetentionExecutionStatus.Ok,
-            $"Deleted {rowsAffected} row(s) older than {policy.ColdDays} days.",
-            rowsAffected, executedAt, policy.ScheduleIntervalHours);
+            return new RetentionRunResult(RetentionExecutionStatus.Ok,
+                $"Archived {rowsAffected} row(s) older than {policy.ColdDays} days to cold storage.",
+                rowsAffected, executedAt, policy.ScheduleIntervalHours);
+        }
+
+        _logger.LogError(
+            "LogRetentionRuntime: MalformedPolicy — archive_strategy='{Strategy}' is not supported.",
+            policy.ArchiveStrategy);
+        return Fail(RetentionExecutionStatus.MalformedPolicy,
+            $"archive_strategy='{policy.ArchiveStrategy}' is not a supported strategy. Supported: 'delete', 'archive'.",
+            executedAt, policy.ScheduleIntervalHours);
     }
 
     private static RetentionRunResult Fail(

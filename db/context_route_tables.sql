@@ -287,6 +287,47 @@ CREATE INDEX IF NOT EXISTS idx_cts_prev_role
     ON context_transition_stats (prev_operation, role, user_id);
 
 
+-- ---------------------------------------------------------------------------
+-- context_event_cold
+-- Cold storage for context events moved from context_event when
+-- archive_strategy="archive" is configured in the retention policy.
+-- Rows are inserted here before being deleted from context_event.
+-- No FK to context_event (records are moved, not copied).
+-- No FK to context_session (session may still be active).
+-- archived_at records when the row was moved to cold storage.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS context_event_cold (
+    event_id                UUID        PRIMARY KEY,
+    session_id              UUID        NOT NULL,
+    user_id                 TEXT,
+    role                    TEXT,
+    class                   TEXT,
+    table_name              TEXT        NOT NULL,
+    record_id               TEXT,
+    operation               TEXT        NOT NULL,
+    token_ids               UUID[]      NOT NULL DEFAULT '{}',
+    created_at              TIMESTAMPTZ NOT NULL,
+    next_operation_hint     TEXT,
+    next_token_ids_hint     UUID[],
+    archived_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE context_event_cold IS
+    'Cold storage for archived context events. '
+    'Rows are moved here from context_event when archive_strategy="archive". '
+    'No FK to context_event or context_session — moved records are self-contained. '
+    'archived_at records when the row was promoted to cold storage.';
+
+CREATE INDEX IF NOT EXISTS idx_cec_session
+    ON context_event_cold (session_id);
+
+CREATE INDEX IF NOT EXISTS idx_cec_created_at
+    ON context_event_cold (created_at);
+
+CREATE INDEX IF NOT EXISTS idx_cec_archived_at
+    ON context_event_cold (archived_at);
+
+
 -- =============================================================================
 -- Optional tables (v1 deferred — isolated below this line)
 -- These are not required for the v1 recommendation runtime.
