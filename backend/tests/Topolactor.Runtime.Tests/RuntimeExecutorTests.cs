@@ -13,9 +13,9 @@ public class RuntimeExecutorTests
 {
     internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
     {
-        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
-        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
+        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
 
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
@@ -38,7 +38,7 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_DefaultDummyRoute_ReturnsSuccessfulEmission()
+    public async Task ExecuteAsync_InMemoryDefaultRoute_ReturnsSuccessfulEmission()
     {
         var executor = CreateExecutor();
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
@@ -89,7 +89,7 @@ public class RuntimeExecutorTests
     [Fact]
     public async Task TopologyRepository_NonDefaultLookups_ReturnNull()
     {
-        var repository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var repository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
 
         var structureMap = await repository.LoadStructureMapAsync("missing:entity:search");
         var package = await repository.LoadPackageAsync(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
@@ -161,7 +161,7 @@ internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepositor
 {
     public bool DemoEntityListCalled { get; private set; }
 
-    public DemoEntityValidRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "dummy") { }
+    public DemoEntityValidRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "test-double") { }
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
     {

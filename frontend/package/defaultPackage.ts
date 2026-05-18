@@ -6,10 +6,8 @@ export type PackageDef = {
 };
 
 /**
- * The default package is the fallback node in the package_resolve step of the
- * canonical pipeline.  It references the skeleton default-view component and
- * carries no schemaDef override, deferring schema resolution to the
- * schema_resolve step.
+ * Static test fixture package.
+ * Canonical runtime package resolution is backend/DB-backed.
  *
  * Real packages will be registered per-hub and will reference their own
  * component and schema definitions.

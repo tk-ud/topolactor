@@ -6,14 +6,14 @@ namespace Topolactor.Repository;
 /// Repository for loading stored topology data: structure maps, packages, schemas,
 /// and runtime function parameters.
 ///
-/// In-memory skeleton: the default dummy topology path (attractor key "default:entity:search")
+/// In-memory test double: the default topology path (attractor key "default:entity:search")
 /// returns seeded structure/package/schema records without a real DB connection.
 /// Function parameters are not seeded in production repository code; missing policy
 /// returns null so callers can surface explicit policy-missing errors.
 /// </summary>
 public class TopologyRepository
 {
-    // Deterministic IDs matching db/seed_empty.sql so the in-memory skeleton
+    // Deterministic IDs matching db/seed_empty.sql so in-memory tests
     // and the DB seed reference the same topology node IDs.
     public static readonly Guid DefaultPackageId  = new("00000000-0000-0000-0000-000000000001");
     public static readonly Guid DefaultSchemaId   = new("00000000-0000-0000-0000-000000000002");
@@ -55,7 +55,7 @@ public class TopologyRepository
 
     /// <summary>
     /// Loads a structure map record by attractor key or structure map ID.
-    /// Returns the default dummy record for the "default:entity:search" path.
+    /// Returns the default in-memory record for the "default:entity:search" path.
     /// Returns null for all other keys (broken reference — caller must error).
     /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
@@ -73,7 +73,7 @@ public class TopologyRepository
 
     /// <summary>
     /// Loads a package record by its ID.
-    /// Returns the default dummy package for the default package ID.
+    /// Returns the default in-memory package for the default package ID.
     /// Returns null for all other IDs (broken reference — caller must error).
     /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
@@ -91,7 +91,7 @@ public class TopologyRepository
 
     /// <summary>
     /// Loads a schema record by its ID.
-    /// Returns the default dummy schema for the default schema ID.
+    /// Returns the default in-memory schema for the default schema ID.
     /// Returns null for all other IDs (broken reference — caller must error).
     /// Production: override in NpgsqlTopologyRepository.
     /// </summary>
@@ -111,7 +111,7 @@ public class TopologyRepository
     /// Loads a function_parameters row by (function_name, parameter_key) and returns
     /// the parameter_value as a raw JSON string, or null if no active row is found.
     ///
-    /// In-memory skeleton: returns null for all function parameters. Production
+    /// In-memory test double: returns null for all function parameters. Production
     /// policy values must come from stored topology data, not repository constants.
     ///
     /// Real DB implementation: SELECT parameter_value FROM function_parameters

@@ -13,9 +13,8 @@ export type SchemaDef = {
 };
 
 /**
- * The default schema is the fallback node in the schema_resolve step of the
- * canonical pipeline.  It exposes a single "label" text field and no layout
- * override.
+ * Static test fixture schema.
+ * Canonical runtime schema resolution is backend/DB-backed.
  *
  * Real schemas will be defined per-hub and per-entity-type and may carry full
  * layout descriptors consumed by the component_expand step.

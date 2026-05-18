@@ -333,3 +333,10 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 - `action=detail` requires payload `entityId` UUID; missing/malformed is `INVALID_PAYLOAD`, unknown action is `INVALID_OPERATION`.
 
 - Runtime reachability: DB seed contains structure_maps for `demo:entity:list`, `demo:entity:detail`, `demo:entity:create`, `demo:entity:advance`, so these operations pass attractor/structure-map resolution before state-loop execution.
+
+## CI runtime-meaning checks
+
+- CI/local should run `bash .agent/tests/check-runtime-semantics.sh` to validate runtime semantics (dispatch/recommendation/admin proxy), not only structure checks.
+- Runtime-meaning check is considered complete only after execution succeeds in an environment with both dotnet and deno available.
+- Docker Compose full E2E smoke remains an optional local check due to runtime/cost; it is not a blocking CI gate in this phase.
+

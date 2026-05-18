@@ -12,7 +12,7 @@ public class SemanticMapper
 {
     /// <summary>
     /// Maps a resolved RuntimeWorkingShape to a RepositoryCommand.
-    /// Stub implementation: returns a command populated with available shape fields.
+    /// Maps the resolved shape fields directly into a repository command.
     /// </summary>
     public RepositoryCommand MapToRepositoryCommand(RuntimeWorkingShape shape)
     {
