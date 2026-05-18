@@ -51,7 +51,7 @@ public class JwtGuard
                 return [new ValidationError("AUTH_TOKEN_EXP_MISSING",
                     "Token is missing required exp claim.")];
 
-            if (!expProp.TryGetInt64(out var expUnix))
+            if (expProp.ValueKind != JsonValueKind.Number || !expProp.TryGetInt64(out var expUnix))
                 return [new ValidationError("AUTH_TOKEN_EXP_INVALID",
                     "Token exp claim is not a valid integer.")];
 
