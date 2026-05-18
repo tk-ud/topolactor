@@ -34,7 +34,8 @@ if [ "${1:-}" = "--self-test" ]; then
     "fail-unanswered.md:fail" \
     "fail-policy-violation.md:fail" \
     "fail-partial-diff.md:fail" \
-    "fail-local-checks.md:fail"
+    "fail-local-checks.md:fail" \
+    "fail-remaining-todos.md:fail"
   do
     fname="${spec%%:*}"
     expect="${spec##*:}"
@@ -115,7 +116,7 @@ echo ""
 
 # V14: count check
 if [ "$TOTAL" -ne 15 ]; then
-  vfail "V14: Expected exactly 15 Answer: lines, found ${TOTAL} — fill in all Q1–Q15"
+  vfail "V16: Expected exactly 15 Answer: lines, found ${TOTAL} — fill in all Q1–Q15"
   echo ""
   echo "=== Policy Judgment Gate: ${VFAILS} violation(s) — FAIL ===" >&2
   exit 1
@@ -136,7 +137,7 @@ for i in "${!ANSWERS[@]}"; do
   if [ "$ok" = true ]; then
     echo "OK  Q${qnum}: ${a}"
   else
-    vfail "V12/V13: Q${qnum}: invalid or empty answer \"${a}\" — must be yes / no / n/a"
+    vfail "V14/V15: Q${qnum}: invalid or empty answer \"${a}\" — must be yes / no / n/a"
     FORMAT_OK=false
   fi
 done
@@ -245,6 +246,20 @@ if [ "$Q14" = "no" ]; then
   vfail "V11 (Q14=no): required local checks not passed — run local CI before reporting completion"
 else
   ok_v "V11: Q14=${Q14}"
+fi
+
+# V12: Checklist not based on full branch diff
+if [ "$Q13" = "no" ]; then
+  vfail "V12 (Q13=no): checklist answers not based on full branch diff — answers must reflect the complete branch state"
+else
+  ok_v "V12: Q13=${Q13}"
+fi
+
+# V13: Remaining TODOs not listed
+if [ "$Q15" = "no" ]; then
+  vfail "V13 (Q15=no): remaining TODOs not listed in completion report or PR summary"
+else
+  ok_v "V13: Q15=${Q15}"
 fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────

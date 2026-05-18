@@ -104,6 +104,7 @@ check_file ".agent/checklists/fixtures/policy-judgment/fail-unanswered.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-policy-violation.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-partial-diff.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-local-checks.md"
+check_file ".agent/checklists/fixtures/policy-judgment/fail-remaining-todos.md"
 
 check_file ".github/workflows/structure-check.yml"
 check_file ".github/workflows/backend-tests.yml"
