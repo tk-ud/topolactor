@@ -1,0 +1,135 @@
+system:
+  name: topology-recommendation-ci-runtime
+  version: "1.0"
+  concept: >
+    CI gate for topology update candidates generated from self-learning statistics.
+
+    Candidates (registry_addition, relation_registry_promotion, enum_axis_registration,
+    schema_patch, manifest_patch, package_binding, generated_column, index,
+    physical_table, sql_patch) are validated by the C# package runtime validation runner.
+
+    checked=true  → ci_pass  → eligible for admin approval / promote
+    checked=false → ci_fail  → reject / recommend delete / expire
+
+design_principles:
+  ci_subject: C# package runtime validation runner
+  shell_script: optional — allowlisted external check adapter only
+  db_command_strings: prohibited
+  silent_fallback: prohibited
+  candidate_scope: not limited to sql_patch or physical_table
+
+candidate_types:
+  - registry_addition
+  - relation_registry_promotion
+  - enum_axis_registration
+  - schema_patch
+  - manifest_patch
+  - package_binding
+  - generated_column
+  - index
+  - physical_table
+  - sql_patch
+
+entities:
+  topology_recommendation_candidate:
+    description: >
+      Records topology update candidates generated from self-learning statistics or admin input.
+      proposed_change and target_ref must not contain command strings or shell commands.
+    fields:
+      candidate_id:    { type: uuid, pk: true }
+      candidate_type:  { type: enum, values: [registry_addition, relation_registry_promotion,
+                          enum_axis_registration, schema_patch, manifest_patch, package_binding,
+                          generated_column, index, physical_table, sql_patch] }
+      source:          { type: string, note: "e.g. self_learning_statistics / admin_manual" }
+      target_ref:      { type: jsonb, note: "structured identifier only; no command strings" }
+      proposed_change: { type: jsonb, note: "structured change description; no command strings" }
+      status:          { type: enum, values: [pending, ci_pass, ci_fail, promoted, rejected, expired] }
+      generated_at:    { type: timestamp }
+      expires_at:      { type: timestamp, nullable: true }
+      created_at:      { type: timestamp }
+      updated_at:      { type: timestamp }
+    indexes:
+      - { name: idx_trc_status,    on: [status] }
+      - { name: idx_trc_type,      on: [candidate_type] }
+      - { name: idx_trc_generated, on: [generated_at] }
+
+  recommendation_check_result:
+    description: >
+      CI result recorded by C# validation runner per candidate.
+      result_detail must not contain command strings.
+    fields:
+      check_id:         { type: uuid, pk: true }
+      candidate_id:     { type: uuid, fk: topology_recommendation_candidate.candidate_id }
+      check_name:       { type: string }
+      checker_package:  { type: string }
+      checked:          { type: boolean, note: "true = CI pass / false = CI fail" }
+      result_detail:    { type: jsonb, note: "structured result; no command strings" }
+      adapter_id:       { type: uuid, nullable: true, fk: external_check_adapter_registry.adapter_id }
+      checked_at:       { type: timestamp }
+    indexes:
+      - { name: idx_rcr_candidate, on: [candidate_id] }
+      - { name: idx_rcr_checked,   on: [checked] }
+
+  external_check_adapter_registry:
+    description: >
+      Allowlist for external check adapters (e.g. existing local CI).
+      DB does NOT store command strings; command implementation lives in C# package runtime.
+    fields:
+      adapter_id:      { type: uuid, pk: true }
+      adapter_name:    { type: string, note: "reference key to C# implementation" }
+      adapter_type:    { type: enum, values: [local_ci, external_validator] }
+      candidate_types: { type: "string[]", note: "candidate_type list this adapter handles" }
+      enabled:         { type: boolean }
+      created_at:      { type: timestamp }
+
+  topology_policy_source:
+    description: >
+      CI policy is stored in the existing function_parameters table — not a separate config table.
+      Policy-missing → MissingPolicy. No production default in runtime code.
+    table: function_parameters
+    function_name: topology_recommendation_ci_resolve
+    parameter_key: default_policy
+    seed_json: >
+      {"enabled":true,
+       "allowed_candidate_types":["registry_addition","relation_registry_promotion",
+         "enum_axis_registration","schema_patch","manifest_patch","package_binding",
+         "generated_column","index","physical_table","sql_patch"],
+       "expiry_days":30,
+       "min_check_pass_count":1,
+       "max_candidates_per_run":50}
+    resolver: TopologyRepository.LoadFunctionParameterAsync
+
+dispatch:
+  excitation_trigger: cron
+  trigger_context_operation: "topology:recommendation:ci:run"
+  package_selected: topology_recommendation_ci
+  policy_surface:
+    - function_parameters
+
+status:
+  candidate_status:
+    pending:   "generated; CI not yet run"
+    ci_pass:   "checked=true; eligible for admin approval / promote"
+    ci_fail:   "checked=false; reject / recommend delete / expire target"
+    promoted:  "applied"
+    rejected:  "rejected by admin or policy"
+    expired:   "policy expiry reached"
+  dispatch_status:
+    Ok:              "normal completion"
+    Disabled:        "package disabled — must be recorded, not silent-skipped"
+    MissingPolicy:   "function_parameters not registered"
+    MalformedPolicy: "policy data corrupt or JSON parse failure"
+    ValidationFailed: "validation check failed — recorded as checked=false"
+    ExternalError:   "external adapter error or non-allowlisted adapter call"
+
+connection:
+  canonical_route: >
+    cron trigger → trigger context → Runtime excitation
+    → package_resolve (topology_recommendation_ci)
+    → C# validation runner
+    → recommendation_check_result / audit log
+  promotion_policy_position: >
+    Sits before show_admin_candidates in promotion_policy.flow.
+    Only ci_pass candidates are presented to admin.
+  excitation_design: docs/design/runtime-excitation-and-package-dispatch.md
+  recommendation_design: docs/design/context-route-recommendation.md

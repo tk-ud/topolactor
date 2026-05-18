@@ -141,10 +141,35 @@ framework_policy:
       - jsonb_or_registrar_first
       - collect_usage_metrics
       - evaluate_promotion_manifest
+      - topology_recommendation_ci_gate
       - show_admin_candidates
       - admin_approval
       - apply_index_or_generated_column_or_registry_or_physical_table
       - keep_rollback_plan
+    topology_recommendation_ci_gate:
+      role: ci_verification_gate_before_admin_approval
+      subject: C# package runtime validation runner
+      trigger: cron excitation trigger (context only; no business logic in trigger)
+      package: topology_recommendation_ci
+      policy_surface: function_parameters
+      candidate_types:
+        - registry_addition
+        - relation_registry_promotion
+        - enum_axis_registration
+        - schema_patch
+        - manifest_patch
+        - package_binding
+        - generated_column
+        - index
+        - physical_table
+        - sql_patch
+      result:
+        ci_pass: eligible for show_admin_candidates
+        ci_fail: reject / recommend delete / expire
+      db_command_strings: prohibited
+      shell_script: optional — allowlisted external check adapter only
+      silent_fallback: prohibited
+      ssot: docs/design/topology-recommendation-ci-runtime.md
     managed_by_manifest:
       - read_frequency_threshold
       - filter_usage_threshold
