@@ -133,10 +133,13 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING;
 -- context_event retention policy
 -- Loaded by RetentionScheduler → LogRetentionRuntime via
 --   TopologyRepository.LoadFunctionParameterAsync("context_event_retention", "retention_policy").
--- hot_days: events within this window are kept (fast path; not yet enforced in v1).
--- cold_days: events older than cold_days are eligible for cleanup.
--- archive_strategy: "delete" (purge rows). "archive" (move to cold table) is future work.
--- batch_size: rows per deletion batch to avoid long-lock transactions.
+-- hot_days: safety floor — events newer than hot_days are never deleted or archived,
+--           even if cold_days would otherwise select them. Must be a positive integer if present.
+-- cold_days: events older than cold_days are eligible for cleanup (subject to hot_days).
+-- archive_strategy: "delete" — permanently purge rows from context_event.
+--                   "archive" — move rows to context_event_cold before removing from context_event.
+--                   This seed uses "delete" as the default strategy.
+-- batch_size: rows per cleanup batch to avoid long-lock transactions.
 -- enabled: false disables cleanup; RetentionScheduler logs Disabled status instead of skipping silently.
 -- schedule_interval_hours: how often RetentionScheduler triggers the runtime.
 -- ---------------------------------------------------------------------------

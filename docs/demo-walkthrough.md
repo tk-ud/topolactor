@@ -53,10 +53,19 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 > (`demo_auth / demo_users`) via `db/demo_seed.sql`.
 
 > **Note — log retention:** The backend runs a `RetentionScheduler` background service
-> that calls `LogRetentionRuntime` to delete `context_event` rows older than `cold_days`.
-> Retention policy (`enabled`, `cold_days`, `archive_strategy`, `batch_size`,
+> that calls `LogRetentionRuntime` to clean up `context_event` rows older than `cold_days`
+> (and outside the `hot_days` safety window, if set).
+> Retention policy (`enabled`, `cold_days`, `hot_days`, `archive_strategy`, `batch_size`,
 > `schedule_interval_hours`) is stored in `function_parameters`
 > (`context_event_retention / retention_policy`) and seeded by `db/seed_empty.sql`.
+>
+> `archive_strategy` controls how eligible rows are removed:
+> - `"delete"` — rows are permanently purged from `context_event` (default seed value).
+> - `"archive"` — rows are moved to the `context_event_cold` cold table before being removed from `context_event`.
+>
+> `hot_days`, if set to a positive integer, acts as a safety floor: events within that window
+> are never deleted or archived regardless of `cold_days`.
+>
 > Set `enabled: false` in the policy row to disable cleanup. The scheduler logs an
 > explicit `Disabled` status rather than silently skipping.
 
