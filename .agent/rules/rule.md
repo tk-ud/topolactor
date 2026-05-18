@@ -56,6 +56,37 @@ Production fallback constants are prohibited.
 
 Test fixtures may contain representative policy values, but they must be isolated under tests and must not be referenced by production Runtime or Repository code.
 
+## Agent Judgment Gate — Runtime Policy Checklist
+
+Before reporting completion on any task that touches runtime behavior,
+data-defined topology, canonical route steps, or frontend projection, an agent
+must complete and validate the Runtime Policy Checklist.
+
+Checklist template: `.agent/checklists/runtime-policy.md`
+Validation script: `.agent/tests/check-runtime-policy-local.sh`
+
+The checklist is local-only. It is not connected to any GitHub Actions workflow.
+Completing the checklist is an agent judgment step, not a CI step.
+
+Fixtures:
+- `.agent/tests/fixtures/runtime-policy/pass.md` — all rules satisfied
+- `.agent/tests/fixtures/runtime-policy/fail-unanswered.md` — unanswered / invalid answers → FAIL
+- `.agent/tests/fixtures/runtime-policy/fail-policy-violation.md` — policy violations → FAIL
+
+Checklist gate violations (any → checklist FAIL):
+
+| Rule | Condition |
+|---|---|
+| V1 | Q5 = yes — silent fallback introduced |
+| V2 | Q6 = yes — unexplained production runtime constant |
+| V3 | Q2 = yes AND Q3 = no — fallback present, no explicit-error replacement |
+| V4 | Q1 = yes AND Q4 = no — runtime value not from a policy surface |
+| V5 | Q7 = yes — canonical route step bypassed |
+| V6 | Q8 = yes — business logic in frontend projection layer |
+| V7 | Q9 = yes — broken reference swallowed |
+| V8 | Q10 = no — structure check not run or not passing |
+| V9 | Any answer not in {yes, no, n/a} |
+
 ## Local CI Gate
 
 `.agent/tests/*.sh` are local CI gates for agents.
