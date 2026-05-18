@@ -12,6 +12,8 @@ required_directories:
     - .agent/tests
     - .agent/tasks
     - .agent/reports
+    - .agent/checklists
+    - .agent/checklists/fixtures/policy-judgment
   docs:
     - docs
   db:
@@ -55,6 +57,13 @@ required_files:
     - .agent/tests/check-default-entity-search.sh
     - .agent/tasks/todo.md
     - .agent/reports/README.md
+    - .agent/checklists/policy-judgment.md
+    - .agent/checklists/check-policy-judgment.sh
+    - .agent/checklists/fixtures/policy-judgment/pass.md
+    - .agent/checklists/fixtures/policy-judgment/fail-unanswered.md
+    - .agent/checklists/fixtures/policy-judgment/fail-policy-violation.md
+    - .agent/checklists/fixtures/policy-judgment/fail-partial-diff.md
+    - .agent/checklists/fixtures/policy-judgment/fail-local-checks.md
   ci:
     - .github/workflows/structure-check.yml
     - .github/workflows/backend-tests.yml

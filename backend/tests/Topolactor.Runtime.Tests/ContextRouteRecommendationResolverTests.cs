@@ -550,6 +550,33 @@ public class ContextRouteRecommendationResolverTests
         );
     }
 
+    [Fact]
+    public async Task ResolveAsync_PolicyWithNullRecentDays_DoesNotReturnExplicitError()
+    {
+        // Null recent_days must not produce ExplicitError. The resolver should
+        // pass null to LoadRecentPrefixVectorsAsync without substituting a fallback.
+        // With empty prefix history, result is InsufficientHistory, not ExplicitError.
+        var resolver = CreateResolver(topologyRepo: new StubNullRecentDaysPolicyTopologyRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_PolicyWithPreferRecentFalse_DoesNotReturnExplicitError()
+    {
+        // prefer_recent=false must not produce ExplicitError.
+        // With empty prefix history, result is InsufficientHistory, not ExplicitError.
+        var resolver = CreateResolver(topologyRepo: new StubPreferRecentFalsePolicyTopologyRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
+    }
+
     /// <summary>
     /// Stub repository that returns a fixed token record and 15 prefix candidates
     /// all carrying NextOperation="action_next" with a known sparse vector.
@@ -569,7 +596,7 @@ public class ContextRouteRecommendationResolverTests
         public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
             string? tableName,
             string? role,
-            int maxDays,
+            int? maxDays,
             CancellationToken ct = default)
         {
             var vector = new Dictionary<Guid, float> { [tokenId] = 1.0f };

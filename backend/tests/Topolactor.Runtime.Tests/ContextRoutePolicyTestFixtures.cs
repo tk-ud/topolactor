@@ -17,11 +17,30 @@ internal static class ContextRoutePolicyTestFixtures
         RecentDays:         90,
         MaxCandidatesShown: 5,
         BaselineWeight:     0.5f,
-        NeighborWeight:     0.5f
+        NeighborWeight:     0.5f,
+        TransitionAggregation: new TransitionAggregationPolicy(
+            AggregationLimit: 10000,
+            PreferRecent:     true,
+            RecentDays:       null
+        )
     );
 
     internal static string ValidPolicyJson() =>
-        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}""";
+        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}""";
+
+    /// <summary>
+    /// Policy JSON with recent_days=null at top level and in transition_aggregation.
+    /// Verifies that null recent_days propagates without fallback to a magic number.
+    /// </summary>
+    internal static string ValidPolicyJsonWithNullRecentDays() =>
+        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":null,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}""";
+
+    /// <summary>
+    /// Policy JSON with prefer_recent=false.
+    /// Verifies that prefer_recent=false does not cause a resolver error.
+    /// </summary>
+    internal static string ValidPolicyJsonWithPreferRecentFalse() =>
+        """{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":false,"recent_days":null}}""";
 }
 
 /// <summary>
@@ -69,4 +88,24 @@ internal sealed class StubScopedPolicyTopologyRepository(string expectedKey)
         CancellationToken ct = default)
         => Task.FromResult<string?>(
             parameterKey == expectedKey ? ContextRoutePolicyTestFixtures.ValidPolicyJson() : null);
+}
+
+internal sealed class StubNullRecentDaysPolicyTopologyRepository()
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy")
+{
+    public override Task<string?> LoadFunctionParameterAsync(
+        string functionName,
+        string parameterKey,
+        CancellationToken ct = default)
+        => Task.FromResult<string?>(ContextRoutePolicyTestFixtures.ValidPolicyJsonWithNullRecentDays());
+}
+
+internal sealed class StubPreferRecentFalsePolicyTopologyRepository()
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy")
+{
+    public override Task<string?> LoadFunctionParameterAsync(
+        string functionName,
+        string parameterKey,
+        CancellationToken ct = default)
+        => Task.FromResult<string?>(ContextRoutePolicyTestFixtures.ValidPolicyJsonWithPreferRecentFalse());
 }

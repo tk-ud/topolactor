@@ -38,6 +38,16 @@ psql -d <database> -f db/seed_empty.sql
 `default:entity:search` structure map and the context route recommendation policy
 row in `function_parameters` needed for the dummy canonical flow.
 
+To also load the public scaffold demo data (fake data only, no real business data):
+
+```bash
+psql -d <database> -f db/demo_seed.sql
+```
+
+`demo_seed.sql` adds demo hub / entities / context tokens / demo policy and demo structure maps.
+It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING`.
+See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
+
 ---
 
 ## Files
@@ -49,6 +59,7 @@ row in `function_parameters` needed for the dummy canonical flow.
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, sparse vector caches, transition stats. Optional cluster/drift tables isolated at bottom. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`. No real business data. |
+| `demo_seed.sql` | Public scaffold demo seed. Fake/demo data only: hub, entities, context tokens, demo_policy, demo structure maps. Apply after `seed_empty.sql`. |
 
 ---
 

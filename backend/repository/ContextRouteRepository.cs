@@ -56,7 +56,7 @@ public class ContextRouteRepository
     public virtual Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
         string? tableName,
         string? role,
-        int maxDays,
+        int? maxDays,
         CancellationToken ct = default)
     {
         _logger.LogDebug("ContextRouteRepository.LoadRecentPrefixVectorsAsync: in-memory skeleton — returning empty.");
@@ -70,9 +70,26 @@ public class ContextRouteRepository
     public virtual Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
         string prevOperation,
         string? role,
+        int candidateLimit,
         CancellationToken ct = default)
     {
         _logger.LogDebug("ContextRouteRepository.GetTransitionStatsAsync: in-memory skeleton — returning empty for prevOp='{PrevOp}'.", prevOperation);
+        return Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
+    }
+
+    /// <summary>
+    /// Computes windowed transition stats directly from context_event raw rows.
+    /// Uses aggregation_limit (count window) and optional recent_days (date window).
+    /// In-memory skeleton: returns empty list. Override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(
+        string prevOperation,
+        string? role,
+        TransitionAggregationPolicy aggregationPolicy,
+        int candidateLimit,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.GetWindowedTransitionStatsAsync: in-memory skeleton — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
     }
 

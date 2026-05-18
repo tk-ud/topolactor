@@ -56,6 +56,56 @@ Production fallback constants are prohibited.
 
 Test fixtures may contain representative policy values, but they must be isolated under tests and must not be referenced by production Runtime or Repository code.
 
+## Agent Judgment Gate — Policy Judgment Checklist
+
+The Policy Judgment Gate is a local-only agent self-check. It is **not CI** and
+is **not connected to any GitHub Actions workflow**. It is separate from the
+`.agent/tests/*.sh` local CI gate.
+
+Scope: not limited to Runtime. Covers any change involving Runtime, validation,
+promotion, disclosure, routing, projection claim, or any other policy-boundary
+decision — anywhere the agent's judgment determines whether a design choice
+complies with the data-defined topology architecture.
+
+Checklist template: `.agent/checklists/policy-judgment.md`
+Validation script: `.agent/checklists/check-policy-judgment.sh`
+
+Required before completion report on any change that:
+- introduces or modifies a runtime or policy-affecting value
+- touches recommendation, scoring, threshold, retention, routing, validation,
+  promotion, disclosure, emission, or projection behavior
+- modifies Registry, Manifest, function_parameters, structure_map, package, schema
+- makes a runtime or policy behavior claim in docs / README / PR summary
+
+Judgment gate rules:
+
+- **Checklist must be answered from the full branch diff.** Use `git diff main...HEAD`.
+  Answering from only the latest commit or only edited files is a violation (V10).
+- **Partial diff judgment is prohibited.** If the branch diff was not inspected,
+  Q12 must be `no` — which triggers V10 automatically.
+- **Workflow non-connection.** This gate must not be called from `.github/workflows/`.
+- **NOT EXECUTED ≠ PASS.** Missing tools → report NOT EXECUTED, not yes.
+- **All green before completion report.** Gate red → no completion report.
+
+Checklist gate violations (any → FAIL):
+
+| Rule | Condition |
+|---|---|
+| V1 | Q5 = yes — silent fallback |
+| V2 | Q6 = yes — unexplained production policy constant |
+| V3 | Q2 = yes AND Q3 = no — fallback present, no explicit-error replacement |
+| V4 | Q1 = yes AND Q4 = no — policy/runtime value not from a policy surface |
+| V5 | Q7 = yes — canonical route bypassed |
+| V6 | Q8 = yes — business logic in frontend projection layer |
+| V7 | Q9 = yes — broken reference swallowed |
+| V8 | Q10 = no — policy fields not consumed by runtime/policy executor |
+| V9 | Q11 = no — demo/mock/static values not isolated |
+| V10 | Q12 = no — full branch diff not inspected |
+| V11 | Q14 = no — required local checks not passed |
+| V12 | Any answer not in {yes, no, n/a} |
+| V13 | Missing answer |
+| V14 | Fewer or more than 15 answers |
+
 ## Local CI Gate
 
 `.agent/tests/*.sh` are local CI gates for agents.

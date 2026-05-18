@@ -123,7 +123,7 @@ INSERT INTO function_parameters (function_name, parameter_key, parameter_value, 
 VALUES (
     'context_route_recommendation_resolve',
     'default_policy',
-    '{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5}',
+    '{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}',
     true
 )
 ON CONFLICT (function_name, parameter_key) DO NOTHING;
