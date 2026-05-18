@@ -184,6 +184,7 @@ Answer:
 
 Did the required local checks pass before completion report?
 If a required local check is NOT EXECUTED, equivalent remote CI success must be verified before completion; queued/in_progress is not PASS.
+Structure Check is always-on, heavy CI workflows are path-scoped, and scope-irrelevant workflow-level skip is not blocking.
 
 Required: `bash .agent/tests/check-structure.sh` (always), plus any
 domain-specific check triggered by this change (db-schema, backend-tests,

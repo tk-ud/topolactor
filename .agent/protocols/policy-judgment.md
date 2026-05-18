@@ -20,6 +20,8 @@ Q12/Q13 meaning:
 - required NOT EXECUTED local checks must map to equivalent remote CI success before completion
 - CI queued/in_progress is not PASS
 - required NOT EXECUTED without equivalent CI success is a blocking failure
+- scope-irrelevant workflow-level skip is not blocking
+- scope-relevant CI not completed with success is a blocking failure
 
 - answers must be based on full branch diff inspection
 - when required, answers must include scenario contract verification

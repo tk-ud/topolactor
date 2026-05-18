@@ -157,6 +157,13 @@ READ_AGENTS_AND_RULES
 
 See `NOTICE.md`.
 
+### CI policy
+
+- Structure Check is the always-on required gate.
+- Heavy CI workflows are path-scoped.
+- Scope-irrelevant skipped heavy CI is not blocking.
+- Branch protection should keep Structure Check as the stable always-on gate.
+
 ## Runtime Environment Routes
 
 Use one of the three routes below. All configured routes must reach the same canonical runtime: frontend proxy (or nginx) → backend runtime → PostgreSQL.

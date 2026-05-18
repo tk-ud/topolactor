@@ -41,3 +41,12 @@ Remote CI Equivalence Gate:
 - scope-irrelevant CI must not be treated as required.
 
 If a mandatory scope-relevant check is NOT EXECUTED and no equivalent remote CI success is verified, completion is blocked.
+
+
+CI policy baseline:
+
+- Structure Check is the always-on required gate.
+- Heavy CI workflows are path-scoped.
+- scope-irrelevant workflow-level skip is not blocking.
+- scope-relevant workflow success is required when local equivalent is NOT EXECUTED.
+- heavy CI should not be configured as always-required branch protection unless pending-skip behavior is explicitly handled.
