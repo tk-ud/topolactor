@@ -31,6 +31,15 @@ public class TopologyVectorRuntimeTests
         MissingCandidateDelta: 0.03f
     );
 
+    private static readonly TransitionKeyEvidencePolicy DefaultEvidencePolicy = new(
+        Enabled: true,
+        OperationContribution: 1.0f,
+        RelationContribution: 0.8f,
+        StateContribution: 0.7f,
+        TableContribution: 0.6f,
+        NeighborTopK: 3
+    );
+
     public TopologyVectorRuntimeTests()
     {
         _runtime = new TopologyVectorRuntime(
@@ -129,6 +138,84 @@ public class TopologyVectorRuntimeTests
         Assert.Equal(RegistryVectorValidationClass.Pass, result.ValidationClass);
         Assert.False(result.IsBlocking);
         Assert.Empty(result.Neighbors);
+    }
+
+    [Fact]
+    public async Task ValidateRegistryVectorAsync_DbUnavailable_IsBlockingExplicitError()
+    {
+        // Arrange: repository that throws on FindRegistryVectorNeighborsAsync
+        var throwingRuntime = new TopologyVectorRuntime(
+            NullLogger<TopologyVectorRuntime>.Instance,
+            new ThrowingRegistryRepository());
+        var queryIds = new[] { Guid.NewGuid() };
+
+        var result = await throwingRuntime.ValidateRegistryVectorAsync(
+            "relation_registry", queryIds, DefaultRegistryValidationPolicy);
+
+        Assert.Equal(RegistryVectorValidationClass.ExplicitError, result.ValidationClass);
+        Assert.True(result.IsBlocking);
+        Assert.Equal("REGISTRY_VECTOR_VALIDATION_DB_UNAVAILABLE", result.StatusDetail);
+    }
+
+    // -------------------------------------------------------------------------
+    // ExtractTransitionKeyEvidence
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ExtractTransitionKeyEvidence_NullPolicy_ReturnsEmpty()
+    {
+        var result = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
+            Guid.NewGuid(), "op", [], [], [], [], null);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ExtractTransitionKeyEvidence_DisabledPolicy_ReturnsEmpty()
+    {
+        var disabled = DefaultEvidencePolicy with { Enabled = false };
+        var result = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
+            Guid.NewGuid(), "op", [], [], [], [], disabled);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ExtractTransitionKeyEvidence_ScoresFromPolicy_NotHardcoded()
+    {
+        var customPolicy = new TransitionKeyEvidencePolicy(
+            Enabled: true,
+            OperationContribution: 0.9f,
+            RelationContribution: 0.5f,
+            StateContribution: 0.4f,
+            TableContribution: 0.3f,
+            NeighborTopK: 2
+        );
+        var relId = Guid.NewGuid();
+        var result = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
+            Guid.NewGuid(), "view_detail",
+            relationIds: [relId],
+            stateIds: [],
+            tableNames: [],
+            topNeighbors: [],
+            policy: customPolicy);
+
+        Assert.Equal(2, result.Count);
+        var opEntry = result.Single(e => e.KeyKind == "operation");
+        Assert.Equal(0.9f, opEntry.ContributionScore, precision: 4);
+        var relEntry = result.Single(e => e.KeyKind == "relation");
+        Assert.Equal(0.5f, relEntry.ContributionScore, precision: 4);
+    }
+
+    [Fact]
+    public void ExtractTransitionKeyEvidence_NeighborTopKFromPolicy()
+    {
+        var policyTopK2 = DefaultEvidencePolicy with { NeighborTopK = 2 };
+        var neighbors = Enumerable.Range(0, 5).Select(_ =>
+            new RegistryVectorNeighbor(Guid.NewGuid(), "n", 0.7f, [], "r")).ToList();
+
+        var result = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
+            Guid.NewGuid(), null, [], [], [], neighbors, policyTopK2);
+
+        Assert.Equal(2, result.Count(e => e.KeyKind == "cosine_neighbor"));
     }
 
     // -------------------------------------------------------------------------
@@ -344,7 +431,24 @@ public class TopologyVectorRuntimeTests
         Assert.Contains("topology_vector_runtime", json);
         Assert.Contains("registry_validation", json);
         Assert.Contains("hub_attention", json);
+        Assert.Contains("transition_key_evidence", json);
         Assert.Contains("topology_mlp", json);
         Assert.Contains("feedback_weight_update", json);
     }
+}
+
+/// <summary>
+/// Stub repository that throws on FindRegistryVectorNeighborsAsync to simulate DB unavailability.
+/// Used to verify fail-closed behavior: DB unavailable → ExplicitError + IsBlocking:true.
+/// </summary>
+internal sealed class ThrowingRegistryRepository()
+    : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
+{
+    public override Task<IReadOnlyList<RegistryVectorNeighbor>> FindRegistryVectorNeighborsAsync(
+        string registryTable,
+        IReadOnlyList<Guid> queryIds,
+        float minSimilarity,
+        int topK,
+        CancellationToken ct = default)
+        => throw new InvalidOperationException("Simulated DB unavailable");
 }

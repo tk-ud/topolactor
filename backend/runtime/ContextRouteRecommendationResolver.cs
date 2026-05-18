@@ -382,6 +382,14 @@ public class ContextRouteRecommendationResolver
                         EmaFastAlpha:                 dto.TopologyVectorRuntime.HubAttention.EmaFastAlpha,
                         EmaSlowAlpha:                 dto.TopologyVectorRuntime.HubAttention.EmaSlowAlpha,
                         MaxUpdateCandidatesPerEvent:  dto.TopologyVectorRuntime.HubAttention.MaxUpdateCandidatesPerEvent),
+                TransitionKeyEvidence: dto.TopologyVectorRuntime.TransitionKeyEvidence is null ? null
+                    : new TransitionKeyEvidencePolicy(
+                        Enabled:               dto.TopologyVectorRuntime.TransitionKeyEvidence.Enabled,
+                        OperationContribution: dto.TopologyVectorRuntime.TransitionKeyEvidence.OperationContribution,
+                        RelationContribution:  dto.TopologyVectorRuntime.TransitionKeyEvidence.RelationContribution,
+                        StateContribution:     dto.TopologyVectorRuntime.TransitionKeyEvidence.StateContribution,
+                        TableContribution:     dto.TopologyVectorRuntime.TransitionKeyEvidence.TableContribution,
+                        NeighborTopK:          dto.TopologyVectorRuntime.TransitionKeyEvidence.NeighborTopK),
                 TopologyMlp: dto.TopologyVectorRuntime.TopologyMlp is null ? null
                     : new TopologyMlpPolicy(
                         Enabled:             dto.TopologyVectorRuntime.TopologyMlp.Enabled,
@@ -431,11 +439,21 @@ public class ContextRouteRecommendationResolver
     );
 
     private record TopologyVectorRuntimeDto(
-        [property: JsonPropertyName("enabled")]              bool Enabled,
-        [property: JsonPropertyName("registry_validation")]  RegistryValidationDto? RegistryValidation = null,
-        [property: JsonPropertyName("hub_attention")]        HubAttentionDto? HubAttention = null,
-        [property: JsonPropertyName("topology_mlp")]         TopologyMlpDto? TopologyMlp = null,
-        [property: JsonPropertyName("feedback_weight_update")] FeedbackWeightUpdateDto? FeedbackWeightUpdate = null
+        [property: JsonPropertyName("enabled")]                  bool Enabled,
+        [property: JsonPropertyName("registry_validation")]      RegistryValidationDto? RegistryValidation = null,
+        [property: JsonPropertyName("hub_attention")]            HubAttentionDto? HubAttention = null,
+        [property: JsonPropertyName("transition_key_evidence")]  TransitionKeyEvidenceDto? TransitionKeyEvidence = null,
+        [property: JsonPropertyName("topology_mlp")]             TopologyMlpDto? TopologyMlp = null,
+        [property: JsonPropertyName("feedback_weight_update")]   FeedbackWeightUpdateDto? FeedbackWeightUpdate = null
+    );
+
+    private record TransitionKeyEvidenceDto(
+        [property: JsonPropertyName("enabled")]                bool  Enabled,
+        [property: JsonPropertyName("operation_contribution")] float OperationContribution,
+        [property: JsonPropertyName("relation_contribution")]  float RelationContribution,
+        [property: JsonPropertyName("state_contribution")]     float StateContribution,
+        [property: JsonPropertyName("table_contribution")]     float TableContribution,
+        [property: JsonPropertyName("neighbor_top_k")]         int   NeighborTopK
     );
 
     private record RegistryValidationDto(

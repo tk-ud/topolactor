@@ -64,6 +64,7 @@ public record TopologyVectorRuntimePolicy(
     bool Enabled,
     RegistryValidationPolicy? RegistryValidation,
     HubAttentionPolicy? HubAttention,
+    TransitionKeyEvidencePolicy? TransitionKeyEvidence,
     TopologyMlpPolicy? TopologyMlp,
     FeedbackWeightUpdatePolicy? FeedbackWeightUpdate
 );
@@ -92,6 +93,20 @@ public record HubAttentionPolicy(
     float EmaFastAlpha,
     float EmaSlowAlpha,
     int MaxUpdateCandidatesPerEvent
+);
+
+/// <summary>
+/// Policy for transition key evidence extraction.
+/// Contribution scores for each key kind and the neighbor top-k count are read from policy.
+/// All values are scoring behavior — never hardcoded in runtime code.
+/// </summary>
+public record TransitionKeyEvidencePolicy(
+    bool Enabled,
+    float OperationContribution,
+    float RelationContribution,
+    float StateContribution,
+    float TableContribution,
+    int NeighborTopK
 );
 
 /// <summary>

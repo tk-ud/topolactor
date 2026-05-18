@@ -139,7 +139,9 @@ public enum RegistryVectorValidationClass
     RelatedExistingRegistry,
     NearDuplicateVector,
     DuplicateVector,
-    ZeroVector
+    ZeroVector,
+    /// <summary>DB unavailable or other explicit infrastructure error. Always blocking (fail-closed).</summary>
+    ExplicitError
 }
 
 /// <summary>

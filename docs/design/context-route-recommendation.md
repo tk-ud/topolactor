@@ -250,13 +250,17 @@ Registrar の Draft → Validate → Promote flow に vector neighbor validation
 | `related_existing_registry` | >= related_threshold | warning |
 | `pass` | < related_threshold | 通過 |
 | `zero_vector` | zero norm | explicit validation result |
+| `explicit_error` | DB unavailable / infrastructure error | **blocking（fail-closed）** |
 
 threshold は function_parameters (topology_vector_runtime.registry_validation) から読む。
+
+DB unavailable は fail-closed: `ValidationClass.ExplicitError` + `IsBlocking:true` を返す。
+`Pass` + `IsBlocking:false` （fail-open）は禁止。
 
 要件:
 - UI が独自判定しない（backend structured validation result を projection するだけ）
 - Backend が structured validation result を返す
-- broken refs / malformed ids / DB unavailable は silent fallback しない → ExplicitError
+- broken refs / malformed ids / DB unavailable は silent fallback しない → ExplicitError + blocking
 
 ### Hub Attention Recommendation
 
@@ -340,6 +344,14 @@ JSON 内の `topology_vector_runtime` サブオブジェクトとして格納す
       "ema_fast_alpha": 0.30,
       "ema_slow_alpha": 0.10,
       "max_update_candidates_per_event": 10000
+    },
+    "transition_key_evidence": {
+      "enabled": true,
+      "operation_contribution": 1.0,
+      "relation_contribution": 0.8,
+      "state_contribution": 0.7,
+      "table_contribution": 0.6,
+      "neighbor_top_k": 3
     },
     "topology_mlp": {
       "enabled": true,

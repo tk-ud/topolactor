@@ -92,8 +92,8 @@ public class TopologyVectorRuntime
                 "TopologyVectorRuntime.ValidateRegistryVectorAsync: DB error for table={Table}.",
                 registryTable);
             return new RegistryVectorValidationResult(
-                ValidationClass: RegistryVectorValidationClass.Pass,
-                IsBlocking: false,
+                ValidationClass: RegistryVectorValidationClass.ExplicitError,
+                IsBlocking: true,
                 Neighbors: [],
                 StatusDetail: "REGISTRY_VECTOR_VALIDATION_DB_UNAVAILABLE"
             );
@@ -177,6 +177,9 @@ public class TopologyVectorRuntime
     /// Extracts transition key evidence from the current hub/relation/operation context.
     /// Identifies which table / relation / state / entity is the transition Key.
     ///
+    /// All contribution scores and neighborTopK come from TransitionKeyEvidencePolicy —
+    /// never hardcoded. When policy is null or disabled, returns empty list.
+    ///
     /// Returns evidence entries to be stored in evidence_json.
     /// Evidence explains "why this candidate?" for hub attention.
     /// </summary>
@@ -186,8 +189,12 @@ public class TopologyVectorRuntime
         IReadOnlyList<Guid> relationIds,
         IReadOnlyList<Guid> stateIds,
         IReadOnlyList<string> tableNames,
-        IReadOnlyList<RegistryVectorNeighbor> topNeighbors)
+        IReadOnlyList<RegistryVectorNeighbor> topNeighbors,
+        TransitionKeyEvidencePolicy? policy)
     {
+        if (policy is null || !policy.Enabled)
+            return [];
+
         var evidence = new List<TransitionKeyEvidence>();
 
         if (!string.IsNullOrWhiteSpace(currentOperation))
@@ -196,7 +203,7 @@ public class TopologyVectorRuntime
                 KeyKind: "operation",
                 KeyId: currentOperation,
                 KeyLabel: currentOperation,
-                ContributionScore: 1.0f,
+                ContributionScore: policy.OperationContribution,
                 Reason: "current_operation"
             ));
         }
@@ -207,7 +214,7 @@ public class TopologyVectorRuntime
                 KeyKind: "relation",
                 KeyId: rel.ToString(),
                 KeyLabel: rel.ToString(),
-                ContributionScore: 0.8f,
+                ContributionScore: policy.RelationContribution,
                 Reason: "active_relation"
             ));
         }
@@ -218,7 +225,7 @@ public class TopologyVectorRuntime
                 KeyKind: "state",
                 KeyId: state.ToString(),
                 KeyLabel: state.ToString(),
-                ContributionScore: 0.7f,
+                ContributionScore: policy.StateContribution,
                 Reason: "active_state"
             ));
         }
@@ -229,12 +236,12 @@ public class TopologyVectorRuntime
                 KeyKind: "table",
                 KeyId: table,
                 KeyLabel: table,
-                ContributionScore: 0.6f,
+                ContributionScore: policy.TableContribution,
                 Reason: "active_table"
             ));
         }
 
-        foreach (var neighbor in topNeighbors.Take(3))
+        foreach (var neighbor in topNeighbors.Take(policy.NeighborTopK))
         {
             evidence.Add(new TransitionKeyEvidence(
                 KeyKind: "cosine_neighbor",
