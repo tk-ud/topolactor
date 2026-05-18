@@ -48,6 +48,7 @@ required_files:
     - docs/file-structure.yaml
     - docs/registrar-admin-ui-specification.md
     - docs/promotion-manifest-editor-specification.md
+    - docs/design/relation-registry-fk-audit-and-abstract-migration.md
   agent:
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml

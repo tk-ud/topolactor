@@ -146,6 +146,39 @@ framework_policy:
       - admin_approval
       - apply_index_or_generated_column_or_registry_or_physical_table
       - keep_rollback_plan
+    relation_registry_fk_audit_and_abstract_migration:
+      role: relation_registry_authority_driven_reference_audit_and_candidate_generation
+      authority: relation_registry
+      policy_surface:
+        - manifest
+        - function_parameters
+      audit_targets:
+        - hubs.relation_registry_id
+        - entities.relation_ids
+        - hub_relations.relation_registry_id
+        - structure_maps.relation_registry_id
+        - relation_registry.master_ids
+      flow:
+        - periodic_audit_select_relation_registry
+        - detect_dangling_or_inactive_or_missing_or_mismatch
+        - generate_fk_index_relation_binding_structure_map_candidates
+        - topology_recommendation_ci_gate
+        - admin_approval
+        - apply
+      statuses:
+        - OK
+        - MissingPolicy
+        - MalformedPolicy
+        - ValidationFailed
+        - DanglingReference
+        - InactiveReference
+        - MissingRelation
+        - CandidateMismatch
+      db_command_strings: prohibited
+      package_runtime_validation_runner: required
+      shell_script: optional_allowlisted_adapter_only
+      silent_fallback: prohibited
+      ssot: docs/design/relation-registry-fk-audit-and-abstract-migration.md
     topology_recommendation_ci_gate:
       role: ci_verification_gate_before_admin_approval
       subject: C# package runtime validation runner
