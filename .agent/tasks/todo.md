@@ -50,9 +50,10 @@
       → 対象候補は SQL patch / physical table promotion に限定しない。registry_addition / relation_registry_promotion / enum_axis_registration / schema_patch / manifest_patch / package_binding / generated_column / index / physical_table / sql_patch などを扱う。
       → 例: 統計的に連続・共起する Enum ベクトルが多い場合、hub への registry candidate 追加を推薦し、既存 registry / relation / schema / package との整合を CI で検証する。
       → cron excitation trigger は context を Runtime に渡すだけとし、Runtime が topology_recommendation_ci package を選択する。
-      → DB は「何を検査するか」の Registry / Manifest / policy を持ち、C# Runtime が許可された C# 関数を実行し、その C# 関数が必要に応じて allowlisted sh を実行する。
+      → DB は「何を検査するか」の Registry / Manifest / policy を持ち、C# Runtime が許可された topology recommendation CI package を選択する。
+      → CI / validation の主体は C# package runtime の validation runner とする。shell script は必須ではなく、既存 local CI や外部検証器が必要な場合だけ allowlisted external check adapter として呼び出す。
       → CI 結果は recommendation_check_result として記録し、checked=true の候補だけ update / promote 対象にする。checked=false は reject / recommend delete / expire 候補にする。
-      → 直接 DB から任意 sh を実行しない。sh 実行は C# package runtime の明示関数に閉じる。
+      → DB は実行コマンド文字列を保持しない。外部チェックの呼び出しは C# package runtime が明示的に許可した external check adapter に閉じる。
       → 対象候補: docs/design/topology-recommendation-ci-runtime.md, docs/framework-policy.yaml, .agent/tasks/todo.md。
 
 ## Infra / Demo Runtime
