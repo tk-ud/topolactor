@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
@@ -99,5 +100,30 @@ public class RuntimeExecutorTests
         Assert.Null(package);
         Assert.Null(schema);
         Assert.Null(functionParameter);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
+    {
+        var executor = CreateExecutor();
+        var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_OPERATION");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
+    {
+        var executor = CreateExecutor();
+        var payload = JsonSerializer.SerializeToElement(new { title = "x" });
+        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
     }
 }

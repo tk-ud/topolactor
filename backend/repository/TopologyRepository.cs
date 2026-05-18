@@ -13,12 +13,6 @@ namespace Topolactor.Repository;
 /// </summary>
 public class TopologyRepository
 {
-    private readonly Dictionary<Guid, (string title, string status)> _demoState = new()
-    {
-        [Guid.Parse("00000000-0000-0000-0000-000000000041")] = ("Alpha Entity", "active"),
-        [Guid.Parse("00000000-0000-0000-0000-000000000042")] = ("Beta Entity", "operating"),
-        [Guid.Parse("00000000-0000-0000-0000-000000000043")] = ("Gamma Entity", "active")
-    };
     // Deterministic IDs matching db/seed_empty.sql so the in-memory skeleton
     // and the DB seed reference the same topology node IDs.
     public static readonly Guid DefaultPackageId  = new("00000000-0000-0000-0000-000000000001");
@@ -137,33 +131,16 @@ public class TopologyRepository
     }
 
     public virtual Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
-    {
-        var rows = _demoState.Select(x => new DemoEntityProjection(x.Key, x.Value.title, x.Value.status)).ToList();
-        return Task.FromResult<IReadOnlyList<DemoEntityProjection>>(rows);
-    }
+        => Task.FromException<IReadOnlyList<DemoEntityProjection>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 
     public virtual Task<DemoEntityProjection?> LoadDemoEntityDetailAsync(Guid entityId, CancellationToken ct = default)
-    {
-        if (!_demoState.TryGetValue(entityId, out var row)) return Task.FromResult<DemoEntityProjection?>(null);
-        return Task.FromResult<DemoEntityProjection?>(new DemoEntityProjection(entityId, row.title, row.status));
-    }
+        => Task.FromException<DemoEntityProjection?>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 
     public virtual Task<DemoTransitionResult> ApplyDemoTransitionAsync(Guid entityId, string action, string? title, CancellationToken ct = default)
-    {
-        if (action == "create")
-        {
-            if (_demoState.ContainsKey(entityId)) return Task.FromResult(new DemoTransitionResult(false, "CONFLICT", "entity already exists"));
-            _demoState[entityId] = (title ?? "Untitled", "active");
-            return Task.FromResult(new DemoTransitionResult(true, null, null));
-        }
-        if (!_demoState.TryGetValue(entityId, out var current)) return Task.FromResult(new DemoTransitionResult(false, "NOT_FOUND", "entity not found"));
-        var next = action switch { "advance" when current.status == "active" => "operating", "advance" when current.status == "operating" => "archived", _ => null };
-        if (next is null) return Task.FromResult(new DemoTransitionResult(false, "INVALID_TRANSITION", "invalid transition"));
-        _demoState[entityId] = (current.title, next);
-        return Task.FromResult(new DemoTransitionResult(true, null, null));
-    }
+        => Task.FromException<DemoTransitionResult>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 
-    public virtual Task<IReadOnlyList<object>> LoadDemoTransitionHistoryAsync(Guid entityId, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<object>>([]);
+    public virtual Task<IReadOnlyList<object>> LoadDemoTransitionHistoryAsync(Guid entityId, CancellationToken ct = default)
+        => Task.FromException<IReadOnlyList<object>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 }
 
 /// <summary>

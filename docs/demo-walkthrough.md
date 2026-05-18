@@ -327,5 +327,7 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 
 ## Scenario F: demo entity state loop
 - Dispatch `target=demo, layer=entity, action=detail|advance|create` with payload `{ "entityId": "<uuid>", "title": "..." }`.
-- Runtime applies DB-backed transition (`entities` + `demo_state_transitions`) and returns emission data with `items` (list), `detail`, and `history`.
+- Runtime applies DB-backed transition (`entities` + `demo_state_transitions`) and returns emission data with DB-backed `items` (list), `detail`, and `history` (no frontend fallback).
 - Invalid payload/transition/missing entity are explicit errors (`INVALID_PAYLOAD`, `INVALID_TRANSITION`, `STATE_NOT_FOUND`).
+
+- `action=detail` requires payload `entityId` UUID; missing/malformed is `INVALID_PAYLOAD`, unknown action is `INVALID_OPERATION`.

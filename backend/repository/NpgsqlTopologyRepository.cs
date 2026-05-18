@@ -205,10 +205,23 @@ public class NpgsqlTopologyRepository : TopologyRepository
         {
             if (action == "create")
             {
+                var activeStateIdCmd = conn.CreateCommand(); activeStateIdCmd.Transaction = tx;
+                activeStateIdCmd.CommandText = "SELECT state_id FROM state_registry WHERE name='active' LIMIT 1";
+                var activeStateIdObj = await activeStateIdCmd.ExecuteScalarAsync(ct);
+                if (activeStateIdObj is null)
+                {
+                    await tx.RollbackAsync(ct);
+                    return new(false, "STATE_POLICY_NOT_FOUND", "state_registry.active is missing");
+                }
                 var cmd = conn.CreateCommand(); cmd.Transaction = tx;
                 cmd.CommandText = "INSERT INTO entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,'00000000-0000-0000-0000-000000000010',jsonb_build_object('label',@title,'state','active','hub_id','00000000-0000-0000-0000-000000000010'),ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],(SELECT state_id FROM state_registry WHERE name='active' LIMIT 1))";
                 cmd.Parameters.AddWithValue("id", entityId); cmd.Parameters.AddWithValue("title", title ?? "Untitled");
                 await cmd.ExecuteNonQueryAsync(ct);
+                var hist = conn.CreateCommand(); hist.Transaction = tx;
+                hist.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";
+                hist.Parameters.AddWithValue("id", entityId);
+                hist.Parameters.AddWithValue("title", title ?? "Untitled");
+                await hist.ExecuteNonQueryAsync(ct);
                 await tx.CommitAsync(ct); return new(true, null, null);
             }
             var read = conn.CreateCommand(); read.Transaction = tx;
@@ -218,13 +231,20 @@ public class NpgsqlTopologyRepository : TopologyRepository
             if (current is null) { await tx.RollbackAsync(ct); return new(false, "NOT_FOUND", "entity not found"); }
             var next = action == "advance" && current == "active" ? "operating" : action == "advance" && current == "operating" ? "archived" : null;
             if (next is null) { await tx.RollbackAsync(ct); return new(false, "INVALID_TRANSITION", "invalid transition"); }
+            var stateIdCmd = conn.CreateCommand(); stateIdCmd.Transaction = tx;
+            stateIdCmd.CommandText = "SELECT state_id FROM state_registry WHERE name=@name LIMIT 1";
+            stateIdCmd.Parameters.AddWithValue("name", next);
+            var nextStateIdObj = await stateIdCmd.ExecuteScalarAsync(ct);
+            if (nextStateIdObj is null) { await tx.RollbackAsync(ct); return new(false, "STATE_POLICY_NOT_FOUND", $"state_registry.{next} is missing"); }
             var up = conn.CreateCommand(); up.Transaction = tx;
-            up.CommandText = "UPDATE entities SET entity_jsonb=jsonb_set(entity_jsonb,'{state}',to_jsonb(@next::text),true), updated_at=now() WHERE entity_id=@id";
+            up.CommandText = "UPDATE entities SET entity_jsonb=jsonb_set(entity_jsonb,'{state}',to_jsonb(@next::text),true), state_id=@stateId, updated_at=now() WHERE entity_id=@id";
             up.Parameters.AddWithValue("id", entityId); up.Parameters.AddWithValue("next", next);
+            up.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await up.ExecuteNonQueryAsync(ct);
             var hist = conn.CreateCommand(); hist.Transaction = tx;
-            hist.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after)),jsonb_build_object('action',@action,'entity_id',@id::text))";
+            hist.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after),'state_id',jsonb_build_object('after',@stateId::text)),jsonb_build_object('action',@action,'entity_id',@id::text,'before_state',@before,'after_state',@after))";
             hist.Parameters.AddWithValue("id", entityId); hist.Parameters.AddWithValue("action", action); hist.Parameters.AddWithValue("before", current); hist.Parameters.AddWithValue("after", next);
+            hist.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await hist.ExecuteNonQueryAsync(ct);
             await tx.CommitAsync(ct); return new(true, null, null);
         }
