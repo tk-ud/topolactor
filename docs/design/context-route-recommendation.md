@@ -133,6 +133,28 @@ canonical route への挿入位置:
 
 ---
 
+## Runtime Excitation Trigger との接続
+
+Context route recommendation の log retention は、
+`docs/design/runtime-excitation-and-package-dispatch.md` に定義する
+**cron trigger → abstract delete package** パターンで処理する。
+
+```text
+cron trigger
+→ trigger context { operation: "log:retention:cleanup" }
+→ Runtime excitation
+→ resolve Manifest: select abstract delete package
+→ retention policy check (function_parameters: 対象 log 種別・期間・有効/無効)
+→ execute: context_event / context_prefix_vector_cache の cleanup
+→ update audit result
+```
+
+context route recommendation の retention policy（対象 log 種別・retention 期間・有効/無効）は
+`function_parameters` テーブルに格納する。
+cron 側に retention 期間や対象 log 種別を直書きしない。
+
+---
+
 ## クラスタリング（optional）
 
 月次 k-means でセッションをクラスタリング。

@@ -33,9 +33,12 @@
          放置するとユーザー操作 log が肥大化する。
       → create 側は UI操作を起点に DB Registry / function_parameters / topology policy から抽象 create 関数を解決して実行する。delete 側も同じ Runtime 導線で対称に扱う。
       → OS cron 直結ではなく、独自 backend runtime の scheduled worker / scheduler として扱う。
+         cron は excitation trigger として context を Runtime に渡すだけ。
+         package selection / retention 期間 / 有効無効は policy surface（function_parameters / Manifest）で管理する。
+         設計方針詳細: docs/design/runtime-excitation-and-package-dispatch.md 参照。
       → admin 管理の Manifest / Registry / function_parameters / structure_map policy で、対象log種別・retention期間・実行頻度・on/off を管理する。
       → scheduler は Manifest 上の抽象 delete 関数を解決し、DB上で具体的な delete / anonymize / aggregate promotion 処理として実行する。
-      → cleanup は optional 機能として有効/無効を切り替えられるようにする。無効時も明示的に disabled status を返し、silent fallback にしない。
+      → cleanup は optional 機能として有効/無効を切り替えられるようにする。無効時も明示的に Disabled status を返し、silent fallback にしない。
       → 期限切れの raw user operation log を削除し、必要な transition aggregates / audit summary は保持方針に従って残す。
       → 実装時の対象候補: db schema / backend scheduled runtime / admin manifest UI / retention policy seed / docs/design/context-route-recommendation.md / local CI test。
       → 未解決点: raw log を完全削除するか、匿名化・集計済み状態へ promotion してから削除するかを決める。
