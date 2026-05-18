@@ -28,20 +28,20 @@
 
 ## Runtime Log Retention
 
-- [ ] DB駆動の抽象 delete 関数を定期 scheduler で実行する
-      → self-learning DB / recommendation runtime は append-only context event / operation history を蓄積するため、
-         放置するとユーザー操作 log が肥大化する。
-      → create 側は UI操作を起点に DB Registry / function_parameters / topology policy から抽象 create 関数を解決して実行する。delete 側も同じ Runtime 導線で対称に扱う。
-      → OS cron 直結ではなく、独自 backend runtime の scheduled worker / scheduler として扱う。
-         cron は excitation trigger として context を Runtime に渡すだけ。
-         package selection / retention 期間 / 有効無効は policy surface（function_parameters / Manifest）で管理する。
-         設計方針詳細: docs/design/runtime-excitation-and-package-dispatch.md 参照。
-      → admin 管理の Manifest / Registry / function_parameters / structure_map policy で、対象log種別・retention期間・実行頻度・on/off を管理する。
-      → scheduler は Manifest 上の抽象 delete 関数を解決し、DB上で具体的な delete / anonymize / aggregate promotion 処理として実行する。
-      → cleanup は optional 機能として有効/無効を切り替えられるようにする。無効時も明示的に Disabled status を返し、silent fallback にしない。
-      → 期限切れの raw user operation log を削除し、必要な transition aggregates / audit summary は保持方針に従って残す。
-      → 実装時の対象候補: db schema / backend scheduled runtime / admin manifest UI / retention policy seed / docs/design/context-route-recommendation.md / local CI test。
-      → 未解決点: raw log を完全削除するか、匿名化・集計済み状態へ promotion してから削除するかを決める。
+- [ ] Codex 向け実装プロンプトに従い、LogRetentionExecutor / Scheduler / Repository を実装する
+      → 要件定義完了済み。実装方針: aggregate-then-delete（context_transition_stats は保持、raw context_event を削除）
+      → policy surface: function_parameters (function_name='context_event_retention', parameter_key='retention_policy')
+      → policy に必要なフィールド: enabled / hot_days / cold_days / archive_strategy / batch_size / log_types
+      → db/seed_empty.sql の既存シードに enabled・log_types を追加し、scheduler 間隔シードを追加する
+      → 新規作成対象:
+           backend/schema/RetentionContracts.cs
+           backend/repository/RetentionRepository.cs (stub)
+           backend/repository/NpgsqlRetentionRepository.cs (FK 削除順序: event_vector_cache → prefix_vector_cache → context_event → context_session)
+           backend/runtime/LogRetentionExecutor.cs (hardcode なし; MissingPolicy / MalformedPolicy / Disabled を明示返却)
+           backend/runtime/LogRetentionScheduler.cs (IHostedService + PeriodicTimer; business logic なし)
+           backend/tests/Topolactor.Runtime.Tests/LogRetentionExecutorTests.cs (Ok / Disabled / MissingPolicy / MalformedPolicy の 4 ケース)
+      → スコープ外: context_transition_stats 削除、admin UI、cold archive テーブル、ON DELETE CASCADE 追加
+      → 完了条件: 4 テスト PASS + check-structure.sh PASS + Policy Judgment Checklist all green
 
 ## Infra / Demo Runtime
 
