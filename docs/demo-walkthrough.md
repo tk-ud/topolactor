@@ -228,13 +228,16 @@ single matching prefix is enough to return a recommendation.
    ```
 6. Set target=`demo`, layer=`hub`, action=`overview`, and submit.
 7. The emission's `context_route_recommendation` section shows:
-   - `status: ok`
-   - `next_operations: [{value: "demo:entity:list", score: ~1.0, ...}]`
+   - `status: "ok"`
+   - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
 
 **Why it works:** `demo_seed.sql` inserts fixed-UUID events and their pre-computed prefix
 vectors (`context_prefix_vector_cache`). The resolver finds prefix_index=0 (similarity=1.0
-for token_active) and the windowed transition stats compute `demo:entity:list` as the likely
-next operation from the seeded context events.
+for token_active) and neighbor voting produces `demo:entity:list` as the likely next operation.
+
+**Route identity:** the resolver uses the full attractor key (`demo:hub:overview`) as `currentOperation`,
+which matches the `operation` column in seeded `context_event` rows. `tableName` is not used as
+a filter — prefix candidates are scoped by `session_id` and `recent_days`, not by `table_name`.
 
 > **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
 > `InsufficientHistory — NO_SESSION_ID`. This is the expected state on the static `/demo` page.

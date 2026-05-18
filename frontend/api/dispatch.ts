@@ -29,7 +29,7 @@ export type ContextRouteRecommendation = {
   nextTokens: RecommendationCandidate[];
   nearestPrefixSessionIds: string[];
   contributingTokens: string[];
-  status: "Ok" | "InsufficientHistory" | "ExplicitError";
+  status: "ok" | "insufficient_history" | "explicit_error";
   statusDetail?: string;
 };
 

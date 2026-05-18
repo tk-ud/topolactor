@@ -105,9 +105,9 @@ public class ContextRouteRecommendationResolver
         }
 
         var tokenIds = ParseTokenIds(vector.ContextTokenIds);
-        var currentOperation = vector.Action ?? "";
+        var currentOperation = vector.AttractorKey ?? "";
         var role = vector.UserRole;
-        var tableName = vector.Target;
+        var tableName = (string?)null;
 
         // Load token registry values for the current event
         IReadOnlyDictionary<Guid, float> tokenValueMap;

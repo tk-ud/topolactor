@@ -29,8 +29,11 @@
       → 完了: demo_seed.sql を固定UUID event IDに変更し context_event_vector_cache / context_prefix_vector_cache をseed。
          demo_policy の min_neighbors を 3→1 に変更（ON CONFLICT DO UPDATE）。
          OperationPanel に Context フィールド（Session ID / Token IDs）を追加。
-         backend JSON ポリシーを SnakeCaseLower → CamelCase + JsonStringEnumConverter に修正。
-         docs/demo-walkthrough.md に Scenario E 追加（dispatch panel → recommendation 導線）。
+         backend JSON ポリシーを CamelCase property + SnakeCaseLower enum に統一。
+         currentOperation を vector.Action ではなく vector.AttractorKey（完全キー形式）に修正。
+         LoadRecentPrefixVectorsAsync の tableName filter を null（全候補対象）に修正。
+         frontend/api/dispatch.ts の status union を snake_case に統一（RecommendationPanel と一致）。
+         docs/demo-walkthrough.md に Scenario E 追加・route identity 定義を明記。
          dispatch panel で target=demo/layer=hub/action=overview + demo session ID + token_active で recommendation ok 結果が得られる。
 
 - [ ] admin / registry 操作を skeleton 受付からDB永続化へ移行する
