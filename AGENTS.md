@@ -104,6 +104,12 @@ Policy:
 - **NOT EXECUTED ≠ PASS.** If a required tool is missing, report NOT EXECUTED in
   the completion summary. Never report a check as passing when it was not run.
 - **Remaining TODOs must be listed** in the completion report or PR summary.
+- **Delegated or split work does not inherit checklist verification.** When work is
+  delegated, split, or continued by another agent, each agent that makes
+  implementation, policy, summary, or completion decisions must independently use
+  the Policy Judgment Checklist if the task falls within its trigger scope. An
+  agent must not treat another agent's checklist answer or summary as its own
+  verified judgment.
 
 Fixtures in `.agent/checklists/fixtures/policy-judgment/` define expected PASS /
 FAIL outcomes and serve as a reference for correct checklist completion.
