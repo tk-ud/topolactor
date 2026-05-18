@@ -35,6 +35,7 @@ For boundary-expanding changes, matrix verification must also include End-to-End
 - DB identity
 - Backend contract/event identity
 - API payload identity
+- Repository mutation identity
 - Frontend projection identity
 - UI action identity
 

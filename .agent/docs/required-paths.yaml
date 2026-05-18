@@ -175,6 +175,7 @@ required_content_terms:
     - "Runtime Boundary Failure Matrix"
     - "Recursive Verification Gate"
     - "End-to-End Boundary Identity"
+    - "Repository mutation identity"
     - "Frontend projection identity"
     - "UI action identity"
   .agent/protocols/reports-and-todos.md:
