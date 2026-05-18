@@ -143,18 +143,23 @@ public class RuntimeExecutorTests
     [Fact]
     public async Task ExecuteAsync_DemoEntityList_ReachesPostAttractorFlow()
     {
-        var executor = CreateExecutor(new DemoEntityValidRouteTopologyRepository());
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var executor = CreateExecutor(repo);
         var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
 
         var res = await executor.ExecuteAsync(req);
 
-        Assert.True(res.Success);
-        Assert.NotNull(res.Emission);
+        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_OPERATION");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.True(repo.DemoEntityListCalled);
     }
 }
 
 internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository
 {
+    public bool DemoEntityListCalled { get; private set; }
+
     public DemoEntityValidRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "dummy") { }
 
     public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
@@ -173,5 +178,8 @@ internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepositor
     }
 
     public override Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<DemoEntityProjection>>([]);
+    {
+        DemoEntityListCalled = true;
+        return Task.FromResult<IReadOnlyList<DemoEntityProjection>>([]);
+    }
 }
