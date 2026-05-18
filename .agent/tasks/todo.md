@@ -38,16 +38,3 @@
       → `db/demo_seed.sql` 追加済み。compose init mount に含めるか、walkthrough 側で明示実行にするか判断する。
       → 対象: infra/docker-compose.yml, db/README.md（手順記載済み）, docs/demo-walkthrough.md。
 
-## Local CI Gate — Environment-limited
-
-- [ ] check-db-schema.sh の実行確認
-      → PostgreSQL 接続が必要。本 PR では POSTGRES_HOST 等の環境変数が未設定のため未実行。
-      → CI (GitHub Actions) で確認すること。
-
-- [ ] check-frontend-types.sh の実行確認
-      → Deno が必要。本 PR では deno コマンドが未インストールのため未実行。
-      → CI (GitHub Actions) で確認すること。
-
-- [ ] check-backend-tests.sh の実行確認
-      → dotnet が必要。本 PR では dotnet コマンドが未インストールのため未実行。
-      → CI (GitHub Actions) で確認すること。
