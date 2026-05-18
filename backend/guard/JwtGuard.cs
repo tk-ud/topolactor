@@ -46,12 +46,17 @@ public class JwtGuard
         {
             var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
             using var doc = JsonDocument.Parse(payloadJson);
-            if (doc.RootElement.TryGetProperty("exp", out var expProp) &&
-                expProp.TryGetInt64(out var expUnix))
-            {
-                if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expUnix)
-                    return [new ValidationError("AUTH_TOKEN_EXPIRED", "Token has expired.")];
-            }
+
+            if (!doc.RootElement.TryGetProperty("exp", out var expProp))
+                return [new ValidationError("AUTH_TOKEN_EXP_MISSING",
+                    "Token is missing required exp claim.")];
+
+            if (!expProp.TryGetInt64(out var expUnix))
+                return [new ValidationError("AUTH_TOKEN_EXP_INVALID",
+                    "Token exp claim is not a valid integer.")];
+
+            if (DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expUnix)
+                return [new ValidationError("AUTH_TOKEN_EXPIRED", "Token has expired.")];
         }
         catch
         {

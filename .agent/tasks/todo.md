@@ -14,6 +14,18 @@
 
 ## Current TODO
 
+## Auth / Demo Login
+
+- [ ] backend HTTP host と /auth/login HTTP route を実装する
+      → `backend/endpoint/AuthEndpoint.cs` に認証ロジッククラスは存在するが、
+         backend に HTTP ホスト (ASP.NET Core Program.cs / WebApplication 等) がなく、
+         HTTP route バインドが未実装。
+      → `frontend/routes/api/auth/login.ts` は `DEMO_BACKEND_URL/auth/login` に
+         proxy しているが、この backend エンドポイントが稼働していない限り機能しない。
+      → 実装時の対象候補: backend/Program.cs または backend/Host.cs,
+         MinimalAPI または Controller routing, DEMO_BACKEND_URL 設定手順。
+      → docs/demo-walkthrough.md に「backend HTTP route 未実装」と明記済み。
+
 ## Infra / Demo Runtime
 
 - [ ] nginx service を docker compose に接続する

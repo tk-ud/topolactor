@@ -3,8 +3,14 @@ import { Handlers } from "$fresh/server.ts";
 /**
  * POST /api/auth/login
  *
- * Demo auth scaffold. Proxies to DEMO_BACKEND_URL/auth/login when configured.
- * Returns 501 if DEMO_BACKEND_URL is not set — explicit, not silent.
+ * Demo auth scaffold proxy. Forwards to DEMO_BACKEND_URL/auth/login when set.
+ * Returns 501 (AUTH_BACKEND_NOT_CONFIGURED) when DEMO_BACKEND_URL is not set — explicit, not silent.
+ *
+ * NOTE: The backend /auth/login HTTP route is not yet implemented.
+ * AuthEndpoint.cs (backend/endpoint/AuthEndpoint.cs) contains the auth logic class,
+ * but the backend does not have an HTTP host or route-binding layer yet.
+ * This proxy is scaffolded for when the backend HTTP server is wired.
+ * See .agent/tasks/todo.md — "backend HTTP host and /auth/login route".
  *
  * Request body: { "username": "...", "password": "..." }
  * Response:     { "success": bool, "token"?: "...", "errors"?: [...] }

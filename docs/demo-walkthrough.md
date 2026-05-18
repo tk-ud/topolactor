@@ -28,10 +28,15 @@ This walkthrough shows how to observe the canonical runtime route in action usin
 > to `infra/docker-compose.yml`. It will be enabled once frontend and backend Docker services
 > are defined in the compose file. Currently only `postgres` and `adminer` are active.
 
-> **Note — demo login:** The JWT login scaffold is at `/login`. Credential verification
-> requires a running backend (`DEMO_BACKEND_URL` env var). Demo credentials are stored as
-> bcrypt hashes in `function_parameters` (`demo_auth / demo_users`) via `db/demo_seed.sql`.
-> JWT config from `DEMO_JWT_SECRET` / `DEMO_JWT_ISSUER` / `DEMO_JWT_EXPIRY_HOURS` env vars.
+> **Note — demo login:** The JWT login scaffold is at `/login`. The login form calls
+> `/api/auth/login` (Fresh route), which proxies to `DEMO_BACKEND_URL/auth/login`.
+> **The backend HTTP route is not yet implemented** — `AuthEndpoint.cs` contains the auth
+> logic class but the backend has no HTTP host or route-binding layer yet.
+> Demo credentials are stored as bcrypt hashes in `function_parameters`
+> (`demo_auth / demo_users`) via `db/demo_seed.sql`.
+> Required env vars: `DEMO_JWT_SECRET` (required), `DEMO_JWT_EXPIRY_HOURS` (required,
+> positive integer), `DEMO_JWT_ISSUER` (optional, display-only, defaults to
+> `"topolactor-demo"`), `DEMO_BACKEND_URL` (required when using login).
 
 ---
 

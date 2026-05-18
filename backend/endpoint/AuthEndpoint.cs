@@ -14,8 +14,8 @@ namespace Topolactor.Endpoint;
 ///
 /// Environment variables (required / optional):
 ///   DEMO_JWT_SECRET       — required; shared secret for HS256 signing
-///   DEMO_JWT_ISSUER       — optional; defaults to "topolactor-demo"
-///   DEMO_JWT_EXPIRY_HOURS — optional; integer; defaults to 8
+///   DEMO_JWT_ISSUER       — optional; defaults to "topolactor-demo" (display-only)
+///   DEMO_JWT_EXPIRY_HOURS — required; positive integer; token lifetime in hours
 ///
 /// Demo credentials are stored as a JSON array in function_parameters.
 /// Password hashes are bcrypt (BCrypt.Net-Next). Not for production auth.
