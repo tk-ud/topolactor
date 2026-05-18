@@ -336,6 +336,7 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 
 ## CI runtime-meaning checks
 
-- CI should run `bash .agent/tests/check-runtime-semantics.sh` to validate runtime semantics (dispatch/recommendation/admin proxy), not only structure checks.
+- CI/local should run `bash .agent/tests/check-runtime-semantics.sh` to validate runtime semantics (dispatch/recommendation/admin proxy), not only structure checks.
+- Runtime-meaning check is considered complete only after execution succeeds in an environment with both dotnet and deno available.
 - Docker Compose full E2E smoke remains an optional local check due to runtime/cost; it is not a blocking CI gate in this phase.
 

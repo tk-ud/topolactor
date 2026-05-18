@@ -10,6 +10,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 require_tool() {
   if ! command -v "$1" &>/dev/null; then
     echo "ERROR: required tool not found: $1" >&2
+    echo "This check was NOT executed — missing tool is not a pass." >&2
     exit 1
   fi
 }

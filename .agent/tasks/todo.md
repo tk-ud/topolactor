@@ -85,7 +85,8 @@
       → 理由: structure/backend/db のチェックはあるが、ログイン→dispatch→emission、policy変更→runtime反映、registry更新→推薦変化の意味テストが不足している。
       → 改善方針: backend unit/integration、frontend type/API proxy、DB seed smoke、demo runtime smoke を分けて追加する。
       → 対象ファイル: .agent/tests/*, backend/tests/Topolactor.Runtime.Tests/*, frontend/*, db/demo_seed.sql, docs/demo-walkthrough.md
-      → 完了: .agent/tests/check-runtime-semantics.sh を追加し、backend runtime/integration と frontend API proxy 意味テストを統合。Docker Compose E2E smoke は現時点ではローカル任意チェックとして docs に明記。
+      → 完了(導線追加): .agent/tests/check-runtime-semantics.sh を追加し、backend runtime/integration と frontend API proxy 意味テストを統合。Docker Compose E2E smoke は現時点ではローカル任意チェックとして docs に明記。
+      → 残: dotnet / deno 利用可能環境での runtime意味チェック実行確認は未完了（残todoへ分離）。
       → 推奨担当: Codex
 
 ## Demo Runtime Dispatch
@@ -93,3 +94,22 @@
 - [x] Public scaffold demo のログイン→dispatch→backend runtime emission 導線を閉じる
       → 完了: /api/dispatch proxy 実装、JWT sessionStorage 保存/読み取り、未ログイン時明示案内、docs/demo-walkthrough.md にログイン→dispatch フロー追記。
       → 残課題: recommendation cold-start 表示の扱い（次の判断点）は未解決。context_route recommendation TODO に委譲。
+
+
+## Runtime Persistence Completion
+
+- [ ] DiffLogRepository を DB-backed append-only diff log へ移行する
+      → 理由: 現状 DiffLogRepository.AppendAsync は ILogger への非永続出力であり、durable diff history を前提にできない。state transition / event-diff 履歴の runtime意味確認に必要な永続正規導線が未完了。
+      → 改善方針: diff log 保存テーブル・repository interface・Npgsql implementation・failure時明示エラーを定義し、runtime/persistence 境界として検証する。
+      → 対象ファイル: backend/repository/DiffLogRepository.cs, backend/repository/NpgsqlTopologyRepository.cs, db/schema.sql, db/topology_tables.sql, backend/tests/Topolactor.Runtime.Tests/*, docs/demo-walkthrough.md
+      → 次の判断点: 既存 demo_state_transitions を diff log 正本に寄せるか、汎用 diff_log テーブルを別途切るか。
+      → 推奨担当: Codex
+
+## Runtime Meaning Check Verification
+
+- [ ] check-runtime-semantics.sh を dotnet / deno 利用可能環境で実行し、runtime意味チェックの実行結果を確定する
+      → 理由: check-runtime-semantics.sh は追加済みだが、実行環境で dotnet / deno 不在の場合は未実行となるため、導線追加と実行確認を分ける必要がある。
+      → 改善方針: dotnet / deno が利用可能な環境で backend runtime tests / integration tests / frontend API proxy tests を実行し、失敗時は原因を修正する。
+      → 対象ファイル: .agent/tests/check-runtime-semantics.sh, backend/tests/Topolactor.Runtime.Tests/*, backend/tests/Topolactor.Integration.Tests/*, frontend/tests/*
+      → 次の判断点: Docker Compose E2E smoke を次段階でCI必須に昇格するか、ローカル任意のまま維持するか。
+      → 推奨担当: Codex
