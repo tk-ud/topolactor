@@ -516,6 +516,7 @@ CREATE INDEX IF NOT EXISTS idx_chrc_updated
 CREATE TABLE IF NOT EXISTS context_hub_feedback_event (
     feedback_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     hub_id          UUID        NOT NULL,
+    target_table    TEXT        NOT NULL,
     candidate_id    UUID        NOT NULL,
     candidate_kind  TEXT        NOT NULL
                     CHECK (candidate_kind IN ('registry','hub','entity','relation','operation','token')),
@@ -529,11 +530,20 @@ CREATE TABLE IF NOT EXISTS context_hub_feedback_event (
 
 COMMENT ON TABLE context_hub_feedback_event IS
     'Append-only feedback weight update event log. '
-    'Records selected / ignored / missing_candidate differences per hub/candidate. '
+    'Records selected / ignored / missing_candidate differences per hub/candidate/target_table. '
+    'target_table must match context_hub_recommendation_current.target_table so that '
+    'feedback_adjustment is applied to the exact PK row '
+    '(hub_id, target_table, candidate_kind, candidate_id, scope_limit). '
     'feedback_kind: selected → positive_delta; ignored → negative_delta; '
     'missing_candidate → missing_candidate_delta (from policy — not hardcoded). '
     'Aggregate current (feedback_adjustment) in context_hub_recommendation_current '
     'is rebuildable from this log.';
+
+COMMENT ON COLUMN context_hub_feedback_event.target_table IS
+    'Target table name matching context_hub_recommendation_current.target_table. '
+    'Required to scope feedback_adjustment update to the exact PK row. '
+    'Prevents erroneous cross-target_table application when the same candidate_id '
+    'appears under multiple target_tables for the same hub.';
 
 COMMENT ON COLUMN context_hub_feedback_event.delta_applied IS
     'Actual delta applied from topology_vector_runtime.feedback_weight_update policy '
@@ -541,7 +551,7 @@ COMMENT ON COLUMN context_hub_feedback_event.delta_applied IS
     'Policy values: positive_delta, negative_delta, missing_candidate_delta.';
 
 CREATE INDEX IF NOT EXISTS idx_chfe_hub_candidate
-    ON context_hub_feedback_event (hub_id, candidate_id, scope_limit);
+    ON context_hub_feedback_event (hub_id, target_table, candidate_id, scope_limit);
 
 CREATE INDEX IF NOT EXISTS idx_chfe_created
     ON context_hub_feedback_event (created_at);

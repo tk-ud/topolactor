@@ -315,6 +315,10 @@ delta 値は function_parameters (topology_vector_runtime.feedback_weight_update
 feedback は context_hub_feedback_event (append-only) にも記録する。
 aggregate current は再構築可能にする。
 
+feedback の適用粒度は `(hub_id, target_table, candidate_kind, candidate_id, scope_limit)` — context_hub_recommendation_current の PK 全体と一致する。
+
+`target_table` を含めない場合、同一 candidate_id が複数の target_table に存在すると feedback が誤って複数の target_table に適用される。HubFeedbackEvent と context_hub_feedback_event の両方が `target_table` を持つことで、この誤適用を防ぐ。
+
 ### Policy ストレージ
 
 topology_vector_runtime の policy は独立した設定テーブルではなく、

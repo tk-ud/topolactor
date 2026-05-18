@@ -367,9 +367,14 @@ public class TopologyVectorRuntime
     /// <summary>
     /// Builds feedback events from selected / ignored / missing candidate ID lists.
     /// Delta values come from FeedbackWeightUpdatePolicy — never hardcoded.
+    ///
+    /// targetTable must match context_hub_recommendation_current.target_table so that
+    /// feedback_adjustment is applied to the exact PK row and never bleeds across
+    /// target_tables for the same candidate_id within the same hub.
     /// </summary>
     public static IReadOnlyList<HubFeedbackEvent> BuildFeedbackEvents(
         Guid hubId,
+        string targetTable,
         string candidateKind,
         int scopeLimit,
         IReadOnlyList<Guid> selectedIds,
@@ -385,6 +390,7 @@ public class TopologyVectorRuntime
         {
             events.Add(new HubFeedbackEvent(
                 HubId: hubId,
+                TargetTable: targetTable,
                 CandidateId: id,
                 CandidateKind: candidateKind,
                 ScopeLimit: scopeLimit,
@@ -397,6 +403,7 @@ public class TopologyVectorRuntime
         {
             events.Add(new HubFeedbackEvent(
                 HubId: hubId,
+                TargetTable: targetTable,
                 CandidateId: id,
                 CandidateKind: candidateKind,
                 ScopeLimit: scopeLimit,
@@ -409,6 +416,7 @@ public class TopologyVectorRuntime
         {
             events.Add(new HubFeedbackEvent(
                 HubId: hubId,
+                TargetTable: targetTable,
                 CandidateId: id,
                 CandidateKind: candidateKind,
                 ScopeLimit: scopeLimit,

@@ -1182,9 +1182,10 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                 insertCmd.Transaction = txn;
                 insertCmd.CommandText =
                     "INSERT INTO context_hub_feedback_event " +
-                    "(hub_id, candidate_id, candidate_kind, scope_limit, feedback_kind, delta_applied) " +
-                    "VALUES (@hubId, @candidateId, @candidateKind, @scopeLimit, @feedbackKind, @deltaApplied)";
+                    "(hub_id, target_table, candidate_id, candidate_kind, scope_limit, feedback_kind, delta_applied) " +
+                    "VALUES (@hubId, @targetTable, @candidateId, @candidateKind, @scopeLimit, @feedbackKind, @deltaApplied)";
                 insertCmd.Parameters.AddWithValue("hubId",         ev.HubId);
+                insertCmd.Parameters.AddWithValue("targetTable",   ev.TargetTable);
                 insertCmd.Parameters.AddWithValue("candidateId",   ev.CandidateId);
                 insertCmd.Parameters.AddWithValue("candidateKind", ev.CandidateKind);
                 insertCmd.Parameters.AddWithValue("scopeLimit",    ev.ScopeLimit);
@@ -1200,11 +1201,13 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                     "SET feedback_adjustment = feedback_adjustment + @delta, " +
                     "    updated_at = now() " +
                     "WHERE hub_id = @hubId " +
+                    "  AND target_table = @targetTable " +
                     "  AND candidate_id = @candidateId " +
                     "  AND candidate_kind = @candidateKind " +
                     "  AND scope_limit = @scopeLimit";
                 updateCmd.Parameters.AddWithValue("delta",         (double)ev.DeltaApplied);
                 updateCmd.Parameters.AddWithValue("hubId",         ev.HubId);
+                updateCmd.Parameters.AddWithValue("targetTable",   ev.TargetTable);
                 updateCmd.Parameters.AddWithValue("candidateId",   ev.CandidateId);
                 updateCmd.Parameters.AddWithValue("candidateKind", ev.CandidateKind);
                 updateCmd.Parameters.AddWithValue("scopeLimit",    ev.ScopeLimit);

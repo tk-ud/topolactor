@@ -333,7 +333,7 @@ public class TopologyVectorRuntimeTests
         var hubId = Guid.NewGuid();
         var candidateId = Guid.NewGuid();
         var events = TopologyVectorRuntime.BuildFeedbackEvents(
-            hubId, "hub", 1000,
+            hubId, "hubs", "hub", 1000,
             selectedIds: [candidateId],
             ignoredIds: [],
             missingCandidateIds: [],
@@ -343,6 +343,7 @@ public class TopologyVectorRuntimeTests
         Assert.Equal("selected", events[0].FeedbackKind);
         Assert.Equal(DefaultFeedbackPolicy.PositiveDelta, events[0].DeltaApplied);
         Assert.Equal(candidateId, events[0].CandidateId);
+        Assert.Equal("hubs", events[0].TargetTable);
     }
 
     [Fact]
@@ -351,7 +352,7 @@ public class TopologyVectorRuntimeTests
         var hubId = Guid.NewGuid();
         var candidateId = Guid.NewGuid();
         var events = TopologyVectorRuntime.BuildFeedbackEvents(
-            hubId, "hub", 1000,
+            hubId, "hubs", "hub", 1000,
             selectedIds: [],
             ignoredIds: [candidateId],
             missingCandidateIds: [],
@@ -368,7 +369,7 @@ public class TopologyVectorRuntimeTests
         var hubId = Guid.NewGuid();
         var candidateId = Guid.NewGuid();
         var events = TopologyVectorRuntime.BuildFeedbackEvents(
-            hubId, "hub", 1000,
+            hubId, "hubs", "hub", 1000,
             selectedIds: [],
             ignoredIds: [],
             missingCandidateIds: [candidateId],
@@ -384,7 +385,7 @@ public class TopologyVectorRuntimeTests
     {
         var hubId = Guid.NewGuid();
         var events = TopologyVectorRuntime.BuildFeedbackEvents(
-            hubId, "hub", 1000,
+            hubId, "hubs", "hub", 1000,
             selectedIds: [Guid.NewGuid(), Guid.NewGuid()],
             ignoredIds: [Guid.NewGuid()],
             missingCandidateIds: [Guid.NewGuid()],
@@ -407,7 +408,7 @@ public class TopologyVectorRuntimeTests
         );
         var hubId = Guid.NewGuid();
         var events = TopologyVectorRuntime.BuildFeedbackEvents(
-            hubId, "entity", 3000,
+            hubId, "entities", "entity", 3000,
             selectedIds: [Guid.NewGuid()],
             ignoredIds: [],
             missingCandidateIds: [],
@@ -415,6 +416,49 @@ public class TopologyVectorRuntimeTests
 
         Assert.Single(events);
         Assert.Equal(0.10f, events[0].DeltaApplied, precision: 4);
+    }
+
+    [Fact]
+    public void BuildFeedbackEvents_TargetTable_IsPreservedInAllEvents()
+    {
+        var hubId = Guid.NewGuid();
+        var events = TopologyVectorRuntime.BuildFeedbackEvents(
+            hubId, "relation_registry", "registry", 1000,
+            selectedIds: [Guid.NewGuid()],
+            ignoredIds: [Guid.NewGuid()],
+            missingCandidateIds: [Guid.NewGuid()],
+            DefaultFeedbackPolicy);
+
+        Assert.Equal(3, events.Count);
+        Assert.All(events, e => Assert.Equal("relation_registry", e.TargetTable));
+    }
+
+    [Fact]
+    public void BuildFeedbackEvents_DifferentTargetTables_ProduceSeparateEvents()
+    {
+        var hubId = Guid.NewGuid();
+        var candidateId = Guid.NewGuid();
+
+        var eventsA = TopologyVectorRuntime.BuildFeedbackEvents(
+            hubId, "relation_registry", "registry", 1000,
+            selectedIds: [candidateId],
+            ignoredIds: [],
+            missingCandidateIds: [],
+            DefaultFeedbackPolicy);
+
+        var eventsB = TopologyVectorRuntime.BuildFeedbackEvents(
+            hubId, "entities", "registry", 1000,
+            selectedIds: [candidateId],
+            ignoredIds: [],
+            missingCandidateIds: [],
+            DefaultFeedbackPolicy);
+
+        // same candidateId, same hub, different target_table -> separate events
+        Assert.Single(eventsA);
+        Assert.Single(eventsB);
+        Assert.Equal("relation_registry", eventsA[0].TargetTable);
+        Assert.Equal("entities", eventsB[0].TargetTable);
+        Assert.NotEqual(eventsA[0].TargetTable, eventsB[0].TargetTable);
     }
 
     // -------------------------------------------------------------------------
