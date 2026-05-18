@@ -186,6 +186,16 @@ VALUES (
 )
 ON CONFLICT (structure_map_id) DO NOTHING;
 
+INSERT INTO structure_maps (
+    structure_map_id, name, attractor_key, package_id, schema_id, component_ids, state_policy, active
+)
+VALUES
+    ('00000000-0000-0000-0000-000000000019','demo_entity_list','demo:entity:list','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true),
+    ('00000000-0000-0000-0000-00000000001a','demo_entity_detail','demo:entity:detail','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true),
+    ('00000000-0000-0000-0000-00000000001b','demo_entity_create','demo:entity:create','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true),
+    ('00000000-0000-0000-0000-00000000001c','demo_entity_advance','demo:entity:advance','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true)
+ON CONFLICT (structure_map_id) DO NOTHING;
+
 
 -- ---------------------------------------------------------------------------
 -- hubs — demo hub

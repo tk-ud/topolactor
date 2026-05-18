@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json;
 using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
@@ -10,9 +11,9 @@ namespace Topolactor.Runtime.Tests;
 
 public class RuntimeExecutorTests
 {
-    internal static RuntimeExecutor CreateExecutor()
+    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
     {
-        var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
 
@@ -99,5 +100,87 @@ public class RuntimeExecutorTests
         Assert.Null(package);
         Assert.Null(schema);
         Assert.Null(functionParameter);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
+    {
+        var executor = CreateExecutor();
+        var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_OPERATION");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
+    {
+        var executor = CreateExecutor();
+        var payload = JsonSerializer.SerializeToElement(new { title = "x" });
+        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityDetailMalformedEntityId_ReturnsInvalidPayload()
+    {
+        var executor = CreateExecutor();
+        var payload = JsonSerializer.SerializeToElement(new { entityId = "not-a-uuid" });
+        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DemoEntityList_ReachesPostAttractorFlow()
+    {
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var executor = CreateExecutor(repo);
+        var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
+
+        var res = await executor.ExecuteAsync(req);
+
+        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_OPERATION");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.DoesNotContain(res.Errors, e => e.Code == "STRUCTURE_MAP_RESOLVE_FAILED");
+        Assert.True(repo.DemoEntityListCalled);
+    }
+}
+
+internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository
+{
+    public bool DemoEntityListCalled { get; private set; }
+
+    public DemoEntityValidRouteTopologyRepository() : base(NullLogger<TopologyRepository>.Instance, "dummy") { }
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key is "demo:entity:list" or "demo:entity:detail" or "demo:entity:create" or "demo:entity:advance" or "11111111-1111-1111-1111-111111111111")
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: "11111111-1111-1111-1111-111111111111",
+                AttractorKey: "demo:entity:list",
+                PackageId: TopologyRepository.DefaultPackageId,
+                SchemaId: TopologyRepository.DefaultSchemaId,
+                ComponentIds: [TopologyRepository.DefaultComponentId],
+                StatePolicyJson: null));
+        }
+        return base.LoadStructureMapAsync(key, ct);
+    }
+
+    public override Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
+    {
+        DemoEntityListCalled = true;
+        return Task.FromResult<IReadOnlyList<DemoEntityProjection>>([]);
     }
 }

@@ -60,7 +60,7 @@
          AdminEndpointTests.cs: list/create/deprecate の success/failure/conflict/boundary/idempotent テスト追加。
          frontend/tests/adminApi.test.ts: 501/401/200/409/422/404 の応答マッピングテスト追加。
 
-- [ ] DB-backed application runtimeとしての最小状態遷移ループを定義し、demo seed から実データ入力ループへ移行する
+- [x] DB-backed application runtimeとしての最小状態遷移ループを定義し、demo seed から実データ入力ループへ移行する
       → 目的: topolactor を単なる runtime scaffold ではなく、任意ドメインの application state loop を持つ runtime へ進める。
       → 改善方針: state transition、event/diff履歴、list/detail projection を含む最小schema/package/componentを定義し、runtime route に載せる。
       → 対象ファイル: db/schema.sql, db/topology_tables.sql, db/demo_seed.sql, backend/runtime/*, frontend/routes/*, frontend/components/*, docs/demo-walkthrough.md

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
@@ -75,6 +76,12 @@ public class RuntimeExecutor
                 Success: false,
                 Emission: null,
                 Errors: guardErrors);
+        }
+
+        var demoValidationError = ValidateDemoEntityRequest(vector);
+        if (demoValidationError is not null)
+        {
+            return ErrorResponse(demoValidationError.Code, demoValidationError.Message);
         }
 
         // Step 3: Resolve attractor — no silent fallback
@@ -167,6 +174,13 @@ public class RuntimeExecutor
         workingShape = workingShape with { ContextRouteRecommendation = recommendation };
 
         // Step 10: Build emission from resolved working shape
+        if (vector.Target == "demo" && vector.Layer == "entity")
+        {
+            var stateResult = await ApplyDemoStateLoopAsync(vector, ct);
+            if (stateResult.error is not null) return ErrorResponse(stateResult.error.Code, stateResult.error.Message);
+            workingShape = workingShape with { ResolvedData = stateResult.data };
+        }
+
         var emission = _emissionBuilder.Build(workingShape);
 
         _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");
@@ -182,4 +196,82 @@ public class RuntimeExecutor
             Success: false,
             Emission: null,
             Errors: [new ValidationError(code, message)]);
+
+    private static ValidationError? ValidateDemoEntityRequest(OperationVector vector)
+    {
+        if (!string.Equals(vector.Target, "demo", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(vector.Layer, "entity", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var action = vector.Action?.ToLowerInvariant();
+        if (action is not ("list" or "detail" or "create" or "advance"))
+        {
+            return new ValidationError("INVALID_OPERATION", "demo/entity supports only list, detail, create, advance");
+        }
+
+        if (action is "detail" or "create" or "advance")
+        {
+            if (vector.Payload is null ||
+                !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) ||
+                string.IsNullOrWhiteSpace(entityIdEl.GetString()) ||
+                !Guid.TryParse(entityIdEl.GetString(), out _))
+            {
+                return new ValidationError("INVALID_PAYLOAD", "entityId UUID is required");
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> ApplyDemoStateLoopAsync(OperationVector vector, CancellationToken ct)
+    {
+        var action = vector.Action?.ToLowerInvariant();
+        if (action is not ("list" or "detail" or "create" or "advance"))
+        {
+            return (null, new ValidationError("INVALID_OPERATION", "demo/entity supports only list, detail, create, advance"));
+        }
+
+        try
+        {
+            Guid? entityId = null;
+            if (action is "detail" or "create" or "advance")
+            {
+                if (vector.Payload is null ||
+                    !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) ||
+                    string.IsNullOrWhiteSpace(entityIdEl.GetString()) ||
+                    !Guid.TryParse(entityIdEl.GetString(), out var parsedId))
+                {
+                    return (null, new ValidationError("INVALID_PAYLOAD", "entityId UUID is required"));
+                }
+                entityId = parsedId;
+            }
+
+            if (action is "create" or "advance")
+            {
+                var title = vector.Payload!.Value.TryGetProperty("title", out var titleEl) ? titleEl.GetString() : null;
+                var apply = await _topologyRepository.ApplyDemoTransitionAsync(entityId!.Value, action, title, ct);
+                if (!apply.Success)
+                    return (null, new ValidationError(apply.ErrorCode ?? "TRANSITION_FAILED", apply.ErrorMessage ?? "transition failed"));
+            }
+
+            var list = await _topologyRepository.LoadDemoEntityListAsync(ct);
+            DemoEntityProjection? detail = null;
+            if (action == "detail" || entityId is not null)
+            {
+                detail = await _topologyRepository.LoadDemoEntityDetailAsync(entityId!.Value, ct);
+                if (detail is null)
+                    return (null, new ValidationError("STATE_NOT_FOUND", "requested entity does not exist"));
+            }
+
+            var history = detail is null ? Array.Empty<object>() : await _topologyRepository.LoadDemoTransitionHistoryAsync(detail.EntityId, ct);
+            var data = JsonSerializer.SerializeToElement(new { items = list, detail, history });
+            return (data, null);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("NOT_CONNECTED", StringComparison.Ordinal))
+        {
+            return (null, new ValidationError("REPOSITORY_NOT_CONNECTED", ex.Message));
+        }
+    }
 }

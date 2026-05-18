@@ -32,7 +32,8 @@
 INSERT INTO state_registry (state_id, name, owner)
 VALUES
     (gen_random_uuid(), 'active',    'system'),
-    (gen_random_uuid(), 'operating', 'business')
+    (gen_random_uuid(), 'operating', 'business'),
+    (gen_random_uuid(), 'archived',  'system')
 ON CONFLICT DO NOTHING;
 
 

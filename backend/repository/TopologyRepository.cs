@@ -129,6 +129,18 @@ public class TopologyRepository
             functionName, parameterKey);
         return Task.FromResult<string?>(null);
     }
+
+    public virtual Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
+        => Task.FromException<IReadOnlyList<DemoEntityProjection>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
+
+    public virtual Task<DemoEntityProjection?> LoadDemoEntityDetailAsync(Guid entityId, CancellationToken ct = default)
+        => Task.FromException<DemoEntityProjection?>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
+
+    public virtual Task<DemoTransitionResult> ApplyDemoTransitionAsync(Guid entityId, string action, string? title, CancellationToken ct = default)
+        => Task.FromException<DemoTransitionResult>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
+
+    public virtual Task<IReadOnlyList<object>> LoadDemoTransitionHistoryAsync(Guid entityId, CancellationToken ct = default)
+        => Task.FromException<IReadOnlyList<object>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 }
 
 /// <summary>
@@ -165,3 +177,6 @@ public record SchemaRecord(
     string? Version,
     string? RawDefinition
 );
+
+public record DemoEntityProjection(Guid EntityId, string Title, string Status);
+public record DemoTransitionResult(bool Success, string? ErrorCode, string? ErrorMessage);
