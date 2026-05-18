@@ -57,18 +57,6 @@ internal static class TestJwtBuilder
         return BuildTokenFromRawPayload(secret, rawPayloadJson);
     }
 
-    /// <summary>
-    /// Builds a token signed with a different secret. Tests AUTH_TOKEN_INVALID_SIGNATURE handling.
-    /// </summary>
-    public static string BuildTokenWithWrongSignature(string rightSecret, string wrongSecret)
-    {
-        var token = BuildToken(wrongSecret);
-        // Use the payload from the wrong-secret token, but split and rebuild with tampered signature
-        var parts = token.Split('.');
-        // Sign with wrong key so the guard (using rightSecret) rejects it
-        return token; // already signed with wrongSecret
-    }
-
     private static string BuildTokenFromPayloadObject(string secret, object payloadObj)
     {
         var rawPayloadJson = JsonSerializer.Serialize(payloadObj);

@@ -7,7 +7,11 @@ namespace Topolactor.Integration.Tests;
 /// Behavior tests for JwtGuard.Validate.
 /// Covers: missing token, missing secret, malformed structure, invalid signature,
 /// missing exp, invalid exp type, expired token, valid token.
+///
+/// Placed in the "Auth tests" collection (AuthTestCollection) so these tests run
+/// sequentially with AuthEndpointTests and avoid env-var interference.
 /// </summary>
+[Collection("Auth tests")]
 public class JwtGuardTests
 {
     private const string TestSecret = "test-jwt-secret-for-guard-tests";

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Endpoint;
 using Topolactor.Repository;
@@ -9,7 +10,11 @@ namespace Topolactor.Integration.Tests;
 /// Behavior tests for AuthEndpoint.HandleAsync.
 /// Covers: env var config errors, missing/malformed credentials, invalid password, valid login.
 /// No DB connection required — uses FakeTopologyRepository.
+///
+/// Placed in the "Auth tests" collection (AuthTestCollection) so these tests run
+/// sequentially with JwtGuardTests and avoid env-var interference.
 /// </summary>
+[Collection("Auth tests")]
 public class AuthEndpointTests
 {
     // Pre-computed bcrypt hash of "test-password" at cost 4 (fast for tests).
@@ -18,8 +23,11 @@ public class AuthEndpointTests
     private const string TestUsername = "testuser";
     private const string TestRole = "test";
 
-    private static string ValidCredentialsJson =>
-        $"""[{{"username":"{TestUsername}","password_hash":"{TestPasswordHash}","role":"{TestRole}"}}]""";
+    private static string ValidCredentialsJson() =>
+        JsonSerializer.Serialize(new[]
+        {
+            new { username = TestUsername, password_hash = TestPasswordHash, role = TestRole },
+        });
 
     private static AuthEndpoint CreateEndpoint(string? credentialsJson) =>
         new(NullLogger<AuthEndpoint>.Instance,
@@ -28,7 +36,7 @@ public class AuthEndpointTests
     [Fact]
     public async Task NullRequest_Returns_AUTH_REQUEST_NULL()
     {
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(null!);
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_REQUEST_NULL");
@@ -37,7 +45,7 @@ public class AuthEndpointTests
     [Fact]
     public async Task EmptyUsername_Returns_AUTH_CREDENTIALS_REQUIRED()
     {
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new("", TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_CREDENTIALS_REQUIRED");
@@ -46,7 +54,7 @@ public class AuthEndpointTests
     [Fact]
     public async Task EmptyPassword_Returns_AUTH_CREDENTIALS_REQUIRED()
     {
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, ""));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_CREDENTIALS_REQUIRED");
@@ -56,7 +64,7 @@ public class AuthEndpointTests
     public async Task MissingJwtSecret_Returns_AUTH_JWT_SECRET_NOT_CONFIGURED()
     {
         using var env = new EnvScope().Set("DEMO_JWT_SECRET", null);
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_JWT_SECRET_NOT_CONFIGURED");
@@ -98,7 +106,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", null);
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_JWT_EXPIRY_NOT_CONFIGURED");
@@ -110,7 +118,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", "not-a-number");
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_JWT_EXPIRY_NOT_CONFIGURED");
@@ -122,7 +130,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", "0");
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_JWT_EXPIRY_NOT_CONFIGURED");
@@ -134,7 +142,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", "8");
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, "wrong-password"));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_INVALID_CREDENTIALS");
@@ -146,7 +154,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", "8");
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new("nobody", TestPassword));
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "AUTH_INVALID_CREDENTIALS");
@@ -158,7 +166,7 @@ public class AuthEndpointTests
         using var env = new EnvScope()
             .Set("DEMO_JWT_SECRET", "test-secret")
             .Set("DEMO_JWT_EXPIRY_HOURS", "8");
-        var endpoint = CreateEndpoint(ValidCredentialsJson);
+        var endpoint = CreateEndpoint(ValidCredentialsJson());
         var response = await endpoint.HandleAsync(new(TestUsername, TestPassword));
         Assert.True(response.Success);
         Assert.NotNull(response.Token);
