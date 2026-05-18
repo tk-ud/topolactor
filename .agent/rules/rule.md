@@ -64,7 +64,7 @@ When task volume is high, agents may optionally use `.agent/tmp/tmp.txt` as a sh
 Rules:
 - `.agent/tmp/tmp.txt` is temporary and must not be committed.
 - Create only when needed via `bash .agent/scripts/create-tmp.sh`.
-- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git status --short / git diff / git diff --cached` to detect scope drift.
+- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'` to detect scope drift.
 - If drift exists, either fix scope or explicitly document intentional scope change in completion report / PR summary.
 - After comparison, delete memo via `bash .agent/scripts/delete-tmp.sh`.
 - `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
@@ -94,7 +94,7 @@ Required before completion report on any change that:
 
 Judgment gate rules:
 
-- **Checklist must be answered from the full branch diff.** Use `git status --short / git diff / git diff --cached`.
+- **Checklist must be answered from the full branch diff.** Use `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`.
   Answering from only the latest commit or only edited files is a violation (V10).
 - **Partial diff judgment is prohibited.** If the branch diff was not inspected,
   Q12 must be `no` — which triggers V10 automatically.
@@ -208,7 +208,7 @@ Checker script responsibility should stay focused on answer-format validation an
 
 Before completion report, execute in this order:
 
-1. Inspect full branch diff (`git status --short / git diff / git diff --cached`).
+1. Inspect full branch diff (`git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`).
 2. Perform Policy Judgment Checklist.
 3. Audit AGENTS.md / rule.md scope applicability and required checks.
 4. Audit prompt / PR summary / docs claims for runtime or policy assertions.
