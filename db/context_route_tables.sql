@@ -392,3 +392,156 @@ COMMENT ON TABLE context_drift_signal IS
 
 CREATE INDEX IF NOT EXISTS idx_cds_type_target
     ON context_drift_signal (signal_type, target, detected_at);
+
+-- =============================================================================
+-- Topology Vector Runtime tables
+-- context_hub_recommendation_current — rebuildable materialized current for hub attention
+-- context_hub_feedback_event         — append-only feedback weight update event log
+--
+-- These tables support the Topology Vector Runtime extension:
+--   Registry Vector Validation, Hub Attention Recommendation,
+--   Topology MLP feature crossing, Feedback Weight Update.
+--
+-- CANONICAL FLOW INSERTION POINT:
+--   ...
+--   → context_route_recommendation_resolve   ← topology vector runtime integrated here
+--   → emission_or_projection
+-- =============================================================================
+
+
+-- ---------------------------------------------------------------------------
+-- context_hub_recommendation_current
+-- Rebuildable materialized current for hub attention recommendations.
+-- NOT a source of truth — topology definition + context_hub_feedback_event are authoritative.
+-- Rebuilt from topology data on demand.
+--
+-- scope_limit isolation:
+--   1000 = UI instant recommendation
+--   3000 = normal table operations
+--   10000 = hub-scoped wide learning
+-- Rows with different scope_limit values are isolated by the unique key.
+--
+-- evidence_json: transition key evidence (relation/cosine/stat/EMA/cross)
+-- mlp_feature_json: feature crossing contribution breakdown
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS context_hub_recommendation_current (
+    hub_id                  UUID        NOT NULL,
+    target_table            TEXT        NOT NULL,
+    candidate_kind          TEXT        NOT NULL
+                            CHECK (candidate_kind IN ('registry','hub','entity','relation','operation','token')),
+    candidate_id            UUID        NOT NULL,
+    scope_limit             INT         NOT NULL
+                            CHECK (scope_limit IN (1000, 3000, 10000)),
+    base_probability        FLOAT,
+    cosine_similarity       FLOAT,
+    static_relation_weight  FLOAT,
+    statistical_weight      FLOAT,
+    mlp_feature_score       FLOAT,
+    feedback_adjustment     FLOAT       NOT NULL DEFAULT 0.0,
+    ema_fast_30             FLOAT,
+    ema_slow_10             FLOAT,
+    trend                   FLOAT,
+    cross_state             TEXT        CHECK (cross_state IN ('up','down','none')),
+    attention_score         FLOAT,
+    rank                    INT,
+    evidence_json           JSONB       NOT NULL DEFAULT '{}',
+    mlp_feature_json        JSONB       NOT NULL DEFAULT '{}',
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (hub_id, target_table, candidate_kind, candidate_id, scope_limit)
+);
+
+COMMENT ON TABLE context_hub_recommendation_current IS
+    'Rebuildable materialized current for hub attention recommendations. '
+    'NOT a source of truth. Rebuilt from topology data + context_hub_feedback_event. '
+    'scope_limit IN (1000, 3000, 10000): isolated by unique key — no cross-limit mixing. '
+    'evidence_json: transition key evidence. mlp_feature_json: feature crossing breakdown.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.scope_limit IS
+    'Recommendation scope limit. '
+    '1000 = UI instant recommendation; '
+    '3000 = normal table operations; '
+    '10000 = hub-scoped wide learning. '
+    'Enforced by CHECK constraint and unique key — rows with different limits are isolated.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.ema_fast_30 IS
+    'EMA with fast alpha (from policy: topology_vector_runtime.hub_attention.ema_fast_alpha). '
+    'Alpha value is read from function_parameters — not hardcoded.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.ema_slow_10 IS
+    'EMA with slow alpha (from policy: topology_vector_runtime.hub_attention.ema_slow_alpha). '
+    'Alpha value is read from function_parameters — not hardcoded.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.trend IS
+    'ema_fast_30 - ema_slow_10. Positive = fast rising above slow (upward trend).';
+
+COMMENT ON COLUMN context_hub_recommendation_current.cross_state IS
+    'Cross detection: up = fast crossed above slow; down = fast crossed below slow; none = no cross.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.attention_score IS
+    'Composite score: static_relation_weight + cosine_similarity + statistical_weight '
+    '+ mlp_feature_score + feedback_adjustment.';
+
+COMMENT ON COLUMN context_hub_recommendation_current.evidence_json IS
+    'Transition key evidence JSON. Keys: relation, cosine, stat, ema, cross, key_entities. '
+    'Answers: why this candidate for this hub?';
+
+COMMENT ON COLUMN context_hub_recommendation_current.mlp_feature_json IS
+    'Topology MLP feature crossing breakdown. '
+    'Records which feature combinations contributed to mlp_feature_score. '
+    'Answers: which key combinations drove this score?';
+
+COMMENT ON COLUMN context_hub_recommendation_current.feedback_adjustment IS
+    'Cumulative feedback adjustment from context_hub_feedback_event. '
+    'Applied as positive_delta / negative_delta / missing_candidate_delta per feedback event. '
+    'Delta values read from function_parameters — not hardcoded. '
+    'Rebuildable from context_hub_feedback_event aggregate.';
+
+CREATE INDEX IF NOT EXISTS idx_chrc_hub_scope
+    ON context_hub_recommendation_current (hub_id, scope_limit);
+
+CREATE INDEX IF NOT EXISTS idx_chrc_hub_rank
+    ON context_hub_recommendation_current (hub_id, scope_limit, rank);
+
+CREATE INDEX IF NOT EXISTS idx_chrc_updated
+    ON context_hub_recommendation_current (updated_at);
+
+
+-- ---------------------------------------------------------------------------
+-- context_hub_feedback_event
+-- Append-only feedback weight update event log.
+-- Records selected / ignored / missing_candidate differences per hub per candidate.
+-- Used to rebuild feedback_adjustment in context_hub_recommendation_current.
+-- Never updated or deleted — aggregate current is rebuildable from this log.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS context_hub_feedback_event (
+    feedback_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    hub_id          UUID        NOT NULL,
+    candidate_id    UUID        NOT NULL,
+    candidate_kind  TEXT        NOT NULL
+                    CHECK (candidate_kind IN ('registry','hub','entity','relation','operation','token')),
+    scope_limit     INT         NOT NULL
+                    CHECK (scope_limit IN (1000, 3000, 10000)),
+    feedback_kind   TEXT        NOT NULL
+                    CHECK (feedback_kind IN ('selected','ignored','missing_candidate')),
+    delta_applied   FLOAT       NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE context_hub_feedback_event IS
+    'Append-only feedback weight update event log. '
+    'Records selected / ignored / missing_candidate differences per hub/candidate. '
+    'feedback_kind: selected → positive_delta; ignored → negative_delta; '
+    'missing_candidate → missing_candidate_delta (from policy — not hardcoded). '
+    'Aggregate current (feedback_adjustment) in context_hub_recommendation_current '
+    'is rebuildable from this log.';
+
+COMMENT ON COLUMN context_hub_feedback_event.delta_applied IS
+    'Actual delta applied from topology_vector_runtime.feedback_weight_update policy '
+    'at the time this event was created. Stored for audit/rebuild purposes. '
+    'Policy values: positive_delta, negative_delta, missing_candidate_delta.';
+
+CREATE INDEX IF NOT EXISTS idx_chfe_hub_candidate
+    ON context_hub_feedback_event (hub_id, candidate_id, scope_limit);
+
+CREATE INDEX IF NOT EXISTS idx_chfe_created
+    ON context_hub_feedback_event (created_at);

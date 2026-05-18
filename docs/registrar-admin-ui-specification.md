@@ -185,6 +185,31 @@ warnings. The admin must resolve all errors before promotion is permitted.
 
 Broken refs are explicit validation errors. No silent fallback or auto-repair.
 
+### Registry Vector Validation
+
+In addition to structural validation, the Registrar backend applies vector neighbor
+validation when an ID-array-based registry entry is drafted or validated:
+
+- **duplicate_vector**: cosine >= duplicate_threshold (from policy) — blocking; reuse existing.
+- **near_duplicate_vector**: cosine >= near_duplicate_threshold (from policy) — blocking or confirm.
+- **related_existing_registry**: cosine >= related_threshold (from policy) — warning; consider reuse.
+- **zero_vector**: empty ID array (zero norm) — explicit result; not a silent pass.
+- **pass**: cosine < related_threshold — proceed.
+
+Thresholds are read from `function_parameters` (`topology_vector_runtime.registry_validation`).
+No threshold is hardcoded in runtime code.
+
+The backend returns a `RegistryVectorValidationResult` containing:
+- validation class
+- whether the result is blocking
+- nearest neighbor candidates (registry id, name, cosine score, matched ids, reason)
+
+The Registrar UI projects this structured result. The UI does not compute cosine similarity.
+Broken refs, malformed IDs, and DB unavailability return explicit errors — not silent fallback.
+
+Duplicate key check (string equality) and duplicate vector check (cosine similarity) are
+separate validation classes. Both may apply to the same registration attempt.
+
 ## 7. Frontend Projection Policy
 
 The Registrar admin UI frontend is a projection of topology registration state.

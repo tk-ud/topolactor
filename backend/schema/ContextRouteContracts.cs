@@ -123,3 +123,125 @@ public record ContextRouteRecommendationResult(
     RecommendationStatus Status,
     string? StatusDetail
 );
+
+// =============================================================================
+// Topology Vector Runtime contracts
+// =============================================================================
+
+/// <summary>
+/// Validation class returned by registry vector validation.
+/// duplicate_vector and near_duplicate_vector are separate from the existing
+/// duplicate_key check (which compares string labels, not cosine similarity).
+/// </summary>
+public enum RegistryVectorValidationClass
+{
+    Pass,
+    RelatedExistingRegistry,
+    NearDuplicateVector,
+    DuplicateVector,
+    ZeroVector
+}
+
+/// <summary>
+/// A single neighbor found during registry vector cosine search.
+/// Used in RegistryVectorValidationResult to explain which existing registries
+/// are semantically close to the candidate being validated.
+/// </summary>
+public record RegistryVectorNeighbor(
+    Guid RegistryId,
+    string Name,
+    float CosineScore,
+    IReadOnlyList<Guid> MatchedIds,
+    string Reason
+);
+
+/// <summary>
+/// Structured result of registry vector validation.
+/// Returned by ValidateRegistryVectorAsync.
+///
+/// IsBlocking: true for DuplicateVector and NearDuplicateVector.
+/// Neighbors: existing registries with high cosine similarity to the candidate.
+/// StatusDetail: error code when ValidationClass is not computable (DB unavailable, etc.).
+///
+/// No silent fallback — DB unavailability returns ExplicitError status in StatusDetail.
+/// </summary>
+public record RegistryVectorValidationResult(
+    RegistryVectorValidationClass ValidationClass,
+    bool IsBlocking,
+    IReadOnlyList<RegistryVectorNeighbor> Neighbors,
+    string? StatusDetail = null
+);
+
+/// <summary>
+/// A row from context_hub_recommendation_current.
+/// attention_score = static_relation_weight + cosine_similarity + statistical_weight
+///                 + mlp_feature_score + feedback_adjustment.
+/// evidence_json: transition key evidence (relation/cosine/stat/EMA/cross).
+/// mlp_feature_json: feature crossing contribution breakdown.
+/// </summary>
+public record HubAttentionCurrentRecord(
+    Guid HubId,
+    string TargetTable,
+    string CandidateKind,
+    Guid CandidateId,
+    int ScopeLimit,
+    float? BaseProbability,
+    float? CosineSimilarity,
+    float? StaticRelationWeight,
+    float? StatisticalWeight,
+    float? MlpFeatureScore,
+    float FeedbackAdjustment,
+    float? EmaFast,
+    float? EmaSlow,
+    float? Trend,
+    string? CrossState,
+    float? AttentionScore,
+    int? Rank,
+    string EvidenceJson,
+    string MlpFeatureJson,
+    DateTimeOffset UpdatedAt
+);
+
+/// <summary>
+/// A single transition key evidence entry explaining why a candidate is relevant.
+/// Stored as an element in evidence_json of context_hub_recommendation_current.
+/// </summary>
+public record TransitionKeyEvidence(
+    string KeyKind,
+    string KeyId,
+    string KeyLabel,
+    float ContributionScore,
+    string Reason
+);
+
+/// <summary>
+/// Feature crossing entry for Topology MLP.
+/// Stored as an element in mlp_feature_json of context_hub_recommendation_current.
+/// </summary>
+public record TopologyMlpFeature(
+    IReadOnlyList<string> FeatureKeys,
+    float CrossScore,
+    string Reason
+);
+
+/// <summary>
+/// A feedback event to be applied and appended.
+/// </summary>
+public record HubFeedbackEvent(
+    Guid HubId,
+    Guid CandidateId,
+    string CandidateKind,
+    int ScopeLimit,
+    string FeedbackKind,
+    float DeltaApplied
+);
+
+/// <summary>
+/// Result of a feedback weight update operation.
+/// Status is always explicit — no silent fallback.
+/// </summary>
+public record FeedbackWeightUpdateResult(
+    RecommendationStatus Status,
+    int EventsApplied,
+    string? StatusDetail = null
+);

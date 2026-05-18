@@ -365,15 +365,44 @@ public class ContextRouteRecommendationResolver
                 RecentDays:       dto.TransitionAggregation.RecentDays)
             : null;
 
+        TopologyVectorRuntimePolicy? topologyVectorRuntime = dto.TopologyVectorRuntime is null ? null
+            : new TopologyVectorRuntimePolicy(
+                Enabled: dto.TopologyVectorRuntime.Enabled,
+                RegistryValidation: dto.TopologyVectorRuntime.RegistryValidation is null ? null
+                    : new RegistryValidationPolicy(
+                        Enabled:                dto.TopologyVectorRuntime.RegistryValidation.Enabled,
+                        DuplicateThreshold:     dto.TopologyVectorRuntime.RegistryValidation.DuplicateThreshold,
+                        NearDuplicateThreshold: dto.TopologyVectorRuntime.RegistryValidation.NearDuplicateThreshold,
+                        RelatedThreshold:       dto.TopologyVectorRuntime.RegistryValidation.RelatedThreshold,
+                        TopK:                   dto.TopologyVectorRuntime.RegistryValidation.TopK),
+                HubAttention: dto.TopologyVectorRuntime.HubAttention is null ? null
+                    : new HubAttentionPolicy(
+                        Enabled:                      dto.TopologyVectorRuntime.HubAttention.Enabled,
+                        ScopeLimits:                  dto.TopologyVectorRuntime.HubAttention.ScopeLimits,
+                        EmaFastAlpha:                 dto.TopologyVectorRuntime.HubAttention.EmaFastAlpha,
+                        EmaSlowAlpha:                 dto.TopologyVectorRuntime.HubAttention.EmaSlowAlpha,
+                        MaxUpdateCandidatesPerEvent:  dto.TopologyVectorRuntime.HubAttention.MaxUpdateCandidatesPerEvent),
+                TopologyMlp: dto.TopologyVectorRuntime.TopologyMlp is null ? null
+                    : new TopologyMlpPolicy(
+                        Enabled:             dto.TopologyVectorRuntime.TopologyMlp.Enabled,
+                        MaxFeatureCrossOrder: dto.TopologyVectorRuntime.TopologyMlp.MaxFeatureCrossOrder),
+                FeedbackWeightUpdate: dto.TopologyVectorRuntime.FeedbackWeightUpdate is null ? null
+                    : new FeedbackWeightUpdatePolicy(
+                        Enabled:               dto.TopologyVectorRuntime.FeedbackWeightUpdate.Enabled,
+                        PositiveDelta:         dto.TopologyVectorRuntime.FeedbackWeightUpdate.PositiveDelta,
+                        NegativeDelta:         dto.TopologyVectorRuntime.FeedbackWeightUpdate.NegativeDelta,
+                        MissingCandidateDelta: dto.TopologyVectorRuntime.FeedbackWeightUpdate.MissingCandidateDelta));
+
         return new ContextRoutePolicy(
-            MinSimilarity:        dto.MinSimilarity,
-            TopK:                 dto.TopK,
-            MinNeighbors:         dto.MinNeighbors,
-            RecentDays:           dto.RecentDays,
-            MaxCandidatesShown:   dto.MaxCandidatesShown,
-            BaselineWeight:       dto.BaselineWeight,
-            NeighborWeight:       dto.NeighborWeight,
-            TransitionAggregation: transitionAggregation
+            MinSimilarity:          dto.MinSimilarity,
+            TopK:                   dto.TopK,
+            MinNeighbors:           dto.MinNeighbors,
+            RecentDays:             dto.RecentDays,
+            MaxCandidatesShown:     dto.MaxCandidatesShown,
+            BaselineWeight:         dto.BaselineWeight,
+            NeighborWeight:         dto.NeighborWeight,
+            TransitionAggregation:  transitionAggregation,
+            TopologyVectorRuntime:  topologyVectorRuntime
         );
     }
 
@@ -397,7 +426,44 @@ public class ContextRouteRecommendationResolver
         [property: JsonPropertyName("max_candidates_shown")]   int   MaxCandidatesShown,
         [property: JsonPropertyName("baseline_weight")]        float BaselineWeight,
         [property: JsonPropertyName("neighbor_weight")]        float NeighborWeight,
-        [property: JsonPropertyName("transition_aggregation")] TransitionAggregationDto? TransitionAggregation = null
+        [property: JsonPropertyName("transition_aggregation")] TransitionAggregationDto? TransitionAggregation = null,
+        [property: JsonPropertyName("topology_vector_runtime")] TopologyVectorRuntimeDto? TopologyVectorRuntime = null
+    );
+
+    private record TopologyVectorRuntimeDto(
+        [property: JsonPropertyName("enabled")]              bool Enabled,
+        [property: JsonPropertyName("registry_validation")]  RegistryValidationDto? RegistryValidation = null,
+        [property: JsonPropertyName("hub_attention")]        HubAttentionDto? HubAttention = null,
+        [property: JsonPropertyName("topology_mlp")]         TopologyMlpDto? TopologyMlp = null,
+        [property: JsonPropertyName("feedback_weight_update")] FeedbackWeightUpdateDto? FeedbackWeightUpdate = null
+    );
+
+    private record RegistryValidationDto(
+        [property: JsonPropertyName("enabled")]                    bool  Enabled,
+        [property: JsonPropertyName("duplicate_threshold")]        float DuplicateThreshold,
+        [property: JsonPropertyName("near_duplicate_threshold")]   float NearDuplicateThreshold,
+        [property: JsonPropertyName("related_threshold")]          float RelatedThreshold,
+        [property: JsonPropertyName("top_k")]                      int   TopK
+    );
+
+    private record HubAttentionDto(
+        [property: JsonPropertyName("enabled")]                          bool          Enabled,
+        [property: JsonPropertyName("scope_limits")]                     int[]         ScopeLimits,
+        [property: JsonPropertyName("ema_fast_alpha")]                   float         EmaFastAlpha,
+        [property: JsonPropertyName("ema_slow_alpha")]                   float         EmaSlowAlpha,
+        [property: JsonPropertyName("max_update_candidates_per_event")]  int           MaxUpdateCandidatesPerEvent
+    );
+
+    private record TopologyMlpDto(
+        [property: JsonPropertyName("enabled")]                bool Enabled,
+        [property: JsonPropertyName("max_feature_cross_order")] int MaxFeatureCrossOrder
+    );
+
+    private record FeedbackWeightUpdateDto(
+        [property: JsonPropertyName("enabled")]                  bool  Enabled,
+        [property: JsonPropertyName("positive_delta")]           float PositiveDelta,
+        [property: JsonPropertyName("negative_delta")]           float NegativeDelta,
+        [property: JsonPropertyName("missing_candidate_delta")]  float MissingCandidateDelta
     );
 
     // ---------------------------------------------------------------------------
