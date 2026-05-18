@@ -275,6 +275,13 @@ else
   echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
 fi
 
+# Protocol split guard
+if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
+  fail "rule.md must not contain long-form Completion Sequence section; keep procedure in .agent/protocols/completion.md"
+else
+  echo "OK  [split] rule.md completion procedure remains split"
+fi
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -286,10 +293,3 @@ else
   exit 1
 fi
 
-
-# Protocol split guard
-if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
-  fail "rule.md must not contain long-form Completion Sequence section; keep procedure in .agent/protocols/completion.md"
-else
-  echo "OK  [split] rule.md completion procedure remains split"
-fi
