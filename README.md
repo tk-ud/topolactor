@@ -34,6 +34,16 @@ add topology data
 
 This makes it possible to add new business surfaces by extending runtime definitions, packages, components, schemas, and structure maps instead of creating a fixed CRUD screen for every table.
 
+## Repository Surfaces
+
+Topolactor is organized as three public-facing surfaces:
+
+- **Runtime scaffold** — backend, frontend, database, and demo topology definitions.
+- **Demo walkthrough** — fake-data scenarios showing how topology and policy changes propagate.
+- **Agent governance layer** — `.agent/` and `AGENTS.md`, which define how coding agents should inspect, modify, verify, and report changes.
+
+The `.agent/` layer is not application runtime code. It is a repository governance layer for preserving the data-defined topology architecture during agent-assisted development.
+
 ## Self-Learning DB and Recommendation Runtime
 
 Topolactor includes a lightweight self-learning DB pattern for recommendation.
@@ -100,6 +110,16 @@ The walkthrough (`docs/demo-walkthrough.md`) covers 4 scenarios:
 
 No real business data is used.
 
+## Demo Status
+
+The public demo uses fake data only.
+
+- `/demo` shows the frontend-side canonical projection flow.
+- `/` dispatch panel exercises backend-side runtime resolution when backend and DB services are available.
+- `docs/demo-walkthrough.md` documents observable scenarios for token value changes, policy reference changes, aggregation policy changes, and frontend projection changes.
+
+Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
+
 ## Start Here
 
 - `docs/framework-core.yaml` — core concepts, topology model, and layer responsibilities.
@@ -111,15 +131,30 @@ No real business data is used.
 - `AGENTS.md` — entrypoint instructions for coding agents.
 - `.agent/` — agent rules, structure checks, skills, tasks, and routine agent surfaces.
 
+## Agent Governance
+
+Agent-assisted changes are governed by `AGENTS.md`.
+
+The agent flow separates:
+
+- local CI checks for structure, backend, frontend, and DB verification
+- Policy Judgment Gate checks for architecture and policy decisions
+- residual task tracking in `.agent/tasks/todo.md`
+
+This helps prevent accidental conversion into CRUD/MVC code, silent runtime fallbacks, frontend business logic, or hidden production policy constants.
+
 ## Agent Workflow
 
 ```text
-READ_RULES
-→ INSPECT_TARGET
-→ DEFINE_SCOPE
-→ RUN_LOCAL_CI
-→ FIX_IF_RED
-→ COMMIT_OR_PR
+READ_AGENTS
+→ INSPECT_FULL_BRANCH_DIFF
+→ APPLY_POLICY_JUDGMENT
+→ AUDIT_SCOPE_AND_CLAIMS
+→ RUN_RELEVANT_LOCAL_CI
+→ RUN_STRUCTURE_CHECK_LAST
+→ REPORT_PASS_FAIL_NOT_EXECUTED_AND_TODOS
 ```
+
+For detailed agent instructions, see `AGENTS.md`.
 
 See `NOTICE.md`.
