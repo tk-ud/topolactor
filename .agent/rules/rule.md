@@ -57,19 +57,38 @@ Production fallback constants are prohibited.
 Test fixtures may contain representative policy values, but they must be isolated under tests and must not be referenced by production Runtime or Repository code.
 
 
-## Temporary Planning Surface
+## Temporary Scenario Contract
 
-When task volume is high, agents may optionally use `.agent/tmp/tmp.txt` as a short-lived initial-constraint memo.
+`.agent/tmp/tmp.txt` is not a free-form planning memo. It is a temporary scenario contract used to bind implementation work to a concrete runtime / policy / projection claim before code changes begin.
+
+When a task touches runtime behavior, recommendation, routing, persistence, append-only logs, cache rebuilds, policy resolution, demo observability, or frontend projection claims, agents must create `.agent/tmp/tmp.txt` before implementation via `bash .agent/scripts/create-tmp.sh`.
+
+The scenario contract must define:
+
+1. User-visible scenario or runtime claim.
+2. Entry operation / request shape.
+3. Expected canonical runtime route.
+4. Expected read / write / append / cache / return order.
+5. Seed / fixture / policy data involved.
+6. Expected emission / projection / status.
+7. Required side effects, including failure / cold-start / insufficient paths.
+8. Known non-goals / out-of-scope paths.
+
+After implementation, full branch diff inspection must compare the actual diff against `.agent/tmp/tmp.txt`.
+
+Full branch diff inspection is incomplete unless the agent verifies whether the implemented code, docs, seed data, tests, and completion report satisfy the scenario contract.
+
+If the full diff contradicts the tmp scenario contract, the task is not complete. The agent must either fix the implementation or explicitly update the scenario contract before completing work.
 
 Rules:
 - `.agent/tmp/tmp.txt` is temporary and must not be committed.
-- Create only when needed via `bash .agent/scripts/create-tmp.sh`.
-- Before Policy Judgment Checklist and before local CI, compare memo constraints with `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'` to detect scope drift.
-- If drift exists, either fix scope or explicitly document intentional scope change in completion report / PR summary.
-- After comparison, delete memo via `bash .agent/scripts/delete-tmp.sh`.
+- Create it only with `bash .agent/scripts/create-tmp.sh`.
+- Verify the full branch diff against the scenario contract before Policy Judgment Checklist and before local CI.
+- If the implemented diff changes the intended scenario, update the scenario contract first, then re-verify the full diff against the updated contract.
+- After verification, delete it via `bash .agent/scripts/delete-tmp.sh`.
 - `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
 - Keep `bash .agent/tests/check-structure.sh` as the final check before completion report.
-- Completion report should state whether tmp was used and confirm deletion status.
+- Completion report must state whether tmp was used, the scenario contract verification result, and tmp deletion status.
 
 ## Agent Judgment Gate — Policy Judgment Checklist
 
@@ -209,10 +228,14 @@ Checker script responsibility should stay focused on answer-format validation an
 
 Before completion report, execute in this order:
 
-1. Inspect full branch diff (`git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`).
-2. Perform Policy Judgment Checklist.
-3. Audit AGENTS.md / rule.md scope applicability and required checks.
-4. Audit prompt / PR summary / docs claims for runtime or policy assertions.
-5. Run relevant local CI checks.
-6. Run `bash .agent/tests/check-structure.sh` **last**.
-7. In completion report, list commands, results (`PASS` / `FAIL` / `NOT EXECUTED`), and remaining TODOs.
+1. Create `.agent/tmp/tmp.txt` before implementation when the task affects runtime / policy / projection behavior.
+2. Implement the change.
+3. Inspect full branch diff (`git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`).
+4. Verify the full branch diff against `.agent/tmp/tmp.txt` scenario contract when tmp is required.
+5. Perform Policy Judgment Checklist.
+6. Audit AGENTS.md / rule.md scope applicability and required checks.
+7. Audit prompt / PR summary / docs claims for runtime or policy assertions.
+8. Run relevant local CI checks.
+9. Delete `.agent/tmp/tmp.txt` when it was used.
+10. Run `bash .agent/tests/check-structure.sh` **last**.
+11. In completion report, list commands, results (`PASS` / `FAIL` / `NOT EXECUTED`), scenario contract verification result, tmp deletion status, and remaining TODOs.
