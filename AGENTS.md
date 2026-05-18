@@ -1,174 +1,32 @@
-# AGENTS.md — Repository Agent Entrypoint
+# Agent Contract
 
-This is the instruction entrypoint for all agents operating on this repository.
+1. Preserve the canonical runtime route.
+2. No silent fallback; broken refs and boundary failures are explicit results.
+3. Runtime / persistence / projection changes require a temporary scenario contract (`.agent/tmp/tmp.txt`).
+4. Before completion, verify the full branch diff against the scenario contract and Runtime Boundary Failure Matrix.
+5. Run required local checks; run `bash .agent/tests/check-structure.sh` last.
 
-## Read First
+Detailed rules and judgment criteria live under `.agent/rules/`.
+Executable checks and expanded verification live under `.agent/scripts/`, `.agent/checklists/`, and `.agent/tests/`.
+Persistent inspection reports live under `.agent/reports/`.
 
-Before taking any action, read:
+## Runtime Boundary Failure Matrix
 
-- `.agent/rules/rule.md` — architecture rules and constraints
-- `.agent/docs/structure-map.yaml` — repository structure overview
-- `.agent/docs/required-paths.yaml` — required paths and content terms (SSOT)
+For changes that add or wire endpoint / frontend API proxy / repository write / admin operation / persistence mutation / DB-backed registry operation, verify at least:
 
-## Run Before Reporting Completion
+1. success path
+2. authentication / authorization failure
+3. request validation failure
+4. malformed id / malformed payload
+5. not found
+6. persistence constraint failure
+7. repository / backend unavailable
+8. frontend proxy status propagation
+9. UI-visible error state
+10. post-write read consistency
 
-Run `bash .agent/tests/check-structure.sh` last before reporting completion. See **Policy Judgment Checklist Scope / Order and reporting requirements** for the full completion sequence.
-
-## Agent Local CI Gate
-
-`.agent/tests/*.sh` are local CI gates for agents.
-GitHub Actions workflows are audit wrappers for PR verification.
-
-Required checks:
-
-- Always run `bash .agent/tests/check-structure.sh`.
-- For DB or SQL changes, run `bash .agent/tests/check-db-schema.sh`.
-- For backend or C# runtime changes, run `bash .agent/tests/check-backend-tests.sh`.
-- For frontend or Fresh/Deno/Preact changes, run `bash .agent/tests/check-frontend-types.sh`.
-
-Local CI policy:
-
-- CI red means no commit and no push.
-- If local CI is red, fix the error first.
-- After fixing, rerun the relevant local CI.
-- Only green local CI may proceed to commit and push.
-- A missing required tool means the check was not executed, not that it passed.
-- Completion reports must distinguish actual passes from environment-limited non-execution.
-
-## Report and Task Surface
-
-`.agent/reports/` and `.agent/tasks/todo.md` are persistent surfaces for routine / scheduled / automatically executed agents.
-
-Use `.agent/reports/` for:
-
-- routine inspection reports
-- scheduled maintenance reports
-- automated agent run outputs
-- periodic structure / policy / dependency audit results
-
-Use `.agent/tasks/todo.md` for:
-
-- unresolved tasks discovered by routine or automated agents
-- residual tasks that must survive beyond the current PR or conversation
-
-Do not use `.agent/reports/` as the default place for PR summaries, PR audit notes, or normal implementation logs.
-Do not update `.agent/tasks/todo.md` during normal PR work unless a real remaining task must be carried forward after merge.
-
-PR audit results should normally stay in the review / conversation / PR comment surface.
-Implementation summaries should normally stay in the PR description or completion message.
+If any matrix item is intentionally out of scope, state why in the completion report or PR summary.
 
 
-## Temporary Scenario Contract
-
-For tasks that touch runtime behavior, recommendation, routing, persistence, append-only logs, cache rebuilds, policy resolution, demo observability, or frontend projection claims, `.agent/tmp/tmp.txt` is a temporary scenario contract, not a free-form planning memo.
-
-Agents must create it before implementation, verify the full branch diff against it before Policy Judgment Checklist and local CI, then delete it before the final structure check.
-
-See `.agent/rules/rule.md` for required scenario contract fields, verification rules, and completion sequence.
-
-## Policy Judgment Gate
-
-`.agent/checklists/` contains a local-only Agent judgment gate for policy-impacting
-changes. It is **not** a GitHub Actions workflow. It is separate from the
-`.agent/tests/*.sh` local CI gates — those verify structure and build correctness;
-this verifies policy design decisions.
-
-**When required:** any change involving runtime behavior, data-defined topology,
-Registry, Manifest, function_parameters, structure_map policy, package / schema /
-component expansion, recommendation, scoring, threshold, retention, routing,
-validation, promotion, disclosure, frontend projection claim, or docs / README /
-PR summary that asserts runtime or policy behavior.
-
-**Not required** for documentation-only, comment-only, purely mechanical refactor,
-display-only copy / style changes, or test-fixture-only changes — unless those
-contain a runtime or policy behavior claim.
-
-```sh
-# 1. Inspect full branch diff first
-git status --short
-git diff -- . ':(exclude).git'
-git diff --cached -- . ':(exclude).git'
-
-# 2. Copy checklist template and fill in all Q1–Q15 answers
-cp .agent/checklists/policy-judgment.md /tmp/my-task-checklist.md
-# edit /tmp/my-task-checklist.md — set each Answer: to yes / no / n/a
-
-# 3. Validate locally
-bash .agent/checklists/check-policy-judgment.sh /tmp/my-task-checklist.md
-
-# 4. Run self-test to verify fixtures
-bash .agent/checklists/check-policy-judgment.sh --self-test
-```
-
-Policy:
-
-- **Checklist answers must be based on the full branch diff**, not only the latest
-  commit or edited files. Run `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'` first.
-- **All green before reporting completion.** If any local check or the judgment gate
-  fails, fix first.
-- **NOT EXECUTED ≠ PASS.** If a required tool is missing, report NOT EXECUTED in
-  the completion summary. Never report a check as passing when it was not run.
-- **Remaining TODOs must be listed** in the completion report or PR summary.
-- **Delegated or split work does not inherit checklist verification.** When work is
-  delegated, split, or continued by another agent, each agent that makes
-  implementation, policy, summary, or completion decisions must independently use
-  the Policy Judgment Checklist if the task falls within its trigger scope. An
-  agent must not treat another agent's checklist answer or summary as its own
-  verified judgment.
-
-Fixtures in `.agent/checklists/fixtures/policy-judgment/` define expected PASS /
-FAIL outcomes and serve as a reference for correct checklist completion.
-
-
-## Policy Judgment Checklist Scope
-
-Policy Judgment Checklist is a **compliance-signature gate**, not the full policy rule body.
-Detailed applicability and design judgment must be governed by this AGENTS.md and `.agent/rules/rule.md`, while the checklist stays lightweight.
-
-### Runtime-family changes (trigger scope examples)
-
-- `backend/runtime/*`
-- `backend/endpoint/*`
-- `backend/guard/*`
-- `backend/repository/*`
-- `backend/schema/*`
-- `frontend/routes/api/*`
-- `frontend/package/*`
-- `frontend/schema/*`
-- `frontend/registry/*`
-- `db/*seed*.sql`
-- Any change to Registry / Manifest / `function_parameters` / `structure_map` policy
-
-### Runtime-family required checks
-
-- New endpoint → request / success / failure behavior test, or explicit `NOT WIRED`.
-- New guard → accept / reject / missing config / malformed input test.
-- New runtime resolver → success / missing-policy / invalid-policy test.
-- New repository policy read → found / missing / malformed test.
-- New frontend API proxy → backend route wired, or PR summary with `NOT WIRED` + follow-up TODO.
-- New policy field → consumed by runtime / policy executor, or explicitly document unused reason.
-
-### Order and reporting requirements
-
-- Policy / Checklist / Prompt-claim audit must be completed **before** local CI.
-- Local CI is not a substitute for Policy Judgment.
-- GitHub Actions success is not a substitute for local execution reporting.
-- Completion report must include local check commands and results.
-- Distinguish `NOT EXECUTED` / `PASS` / `FAIL` explicitly.
-- Run `bash .agent/tests/check-structure.sh` last before completion report.
-
-## Architecture Constraints
-
-- Do not convert topolactor into a CRUD or MVC application.
-- Do not bypass the canonical runtime route: `operation → vector → attractor → structure_map → package → schema → emission`.
-- Do not add silent fallbacks. Broken references are explicit errors.
-- Do not require DB credentials, real business data, or build tools for structure checks.
-
-## Layer Summary
-
-```text
-DB        = semantic topology space
-Backend   = abstract runtime / function execution space
-Frontend  = Fresh / Deno / Preact physical projection space
-Agent     = local structure guard / routine report / residual task surface
-```
+Policy Judgment Gate details and execution are defined in `.agent/rules/rule.md` and `.agent/checklists/check-policy-judgment.sh`.
+Temporary Scenario Contract details are defined under `.agent/rules/rule.md`.

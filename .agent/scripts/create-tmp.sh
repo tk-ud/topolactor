@@ -24,10 +24,23 @@ cat > "$TMP_FILE" <<'EOF'
 # 5) Seed / fixture / policy data involved
 # 6) Expected emission / projection / status
 # 7) Required side effects, including failure / cold-start / insufficient paths
-# 8) Known non-goals / out-of-scope paths
+# 8) Runtime Boundary Failure Matrix coverage (1-10) and intentional out-of-scope reasons
+# 9) Known non-goals / out-of-scope paths
+#
+# Runtime Boundary Failure Matrix:
+# 1. success path
+# 2. authentication / authorization failure
+# 3. request validation failure
+# 4. malformed id / malformed payload
+# 5. not found
+# 6. persistence constraint failure
+# 7. repository / backend unavailable
+# 8. frontend proxy status propagation
+# 9. UI-visible error state
+# 10. post-write read consistency
 #
 # After implementation:
-# 9) Full branch diff verification result
+# 10) Full branch diff verification result
 #
 # Before completion:
 # - Verify full branch diff against this scenario contract

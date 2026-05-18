@@ -128,10 +128,14 @@ required_content_terms:
   AGENTS.md:
     - ".agent/rules/rule.md"
     - ".agent/tests/check-structure.sh"
+    - "Agent Contract"
+    - "Runtime Boundary Failure Matrix"
   .agent/rules/rule.md:
     - "Data-defined topology is the architecture subject"
     - "OperationVector is internal runtime representation"
     - "Broken refs are explicit errors"
+    - "Runtime Boundary Failure Matrix"
+    - "boundary matrix verification"
   docs/file-structure.yaml:
     - "data_defined_topology_is_the_architecture_subject"
     - "operation_vector_is_internal_runtime_representation"
@@ -155,6 +159,18 @@ required_content_terms:
     - "bash .agent/tests/check-backend-tests.sh"
   .agent/tests/check-backend-tests.sh:
     - "dotnet test"
+  .agent/docs/structure-map.yaml:
+    - "temporary scenario contract"
+    - "periodic audit"
+  .agent/scripts/create-tmp.sh:
+    - "Runtime Boundary Failure Matrix"
+  .agent/reports/README.md:
+    - "routine inspection reports"
+    - "Do not use this directory as the default place for normal PR summaries"
+  .agent/docs/required-paths.yaml:
+    - "Temporary Scenario Contract"
+    - "Runtime Boundary Failure Matrix"
+    - "routine inspection"
   .agent/tests/check-frontend-types.sh:
     - "deno check"
   .github/workflows/frontend-types.yml:

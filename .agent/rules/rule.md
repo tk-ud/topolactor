@@ -72,7 +72,8 @@ The scenario contract must define:
 5. Seed / fixture / policy data involved.
 6. Expected emission / projection / status.
 7. Required side effects, including failure / cold-start / insufficient paths.
-8. Known non-goals / out-of-scope paths.
+8. Runtime Boundary Failure Matrix coverage and any intentional out-of-scope reasons.
+9. Known non-goals / out-of-scope paths.
 
 After implementation, full branch diff inspection must compare the actual diff against `.agent/tmp/tmp.txt`.
 
@@ -89,6 +90,28 @@ Rules:
 - `bash .agent/tests/check-structure.sh` must fail when `.agent/tmp/tmp.txt` remains.
 - Keep `bash .agent/tests/check-structure.sh` as the final check before completion report.
 - Completion report must state whether tmp was used, the scenario contract verification result, and tmp deletion status.
+
+
+## Runtime Boundary Failure Matrix
+
+For any change that adds or wires an endpoint, frontend API proxy, repository write,
+admin operation, persistence mutation, or DB-backed registry operation, success tests
+are not sufficient.
+
+The temporary scenario contract and PR audit must verify the full runtime boundary matrix:
+
+1. success path
+2. authentication / authorization failure
+3. request validation failure
+4. malformed id / malformed payload
+5. not found
+6. persistence constraint failure
+7. repository / backend unavailable
+8. frontend proxy status propagation
+9. UI-visible error state
+10. post-write read consistency
+
+If a matrix item is intentionally out of scope, completion reporting must state why.
 
 ## Agent Judgment Gate — Policy Judgment Checklist
 
@@ -116,7 +139,11 @@ Judgment gate rules:
 
 - **Checklist must be answered from the full branch diff.** Use `git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`.
   Answering from only the latest commit or only edited files is a violation (V10).
-- **Partial diff judgment is prohibited.** If the branch diff was not inspected,
+- **When tmp is required, checklist answers must also be based on scenario contract verification.**
+  If required scenario contract verification was not performed, Q12 must be `no` and Q13 must be `no`.
+- **When Runtime Boundary Failure Matrix is required, checklist answers must include matrix verification.**
+  If required matrix verification was not performed, Q12 must be `no` and Q13 must be `no`.
+- **Partial diff or partial verification judgment is prohibited.** If required branch diff / scenario contract / boundary matrix verification was not completed,
   Q12 must be `no` — which triggers V10 automatically.
 - **Delegated or split work does not inherit checklist verification.** When work is
   delegated, split, or continued by another agent, every agent that makes
@@ -141,9 +168,9 @@ Checklist gate violations (any → FAIL):
 | V7 | Q9 = yes — broken reference swallowed |
 | V8 | Q10 = no — policy fields not consumed by runtime/policy executor |
 | V9 | Q11 = no — demo/mock/static values not isolated |
-| V10 | Q12 = no — full branch diff not inspected |
+| V10 | Q12 = no — full branch diff not inspected and/or required scenario contract / boundary matrix verification missing |
 | V11 | Q14 = no — required local checks not passed |
-| V12 | Q13 = no — checklist answers not based on full branch diff |
+| V12 | Q13 = no — checklist answers not based on full branch diff and required scenario contract / boundary matrix verification |
 | V13 | Q15 = no — remaining TODOs not listed in completion report or PR summary |
 | V14 | Any answer not in {yes, no, n/a} |
 | V15 | Missing answer |
@@ -231,7 +258,7 @@ Before completion report, execute in this order:
 1. Create `.agent/tmp/tmp.txt` before implementation when the task affects runtime / policy / projection behavior.
 2. Implement the change.
 3. Inspect full branch diff (`git status --short`, `git diff -- . ':(exclude).git'`, and `git diff --cached -- . ':(exclude).git'`).
-4. Verify the full branch diff against `.agent/tmp/tmp.txt` scenario contract when tmp is required.
+4. Verify the full branch diff against `.agent/tmp/tmp.txt` scenario contract and Runtime Boundary Failure Matrix when tmp is required.
 5. Perform Policy Judgment Checklist.
 6. Audit AGENTS.md / rule.md scope applicability and required checks.
 7. Audit prompt / PR summary / docs claims for runtime or policy assertions.

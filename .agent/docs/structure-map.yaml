@@ -69,9 +69,9 @@ layers:
       skills:   .agent/skills/    # agent skill notes
       tests:    .agent/tests/     # local check scripts
       scripts:  .agent/scripts/   # agent helper scripts
-      tmp:      .agent/tmp/       # temporary planning surface (tmp.txt is non-persistent)
+      tmp:      .agent/tmp/       # temporary scenario contract surface (tmp.txt is non-persistent)
       tasks:    .agent/tasks/     # remaining task list
-      reports:  .agent/reports/   # check results, issue drafts, audits
+      reports:  .agent/reports/   # persistent routine inspection / scheduled maintenance / periodic audit reports
 
 canonical_flow:
   - stored_topology_data
