@@ -78,6 +78,12 @@ public class RuntimeExecutor
                 Errors: guardErrors);
         }
 
+        var demoValidationError = ValidateDemoEntityRequest(vector);
+        if (demoValidationError is not null)
+        {
+            return ErrorResponse(demoValidationError.Code, demoValidationError.Message);
+        }
+
         // Step 3: Resolve attractor — no silent fallback
         AttractorResult attractorResult;
         try
@@ -190,6 +196,34 @@ public class RuntimeExecutor
             Success: false,
             Emission: null,
             Errors: [new ValidationError(code, message)]);
+
+    private static ValidationError? ValidateDemoEntityRequest(OperationVector vector)
+    {
+        if (!string.Equals(vector.Target, "demo", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(vector.Layer, "entity", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var action = vector.Action?.ToLowerInvariant();
+        if (action is not ("list" or "detail" or "create" or "advance"))
+        {
+            return new ValidationError("INVALID_OPERATION", "demo/entity supports only list, detail, create, advance");
+        }
+
+        if (action is "detail" or "create" or "advance")
+        {
+            if (vector.Payload is null ||
+                !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) ||
+                string.IsNullOrWhiteSpace(entityIdEl.GetString()) ||
+                !Guid.TryParse(entityIdEl.GetString(), out _))
+            {
+                return new ValidationError("INVALID_PAYLOAD", "entityId UUID is required");
+            }
+        }
+
+        return null;
+    }
 
     private async Task<(JsonElement? data, ValidationError? error)> ApplyDemoStateLoopAsync(OperationVector vector, CancellationToken ct)
     {
