@@ -92,89 +92,42 @@ Any omitted identity field must be explicitly justified. Multi-instance leakage 
 
 ## Audit Gap Response Gate
 
-Any audit report, completion report, or TODO-state decision that evaluates governance quality must pass the Audit Gap Response Gate.
+Purpose:
+- Governance quality decisions in audit/completion/TODO surfaces must not bypass gap disclosure and eligibility judgment.
 
-Required audit sections:
+Prohibited:
+- Marking governance completion without required audit sections or classification semantics.
+- Treating unobserved behavior evidence as behavior execution PASS.
 
-- Governance Gaps
-- Proposed Governance Improvements
-- Remaining TODOs
-- Completion Eligibility
-
-Gate requirements:
-
-1. Governance Gaps must explicitly evaluate protocol/checklist/task/report-surface/completion/agent-behavior risks.
-2. If any governance gap exists, Proposed Governance Improvements is mandatory and must describe actionable protocol/feature/checklist improvements.
-3. Remaining TODOs must preserve unresolved work in `.agent/tasks/todo.md` as incomplete items.
-4. Completion Eligibility must separate static protocol coverage audit eligibility from behavior execution audit eligibility.
-5. Behavior execution audit cannot be treated complete without observed behavior evidence (for example execution logs, trap-case results, historical PR evidence tied to artifacts, diff-linked runtime behavior proof, or persistent report evidence).
-6. Log-only evidence, PR-body-only evidence, and static-doc-only evidence must not be misclassified as explicit behavior evidence or explicit result-surface proof.
-7. Classification must use PASS / GAP / BLOCKING / TODO semantics; cautionary, conditional, or non-fatal findings are not unconditional PASS.
-
-Recursive Verification Gate dependency:
-
-- Any unresolved governance GAP or missing improvement/TODO response that should block completion is treated as blocking until fixed or explicitly preserved as remaining TODO within the defined audit scope.
-
+Details:
+- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion.md`
 
 ## Failure Triage Self-Recursion Gate
 
-Any completion report, audit report, or TODO `[x]` decision must run failure triage over all executed commands before eligibility judgment.
+Purpose:
+- Any failed executed command must be triaged before completion decision or TODO `[x]` update.
 
-Failure triage classification (required for each failed command):
+Prohibited:
+- Leaving failed commands untriaged.
+- Waiting for user feedback before recursion when blocking/ambiguous failures exist.
 
-- required check failure
-- exploratory / usage-confirmation failure
-- expected negative test
-- out-of-scope failure
-
-Gate requirements:
-
-1. If any required check failure exists, classification is BLOCKING.
-2. If a failure cannot be classified, classification is BLOCKING.
-3. exploratory / usage-confirmation failures must include explicit rationale for why the command is not a required check for audited scope.
-4. expected negative tests must include expected-failure intent and success condition evidence.
-5. out-of-scope failures must include explicit scope boundary rationale.
-6. No completion report and no TODO `[x]` update is allowed before failure triage result is recorded.
-7. Agent must not wait for user feedback to trigger triage recursion.
-
-Self-recursion actions (at least one required when triage finds BLOCKING/GAP/TODO conditions):
-
-- return to fix phase,
-- revise report classification (for example PASS → GAP/BLOCKING/TODO),
-- revert TODO `[x]` to `[ ]`,
-- preserve unresolved work in Remaining TODOs.
-
+Details:
+- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion.md`
 
 ## Required Check Scope Declaration Gate
 
-Before completion and before any TODO `[x]` update, declare required check scope from changed files and changed behavior surfaces.
+Purpose:
+- Declare required check scope per change so check shrinkage is explicit and reviewable.
 
-Check scope status must classify each considered check as exactly one of:
+Prohibited:
+- Missing required-check scope declaration in completion-facing reports.
+- Treating REQUIRED_NOT_EXECUTED as PASS without remote CI equivalence or explicit remaining TODO handling.
 
-- REQUIRED_EXECUTED
-- REQUIRED_NOT_EXECUTED
-- NOT_REQUIRED
-- OUT_OF_SCOPE
-
-Gate requirements:
-
-1. required check scope declaration is mandatory for completion report and completion-facing audit report.
-2. REQUIRED_NOT_EXECUTED requires either equivalent remote CI success or explicit Remaining TODO preservation.
-3. NOT_REQUIRED and OUT_OF_SCOPE require explicit rationale tied to changed scope.
-4. scope-classification missing or ambiguous entries are BLOCKING.
-5. REQUIRED_NOT_EXECUTED is never PASS by itself.
-6. For doc-only / governance-only changes, evaluate at minimum: policy judgment need, structure check need, checklist self-test need, and report/todo/completion-protocol consistency checks.
-7. If any classified check fails, hand off to Failure Triage Self-Recursion Gate.
-8. Agent must not wait for user feedback to correct scope shrinkage or missing scope declaration.
-
-Representative check mapping by scope must be explicit in report reasoning:
-
-- backend/runtime/API scope
-- frontend/types/projection scope
-- DB/persistence scope
-- policy/checklist/protocol scope
-- report/todo/surface-governance scope
-- structure baseline scope
+Details:
+- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion.md`
 
 ## Protocol References
 

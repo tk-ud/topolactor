@@ -2,6 +2,8 @@
 
 Mandatory completion order:
 
+Detailed classification criteria for required-check scope, failure triage, and audit-gap reporting are defined in `.agent/protocols/reports-and-todos.md`.
+
 1. Inspect full branch diff (`git status --short`, `git diff -- . ":(exclude).git"`, `git diff --cached -- . ":(exclude).git"`).
 2. Verify full diff against Temporary Scenario Contract when required.
 3. Verify Runtime Boundary Failure Matrix coverage when required.

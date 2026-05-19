@@ -362,6 +362,16 @@ check_content ".agent/protocols/completion.md" "required check scope declaration
 check_content ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
 check_content ".agent/protocols/reports-and-todos.md" "Required Check Scope Declaration Gate Reporting Requirements"
 
+check_content ".agent/rules/rule.md" "Details:"
+check_content ".agent/rules/rule.md" ".agent/protocols/reports-and-todos.md"
+check_content ".agent/rules/rule.md" ".agent/protocols/completion.md"
+
+if rg -n "REQUIRED_EXECUTED|required check failure|expected negative test|Governance Gaps|Proposed Governance Improvements|Completion Eligibility" "$REPO_ROOT/.agent/rules/rule.md" >/dev/null; then
+  fail "rule.md must remain compact for gate details; move detailed classifications/sections to protocols"
+else
+  echo "OK  [compact] rule.md gate details remain in protocols"
+fi
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
