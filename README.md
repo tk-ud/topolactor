@@ -88,6 +88,15 @@ The repository keeps explicit governance surfaces for runtime boundary checks, p
 
 - External overview and agenda: `docs/agent-development-os.md`
 
+## Operational Details
+
+Runtime setup, explicit failure behavior, and agent workflow are intentionally kept in dedicated operational documents.
+
+- Agent contract: `AGENTS.md`
+- Repository/runtime map: `docs/file-structure.yaml`
+- Runtime and policy SSOT: `docs/framework-policy.yaml`
+- Demo/setup guide: `docs/demo-walkthrough.md`
+
 ## CI / Verification Notes
 
 - `IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT`
