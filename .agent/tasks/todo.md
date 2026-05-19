@@ -130,35 +130,35 @@
 
 ## Audit Gap Response Gate Hardening
 
-- [ ] [Codex] Audit Gap Response Gate の動作確認を行う
+- [x] [Codex] Audit Gap Response Gate の動作確認を行う
       → 目的: 監査レポートで governance gap が出た場合に Proposed Governance Improvements と Remaining TODOs が必ず出るか確認する。
 
-- [ ] [Codex] Static Protocol Coverage Audit と Behavior Execution Audit の分離を検証する
+- [x] [Codex] Static Protocol Coverage Audit と Behavior Execution Audit の分離を検証する
       → 目的: 静的確認だけで behavior audit を [x] にしないことを確認する。
 
-- [ ] [Codex] LogError と Explicit Result Surface の混同を検出する監査観点を追加する
+- [x] [Codex] LogError と Explicit Result Surface の混同を検出する監査観点を追加する
       → 目的: ログ出力のみを呼び出し元に返る明示ステータスと誤認しないようにする。
 
 - [ ] [Claude] Claude Implementation Boundary Audit の再監査を行う
       → 目的: A1/A2/A4/A11 のような conditional / caution / non-fatal 判定を PASS 扱いせず、GAP/TODOとして扱えるか確認する。
 
 
-- [ ] [Codex] Failure Triage Self-Recursion Gate の動作確認を行う
+- [x] [Codex] Failure Triage Self-Recursion Gate の動作確認を行う
       → 目的: 失敗コマンドが含まれる場合、ユーザー指摘前に Agent が自律的に GAP/BLOCKING/TODO へ再分類できるか確認する。
 
-- [ ] [Codex] required check failure / exploratory failure / expected negative test の分類を検証する
+- [x] [Codex] required check failure / exploratory failure / expected negative test の分類を検証する
       → 目的: failure を一律 PASS または一律 BLOCKING にせず、completion eligibility に反映できるか確認する。
 
-- [ ] [Codex] 失敗ログありの状態で todo.md を `[x]` に更新しないことを検証する
+- [x] [Codex] 失敗ログありの状態で todo.md を `[x]` に更新しないことを検証する
       → 目的: failure triage 未完了時の TODO完了マークを防止する。
 
 
-- [ ] [Codex] Required Check Scope Declaration Gate の動作確認を行う
+- [x] [Codex] Required Check Scope Declaration Gate の動作確認を行う
       → 目的: 変更スコープごとに required / not required / out-of-scope checks を宣言できるか確認する。
 
-- [ ] [Codex] doc-only / governance-only 変更で check scope shrinkage が起きないか監査する
+- [x] [Codex] doc-only / governance-only 変更で check scope shrinkage が起きないか監査する
       → 目的: check-structure.sh のみ実行する場合でも、他チェック不要理由が completion report に残るか確認する。
 
-- [ ] [Codex] REQUIRED_NOT_EXECUTED の remote CI equivalence / 残TODO処理を検証する
+- [x] [Codex] REQUIRED_NOT_EXECUTED の remote CI equivalence / 残TODO処理を検証する
       → 目的: 必須チェック未実行を PASS と誤認せず、remote CI または未完了TODOへ接続できるか確認する。
 
