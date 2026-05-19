@@ -50,3 +50,11 @@
       → 次の判断点: 点検チェックリスト化の要否を判断。
 
 - [ ] [Codex] Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence (tracked after SSOT/schema alignment).
+- [ ] [Codex] registry tensor projection continuity 軽量チェックリストを追加する
+      → 問題点: registry tensor projection surface の定期点検観点（runtime / endpoint / scheduler / function / UI / DB の6面）が未定義で、drift 判定が属人的になる。
+      → 目的: 実装完了判定ではなく、projection continuity の静的監査観点を軽量チェックリスト化する。
+      → 改善方針: checklist肥大化を避け、6面の存在確認・write/read surface・未実装境界・残TODO保存だけを確認する軽量ゲートにする。
+      → 対象ファイル名: .agent/checklists/*, .agent/protocols/reports-and-todos.md
+      → 対象関数名: なし
+      → todo: 後続PRで checklist 形式と必要なら self-test を追加する。
+      → 次の判断点: check-policy-judgment.sh とは分離し、registry tensor projection continuity 専用の静的監査チェックにするか判断する。

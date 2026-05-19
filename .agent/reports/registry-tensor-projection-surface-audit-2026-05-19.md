@@ -17,6 +17,7 @@
 
 ## Remaining TODOs
 - `.agent/tasks/todo.md` の `Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence` を継続。
+- `.agent/checklists/` に registry tensor projection continuity の軽量チェックリストを追加する governance/checklist follow-up を継続（実装機能追加ではない）。
 
 ## Completion Eligibility
 - 種別: static protocol coverage audit（挙動実行監査ではない）。
