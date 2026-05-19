@@ -35,37 +35,37 @@
 
 ## Codex Governance Audit Experiments
 
-- [ ] [Codex] Policy Judgment のテンプレート直実行誤用を検出する監査を実施する
+- [x] [Codex] Policy Judgment のテンプレート直実行誤用を検出する監査を実施する
       → 理由: 手順逸脱により gate 判定が形骸化するリスクがある。
       → 対象ファイル: .agent/protocols/policy-judgment.md, .agent/checklists/check-policy-judgment.sh
       → 次の判断点: テンプレート利用と実行手順の差分を監査報告に明記できるか確認する。
 
-- [ ] [Codex] Policy Judgment FAIL / NOT EXECUTED / queued CI を PASS と誤認しないか監査する
+- [x] [Codex] Policy Judgment FAIL / NOT EXECUTED / queued CI を PASS と誤認しないか監査する
       → 理由: completion 判定と実 CI 状態の claim drift を防止する必要がある。
       → 対象ファイル: .agent/protocols/completion.md, .agent/protocols/policy-judgment.md
       → 次の判断点: FAIL/未実行/保留を明示的に blocking 扱いできているか検証する。
 
-- [ ] [Codex] docs-only 変更でも runtime / policy behavior claim を含む場合に Policy Judgment を要求するか監査する
+- [x] [Codex] docs-only 変更でも runtime / policy behavior claim を含む場合に Policy Judgment を要求するか監査する
       → 理由: ファイル種別ベースの例外で判断漏れが起きる可能性がある。
       → 対象ファイル: .agent/protocols/policy-judgment.md, .agent/protocols/completion.md
       → 次の判断点: claim ベース判定の適用条件を監査で再現できるか確認する。
 
-- [ ] [Codex] PR Summary と実際の diff の claim drift を監査する
+- [x] [Codex] PR Summary と実際の diff の claim drift を監査する
       → 理由: 報告内容と変更実体の乖離は Recursive Verification Gate 破綻につながる。
       → 対象ファイル: .agent/protocols/reports-and-todos.md, .agent/protocols/completion.md
       → 次の判断点: summary 各主張が diff の根拠へトレース可能か点検する。
 
-- [ ] [Codex] `.agent/tmp/tmp.txt` の作成・検証・削除順序を守るか監査する
+- [x] [Codex] `.agent/tmp/tmp.txt` の作成・検証・削除順序を守るか監査する
       → 理由: 一時契約のライフサイクル崩れは gate の証跡不整合を生む。
       → 対象ファイル: .agent/protocols/scenario-contract.md, .agent/protocols/completion.md
       → 次の判断点: 生成→照合→削除の順序違反を検出可能か確認する。
 
-- [ ] [Codex] `bash .agent/tests/check-structure.sh` を最後に実行する運用を監査する
+- [x] [Codex] `bash .agent/tests/check-structure.sh` を最後に実行する運用を監査する
       → 理由: required local checks の終端順序が崩れると completion gate を満たせない。
       → 対象ファイル: AGENTS.md, .agent/tests/check-structure.sh
       → 次の判断点: 実行ログ上で最終コマンドとして確認できるか検証する。
 
-- [ ] [Codex] todo.md の `[x]` 更新が Recursive Verification Gate 通過後に限定されているか監査する
+- [x] [Codex] todo.md の `[x]` 更新が Recursive Verification Gate 通過後に限定されているか監査する
       → 理由: 先行完了マークは未解決ブロッカーの隠蔽につながる。
       → 対象ファイル: .agent/tasks/todo.md, .agent/protocols/completion.md
       → 次の判断点: gate 通過前の完了更新を検出する監査観点を固定化できるか確認する。
