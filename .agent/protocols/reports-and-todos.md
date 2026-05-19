@@ -37,6 +37,7 @@ Rules:
 2. NOT_REQUIRED and OUT_OF_SCOPE require explicit scope rationale.
 3. Missing declarations or ambiguous status assignments are BLOCKING.
 4. For doc-only / governance-only scope, still evaluate and declare at minimum: policy judgment need, structure check need, checklist self-test need, and report/todo/completion-protocol consistency checks.
+5. Policy judgment need classification is mandatory and must use one allowed value; ambiguous declarations such as `NOT_REQUIRED` are prohibited.
 5. If any declared check failed, pass control to Failure Triage Self-Recursion Gate before completion eligibility decision.
 
 ## Failure Triage Self-Recursion Gate Reporting Requirements

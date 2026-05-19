@@ -3,6 +3,21 @@
 This checklist is a lightweight **compliance-signature gate** for AGENTS.md / rule.md policy judgment requirements.
 Detailed rule definitions belong in `AGENTS.md` and `.agent/protocols/policy-judgment.md`, not in incident-specific checklist expansion.
 
+Policy-Judgment-Need:
+Policy-Judgment-Rationale:
+
+Allowed Policy-Judgment-Need values:
+- REQUIRED_RUNTIME_CHANGE
+- REQUIRED_POLICY_SURFACE_CHANGE
+- REQUIRED_DOC_RUNTIME_POLICY_CLAIM
+- NOT_REQUIRED_DOC_NO_RUNTIME_POLICY_CLAIM
+- NOT_REQUIRED_MECHANICAL_ONLY
+- OUT_OF_SCOPE
+
+Declaration rules:
+- REQUIRED_*: rationale is required, Answer: lines must be exactly 15, and Q1–Q15 / V1–V16 validation runs.
+- NOT_REQUIRED_* / OUT_OF_SCOPE: rationale is required, Answer: lines must be exactly 0, and Q1–Q15 validation is skipped.
+
 Complete this checklist before reporting completion on any change that involves:
 runtime behavior, data-defined topology, Registry, Manifest, function_parameters,
 structure_map policy, package / schema / component expansion, recommendation,

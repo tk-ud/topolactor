@@ -8,7 +8,7 @@ Detailed classification criteria for required-check scope, failure triage, and a
 2. Verify full diff against Temporary Scenario Contract when required.
 3. Verify Runtime Boundary Failure Matrix coverage when required.
 4. For boundary extension scope, run Boundary Identity Gate with a PR-specific temporary answer file (`bash .agent/checklists/check-boundary-identity.sh <pr-specific-temp-file>`), and record the result in the completion report.
-5. Run Policy Judgment Checklist and keep 15 answers valid.
+5. Run Policy Judgment Checklist with Policy-Judgment-Need classification. If Policy-Judgment-Need is REQUIRED_*, complete and validate the normal 15 answers. If classification is NOT_REQUIRED_* or OUT_OF_SCOPE, still run `bash .agent/checklists/check-policy-judgment.sh <checklist-file>` and record declaration-validation result plus rationale in the completion report.
 6. Declare Required Check Scope Declaration Gate result from full changed scope, classify checks (REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE), and record rationale before running completion decision gates.
 7. Run relevant local CI checks for touched scope.
 8. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
@@ -26,7 +26,7 @@ Completion report must include:
 - scenario contract verification result
 - boundary matrix verification result
 - boundary identity gate result (when boundary extension scope exists)
-- policy judgment result
+- policy judgment result (need classification, rationale, and checklist/declaration validation result)
 - required check scope declaration (check inventory, REQUIRED_EXECUTED/REQUIRED_NOT_EXECUTED/NOT_REQUIRED/OUT_OF_SCOPE classification, and rationale per non-executed check)
 - failure triage result (failed-command inventory, classification per failure, blocking decision, and recursion action)
 - audit gap response result (required sections, classification, and evidence eligibility check)
