@@ -151,11 +151,12 @@ Related executables:
 ## Negative Consistency Gate
 
 Purpose:
-- Completion summaries must include explicit contradiction-check questions against task-purpose alignment, policy/contract compliance, and success-vs-unresolved-failure claims.
+- Negative consistency must be enforced as checklist/verification gate before completion eligibility decision.
 
 Prohibited:
-- Declaring completion with `問題なし` answers that have no evidence.
-- Treating unresolved required-check/CI/blocking failures as successful completion claims.
+- Treating negative consistency as summary-only ritual.
+- Declaring completion when any negative consistency item is `問題あり`.
+- Treating REQUIRED_NOT_EXECUTED as PASS.
 
 Details:
 - `.agent/protocols/completion.md`

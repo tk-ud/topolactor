@@ -39,6 +39,7 @@ Rules:
 4. For doc-only / governance-only scope, still evaluate and declare at minimum: policy judgment need, structure check need, checklist self-test need, and report/todo/completion-protocol consistency checks.
 5. Policy judgment need classification is mandatory and must use one allowed value; ambiguous declarations such as `NOT_REQUIRED` are prohibited.
 5. If any declared check failed, pass control to Failure Triage Self-Recursion Gate before completion eligibility decision.
+6. If changed scope touches `infra/docker-compose.yml`, `.agent/scripts/bootstrap-local-postgres.sh`, or DB init path, required check scope must include docker-compose/bootstrap verification with one of: REQUIRED_EXECUTED, or REQUIRED_NOT_EXECUTED + remote CI equivalent success, or REQUIRED_NOT_EXECUTED + incomplete TODO.
 
 ## Failure Triage Self-Recursion Gate Reporting Requirements
 
@@ -114,19 +115,27 @@ Gate intent is intentionally lightweight: validate 6-surface presence (runtime/e
 
 ## Negative Consistency Gate Reporting Requirements
 
-All completion-facing summaries must include the fixed heading `## Negative Consistency Gate` and all Q1/Q2/Q3 blocks with:
+Negative Consistency is executed at checklist/verification time.
 
-- `Answer:`
-- `Evidence:`
-- `Remaining risk:`
+Use:
 
-Validation scope for scripts/checkers is format-presence only; semantic judgment remains a GPT audit responsibility.
+- checklist template: `.agent/checklists/negative-consistency.md`
+- static validator: `bash .agent/checklists/check-negative-consistency.sh <checklist-file>`
+
+Completion summaries must report:
+
+- checklist execution result (PASS/FAIL),
+- blocking decision,
+- failure reasons,
+- remaining TODO / out-of-scope linkage for unresolved risk.
+
+Do not require summary-time re-printing of Q1/Q2/Q3 question text.
 
 Rules:
 
 1. `Answer: 問題なし` with empty `Evidence` is BLOCKING.
-2. `Evidence` must mention at least one of: diff / test / CI / contract / checklist / TODO.
-3. Any remaining risk must be connected to an explicit remaining TODO or explicit out-of-scope reason.
-4. If required checks are not executed without equivalent remote CI PASS, if CI is not PASS, or if blocking failures remain unresolved, Q3 must be `問題あり` and completion is blocked.
-5. If policy/boundary/scenario-contract compliance cannot be disproved with evidence, Q2 must be `問題あり` and completion is blocked.
-6. If task-purpose-to-diff consistency cannot be evidenced, Q1 must be `問題あり` and completion is blocked.
+2. Evidence must mention at least one of: diff / test / CI / contract / checklist / TODO.
+3. Any remaining risk must be connected to explicit remaining TODO or explicit out-of-scope reason.
+4. If required checks are NOT EXECUTED without equivalent remote CI PASS, if CI is not PASS, or if blocking failures remain unresolved, Q3 must be `問題あり` and completion eligibility is BLOCKING.
+5. REQUIRED_NOT_EXECUTED is never PASS-equivalent; preserve as unresolved until remote CI equivalent success or explicit incomplete TODO.
+6. backend-tests CI success is not equivalent evidence for docker-compose/bootstrap/db-init verification.

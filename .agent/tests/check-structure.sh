@@ -110,6 +110,14 @@ check_file ".agent/checklists/policy-judgment.md"
 check_file ".agent/checklists/boundary-identity.md"
 check_file ".agent/checklists/check-boundary-identity.sh"
 check_file ".agent/checklists/check-policy-judgment.sh"
+check_file ".agent/checklists/negative-consistency.md"
+check_file ".agent/checklists/check-negative-consistency.sh"
+check_file ".agent/checklists/fixtures/negative-consistency/pass.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-empty-evidence.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-q3-blocking.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-required-not-executed-pass.md"
+check_file ".agent/tests/check-docker-compose.sh"
+check_file ".github/workflows/docker-compose.yml"
 check_file ".agent/checklists/fixtures/policy-judgment/pass.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-unanswered.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-policy-violation.md"
@@ -307,11 +315,11 @@ check_content ".agent/checklists/policy-judgment.md" "Structure Check is always-
 check_content ".agent/scripts/create-tmp.sh" "Remote CI Equivalence Gate"
 check_content ".agent/protocols/completion.md" "Negative Consistency Gate"
 check_content ".agent/protocols/reports-and-todos.md" "Negative Consistency Gate Reporting Requirements"
+check_content ".agent/checklists/negative-consistency.md" "Q1"
+check_content ".agent/checklists/check-negative-consistency.sh" "--self-test"
 check_content ".agent/rules/rule.md" "Negative Consistency Gate"
-check_content ".agent/protocols/completion.md" "Q1. タスク目的と実装差分が意味的にズレているように見えるが、問題ないか？"
-check_content ".agent/protocols/completion.md" "Answer:"
-check_content ".agent/protocols/completion.md" "Evidence:"
-check_content ".agent/protocols/completion.md" "Remaining risk:"
+check_content ".agent/protocols/completion.md" "check-negative-consistency.sh"
+check_content ".agent/protocols/completion.md" "Completion-Eligibility"
 
 
 check_content "AGENTS.md" "Temporary Scenario Contract"
@@ -400,3 +408,5 @@ else
   exit 1
 fi
 
+
+check_content ".agent/protocols/reports-and-todos.md" "backend-tests CI success is not equivalent evidence for docker-compose/bootstrap/db-init verification"

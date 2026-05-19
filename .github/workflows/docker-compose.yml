@@ -1,0 +1,27 @@
+name: docker-compose-check
+
+on:
+  pull_request:
+    paths:
+      - 'infra/docker-compose.yml'
+      - 'db/init.sql'
+      - '.agent/scripts/bootstrap-local-postgres.sh'
+      - '.agent/tests/check-docker-compose.sh'
+      - '.github/workflows/docker-compose.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/docker-compose.yml'
+      - 'db/init.sql'
+      - '.agent/scripts/bootstrap-local-postgres.sh'
+      - '.agent/tests/check-docker-compose.sh'
+      - '.github/workflows/docker-compose.yml'
+
+jobs:
+  docker-compose-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run docker-compose bootstrap check
+        run: bash .agent/tests/check-docker-compose.sh

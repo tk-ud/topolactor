@@ -129,6 +129,7 @@ TOTAL="${#ANSWERS[@]}"
 
 echo ""
 echo "=== Policy Judgment Gate (Recursive Verification Gate enforced; scenario contract aware) ==="
+echo "Note: Negative Consistency Gate is validated separately via check-negative-consistency.sh before completion eligibility."
 echo "File: $CHECKLIST"
 echo "Policy-Judgment-Need: ${NEED:-<missing>}"
 echo "Answers found: $TOTAL"

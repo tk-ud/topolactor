@@ -17,7 +17,7 @@ Detailed classification criteria for required-check scope, failure triage, and a
 11. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, missing required check scope declaration, ambiguous check scope classification, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
     - For registry/topology recommendation and UI topology semantics, include `.agent/protocols/registry-tensor-policy.md` drift checks.
 12. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
-13. Apply Negative Consistency Gate in the completion summary before final completion decision.
+13. Run Negative Consistency Checklist Gate (`bash .agent/checklists/check-negative-consistency.sh <checklist-file>`) before completion eligibility decision.
 14. Run `bash .agent/tests/check-structure.sh` last.
 15. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
 
@@ -33,7 +33,7 @@ Completion report must include:
 - audit gap response result (required sections, classification, and evidence eligibility check)
 - local check status (PASS / FAIL / NOT EXECUTED)
 - remote CI equivalence status for each required NOT EXECUTED local check
-- negative consistency gate result (Q1/Q2/Q3 each with Answer/Evidence/Remaining risk, and blocking decision when evidence is missing or risk handling is absent)
+- negative consistency checklist result (Q1/Q2/Q3 Answer/Evidence/Remaining risk validation status, blocking decision, and remaining TODO linkage)
 - tmp deletion status
 - remaining TODOs
 
@@ -67,26 +67,11 @@ CI policy baseline:
 
 Negative Consistency Gate:
 
-Completion-facing summaries must include this exact section and structure:
+- Negative Consistency is a checklist/verification gate, not a summary-only writing ritual.
+- Execute `bash .agent/checklists/check-negative-consistency.sh <checklist-file>` before completion eligibility decision.
+- The completion summary reports checklist result, blocking decision, and remaining TODOs; it must not treat unresolved `問題あり` as completion.
 
-## Negative Consistency Gate
-
-### Q1. タスク目的と実装差分が意味的にズレているように見えるが、問題ないか？
-Answer:
-Evidence:
-Remaining risk:
-
-### Q2. AGENTS.md / policy / scenario contract / boundary contract に違反しているように見えるが、問題ないか？
-Answer:
-Evidence:
-Remaining risk:
-
-### Q3. 成功扱いになっているが、未完了・未検証・部分失敗が残っているように見えるが、問題ないか？
-Answer:
-Evidence:
-Remaining risk:
-
-Rules:
+Checklist rules:
 
 - `Answer: 問題なし` without concrete `Evidence:` is BLOCKING.
 - Evidence must explicitly reference one or more of: diff / test / CI / contract / checklist / TODO.
@@ -94,4 +79,6 @@ Rules:
 - If CI is not PASS, required checks are not executed, or unresolved blocking failures remain, Q3 must be `問題あり`.
 - If policy-violation suspicion cannot be disproved with evidence, Q2 must be `問題あり`.
 - If task-purpose-to-diff mapping cannot be explained with evidence, Q1 must be `問題あり`.
-- Any `問題あり` result blocks completion and returns to fix phase.
+- Any `問題あり` result is BLOCKING for completion eligibility.
+
+Completion-Eligibility is BLOCKING when Negative Consistency checklist reports any 問題あり or evidence/risk linkage violation.
