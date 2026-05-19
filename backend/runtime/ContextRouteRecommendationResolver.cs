@@ -158,7 +158,8 @@ public class ContextRouteRecommendationResolver
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "ContextRouteRepository transition stats query failed — continuing without baseline.");
+                _logger.LogError(ex, "ContextRouteRepository transition stats query failed.");
+                return ExplicitError("TRANSITION_STATS_QUERY_FAILED");
             }
         }
 
@@ -186,13 +187,13 @@ public class ContextRouteRecommendationResolver
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
+            _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed.");
+            return ExplicitError("CONTEXT_EVENT_APPEND_FAILED");
         }
 
         // TopologyVectorRuntime extension: evidence extraction, MLP feature crossing, hub attention update.
         // Runs AFTER AppendContextEventAsync so the event is in context before hub attention is updated.
-        // enabled=false → no-op (explicit, not silent). Failure → log error, continue.
-        // Does not affect ContextRouteRecommendationResult — side effects only.
+        // enabled=false → no-op (explicit, not silent). Failure → ExplicitError("TVR_EXTENSION_FAILED").
         if (policy.TopologyVectorRuntime is { Enabled: true } tvPolicy)
         {
             try
@@ -203,7 +204,8 @@ public class ContextRouteRecommendationResolver
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    "ContextRouteRecommendationResolver: TopologyVectorRuntime extension failed — continuing.");
+                    "ContextRouteRecommendationResolver: TopologyVectorRuntime extension failed.");
+                return ExplicitError("TVR_EXTENSION_FAILED");
             }
         }
 
@@ -245,7 +247,7 @@ public class ContextRouteRecommendationResolver
     /// Extracts transition key evidence, builds MLP features, and updates hub attention current.
     ///
     /// Timing: called after AppendContextEventAsync so the event is in context.
-    /// Non-fatal: caller wraps in try-catch; failure does not affect recommendation result.
+    /// Failure: caller catches and returns ExplicitError("TVR_EXTENSION_FAILED").
     ///
     /// Hub identity: hubId is the caller-supplied IdOrHubId from the request (hub-entity-scoped).
     /// Hub attention is skipped when hubId is null — no hub entity means no hub attention record.

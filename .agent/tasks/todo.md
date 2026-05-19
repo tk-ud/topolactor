@@ -21,14 +21,10 @@
 
 ## Implementation Phase — Claude Runtime Boundary Fixes
 
-- [ ] [Claude] A1/A2 fix: recoverable boundary と explicit result surface の方針を実装可能な形へ整理・反映する
-      → 問題点: AppendContextEventAsync / transition stats / TVR extension の失敗が LogError-only または code comment ベースの non-fatal 扱いになっている。
-      → 目的: LogError-only を explicit result surface と誤認しない形にし、non-fatal 継続の根拠を auditable surface に置く。
-      → 改善方針: 実装前に recoverable boundary の正規方針を決め、必要なら protocol / runtime result / status metadata / NonFatalOperationPolicy 相当へ接続する。
-      → 対象ファイル名: backend/runtime/ContextRouteRecommendationResolver.cs, backend/runtime/TopologyVectorRuntime.cs, .agent/protocols/*, .agent/tasks/todo.md
-      → 対象関数名: ContextRouteRecommendationResolver.ResolveAsync, AppendContextEventAsync, RunTopologyVectorRuntimeExtensionAsync
-      → 依存関係: この方針確定を A11 failure path tests の前提にする。
-      → todo: 調査→方針確定→実装PRを別途作成。todo整理PRでは実装しない。
+- [x] [Claude] A1/A2 fix: recoverable boundary と explicit result surface の方針を実装可能な形へ整理・反映する
+      → 完了: LogError-only continuing を削除し、AppendContextEventAsync / transition stats / TVR extension の失敗を ExplicitError に統一した。
+      → 対象ファイル名: backend/runtime/ContextRouteRecommendationResolver.cs
+      → 実装PR: claude/fail-close-context-route-runtime-QuuDb
 
 - [ ] [Claude] A4 fix: context_hub 系 DB CHECK 制約と policy variability の衝突を設計・移行方針へ落とす
       → 問題点: scope_limit / candidate_kind / feedback_kind が DB CHECK に固定され、function_parameters / registry policy の可変性と衝突し得る。
@@ -38,14 +34,11 @@
       → 対象関数名: context_hub_recommendation_current, context_hub_feedback_event, UpsertHubAttentionCurrentAsync, ApplyFeedbackWeightUpdateAsync
       → todo: 調査→設計方針→必要なら migration 実装PRへ分離。
 
-- [ ] [Claude] A11 fix: AppendContextEventAsync / TVR extension failure の境界失敗テストを追加する
-      → 問題点: non-fatal by design とされる経路の失敗時挙動がテストで明示されていない。
-      → 目的: persistence constraint failure / TVR extension failure が、仕様どおり explicit status または non-fatal policy と整合するか検証可能にする。
-      → 改善方針: A1/A2 の方針と矛盾しないテストを追加する。先に方針が必要なら A1/A2 の後続にする。
-      → 対象ファイル名: backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs, backend/runtime/ContextRouteRecommendationResolver.cs
-      → 対象関数名: ResolveAsync, AppendContextEventAsync, RunTopologyVectorRuntimeExtensionAsync
-      → 依存関係: A1/A2 の方針確定後に実装。
-      → todo: A1/A2 方針確認後、failure path tests を追加する。
+- [x] [Claude] A11 fix: AppendContextEventAsync / TVR extension failure の境界失敗テストを追加する
+      → 完了: fail-close 方針に基づく A11 failure path tests を追加した。
+      → 対象ファイル名: backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs
+      → 追加テスト: ResolveAsync_AppendContextEventThrows_ReturnsExplicitError, ResolveAsync_TransitionStatsThrows_ReturnsExplicitError, ResolveAsync_TvrExtensionHubAttentionUpdateThrows_ReturnsExplicitError
+      → 実装PR: claude/fail-close-context-route-runtime-QuuDb
 
 ## Implementation Phase — Codex Governance / Close Readiness
 

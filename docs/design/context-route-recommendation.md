@@ -83,6 +83,20 @@ ExplicitError       — リゾルバー内部エラー（policy missing 含む�
 
 silent fallback は存在しない。status は常に明示。
 
+## Runtime 失敗時の fail-close 方針
+
+Runtime 観測・統計・Attention 更新の失敗はすべて ExplicitError として返す。
+LogError のみで処理を継続し recommendation result を返す経路は禁止。
+
+| 失敗箇所 | ExplicitError code |
+|---|---|
+| AppendContextEventAsync | `CONTEXT_EVENT_APPEND_FAILED` |
+| GetTransitionStatsAsync / GetWindowedTransitionStatsAsync | `TRANSITION_STATS_QUERY_FAILED` |
+| RunTopologyVectorRuntimeExtensionAsync (hub attention 更新含む) | `TVR_EXTENSION_FAILED` |
+
+観測ログ・統計根拠・Attention 更新の整合が取れた場合のみ recommendation result を返す。
+部分成功・空統計フォールバック・観測されていない成功は禁止。
+
 ---
 
 ## 取り扱い方針
