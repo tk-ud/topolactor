@@ -68,6 +68,33 @@ framework_policy:
             - vector_sparse
             - l2_norm
           rule: rebuildable_helper_projection_not_meaning_sot
+      axis_assignment_phase_shift:
+        rule: attention_weight_rotates_observed_topology_state_not_registry_basis
+        basis:
+          registry_table: fixed_semantic_basis
+          registry_id: topology_axis_label
+          attentioned_key: excitation_key
+          w: attention_weight_and_rotation_amount
+        transform:
+          input_state: current_record_tensor_or_route_projection_matrix
+          expression: M_next = M_current + lambda_sum_of_w_key_axis_transform_key
+          affected_surfaces:
+            - relation_binding
+            - route_candidate
+            - projection_cache
+            - hub_attention_current
+            - diff_log_observation
+            - ui_topology_state
+        prohibition:
+          - mutate_registry_basis_per_attention_event
+          - treat_attention_weight_as_new_meaning_sot
+          - generate_raw_db_command_strings_from_attention
+          - hide_state_shift_without_append_only_observation
+        note: >
+          Attentioned keys provide excitation weights for rotating the current
+          observed matrix/projection/route state. Registry tables remain the SSOT
+          basis; SQL Attention must not become raw DB command generation or direct
+          registry-basis mutation.
     record_tensor_state_rule:
       definition: record_referencing_registry_ids_is_tensor_state
       coordinate_derivation:
