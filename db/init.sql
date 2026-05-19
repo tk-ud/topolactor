@@ -1,3 +1,6 @@
+-- Docker compose initializer SSOT.
+-- This file expects container paths (/db/...) and is not intended for host-side `psql -f db/init.sql`.
+
 \set ON_ERROR_STOP on
 
 \echo '[init.sql] applying schema.sql'

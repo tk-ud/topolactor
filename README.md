@@ -100,7 +100,7 @@ To satisfy local prerequisites without mixing install and check logic:
 bash .agent/scripts/bootstrap-local-tools.sh
 ```
 
-This script installs missing dotnet SDK 8 and Deno only when absent, ensures `infra/.env` exists, and starts `postgres` via Docker Compose.
+This script installs missing dotnet SDK 8 and Deno only when absent, ensures `infra/.env` exists, starts `postgres` via Docker Compose, and writes `~/.topolactor-tools/env.sh` for PATH setup in the parent shell.
 
 For DB bootstrap only:
 
@@ -108,9 +108,10 @@ For DB bootstrap only:
 bash .agent/scripts/bootstrap-local-postgres.sh
 ```
 
-After bootstrap, run checks as-is (they still fail explicitly when prerequisites are missing):
+After bootstrap, load tool PATH in your current shell, then run checks (check scripts still fail explicitly when prerequisites are missing):
 
 ```bash
+source ~/.topolactor-tools/env.sh
 bash .agent/tests/check-backend-tests.sh
 bash .agent/tests/check-frontend-types.sh
 ```

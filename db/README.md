@@ -20,7 +20,7 @@ stored_topology_data
 
 ## How to run
 
-Apply files in this order (or run `db/init.sql` which is the single-order SSOT):
+Apply files in this order (this is the standard local `psql` path):
 
 ```bash
 psql -d <database> -f db/schema.sql
@@ -51,8 +51,9 @@ It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING
 See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
 
 **docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
-executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`, which applies
-`schema.sql -> topology_tables.sql -> promotion_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`. This file is **compose/container-path specific** (`/db/...`) and assumes `infra/docker-compose.yml` mounts `../db` to `/db`.
+It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+For normal host-side `psql` usage, use the ordered per-file commands above (not `psql -f db/init.sql`).
 On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
 
 ---
