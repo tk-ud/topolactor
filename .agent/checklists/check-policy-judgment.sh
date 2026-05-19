@@ -32,6 +32,11 @@ if [ "${1:-}" = "--self-test" ]; then
     "pass.md:pass" \
     "pass-not-required-doc-no-claim.md:pass" \
     "pass-required-doc-runtime-policy-claim.md:pass" \
+    "fail-unanswered.md:fail" \
+    "fail-policy-violation.md:fail" \
+    "fail-partial-diff.md:fail" \
+    "fail-local-checks.md:fail" \
+    "fail-remaining-todos.md:fail" \
     "fail-missing-need.md:fail" \
     "fail-invalid-need.md:fail" \
     "fail-missing-rationale.md:fail" \
