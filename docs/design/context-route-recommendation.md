@@ -281,6 +281,11 @@ DB unavailable は fail-closed: `ValidationClass.ExplicitError` + `IsBlocking:tr
 
 hub 同士を static relation と統計 recommendation 両方で attention できるようにする。
 
+hub identity 要件:
+- `context_hub_recommendation_current` への書き込みは、dispatch に `IdOrHubId` が提供されている場合のみ実行する。
+- `IdOrHubId` なしの dispatch（null）は hub attention current write をスキップする。sessionId を hubId の代替に使わない。
+- hub attention は hub-entity-scoped であり、session-scoped ではない。
+
 ```text
 current hub = Query
 candidate hub / relation / entity vector = Key

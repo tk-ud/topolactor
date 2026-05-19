@@ -43,7 +43,8 @@ public record OperationVector(
     string? ContextSessionId = null,
     string? ContextUserId = null,
     string? ContextTokenIds = null,     // comma-separated Guid list
-    string? ContextRecordId = null
+    string? ContextRecordId = null,
+    Guid? IdOrHubId = null
 );
 
 /// <summary>
