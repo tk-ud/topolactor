@@ -139,7 +139,7 @@
 - [ ] [Codex] LogError と Explicit Result Surface の混同を検出する監査観点を追加する
       → 目的: ログ出力のみを呼び出し元に返る明示ステータスと誤認しないようにする。
 
-- [ ] [Claude] Claude Implementation Boundary Audit の再監査を行う
+- [x] [Claude] Claude Implementation Boundary Audit の再監査を行う
       → 目的: A1/A2/A4/A11 のような conditional / caution / non-fatal 判定を PASS 扱いせず、GAP/TODOとして扱えるか確認する。
 
 
@@ -161,4 +161,23 @@
 
 - [ ] [Codex] REQUIRED_NOT_EXECUTED の remote CI equivalence / 残TODO処理を検証する
       → 目的: 必須チェック未実行を PASS と誤認せず、remote CI または未完了TODOへ接続できるか確認する。
+
+## Implementation Boundary GAP Follow-ups (from Claude Re-audit 2026-05-19)
+
+- [ ] [Claude] A1 fix: AppendContextEventAsync の失敗を explicit result surface として扱う
+      → GAP: LogError-only は explicit result ではない。non-fatal 継続の意図を policy surface に記録するか、呼び出し元に明示的なステータスを返す必要がある。
+      → 対象ファイル: backend/runtime/ContextRouteRecommendationResolver.cs:183-190
+      → 参照レポート: .agent/reports/2026-05-19-claude-boundary-audit-reaudit.md
+
+- [ ] [Claude] A2 fix: 非致命境界（transition stats / TVR extension）のポリシー文書化
+      → GAP: non-fatal 設計がコードコメントのみで表現されている。auditable なポリシー surface（protocol or rule）に明記する。
+      → 対象ファイル: .agent/protocols/ (新規 recoverable-boundary.md または rule.md 拡張)
+
+- [ ] [Claude] A4 fix: DB CHECK 制約の policy variability 制限を GAP として記録
+      → GAP: scope_limit / candidate_kind / feedback_kind の CHECK 値がハードコードされており、新しいティア追加にはマイグレーションが必要。
+      → 対象ファイル: db/context_route_tables.sql:431,434,522,524,526
+
+- [ ] [Claude] A11 fix: persistence constraint failure テストケースを追加する
+      → GAP: AppendContextEventAsync 失敗時に recommendation result が返されることを検証するテストが存在しない。
+      → 対象ファイル: backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs
 
