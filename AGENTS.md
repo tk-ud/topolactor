@@ -4,11 +4,10 @@
 
 Agent executes requested repository work while preserving canonical runtime route and explicit-failure behavior.
 
-## Entry Guidance
+## Entry Route
 
-- `docs/` is the primary SSOT agenda surface for repository architecture and design.
-- `.agent/README.md` defines `.agent/` directory roles and read-order boundaries.
-- `.agent/rules/rule.md` defines always-read operating rules and protocol trigger map.
+- Start from `.agent/rules/rule.md` for always-read operating rules.
+- Follow the read route and trigger map there.
 
 ## Triggered Governance References
 
@@ -20,5 +19,7 @@ Agent executes requested repository work while preserving canonical runtime rout
 ## Work Posture
 
 - Do not treat all protocols as always-on workflow.
+- Do not treat all docs as always-read scope.
+- Do not treat all skills as always-read scope.
 - Open and apply protocol/checklist/test surfaces only when their trigger condition matches the current change.
 - Keep verification explicit and run required local checks, with `bash .agent/tests/check-structure.sh` run last.

@@ -9,6 +9,19 @@ Every task starts by reading:
 
 These are always-on governance sources. Protocols and skills are conditional and must be opened only when their trigger applies.
 
+
+## Read Route
+
+Use this lightweight read route:
+
+1. `AGENTS.md`
+2. `.agent/rules/rule.md`
+3. relevant `.agent/docs/` resume/index for the agenda
+4. corresponding `.agent/skills/` lightweight workflow when executing that task/check
+5. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
+
+Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope.
+
 ## Architecture Rules
 
 - Data-defined topology is the architecture subject. Not DTOs, not CRUD, not layered MVC.

@@ -7,14 +7,16 @@ It separates always-read guidance from condition-triggered references, and separ
 
 1. `AGENTS.md` (repository entry contract)
 2. `.agent/rules/rule.md` (always-on operating rules)
-3. Open only the specific `.agent/protocols/*.md` and `.agent/skills/*.md` needed for the current change scope
+3. Open the relevant `.agent/docs/` resume/index for the current agenda
+4. Open only the corresponding `.agent/skills/*.md` lightweight workflow when executing that task/check
+5. Open only the specific `.agent/protocols/*.md` needed by trigger condition
 
 ## Directory Roles
 
 - `AGENTS.md`:
   Defines the agent role, the SSOT agenda orientation for `docs/`, and the handoff to `.agent/rules/rule.md`.
 - `.agent/docs/`:
-  Resume/index surface for SSOT materials under `docs/`.
+  Resume/index surface for SSOT materials under `docs/`; not a signal to read all `docs/` by default.
 - `.agent/rules/`:
   Always-read rule surface. Defines required behavior boundaries, prohibitions, and directory-role framing under `.agent/`.
 - `.agent/skills/`:

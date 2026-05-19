@@ -1,7 +1,7 @@
 # Skill: Structure Check
 
 This is a task skill, not an always-on governance protocol.
-Read and apply it only when running the structure check task.
+Read and apply it only when running the structure check task, after scoping needed surfaces via `.agent/docs/`.
 
 ## When to Run
 
