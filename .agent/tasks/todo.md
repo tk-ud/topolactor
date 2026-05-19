@@ -19,10 +19,10 @@
 
 ## System Operation CI (Issue #83)
 
-- [ ] [Claude] SystemOperationCiRuntime の backend-tests CI 検証
+- [x] [Claude] SystemOperationCiRuntime の backend-tests CI 検証
       → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104 wiring 含む)。
       → 対象: 全 backend/runtime/*, backend/repository/*, backend/tests/.../*.cs
-      → dotnet が環境にないため local 実行不可。remote CI (backend-tests workflow) で確認後に [x] 化。
+      → remote CI (backend-tests workflow) PASS 確認済み (PR #104)。
 
 - [x] [Claude] SystemOperationCiRuntime の event-driven CI 接続 (RunTopologyVectorRuntimeExtensionAsync)
       → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104)。
@@ -39,21 +39,20 @@
       → NpgsqlContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: context_token_registry で孤立 token カウント。
       → テスト追加: StubRegistryCiRepository + InspectRegistryContinuityAsync 3テスト。
 
-- [ ] [Claude] Cron trigger 接続 (background worker / scheduled job)
+- [x] [Claude] Cron trigger 接続 (background worker / scheduled job)
       → 実装完了 (branch: claude/process-todo-tasks-Ns7fy)。
       → SystemOperationCiScheduler (BackgroundService) を追加。InspectHubAttentionContinuityAsync /
          InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync を定期呼び出し。
       → Program.cs に AddHostedService<SystemOperationCiScheduler>() 登録済み。
       → 診断結果レポート: .agent/reports/2026-05-19-system-operation-ci-scheduler.md
-      → 残タスク: backend-tests remote CI PASS 確認後に [x] 化。
+      → remote CI (backend-tests workflow) PASS 確認済み (PR #108)。
 
 ## Registry Tensor Continuity
 
-- [ ] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
+- [x] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
       → 実装完了 (branch: claude/process-todo-tasks-yXNvS, commit: 6db556c)。
       → 実施内容: BuildEventVector → BuildMultiHotVector (1.0f per token ID)、tokenValueMap 依存を除去、tokenIds proxy as relationIds を廃止、DDLコメント・UI文言・DTO名を multi-hot / rebuildable projection cache に更新。
-      → 残タスク: backend-tests CI 検証 (backend-tests workflow は PR / main push でのみ起動。PR作成 or main mergeで CI pass を確認してから [x] 化すること)。
-      → 完了条件: backend-tests remote CI PASS 確認後に [x]。
+      → remote CI (backend-tests workflow) PASS 確認済み (PR #93)。
 
 - [x] [Codex] Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence (tracked after SSOT/schema alignment).
       → 実装完了 (branch: claude/process-todo-tasks-wPH6O)。
