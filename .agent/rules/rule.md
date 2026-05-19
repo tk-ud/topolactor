@@ -18,11 +18,14 @@ Use this lightweight read route:
 1. `AGENTS.md`
 2. `.agent/README.md`
 3. `.agent/rules/rule.md`
-4. only when needed, open relevant `.agent/docs/` resume/index
-5. only when needed, open corresponding `.agent/skills/` lightweight workflow
-6. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
+4. `.agent/skills/agent-workflow.md`
+5. only when needed, open relevant `.agent/docs/` resume/index
+6. only when needed, open corresponding `.agent/skills/structure-check.md` and other task skills
+7. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
 
 Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope.
+
+Work execution order follows `.agent/skills/agent-workflow.md`.
 
 ## Architecture Rules
 

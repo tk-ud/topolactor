@@ -2,85 +2,49 @@
 
 ## Purpose
 
-This skill defines the minimal execution order for agents working in this repository.
+This skill defines the lightweight execution order for task work.
 
-It does not replace `AGENTS.md`, `.agent/rules/rule.md`, or `.agent/docs/required-paths.yaml`.
-Use those files as the source of rules and required structure.
+It does not replace `AGENTS.md`, `.agent/README.md`, or `.agent/rules/rule.md`.
+Follow those always-read sources first.
 
 ## Execution Order
 
 ```text
-READ_RULES
-→ INSPECT_TARGET
-→ DEFINE_SCOPE
-→ EDIT_OR_SPECIFY
-→ RUN_LOCAL_CI
-→ FIX_IF_RED
-→ UPDATE_TASK_SURFACE
-→ COMMIT_OR_PR
+READ_ENTRY
+→ SCENARIO_CONTRACT
+→ IMPLEMENT
+→ FILL_CHECKLISTS
+→ VERIFY_SCENARIO_DIFF
+→ JUDGMENT
+→ STRUCTURE_CHECK
+→ PUSH_OR_PR
 ```
 
-## Step Meaning
+## Step Routing (reference only)
 
-### READ_RULES
+- READ_ENTRY
+  - `AGENTS.md`
+  - `.agent/README.md`
+  - `.agent/rules/rule.md`
+- SCENARIO_CONTRACT
+  - `.agent/protocols/scenario-contract.md` (triggered scope only)
+- IMPLEMENT
+  - implement using scoped files and fixed scenario intent when contract exists
+- FILL_CHECKLISTS
+  - fill policy-judgment / boundary-identity / required-check declarations only when corresponding triggers apply
+- VERIFY_SCENARIO_DIFF
+  - verify scenario contract and full branch diff consistency when scenario trigger applies
+- JUDGMENT
+  - `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only when completion / TODO / report judgment is needed
+- STRUCTURE_CHECK
+  - run `bash .agent/tests/check-structure.sh` last
+  - structure check is structural validation, not semantic substitute
+- PUSH_OR_PR
+  - execute only after triggered gates pass and blocking conditions are cleared
 
-Read the repository entrypoints before changing files:
+## Scope Discipline
 
-```text
-AGENTS.md
-.agent/rules/rule.md
-.agent/docs/required-paths.yaml
-```
-
-### INSPECT_TARGET
-
-Open the files directly related to the task.
-Do not infer architecture from file names alone.
-
-### DEFINE_SCOPE
-
-Keep the change scoped to the issue or request.
-Do not add implementation surfaces when the task is documentation-only.
-Do not turn topology runtime work into CRUD, MVC, or frontend-owned state.
-
-### EDIT_OR_SPECIFY
-
-Make the smallest coherent change that preserves the canonical route:
-
-```text
-stored_topology_data
-→ user_operation
-→ operation_vector
-→ attractor_resolve
-→ structure_map_resolve
-→ package_resolve
-→ schema_resolve
-→ component_expand
-→ emission_or_projection
-```
-
-### RUN_LOCAL_CI
-
-Run the relevant local CI script from `.agent/tests/`.
-At minimum, run structure check for repository-shape changes.
-
-### FIX_IF_RED
-
-If local CI is red, fix the failure and rerun the same check.
-Do not treat missing tools as a passing result.
-
-### UPDATE_TASK_SURFACE
-
-Update `.agent/tasks/todo.md` or `.agent/reports/` only when the task explicitly creates or closes task/report state.
-Do not add new TODO items casually.
-
-### COMMIT_OR_PR
-
-Commit or open/update a PR only after the relevant local CI is green, or clearly report that execution was not possible due to environment limitations.
-
-## Use This Skill For
-
-- deciding task execution order
-- avoiding scope creep
-- preventing duplicate rule text across agent docs
-- keeping agent work aligned with the topology runtime route
+- Do not read all protocols by default.
+- Do not read all docs by default.
+- Do not read all skills by default.
+- Open only the minimum surfaces required by trigger and task scope.

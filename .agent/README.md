@@ -8,7 +8,8 @@ It separates always-read guidance from condition-triggered references, and separ
 1. `AGENTS.md` (repository entry contract)
 2. `.agent/README.md` (this role-and-route guide)
 3. `.agent/rules/rule.md` (always-read operating rules and trigger map)
-4. Only when needed, open relevant `.agent/docs/` resume/index, `.agent/skills/*.md`, and `.agent/protocols/*.md`
+4. `.agent/skills/agent-workflow.md` (lightweight execution order)
+5. Only when needed, open relevant `.agent/docs/` resume/index, `.agent/skills/structure-check.md` (and other task skills), and `.agent/protocols/*.md`
 
 ## Directory Roles
 
