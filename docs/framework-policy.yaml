@@ -75,6 +75,36 @@ framework_policy:
           registry_id: topology_axis_label
           attentioned_key: excitation_key
           w: attention_weight_and_rotation_amount
+        quaternion_dual_projection:
+          role: attention_dual_phase_operator_for_statistical_anti_collapse
+          purpose: protect_projection_from_statistical_over_convergence_to_attractor_field
+          equation:
+            canonical: "q = w + x*i + y*j + z*k"
+            rotation: "q(theta,u) = cos(theta/2) + (u_x*i + u_y*j + u_z*k) * sin(theta/2)"
+            phase_escape: "theta = policy_bounded_phase_escape(abs(w), collapse_risk)"
+          components:
+            i_j_k: fixed_registry_basis_axes
+            x: observed_projection_component_on_registry_axis_i
+            y: observed_projection_component_on_registry_axis_j
+            z: observed_projection_component_on_registry_axis_k
+            w: attentioned_key_excitation_scalar_and_rotation_amount
+            q: projection_and_route_state_phase_operator
+          duality:
+            attention_side: aggregation_statistics_attractor_weight_observation
+            quaternion_side: phase_rotation_projection_operator
+            rule: stronger_attention_increases_policy_bounded_phase_escape_not_registry_mutation
+          collapse_protection:
+            risk: statistics_only_ranking_over_converges_to_high_weight_attractor_field
+            rule: quaternion_projection_rotates_route_phase_when_attention_is_strong
+            invariant: strong_attention_must_not_mean_stronger_same_candidate_collapse
+          invariant:
+            - registry_tables_remain_ssot_basis
+            - quaternion_is_projection_state_operator_not_meaning_sot
+            - observed_matrix_projection_route_state_is_rotated_not_registry_basis
+          prohibition:
+            - generate_raw_db_command_strings_from_quaternion
+            - mutate_registry_basis_from_quaternion
+            - use_quaternion_as_direct_persistence_mutation_command
         transform:
           input_state: current_record_tensor_or_route_projection_matrix
           expression: M_next = M_current + lambda_sum_of_w_key_axis_transform_key

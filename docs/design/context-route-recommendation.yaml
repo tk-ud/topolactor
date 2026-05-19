@@ -583,7 +583,10 @@ topology_vector_runtime:
         aggregated statistics are treated as attention weights.
       output: >
         ranked recommendation current / projection input + continuity evidence that
-        can be audited in dynamic-variable scenario CI pipelines.
+        can be audited in dynamic-variable scenario CI pipelines. Strong attention
+        must not be interpreted as "stronger same-candidate collapse"; strong
+        attention is converted to a policy-bounded phase-escape rotation on
+        projection/route state (quaternion side), while registry tables remain fixed SSOT basis.
     continuity_observability:
       hub_space: linear_space
       aggregate_values: attention_weight_observation
@@ -607,6 +610,40 @@ topology_vector_runtime:
         positioning: >
           Candidate-diversity policy to mitigate single-attractor fixation and
           candidate-space collapse. This is not the semantic core of SQL Attention.
+        quaternion_dual_projection:
+          role: attention_dual_phase_operator_for_statistical_anti_collapse
+          purpose: >
+            Protect projection/route state from over-convergence when statistical
+            attractor weights become too strong.
+          equation:
+            canonical: "q = w + x*i + y*j + z*k"
+            rotation: "q(theta,u) = cos(theta/2) + (u_x*i + u_y*j + u_z*k) * sin(theta/2)"
+            phase_escape: "theta = policy_bounded_phase_escape(abs(w), collapse_risk)"
+          meaning:
+            i_j_k: fixed_registry_basis_axes
+            x_y_z: observed_projection_components_on_registry_axes
+            w: attentioned_key_excitation_scalar_and_rotation_amount
+            q: projection_and_route_state_phase_operator
+          duality:
+            attention_side: aggregation_statistics_attractor_weight_observation
+            quaternion_side: phase_rotation_projection_operator
+            rule: stronger_attention_increases_policy_bounded_phase_escape_not_registry_mutation
+          anti_collapse_rule:
+            risk: statistics_only_ranking_over_converges_to_high_weight_attractor_field
+            behavior: quaternion_projection_rotates_route_phase_when_attention_is_strong
+            invariant: strong_attention_must_not_mean_stronger_same_candidate_collapse
+          invariants:
+            - registry_tables_remain_ssot_basis
+            - quaternion_is_projection_state_operator_not_meaning_sot
+            - observed_matrix_projection_route_state_is_rotated_not_registry_basis
+          prohibition:
+            - generate_raw_db_command_strings_from_quaternion
+            - mutate_registry_basis_from_quaternion
+            - use_quaternion_as_direct_persistence_mutation_command
+          separation_from_time_trend:
+            ema_trend_cross_state: time_series_trend_signal_only
+            phase_and_quaternion: projection_posture_and_route_state_orientation
+            rule: do_not_relabel_ema_or_trend_as_phase
         candidate_layers:
           first_candidate_global_aggregate:
             role: "stable baseline from full-history or sufficiently long-history aggregate"
