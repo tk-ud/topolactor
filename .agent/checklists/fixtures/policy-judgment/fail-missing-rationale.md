@@ -1,6 +1,5 @@
-# Policy Judgment Checklist — fixture: PASS (required runtime)
-Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
-Policy-Judgment-Rationale: Runtime behavior-affecting change requires full policy judgment checklist.
+# FAIL: missing rationale
+Policy-Judgment-Need: REQUIRED_POLICY_SURFACE_CHANGE
 
 ## Q1
 Answer: yes

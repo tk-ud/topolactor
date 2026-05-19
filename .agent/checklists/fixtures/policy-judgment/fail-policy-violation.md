@@ -1,4 +1,6 @@
 # Policy Judgment Checklist — fixture: FAIL (policy violations)
+Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
+Policy-Judgment-Rationale: Existing fixture exercises V1/V2/V3/V4 violation behavior.
 
 Scenario: agent introduced a hardcoded LIMIT 100 as a production runtime constant
 without resolving it from function_parameters, and substituted ?? 3650 as a

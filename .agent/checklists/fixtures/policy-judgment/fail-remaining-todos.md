@@ -1,4 +1,6 @@
 # Policy Judgment Checklist — fixture: FAIL (remaining TODOs not listed)
+Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
+Policy-Judgment-Rationale: Existing fixture exercises V13 remaining-TODO declaration behavior.
 
 Scenario: change is otherwise complete, but remaining TODOs are not explicitly
 listed in the completion report or PR summary.

@@ -1,7 +1,9 @@
 # Policy Judgment Checklist — fixture: FAIL (unanswered / invalid answers)
+Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
+Policy-Judgment-Rationale: Existing fixture exercises V14/V15 answer format validation behavior.
 
 Q2 and Q7 have invalid values ("pending", "tbd").
-Expected result: FAIL — V12/V13 format errors on Q2 and Q7.
+Expected result: FAIL — V14/V15 format errors on Q2 and Q7.
 
 ---
 

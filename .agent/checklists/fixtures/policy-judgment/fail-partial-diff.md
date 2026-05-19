@@ -1,4 +1,6 @@
 # Policy Judgment Checklist — fixture: FAIL (checklist not based on full branch diff)
+Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
+Policy-Judgment-Rationale: Existing fixture exercises V12 partial/full-diff validation behavior.
 
 Scenario: agent ran git diff and completed required scenario contract verification (Q12=yes), but
 the checklist answers are not based on the full branch diff + scenario contract verification (Q13=no) — the agent

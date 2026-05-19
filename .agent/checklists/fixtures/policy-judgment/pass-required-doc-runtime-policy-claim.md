@@ -1,6 +1,6 @@
-# Policy Judgment Checklist — fixture: PASS (required runtime)
-Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
-Policy-Judgment-Rationale: Runtime behavior-affecting change requires full policy judgment checklist.
+# Policy Judgment Checklist — fixture: PASS (required doc runtime/policy claim)
+Policy-Judgment-Need: REQUIRED_DOC_RUNTIME_POLICY_CLAIM
+Policy-Judgment-Rationale: Design document updates include runtime/policy behavior claims.
 
 ## Q1
 Answer: yes

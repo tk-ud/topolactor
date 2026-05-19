@@ -1,4 +1,6 @@
 # Policy Judgment Checklist — fixture: FAIL (local checks not passed)
+Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
+Policy-Judgment-Rationale: Existing fixture exercises V11 local-check failure behavior.
 
 Scenario: agent reports completion but local CI checks are red (check-structure.sh fails).
 Q14=no triggers V11.
