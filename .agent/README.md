@@ -14,13 +14,13 @@ It separates always-read guidance from condition-triggered references, and separ
 ## Directory Roles
 
 - `AGENTS.md`:
-  Defines the agent role, the SSOT agenda orientation for `docs/`, and the handoff to `.agent/rules/rule.md`.
+  Defines the agent role, provides the entry handoff to `.agent/README.md`, and routes readers to `.agent/rules/rule.md`; it is not a direct entrypoint for reading all `docs/`.
 - `.agent/docs/`:
   Resume/index surface for SSOT materials under `docs/`; not a signal to read all `docs/` by default.
 - `.agent/rules/`:
   Always-read rule surface. Defines required behavior boundaries, prohibitions, and directory-role framing under `.agent/`.
 - `.agent/skills/`:
-  Lightweight workflow and structure-operation procedures. Skills are task procedures, not heavy completion-governance protocols.
+  `agent-workflow.md` is the always-read lightweight execution workflow. Other skill files are task procedures read only when executing the corresponding task/check. Skills are task procedures.
 - `.agent/protocols/`:
   Condition-triggered governance reference points. Protocols are not an always-read bundle and not a single always-on workflow.
 - `.agent/reports/`:
@@ -37,14 +37,17 @@ It separates always-read guidance from condition-triggered references, and separ
 ## What Is Always Read
 
 - `AGENTS.md`
+- `.agent/README.md`
 - `.agent/rules/rule.md`
+- `.agent/skills/agent-workflow.md`
 
 These define baseline obligations and operating posture for every task.
 
 ## What Is Read Only When Needed
 
 - `.agent/protocols/*.md`: read only when that protocol's trigger condition matches the change.
-- `.agent/skills/*.md`: read only when executing the corresponding workflow/check procedure.
+- `.agent/skills/agent-workflow.md`: always read as the lightweight execution workflow.
+- other `.agent/skills/*.md`: read only when executing the corresponding task/check procedure.
 
 This avoids the misread that all protocols must be read and applied on every task.
 
