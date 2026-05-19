@@ -46,6 +46,11 @@ When creating the Scenario Contract, agents must explicitly answer before implem
 - Whether boundary multi-instance operation could cause cross-boundary leakage in DB / Backend / API / Frontend projection / UI action
 - What the minimum leakage-detection scenario is
 
+Boundary Identity Gate requirement:
+
+- If Boundary Extension Scenario is required for the change, Boundary Identity Gate execution is also required.
+- Run `bash .agent/checklists/check-boundary-identity.sh <pr-specific-temp-file>` using a PR-specific temporary answer file; do not answer in the checklist template.
+
 Required verification items:
 
 - existing boundary being extended
