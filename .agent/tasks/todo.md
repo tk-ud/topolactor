@@ -14,6 +14,9 @@
 
 ## Current TODO
 
+- [ ] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
+      → 対象: `db/init.sql`, `infra/docker-compose.yml`。`ui_component_bucket` / `ui_topology_tensor` 作成確認まで実施し、確認後に削除/完了化。
+
 ## Registry Tensor Continuity
 
 - [ ] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
