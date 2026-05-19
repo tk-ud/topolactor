@@ -44,3 +44,11 @@
       → 目的: optional / future / implemented の境界を単一の参照面で追跡可能にする。
       → 対象ファイル候補: docs/design/*, docs/file-structure.yaml
       → 次の判断点: 既存ドキュメントへの統合位置を決め、一覧形式を確定する。
+
+## Registry Tensor Continuity
+
+- [ ] [Codex] registry tensor projection surface の実装乖離点検（runtime / endpoint / scheduler / function / UI topology）
+      → 問題点: SSOT と監査Policyの明文化後、実装側で surface 間の意味連続性が崩れる余地がある。
+      → 目的: projection/expansion surface ごとの drift を点検し、必要なら別PRで是正する。
+      → 対象ファイル候補: docs/design/*, backend/runtime/*, frontend/*, db/*（点検のみ）
+      → 次の判断点: 点検チェックリスト化の要否を判断。

@@ -15,6 +15,7 @@ Detailed classification criteria for required-check scope, failure triage, and a
 9. Apply Failure Triage Self-Recursion Gate over all executed commands and record failure triage result before any completion decision or TODO `[x]` update.
 10. Apply Audit Gap Response Gate checks for any audit/completion/todo decision surface before completion or TODO `[x]` updates.
 11. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, missing required check scope declaration, ambiguous check scope classification, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
+    - For registry/topology recommendation and UI topology semantics, include `.agent/protocols/registry-tensor-policy.md` drift checks.
 12. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
 13. Run `bash .agent/tests/check-structure.sh` last.
 14. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.

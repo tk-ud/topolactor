@@ -99,6 +99,7 @@ check_file ".agent/protocols/policy-judgment.md"
 check_file ".agent/protocols/scenario-contract.md"
 check_file ".agent/protocols/runtime-boundary-matrix.md"
 check_file ".agent/protocols/reports-and-todos.md"
+check_file ".agent/protocols/registry-tensor-policy.md"
 check_file ".agent/skills/structure-check.md"
 check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
@@ -201,6 +202,11 @@ check_content ".agent/protocols/policy-judgment.md" "Policy Judgment Gate"
 check_content ".agent/protocols/scenario-contract.md" "Temporary Scenario Contract"
 check_content ".agent/protocols/reports-and-todos.md" "routine inspection reports"
 check_content ".agent/protocols/reports-and-todos.md" "Recursive Verification Gate"
+check_content ".agent/protocols/registry-tensor-policy.md" "Registry Tensor Policy"
+check_content ".agent/protocols/registry-tensor-policy.md" "tensor basis / vector basis"
+check_content ".agent/protocols/registry-tensor-policy.md" "Drift / GAP classification"
+check_content ".agent/rules/rule.md" "registry-tensor-policy.md"
+check_content "docs/framework-policy.yaml" "registry_tensor_principle"
 check_content ".agent/scripts/create-tmp.sh" "Runtime Boundary Failure Matrix"
 check_content ".agent/docs/structure-map.yaml" "temporary scenario contract"
 check_content ".agent/docs/structure-map.yaml" "periodic audit"
@@ -382,5 +388,4 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
-
 
