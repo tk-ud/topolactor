@@ -23,4 +23,41 @@ public class OperationVectorResolverTests
 
         Assert.Equal("default:entity:search", vector.AttractorKey);
     }
+
+    [Fact]
+    public void Resolve_ForwardsIdOrHubId_ToVector()
+    {
+        var resolver = new OperationVectorResolver();
+        var hubId = Guid.NewGuid();
+        var request = new EndpointRequestDto(
+            OperationType: "Search",
+            Target: "default",
+            Layer: "entity",
+            Action: "search",
+            IdOrHubId: hubId,
+            Payload: null,
+            Context: null);
+
+        var vector = resolver.Resolve(request);
+
+        Assert.Equal(hubId, vector.IdOrHubId);
+    }
+
+    [Fact]
+    public void Resolve_NullIdOrHubId_YieldsNullInVector()
+    {
+        var resolver = new OperationVectorResolver();
+        var request = new EndpointRequestDto(
+            OperationType: "Search",
+            Target: "default",
+            Layer: "entity",
+            Action: "search",
+            IdOrHubId: null,
+            Payload: null,
+            Context: null);
+
+        var vector = resolver.Resolve(request);
+
+        Assert.Null(vector.IdOrHubId);
+    }
 }

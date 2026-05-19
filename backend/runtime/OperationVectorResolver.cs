@@ -49,7 +49,8 @@ public class OperationVectorResolver
             ContextSessionId: contextSessionId,
             ContextUserId: contextUserId,
             ContextTokenIds: contextTokenIds,
-            ContextRecordId: contextRecordId
+            ContextRecordId: contextRecordId,
+            IdOrHubId: request.IdOrHubId
         );
     }
 
