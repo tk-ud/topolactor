@@ -6,10 +6,9 @@ It separates always-read guidance from condition-triggered references, and separ
 ## Read Order
 
 1. `AGENTS.md` (repository entry contract)
-2. `.agent/rules/rule.md` (always-on operating rules)
-3. Open the relevant `.agent/docs/` resume/index for the current agenda
-4. Open only the corresponding `.agent/skills/*.md` lightweight workflow when executing that task/check
-5. Open only the specific `.agent/protocols/*.md` needed by trigger condition
+2. `.agent/README.md` (this role-and-route guide)
+3. `.agent/rules/rule.md` (always-read operating rules and trigger map)
+4. Only when needed, open relevant `.agent/docs/` resume/index, `.agent/skills/*.md`, and `.agent/protocols/*.md`
 
 ## Directory Roles
 

@@ -6,8 +6,8 @@ Agent executes requested repository work while preserving canonical runtime rout
 
 ## Entry Route
 
-- Start from `.agent/rules/rule.md` for always-read operating rules.
-- Follow the read route and trigger map there.
+- Start by reading `.agent/README.md`.
+- Then read `.agent/rules/rule.md` for always-read operating rules and trigger map.
 
 ## Triggered Governance References
 

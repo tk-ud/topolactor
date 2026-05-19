@@ -5,7 +5,8 @@
 Every task starts by reading:
 
 1. `AGENTS.md`
-2. `.agent/rules/rule.md`
+2. `.agent/README.md`
+3. `.agent/rules/rule.md`
 
 These are always-on governance sources. Protocols and skills are conditional and must be opened only when their trigger applies.
 
@@ -15,10 +16,11 @@ These are always-on governance sources. Protocols and skills are conditional and
 Use this lightweight read route:
 
 1. `AGENTS.md`
-2. `.agent/rules/rule.md`
-3. relevant `.agent/docs/` resume/index for the agenda
-4. corresponding `.agent/skills/` lightweight workflow when executing that task/check
-5. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
+2. `.agent/README.md`
+3. `.agent/rules/rule.md`
+4. only when needed, open relevant `.agent/docs/` resume/index
+5. only when needed, open corresponding `.agent/skills/` lightweight workflow
+6. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
 
 Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope.
 
