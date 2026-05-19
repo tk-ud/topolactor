@@ -104,8 +104,8 @@ design_principles:
   append_only_logs: true
   statistical_learning: true
   explainability:
-    - "show nearest sessions/prefixes"
-    - "show top contributing tokens (dot-product contributors)"
+    - "show nearest tensor-state prefixes"
+    - "show contributing topology observations for neighborhood and attention weight"
   meaning_definition:
     default: >
       Semantic SoT is registry tensor continuity from registry_id references and
@@ -115,7 +115,7 @@ design_principles:
       remains registry tensor continuity + topology observation surfaces.
   separation_of_concerns:
     write_path:  "append event -> update minimal caches (cheap)"
-    read_path:   "fast lookup + sparse cosine on limited candidate sets"
+    read_path:   "fast topology candidate lookup + theta/neighborhood filtering on limited tensor-state candidates"
     learn_path:  "batch/near-realtime aggregation over logs"
 
 ui:
@@ -148,13 +148,17 @@ core_ideas:
 
   meaning_direction:
     definition: >
-      Each event contributes a sparse vector of token values.
-      A session (or its prefix) is represented as an aggregated vector (SUM).
-      Similarity is cosine similarity over these vectors.
+      Each event contributes topology observations over a record tensor state.
+      A session prefix accumulates registry_id continuity, relation/log evidence,
+      and DB topology observations as attention evidence (not meaning SoT).
+      Theta/cosine may be used only as neighborhood filtering over limited
+      candidate tensor states; attention weight is observed from
+      aggregation/transition/recency/frequency/diff/logs.
 
   prediction:
     definition: >
-      Given current context vector, find similar past context prefixes and infer:
+      Given current topology observation context, find neighborhood-matched past
+      tensor-state prefixes and infer:
         A: next_action (workflow)
         B: next_info tokens (reference/info)
 
