@@ -100,3 +100,13 @@ Classification policy for audit conclusions:
 Registry/topology semantics audits must classify drift/GAP using `.agent/protocols/registry-tensor-policy.md` when the change touches SSOT, recommendation runtime design, registrar UI spec, or topology governance policy text.
 
 Conditional pass, caution, and non-fatal findings must not be treated as unconditional PASS.
+
+
+## Registry Tensor Projection Continuity Lightweight Gate
+
+For registry tensor continuity routine/periodic audits, use:
+
+- checklist template: `.agent/checklists/registry-tensor-projection-continuity.md`
+- static validator: `bash .agent/checklists/check-registry-tensor-projection-continuity.sh <checklist-file>`
+
+Gate intent is intentionally lightweight: validate 6-surface presence (runtime/endpoint/scheduler/function/UI/DB), write/read surface visibility, explicit unimplemented boundaries, and remaining TODO preservation.
