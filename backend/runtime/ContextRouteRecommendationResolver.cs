@@ -34,19 +34,22 @@ public class ContextRouteRecommendationResolver
     private readonly TopologyRepository _topologyRepository;
     private readonly ContextVectorBuilder _vectorBuilder;
     private readonly ContextNeighborSearch _neighborSearch;
+    private readonly SystemOperationCiRuntime _systemCiRuntime;
 
     public ContextRouteRecommendationResolver(
         ILogger<ContextRouteRecommendationResolver> logger,
         ContextRouteRepository contextRouteRepository,
         ContextVectorBuilder vectorBuilder,
         ContextNeighborSearch neighborSearch,
-        TopologyRepository topologyRepository)
+        TopologyRepository topologyRepository,
+        SystemOperationCiRuntime systemCiRuntime)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
         _vectorBuilder = vectorBuilder ?? throw new ArgumentNullException(nameof(vectorBuilder));
         _neighborSearch = neighborSearch ?? throw new ArgumentNullException(nameof(neighborSearch));
         _topologyRepository = topologyRepository ?? throw new ArgumentNullException(nameof(topologyRepository));
+        _systemCiRuntime = systemCiRuntime ?? throw new ArgumentNullException(nameof(systemCiRuntime));
     }
 
     /// <summary>
@@ -266,6 +269,18 @@ public class ContextRouteRecommendationResolver
             topNeighbors: [],
             policy: tvPolicy.TransitionKeyEvidence);
 
+        // CI gate: evidence integrity (event-driven, in-memory — no DB round-trip).
+        // Blocking → throw → caller catches → ExplicitError("TVR_EXTENSION_FAILED").
+        // Gap → log warning, recommendation continues.
+        var evidenceCiResult = _systemCiRuntime.InspectEvidenceIntegrity(currentOperation, evidence);
+        if (evidenceCiResult.OverallStatus == SystemCiStatus.Blocking)
+            throw new InvalidOperationException(
+                $"SystemCI evidence_integrity blocking: [{string.Join(", ", evidenceCiResult.Findings.Select(f => f.CheckName))}]");
+        if (evidenceCiResult.OverallStatus == SystemCiStatus.Gap)
+            _logger.LogWarning(
+                "SystemCI evidence_integrity gap findings: {Findings}",
+                string.Join(", ", evidenceCiResult.Findings.Select(f => f.CheckName)));
+
         // 2. Build MLP features (static — no DB).
         var (mlpFeatures, mlpScore) = tvPolicy.TopologyMlp is { Enabled: true } mlpPolicy
             ? TopologyVectorRuntime.BuildTopologyMlpFeatures(evidence, mlpPolicy.MaxFeatureCrossOrder)
@@ -330,6 +345,19 @@ public class ContextRouteRecommendationResolver
                         MlpFeatureJson:       mlpFeatureJson,
                         UpdatedAt:            DateTimeOffset.UtcNow
                     );
+
+                    // CI gate: hub attention invariant check (event-driven, in-memory — no DB round-trip).
+                    // Blocking → throw → caller catches → ExplicitError("TVR_EXTENSION_FAILED").
+                    // Gap → log warning, upsert proceeds.
+                    var hubCiResult = _systemCiRuntime.InspectHubAttentionAfterUpdate(
+                        record, evidenceJson, mlpFeatureJson);
+                    if (hubCiResult.OverallStatus == SystemCiStatus.Blocking)
+                        throw new InvalidOperationException(
+                            $"SystemCI hub_attention blocking: [{string.Join(", ", hubCiResult.Findings.Select(f => f.CheckName))}]");
+                    if (hubCiResult.OverallStatus == SystemCiStatus.Gap)
+                        _logger.LogWarning(
+                            "SystemCI hub_attention gap findings: {Findings}",
+                            string.Join(", ", hubCiResult.Findings.Select(f => f.CheckName)));
 
                     await _contextRouteRepository.UpsertHubAttentionCurrentAsync(record, ct);
                 }

@@ -329,4 +329,68 @@ public class ContextRouteRepository
             events.Count);
         return Task.FromResult(0);
     }
+
+    // ---------------------------------------------------------------------------
+    // System Operation CI — read-only inspection surfaces
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads lightweight hub attention summaries for system CI inspection.
+    /// Returns HubAttentionCiSummary with key fields only (no full evidence/MLP blobs).
+    /// HasEvidence is true when evidence_json contains at least one element.
+    ///
+    /// Used by SystemOperationCiRuntime cron-triggered checks.
+    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<HubAttentionCiSummary>> LoadHubAttentionSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.LoadHubAttentionSummaryForCiAsync: in-memory skeleton — returning empty.");
+        return Task.FromResult<IReadOnlyList<HubAttentionCiSummary>>([]);
+    }
+
+    /// <summary>
+    /// Returns the total count of rows in context_event.
+    /// Used by SystemOperationCiRuntime to check current rebuildability:
+    /// if hub attention records exist but event count is 0, current is not rebuildable.
+    ///
+    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<long> CountContextEventsAsync(CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.CountContextEventsAsync: in-memory skeleton — returning 0.");
+        return Task.FromResult(0L);
+    }
+
+    /// <summary>
+    /// Returns the total count of rows in context_hub_feedback_event.
+    /// Used by SystemOperationCiRuntime rebuildability check as a secondary event source:
+    /// if context_event is empty but feedback events exist, current is still rebuildable.
+    ///
+    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<long> CountFeedbackEventsAsync(CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.CountFeedbackEventsAsync: in-memory skeleton — returning 0.");
+        return Task.FromResult(0L);
+    }
+
+    /// <summary>
+    /// Loads a lightweight summary of context_token_registry for registry continuity CI inspection.
+    /// TotalActiveTokens: active token count; UnreferencedTokenCount: active tokens not in any
+    /// hub attention record (candidate_kind = 'token').
+    ///
+    /// Used by SystemOperationCiRuntime to detect orphaned active registry tokens.
+    /// In-memory skeleton: returns zero counts. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<RegistryTokenCiSummary> LoadRegistryTokenSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: in-memory skeleton — returning zero counts.");
+        return Task.FromResult(new RegistryTokenCiSummary(TotalActiveTokens: 0, UnreferencedTokenCount: 0));
+    }
 }

@@ -13,17 +13,21 @@ public class ContextRouteRecommendationResolverTests
 
     private static ContextRouteRecommendationResolver CreateResolver(
         ContextRouteRepository? repo = null,
-        TopologyRepository? topologyRepo = null)
+        TopologyRepository? topologyRepo = null,
+        SystemOperationCiRuntime? ciRuntime = null)
     {
         repo ??= new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
         // Default: use an explicit test fixture policy, not production repository seed values.
         topologyRepo ??= new StubValidPolicyTopologyRepository();
+        ciRuntime ??= new SystemOperationCiRuntime(
+            NullLogger<SystemOperationCiRuntime>.Instance, repo);
         return new ContextRouteRecommendationResolver(
             NullLogger<ContextRouteRecommendationResolver>.Instance,
             repo,
             VectorBuilder(),
             NeighborSearch(),
-            topologyRepo);
+            topologyRepo,
+            ciRuntime);
     }
 
     // --- ContextVectorBuilder tests ---
@@ -769,6 +773,62 @@ public class ContextRouteRecommendationResolverTests
             "LoadRecentPrefixVectorsAsync must still run before AppendContextEventAsync.");
     }
 
+    // --- SystemOperationCiRuntime wiring tests ---
+
+    [Fact]
+    public async Task ResolveAsync_BlockingEvidenceCi_ReturnsTvrExtensionFailed()
+    {
+        // Blocking CI finding on evidence integrity must propagate as TVR_EXTENSION_FAILED.
+        var resolver = CreateResolver(ciRuntime: new StubBlockingEvidenceCiRuntime());
+
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_GapEvidenceCi_RecommendationContinues()
+    {
+        // Gap CI finding must not fail the recommendation — recommendation continues.
+        // With no prefix candidates, result is InsufficientHistory (not ExplicitError).
+        var resolver = CreateResolver(ciRuntime: new StubGapEvidenceCiRuntime());
+
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.NotEqual(RecommendationStatus.ExplicitError, result.Status);
+        Assert.NotEqual("TVR_EXTENSION_FAILED", result.StatusDetail);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NanEmaFastExistingRecord_ReturnsTvrExtensionFailed()
+    {
+        // Existing hub attention record with NaN ema_fast causes ComputeEma to produce NaN,
+        // which InspectHubAttentionAfterUpdate detects as Blocking → TVR_EXTENSION_FAILED.
+        var tokenId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
+        var repo = new NanEmaFastExistingRepository(tokenId, hubId);
+        var resolver = CreateResolver(
+            repo: repo,
+            topologyRepo: new StubValidPolicyTopologyRepository(),
+            ciRuntime: new SystemOperationCiRuntime(
+                NullLogger<SystemOperationCiRuntime>.Instance, repo));
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString(),
+            hubId: hubId);
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
+    }
+
     /// <summary>
     /// Stub repository that returns a fixed token record and 15 prefix candidates
     /// all carrying NextOperation="action_next" with a known sparse vector.
@@ -999,6 +1059,88 @@ public class ContextRouteRecommendationResolverTests
         {
             RecalculateHubIds.Add(hubId);
             return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Stub SystemOperationCiRuntime whose InspectEvidenceIntegrity always returns Blocking.
+    /// Used to verify that a Blocking CI result propagates as TVR_EXTENSION_FAILED.
+    /// </summary>
+    private sealed class StubBlockingEvidenceCiRuntime()
+        : SystemOperationCiRuntime(
+            NullLogger<SystemOperationCiRuntime>.Instance,
+            new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy"))
+    {
+        public override SystemCiDiagnosticResult InspectEvidenceIntegrity(
+            string? currentOperation,
+            IReadOnlyList<TransitionKeyEvidence> evidence)
+            => new(
+                InspectionTarget: "evidence_integrity",
+                InspectionKind:   SystemCiInspectionKind.EventDriven,
+                OverallStatus:    SystemCiStatus.Blocking,
+                Findings:         [new SystemCiFinding("STUB_BLOCKING", SystemCiStatus.Blocking, "stub blocking finding")],
+                InspectedAt:      DateTimeOffset.UtcNow
+            );
+    }
+
+    /// <summary>
+    /// Stub SystemOperationCiRuntime whose InspectEvidenceIntegrity always returns Gap.
+    /// Used to verify that a Gap CI result does not fail the recommendation.
+    /// </summary>
+    private sealed class StubGapEvidenceCiRuntime()
+        : SystemOperationCiRuntime(
+            NullLogger<SystemOperationCiRuntime>.Instance,
+            new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy"))
+    {
+        public override SystemCiDiagnosticResult InspectEvidenceIntegrity(
+            string? currentOperation,
+            IReadOnlyList<TransitionKeyEvidence> evidence)
+            => new(
+                InspectionTarget: "evidence_integrity",
+                InspectionKind:   SystemCiInspectionKind.EventDriven,
+                OverallStatus:    SystemCiStatus.Gap,
+                Findings:         [new SystemCiFinding("STUB_GAP", SystemCiStatus.Gap, "stub gap finding")],
+                InspectedAt:      DateTimeOffset.UtcNow
+            );
+    }
+
+    /// <summary>
+    /// Stub repository that returns an existing hub attention record with NaN ema_fast.
+    /// ComputeEma with NaN as prior produces NaN, triggering EMA_FAST_NOT_FINITE Blocking finding.
+    /// </summary>
+    private sealed class NanEmaFastExistingRepository(Guid tokenId, Guid hubId)
+        : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(
+            Guid hId,
+            int scopeLimit,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<HubAttentionCurrentRecord> result =
+            [
+                new HubAttentionCurrentRecord(
+                    HubId:                hubId,
+                    TargetTable:          "context_token_registry",
+                    CandidateKind:        "token",
+                    CandidateId:          tokenId,
+                    ScopeLimit:           scopeLimit,
+                    BaseProbability:      null,
+                    CosineSimilarity:     null,
+                    StaticRelationWeight: null,
+                    StatisticalWeight:    1.0f,
+                    MlpFeatureScore:      null,
+                    FeedbackAdjustment:   0.0f,
+                    EmaFast:              float.NaN,
+                    EmaSlow:              0.1f,
+                    Trend:                0.0f,
+                    CrossState:           "none",
+                    AttentionScore:       1.0f,
+                    Rank:                 1,
+                    EvidenceJson:         "[]",
+                    MlpFeatureJson:       "[]",
+                    UpdatedAt:            DateTimeOffset.UtcNow)
+            ];
+            return Task.FromResult(result);
         }
     }
 }
