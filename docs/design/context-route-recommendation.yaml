@@ -14,9 +14,12 @@ system:
 
 registry_tensor_principle:
   role: ssot_mandatory_principle
-  registry: topology_vocabulary_basis
-  registry_id: topology_vocabulary_axis_basis
-  registry_id_combinations: sparse_vector_or_tensor_coordinate
+  registry: semantic_matrix_topology_vocabulary_basis
+  registry_table_role: semantic_matrix
+  registry_row: registry_id_basis_vocabulary_row
+  registry_column: semantic_projection_wiring_axis_column
+  registry_value: weight_state_relation_coordinate_connection_cell
+  registry_id_combinations: sparse_vector_or_tensor_coordinate_from_semantic_matrix
   projection_surfaces:
     db: tensor_persistence_projection
     ui: tensor_projection_surface
@@ -27,7 +30,8 @@ registry_tensor_principle:
     ci_diagnostic: tensor_projection_surface
   mandatory_interpretation: >
     Surfaces above are projections/expansions of the same registry tensor and
-    must not be treated as disconnected CRUD implementations.
+    must not be treated as disconnected CRUD implementations. Abstract function
+    receives the tensor and executes projection/expansion on each surface.
 
 design_principles:
   offline_first: true
@@ -617,7 +621,7 @@ topology_vector_runtime:
       - structure_maps.component_ids
       - hub_relations.relation_registry_id + weight
     notes:
-      - "registry table itself is the dictionary / basis definition"
+      - "registry table itself is the semantic matrix (row=registryId, column=axis, value=weight/state/relation/coordinate)"
       - "rows holding ID arrays are topology nodes that carry vectors"
       - "string label/name is search aid only — not the primary axis for cosine"
       - "existing GIN indexes are used for coarse candidate filtering"

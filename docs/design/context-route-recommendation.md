@@ -17,11 +17,12 @@
 
 ## Registry Tensor Principle（SSOT）
 
-registry は単なる辞書/設定ではなく、topology vocabulary の basis（tensor basis / vector basis）として扱う。
-registry id は意味軸の基底であり、registry id の組み合わせは sparse vector / tensor coordinate である。
+registry table は単なる辞書/設定/metadata ではなく、topology vocabulary の semantic matrix（tensor basis / vector basis）として扱う。
+row は registryId（basis vocabulary）、column は semantic axis / projection axis / wiring axis、value は weight / state / relation / coordinate / connection の観測値である。
+registryId row・axis column・value cell の組み合わせは sparse vector / tensor coordinate を構成する。
 
 DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic は個別主語ではなく、
-同一 registry tensor の projection / expansion surface として扱う。
+abstract function に registry tensor（semantic matrix 由来の coordinate set）を入力し、各 surface へ projection / expansion する実行面として扱う。
 
 - DB = tensor persistence
 - UI = tensor projection
@@ -302,7 +303,7 @@ UUID + weight = weighted sparse vector
 - `hub_relations.relation_registry_id + weight`
 
 注意:
-- registry table 自体は辞書 / 基底定義
+- registry table 自体は semantic matrix（row=registryId, column=axis, value=weight/state/relation/coordinate）
 - ID 配列を保持する row が vector を持つ topology node
 - 文字列 label / name は検索補助であり、意味近傍の主軸ではない
 - 既存の GIN index は候補集合の粗探索に利用する

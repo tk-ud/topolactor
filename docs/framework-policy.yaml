@@ -1,9 +1,12 @@
 framework_policy:
   registry_tensor_principle:
     role: ssot_mandatory_principle
-    registry: topology_vocabulary_basis
-    registry_id: topology_vocabulary_axis_basis
-    registry_id_combinations: sparse_vector_or_tensor_coordinate
+    registry: semantic_matrix_topology_vocabulary_basis
+    registry_table_role: semantic_matrix
+    registry_row: registry_id_basis_vocabulary_row
+    registry_column: semantic_projection_wiring_axis_column
+    registry_value: weight_state_relation_coordinate_connection_cell
+    registry_id_combinations: sparse_vector_or_tensor_coordinate_from_semantic_matrix
     tensor_surface_mapping:
       db: tensor_persistence_projection
       ui: tensor_projection_surface
@@ -15,11 +18,40 @@ framework_policy:
     projection_rule: >
       DB/UI/endpoint/runtime/scheduler/function/CI surfaces are not independent
       implementation subjects; they are projection/expansion surfaces of the same
-      registry tensor.
+      registry tensor derived from the registry semantic matrix.
     jsonb_columnar_rule:
       jsonb: latent_and_semi_structured_feature_retention
       columnar: observable_semantic_axis_for_auditability
-      expansion: execute_tensor_on_runtime_surfaces
+      expansion: execute_abstract_function_with_registry_tensor_on_runtime_surfaces
+
+  ui_topology_tensor_persistence:
+    components_bucket:
+      role: unpackaged_component_staging_surface
+      rule: components_in_bucket_are_not_ui_topology_tensor_entities
+      prohibition: component_without_component_id_must_not_be_projected
+    package_generator:
+      role: issue_ids_and_promote_bucket_components
+      issues:
+        - component_id
+        - package_id
+        - layout_id
+        - wiring_id
+      wiring:
+        - connect_package_component_layout_wiring_axes
+        - persist_to_ui_topology_db
+    persistence_tables:
+      - ui_component_bucket
+      - ui_component_registry
+      - ui_component_package
+      - ui_package_component_map
+      - ui_layout_registry
+      - ui_wiring_registry
+      - ui_topology_tensor
+    frontend_projection_rule: frontend_projects_db_topology_definition_only
+    drift_gap:
+      - code_only_component_is_not_topology_entity
+      - code_only_package_is_not_topology_entity
+      - ui_topology_component_catalog_only_interpretation_is_prohibited
 
   registries:
     master_registry:

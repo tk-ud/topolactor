@@ -52,3 +52,5 @@
       → 目的: projection/expansion surface ごとの drift を点検し、必要なら別PRで是正する。
       → 対象ファイル候補: docs/design/*, backend/runtime/*, frontend/*, db/*（点検のみ）
       → 次の判断点: 点検チェックリスト化の要否を判断。
+
+- [ ] [Codex] Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence (tracked after SSOT/schema alignment).

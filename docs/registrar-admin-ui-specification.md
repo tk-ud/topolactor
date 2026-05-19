@@ -34,11 +34,11 @@ Registrar = controlled registration boundary for topology data
 The Registrar UI submits registration intent. It does not execute runtime directly.
 
 Registry tensor interpretation:
-- registry is topology vocabulary basis (not a mere component catalog)
+- registry table is semantic matrix topology vocabulary basis (not a mere dictionary / metadata table / component catalog)
 - registry ids compose sparse vector / tensor coordinates
 - Registrar UI is a UI projection surface of registry tensor, not an authority for topology meaning decisions
 - packageId / layoutId / wiringId are UI tensor axes
-- CRUD wiring / CanDI wiring are wiring-axis projections over the same UI topology tensor
+- CRUD wiring / CanDI wiring are wiring-axis projections over the same UI topology tensor (semantic matrix UI projection surface)
 
 The canonical runtime route remains:
 
@@ -56,6 +56,24 @@ stored_topology_data
 
 The Registrar surface feeds into `stored_topology_data` only after successful
 draft → validate → promote flow. It does not short-circuit or bypass any step.
+
+## 2.5 Components Bucket → Package Generator → DB Save
+
+The UI topology registration flow is strict and immediate:
+
+```text
+components bucket
+→ package generator
+→ ID issuance (componentId / packageId / layoutId / wiringId)
+→ UI topology DB save
+→ frontend projection target
+```
+
+- Components bucket is an unpackaged-component holding surface; bucket entries are not UI topology tensor entities yet.
+- Components without issued `componentId` must not be connected to CRUD/CanDI/route/layout/wiring projection surfaces.
+- Package generator promotes bucket entries into packageable topology units, issues required IDs, wires layout/wiring axes, and persists the result.
+- Persisted rows in UI topology DB are the source of truth for projection; frontend projects DB topology definitions and does not judge topology meaning.
+- Code-only component or code-only package is drift/GAP because it is detached from registry tensor / semantic matrix persistence.
 
 ## 3. Managed Objects
 
