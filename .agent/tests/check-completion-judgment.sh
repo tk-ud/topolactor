@@ -3,7 +3,7 @@ set -euo pipefail
 
 # This script is a governance vocabulary/invariant guard.
 # It does not replace human/agent semantic JUDGMENT over PR diff,
-# scenario contract, and checklist contents.
+# scenario contract, checklist contents, and required check scope.
 # Structure check is not a judgment substitute.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
