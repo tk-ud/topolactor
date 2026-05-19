@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run completion judgment check
+      - name: Run completion judgment invariant check
         run: bash .agent/tests/check-completion-judgment.sh
 
       - name: Run structure check

@@ -65,7 +65,9 @@ required_files:
     - .agent/protocols/scenario-contract.md
     - .agent/protocols/runtime-boundary-matrix.md
     - .agent/protocols/reports-and-todos.md
+    - .agent/protocols/registry-tensor-policy.md
     - .agent/skills/structure-check.md
+    - .agent/skills/agent-workflow.md
     - .agent/tests/check-structure.sh
     - .agent/tests/check-backend-tests.sh
     - .agent/tests/check-frontend-types.sh
@@ -217,6 +219,16 @@ required_content_terms:
     - "required_docs"
     - "supporting_docs"
     - "protocols"
+  .agent/skills/agent-workflow.md:
+    - "READ_TASK_MATERIALS"
+    - "READ_TARGET_SURFACES"
+    - "DEFINE_SCOPE"
+    - "STRUCTURE_CHECK"
+    - "completion summary must include remaining TODO"
+  .agent/tests/check-completion-judgment.sh:
+    - "Completion Judgment Gate Check"
+    - "Workflow Order Invariant"
+    - "docs/ SSOT reload"
   .agent/reports/README.md:
     - "routine inspection reports"
     - "Do not use this directory as the default place for normal PR summaries"

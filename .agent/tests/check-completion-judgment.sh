@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# This script is a governance vocabulary/invariant guard.
+# It does not replace human/agent semantic JUDGMENT over PR diff,
+# scenario contract, and checklist contents.
+# Structure check is not a judgment substitute.
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
 
@@ -12,7 +17,7 @@ check_term(){
   if grep -qF -- "$term" "$file"; then pass "$1 -> $term"; else fail "$1 missing: $term"; fi
 }
 
-echo "=== Completion Judgment Gate Check ==="
+echo "=== Completion Judgment Invariant/Vocabulary Guard Check ==="
 
 check_term ".agent/rules/rule.md" "Workflow Order Invariant"
 check_term ".agent/rules/rule.md" "READ_TASK_MATERIALS"
