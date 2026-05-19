@@ -152,3 +152,13 @@
 - [ ] [Codex] 失敗ログありの状態で todo.md を `[x]` に更新しないことを検証する
       → 目的: failure triage 未完了時の TODO完了マークを防止する。
 
+
+- [ ] [Codex] Required Check Scope Declaration Gate の動作確認を行う
+      → 目的: 変更スコープごとに required / not required / out-of-scope checks を宣言できるか確認する。
+
+- [ ] [Codex] doc-only / governance-only 変更で check scope shrinkage が起きないか監査する
+      → 目的: check-structure.sh のみ実行する場合でも、他チェック不要理由が completion report に残るか確認する。
+
+- [ ] [Codex] REQUIRED_NOT_EXECUTED の remote CI equivalence / 残TODO処理を検証する
+      → 目的: 必須チェック未実行を PASS と誤認せず、remote CI または未完了TODOへ接続できるか確認する。
+

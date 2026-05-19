@@ -357,6 +357,10 @@ check_content ".agent/rules/rule.md" "Failure Triage Self-Recursion Gate"
 check_content ".agent/protocols/completion.md" "failure triage result"
 check_content ".agent/protocols/completion.md" "Apply Failure Triage Self-Recursion Gate"
 check_content ".agent/protocols/reports-and-todos.md" "Failure Triage Self-Recursion Gate Reporting Requirements"
+check_content ".agent/rules/rule.md" "Required Check Scope Declaration Gate"
+check_content ".agent/protocols/completion.md" "required check scope declaration"
+check_content ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
+check_content ".agent/protocols/reports-and-todos.md" "Required Check Scope Declaration Gate Reporting Requirements"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

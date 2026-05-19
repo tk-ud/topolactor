@@ -144,6 +144,38 @@ Self-recursion actions (at least one required when triage finds BLOCKING/GAP/TOD
 - revert TODO `[x]` to `[ ]`,
 - preserve unresolved work in Remaining TODOs.
 
+
+## Required Check Scope Declaration Gate
+
+Before completion and before any TODO `[x]` update, declare required check scope from changed files and changed behavior surfaces.
+
+Check scope status must classify each considered check as exactly one of:
+
+- REQUIRED_EXECUTED
+- REQUIRED_NOT_EXECUTED
+- NOT_REQUIRED
+- OUT_OF_SCOPE
+
+Gate requirements:
+
+1. required check scope declaration is mandatory for completion report and completion-facing audit report.
+2. REQUIRED_NOT_EXECUTED requires either equivalent remote CI success or explicit Remaining TODO preservation.
+3. NOT_REQUIRED and OUT_OF_SCOPE require explicit rationale tied to changed scope.
+4. scope-classification missing or ambiguous entries are BLOCKING.
+5. REQUIRED_NOT_EXECUTED is never PASS by itself.
+6. For doc-only / governance-only changes, evaluate at minimum: policy judgment need, structure check need, checklist self-test need, and report/todo/completion-protocol consistency checks.
+7. If any classified check fails, hand off to Failure Triage Self-Recursion Gate.
+8. Agent must not wait for user feedback to correct scope shrinkage or missing scope declaration.
+
+Representative check mapping by scope must be explicit in report reasoning:
+
+- backend/runtime/API scope
+- frontend/types/projection scope
+- DB/persistence scope
+- policy/checklist/protocol scope
+- report/todo/surface-governance scope
+- structure baseline scope
+
 ## Protocol References
 
 Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:
