@@ -19,6 +19,46 @@ Recursive Verification Gate and TODO state:
 - Do not represent incomplete verification as completion.
 
 
+
+## Required Check Scope Declaration Gate Reporting Requirements
+
+Before Completion Eligibility judgment in any completion-facing report or governance audit summary, declare required check scope from changed files and changed behavior surfaces.
+
+Per-check status must use exactly one label:
+
+- REQUIRED_EXECUTED
+- REQUIRED_NOT_EXECUTED
+- NOT_REQUIRED
+- OUT_OF_SCOPE
+
+Rules:
+
+1. REQUIRED_NOT_EXECUTED requires remote CI equivalence evidence or explicit Remaining TODO preservation.
+2. NOT_REQUIRED and OUT_OF_SCOPE require explicit scope rationale.
+3. Missing declarations or ambiguous status assignments are BLOCKING.
+4. For doc-only / governance-only scope, still evaluate and declare at minimum: policy judgment need, structure check need, checklist self-test need, and report/todo/completion-protocol consistency checks.
+5. If any declared check failed, pass control to Failure Triage Self-Recursion Gate before completion eligibility decision.
+
+## Failure Triage Self-Recursion Gate Reporting Requirements
+
+Before Completion Eligibility judgment in any audit/completion-facing report, triage all executed-command failures.
+
+Required per-failure classification:
+
+- required check failure
+- exploratory / usage-confirmation failure
+- expected negative test
+- out-of-scope failure
+
+Rules:
+
+1. required check failure => BLOCKING.
+2. unclassified failure => BLOCKING.
+3. exploratory / usage-confirmation failure requires rationale for non-required status.
+4. expected negative test requires expected-failure intent and success condition evidence.
+5. failure triage must be completed before TODO `[x]` updates.
+6. if triage finds blocking conditions, recurse without waiting for user instruction (fix phase, report reclassification, TODO rollback, or Remaining TODO preservation).
+
 ## Audit Gap Response Gate Reporting Requirements
 
 When producing any governance audit report (including completion-facing audit summaries), include all of the following sections:
