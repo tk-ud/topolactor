@@ -62,6 +62,7 @@ builder.Services.AddSingleton<SystemOperationCiRuntime>();
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
+builder.Services.AddSingleton<AdminRuntime>();
 builder.Services.AddSingleton<RuntimeExecutor>();
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();

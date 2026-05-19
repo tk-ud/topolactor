@@ -4,7 +4,7 @@ This checklist is a lightweight **compliance-signature gate** for AGENTS.md / ru
 Detailed rule definitions belong in `AGENTS.md` and `.agent/protocols/policy-judgment.md`, not in incident-specific checklist expansion.
 
 Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
-Policy-Judgment-Rationale: PR #104 wires SystemOperationCiRuntime into RunTopologyVectorRuntimeExtensionAsync (canonical route), adding Blocking→ExplicitError fail-close behavior and Gap→LogWarning diagnostics for evidence_integrity and hub_attention checks; adds InspectRegistryContinuityAsync (CRON_ORPHANED_REGISTRY finding); fixes InspectCurrentRebuildabilityAsync to also check CountFeedbackEventsAsync; fixes NpgsqlContextRouteRepository.LoadHubAttentionSummaryForCiAsync CASE expression; adds required DI singleton for SystemOperationCiRuntime. All CI invariant thresholds are system invariants (IEEE-754 finiteness, UUID non-empty, sign invariants, semantic orphan detection), not policy values.
+Policy-Judgment-Rationale: Step 2 of issue-84 architecture fix. Adds 6 structure_map entries to seed_empty.sql (admin attractor keys: admin:context_token_registry:{list,create,deprecate}, admin:registry_vector:validate, admin:ui_component_bucket:list, admin:package_generator:generate) with deterministic UUIDs. Adds AdminRuntime class that owns admin business logic moved from AdminEndpoint. Routes admin operations through Step 10 of the canonical pipeline (same pattern as demo:entity:*), using AdminRuntime.ExecuteDataAsync to populate ResolvedData before EmissionBuilder. AdminEndpoint thinned to delegate to AdminRuntime typed methods. RuntimeExecutor gains AdminRuntime dependency injected via DI. All admin attractor keys require structure_map DB entries (AttractorResolver throws on missing — no fallback). No policy threshold, scoring, or retention values introduced; only topology routing definition.
 
 Allowed Policy-Judgment-Need values:
 - REQUIRED_RUNTIME_CHANGE
@@ -45,7 +45,7 @@ Does this change introduce or modify a value that controls runtime behavior,
 policy behavior, scoring, thresholds, limits, retention windows, sort order,
 routing, validation, promotion, disclosure, projection shape, or emission?
 
-Answer: no
+Answer: yes
 
 ---
 
@@ -91,7 +91,7 @@ Examples:
 
 If Q1=no or n/a, answer n/a.
 
-Answer: n/a
+Answer: yes
 
 ---
 
@@ -157,7 +157,7 @@ relevant policy executor?
 
 If no policy field is added or modified, answer n/a.
 
-Answer: n/a
+Answer: yes
 
 ---
 

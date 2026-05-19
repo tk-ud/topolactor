@@ -26,6 +26,7 @@ public class RuntimeExecutor
     private readonly DiffLogRepository _diffLogRepository;
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
+    private readonly AdminRuntime _adminRuntime;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -39,7 +40,8 @@ public class RuntimeExecutor
         TopologyRepository topologyRepository,
         DiffLogRepository diffLogRepository,
         RuntimeGuard runtimeGuard,
-        ContextRouteRecommendationResolver contextRouteRecommendationResolver)
+        ContextRouteRecommendationResolver contextRouteRecommendationResolver,
+        AdminRuntime adminRuntime)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -53,6 +55,7 @@ public class RuntimeExecutor
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
+        _adminRuntime = adminRuntime ?? throw new ArgumentNullException(nameof(adminRuntime));
     }
 
     /// <summary>
@@ -182,6 +185,12 @@ public class RuntimeExecutor
             var stateResult = await ApplyDemoStateLoopAsync(vector, ct);
             if (stateResult.error is not null) return ErrorResponse(stateResult.error.Code, stateResult.error.Message);
             workingShape = workingShape with { ResolvedData = stateResult.data };
+        }
+        else if (string.Equals(vector.Target, "admin", StringComparison.OrdinalIgnoreCase))
+        {
+            var adminResult = await _adminRuntime.ExecuteDataAsync(vector, ct);
+            if (adminResult.error is not null) return ErrorResponse(adminResult.error.Code, adminResult.error.Message);
+            workingShape = workingShape with { ResolvedData = adminResult.data };
         }
 
         var emission = _emissionBuilder.Build(workingShape);
