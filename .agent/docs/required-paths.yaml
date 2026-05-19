@@ -192,6 +192,8 @@ required_content_terms:
     - "Runtime Boundary Failure Matrix"
     - "Temporary Scenario Contract"
     - "Expected read / write / append / cache / return order"
+    - "Negative Scenarios"
+    - "This is not PASS/FAIL judgment and not completion proof."
     - "Remote CI Equivalence Gate"
     - "Boundary Extension Scenario"
     - "Multi-instance leakage scenario"

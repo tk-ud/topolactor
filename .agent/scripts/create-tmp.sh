@@ -61,6 +61,22 @@ cat > "$TMP_FILE" <<'EOF'
 # 9. UI-visible error state
 # 10. post-write read consistency
 #
+# Negative Scenarios
+# Write immediately after Scenario Contract creation.
+# This is not PASS/FAIL judgment and not completion proof.
+#
+# Common overlooked risks:
+# - <このタスクでよくある未接続・未実装・過大主張>
+#
+# Failure-prone implementation directions:
+# - <実装がズレやすい方向>
+#
+# Completion claim risks:
+# - <完了サマリで言ってはいけない過大主張>
+#
+# Attention reminders for later checklist / summary:
+# - <後続チェック時に戻す観点>
+#
 # Remote CI Equivalence Gate:
 # - Local checks not executed:
 # - Required remote CI equivalent:

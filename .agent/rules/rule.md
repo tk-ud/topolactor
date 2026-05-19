@@ -146,17 +146,3 @@ Related executables:
 
 - `bash .agent/checklists/check-policy-judgment.sh`
 - `bash .agent/tests/check-structure.sh` (run last)
-
-
-## Negative Consistency Gate
-
-Purpose:
-- Completion summaries must include explicit contradiction-check questions against task-purpose alignment, policy/contract compliance, and success-vs-unresolved-failure claims.
-
-Prohibited:
-- Declaring completion with `問題なし` answers that have no evidence.
-- Treating unresolved required-check/CI/blocking failures as successful completion claims.
-
-Details:
-- `.agent/protocols/completion.md`
-- `.agent/protocols/reports-and-todos.md`
