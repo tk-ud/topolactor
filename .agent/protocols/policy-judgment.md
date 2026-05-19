@@ -1,35 +1,21 @@
 # Policy Judgment Gate
 
-Policy Judgment Gate trigger:
+This protocol is condition-triggered. It is not an always-on read.
+
+## Trigger scope
+
+Run this gate when changes include any of:
 
 - runtime/policy-affecting value introduction or modification
 - recommendation/scoring/threshold/retention/routing/validation/promotion/disclosure/emission/projection behavior changes
 - Registry/Manifest/function_parameters/structure_map/package/schema changes
 - docs or summaries that assert runtime or policy behavior
 
+If none apply, declare NOT_REQUIRED/OUT_OF_SCOPE with rationale in completion-facing reporting.
+
 Checklist is fixed at 15 questions. Q additions are prohibited.
 
-Recursive Verification Gate requirement:
-
-- Any Policy Judgment violation is a blocking failure; completion is not allowed.
-- If violation is fixable in the same task scope, return to fix phase and rerun policy judgment.
-- If not fixable in scope, keep task incomplete and record explicit remaining TODO.
-
-Q12/Q13 meaning:
-
-- required NOT EXECUTED local checks must map to equivalent remote CI success before completion
-- CI queued/in_progress is not PASS
-- required NOT EXECUTED without equivalent CI success is a blocking failure
-- scope-irrelevant workflow-level skip is not blocking
-- scope-relevant CI not completed with success is a blocking failure
-
-- answers must be based on full branch diff inspection
-- when required, answers must include scenario contract verification
-- when required, answers must include Runtime Boundary Failure Matrix verification
-- missing required verification forces Q12=no and Q13=no
-- any detected mismatch or missing verification in these surfaces triggers recursion to fix phase before completion
-
-Delegated or split work does not inherit verification. Each agent making implementation/policy/completion decisions must verify independently.
+Any Policy Judgment violation is blocking under Recursive Verification Gate.
 
 Violation table:
 
@@ -49,3 +35,7 @@ Violation table:
 - V14: answer not in {yes, no, n/a}
 - V15: missing answer
 - V16: answer count is not 15
+
+
+CI queued/in_progress is not PASS.
+scope-irrelevant workflow-level skip is not blocking.

@@ -1,5 +1,11 @@
 # Registry Tensor Policy
 
+This protocol is condition-triggered. It is not an always-on read.
+
+## Trigger scope
+
+Run this policy when changes touch registry tensor semantics, topology semantics, SSOT semantics, recommendation runtime semantics, registrar UI spec semantics, or topology governance policy text.
+
 ## Purpose
 
 Define mandatory audit interpretation for registry/topology/attention/UI/runtime surfaces.
@@ -12,28 +18,25 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - row = `registryId` / topology vocabulary basis.
 - column = semantic axis / projection axis / wiring axis.
 - value = weight / state / relation / coordinate / connection cell.
-- `registry id` is a topology vocabulary axis basis.
 - `registry id` combinations are sparse vectors / tensor coordinates.
 - row/column/value combinations produce sparse vector / tensor coordinates.
 - DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are projection or expansion surfaces of the same registry tensor.
-- abstract function(tensor) executes projection/expansion onto each surface above.
+- abstract function(tensor) executes projection/expansion onto each surface.
 - Frontend is a projection surface; it is not the meaning-judgment authority.
-
 - abstract tables and registry tables are tensor surfaces; registry table structure itself spans vector space.
 - cross-registry attention is mandatory-capable via registryId / axis / relation bindings.
-- same-table count/sum/average/recency/frequency/transition aggregates are attention weights (observation), not meaning source itself.
-- real/sys operational tables use id/state/jsonb as basic shape; they are observed entity surfaces connected from registry tensor, not the tensor basis itself.
+- same-table count/sum/average/recency/frequency/transition aggregates are attention weights (observation), not meaning source.
+- real/sys operational tables use id/state/jsonb as basic shape; they are observed entity surfaces connected from registry tensor.
 - jsonb keys are promotable to columns as observable semantic axes for attention/audit/projection.
 - logs.diffs is append-only diff surface with basic shape id/tableId/jsonb/created; it is audit/rebuild history and must not replace current-state SoT.
 - vector_sparse/l2_norm caches are rebuildable materialized projections, never SoT and never direct authoring targets.
 - SQL Attention is not SQL-based dot-product attention and must not be explained as SQL reproduction of Transformer QK inner product over all elements.
-- SQL Attention decomposes attention-equivalent observation into neighborhood narrowing (registry_id/relation/topology continuity/indexed DB structure) and excitation strength observation (aggregation/transition/recency/frequency/diff/log signals).
-- Theta/cosine may be used for neighborhood filtering only; semantic SoT remains registry tensor continuity, not cosine itself.
+- SQL Attention decomposes attention-equivalent observation into neighborhood narrowing and excitation-strength observation.
+- Theta/cosine may be used for neighborhood filtering only; semantic SoT remains registry tensor continuity.
 - norm/l2_norm is projection cache for strength/impedance/weight observation and must not be treated as manually-authored semantic value.
 - a record that references registry IDs is treated as a tensor state.
-- record does not own a manually-authored vector.
 - record tensor coordinate is derived from registry_id references, relation bindings, jsonb/promoted columns, and logs/observations.
-- vector_sparse/l2_norm are rebuildable projection caches derived from that record tensor state.
+- vector_sparse/l2_norm are rebuildable projection caches derived from record tensor state.
 
 ## Projection surface map
 
@@ -58,13 +61,12 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - `packageId` / `layoutId` / `wiringId` are UI tensor axes.
 - UI topology tables are tensor UI projection surfaces, not component catalogs.
 - CRUD wiring / CanDI wiring are wiring-axis projections over UI topology tensor.
-
 - code-only component/package without ID issuance + DB persistence is drift/GAP.
 - components bucket is staging only; projection eligibility begins after package generator ID issuance and topology DB save.
 
-## Drift / GAP classification (blocking unless explicitly out-of-scope)
+## Drift / GAP classification
 
-Treat the following as drift/GAP during audit:
+Treat the following as drift/GAP during audit when trigger scope applies:
 
 1. registry table is not treated as semantic matrix
 2. registry row/column/value matrix interpretation is missing
@@ -79,26 +81,25 @@ Treat the following as drift/GAP during audit:
 11. code-only component/package is treated as acceptable topology entity
 12. components bucket staging state is projected before ID issuance/DB save
 13. semantic continuity is not verified across projection surfaces
-
 14. registry table structure itself is not treated as vector space
 15. cross-registry attention capability is ignored
 16. same-table aggregates are treated as meaning source instead of attention weight observation
-17. real/sys tables diverge from id/state/jsonb basic shape without explicit bounded reason
-18. jsonb key promotion path to columnized observable axes is denied
-19. logs.diffs append-only diff surface semantics (id/tableId/jsonb/created) are not preserved
-20. vector cache (vector_sparse/l2_norm) is treated as SoT
-21. record-level direct vector authoring is introduced
-22. seed/UI/API directly authors vector_sparse as normal path
-23. record is treated as manual vector container instead of tensor state derived from registry references
-24. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
-25. SQL Attention is implemented as SQL-side QK all-element dot-product reproduction
-26. full-element inner product brute force is introduced in RDB as normal attention path
-27. token.value manual numeric inputs are treated as semantic SoT
-28. cosine similarity is treated as semantic meaning body instead of neighborhood filter
-29. vector_sparse/l2_norm is treated as record/event semantic SoT
-30. DB topology candidate narrowing via relation/log/aggregation/index is ignored
+17. logs.diffs append-only diff surface semantics are not preserved
+18. vector cache (vector_sparse/l2_norm) is treated as SoT
+19. record-level direct vector authoring is introduced
+20. cosine similarity is treated as semantic meaning body instead of neighborhood filter
+
+21. real/sys tables diverge from id/state/jsonb basic shape without explicit bounded reason
+22. jsonb key promotion path to columnized observable axes is denied
+23. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
+24. SQL Attention is implemented as SQL-side QK all-element dot-product reproduction
+25. full-element inner product brute force is introduced in RDB as normal attention path
+26. token.value manual numeric inputs are treated as semantic SoT
+27. vector_sparse/l2_norm is treated as record/event semantic SoT
+28. DB topology candidate narrowing via relation/log/aggregation/index is ignored
 
 ## Gate usage
 
 - Keep rule.md lightweight and use this protocol for detailed audit semantics.
 - Apply this policy in completion-facing summaries and PR descriptions without copying governance source body.
+- Classify drift/GAP using this protocol when trigger scope applies.

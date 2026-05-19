@@ -1,5 +1,32 @@
 # Agent Rules
 
+## Always-Read Baseline
+
+Every task starts by reading:
+
+1. `AGENTS.md`
+2. `.agent/README.md`
+3. `.agent/rules/rule.md`
+
+These are always-on governance sources. Protocols and skills are conditional and must be opened only when their trigger applies.
+
+
+## Read Route
+
+Use this lightweight read route:
+
+1. `AGENTS.md`
+2. `.agent/README.md`
+3. `.agent/rules/rule.md`
+4. `.agent/skills/agent-workflow.md`
+5. only when needed, open relevant `.agent/docs/` resume/index
+6. only when needed, open corresponding `.agent/skills/structure-check.md` and other task skills
+7. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
+
+Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope.
+
+Work execution order follows `.agent/skills/agent-workflow.md`.
+
 ## Architecture Rules
 
 - Data-defined topology is the architecture subject. Not DTOs, not CRUD, not layered MVC.
@@ -82,67 +109,48 @@ When a new policy judgment viewpoint is needed, first evaluate whether it should
 
 Checker script responsibility should stay focused on answer-format validation and critical-violation detection, not detailed policy rule proliferation.
 
-
 When a change extends an existing boundary with a new event, write path, append log, current table, repository mutation, API payload, frontend projection, or UI action, agents must verify End-to-End Boundary Identity.
 
 The verification must compare DB identity, backend contract identity, API payload identity, repository mutation identity, frontend projection identity, and UI action identity.
 
 Any omitted identity field must be explicitly justified. Multi-instance leakage scenarios must be checked before completion.
 
+## Protocol Agenda Map
 
-## Audit Gap Response Gate
+Protocol agenda map (condition-triggered):
 
-Purpose:
-- Governance quality decisions in audit/completion/TODO surfaces must not bypass gap disclosure and eligibility judgment.
+1. completion-governance: `.agent/protocols/completion.md`
+2. scenario-contract: `.agent/protocols/scenario-contract.md`
+3. boundary-identity: `.agent/protocols/runtime-boundary-matrix.md`
+4. policy-judgment: `.agent/protocols/policy-judgment.md`
+5. registry-topology-semantics: `.agent/protocols/registry-tensor-policy.md`
+6. reports-and-todo-surfaces: `.agent/protocols/reports-and-todos.md`
 
-Prohibited:
-- Marking governance completion without required audit sections or classification semantics.
-- Treating unobserved behavior evidence as behavior execution PASS.
+## Protocol Trigger Map
 
-Details:
-- `.agent/protocols/reports-and-todos.md`
-- `.agent/protocols/completion.md`
+Protocols are not always-on reading. Use each protocol only when its trigger condition applies.
 
-## Failure Triage Self-Recursion Gate
+- Completion report / TODO `[x]` update / completion eligibility decision:
+  - `.agent/protocols/completion.md`
+  - `.agent/protocols/reports-and-todos.md`
+- Runtime claim / route / persistence / projection changes:
+  - `.agent/protocols/scenario-contract.md` (Temporary Scenario Contract)
+- Endpoint / frontend API proxy / repository write / admin operation / persistence mutation / DB-backed registry operation:
+  - `.agent/protocols/runtime-boundary-matrix.md` (Runtime Boundary Failure Matrix)
+- Policy value / scoring / threshold / routing / validation / projection behavior changes:
+  - `.agent/protocols/policy-judgment.md`
+- Registry tensor / topology semantics changes:
+  - `.agent/protocols/registry-tensor-policy.md`
 
-Purpose:
-- Any failed executed command must be triaged before completion decision or TODO `[x]` update.
+## Gate Naming (Reference Only)
 
-Prohibited:
-- Leaving failed commands untriaged.
-- Waiting for user feedback before recursion when blocking/ambiguous failures exist.
-
-Details:
-- `.agent/protocols/reports-and-todos.md`
-- `.agent/protocols/completion.md`
-
-## Required Check Scope Declaration Gate
-
-Purpose:
-- Declare required check scope per change so check shrinkage is explicit and reviewable.
-
-Prohibited:
-- Missing required-check scope declaration in completion-facing reports.
-- Treating REQUIRED_NOT_EXECUTED as PASS without remote CI equivalence or explicit remaining TODO handling.
+Recursive Verification Gate, Required Check Scope Declaration Gate, Failure Triage Self-Recursion Gate, and Audit Gap Response Gate are executed through completion-governance protocol.
 
 Details:
-- `.agent/protocols/reports-and-todos.md`
 - `.agent/protocols/completion.md`
+- `.agent/protocols/reports-and-todos.md`
 
-## Protocol References
+Skills are operation procedures and are not governance protocols. Read `.agent/skills/*.md` only when executing the corresponding task/check.
 
-Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:
 
-- Temporary Scenario Contract: `.agent/protocols/scenario-contract.md`
-- Runtime Boundary Failure Matrix: `.agent/protocols/runtime-boundary-matrix.md`
-- Policy Judgment Gate and V1〜V16 table: `.agent/protocols/policy-judgment.md`
-- Completion Sequence and local gate order: `.agent/protocols/completion.md`
-- Reports and TODO operation surfaces: `.agent/protocols/reports-and-todos.md`
-- Registry Tensor audit/drift policy: `.agent/protocols/registry-tensor-policy.md`
-
-Recursive Verification Gate: Any blocking audit failure across CI/local checks, scenario contract, boundary matrix, full diff verification, or policy judgment blocks completion and requires fix-and-reverify within scope before completion.
-
-Related executables:
-
-- `bash .agent/checklists/check-policy-judgment.sh`
-- `bash .agent/tests/check-structure.sh` (run last)
+Temporary Scenario Contract and scenario contract use are trigger-based and not always-on.
