@@ -573,6 +573,69 @@ public class ContextRouteRecommendationResolverTests
         Assert.Empty(tracking.RecalculateHubIds);
     }
 
+    // --- A11: failure path tests ---
+
+    [Fact]
+    public async Task ResolveAsync_AppendContextEventThrows_ReturnsExplicitError()
+    {
+        // AppendContextEventAsync failure must return ExplicitError, not a recommendation result.
+        var repo = new AppendThrowingRepository();
+        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+        var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("CONTEXT_EVENT_APPEND_FAILED", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TransitionStatsThrows_ReturnsExplicitError()
+    {
+        // Transition stats query failure must return ExplicitError — no fallback to empty stats.
+        // Uses a stub that returns 15 matching prefix candidates (enough to exceed MinNeighbors=10)
+        // so the stats query path is actually reached, then throws.
+        var tokenId = Guid.NewGuid();
+        var repo = new TransitionStatsThrowingRepository(tokenId);
+        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString());
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("TRANSITION_STATS_QUERY_FAILED", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_TvrExtensionHubAttentionUpdateThrows_ReturnsExplicitError()
+    {
+        // TVR extension / hub attention current update failure must return ExplicitError.
+        // Hub attention is hub-entity-scoped; hubId must be provided to enter the write path.
+        var tokenId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
+        var repo = new TvrExtensionThrowingRepository();
+        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString(),
+            hubId: hubId);
+
+        var result = await resolver.ResolveAsync(shape);
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("TVR_EXTENSION_FAILED", result.StatusDetail);
+        Assert.Empty(result.NextOperations);
+        Assert.Empty(result.NextTokens);
+    }
+
     // --- Helper ---
 
     private static RuntimeWorkingShape MakeShape(
@@ -816,6 +879,86 @@ public class ContextRouteRecommendationResolverTests
             WasAppendCalled = true;
             return Task.CompletedTask;
         }
+    }
+
+    /// <summary>
+    /// Stub repository that throws on AppendContextEventAsync to simulate a persistence failure.
+    /// Used to verify that AppendContextEventAsync failure returns ExplicitError.
+    /// </summary>
+    private sealed class AppendThrowingRepository() : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+            => throw new InvalidOperationException("Simulated DB constraint failure on context_event append.");
+    }
+
+    /// <summary>
+    /// Stub repository that returns 15 matching prefix candidates (enough to exceed MinNeighbors=10)
+    /// but throws on both transition stats query methods to simulate a DB failure in stats aggregation.
+    /// Used to verify that stats query failure returns ExplicitError with no fallback to empty stats.
+    /// </summary>
+    private sealed class TransitionStatsThrowingRepository(Guid tokenId) : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
+            IEnumerable<Guid> tokenIds,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<ContextTokenRecord> result =
+                [new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")];
+            return Task.FromResult(result);
+        }
+
+        public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
+            string? tableName,
+            string? role,
+            int? maxDays,
+            CancellationToken ct = default)
+        {
+            var vector = new Dictionary<Guid, float> { [tokenId] = 1.0f };
+            IReadOnlyList<ContextPrefixVectorRecord> result = Enumerable.Range(0, 15)
+                .Select(i => new ContextPrefixVectorRecord(
+                    SessionId: Guid.NewGuid(),
+                    PrefixIndex: i,
+                    LastEventId: Guid.NewGuid(),
+                    SparseVector: vector,
+                    L2Norm: 1.0f,
+                    UpdatedAt: DateTimeOffset.UtcNow.AddMinutes(-i),
+                    NextOperation: "action_next",
+                    NextTokenIdsHint: null
+                ))
+                .ToList();
+            return Task.FromResult(result);
+        }
+
+        public override Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
+            string prevOperation,
+            string? role,
+            int candidateLimit,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("Simulated DB error in transition stats query.");
+
+        public override Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(
+            string prevOperation,
+            string? role,
+            TransitionAggregationPolicy aggregationPolicy,
+            int candidateLimit,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("Simulated DB error in windowed transition stats query.");
+    }
+
+    /// <summary>
+    /// Stub repository that throws on UpsertHubAttentionCurrentAsync to simulate a hub attention
+    /// DB constraint failure inside the TVR extension path.
+    /// Used to verify that TVR extension failure returns ExplicitError.
+    /// </summary>
+    private sealed class TvrExtensionThrowingRepository() : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task UpsertHubAttentionCurrentAsync(
+            HubAttentionCurrentRecord record,
+            CancellationToken ct = default)
+            => throw new InvalidOperationException("Simulated DB constraint failure in hub attention upsert.");
     }
 
     /// <summary>
