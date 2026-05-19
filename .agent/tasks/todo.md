@@ -72,57 +72,57 @@
 
 ## Claude Implementation Boundary Audit Experiments
 
-- [ ] [Claude] context_event append が silent failure にならないか監査する
+- [x] [Claude] context_event append が silent failure にならないか監査する
       → 理由: append failure の握りつぶしは runtime 観測性を失わせる。
       → 対象ファイル: runtime / persistence 関連実装（監査時に確定）
       → 次の判断点: failure が explicit result として surface されるか検証する。
 
-- [ ] [Claude] transition stats / context event / TVR extension の失敗を「継続可能」にしてよい境界を監査する
+- [x] [Claude] transition stats / context event / TVR extension の失敗を「継続可能」にしてよい境界を監査する
       → 理由: recoverable 境界の誤設定で policy と実装の整合が崩れる。
       → 対象ファイル: runtime executor / recommendation runtime 関連実装（監査時に確定）
       → 次の判断点: 継続可否の判定根拠を policy surface に照合できるか確認する。
 
-- [ ] [Claude] function_parameters 由来にすべき値を runtime 定数化しないか監査する
+- [x] [Claude] function_parameters 由来にすべき値を runtime 定数化しないか監査する
       → 理由: policy 可変値の定数化は SSOT 逸脱を起こす。
       → 対象ファイル: runtime policy 読み取り / registrar validation 関連実装（監査時に確定）
       → 次の判断点: 可変パラメータのソースが function_parameters に統一されているか確認する。
 
-- [ ] [Claude] DB CHECK / column name / seed policy が policy可変性と衝突していないか監査する
+- [x] [Claude] DB CHECK / column name / seed policy が policy可変性と衝突していないか監査する
       → 理由: schema 固定と policy 変更余地の矛盾が運用停止を誘発する。
       → 対象ファイル: db/*.sql, seed policy 関連定義（監査時に確定）
       → 次の判断点: 変更可能前提の項目が DB 制約で過固定化されていないか確認する。
 
-- [ ] [Claude] append-only log と rebuildable materialized current を混同しないか監査する
+- [x] [Claude] append-only log と rebuildable materialized current を混同しないか監査する
       → 理由: 役割混同は履歴完全性と再構築可能性を同時に損なう。
       → 対象ファイル: log/current テーブル定義と repository 実装（監査時に確定）
       → 次の判断点: append-only と current projection の責務境界が明示されているか確認する。
 
-- [ ] [Claude] frontend に topology / cosine / MLP / feedback 判定を漏らさないか監査する
+- [x] [Claude] frontend に topology / cosine / MLP / feedback 判定を漏らさないか監査する
       → 理由: 判定ロジックの frontend 流出は境界違反となる。
       → 対象ファイル: frontend projection / admin UI 関連実装（監査時に確定）
       → 次の判断点: frontend は structured result の投影のみに留まっているか検証する。
 
-- [ ] [Claude] hub identity / target_table / candidate_kind / candidate_id / scope_limit の境界キー欠落を監査する
+- [x] [Claude] hub identity / target_table / candidate_kind / candidate_id / scope_limit の境界キー欠落を監査する
       → 理由: 境界キー欠落は集計歪み・誤関連付けを起こす。
       → 対象ファイル: runtime dispatch / repository key mapping 関連実装（監査時に確定）
       → 次の判断点: 各キーが write/read 両経路で保持されるか確認する。
 
-- [ ] [Claude] SQL Attention を単なる推薦UI実装へ矮小化しないか監査する
+- [x] [Claude] SQL Attention を単なる推薦UI実装へ矮小化しないか監査する
       → 理由: DB-backed attention の意味境界を UI 層へ誤転写するリスクがある。
       → 対象ファイル: recommendation runtime / SQL attention 関連実装（監査時に確定）
       → 次の判断点: attention の責務が runtime+persistence 側に維持されているか確認する。
 
-- [ ] [Claude] optional / future extension を runtime implemented と誤記しないか監査する
+- [x] [Claude] optional / future extension を runtime implemented と誤記しないか監査する
       → 理由: 実装済み主張の先走りは completion 報告の信頼性を損なう。
       → 対象ファイル: docs/design/*.md, reports/todos 関連ドキュメント（監査時に確定）
       → 次の判断点: 実装済み・未実装・将来拡張のラベル整合を確認する。
 
-- [ ] [Claude] exploration slot を完全ランダム候補として実装しないか監査する
+- [x] [Claude] exploration slot を完全ランダム候補として実装しないか監査する
       → 理由: 推薦境界条件を失い、policy 期待と乖離する。
       → 対象ファイル: recommendation candidate selection 関連実装（監査時に確定）
       → 次の判断点: exploration 条件が policy/runtime 定義に沿っているか検証する。
 
-- [ ] [Claude] happy path のみのテストで boundary failure matrix を省略しないか監査する
+- [x] [Claude] happy path のみのテストで boundary failure matrix を省略しないか監査する
       → 理由: failure matrix 欠落は運用時障害の未検出を招く。
       → 対象ファイル: tests / protocols / completion artifacts（監査時に確定）
       → 次の判断点: success 以外の failure 系ケースが網羅されているか確認する。
