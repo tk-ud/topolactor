@@ -11,13 +11,8 @@ services:
       - "5432:5432"
     volumes:
       - topolactor_demo_pgdata:/var/lib/postgresql/data
-      - ../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
-      - ../db/topology_tables.sql:/docker-entrypoint-initdb.d/02-topology_tables.sql:ro
-      - ../db/promotion_tables.sql:/docker-entrypoint-initdb.d/03-promotion_tables.sql:ro
-      - ../db/context_route_tables.sql:/docker-entrypoint-initdb.d/04-context_route_tables.sql:ro
-      - ../db/ui_topology_tables.sql:/docker-entrypoint-initdb.d/05-ui_topology_tables.sql:ro
-      - ../db/seed_empty.sql:/docker-entrypoint-initdb.d/06-seed_empty.sql:ro
-      - ../db/demo_seed.sql:/docker-entrypoint-initdb.d/07-demo_seed.sql:ro
+      - ../db:/db:ro
+      - ../db/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U topolactor_demo -d topolactor_demo"]
       interval: 10s
