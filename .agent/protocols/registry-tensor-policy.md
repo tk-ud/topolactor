@@ -19,6 +19,18 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - abstract function(tensor) executes projection/expansion onto each surface above.
 - Frontend is a projection surface; it is not the meaning-judgment authority.
 
+- abstract tables and registry tables are tensor surfaces; registry table structure itself spans vector space.
+- cross-registry attention is mandatory-capable via registryId / axis / relation bindings.
+- same-table count/sum/average/recency/frequency/transition aggregates are attention weights (observation), not meaning source itself.
+- real/sys operational tables use id/state/jsonb as basic shape; they are observed entity surfaces connected from registry tensor, not the tensor basis itself.
+- jsonb keys are promotable to columns as observable semantic axes for attention/audit/projection.
+- logs.diffs is append-only diff surface with basic shape id/tableId/jsonb/created; it is audit/rebuild history and must not replace current-state SoT.
+- vector_sparse/l2_norm caches are rebuildable materialized projections, never SoT and never direct authoring targets.
+- a record that references registry IDs is treated as a tensor state.
+- record does not own a manually-authored vector.
+- record tensor coordinate is derived from registry_id references, relation bindings, jsonb/promoted columns, and logs/observations.
+- vector_sparse/l2_norm are rebuildable projection caches derived from that record tensor state.
+
 ## Projection surface map
 
 - DB: tensor persistence projection
@@ -63,6 +75,18 @@ Treat the following as drift/GAP during audit:
 11. code-only component/package is treated as acceptable topology entity
 12. components bucket staging state is projected before ID issuance/DB save
 13. semantic continuity is not verified across projection surfaces
+
+14. registry table structure itself is not treated as vector space
+15. cross-registry attention capability is ignored
+16. same-table aggregates are treated as meaning source instead of attention weight observation
+17. real/sys tables diverge from id/state/jsonb basic shape without explicit bounded reason
+18. jsonb key promotion path to columnized observable axes is denied
+19. logs.diffs append-only diff surface semantics (id/tableId/jsonb/created) are not preserved
+20. vector cache (vector_sparse/l2_norm) is treated as SoT
+21. record-level direct vector authoring is introduced
+22. seed/UI/API directly authors vector_sparse as normal path
+23. record is treated as manual vector container instead of tensor state derived from registry references
+24. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
 
 ## Gate usage
 

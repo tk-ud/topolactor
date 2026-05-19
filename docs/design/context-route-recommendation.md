@@ -34,7 +34,32 @@ abstract function に registry tensor（semantic matrix 由来の coordinate set
 
 JSONB は潜在/半構造特徴保持層、column 化は観測可能意味軸、runtime 展開は tensor expansion として扱う。
 
+同一テーブル内の count/sum/average/recency/frequency/transition 集計値は、意味本体ではなく attention weight の観測値として扱う。
+
 ---
+
+
+## Real/Sys Table Principle and logs.diffs
+
+実部/sys テーブルの基本形は `id / state / jsonb` とする。
+- `id` = identity
+- `state` = current state
+- `jsonb` = 潜在/半構造特徴保持面
+
+実部/sys テーブルは registry tensor そのものではなく、registry tensor から観測・接続される実体面である。
+jsonb key は観測頻度・意味重要度・監査要件に応じて column 化し、attention/audit/projection の観測軸として表出できる。
+
+`logs.diffs` は append-only diff surface（基本形: `id / tableId / jsonb / created`）として扱う。
+これは監査・再構築・履歴面であり、現在状態 SoT の代替ではない。
+
+## Vector Cache Clarification
+
+registry_id 群を参照する record は Tensor state として扱う。
+record は手入力 vector を所有しない。
+record の tensor coordinate は registry_id 参照、relation binding、jsonb/promoted column、logs/observations から導出される。
+`vector_sparse` / `l2_norm` は SoT ではなく、その Tensor state から再生成可能な materialized projection cache である。
+seed / UI / API から vector cache を直接 authoring する導線は drift/GAP として扱う。
+
 
 ## 推薦の二軸
 

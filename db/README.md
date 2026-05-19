@@ -62,7 +62,7 @@ On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manuall
 | `schema.sql` | Top-level entrypoint. Extensions, all registry tables, `function_parameters`. References `topology_tables.sql` and `promotion_tables.sql` via `\i` comments. |
 | `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
-| `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, sparse vector caches, transition stats. Optional cluster/drift tables isolated at bottom. |
+| `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. Optional cluster/drift tables isolated at bottom. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`. No real business data. |
 | `demo_seed.sql` | Public scaffold demo seed. Fake/demo data only: hub, entities, context tokens, demo_policy, demo structure maps. Apply after `seed_empty.sql`. |
 
@@ -89,6 +89,15 @@ here alter topology behaviour for all future canonical flow traversals.
 
 ### Converged entity data tables
 
+Basic shape principle for real/sys tables: `id / state / jsonb`.
+- `id`: identity
+- `state`: current state
+- `jsonb`: latent and semi-structured payload retained before/alongside selective column promotion
+
+JSONB keys can be promoted to columns when observation/audit/projection requires explicit semantic axes.
+This promotion is treated as surfacing semantic axes, not as abandoning the tensor-first architecture subject.
+
+
 These hold the runtime-converged state produced by traversing the topology.
 They are outputs of the canonical flow, not source-of-truth business data.
 Data here reflects the current resolved projection of operations against the
@@ -96,7 +105,7 @@ topology definition.
 
 - `hubs` — resolved grouping points, populated during `attractor_resolve`
 - `entities` — resolved data nodes within hubs, populated by `schema_resolve` + `component_expand`
-- `diff_logs` — (future) change log of entity convergence transitions
+- `diff_logs` — append-only diff surface (basic shape: id / tableId / jsonb / created) for audit/rebuild history; not current-state SoT
 
 ### Promotion policy tables
 
