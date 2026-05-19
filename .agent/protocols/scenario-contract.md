@@ -6,6 +6,19 @@ This protocol is condition-triggered. It is not an always-on read.
 
 Create and verify `.agent/tmp/tmp.txt` when changes include runtime claim, canonical route behavior, persistence behavior, or projection behavior.
 
+## Precondition: Workflow Order Invariant Gate
+
+Before creating scenario contract:
+
+- READ_TASK_MATERIALS completed.
+- READ_TARGET_SURFACES completed.
+- DEFINE_SCOPE completed.
+- Reconfirm issue/prompt explicit materials.
+- Perform docs/ SSOT reload from `.agent/docs/ssot-map.yaml` for changed surfaces.
+- Record reloaded material names in scenario contract.
+
+A scenario contract without docs/ SSOT reload is invalid.
+
 ## Position in completion sequence
 
 - Scenario Contract is created before implementation (intent fixation stage).

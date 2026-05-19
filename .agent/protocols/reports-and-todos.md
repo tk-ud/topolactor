@@ -1,5 +1,10 @@
 # Reports and TODO Surfaces (Agenda: reports-and-todo-surfaces)
 
+## Workflow Guard
+
+- Treat this protocol as a report/TODO surface update after JUDGMENT.
+- Do not treat report/TODO updates as a bypass for workflow order.
+
 ## Trigger condition
 
 Read this protocol only when deciding where to store reports/summaries/TODO carry-over.

@@ -2,6 +2,13 @@
 
 Completion Sequence
 
+## Workflow Guard
+
+- Use this protocol only during JUDGMENT for completion eligibility / TODO `[x]` / completion summary decisions.
+- Do not skip SCENARIO_CONTRACT / IMPLEMENT / FILL_CHECKLISTS / VERIFY_SCENARIO_DIFF before this judgment stage.
+- NOT_REQUIRED / OUT_OF_SCOPE declarations must be explicit.
+- Trigger-non-applicable gates must be declared as NOT_REQUIRED / OUT_OF_SCOPE explicitly; silent skip is prohibited.
+
 ## Trigger condition
 
 Run this protocol only when any of the following is attempted:

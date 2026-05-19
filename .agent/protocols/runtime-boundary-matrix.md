@@ -2,6 +2,11 @@
 
 This protocol is condition-triggered. It is not an always-on read.
 
+## Workflow Guard
+
+- Use this protocol only in FILL_CHECKLISTS or JUDGMENT stages.
+- Do not use this protocol to bypass earlier workflow steps.
+
 ## Trigger scope
 
 Run this matrix verification when changes include:

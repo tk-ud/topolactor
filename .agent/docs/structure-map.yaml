@@ -64,7 +64,7 @@ layers:
       Agent-facing documentation, rules, skills, checks, tasks, and reports.
       The check script is the executable SSOT for structure validation.
     directories:
-      docs:     .agent/docs/      # agenda resume/index to scope needed docs/ sources
+      docs:     .agent/docs/      # agenda resume/index; ssot-map.yaml maps change surfaces to docs/ SSOT
       rules:    .agent/rules/     # architecture behavior rules
       protocols: .agent/protocols/ # procedure protocols / expanded verification guidance
       skills:   .agent/skills/    # agent skill notes
