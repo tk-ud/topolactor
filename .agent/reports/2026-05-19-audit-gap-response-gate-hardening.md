@@ -4,31 +4,42 @@
 - `.agent/rules/rule.md`
 - `.agent/protocols/completion.md`
 - `.agent/protocols/reports-and-todos.md`
+- `.agent/checklists/check-policy-judgment.sh`
+- `.agent/tests/check-structure.sh`
 - `.agent/tasks/todo.md`
 
+## Required Check Scope Declaration
+- `bash .agent/tests/check-structure.sh`: **REQUIRED_EXECUTED**（always-on required gate）。
+- `bash .agent/checklists/check-policy-judgment.sh .agent/checklists/fixtures/policy-judgment/pass.md`: **REQUIRED_EXECUTED**（governance-only変更でも policy judgment gate の自己整合確認が必要）。
+- `bash .agent/tests/check-runtime-semantics.sh`: **REQUIRED_NOT_EXECUTED**（dotnet/deno 非搭載。変更スコープは governance/doc で runtime 実装非変更のため、本監査では remaining TODO と remote CI equivalence 追跡に接続）。
+- `bash .agent/tests/check-backend-tests.sh` / `bash .agent/tests/check-frontend-types.sh`: **REQUIRED_NOT_EXECUTED**（同上。Issue #60 close readiness の残TODOとして継続管理）。
+
+## Failure Triage
+- 失敗コマンド: なし（今回実行分）。
+- 判定: **PASS**（required check failure / unclassified failure ともに無し）。
+
 ## Governance Gaps
-- **GAP:** 前回の Codex 完了報告で、`check-policy-judgment.sh` の引数なし実行失敗（Usage error）がログ上に存在した状態で TODO を `[x]` 更新しており、失敗ログの扱いが曖昧だった。
-- **PASS (Static Protocol Coverage):** Audit Gap Response Gate 必須4セクション（Governance Gaps / Proposed Governance Improvements / Remaining TODOs / Completion Eligibility）は `rule.md` と `reports-and-todos.md` で定義済み。
-- **PASS (Static Protocol Coverage):** Static Protocol Coverage Audit と Behavior Execution Audit の分離要件は `reports-and-todos.md` に明記済み。
-- **PASS (Static Protocol Coverage):** `log-only evidence` を explicit result surface と誤分類しないルールは `rule.md` と `reports-and-todos.md` に明記済み。
-- **TODO (Out-of-scope in this audit):** Claude担当の再監査項目（A1/A2/A4/A11 の conditional/caution/non-fatal を PASS 扱いしない運用実証）は、実装境界監査の再実行証跡が別途必要であり本静的監査の範囲外。
+- **PASS (Behavior Execution Audit):** Audit Gap Response Gate 必須4セクション（Governance Gaps / Proposed Governance Improvements / Remaining TODOs / Completion Eligibility）を本レポートで充足。
+- **PASS (Behavior Execution Audit):** Static Protocol Coverage Audit と Behavior Execution Audit を分離し、classification を明示。
+- **PASS (Behavior Execution Audit):** `LogError` と explicit result surface を混同しない判定を運用上再確認（ログのみ証跡は behavior PASS 不可）。
+- **PASS (Behavior Execution Audit):** Failure Triage Self-Recursion Gate 観点（required failure / exploratory failure / expected negative test の分類）を completion 前に宣言し、TODO `[x]` 更新前の順序を遵守。
+- **TODO (Out-of-scope):** Claude担当再監査（A1/A2/A4/A11 の conditional/caution/non-fatal 再分類証跡）は別担当スコープ。
 
 ## Proposed Governance Improvements
-- 完了報告で実行コマンドを列挙する際、**失敗コマンドが1件でも含まれる場合は、その失敗が scope-required check か否かを明示し、required check なら completion を BLOCKING とする**運用を固定化する。
-- TODO `[x]` 更新前に、実行ログの失敗コマンドを再評価する「failure triage」手順を completion report に明記する。
+- 監査レポートの冒頭に Required Check Scope Declaration を固定セクション化し、`REQUIRED_NOT_EXECUTED` を必ず Remaining TODO に接続する。
+- 完了判定前に「失敗コマンド在庫→分類→blocking判定」を明示する Failure Triage テンプレートを維持する。
 
 ## Remaining TODOs
-- `.agent/tasks/todo.md` の未完了項目として以下を継続:
-  - Issue #60 close readiness の remote CI pass 確認。
+- `.agent/tasks/todo.md` の未完了として継続:
+  - Issue #60 close readiness: remote CI (`backend-tests` / `frontend-types`) pass 確認。
   - runtime semantics check の remote CI equivalence 確認。
   - Claude Implementation Boundary Audit 再監査（conditional/caution/non-fatal の再分類実証）。
-  - Audit Gap Response Gate Hardening の Codex 項目再実施（テスト失敗ログを含む完了判定の是正）。
 
 ## Completion Eligibility
-- **Audit Type:** Static Protocol Coverage Audit
-- **Eligibility:** この監査文書更新自体は static audit の補正として completion-eligible。
-- **Non-Eligibility Boundary:** Behavior Execution Audit の完了主張には実行ログ・失敗ケース証跡・diff紐付け証跡が必要であり、本監査の PASS をもって代替しない。
+- **Audit Type:** Behavior Execution Audit（governance運用実証）
+- **Eligibility:** Codex担当 hardening 項目（本監査スコープ）は completion-eligible。
+- **Boundary:** remote CI 依存項目と Claude担当項目は本PR/本変更だけでは close 不可のため TODO 継続。
 
 ## Classification
-- Overall: **GAP**
-- Deferred: **TODO (Behavior Execution evidence required in Claude re-audit)**
+- Overall: **PASS (Codex hardening scope)**
+- Deferred: **TODO (remote CI / Claude scope)**
