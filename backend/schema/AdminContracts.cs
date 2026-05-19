@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Topolactor.Schema;
 
 /// <summary>
@@ -52,4 +54,45 @@ public record AdminCreateTokenResponseDto(
 public record AdminDeprecateTokenResponseDto(
     bool Ok,
     string Message
+);
+
+// ---------------------------------------------------------------------------
+// Registrar vector validation DTOs
+// ---------------------------------------------------------------------------
+
+/// <summary>
+/// Admin API request to validate a candidate registry ID array against existing
+/// registry rows using multi-hot cosine similarity.
+/// registryTable must be one of the supported tables (e.g. "relation_registry").
+/// queryIds must be valid UUID strings.
+/// </summary>
+public record AdminRegistryVectorValidateRequestDto(
+    [property: JsonPropertyName("registryTable")] string RegistryTable,
+    [property: JsonPropertyName("queryIds")]      IReadOnlyList<string> QueryIds
+);
+
+/// <summary>
+/// A single neighbor returned in the registry vector validation result.
+/// </summary>
+public record AdminRegistryVectorNeighborDto(
+    [property: JsonPropertyName("registryId")]   string RegistryId,
+    [property: JsonPropertyName("name")]         string Name,
+    [property: JsonPropertyName("cosineScore")]  float CosineScore,
+    [property: JsonPropertyName("matchedIds")]   IReadOnlyList<string> MatchedIds,
+    [property: JsonPropertyName("reason")]       string Reason
+);
+
+/// <summary>
+/// Admin API response for a registry vector validation operation.
+/// validationClass: one of pass, related_existing_registry, near_duplicate_vector,
+///   duplicate_vector, zero_vector, explicit_error.
+/// isBlocking: true when the validation result should block promotion.
+/// neighbors: existing registries with high cosine similarity to the candidate.
+/// statusDetail: machine-readable code when validationClass is explicit_error.
+/// </summary>
+public record AdminRegistryVectorValidateResponseDto(
+    [property: JsonPropertyName("validationClass")] string ValidationClass,
+    [property: JsonPropertyName("isBlocking")]      bool IsBlocking,
+    [property: JsonPropertyName("neighbors")]        IReadOnlyList<AdminRegistryVectorNeighborDto> Neighbors,
+    [property: JsonPropertyName("statusDetail")]     string? StatusDetail = null
 );

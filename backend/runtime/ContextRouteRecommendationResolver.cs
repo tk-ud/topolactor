@@ -189,6 +189,24 @@ public class ContextRouteRecommendationResolver
             _logger.LogError(ex, "ContextRouteRepository.AppendContextEventAsync failed — continuing.");
         }
 
+        // TopologyVectorRuntime extension: evidence extraction, MLP feature crossing, hub attention update.
+        // Runs AFTER AppendContextEventAsync so the event is in context before hub attention is updated.
+        // enabled=false → no-op (explicit, not silent). Failure → log error, continue.
+        // Does not affect ContextRouteRecommendationResult — side effects only.
+        if (policy.TopologyVectorRuntime is { Enabled: true } tvPolicy)
+        {
+            try
+            {
+                await RunTopologyVectorRuntimeExtensionAsync(
+                    tvPolicy, currentOperation, tokenIds, tokenValueMap, tableName, sessionId, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "ContextRouteRecommendationResolver: TopologyVectorRuntime extension failed — continuing.");
+            }
+        }
+
         if (prefixCandidates.Count == 0)
         {
             _logger.LogDebug("ContextRouteRecommendationResolver: no prefix candidates — InsufficientHistory.");
@@ -216,6 +234,124 @@ public class ContextRouteRecommendationResolver
             Status: RecommendationStatus.Ok,
             StatusDetail: null
         );
+    }
+
+    // ---------------------------------------------------------------------------
+    // TopologyVectorRuntime extension (side effects only — does not affect result)
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Executes the TopologyVectorRuntime extension after the context event is appended.
+    /// Extracts transition key evidence, builds MLP features, and updates hub attention current.
+    ///
+    /// Timing: called after AppendContextEventAsync so the event is in context.
+    /// Non-fatal: caller wraps in try-catch; failure does not affect recommendation result.
+    ///
+    /// Hub identity (PROVISIONAL): sessionId is used as hubId here because the recommendation
+    /// resolver receives OperationVector which does not carry IdOrHubId from the caller.
+    /// This means hub attention is session-scoped, not hub-entity-scoped.
+    /// Correct hub identity (caller-supplied IdOrHubId) requires surfacing IdOrHubId through
+    /// OperationVector or passing it separately — tracked as a remaining TODO.
+    ///
+    /// enabled=false is handled by the caller (this method is not called when disabled).
+    /// </summary>
+    private async Task RunTopologyVectorRuntimeExtensionAsync(
+        TopologyVectorRuntimePolicy tvPolicy,
+        string? currentOperation,
+        IReadOnlyList<Guid> tokenIds,
+        IReadOnlyDictionary<Guid, float> tokenValueMap,
+        string? tableName,
+        Guid sessionId,
+        CancellationToken ct)
+    {
+        // 1. Extract transition key evidence (static — no DB).
+        // tokenIds proxy as relation IDs in evidence attribution.
+        // topNeighbors = [] in the recommendation path (no registry validation here).
+        var evidence = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
+            hubId: sessionId,
+            currentOperation: currentOperation,
+            relationIds: tokenIds,
+            stateIds: [],
+            tableNames: tableName is not null ? [tableName] : [],
+            topNeighbors: [],
+            policy: tvPolicy.TransitionKeyEvidence);
+
+        // 2. Build MLP features (static — no DB).
+        var (mlpFeatures, mlpScore) = tvPolicy.TopologyMlp is { Enabled: true } mlpPolicy
+            ? TopologyVectorRuntime.BuildTopologyMlpFeatures(evidence, mlpPolicy.MaxFeatureCrossOrder)
+            : ((IReadOnlyList<TopologyMlpFeature>)[], 0.0f);
+
+        // 3. Hub attention current: load → compute EMA → upsert → recalculate ranks.
+        // Runs only when HubAttention policy is present and enabled.
+        // PROVISIONAL: uses sessionId as hubId (session-scoped). Proper hub-entity-scoped
+        // attention requires IdOrHubId to be threaded through OperationVector — see TODO.
+        // Skipped when tokenIds is empty (no candidates to track).
+        if (tvPolicy.HubAttention is { Enabled: true } hubPolicy && tokenIds.Count > 0)
+        {
+            var evidenceJson = TopologyVectorRuntime.SerializeEvidenceJson(evidence);
+            var mlpFeatureJson = TopologyVectorRuntime.SerializeMlpFeatureJson(mlpFeatures);
+
+            foreach (var scopeLimit in hubPolicy.ScopeLimits)
+            {
+                var existingRecords = await _contextRouteRepository.LoadHubAttentionCurrentAsync(
+                    sessionId, scopeLimit, ct);
+                var existingByCandidate = existingRecords.ToDictionary(r => r.CandidateId);
+
+                var candidatesToProcess = tokenIds
+                    .Take(hubPolicy.MaxUpdateCandidatesPerEvent)
+                    .ToList();
+
+                foreach (var tokenId in candidatesToProcess)
+                {
+                    existingByCandidate.TryGetValue(tokenId, out var existing);
+
+                    var currentValue = tokenValueMap.TryGetValue(tokenId, out var v)
+                        ? Math.Abs(v)
+                        : 0.0f;
+
+                    var newEmaFast = TopologyVectorRuntime.ComputeEma(
+                        currentValue, existing?.EmaFast, hubPolicy.EmaFastAlpha);
+                    var newEmaSlow = TopologyVectorRuntime.ComputeEma(
+                        currentValue, existing?.EmaSlow, hubPolicy.EmaSlowAlpha);
+                    var trend = newEmaFast - newEmaSlow;
+                    var crossState = TopologyVectorRuntime.ComputeCrossState(
+                        newEmaFast, newEmaSlow, existing?.EmaFast, existing?.EmaSlow);
+
+                    var attentionScore = newEmaFast + mlpScore + (existing?.FeedbackAdjustment ?? 0.0f);
+
+                    var record = new HubAttentionCurrentRecord(
+                        HubId:                sessionId,
+                        TargetTable:          "context_token_registry",
+                        CandidateKind:        "token",
+                        CandidateId:          tokenId,
+                        ScopeLimit:           scopeLimit,
+                        BaseProbability:      null,
+                        CosineSimilarity:     null,
+                        StaticRelationWeight: null,
+                        StatisticalWeight:    currentValue > 0.0f ? currentValue : null,
+                        MlpFeatureScore:      mlpScore > 0.0f ? mlpScore : null,
+                        FeedbackAdjustment:   existing?.FeedbackAdjustment ?? 0.0f,
+                        EmaFast:              newEmaFast,
+                        EmaSlow:              newEmaSlow,
+                        Trend:                trend,
+                        CrossState:           crossState,
+                        AttentionScore:       attentionScore,
+                        Rank:                 null,
+                        EvidenceJson:         evidenceJson,
+                        MlpFeatureJson:       mlpFeatureJson,
+                        UpdatedAt:            DateTimeOffset.UtcNow
+                    );
+
+                    await _contextRouteRepository.UpsertHubAttentionCurrentAsync(record, ct);
+                }
+
+                if (candidatesToProcess.Count > 0)
+                {
+                    await _contextRouteRepository.RecalculateHubAttentionRanksAsync(
+                        sessionId, scopeLimit, ct);
+                }
+            }
+        }
     }
 
     /// <summary>

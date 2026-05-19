@@ -5,6 +5,7 @@
 import * as $$0 from "./routes/index.tsx";
 import * as $$1 from "./routes/admin/index.tsx";
 import * as $$2 from "./routes/admin/context-token-registry.tsx";
+import * as $$2b from "./routes/admin/registry-vector-validate.tsx";
 import * as $$3 from "./routes/demo.tsx";
 import * as $$3b from "./routes/demo-static.tsx";
 import * as $$4 from "./routes/login.tsx";
@@ -13,15 +14,18 @@ import * as $$6 from "./routes/api/auth/login.ts";
 import * as $$7 from "./routes/api/dispatch.ts";
 import * as $$8 from "./routes/api/admin/context-token-registry.ts";
 import * as $$9 from "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts";
+import * as $$9b from "./routes/api/admin/registry-vector-validate.ts";
 import * as $$10 from "./islands/ContextTokenRegistryEditor.tsx";
 import * as $$11 from "./islands/LoginPanel.tsx";
 import * as $$12 from "./islands/OperationPanel.tsx";
+import * as $$13 from "./islands/RegistryVectorValidator.tsx";
 
 const manifest = {
   routes: {
     "./routes/index.tsx": $$0,
     "./routes/admin/index.tsx": $$1,
     "./routes/admin/context-token-registry.tsx": $$2,
+    "./routes/admin/registry-vector-validate.tsx": $$2b,
     "./routes/demo.tsx": $$3,
     "./routes/demo-static.tsx": $$3b,
     "./routes/login.tsx": $$4,
@@ -30,11 +34,13 @@ const manifest = {
     "./routes/api/dispatch.ts": $$7,
     "./routes/api/admin/context-token-registry.ts": $$8,
     "./routes/api/admin/context-token-registry/[tokenId]/deprecate.ts": $$9,
+    "./routes/api/admin/registry-vector-validate.ts": $$9b,
   },
   islands: {
     "./islands/ContextTokenRegistryEditor.tsx": $$10,
     "./islands/LoginPanel.tsx": $$11,
     "./islands/OperationPanel.tsx": $$12,
+    "./islands/RegistryVectorValidator.tsx": $$13,
   },
   baseUrl: import.meta.url,
 };
