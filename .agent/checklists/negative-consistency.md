@@ -19,4 +19,8 @@ Remaining risk:
 
 Completion-Eligibility:
 
-Allowed answers: `問題なし` / `問題あり`
+Allowed Completion-Eligibility values: `PASS` / `BLOCKING`
+
+Eligibility rule:
+- Any Q1/Q2/Q3 = `問題あり` => Completion-Eligibility must be `BLOCKING`.
+- `Completion-Eligibility: PASS` is allowed only when Q1/Q2/Q3 are all `問題なし`.

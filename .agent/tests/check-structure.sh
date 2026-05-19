@@ -115,6 +115,10 @@ check_file ".agent/checklists/check-negative-consistency.sh"
 check_file ".agent/checklists/fixtures/negative-consistency/pass.md"
 check_file ".agent/checklists/fixtures/negative-consistency/fail-empty-evidence.md"
 check_file ".agent/checklists/fixtures/negative-consistency/fail-q3-blocking.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-q1-blocking.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-q2-blocking.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-eligibility-missing.md"
+check_file ".agent/checklists/fixtures/negative-consistency/fail-eligibility-invalid.md"
 check_file ".agent/checklists/fixtures/negative-consistency/fail-required-not-executed-pass.md"
 check_file ".agent/tests/check-docker-compose.sh"
 check_file ".github/workflows/docker-compose.yml"
@@ -397,6 +401,8 @@ else
   echo "OK  [compact] rule.md gate details remain in protocols"
 fi
 
+check_content ".agent/protocols/reports-and-todos.md" "backend-tests CI success is not equivalent evidence for docker-compose/bootstrap/db-init verification"
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -407,6 +413,3 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
-
-
-check_content ".agent/protocols/reports-and-todos.md" "backend-tests CI success is not equivalent evidence for docker-compose/bootstrap/db-init verification"

@@ -19,4 +19,11 @@ bash .agent/scripts/bootstrap-local-postgres.sh
 
 docker compose --env-file infra/.env -f infra/docker-compose.yml ps postgres | grep -q healthy
 
-echo "docker-compose/bootstrap verification: PASS"
+for tbl in ui_component_bucket ui_topology_tensor context_token_registry; do
+  docker compose --env-file infra/.env -f infra/docker-compose.yml exec -T postgres     psql -U topolactor_demo -d topolactor_demo -tAc "SELECT to_regclass('public.${tbl}') IS NOT NULL;" | grep -q t || {
+      echo "ERROR: table '${tbl}' not found after init" >&2
+      exit 1
+    }
+done
+
+echo "docker-compose/bootstrap + db-init verification: PASS"
