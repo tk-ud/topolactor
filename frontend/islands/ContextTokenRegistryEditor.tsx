@@ -10,9 +10,10 @@ import {
 /**
  * ContextTokenRegistryEditor — admin island for context_token_registry.
  *
- * context_token_registry is the hub Registry for the discrete tokens that
- * form the sparse cosine vectors used by the recommendation engine.
- * Each token has a value in [-1.0, 1.0] that defines its meaning direction.
+ * context_token_registry is the hub Registry for discrete topology vocabulary tokens.
+ * Each token ID is a topology vocabulary axis; token presence (multi-hot) is the
+ * topology observation signal used in recommendation. The value field is a
+ * human-assigned ordering reference displayed here for audit — not used in computation.
  *
  * Requires login (JWT in sessionStorage under demo_jwt_token).
  * When the backend is not configured (DEMO_BACKEND_URL unset), shows 501 notice.
@@ -207,7 +208,7 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
         </div>
         <div>
           <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "2px" }}>
-            value [-1.0〜1.0] <span style={{ color: "crimson" }}>*</span>
+            value [-1.0〜1.0]（表示用参照値; 推薦計算には使用しない）<span style={{ color: "crimson" }}>*</span>
           </label>
           <input
             style={{ ...inputStyle, width: "80px" }}

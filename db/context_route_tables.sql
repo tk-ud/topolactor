@@ -27,17 +27,17 @@
 
 -- ---------------------------------------------------------------------------
 -- context_token_registry
--- Discrete token dictionary.
--- token_id is the primary key used in context_event.token_ids.
--- value is the meaning direction component in [-1.0, 1.0] (cosine-compatible).
+-- Discrete token dictionary. Each row is a topology vocabulary basis element.
+-- token_id is the primary key used in context_event.token_ids (multi-hot observation).
+-- value is a human-assigned ordering reference; it is NOT used in recommendation computation.
+-- Recommendation uses multi-hot token ID presence (1.0 per token), not the value field.
 -- group/type is UI grouping only — not used in vector computation.
--- Missing tokens are treated as 0 in the sparse vector.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_token_registry (
     token_id    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     label       TEXT        NOT NULL,
     "group"     TEXT,                                       -- UI grouping tag; not used in computation
-    value       FLOAT       NOT NULL DEFAULT 0.0,           -- meaning direction component [-1.0, 1.0]
+    value       FLOAT       NOT NULL DEFAULT 0.0,           -- ordering reference only; not used in recommendation
     status      TEXT        NOT NULL DEFAULT 'active'
                             CHECK (status IN ('active', 'deprecated')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -47,14 +47,15 @@ CREATE TABLE IF NOT EXISTS context_token_registry (
 
 COMMENT ON TABLE context_token_registry IS
     'Discrete token dictionary for the context route recommendation runtime. '
-    'value is the meaning direction component used in sparse cosine vectors. '
-    'group/type is UI grouping only and is not used in computation. '
-    'Missing tokens are treated as 0 in the sparse vector representation.';
+    'Each row is a topology vocabulary basis element (registryId axis). '
+    'Recommendation uses multi-hot token ID presence (1.0 per token) — not the value field. '
+    'value is a human-assigned ordering reference, kept for UI display and audit. '
+    'group is UI grouping only and is not used in computation.';
 
 COMMENT ON COLUMN context_token_registry.value IS
-    'Meaning direction component. Recommended range [-1.0, 1.0]. '
-    'Assigned by human discrete ordering; spacing need not be uniform. '
-    'Example: {active=1.0, warning=0.0, critical=-1.0}.';
+    'Human-assigned ordering reference. Recommended range [-1.0, 1.0]. '
+    'NOT used in recommendation computation — token ID presence is the topology observation. '
+    'Kept for UI display and potential future use.';
 
 CREATE INDEX IF NOT EXISTS idx_ctr_status
     ON context_token_registry (status)
@@ -183,26 +184,26 @@ CREATE INDEX IF NOT EXISTS idx_crsc_updated
 
 -- ---------------------------------------------------------------------------
 -- context_event_vector_cache
--- Cache of sparse event vector and l2_norm per event for fast cosine computation.
--- vector_sparse is a JSONB map: {token_id: value, ...}.
--- Rebuilt from context_event + context_token_registry.
+-- Rebuildable projection cache of multi-hot event vector and l2_norm per event.
+-- vector_sparse is a JSONB map: {token_id: 1.0, ...} (multi-hot presence, not value-weighted).
+-- NOT a source of truth. Rebuilt from context_event token_ids.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_event_vector_cache (
     event_id        UUID        PRIMARY KEY REFERENCES context_event (event_id),
-    vector_sparse   JSONB       NOT NULL DEFAULT '{}',      -- {token_id: value, ...}
+    vector_sparse   JSONB       NOT NULL DEFAULT '{}',      -- {token_id: 1.0, ...} multi-hot
     l2_norm         FLOAT       NOT NULL DEFAULT 0.0,
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE context_event_vector_cache IS
-    'Cache of sparse event vector and l2_norm per event. '
-    'vector_sparse maps token_id → value. Rebuilt from context_event + token_registry. '
-    'l2_norm = sqrt(sum(value^2)) over non-zero entries.';
+    'Rebuildable projection cache of multi-hot event vector and l2_norm per event. NOT SoT. '
+    'vector_sparse maps token_id → 1.0 (multi-hot). Rebuilt from context_event token_ids. '
+    'l2_norm = sqrt(cardinality(token_ids)) for a multi-hot vector.';
 
 COMMENT ON COLUMN context_event_vector_cache.vector_sparse IS
-    'Sparse vector as JSONB: {token_id_string: float_value}. '
-    'Missing tokens are treated as 0 in cosine computation. '
-    'Dense embeddings are explicitly excluded.';
+    'Multi-hot sparse vector as JSONB: {token_id_string: 1.0}. '
+    'Token presence = 1.0, absence = omitted (treated as 0). '
+    'NOT a semantic source of truth — rebuildable projection cache only.';
 
 CREATE INDEX IF NOT EXISTS idx_cevc_l2_norm
     ON context_event_vector_cache (l2_norm);
@@ -210,16 +211,16 @@ CREATE INDEX IF NOT EXISTS idx_cevc_l2_norm
 
 -- ---------------------------------------------------------------------------
 -- context_prefix_vector_cache
--- Cache of aggregated prefix vector for (session_id, prefix_index).
+-- Rebuildable projection cache of aggregated prefix vector for (session_id, prefix_index).
 -- prefix_index is the event order within the session (0..n-1).
--- prefix_vector = SUM(event_vectors) over events up to prefix_index.
--- Used for nearest-prefix cosine search.
+-- prefix_vector = SUM(multi-hot event_vectors) over events up to prefix_index.
+-- NOT a source of truth. Used for nearest-prefix topology neighborhood search.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_prefix_vector_cache (
     session_id      UUID        NOT NULL REFERENCES context_session (session_id),
     prefix_index    INT         NOT NULL,
     last_event_id   UUID        NOT NULL REFERENCES context_event (event_id),
-    vector_sparse   JSONB       NOT NULL DEFAULT '{}',      -- SUM of event vectors up to prefix_index
+    vector_sparse   JSONB       NOT NULL DEFAULT '{}',      -- SUM of multi-hot event vectors up to prefix_index
     l2_norm         FLOAT       NOT NULL DEFAULT 0.0,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -227,10 +228,10 @@ CREATE TABLE IF NOT EXISTS context_prefix_vector_cache (
 );
 
 COMMENT ON TABLE context_prefix_vector_cache IS
-    'Cache of aggregated prefix vector per (session_id, prefix_index). '
-    'prefix_vector = SUM(v_event) over events[0..prefix_index]. '
+    'Rebuildable projection cache of aggregated multi-hot prefix vector per (session_id, prefix_index). NOT SoT. '
+    'prefix_vector = SUM(multi-hot v_event) over events[0..prefix_index]. '
     'SUM chosen for low compute and statistical stability. '
-    'Used as the primary candidate set for nearest-prefix cosine search.';
+    'Used as candidate set for nearest-prefix topology neighborhood search.';
 
 COMMENT ON COLUMN context_prefix_vector_cache.prefix_index IS
     'Event order within the session (0-based). '
@@ -415,11 +416,15 @@ CREATE INDEX IF NOT EXISTS idx_cds_type_target
 -- NOT a source of truth — topology definition + context_hub_feedback_event are authoritative.
 -- Rebuilt from topology data on demand.
 --
--- scope_limit isolation:
---   1000 = UI instant recommendation
---   3000 = normal table operations
---   10000 = hub-scoped wide learning
--- Rows with different scope_limit values are isolated by the unique key.
+-- scope_limit: valid values are defined in function_parameters
+--   topology_vector_runtime.hub_attention.scope_limits (policy is the enumeration authority).
+--   DB enforces scope_limit > 0 only. Policy controls which values are used at runtime.
+--   Example default values: 1000 = UI instant, 3000 = normal, 10000 = hub-scoped wide.
+--   Adding new scope_limit values requires a policy update only (no DDL migration needed).
+--
+-- candidate_kind: topology vocabulary. Current topology vocabulary:
+--   'registry','hub','entity','relation','operation','token'.
+--   Adding new kinds requires a DDL migration to extend the CHECK constraint.
 --
 -- evidence_json: transition key evidence (relation/cosine/stat/EMA/cross)
 -- mlp_feature_json: feature crossing contribution breakdown
@@ -431,7 +436,7 @@ CREATE TABLE IF NOT EXISTS context_hub_recommendation_current (
                             CHECK (candidate_kind IN ('registry','hub','entity','relation','operation','token')),
     candidate_id            UUID        NOT NULL,
     scope_limit             INT         NOT NULL
-                            CHECK (scope_limit IN (1000, 3000, 10000)),
+                            CHECK (scope_limit > 0),
     base_probability        FLOAT,
     cosine_similarity       FLOAT,
     static_relation_weight  FLOAT,
@@ -457,11 +462,11 @@ COMMENT ON TABLE context_hub_recommendation_current IS
     'evidence_json: transition key evidence. mlp_feature_json: feature crossing breakdown.';
 
 COMMENT ON COLUMN context_hub_recommendation_current.scope_limit IS
-    'Recommendation scope limit. '
-    '1000 = UI instant recommendation; '
-    '3000 = normal table operations; '
-    '10000 = hub-scoped wide learning. '
-    'Enforced by CHECK constraint and unique key — rows with different limits are isolated.';
+    'Recommendation scope limit. Valid values are policy-defined in '
+    'function_parameters topology_vector_runtime.hub_attention.scope_limits. '
+    'DB enforces scope_limit > 0 only; policy is the enumeration authority. '
+    'Default policy values: 1000 = UI instant; 3000 = normal; 10000 = hub-scoped wide. '
+    'Rows with different scope_limit values are isolated by the unique key.';
 
 COMMENT ON COLUMN context_hub_recommendation_current.ema_fast_30 IS
     'EMA with fast alpha (from policy: topology_vector_runtime.hub_attention.ema_fast_alpha). '
@@ -512,6 +517,11 @@ CREATE INDEX IF NOT EXISTS idx_chrc_updated
 -- Records selected / ignored / missing_candidate differences per hub per candidate.
 -- Used to rebuild feedback_adjustment in context_hub_recommendation_current.
 -- Never updated or deleted — aggregate current is rebuildable from this log.
+--
+-- scope_limit: policy-defined; DB enforces scope_limit > 0 only (matches context_hub_recommendation_current).
+-- candidate_kind: topology vocabulary CHECK (extending requires DDL migration).
+-- feedback_kind: topology vocabulary CHECK ('selected','ignored','missing_candidate').
+--   Extending feedback_kind requires a DDL migration.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS context_hub_feedback_event (
     feedback_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -521,7 +531,7 @@ CREATE TABLE IF NOT EXISTS context_hub_feedback_event (
     candidate_kind  TEXT        NOT NULL
                     CHECK (candidate_kind IN ('registry','hub','entity','relation','operation','token')),
     scope_limit     INT         NOT NULL
-                    CHECK (scope_limit IN (1000, 3000, 10000)),
+                    CHECK (scope_limit > 0),
     feedback_kind   TEXT        NOT NULL
                     CHECK (feedback_kind IN ('selected','ignored','missing_candidate')),
     delta_applied   FLOAT       NOT NULL,

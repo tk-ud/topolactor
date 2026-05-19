@@ -2,8 +2,9 @@ namespace Topolactor.Schema;
 
 /// <summary>
 /// A single context token loaded from context_token_registry.
-/// value is the sparse vector component used in cosine similarity.
-/// group is UI grouping only — not used in computation.
+/// Value is a human-assigned ordering reference; it is NOT used in recommendation computation.
+/// Recommendation uses multi-hot token ID presence (1.0 per token) as the topology observation.
+/// Group is UI grouping only — not used in computation.
 /// </summary>
 public record ContextTokenRecord(
     Guid TokenId,
@@ -32,8 +33,8 @@ public record ContextEventRecord(
 );
 
 /// <summary>
-/// Sparse event vector with precomputed l2 norm.
-/// SparseVector maps token_id → value. Missing tokens are 0.
+/// Multi-hot event vector with precomputed l2 norm. Rebuildable projection cache — not SoT.
+/// SparseVector maps token_id → 1.0 (multi-hot presence). Missing tokens are 0.
 /// </summary>
 public record ContextEventVector(
     Guid EventId,
@@ -42,12 +43,10 @@ public record ContextEventVector(
 );
 
 /// <summary>
-/// Cached prefix vector for (session_id, prefix_index).
-/// SparseVector = SUM(event_vectors[0..prefix_index]).
+/// Cached prefix vector for (session_id, prefix_index). Rebuildable projection cache — not SoT.
+/// SparseVector = SUM(multi-hot event_vectors[0..prefix_index]); each token contributes 1.0 per event.
 /// NextOperation and NextTokenIdsHint carry the event that follows this prefix
-/// in the original session. These are populated by the repository when loading
-/// candidates for nearest-prefix search so neighbor-derived candidates can be
-/// produced without a second round-trip.
+/// in the original session, populated for nearest-prefix search without a second round-trip.
 /// </summary>
 public record ContextPrefixVectorRecord(
     Guid SessionId,
