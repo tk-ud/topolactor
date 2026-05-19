@@ -211,7 +211,7 @@ recommendation_targets:
       - "neighbor sessions vote on next_token_ids_hint"
       - "or tokens newly appearing after current prefix (delta tokens)"
     note: >
-      State is not a separate entity; state is the current context vector itself.
+      State is not a separate entity; state is the current topology observation over the record tensor state.
 
 entities:
   # --- Definitions ---
