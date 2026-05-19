@@ -19,165 +19,56 @@
 - AI駆動OS, 小規模修正 = Codex
 - data駆動OS, 大規模リファクタ Runtime構築 = Claude
 
-## Issue #60 — Acceptance & Close Readiness
+## Implementation Phase — Claude Runtime Boundary Fixes
 
-- [ ] [Codex] Issue #60 close 前の acceptance audit を実施する
-      → 残ブロッカー: remote CI (backend-tests / frontend-types) の pass 確認が必要。
-      → 対象ファイル: .agent/tasks/todo.md
-      → 次の判断点: CI pass を確認し、close 可否を判定する。
+- [ ] [Claude] A1/A2 fix: recoverable boundary と explicit result surface の方針を実装可能な形へ整理・反映する
+      → 問題点: AppendContextEventAsync / transition stats / TVR extension の失敗が LogError-only または code comment ベースの non-fatal 扱いになっている。
+      → 目的: LogError-only を explicit result surface と誤認しない形にし、non-fatal 継続の根拠を auditable surface に置く。
+      → 改善方針: 実装前に recoverable boundary の正規方針を決め、必要なら protocol / runtime result / status metadata / NonFatalOperationPolicy 相当へ接続する。
+      → 対象ファイル名: backend/runtime/ContextRouteRecommendationResolver.cs, backend/runtime/TopologyVectorRuntime.cs, .agent/protocols/*, .agent/tasks/todo.md
+      → 対象関数名: ContextRouteRecommendationResolver.ResolveAsync, AppendContextEventAsync, RunTopologyVectorRuntimeExtensionAsync
+      → 依存関係: この方針確定を A11 failure path tests の前提にする。
+      → todo: 調査→方針確定→実装PRを別途作成。todo整理PRでは実装しない。
 
-## Runtime Meaning Check Verification
+- [ ] [Claude] A4 fix: context_hub 系 DB CHECK 制約と policy variability の衝突を設計・移行方針へ落とす
+      → 問題点: scope_limit / candidate_kind / feedback_kind が DB CHECK に固定され、function_parameters / registry policy の可変性と衝突し得る。
+      → 目的: DBがsemantic topology spaceである前提を保ちつつ、policy可変値を過固定化しない。
+      → 改善方針: すぐ制約削除するのではなく、Runtime正規導線・migration影響・参照整合を調査して方針化する。
+      → 対象ファイル名: db/context_route_tables.sql, docs/design/context-route-recommendation.md, backend/repository/NpgsqlContextRouteRepository.cs
+      → 対象関数名: context_hub_recommendation_current, context_hub_feedback_event, UpsertHubAttentionCurrentAsync, ApplyFeedbackWeightUpdateAsync
+      → todo: 調査→設計方針→必要なら migration 実装PRへ分離。
 
-- [ ] [Codex] check-runtime-semantics.sh を dotnet / deno 利用可能環境で実行し、runtime意味チェックの実行結果を確定する
-      → NOT EXECUTABLE: dotnet / deno が本環境で利用不可。Remote CI equivalence（backend-tests.yml / frontend-types.yml）の pass 確認が必要。
-      → 対象ファイル: .agent/tests/check-runtime-semantics.sh
-      → 次の判断点: GitHub Actions CI が pass したことを確認してから close。
+- [ ] [Claude] A11 fix: AppendContextEventAsync / TVR extension failure の境界失敗テストを追加する
+      → 問題点: non-fatal by design とされる経路の失敗時挙動がテストで明示されていない。
+      → 目的: persistence constraint failure / TVR extension failure が、仕様どおり explicit status または non-fatal policy と整合するか検証可能にする。
+      → 改善方針: A1/A2 の方針と矛盾しないテストを追加する。先に方針が必要なら A1/A2 の後続にする。
+      → 対象ファイル名: backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs, backend/runtime/ContextRouteRecommendationResolver.cs
+      → 対象関数名: ResolveAsync, AppendContextEventAsync, RunTopologyVectorRuntimeExtensionAsync
+      → 依存関係: A1/A2 の方針確定後に実装。
+      → todo: A1/A2 方針確認後、failure path tests を追加する。
 
-## Codex Governance Audit Experiments
+## Implementation Phase — Codex Governance / Close Readiness
 
-- [x] [Codex] Policy Judgment のテンプレート直実行誤用を検出する監査を実施する
-      → 理由: 手順逸脱により gate 判定が形骸化するリスクがある。
-      → 対象ファイル: .agent/protocols/policy-judgment.md, .agent/checklists/check-policy-judgment.sh
-      → 次の判断点: テンプレート利用と実行手順の差分を監査報告に明記できるか確認する。
+- [ ] [Codex] Issue #60 close readiness の remote CI pass を確認する
+      → 問題点: backend-tests / frontend-types の remote CI pass 確認が残っている。
+      → 目的: NOT EXECUTED を PASS 扱いせず、close可否を明確にする。
+      → 対象ファイル名: .agent/tasks/todo.md, GitHub Actions status
+      → todo: CI確認。pass なら close-ready、未完なら Remaining TODO 継続。
 
-- [x] [Codex] Policy Judgment FAIL / NOT EXECUTED / queued CI を PASS と誤認しないか監査する
-      → 理由: completion 判定と実 CI 状態の claim drift を防止する必要がある。
-      → 対象ファイル: .agent/protocols/completion.md, .agent/protocols/policy-judgment.md
-      → 次の判断点: FAIL/未実行/保留を明示的に blocking 扱いできているか検証する。
+- [ ] [Codex] check-runtime-semantics.sh の remote CI equivalence を確認する
+      → 問題点: local環境で dotnet / deno が無い場合、runtime semantics check が未確定になる。
+      → 目的: remote CI equivalence または明示的TODOで完了判定を管理する。
+      → 対象ファイル名: .agent/tests/check-runtime-semantics.sh, .github/workflows/*
+      → todo: CI確認。未確認なら未完了のまま保持。
 
-- [x] [Codex] docs-only 変更でも runtime / policy behavior claim を含む場合に Policy Judgment を要求するか監査する
-      → 理由: ファイル種別ベースの例外で判断漏れが起きる可能性がある。
-      → 対象ファイル: .agent/protocols/policy-judgment.md, .agent/protocols/completion.md
-      → 次の判断点: claim ベース判定の適用条件を監査で再現できるか確認する。
+## Deferred Audit Experiments
 
-- [x] [Codex] PR Summary と実際の diff の claim drift を監査する
-      → 理由: 報告内容と変更実体の乖離は Recursive Verification Gate 破綻につながる。
-      → 対象ファイル: .agent/protocols/reports-and-todos.md, .agent/protocols/completion.md
-      → 次の判断点: summary 各主張が diff の根拠へトレース可能か点検する。
+- [ ] [Codex] Audit Gap Response Gate / Failure Triage / Required Check Scope の運用継続確認
+      → 方針: 実装PRごとの completion report で自然に検証し、todo では増殖させない。
+      → 参照: .agent/reports/2026-05-19-claude-boundary-audit-reaudit.md
+      → 次の判断点: 実装PRで gate 違反が再発した場合のみ、新規未完了TODOとして再掲する。
 
-- [x] [Codex] `.agent/tmp/tmp.txt` の作成・検証・削除順序を守るか監査する
-      → 理由: 一時契約のライフサイクル崩れは gate の証跡不整合を生む。
-      → 対象ファイル: .agent/protocols/scenario-contract.md, .agent/protocols/completion.md
-      → 次の判断点: 生成→照合→削除の順序違反を検出可能か確認する。
-
-- [x] [Codex] `bash .agent/tests/check-structure.sh` を最後に実行する運用を監査する
-      → 理由: required local checks の終端順序が崩れると completion gate を満たせない。
-      → 対象ファイル: AGENTS.md, .agent/tests/check-structure.sh
-      → 次の判断点: 実行ログ上で最終コマンドとして確認できるか検証する。
-
-- [x] [Codex] todo.md の `[x]` 更新が Recursive Verification Gate 通過後に限定されているか監査する
-      → 理由: 先行完了マークは未解決ブロッカーの隠蔽につながる。
-      → 対象ファイル: .agent/tasks/todo.md, .agent/protocols/completion.md
-      → 次の判断点: gate 通過前の完了更新を検出する監査観点を固定化できるか確認する。
-
-## Claude Implementation Boundary Audit Experiments
-
-- [x] [Claude] context_event append が silent failure にならないか監査する
-      → 理由: append failure の握りつぶしは runtime 観測性を失わせる。
-      → 対象ファイル: runtime / persistence 関連実装（監査時に確定）
-      → 次の判断点: failure が explicit result として surface されるか検証する。
-
-- [x] [Claude] transition stats / context event / TVR extension の失敗を「継続可能」にしてよい境界を監査する
-      → 理由: recoverable 境界の誤設定で policy と実装の整合が崩れる。
-      → 対象ファイル: runtime executor / recommendation runtime 関連実装（監査時に確定）
-      → 次の判断点: 継続可否の判定根拠を policy surface に照合できるか確認する。
-
-- [x] [Claude] function_parameters 由来にすべき値を runtime 定数化しないか監査する
-      → 理由: policy 可変値の定数化は SSOT 逸脱を起こす。
-      → 対象ファイル: runtime policy 読み取り / registrar validation 関連実装（監査時に確定）
-      → 次の判断点: 可変パラメータのソースが function_parameters に統一されているか確認する。
-
-- [x] [Claude] DB CHECK / column name / seed policy が policy可変性と衝突していないか監査する
-      → 理由: schema 固定と policy 変更余地の矛盾が運用停止を誘発する。
-      → 対象ファイル: db/*.sql, seed policy 関連定義（監査時に確定）
-      → 次の判断点: 変更可能前提の項目が DB 制約で過固定化されていないか確認する。
-
-- [x] [Claude] append-only log と rebuildable materialized current を混同しないか監査する
-      → 理由: 役割混同は履歴完全性と再構築可能性を同時に損なう。
-      → 対象ファイル: log/current テーブル定義と repository 実装（監査時に確定）
-      → 次の判断点: append-only と current projection の責務境界が明示されているか確認する。
-
-- [x] [Claude] frontend に topology / cosine / MLP / feedback 判定を漏らさないか監査する
-      → 理由: 判定ロジックの frontend 流出は境界違反となる。
-      → 対象ファイル: frontend projection / admin UI 関連実装（監査時に確定）
-      → 次の判断点: frontend は structured result の投影のみに留まっているか検証する。
-
-- [x] [Claude] hub identity / target_table / candidate_kind / candidate_id / scope_limit の境界キー欠落を監査する
-      → 理由: 境界キー欠落は集計歪み・誤関連付けを起こす。
-      → 対象ファイル: runtime dispatch / repository key mapping 関連実装（監査時に確定）
-      → 次の判断点: 各キーが write/read 両経路で保持されるか確認する。
-
-- [x] [Claude] SQL Attention を単なる推薦UI実装へ矮小化しないか監査する
-      → 理由: DB-backed attention の意味境界を UI 層へ誤転写するリスクがある。
-      → 対象ファイル: recommendation runtime / SQL attention 関連実装（監査時に確定）
-      → 次の判断点: attention の責務が runtime+persistence 側に維持されているか確認する。
-
-- [x] [Claude] optional / future extension を runtime implemented と誤記しないか監査する
-      → 理由: 実装済み主張の先走りは completion 報告の信頼性を損なう。
-      → 対象ファイル: docs/design/*.md, reports/todos 関連ドキュメント（監査時に確定）
-      → 次の判断点: 実装済み・未実装・将来拡張のラベル整合を確認する。
-
-- [x] [Claude] exploration slot を完全ランダム候補として実装しないか監査する
-      → 理由: 推薦境界条件を失い、policy 期待と乖離する。
-      → 対象ファイル: recommendation candidate selection 関連実装（監査時に確定）
-      → 次の判断点: exploration 条件が policy/runtime 定義に沿っているか検証する。
-
-- [x] [Claude] happy path のみのテストで boundary failure matrix を省略しないか監査する
-      → 理由: failure matrix 欠落は運用時障害の未検出を招く。
-      → 対象ファイル: tests / protocols / completion artifacts（監査時に確定）
-      → 次の判断点: success 以外の failure 系ケースが網羅されているか確認する。
-
-
-## Audit Gap Response Gate Hardening
-
-- [x] [Codex] Audit Gap Response Gate の動作確認を行う
-      → 目的: 監査レポートで governance gap が出た場合に Proposed Governance Improvements と Remaining TODOs が必ず出るか確認する。
-
-- [x] [Codex] Static Protocol Coverage Audit と Behavior Execution Audit の分離を検証する
-      → 目的: 静的確認だけで behavior audit を [x] にしないことを確認する。
-
-- [x] [Codex] LogError と Explicit Result Surface の混同を検出する監査観点を追加する
-      → 目的: ログ出力のみを呼び出し元に返る明示ステータスと誤認しないようにする。
-
-- [x] [Claude] Claude Implementation Boundary Audit の再監査を行う
-      → 目的: A1/A2/A4/A11 のような conditional / caution / non-fatal 判定を PASS 扱いせず、GAP/TODOとして扱えるか確認する。
-
-
-- [x] [Codex] Failure Triage Self-Recursion Gate の動作確認を行う
-      → 目的: 失敗コマンドが含まれる場合、ユーザー指摘前に Agent が自律的に GAP/BLOCKING/TODO へ再分類できるか確認する。
-
-- [x] [Codex] required check failure / exploratory failure / expected negative test の分類を検証する
-      → 目的: failure を一律 PASS または一律 BLOCKING にせず、completion eligibility に反映できるか確認する。
-
-- [x] [Codex] 失敗ログありの状態で todo.md を `[x]` に更新しないことを検証する
-      → 目的: failure triage 未完了時の TODO完了マークを防止する。
-
-
-- [x] [Codex] Required Check Scope Declaration Gate の動作確認を行う
-      → 目的: 変更スコープごとに required / not required / out-of-scope checks を宣言できるか確認する。
-
-- [x] [Codex] doc-only / governance-only 変更で check scope shrinkage が起きないか監査する
-      → 目的: check-structure.sh のみ実行する場合でも、他チェック不要理由が completion report に残るか確認する。
-
-- [x] [Codex] REQUIRED_NOT_EXECUTED の remote CI equivalence / 残TODO処理を検証する
-      → 目的: 必須チェック未実行を PASS と誤認せず、remote CI または未完了TODOへ接続できるか確認する。
-
-## Implementation Boundary GAP Follow-ups (from Claude Re-audit 2026-05-19)
-
-- [ ] [Claude] A1 fix: AppendContextEventAsync の失敗を explicit result surface として扱う
-      → GAP: LogError-only は explicit result ではない。non-fatal 継続の意図を policy surface に記録するか、呼び出し元に明示的なステータスを返す必要がある。
-      → 対象ファイル: backend/runtime/ContextRouteRecommendationResolver.cs:183-190
-      → 参照レポート: .agent/reports/2026-05-19-claude-boundary-audit-reaudit.md
-
-- [ ] [Claude] A2 fix: 非致命境界（transition stats / TVR extension）のポリシー文書化
-      → GAP: non-fatal 設計がコードコメントのみで表現されている。auditable なポリシー surface（protocol or rule）に明記する。
-      → 対象ファイル: .agent/protocols/ (新規 recoverable-boundary.md または rule.md 拡張)
-
-- [ ] [Claude] A4 fix: DB CHECK 制約の policy variability 制限を GAP として記録
-      → GAP: scope_limit / candidate_kind / feedback_kind の CHECK 値がハードコードされており、新しいティア追加にはマイグレーションが必要。
-      → 対象ファイル: db/context_route_tables.sql:431,434,522,524,526
-
-- [ ] [Claude] A11 fix: persistence constraint failure テストケースを追加する
-      → GAP: AppendContextEventAsync 失敗時に recommendation result が返されることを検証するテストが存在しない。
-      → 対象ファイル: backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs
-
+- [ ] [Codex] 監査フェーズ成果の参照維持（再監査の再実行は現時点で不要）
+      → 方針: 完了済み監査実験を current work に戻さず、必要時はレポート参照で追跡する。
+      → 参照: .agent/reports/2026-05-19-claude-boundary-audit-reaudit.md
+      → 次の判断点: Claude 実装境界修正後に、必要最小限の再監査TODOだけ追加する。
