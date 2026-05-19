@@ -599,10 +599,15 @@ topology_vector_runtime:
         As jsonb features are columnized, attention targets recursively increase and
         can be handled as fractal context expansions.
     ci_auditability:
-      status: partial
-      todo: >
-        Automatic CI gate enforcement for dynamic-variable continuity scenarios is a
-        future extension; current document defines direction, not completed runtime.
+      status: implemented
+      implementation: >
+        System Operation CI is implemented. Event-driven inspection
+        (InspectEvidenceIntegrity / InspectHubAttentionAfterUpdate / InspectFeedbackEvents)
+        is wired inside RunTopologyVectorRuntimeExtensionAsync; Blocking results propagate as
+        TVR_EXTENSION_FAILED. Cron-triggered inspection (InspectHubAttentionContinuityAsync /
+        InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync) runs via
+        SystemOperationCiScheduler BackgroundService. See
+        docs/design/topology-recommendation-ci-runtime.md System Operation CI section.
 
     optional_extensions:
       anti_collapse_candidate_policy:

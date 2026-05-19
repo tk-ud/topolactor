@@ -298,7 +298,7 @@ Output = ranked recommendation current / projection input + continuity evidence
 - `JSONB` は潜在的・半構造な特徴保持層として使う。
 - カラム化は観測可能な意味軸の増設として扱い、Attention 対象を再帰的/フラクタルに増やせるようにする。
 - 動的可変シナリオの連結ログ（例: `context_hub_feedback_event`）は、後続の統計重み更新・hub語彙・Topology Context Vocabulary 拡張源として扱う。
-- TODO (future extension): トポロジ連続性シナリオに対する CI 監査の自動ゲート化は設計方針として定義済みだが、実装完了扱いにはしない。
+- System Operation CI 実装済み: event-driven 検査 (`InspectEvidenceIntegrity` / `InspectHubAttentionAfterUpdate` / `InspectFeedbackEvents`) は `RunTopologyVectorRuntimeExtensionAsync` 内で呼び出し、Blocking → `TVR_EXTENSION_FAILED`。cron 検査 (`SystemOperationCiScheduler`) は BackgroundService として登録済み。詳細は `docs/design/topology-recommendation-ci-runtime.md` の System Operation CI セクションを参照。
 
 ### Anti-collapse Candidate Policy（optional / future extension）
 
