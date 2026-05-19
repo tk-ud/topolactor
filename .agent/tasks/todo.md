@@ -23,6 +23,10 @@
       → 完了条件: backend-tests remote CI PASS 確認後に [x]。
 
 - [ ] [Codex] Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence (tracked after SSOT/schema alignment).
+      → 実装完了 (branch: claude/process-todo-tasks-wPH6O)。
+      → 実施内容: UiTopologyRepository (abstract + NpgsqlUiTopologyRepository), PackageGeneratorRuntime, PackageGeneratorEndpoint を追加。Program.cs に DI登録・ルート (GET /admin/ui-component-bucket, POST /admin/package-generator/generate) を追加。ユニットテスト (PackageGeneratorEndpointTests) 追加。
+      → 残タスク: backend-tests remote CI PASS 確認 (dotnet ローカル不可 / REQUIRED_NOT_EXECUTED)。
+      → 完了条件: backend-tests remote CI PASS 確認後に [x]。
 
 - [x] [Codex] registry tensor projection continuity 軽量チェックリストを追加する
       → 問題点: registry tensor projection surface の定期点検観点（runtime / endpoint / scheduler / function / UI / DB の6面）が未定義で、drift 判定が属人的になる。
