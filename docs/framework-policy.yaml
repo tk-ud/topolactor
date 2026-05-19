@@ -40,6 +40,34 @@ framework_policy:
       jsonb: latent_and_semi_structured_feature_retention
       columnar: observable_semantic_axis_for_auditability
       expansion: execute_abstract_function_with_registry_tensor_on_runtime_surfaces
+    sql_attention_policy:
+      definition: db_topology_observed_attention_equivalent_score
+      not:
+        - sql_based_dot_product_attention
+        - reproduce_transformer_qk_inner_product_over_all_elements
+      decomposition:
+        neighborhood_theta:
+          role: candidate_narrowing_only
+          sources:
+            - registry_id_references
+            - relation_bindings
+            - topology_continuity
+            - indexed_db_structure
+          note: theta_or_cosine_is_not_meaning_sot
+        norm_impedance_weight:
+          role: excitation_strength_observation
+          sources:
+            - aggregation
+            - transition
+            - recency
+            - frequency
+            - diff
+            - logs
+        projection_cache:
+          fields:
+            - vector_sparse
+            - l2_norm
+          rule: rebuildable_helper_projection_not_meaning_sot
     record_tensor_state_rule:
       definition: record_referencing_registry_ids_is_tensor_state
       coordinate_derivation:

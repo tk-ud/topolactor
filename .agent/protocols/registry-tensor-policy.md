@@ -26,6 +26,10 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - jsonb keys are promotable to columns as observable semantic axes for attention/audit/projection.
 - logs.diffs is append-only diff surface with basic shape id/tableId/jsonb/created; it is audit/rebuild history and must not replace current-state SoT.
 - vector_sparse/l2_norm caches are rebuildable materialized projections, never SoT and never direct authoring targets.
+- SQL Attention is not SQL-based dot-product attention and must not be explained as SQL reproduction of Transformer QK inner product over all elements.
+- SQL Attention decomposes attention-equivalent observation into neighborhood narrowing (registry_id/relation/topology continuity/indexed DB structure) and excitation strength observation (aggregation/transition/recency/frequency/diff/log signals).
+- Theta/cosine may be used for neighborhood filtering only; semantic SoT remains registry tensor continuity, not cosine itself.
+- norm/l2_norm is projection cache for strength/impedance/weight observation and must not be treated as manually-authored semantic value.
 - a record that references registry IDs is treated as a tensor state.
 - record does not own a manually-authored vector.
 - record tensor coordinate is derived from registry_id references, relation bindings, jsonb/promoted columns, and logs/observations.
@@ -87,6 +91,12 @@ Treat the following as drift/GAP during audit:
 22. seed/UI/API directly authors vector_sparse as normal path
 23. record is treated as manual vector container instead of tensor state derived from registry references
 24. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
+25. SQL Attention is implemented as SQL-side QK all-element dot-product reproduction
+26. full-element inner product brute force is introduced in RDB as normal attention path
+27. token.value manual numeric inputs are treated as semantic SoT
+28. cosine similarity is treated as semantic meaning body instead of neighborhood filter
+29. vector_sparse/l2_norm is treated as record/event semantic SoT
+30. DB topology candidate narrowing via relation/log/aggregation/index is ignored
 
 ## Gate usage
 

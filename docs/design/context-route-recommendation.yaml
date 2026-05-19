@@ -2,12 +2,13 @@ system:
   name: context-route-recommendation
   version: "6.4"
   concept: >
-    Lightweight, offline-capable statistical inference engine using only discrete
-    tokens + append-only logs.
+    Lightweight, offline-capable topology observation engine using registry tensor
+    continuity + append-only logs. SQL Attention observes attention-equivalent
+    score from DB topology and is not SQL-based dot-product attention.
 
-    Operational context is represented as sparse vectors (token numeric values)
-    accumulated over sessions.  Prediction is done by cosine similarity over
-    session prefixes + simple transition aggregates.
+    Operational context is represented as tensor state derived from registry_id
+    references/relation bindings/jsonb features/log observations. Prediction uses
+    neighborhood narrowing + transition/aggregation evidence over session prefixes.
 
     No neural training, no backprop; learning is pure aggregation.
     Optional: periodic clustering for human-readable naming (external LLM for labeling only).
@@ -35,6 +36,29 @@ registry_tensor_principle:
   vector_space_rule: registry_table_structure_itself_spans_vector_space
   cross_registry_attention: registry_relation_axis_enables_attention_across_registries
   same_table_aggregation_attention_weight: count_sum_average_recency_frequency_transition_are_attention_weights
+  sql_attention_not_dot_product: true
+  sql_attention_not_qk_all_element_inner_product: true
+  sql_attention_decomposition:
+    neighborhood_theta:
+      role: candidate_narrowing
+      inputs:
+        - registry_id_references
+        - relation_bindings
+        - topology_continuity
+        - indexed_db_structure
+      note: theta_cosine_is_filter_not_meaning_sot
+    norm_impedance_weight:
+      role: excitation_strength_observation
+      inputs:
+        - aggregation
+        - transition
+        - recency
+        - frequency
+        - diff
+        - logs
+    projection_cache:
+      fields: [vector_sparse, l2_norm]
+      rule: rebuildable_helper_not_meaning_sot
 
 real_sys_table_principle:
   basic_shape: id_state_jsonb
@@ -80,19 +104,18 @@ design_principles:
   append_only_logs: true
   statistical_learning: true
   explainability:
-    - "show nearest sessions/prefixes"
-    - "show top contributing tokens (dot-product contributors)"
+    - "show nearest tensor-state prefixes"
+    - "show contributing topology observations for neighborhood and attention weight"
   meaning_definition:
     default: >
-      token.value is human-defined discrete numeric in a cosine-compatible range
-      (recommended [-1, 1]).
+      Semantic SoT is registry tensor continuity from registry_id references and
+      DB topology observations; token.value is not manual semantic SoT.
     note: >
-      The system does NOT require predefined semantic axes or factors.
-      "Meaning direction" is the emergent neighborhood structure created by cosine
-      similarity over session vectors (token-value aggregation).
+      Theta/cosine can be used for neighborhood filtering, but meaning authority
+      remains registry tensor continuity + topology observation surfaces.
   separation_of_concerns:
     write_path:  "append event -> update minimal caches (cheap)"
-    read_path:   "fast lookup + sparse cosine on limited candidate sets"
+    read_path:   "fast topology candidate lookup + theta/neighborhood filtering on limited tensor-state candidates"
     learn_path:  "batch/near-realtime aggregation over logs"
 
 ui:
@@ -125,13 +148,17 @@ core_ideas:
 
   meaning_direction:
     definition: >
-      Each event contributes a sparse vector of token values.
-      A session (or its prefix) is represented as an aggregated vector (SUM).
-      Similarity is cosine similarity over these vectors.
+      Each event contributes topology observations over a record tensor state.
+      A session prefix accumulates registry_id continuity, relation/log evidence,
+      and DB topology observations as attention evidence (not meaning SoT).
+      Theta/cosine may be used only as neighborhood filtering over limited
+      candidate tensor states; attention weight is observed from
+      aggregation/transition/recency/frequency/diff/logs.
 
   prediction:
     definition: >
-      Given current context vector, find similar past context prefixes and infer:
+      Given current topology observation context, find neighborhood-matched past
+      tensor-state prefixes and infer:
         A: next_action (workflow)
         B: next_info tokens (reference/info)
 
@@ -140,60 +167,35 @@ core_ideas:
       "Axis/meaning discovery" is optional and comes from clustering similar sessions.
       Naming is a human/LLM labeling layer, not required for function.
 
-vector_model:
-  token_value_schema:
-    domain: "token.group is UI grouping tag; not used in computation"
-    value_range:
-      recommended: [-1.0, 1.0]
-      alternative: [0.0, 1.0]
-    value_assignment:
-      method: "human discrete ordering (spacing non-uniform allowed)"
-      examples:
-        status:
-          - { label: "critical",  value: -1.0 }
-          - { label: "warning",   value: -0.5 }
-          - { label: "caution",   value:  0.0 }
-          - { label: "normal",    value:  1.0 }
-        task:
-          - { label: "failed",    value: -1.0 }
-          - { label: "aborted",   value: -0.5 }
-          - { label: "pending",   value:  0.0 }
-          - { label: "in_progress", value: 0.5 }
-          - { label: "completed", value:  1.0 }
-    notes:
-      - "Only cosine similarity prediction is required; per-token cos(theta) is not required."
-
-aggregation_rules:
-  event_vector:
+topology_observation_model:
+  tensor_state_source:
+    - registry_id_references
+    - relation_bindings
+    - jsonb_features_and_promoted_columns
+    - logs_and_observations
+  prefix_observation:
     definition: >
-      v_event is sparse map(token_id -> token_value).
-      Missing tokens are treated as 0.
-
-  session_vector:
+      A session prefix accumulates topology observations and attention evidence
+      over record tensor states. It does not define meaning by manually authored
+      token-value vectors.
+  neighborhood_filtering:
     definition: >
-      v_session_prefix = SUM(v_event) over events in the session prefix up to current time.
-      (SUM chosen for low compute and statistical meaning)
-
-  cosine_similarity:
-    definition: "cos(v_a, v_b) = dot(v_a, v_b) / (||v_a|| * ||v_b||)"
-    zero_norm_policy: "if norm == 0 then similarity = 0"
-
-  neighborhood_inference:
-    k_nearest_sessions: 50       # → function_parameters default_policy.top_k
-    min_similarity: 0.05         # → function_parameters default_policy.min_similarity
-    tie_breaker: "recency_weighted"
-
-  strength_sigmoid:
-    intent: "evidence strength display (not accept/reject)"
+      Theta/cosine may be used only as a bounded neighborhood filter over
+      limited tensor-state candidates.
+    parameters:
+      k_nearest_sessions: 50
+      min_similarity: 0.05
+      tie_breaker: recency_weighted
+  attention_weight_observation:
     definition: >
-      strength = sigmoid((cos_sim - tau) / s)
-      where tau is derived from the local neighborhood (kth similarity),
-      and s is a scale factor.
-    default_params:
-      s: 0.05
-      tau_policy:
-        - "tau = similarity_of_kth_neighbor (k = min_neighbors) if enough neighbors"
-        - "else tau = min_similarity"
+      Attention weight is observed from aggregation, transition, recency,
+      frequency, diff, and logs.
+    strength_display:
+      intent: evidence_strength_display_not_accept_reject
+      definition: neighborhood_weight_relative_evidence
+  projection_cache:
+    fields: [vector_sparse, l2_norm]
+    rule: rebuildable_helper_not_meaning_sot
 
 recommendation_targets:
   A_next_action:
@@ -209,7 +211,7 @@ recommendation_targets:
       - "neighbor sessions vote on next_token_ids_hint"
       - "or tokens newly appearing after current prefix (delta tokens)"
     note: >
-      State is not a separate entity; state is the current context vector itself.
+      State is not a separate entity; state is the current topology observation over the record tensor state.
 
 entities:
   # --- Definitions ---
@@ -218,14 +220,14 @@ entities:
     description: >
       Discrete token dictionary.
       token_id is used in context_event.token_ids.
-      value is the meaning direction component in [-1.0, 1.0] (cosine-compatible).
-      group is UI grouping only — not used in vector computation.
-      Missing tokens are treated as 0 in the sparse vector.
+      value is an operational observation scalar and is not semantic SoT.
+      group is UI grouping only — not used as meaning authority.
+      token/value fields must not be interpreted as manually authored semantic vectors.
     fields:
       token_id:   { type: uuid, pk: true }
       label:      { type: string }
       group:      { type: string, note: "UI grouping tag; not used in computation" }
-      value:      { type: float, note: "meaning direction component [-1.0, 1.0]" }
+      value:      { type: float, note: "operational observation scalar (not meaning SoT)" }
       status:     { type: enum, values: [active, deprecated], default: active }
       created_at: { type: timestamp }
       updated_at: { type: timestamp }
