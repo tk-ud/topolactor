@@ -58,6 +58,7 @@ builder.Services.AddSingleton<SemanticMapper>();
 builder.Services.AddSingleton<RuntimeGuard>();
 builder.Services.AddSingleton<ContextVectorBuilder>();
 builder.Services.AddSingleton<ContextNeighborSearch>();
+builder.Services.AddSingleton<SystemOperationCiRuntime>();
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();

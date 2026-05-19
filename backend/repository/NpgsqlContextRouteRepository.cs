@@ -1244,10 +1244,15 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
+        // CASE guards jsonb_array_length — AND does not short-circuit in PostgreSQL,
+        // so calling jsonb_array_length on the default non-array JSONB '{}' would error.
         cmd.CommandText =
             "SELECT hub_id, candidate_id, scope_limit, " +
             "       attention_score, ema_fast_30, ema_slow_10, " +
-            "       (jsonb_typeof(evidence_json) = 'array' AND jsonb_array_length(evidence_json) > 0) AS has_evidence, " +
+            "       CASE WHEN jsonb_typeof(evidence_json) = 'array' " +
+            "            THEN jsonb_array_length(evidence_json) > 0 " +
+            "            ELSE false " +
+            "       END AS has_evidence, " +
             "       updated_at " +
             "FROM context_hub_recommendation_current " +
             "ORDER BY updated_at DESC";
@@ -1284,6 +1289,53 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         cmd.CommandText = "SELECT COUNT(*) FROM context_event";
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is long l ? l : Convert.ToInt64(result);
+    }
+
+    /// <summary>
+    /// Returns the total count of rows in context_hub_feedback_event.
+    /// Used by system CI rebuildability check as secondary event source.
+    /// </summary>
+    public override async Task<long> CountFeedbackEventsAsync(CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM context_hub_feedback_event";
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is long l ? l : Convert.ToInt64(result);
+    }
+
+    /// <summary>
+    /// Loads a lightweight registry token summary for system CI inspection.
+    /// Counts active tokens and active tokens not referenced by any hub attention record.
+    /// </summary>
+    public override async Task<RegistryTokenCiSummary> LoadRegistryTokenSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT " +
+            "  (SELECT COUNT(*) FROM context_token_registry WHERE status = 'active') AS total_active_tokens, " +
+            "  (SELECT COUNT(*) FROM context_token_registry " +
+            "   WHERE status = 'active' " +
+            "     AND token_id NOT IN (" +
+            "         SELECT DISTINCT candidate_id " +
+            "         FROM context_hub_recommendation_current " +
+            "         WHERE candidate_kind = 'token'" +
+            "     )) AS unreferenced_token_count";
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+            return new RegistryTokenCiSummary(TotalActiveTokens: 0, UnreferencedTokenCount: 0);
+
+        return new RegistryTokenCiSummary(
+            TotalActiveTokens:      Convert.ToInt32(reader.GetValue(0)),
+            UnreferencedTokenCount: Convert.ToInt32(reader.GetValue(1))
+        );
     }
 
     // ---------------------------------------------------------------------------

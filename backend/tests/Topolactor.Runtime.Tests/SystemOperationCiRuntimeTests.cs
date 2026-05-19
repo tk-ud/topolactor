@@ -398,7 +398,7 @@ public class SystemOperationCiRuntimeTests
                 Guid.NewGuid(), Guid.NewGuid(), 1000,
                 AttentionScore: 0.5f, EmaFast: null, EmaSlow: null,
                 HasEvidence: true, UpdatedAt: DateTimeOffset.UtcNow)
-        ], eventCount: 0);
+        ], eventCount: 0, feedbackEventCount: 0);
         var runtime = CreateRuntime(stub);
 
         var result = await runtime.InspectCurrentRebuildabilityAsync();
@@ -422,6 +422,67 @@ public class SystemOperationCiRuntimeTests
         var result = await runtime.InspectCurrentRebuildabilityAsync();
 
         Assert.Equal(SystemCiStatus.Pass, result.OverallStatus);
+    }
+
+    [Fact]
+    public async Task InspectCurrentRebuildabilityAsync_RecordsNoEventsButHasFeedbackEvents_ReturnsPass()
+    {
+        // feedback_event count > 0 means a rebuild source exists; Gap must not fire.
+        var stub = new StubHubAttentionCiRepository(
+        [
+            new HubAttentionCiSummary(
+                Guid.NewGuid(), Guid.NewGuid(), 1000,
+                AttentionScore: 0.5f, EmaFast: null, EmaSlow: null,
+                HasEvidence: true, UpdatedAt: DateTimeOffset.UtcNow)
+        ], eventCount: 0, feedbackEventCount: 42);
+        var runtime = CreateRuntime(stub);
+
+        var result = await runtime.InspectCurrentRebuildabilityAsync();
+
+        Assert.Equal(SystemCiStatus.Pass, result.OverallStatus);
+        Assert.Empty(result.Findings);
+    }
+
+    // ─── InspectRegistryContinuityAsync ──────────────────────────────────────
+
+    [Fact]
+    public async Task InspectRegistryContinuityAsync_NoActiveTokens_ReturnsPass()
+    {
+        var stub = new StubRegistryCiRepository(totalActiveTokens: 0, unreferencedTokenCount: 0);
+        var runtime = CreateRuntime(stub);
+
+        var result = await runtime.InspectRegistryContinuityAsync();
+
+        Assert.Equal(SystemCiStatus.Pass, result.OverallStatus);
+        Assert.Empty(result.Findings);
+        Assert.Equal("registry_continuity", result.InspectionTarget);
+        Assert.Equal(SystemCiInspectionKind.CronContinuity, result.InspectionKind);
+    }
+
+    [Fact]
+    public async Task InspectRegistryContinuityAsync_AllTokensReferenced_ReturnsPass()
+    {
+        var stub = new StubRegistryCiRepository(totalActiveTokens: 5, unreferencedTokenCount: 0);
+        var runtime = CreateRuntime(stub);
+
+        var result = await runtime.InspectRegistryContinuityAsync();
+
+        Assert.Equal(SystemCiStatus.Pass, result.OverallStatus);
+        Assert.Empty(result.Findings);
+    }
+
+    [Fact]
+    public async Task InspectRegistryContinuityAsync_OrphanedTokens_ReturnsGap()
+    {
+        var stub = new StubRegistryCiRepository(totalActiveTokens: 10, unreferencedTokenCount: 3);
+        var runtime = CreateRuntime(stub);
+
+        var result = await runtime.InspectRegistryContinuityAsync();
+
+        Assert.Equal(SystemCiStatus.Gap, result.OverallStatus);
+        Assert.Contains(result.Findings, f => f.CheckName == "CRON_ORPHANED_REGISTRY");
+        Assert.All(result.Findings.Where(f => f.CheckName == "CRON_ORPHANED_REGISTRY"),
+            f => Assert.Equal(SystemCiStatus.Gap, f.Status));
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -453,10 +514,12 @@ public class SystemOperationCiRuntimeTests
 
 /// <summary>
 /// Stub ContextRouteRepository for cron CI tests that need non-empty hub attention summaries.
+/// feedbackEventCount defaults to 0; supply it to test the rebuildability feedback-source path.
 /// </summary>
 internal sealed class StubHubAttentionCiRepository(
     IReadOnlyList<HubAttentionCiSummary> summaries,
-    long eventCount)
+    long eventCount,
+    long feedbackEventCount = 0)
     : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
 {
     public override Task<IReadOnlyList<HubAttentionCiSummary>> LoadHubAttentionSummaryForCiAsync(
@@ -465,4 +528,22 @@ internal sealed class StubHubAttentionCiRepository(
 
     public override Task<long> CountContextEventsAsync(CancellationToken ct = default)
         => Task.FromResult(eventCount);
+
+    public override Task<long> CountFeedbackEventsAsync(CancellationToken ct = default)
+        => Task.FromResult(feedbackEventCount);
+}
+
+/// <summary>
+/// Stub ContextRouteRepository for registry continuity CI tests.
+/// </summary>
+internal sealed class StubRegistryCiRepository(
+    int totalActiveTokens,
+    int unreferencedTokenCount)
+    : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
+{
+    public override Task<RegistryTokenCiSummary> LoadRegistryTokenSummaryForCiAsync(
+        CancellationToken ct = default)
+        => Task.FromResult(new RegistryTokenCiSummary(
+            TotalActiveTokens:      totalActiveTokens,
+            UnreferencedTokenCount: unreferencedTokenCount));
 }

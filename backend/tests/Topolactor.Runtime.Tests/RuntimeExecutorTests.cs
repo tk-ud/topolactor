@@ -34,7 +34,9 @@ public class RuntimeExecutorTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                contextRoutePolicyRepository));
+                contextRoutePolicyRepository,
+                new SystemOperationCiRuntime(
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
     }
 
     [Fact]

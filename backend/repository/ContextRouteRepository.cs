@@ -363,4 +363,34 @@ public class ContextRouteRepository
             "ContextRouteRepository.CountContextEventsAsync: in-memory skeleton — returning 0.");
         return Task.FromResult(0L);
     }
+
+    /// <summary>
+    /// Returns the total count of rows in context_hub_feedback_event.
+    /// Used by SystemOperationCiRuntime rebuildability check as a secondary event source:
+    /// if context_event is empty but feedback events exist, current is still rebuildable.
+    ///
+    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<long> CountFeedbackEventsAsync(CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.CountFeedbackEventsAsync: in-memory skeleton — returning 0.");
+        return Task.FromResult(0L);
+    }
+
+    /// <summary>
+    /// Loads a lightweight summary of context_token_registry for registry continuity CI inspection.
+    /// TotalActiveTokens: active token count; UnreferencedTokenCount: active tokens not in any
+    /// hub attention record (candidate_kind = 'token').
+    ///
+    /// Used by SystemOperationCiRuntime to detect orphaned active registry tokens.
+    /// In-memory skeleton: returns zero counts. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<RegistryTokenCiSummary> LoadRegistryTokenSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: in-memory skeleton — returning zero counts.");
+        return Task.FromResult(new RegistryTokenCiSummary(TotalActiveTokens: 0, UnreferencedTokenCount: 0));
+    }
 }

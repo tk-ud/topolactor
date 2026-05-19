@@ -67,3 +67,14 @@ public record HubAttentionCiSummary(
     bool HasEvidence,
     DateTimeOffset UpdatedAt
 );
+
+/// <summary>
+/// Summary of context_token_registry state for cron CI inspection.
+/// TotalActiveTokens: count of tokens with status='active'.
+/// UnreferencedTokenCount: active tokens not referenced by any hub attention record
+///   (candidate_kind = 'token' in context_hub_recommendation_current).
+/// </summary>
+public record RegistryTokenCiSummary(
+    int TotalActiveTokens,
+    int UnreferencedTokenCount
+);

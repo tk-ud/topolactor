@@ -37,7 +37,9 @@ public class DefaultEntitySearchIntegrationTests
                 contextRouteRepository,
                 new ContextVectorBuilder(),
                 new ContextNeighborSearch(),
-                topologyRepository));
+                topologyRepository,
+                new SystemOperationCiRuntime(
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
     }
 

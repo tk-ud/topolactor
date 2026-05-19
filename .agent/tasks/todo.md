@@ -20,25 +20,29 @@
 ## System Operation CI (Issue #83)
 
 - [ ] [Claude] SystemOperationCiRuntime の backend-tests CI 検証
-      → 実装完了 (branch: claude/issue-83-tasks-PbiMy)。
-      → 対象: `backend/runtime/SystemOperationCiRuntime.cs`, `backend/tests/.../SystemOperationCiRuntimeTests.cs`
+      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104 wiring 含む)。
+      → 対象: 全 backend/runtime/*, backend/repository/*, backend/tests/.../*.cs
       → dotnet が環境にないため local 実行不可。remote CI (backend-tests workflow) で確認後に [x] 化。
 
-- [ ] [Claude] SystemOperationCiRuntime の event-driven CI 接続 (RunTopologyVectorRuntimeExtensionAsync)
-      → 現状: InspectHubAttentionAfterUpdate / InspectEvidenceIntegrity / InspectFeedbackEvents は定義済み。
-      → 未完: ContextRouteRecommendationResolver.RunTopologyVectorRuntimeExtensionAsync から呼び出しを追加する。
-      → Blocking → ExplicitError("TVR_EXTENSION_FAILED") / Gap → LogWarning and continue。
-      → 完了条件: resolver に SystemOperationCiRuntime を DI し、event 後に呼び出す実装 + テスト追加。
+- [x] [Claude] SystemOperationCiRuntime の event-driven CI 接続 (RunTopologyVectorRuntimeExtensionAsync)
+      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104)。
+      → InspectEvidenceIntegrity: evidence extraction 後に呼び出し。Blocking → throw → TVR_EXTENSION_FAILED。
+      → InspectHubAttentionAfterUpdate: hub attention record 構築後 (upsert 前) に呼び出し。Blocking → throw → TVR_EXTENSION_FAILED。
+      → Gap → LogWarning + recommendation 継続。
+      → SystemOperationCiRuntime を Program.cs に DI 登録済み。
+      → テスト追加: StubBlockingEvidenceCiRuntime / StubGapEvidenceCiRuntime / NanEmaFastExistingRepository。
+
+- [x] [Claude] Registry 連続性探索 (orphaned registry detection) の実装
+      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104)。
+      → InspectRegistryContinuityAsync: LoadRegistryTokenSummaryForCiAsync → CRON_ORPHANED_REGISTRY (Gap)。
+      → RegistryTokenCiSummary を SystemCiContracts.cs に追加。
+      → NpgsqlContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: context_token_registry で孤立 token カウント。
+      → テスト追加: StubRegistryCiRepository + InspectRegistryContinuityAsync 3テスト。
 
 - [ ] [Claude] Cron trigger 接続 (background worker / scheduled job)
-      → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync は定義済み。
+      → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync は定義済み。
       → cron trigger → Runtime excitation → SystemOperationCiRuntime 呼び出し導線が未実装。
       → 完了条件: cron dispatch endpoint / background worker から呼び出す実装 + .agent/reports/ への診断結果書き込み。
-
-- [ ] [Claude] Registry 連続性探索 (orphaned registry detection) の実装
-      → 孤立 registry (どの hub からも参照されない registry) の DB 検査クエリが未実装。
-      → 対象: ContextRouteRepository に LoadOrphanedTokenSummaryForCiAsync などを追加する。
-      → 完了条件: CRON_ORPHANED_REGISTRY finding を持つ InspectRegistryContinuityAsync を実装・テスト。
 
 ## Registry Tensor Continuity
 

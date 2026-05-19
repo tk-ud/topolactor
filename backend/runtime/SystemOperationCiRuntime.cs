@@ -46,6 +46,7 @@ public class SystemOperationCiRuntime
     private const string EvidenceIntegrityTarget       = "evidence_integrity";
     private const string HubAttentionContinuityTarget  = "hub_attention_continuity";
     private const string CurrentRebuildabilityTarget   = "current_rebuildability";
+    private const string RegistryContinuityTarget      = "registry_continuity";
 
     public SystemOperationCiRuntime(
         ILogger<SystemOperationCiRuntime> logger,
@@ -67,7 +68,7 @@ public class SystemOperationCiRuntime
     ///
     /// All thresholds here are invariants (finite IEEE-754, non-empty UUID) — not policy values.
     /// </summary>
-    public SystemCiDiagnosticResult InspectHubAttentionAfterUpdate(
+    public virtual SystemCiDiagnosticResult InspectHubAttentionAfterUpdate(
         HubAttentionCurrentRecord record,
         string evidenceJson,
         string mlpFeatureJson)
@@ -168,7 +169,7 @@ public class SystemOperationCiRuntime
     /// Blocking: any evidence entry has contribution_score &lt; 0
     ///   (negative contribution score is a computation invariant violation).
     /// </summary>
-    public SystemCiDiagnosticResult InspectEvidenceIntegrity(
+    public virtual SystemCiDiagnosticResult InspectEvidenceIntegrity(
         string? currentOperation,
         IReadOnlyList<TransitionKeyEvidence> evidence)
     {
@@ -216,7 +217,7 @@ public class SystemOperationCiRuntime
     /// Blocking: delta sign contradicts feedback_kind
     ///   (selected → positive, ignored → negative, missing_candidate → positive).
     /// </summary>
-    public SystemCiDiagnosticResult InspectFeedbackEvents(
+    public virtual SystemCiDiagnosticResult InspectFeedbackEvents(
         IReadOnlyList<HubFeedbackEvent> events)
     {
         ArgumentNullException.ThrowIfNull(events);
@@ -366,17 +367,21 @@ public class SystemOperationCiRuntime
     {
         var summaries = await _repository.LoadHubAttentionSummaryForCiAsync(ct);
         var eventCount = await _repository.CountContextEventsAsync(ct);
+        var feedbackEventCount = await _repository.CountFeedbackEventsAsync(ct);
 
         var findings = new List<SystemCiFinding>();
 
-        if (summaries.Count > 0 && eventCount == 0)
+        // Gap: hub attention records exist but neither context_event nor feedback_event
+        // has any rows — no event source from which the materialized current can be rebuilt.
+        // Pass when feedbackEventCount > 0 because feedback events are a valid rebuild source.
+        if (summaries.Count > 0 && eventCount == 0 && feedbackEventCount == 0)
         {
             findings.Add(new SystemCiFinding(
                 "CURRENT_NOT_REBUILDABLE_NO_EVENTS",
                 SystemCiStatus.Gap,
                 $"context_hub_recommendation_current has {summaries.Count} record(s) " +
-                "but context_event has 0 rows. " +
-                "Materialized current cannot be rebuilt from append-only log. " +
+                "but context_event has 0 rows and context_hub_feedback_event has 0 rows. " +
+                "Materialized current cannot be rebuilt from any append-only event source. " +
                 "Verify that context_event append is wired correctly before hub attention upsert.",
                 null
             ));
@@ -385,8 +390,55 @@ public class SystemOperationCiRuntime
         var result = BuildResult(CurrentRebuildabilityTarget, SystemCiInspectionKind.CronContinuity, findings);
         _logger.LogDebug(
             "SystemOperationCiRuntime.InspectCurrentRebuildabilityAsync: " +
-            "hubAttentionRecords={HubCount} contextEvents={EventCount} status={Status}.",
-            summaries.Count, eventCount, result.OverallStatus);
+            "hubAttentionRecords={HubCount} contextEvents={EventCount} feedbackEvents={FeedbackCount} status={Status}.",
+            summaries.Count, eventCount, feedbackEventCount, result.OverallStatus);
+        return result;
+    }
+
+    /// <summary>
+    /// Cron-triggered registry token continuity inspection.
+    /// Loads a lightweight summary of context_token_registry and checks for orphaned tokens:
+    ///   active tokens not referenced by any hub attention record
+    ///   (candidate_kind = 'token' in context_hub_recommendation_current).
+    ///
+    /// Gap: UnreferencedTokenCount > 0 — orphaned active tokens found.
+    /// Pass: all active tokens are referenced, or no active tokens exist.
+    /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
+    /// </summary>
+    public async Task<SystemCiDiagnosticResult> InspectRegistryContinuityAsync(
+        CancellationToken ct = default)
+    {
+        RegistryTokenCiSummary summary;
+        try
+        {
+            summary = await _repository.LoadRegistryTokenSummaryForCiAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "SystemOperationCiRuntime.InspectRegistryContinuityAsync: repository read failed.");
+            throw;
+        }
+
+        var findings = new List<SystemCiFinding>();
+
+        if (summary.TotalActiveTokens > 0 && summary.UnreferencedTokenCount > 0)
+        {
+            findings.Add(new SystemCiFinding(
+                "CRON_ORPHANED_REGISTRY",
+                SystemCiStatus.Gap,
+                $"{summary.UnreferencedTokenCount} of {summary.TotalActiveTokens} active tokens " +
+                "in context_token_registry are not referenced by any hub attention record. " +
+                "Orphaned tokens do not participate in hub attention scoring.",
+                null
+            ));
+        }
+
+        var result = BuildResult(RegistryContinuityTarget, SystemCiInspectionKind.CronContinuity, findings);
+        _logger.LogDebug(
+            "SystemOperationCiRuntime.InspectRegistryContinuityAsync: " +
+            "totalActiveTokens={TotalActive} unreferencedTokens={Unreferenced} status={Status}.",
+            summary.TotalActiveTokens, summary.UnreferencedTokenCount, result.OverallStatus);
         return result;
     }
 
