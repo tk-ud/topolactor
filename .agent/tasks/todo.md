@@ -43,7 +43,7 @@
       → 残タスク: backend-tests CI 検証 (backend-tests workflow は PR / main push でのみ起動。PR作成 or main mergeで CI pass を確認してから [x] 化すること)。
       → 完了条件: backend-tests remote CI PASS 確認後に [x]。
 
-- [ ] [Codex] registry tensor projection surface の実装乖離点検（runtime / endpoint / scheduler / function / UI topology）
+- [x] [Codex] registry tensor projection surface の実装乖離点検（runtime / endpoint / scheduler / function / UI topology）
       → 問題点: SSOT と監査Policyの明文化後、実装側で surface 間の意味連続性が崩れる余地がある。
       → 目的: projection/expansion surface ごとの drift を点検し、必要なら別PRで是正する。
       → 対象ファイル候補: docs/design/*, backend/runtime/*, frontend/*, db/*（点検のみ）
