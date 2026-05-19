@@ -32,6 +32,37 @@ registry_tensor_principle:
     Surfaces above are projections/expansions of the same registry tensor and
     must not be treated as disconnected CRUD implementations. Abstract function
     receives the tensor and executes projection/expansion on each surface.
+  vector_space_rule: registry_table_structure_itself_spans_vector_space
+  cross_registry_attention: registry_relation_axis_enables_attention_across_registries
+  same_table_aggregation_attention_weight: count_sum_average_recency_frequency_transition_are_attention_weights
+
+real_sys_table_principle:
+  basic_shape: id_state_jsonb
+  id_role: identity
+  state_role: current_state
+  jsonb_role: latent_semi_structured_payload
+  relation_to_registry_tensor: observed_connected_entity_surface
+
+jsonb_key_promotion:
+  rule: jsonb_keys_can_be_columnized_into_observable_semantic_axes
+  drivers:
+    - observation_frequency
+    - semantic_importance
+    - audit_requirement
+
+logs_diffs_principle:
+  role: append_only_diff_surface
+  basic_shape: id_tableId_jsonb_created
+  note: logs_diffs_is_not_current_state_sot
+
+vector_cache_authority:
+  vector_sparse_l2_norm: rebuildable_projection_only
+  sot: false
+  direct_authoring:
+    seed: prohibited_as_normal_path
+    ui: prohibited_as_normal_path
+    api: prohibited_as_normal_path
+    record: prohibited
 
 design_principles:
   offline_first: true

@@ -1,219 +1,96 @@
 # topolactor
 
-Topolactor is a **DB-defined application runtime and agent-assisted development OS** built as a data-driven topology runtime.
+Topolactor is a **data-driven topology runtime architecture** that treats the registry table as a **semantic matrix**, then projects/expands DB, UI, endpoint, runtime, scheduler, and function surfaces from the same **registry tensor**.
 
-It is a public scaffold for building runtime-defined applications where topology, dispatch, projection, and policy are resolved from stored definitions instead of fixed CRUD screens.
+> Short definition: topolactor treats the registry table as a semantic matrix and resolves runtime surfaces by applying abstract functions to registry tensor coordinates.
 
 **Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
 
-## Application Runtime OS / Agent Development OS
+## 30-Second Overview
 
-Topolactor is intentionally organized as a two-layer system:
+- **registry table = semantic matrix**
+- **row = registryId / basis vocabulary**
+- **column = semantic axis / projection axis / wiring axis**
+- **value = weight / state / relation / coordinate / connection**
+- **registryId combinations = sparse vector / tensor coordinate**
+- **abstract function(tensor) = each runtime/projection surface expander**
+- **SQL Attention = continuity + attention-weight observation on DB topology space**
+- **Admin UI = semantic matrix / UI topology tensor editor**
 
-- **Application Runtime OS**
-  - Stores topology semantics in DB surfaces (registries, schemas, packages, relations, structure maps, function parameters).
-  - Resolves user operations through the canonical runtime route.
-  - Emits runtime output and UI projection inputs from data-defined topology.
-- **Agent Development OS**
-  - Governs how AI agents inspect, modify, verify, and report repository changes.
-  - Preserves semantic boundaries (runtime vs projection vs policy) during agent-assisted evolution.
-  - Uses explicit rule, protocol, checklist, script, and test surfaces.
-  - External overview: [`docs/agent-development-os.md`](docs/agent-development-os.md).
+This is not a “put config in JSON and reload” model. The architecture subject is the registry tensor itself and its projection/expansion behavior across runtime boundaries.
 
-This repository is **not** a CRUD generator. It is a runtime-defined application scaffold where AI agents can safely modify topology-driven behavior while preserving semantic architecture boundaries.
+## Architecture Overview
 
-## What You Can Build
+### 1) Registry Tensor / Semantic Matrix
 
-Topolactor is designed for applications where UI, data shape, and runtime behavior are expanded from stored definitions.
+The registry is not only metadata or dictionary storage. It is the semantic matrix that supplies basis vocabulary and wiring axes. Runtime behavior is resolved from matrix coordinates, and different surfaces observe the same tensor from different projections.
 
-With this scaffold, you can build:
+### 2) SQL Attention
 
-- DB-backed applications whose screens are driven by registry and schema definitions
-- admin tools that can grow from JSONB data into promoted tables
-- UI projections assembled from packages and components
-- composite domain projections centered around a resolved hub
-- operation-to-runtime dispatch flows
-- context-aware recommendation surfaces based on accumulated operation history
-- runtime-defined applications that remain agent-editable under governance constraints
+SQL Attention is the runtime’s DB-native observation model for topology continuity and attention weight. It is used to observe what the system should attend to in topology space (context continuity, transitions, and weighted relevance), not as a recommendation-only UI ranking gimmick.
 
-In this project, a **hub** is a resolved grouping point in topology space. It lets related domain data be assembled as a view without making a fixed physical table or screen the architecture subject.
+### 3) Projection / Expansion Surfaces
 
-The intended extension model is:
+DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are treated as projection or expansion surfaces of one tensor. They are not independent architecture subjects.
 
-```text
-add topology data
-→ define attractor / structure_map
-→ bind package / schema / components
-→ runtime emits validated output
-→ frontend projects UI
-```
+### 4) UI Topology Tensor
 
-## Repository Surfaces
+UI topology is a tensor projection surface. UI definitions become first-class topology entities only after persistence and ID issuance; code-only component presence is intentionally insufficient.
 
-Topolactor exposes the following surfaces:
+### 5) Components Bucket + Package Generator
 
-- **Runtime scaffold** — backend, frontend, database, and topology definitions.
-- **Documentation surface** — architecture, policy, flow, and operating guides.
-- **Agent Development OS surface** — governance assets for AI-agent operation (`AGENTS.md`, `.agent/rules/`, `.agent/protocols/`, `.agent/scripts/`, `.agent/checklists/`, `.agent/tests/`).
+- **components bucket**: staging surface for unpackaged components.
+- **package generator**: issues `componentId`, `packageId`, `layoutId`, `wiringId` and persists topology wiring.
+- only persisted/issued topology entities are projected as runtime UI topology.
 
-The Agent Development OS layer is governance infrastructure, not application runtime logic.
+### 6) Stable Surface Adapters
 
-## Self-Learning DB and Recommendation Runtime
+Endpoint/projection adapters are fixed surfaces. New specs should be represented primarily by registry tensor / UI topology data updates, not by re-implementing per-spec adapters every time.
 
-Topolactor includes a lightweight self-learning DB pattern for recommendation.
+### 7) Governance / Audit Policy
 
-It does not train a neural network and does not backpropagate model weights. Instead, it records append-only context events and derives recommendations from stored topology data, token registries, vector caches, and transition aggregates.
+The repository keeps explicit governance surfaces for runtime boundary checks, policy judgment, structure checks, and SSOT drift prevention.
 
-Topology Vector Runtime can be described as **SQL Attention**: it uses stored topology vectors, relation weights, transition aggregates, and EMA trends in PostgreSQL to rank what the runtime should attend to next.
+## What topolactor is **not**
 
-The basic loop is:
+- **Not** a normal CRUD auto-generator.
+- **Not** a component catalog-only system.
+- **Not** an external embedding cache / pgvector-centric architecture.
+- **Not** a framework that recreates endpoint/UI/scheduler/function per spec.
+- **Not** a recommendation-only or ranking-only subsystem.
 
-```text
-append context event
-→ resolve active context tokens
-→ build sparse event / prefix vectors
-→ search nearest historical prefixes
-→ aggregate transition counts
-→ emit next operation / token candidates
-```
+## Implementation Status (Now / Design / Future)
 
-Transition probability is calculated from observed counts in SQL:
+- **Implemented now (main branch):** registry semantic-matrix principle, topology registry surfaces, SQL-based context/recommendation runtime surfaces, UI topology persistence surfaces, admin UI boundary docs.
+- **Design-guarded (SSOT-defined):** tensor-first projection discipline across runtime surfaces, package generator promotion semantics, fixed adapter posture.
+- **Future / planned:** items explicitly called out as planned in SSOT docs (for example some audit/log-derived recommendation expansions).
 
-```text
-P(next_operation | prev_operation)
-= count(next_operation) / sum(count(next_operation) in the same prev_operation scope)
-```
+## Developer Entry Points
 
-This keeps learning behavior explainable, auditable, and data-defined.
+- SSOT concepts/policies: `docs/framework-policy.yaml`
+- Structure map of repository/runtime wiring: `docs/file-structure.yaml`
+- Registry tensor policy: `.agent/protocols/registry-tensor-policy.md`
+- Context-route recommendation SSOT: `docs/design/context-route-recommendation.md`
+- Topology recommendation CI runtime SSOT: `docs/design/topology-recommendation-ci-runtime.md`
+- Admin UI boundary: `docs/registrar-admin-ui-specification.md`
+- DB schema surfaces:
+  - `db/topology_tables.sql`
+  - `db/ui_topology_tables.sql`
+  - `db/context_route_tables.sql`
+- Demo walkthrough: `docs/demo-walkthrough.md`
 
-## Topology Attention Scope
+## Public-facing Articles
 
-Topolactor is not a CRUD generator and not a screen-transition recommender.
+- `docs/articles/registry-semantic-matrix.md`
+- `docs/articles/sql-attention.md`
+- `docs/articles/ui-topology-tensor.md`
 
-The full registrar — `master_registry`, `relation_registry`, `schema_registry`, `package_registry`, `component_registry`, `state_registry`, `structure_maps`, `hub_relations` — is treated as a **topology-wide Key-Value Memory**. Attention queries are generated from operational pressure signals in the data itself, not only from explicit operation sequences:
 
-- tables with high record_count
-- tables with high edit_diff_count or recent_diff_rate
-- tables with frequent state transitions
-- tables with frequent re-edits, rollbacks, or corrections
-- the current hub / operation / record / state
+- External overview and agenda: `docs/agent-development-os.md`
 
-These signals indicate where the domain is placing semantic load. The topology runtime attends over the full registrar space to surface registry candidates, relation candidates, schema candidates, component candidates, state candidates, and operation candidates.
+## CI / Verification Notes
 
-Screen transition and operation recommendation are one part of this attention model, not its limit.
-
-**Note:** edit diff log (`topology_edit_log` / `entity_edit_log`) is not yet implemented. Query generation from edit diff activity is a planned future capability. State transition log and edit diff log have distinct semantic boundaries and must not be conflated.
-
-## Core Flow
-
-```text
-stored_topology_data
-→ user_operation
-→ operation_vector
-→ attractor_resolve
-→ structure_map_resolve
-→ package_resolve
-→ schema_resolve
-→ component_expand
-→ emission_or_projection
-```
-
-## Demo
-
-A public scaffold demo is available after starting the frontend runtime.
-
-- `/demo` is the **runtime dispatch entrypoint** used for interactive runtime flow access.
-- `/demo-static` is a **frontend-only static structure diagram** and **not a runtime result**.
-- `/` can also be used to exercise runtime dispatch and related backend-connected behavior depending on environment wiring.
-
-The walkthrough (`docs/demo-walkthrough.md`) covers representative scenarios around recommendation and policy behavior using fake data.
-
-## Demo Status
-
-The public demo uses fake data only.
-
-- Runtime-connected behavior is exercised through dispatch-capable runtime entry surfaces.
-- `/demo-static` is documentation-style static structure output only, not runtime execution output.
-- Known remaining demo/runtime gaps are tracked in `.agent/tasks/todo.md`.
-
-## Start Here
-
-- `docs/framework-core.yaml` — core concepts, topology model, and layer responsibilities.
-- `docs/framework-policy.yaml` — registry, state, search, manifest, data, log, and promotion policies.
-- `docs/file-structure.yaml` — repository layout and canonical runtime wiring.
-- `docs/design/context-route-recommendation.md` — self-learning DB and recommendation runtime SSOT.
-- `docs/design/runtime-excitation-and-package-dispatch.md` — runtime excitation trigger and package dispatch SSOT.
-- `docs/design/topology-recommendation-ci-runtime.md` — topology recommendation CI runtime SSOT.
-- `docs/design/relation-registry-fk-audit-and-abstract-migration.md` — relation_registry authority FK audit / abstract migration SSOT.
-- `docs/registrar-admin-ui-specification.md` — boundary for topology registration admin UI.
-- `docs/promotion-manifest-editor-specification.md` — boundary for promotion manifest editing.
-- `AGENTS.md` — top-level agent entrypoint instructions.
-
-## Agent Governance
-
-Agent governance is split across explicit surfaces:
-
-- `AGENTS.md` — root contract and required execution order.
-- `.agent/rules/rule.md` — architecture and policy rules.
-- `.agent/protocols/` — protocol definitions (scenario contract, boundary matrix, completion sequence, policy judgment).
-- `.agent/scripts/` — helper scripts for repeatable protocol operations.
-- `.agent/checklists/` — policy-judgment and related compliance checklist gates.
-- `.agent/tests/` — structure and repository-level guard checks.
-
-## Agent Workflow
-
-```text
-READ_AGENTS_AND_RULES
-→ SELECT_RELEVANT_PROTOCOLS_AND_CHECKLISTS
-→ (IF REQUIRED) CREATE_SCENARIO_CONTRACT
-→ INSPECT_FULL_BRANCH_DIFF
-→ VERIFY_DIFF_AGAINST_SCENARIO_CONTRACT_AND_BOUNDARY_MATRIX
-→ APPLY_POLICY_JUDGMENT
-→ IF_BLOCKING_FAILURE_THEN_FIX_AND_REVERIFY
-→ RUN_REQUIRED_LOCAL_CHECKS
-→ IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT
-→ RUN bash .agent/tests/check-structure.sh LAST
-→ REPORT_PASS_FAIL_NOT_EXECUTED_AND_REMAINING_TODOS
-```
-
-See `NOTICE.md`.
-
-### CI policy
-
+- `IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT`
 - Structure Check is the always-on required gate.
 - Heavy CI workflows are path-scoped.
 - Scope-irrelevant skipped heavy CI is not blocking.
-- Branch protection should keep Structure Check as the stable always-on gate.
-
-## Runtime Environment Routes
-
-Use one of the three routes below. All configured routes must reach the same canonical runtime: frontend proxy (or nginx) → backend runtime → PostgreSQL.
-
-### 1) Local dev (processes on host)
-
-- Start PostgreSQL and apply `db/schema.sql`, `db/topology_tables.sql`, `db/promotion_tables.sql`, `db/context_route_tables.sql`, `db/seed_empty.sql`, `db/demo_seed.sql`.
-- Set backend env: `DATABASE_URL`, `DEMO_JWT_SECRET`, `DEMO_JWT_EXPIRY_HOURS` (`DEMO_JWT_ISSUER` optional). (`BACKEND_PORT` is optional in local dev; default `5000`.)
-- Start backend from `backend/`.
-- Set frontend env: `DEMO_BACKEND_URL=http://localhost:<BACKEND_PORT>` and start Fresh.
-- If `DEMO_BACKEND_URL` is missing in Fresh mode, `/api/*` proxies return 501 explicit configuration errors.
-
-### 2) Docker Compose demo (`infra/docker-compose.yml`)
-
-- Copy `infra/.env.example` to `infra/.env` and fill required values.
-- Run `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`.
-- nginx entrypoint: `http://localhost` (port 80).
-- Internal service wiring is fixed to prevent drift: backend listens on `5000`, frontend on `8000`, nginx upstream is `backend:5000` and `frontend:8000`, and backend healthcheck probes `http://localhost:5000/health`.
-- `/api/*` requests are routed by nginx to backend directly.
-
-### 3) Production-like (reverse proxy + separate services)
-
-- Keep same required backend env as local/compose (`DATABASE_URL`, JWT settings).
-- Route `/api/*` through reverse proxy to backend runtime; route UI traffic to frontend runtime.
-- Avoid mixed routing where some requests use Fresh proxy and others bypass it unintentionally.
-
-### Explicit failure behavior (no silent fallback)
-
-- Backend startup fails immediately when `DATABASE_URL` is missing.
-- JWT-guarded backend routes (`/dispatch`, `/admin/*`) return 401 with explicit auth errors when token/secret is invalid or missing.
-- Fresh proxy routes return 501 when `DEMO_BACKEND_URL` is unset and 502 when backend is unreachable.
-- Backend validation failures remain explicit (400/404/409/422 depending on endpoint contract).

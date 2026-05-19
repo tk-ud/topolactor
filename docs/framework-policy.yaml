@@ -19,6 +19,23 @@ framework_policy:
       DB/UI/endpoint/runtime/scheduler/function/CI surfaces are not independent
       implementation subjects; they are projection/expansion surfaces of the same
       registry tensor derived from the registry semantic matrix.
+    vector_space_rule: registry_table_structure_itself_spans_vector_space
+    cross_registry_attention:
+      enabled: true
+      basis:
+        - registry_id
+        - semantic_axis
+        - relation_axis
+      rule: cross_registry_relations_are_attention_capable_topology_edges
+    same_table_aggregation_attention_weight:
+      aggregates:
+        - count
+        - sum
+        - average
+        - recency
+        - frequency
+        - transition
+      rule: aggregates_are_attention_weight_observation_not_meaning_source
     jsonb_columnar_rule:
       jsonb: latent_and_semi_structured_feature_retention
       columnar: observable_semantic_axis_for_auditability
@@ -176,6 +193,36 @@ framework_policy:
         - frontend_proxy_status_propagation
         - ui_visible_error_state
         - post_write_read_consistency
+
+  real_sys_table_basic_shape:
+    rule: id_state_jsonb_is_default_shape_for_real_and_system_tables
+    identity: id
+    current_state: state
+    latent_payload: jsonb
+    note: real_sys_tables_are_entity_surfaces_observed_from_registry_tensor
+
+  jsonb_key_promotion_policy:
+    rule: jsonb_keys_can_be_promoted_to_columns_as_observable_semantic_axes
+    promotion_driver:
+      - observation_frequency
+      - semantic_importance
+      - audit_requirement
+    note: column_promotion_is_semantic_axis_manifestation_not_schema_drift
+
+  logs_diffs_policy:
+    role: append_only_diff_surface
+    basic_shape:
+      - id
+      - table_id
+      - jsonb
+      - created
+    rule: logs_diffs_are_audit_rebuild_history_not_current_state_sot
+
+  vector_cache_policy:
+    vector_sparse_l2_norm: rebuildable_materialized_projection_not_sot
+    prohibition:
+      - direct_record_vector_authoring
+      - direct_seed_ui_api_vector_sparse_authoring_as_normal_path
 
   data_policy:
     raw_input:
