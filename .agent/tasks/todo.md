@@ -14,34 +14,7 @@
 
 ## Current TODO
 
-## Runtime / Policy Variability
-
-- [ ] [Claude] A4 fix: context_hub 系 DB CHECK 制約と policy variability の衝突を設計・移行方針へ落とす
-      → 実装完了 (branch: claude/process-todo-tasks-yXNvS, commit: 6db556c)。
-      → 残タスク: backend-tests CI 検証 (backend-tests workflow は PR / main push でのみ起動。PR作成 or main mergeで CI pass を確認してから [x] 化すること)。
-      → 完了条件: backend-tests remote CI PASS 確認後に [x]。
-
-## Governance / CI Readiness
-
-- [ ] [Codex] Issue #60 close readiness の remote CI pass を確認する
-      → 問題点: backend-tests / frontend-types の remote CI pass 確認が残っている。
-      → 目的: REQUIRED_NOT_EXECUTED を PASS 扱いせず、close可否を明確にする。
-      → 対象: .agent/tasks/todo.md, GitHub Actions status
-      → 次の判断点: CI pass なら close-ready、未完なら Remaining TODO 継続。
-
-- [ ] [Codex] check-runtime-semantics.sh の remote CI equivalence を確認する
-      → 問題点: local環境で dotnet / deno が無い場合、runtime semantics check が未確定になる。
-      → 目的: remote CI equivalence または明示的 TODO で完了判定を管理する。
-      → 対象ファイル名: .agent/tests/check-runtime-semantics.sh, .github/workflows/*
-      → 次の判断点: CI確認。未確認なら未完了のまま保持。
-
 ## Registry Tensor Continuity
-
-- [ ] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
-      → 実装完了 (branch: claude/process-todo-tasks-yXNvS, commit: 6db556c)。
-      → 実施内容: BuildEventVector → BuildMultiHotVector (1.0f per token ID)、tokenValueMap 依存を除去、tokenIds proxy as relationIds を廃止、DDLコメント・UI文言・DTO名を multi-hot / rebuildable projection cache に更新。
-      → 残タスク: backend-tests CI 検証 (backend-tests workflow は PR / main push でのみ起動。PR作成 or main mergeで CI pass を確認してから [x] 化すること)。
-      → 完了条件: backend-tests remote CI PASS 確認後に [x]。
 
 - [ ] [Codex] registry tensor projection surface の実装乖離点検（runtime / endpoint / scheduler / function / UI topology）
       → 問題点: SSOT と監査Policyの明文化後、実装側で surface 間の意味連続性が崩れる余地がある。
