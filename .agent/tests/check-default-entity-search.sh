@@ -42,6 +42,15 @@ else
 fi
 
 echo ""
+echo "=== Frontend contract test: admin API client ==="
+if deno test "${REPO_ROOT}/frontend/tests/adminApi.test.ts" --allow-read; then
+  echo "OK  [frontend] admin API client test passed"
+else
+  echo "FAIL: admin API client test failed" >&2
+  FAILURES=$((FAILURES + 1))
+fi
+
+echo ""
 if [ "${FAILURES}" -eq 0 ]; then
   echo "=== All default:entity:search checks passed ==="
   exit 0
