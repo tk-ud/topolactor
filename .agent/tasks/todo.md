@@ -40,9 +40,12 @@
       → テスト追加: StubRegistryCiRepository + InspectRegistryContinuityAsync 3テスト。
 
 - [ ] [Claude] Cron trigger 接続 (background worker / scheduled job)
-      → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync は定義済み。
-      → cron trigger → Runtime excitation → SystemOperationCiRuntime 呼び出し導線が未実装。
-      → 完了条件: cron dispatch endpoint / background worker から呼び出す実装 + .agent/reports/ への診断結果書き込み。
+      → 実装完了 (branch: claude/process-todo-tasks-Ns7fy)。
+      → SystemOperationCiScheduler (BackgroundService) を追加。InspectHubAttentionContinuityAsync /
+         InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync を定期呼び出し。
+      → Program.cs に AddHostedService<SystemOperationCiScheduler>() 登録済み。
+      → 診断結果レポート: .agent/reports/2026-05-19-system-operation-ci-scheduler.md
+      → 残タスク: backend-tests remote CI PASS 確認後に [x] 化。
 
 ## Registry Tensor Continuity
 
