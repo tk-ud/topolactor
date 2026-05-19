@@ -1,9 +1,12 @@
 framework_policy:
   registry_tensor_principle:
     role: ssot_mandatory_principle
-    registry: topology_vocabulary_basis
-    registry_id: topology_vocabulary_axis_basis
-    registry_id_combinations: sparse_vector_or_tensor_coordinate
+    registry: semantic_matrix_topology_vocabulary_basis
+    registry_table_role: semantic_matrix
+    registry_row: registry_id_basis_vocabulary_row
+    registry_column: semantic_projection_wiring_axis_column
+    registry_value: weight_state_relation_coordinate_connection_cell
+    registry_id_combinations: sparse_vector_or_tensor_coordinate_from_semantic_matrix
     tensor_surface_mapping:
       db: tensor_persistence_projection
       ui: tensor_projection_surface
@@ -15,11 +18,11 @@ framework_policy:
     projection_rule: >
       DB/UI/endpoint/runtime/scheduler/function/CI surfaces are not independent
       implementation subjects; they are projection/expansion surfaces of the same
-      registry tensor.
+      registry tensor derived from the registry semantic matrix.
     jsonb_columnar_rule:
       jsonb: latent_and_semi_structured_feature_retention
       columnar: observable_semantic_axis_for_auditability
-      expansion: execute_tensor_on_runtime_surfaces
+      expansion: execute_abstract_function_with_registry_tensor_on_runtime_surfaces
 
   registries:
     master_registry:
