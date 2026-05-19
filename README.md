@@ -2,6 +2,8 @@
 
 Topolactor is a **Data-Driven OS** for building runtime-defined applications from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
 
+Topolactor provides a data-driven topology runtime with explicit runtime-route and policy governance boundaries.
+
 The core architecture treats the registry table as a **semantic matrix**. DB, UI, endpoint, runtime, scheduler, and function surfaces are projected or expanded from the same registry tensor rather than implemented as disconnected CRUD screens.
 
 **Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
@@ -89,9 +91,34 @@ UI definitions become topology entities only after persistence and ID issuance. 
 - `db/ui_topology_tables.sql`
 - `db/context_route_tables.sql`
 
+
+## Local Bootstrap for .agent Checks
+
+To satisfy local prerequisites without mixing install and check logic:
+
+```bash
+bash .agent/scripts/bootstrap-local-tools.sh
+```
+
+This script installs missing dotnet SDK 8 and Deno only when absent, ensures `infra/.env` exists, and starts `postgres` via Docker Compose.
+
+For DB bootstrap only:
+
+```bash
+bash .agent/scripts/bootstrap-local-postgres.sh
+```
+
+After bootstrap, run checks as-is (they still fail explicitly when prerequisites are missing):
+
+```bash
+bash .agent/tests/check-backend-tests.sh
+bash .agent/tests/check-frontend-types.sh
+```
+
 ## CI / Verification Notes
 
 - Structure Check is the always-on required gate.
 - Heavy CI workflows are path-scoped.
 - Scope-irrelevant skipped heavy CI is not blocking.
 - If a local required check is not executed, equivalent remote CI evidence or an explicit remaining TODO is required.
+- IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT
