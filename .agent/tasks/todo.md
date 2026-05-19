@@ -126,3 +126,19 @@
       → 理由: failure matrix 欠落は運用時障害の未検出を招く。
       → 対象ファイル: tests / protocols / completion artifacts（監査時に確定）
       → 次の判断点: success 以外の failure 系ケースが網羅されているか確認する。
+
+
+## Audit Gap Response Gate Hardening
+
+- [ ] [Codex] Audit Gap Response Gate の動作確認を行う
+      → 目的: 監査レポートで governance gap が出た場合に Proposed Governance Improvements と Remaining TODOs が必ず出るか確認する。
+
+- [ ] [Codex] Static Protocol Coverage Audit と Behavior Execution Audit の分離を検証する
+      → 目的: 静的確認だけで behavior audit を [x] にしないことを確認する。
+
+- [ ] [Codex] LogError と Explicit Result Surface の混同を検出する監査観点を追加する
+      → 目的: ログ出力のみを呼び出し元に返る明示ステータスと誤認しないようにする。
+
+- [ ] [Claude] Claude Implementation Boundary Audit の再監査を行う
+      → 目的: A1/A2/A4/A11 のような conditional / caution / non-fatal 判定を PASS 扱いせず、GAP/TODOとして扱えるか確認する。
+
