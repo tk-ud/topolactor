@@ -346,6 +346,13 @@ else
   echo "OK  [split] rule.md completion procedure remains split"
 fi
 
+
+check_content ".agent/rules/rule.md" "Audit Gap Response Gate"
+check_content ".agent/protocols/reports-and-todos.md" "Governance Gaps"
+check_content ".agent/protocols/reports-and-todos.md" "Proposed Governance Improvements"
+check_content ".agent/protocols/reports-and-todos.md" "Completion Eligibility"
+check_content ".agent/protocols/completion.md" "Audit Gap Response Gate"
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -356,4 +363,5 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
+
 

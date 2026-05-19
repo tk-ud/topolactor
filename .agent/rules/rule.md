@@ -89,6 +89,32 @@ The verification must compare DB identity, backend contract identity, API payloa
 
 Any omitted identity field must be explicitly justified. Multi-instance leakage scenarios must be checked before completion.
 
+
+## Audit Gap Response Gate
+
+Any audit report, completion report, or TODO-state decision that evaluates governance quality must pass the Audit Gap Response Gate.
+
+Required audit sections:
+
+- Governance Gaps
+- Proposed Governance Improvements
+- Remaining TODOs
+- Completion Eligibility
+
+Gate requirements:
+
+1. Governance Gaps must explicitly evaluate protocol/checklist/task/report-surface/completion/agent-behavior risks.
+2. If any governance gap exists, Proposed Governance Improvements is mandatory and must describe actionable protocol/feature/checklist improvements.
+3. Remaining TODOs must preserve unresolved work in `.agent/tasks/todo.md` as incomplete items.
+4. Completion Eligibility must separate static protocol coverage audit eligibility from behavior execution audit eligibility.
+5. Behavior execution audit cannot be treated complete without observed behavior evidence (for example execution logs, trap-case results, historical PR evidence tied to artifacts, diff-linked runtime behavior proof, or persistent report evidence).
+6. Log-only evidence, PR-body-only evidence, and static-doc-only evidence must not be misclassified as explicit behavior evidence or explicit result-surface proof.
+7. Classification must use PASS / GAP / BLOCKING / TODO semantics; cautionary, conditional, or non-fatal findings are not unconditional PASS.
+
+Recursive Verification Gate dependency:
+
+- Any unresolved governance GAP or missing improvement/TODO response that should block completion is treated as blocking until fixed or explicitly preserved as remaining TODO within the defined audit scope.
+
 ## Protocol References
 
 Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:
