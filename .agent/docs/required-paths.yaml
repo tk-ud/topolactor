@@ -214,6 +214,8 @@ required_content_terms:
     - "not a signal to read all docs/"
     - "Runtime Boundary Failure Matrix"
     - "routine inspection"
+    - ".agent/tmp/"
+    - ".agent/tmp/.gitkeep"
   .agent/docs/ssot-map.yaml:
     - "change-surface"
     - "required_docs"

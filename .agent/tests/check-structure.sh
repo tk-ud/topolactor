@@ -46,6 +46,17 @@ check_content() {
   fi
 }
 
+
+check_tmp_tracked_files() {
+  local tracked
+  tracked="$(git -C "$REPO_ROOT" ls-files .agent/tmp)"
+  if [ "$tracked" = ".agent/tmp/.gitkeep" ]; then
+    echo "OK  [tmp]  tracked files in .agent/tmp are limited to .gitkeep"
+  else
+    fail "Tracked files under .agent/tmp must be only .agent/tmp/.gitkeep; found: ${tracked:-<none>}"
+  fi
+}
+
 # ─── Required directories ────────────────────────────────────────────────────
 
 echo ""
@@ -375,6 +386,8 @@ if [ -f "$TMP_MEMO_PATH" ]; then
 else
   echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
 fi
+
+check_tmp_tracked_files
 
 # Protocol split guard
 if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
