@@ -41,11 +41,11 @@ done
 
 count=0
 while IFS= read -r line; do
-  ans="${line#- Answer:}"
+  ans="$(echo "$line" | sed -E "s/^[[:space:]]*-[[:space:]]*Answer:[[:space:]]*//")"
   ans="$(echo "$ans" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
   count=$((count+1))
   case "$ans" in yes|no|n/a) : ;; *) vfail "invalid answer '${ans}' at item ${count}" ;; esac
-done < <(grep '^- Answer:' "$CHECKLIST" || true)
+done < <(grep -E '^[[:space:]]*-[[:space:]]*Answer:' "$CHECKLIST" || true)
 
 [ "$count" -ne 21 ] && vfail "expected exactly 21 '- Answer:' lines, found ${count}"
 
