@@ -20,13 +20,14 @@ stored_topology_data
 
 ## How to run
 
-Apply files in this order:
+Apply files in this order (or run `db/init.sql` which is the single-order SSOT):
 
 ```bash
 psql -d <database> -f db/schema.sql
 psql -d <database> -f db/topology_tables.sql
 psql -d <database> -f db/promotion_tables.sql
 psql -d <database> -f db/context_route_tables.sql
+psql -d <database> -f db/ui_topology_tables.sql
 psql -d <database> -f db/seed_empty.sql
 ```
 
@@ -49,9 +50,10 @@ and demo auth credentials (bcrypt-hashed) for the JWT login scaffold.
 It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING`.
 See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
 
-**docker compose:** On a fresh volume, `docker compose -f infra/docker-compose.yml up -d`
-applies all files above (01–06) automatically via `docker-entrypoint-initdb.d`.
-On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manually.
+**docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
+executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`, which applies
+`schema.sql -> topology_tables.sql -> promotion_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
 
 ---
 
@@ -65,6 +67,7 @@ On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manuall
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. Optional cluster/drift tables isolated at bottom. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`. No real business data. |
 | `demo_seed.sql` | Public scaffold demo seed. Fake/demo data only: hub, entities, context tokens, demo_policy, demo structure maps. Apply after `seed_empty.sql`. |
+| `init.sql` | Docker/demo initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with fail-fast behavior. |
 
 ---
 
