@@ -32,9 +32,9 @@ namespace Topolactor.Runtime;
 ///   → Blocking result → caller throws → ExplicitError
 ///   → Gap result     → caller logs warning; recommendation continues
 ///
-/// Cron continuity (wiring to background worker / scheduled job: TODO):
-///   → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync
-///   → reportable diagnostic results
+/// Cron continuity (wired to SystemOperationCiScheduler background worker):
+///   → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync
+///   → reportable diagnostic results emitted via structured logging
 /// </summary>
 public class SystemOperationCiRuntime
 {
@@ -278,7 +278,7 @@ public class SystemOperationCiRuntime
     /// Returns a diagnostic result for the hub_attention_continuity target.
     /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
     /// </summary>
-    public async Task<SystemCiDiagnosticResult> InspectHubAttentionContinuityAsync(
+    public virtual async Task<SystemCiDiagnosticResult> InspectHubAttentionContinuityAsync(
         CancellationToken ct = default)
     {
         IReadOnlyList<HubAttentionCiSummary> summaries;
@@ -362,7 +362,7 @@ public class SystemOperationCiRuntime
     /// Pass: either no hub attention records exist, or events are present.
     /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
     /// </summary>
-    public async Task<SystemCiDiagnosticResult> InspectCurrentRebuildabilityAsync(
+    public virtual async Task<SystemCiDiagnosticResult> InspectCurrentRebuildabilityAsync(
         CancellationToken ct = default)
     {
         var summaries = await _repository.LoadHubAttentionSummaryForCiAsync(ct);
@@ -405,7 +405,7 @@ public class SystemOperationCiRuntime
     /// Pass: all active tokens are referenced, or no active tokens exist.
     /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
     /// </summary>
-    public async Task<SystemCiDiagnosticResult> InspectRegistryContinuityAsync(
+    public virtual async Task<SystemCiDiagnosticResult> InspectRegistryContinuityAsync(
         CancellationToken ct = default)
     {
         RegistryTokenCiSummary summary;

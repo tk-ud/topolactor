@@ -79,6 +79,7 @@ builder.Services.AddSingleton<JwtGuard>();
 // Background services
 // ---------------------------------------------------------------------------
 builder.Services.AddHostedService<RetentionScheduler>();
+builder.Services.AddHostedService<SystemOperationCiScheduler>();
 
 // ---------------------------------------------------------------------------
 // HTTP layer

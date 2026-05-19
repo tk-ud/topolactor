@@ -17,6 +17,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageReference Include="Npgsql" Version="8.0.7" />
   </ItemGroup>
@@ -29,5 +30,6 @@
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../endpoint/AdminEndpoint.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../endpoint/PackageGeneratorEndpoint.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
