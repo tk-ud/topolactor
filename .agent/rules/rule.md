@@ -115,6 +115,35 @@ Recursive Verification Gate dependency:
 
 - Any unresolved governance GAP or missing improvement/TODO response that should block completion is treated as blocking until fixed or explicitly preserved as remaining TODO within the defined audit scope.
 
+
+## Failure Triage Self-Recursion Gate
+
+Any completion report, audit report, or TODO `[x]` decision must run failure triage over all executed commands before eligibility judgment.
+
+Failure triage classification (required for each failed command):
+
+- required check failure
+- exploratory / usage-confirmation failure
+- expected negative test
+- out-of-scope failure
+
+Gate requirements:
+
+1. If any required check failure exists, classification is BLOCKING.
+2. If a failure cannot be classified, classification is BLOCKING.
+3. exploratory / usage-confirmation failures must include explicit rationale for why the command is not a required check for audited scope.
+4. expected negative tests must include expected-failure intent and success condition evidence.
+5. out-of-scope failures must include explicit scope boundary rationale.
+6. No completion report and no TODO `[x]` update is allowed before failure triage result is recorded.
+7. Agent must not wait for user feedback to trigger triage recursion.
+
+Self-recursion actions (at least one required when triage finds BLOCKING/GAP/TODO conditions):
+
+- return to fix phase,
+- revise report classification (for example PASS → GAP/BLOCKING/TODO),
+- revert TODO `[x]` to `[ ]`,
+- preserve unresolved work in Remaining TODOs.
+
 ## Protocol References
 
 Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:

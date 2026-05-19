@@ -353,6 +353,11 @@ check_content ".agent/protocols/reports-and-todos.md" "Proposed Governance Impro
 check_content ".agent/protocols/reports-and-todos.md" "Completion Eligibility"
 check_content ".agent/protocols/completion.md" "Audit Gap Response Gate"
 
+check_content ".agent/rules/rule.md" "Failure Triage Self-Recursion Gate"
+check_content ".agent/protocols/completion.md" "failure triage result"
+check_content ".agent/protocols/completion.md" "Apply Failure Triage Self-Recursion Gate"
+check_content ".agent/protocols/reports-and-todos.md" "Failure Triage Self-Recursion Gate Reporting Requirements"
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""

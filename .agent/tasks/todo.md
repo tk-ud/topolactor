@@ -142,3 +142,13 @@
 - [ ] [Claude] Claude Implementation Boundary Audit の再監査を行う
       → 目的: A1/A2/A4/A11 のような conditional / caution / non-fatal 判定を PASS 扱いせず、GAP/TODOとして扱えるか確認する。
 
+
+- [ ] [Codex] Failure Triage Self-Recursion Gate の動作確認を行う
+      → 目的: 失敗コマンドが含まれる場合、ユーザー指摘前に Agent が自律的に GAP/BLOCKING/TODO へ再分類できるか確認する。
+
+- [ ] [Codex] required check failure / exploratory failure / expected negative test の分類を検証する
+      → 目的: failure を一律 PASS または一律 BLOCKING にせず、completion eligibility に反映できるか確認する。
+
+- [ ] [Codex] 失敗ログありの状態で todo.md を `[x]` に更新しないことを検証する
+      → 目的: failure triage 未完了時の TODO完了マークを防止する。
+

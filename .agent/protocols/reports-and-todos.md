@@ -19,6 +19,26 @@ Recursive Verification Gate and TODO state:
 - Do not represent incomplete verification as completion.
 
 
+## Failure Triage Self-Recursion Gate Reporting Requirements
+
+Before Completion Eligibility judgment in any audit/completion-facing report, triage all executed-command failures.
+
+Required per-failure classification:
+
+- required check failure
+- exploratory / usage-confirmation failure
+- expected negative test
+- out-of-scope failure
+
+Rules:
+
+1. required check failure => BLOCKING.
+2. unclassified failure => BLOCKING.
+3. exploratory / usage-confirmation failure requires rationale for non-required status.
+4. expected negative test requires expected-failure intent and success condition evidence.
+5. failure triage must be completed before TODO `[x]` updates.
+6. if triage finds blocking conditions, recurse without waiting for user instruction (fix phase, report reclassification, TODO rollback, or Remaining TODO preservation).
+
 ## Audit Gap Response Gate Reporting Requirements
 
 When producing any governance audit report (including completion-facing audit summaries), include all of the following sections:

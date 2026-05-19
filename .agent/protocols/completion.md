@@ -9,11 +9,12 @@ Mandatory completion order:
 5. Run Policy Judgment Checklist and keep 15 answers valid.
 6. Run relevant local CI checks for touched scope.
 7. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
-8. Apply Audit Gap Response Gate checks for any audit/completion/todo decision surface before completion or TODO `[x]` updates.
-9. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
-10. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
-11. Run `bash .agent/tests/check-structure.sh` last.
-12. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
+8. Apply Failure Triage Self-Recursion Gate over all executed commands and record failure triage result before any completion decision or TODO `[x]` update.
+9. Apply Audit Gap Response Gate checks for any audit/completion/todo decision surface before completion or TODO `[x]` updates.
+10. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
+11. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
+12. Run `bash .agent/tests/check-structure.sh` last.
+13. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
 
 Completion report must include:
 
@@ -22,6 +23,7 @@ Completion report must include:
 - boundary matrix verification result
 - boundary identity gate result (when boundary extension scope exists)
 - policy judgment result
+- failure triage result (failed-command inventory, classification per failure, blocking decision, and recursion action)
 - audit gap response result (required sections, classification, and evidence eligibility check)
 - local check status (PASS / FAIL / NOT EXECUTED)
 - remote CI equivalence status for each required NOT EXECUTED local check
