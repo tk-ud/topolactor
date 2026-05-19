@@ -220,14 +220,14 @@ entities:
     description: >
       Discrete token dictionary.
       token_id is used in context_event.token_ids.
-      value is an operational observation scalar and is not semantic SoT.
+      value is a human-assigned ordering/display/audit reference; it is not used in recommendation computation.
+      Recommendation uses multi-hot token ID presence (1.0 per token) as the topology observation signal.
       group is UI grouping only — not used as meaning authority.
-      token/value fields must not be interpreted as manually authored semantic vectors.
     fields:
       token_id:   { type: uuid, pk: true }
       label:      { type: string }
       group:      { type: string, note: "UI grouping tag; not used in computation" }
-      value:      { type: float, note: "operational observation scalar (not meaning SoT)" }
+      value:      { type: float, note: "human-assigned ordering/display/audit reference; not used in recommendation computation" }
       status:     { type: enum, values: [active, deprecated], default: active }
       created_at: { type: timestamp }
       updated_at: { type: timestamp }
@@ -298,18 +298,22 @@ entities:
       updated_at:  { type: timestamp }
 
   context_event_vector_cache:
-    description: "Cache of sparse event vector and l2_norm per event."
+    description: >
+      Rebuildable projection cache of multi-hot event vector and l2_norm per event.
+      Not SoT — source is context_event.token_ids. Rebuilt on demand.
     fields:
       event_id:       { type: uuid, pk: true, fk: context_event.event_id }
-      vector_sparse:  { type: json, note: "{token_id: value, ...}" }
-      l2_norm:        { type: float }
+      vector_sparse:  { type: json, note: "{token_id: 1.0, ...} (multi-hot: token presence = 1.0; no value weighting)" }
+      l2_norm:        { type: float, note: "sqrt(cardinality(token_ids)) for multi-hot vector" }
       updated_at:     { type: timestamp }
 
   context_prefix_vector_cache:
     description: >
-      Cache of aggregated prefix vector for (session_id, prefix_index).
-      prefix_vector = SUM(event_vectors[0..prefix_index]).
-      Used for nearest-prefix cosine search.
+      Rebuildable projection cache of aggregated prefix vector for (session_id, prefix_index).
+      Not SoT — source is context_event.token_ids sequence. Rebuilt on demand.
+      prefix_vector = SUM(multi-hot event_vectors[0..prefix_index]);
+      each token contributes 1.0 per event (multi-hot).
+      Used for nearest-prefix cosine neighborhood search (Θ filter, not meaning SoT).
     fields:
       session_id:    { type: uuid, pk: true, fk: context_session.session_id }
       prefix_index:  { type: int, pk: true, note: "event order within session (0..n-1)" }
@@ -408,9 +412,9 @@ pipelines:
   build_context_event_vector_cache:
     trigger: "on context_event insert"
     steps:
-      - "join context_token_registry by token_ids"
-      - "vector_sparse = {token_id: context_token_registry.value}"
-      - "l2_norm = sqrt(sum(value^2))"
+      - "for each token_id in context_event.token_ids"
+      - "vector_sparse = {token_id: 1.0} (multi-hot: token presence = 1.0; no context_token_registry.value join)"
+      - "l2_norm = sqrt(len(token_ids)) (multi-hot cardinality norm)"
       - "upsert context_event_vector_cache"
 
   build_context_prefix_vector_cache:
@@ -463,7 +467,7 @@ routing:
   contextualize:
     steps:
       - "token_ids = context_record_snapshot_cache(table, record); if missing compute once and cache"
-      - "current_event_vector = sparse vector from context_token_registry for token_ids"
+      - "current_event_vector = multi-hot vector: {token_id: 1.0 for each token_id in token_ids} (neighborhood filter projection; no context_token_registry.value join)"
       - "current_prefix_vector = context_prefix_vector_cache(session_id, current_prefix_index); if missing, SUM events so far"
 
   recommend_section_2_next_action:
@@ -720,7 +724,7 @@ topology_vector_runtime:
         target_table:          { type: string }
         candidate_kind:        { type: enum, values: [registry, hub, entity, relation, operation, token] }
         candidate_id:          { type: uuid }
-        scope_limit:           { type: int, values: [1000, 3000, 10000], note: "1000=UI instant, 3000=normal ops, 10000=wide learning" }
+        scope_limit:           { type: int, note: "positive int; valid values are policy-defined via function_parameters.hub_attention.scope_limits. Default examples: 1000=UI instant, 3000=normal ops, 10000=wide learning" }
         base_probability:      { type: float, nullable: true }
         cosine_similarity:     { type: float, nullable: true }
         static_relation_weight:{ type: float, nullable: true }
@@ -738,7 +742,8 @@ topology_vector_runtime:
         updated_at:            { type: timestamp }
       unique_key: [hub_id, target_table, candidate_kind, candidate_id, scope_limit]
       scope_limit_isolation: >
-        1000 / 3000 / 10000 current rows are isolated by scope_limit column in the unique key.
+        Rows per scope_limit value are isolated by scope_limit column in the unique key.
+        Valid values are policy-defined (function_parameters.hub_attention.scope_limits).
         Scope limits must not be mixed in a single read or upsert operation.
 
     context_hub_feedback_event:
