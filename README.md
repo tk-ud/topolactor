@@ -14,7 +14,7 @@ Topolactor is a **data-driven topology runtime architecture** that treats the re
 - **value = weight / state / relation / coordinate / connection**
 - **registryId combinations = sparse vector / tensor coordinate**
 - **abstract function(tensor) = each runtime/projection surface expander**
-- **SQL Attention = continuity + attention-weight observation on DB topology space**
+- **SQL Attention = DB-topology attention-equivalent observation (not SQL QK dot-product reproduction)**
 - **Admin UI = semantic matrix / UI topology tensor editor**
 
 This is not a “put config in JSON and reload” model. The architecture subject is the registry tensor itself and its projection/expansion behavior across runtime boundaries.

@@ -36,6 +36,13 @@ JSONB は潜在/半構造特徴保持層、column 化は観測可能意味軸、
 
 同一テーブル内の count/sum/average/recency/frequency/transition 集計値は、意味本体ではなく attention weight の観測値として扱う。
 
+SQL Attention は QK 内積を SQL で総当たり再現する設計ではない。
+Transformer の全要素 QK 内積を RDB 上で再現することは対象外であり、GPU 的内積計算の代替実装もしない。
+SQL Attention は DB topology 上の観測で attention 相当スコアを構成する。
+- Θ / neighborhood: registry_id 参照、relation binding、topology continuity、indexed DB structure により候補空間を縮約
+- norm / impedance / weight: aggregation / transition / recency / frequency / diff / logs により励起強度を観測
+- projection cache: `vector_sparse` / `l2_norm` は再生成可能な補助値であり意味 SoT ではない
+
 ---
 
 
