@@ -29,4 +29,11 @@ Verify at least:
 Any matrix item marked failure, unverified, or unjustified out-of-scope is blocking under Recursive Verification Gate.
 
 
-For boundary-expanding changes, include End-to-End Boundary Identity verification across DB identity, Repository mutation identity, Frontend projection identity, and UI action identity.
+For boundary-expanding changes, include End-to-End Boundary Identity verification across:
+
+- DB identity
+- backend contract/event identity
+- API request/response payload identity
+- Repository mutation identity
+- Frontend projection identity
+- UI action identity

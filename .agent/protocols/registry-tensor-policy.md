@@ -89,6 +89,15 @@ Treat the following as drift/GAP during audit when trigger scope applies:
 19. record-level direct vector authoring is introduced
 20. cosine similarity is treated as semantic meaning body instead of neighborhood filter
 
+21. real/sys tables diverge from id/state/jsonb basic shape without explicit bounded reason
+22. jsonb key promotion path to columnized observable axes is denied
+23. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
+24. SQL Attention is implemented as SQL-side QK all-element dot-product reproduction
+25. full-element inner product brute force is introduced in RDB as normal attention path
+26. token.value manual numeric inputs are treated as semantic SoT
+27. vector_sparse/l2_norm is treated as record/event semantic SoT
+28. DB topology candidate narrowing via relation/log/aggregation/index is ignored
+
 ## Gate usage
 
 - Keep rule.md lightweight and use this protocol for detailed audit semantics.
