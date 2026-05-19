@@ -200,6 +200,34 @@ Output = ranked recommendation current / projection input + continuity evidence
 - 動的可変シナリオの連結ログ（例: `context_hub_feedback_event`）は、後続の統計重み更新・hub語彙・Topology Context Vocabulary 拡張源として扱う。
 - TODO (future extension): トポロジ連続性シナリオに対する CI 監査の自動ゲート化は設計方針として定義済みだが、実装完了扱いにはしない。
 
+### Anti-collapse Candidate Policy（optional / future extension）
+
+SQL Attention の中核定義（連続性を監査可能な Attention として表現すること）とは分離した、
+候補空間の collapse と単一アトラクタ固定化を抑えるための **候補多様性ポリシー**。
+実装済み前提にはせず、optional policy / future extension として扱う。
+
+候補レイヤー例（優先順）:
+
+1. 第一候補: `global aggregate`
+   - 全期間または十分長い履歴で安定した連結導線を表す基準候補。
+2. 第二候補: `short EMA`
+   - 直近トレンドを反映する短期候補。
+3. 第三候補: `mid EMA`
+   - 中期文脈を反映し、短期ノイズ単独への過剰追従を緩和する候補。
+
+cross event の扱い:
+- `short EMA` と `mid EMA` の `cross_up` / `cross_down` を trend shift 信号として抽出できる。
+- hot 表示や転換点フラグは projection の実装選択であり、SQL Attention の本体定義ではない。
+
+trend window の解決:
+- trend 判定期間、EMA alpha、比較窓、候補数、重み配分は Runtime 直書きしない。
+- `function_parameters.default_policy.topology_vector_runtime` 側の policy / function_parameters から解決する。
+
+exploration slot（optional）:
+- 完全ランダム探索ではなく、同一トポロジ境界内で低頻度・弱関連の候補を探索枠として扱う。
+- 「もしかしたら？」候補として固定導線からの脱出可能性を作るが、本流候補の置換は目的にしない。
+- 探索比率・抽出上限・許容境界は policy 解決とし、未実装なら TODO のまま明示する。
+
 ### 設計定義
 
 ```text
