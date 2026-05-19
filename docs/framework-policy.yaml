@@ -1,4 +1,26 @@
 framework_policy:
+  registry_tensor_principle:
+    role: ssot_mandatory_principle
+    registry: topology_vocabulary_basis
+    registry_id: topology_vocabulary_axis_basis
+    registry_id_combinations: sparse_vector_or_tensor_coordinate
+    tensor_surface_mapping:
+      db: tensor_persistence_projection
+      ui: tensor_projection_surface
+      endpoint: tensor_projection_surface
+      runtime: tensor_expansion_surface
+      scheduler: tensor_expansion_surface
+      function: tensor_expansion_surface
+      ci_diagnostic: tensor_projection_surface
+    projection_rule: >
+      DB/UI/endpoint/runtime/scheduler/function/CI surfaces are not independent
+      implementation subjects; they are projection/expansion surfaces of the same
+      registry tensor.
+    jsonb_columnar_rule:
+      jsonb: latent_and_semi_structured_feature_retention
+      columnar: observable_semantic_axis_for_auditability
+      expansion: execute_tensor_on_runtime_surfaces
+
   registries:
     master_registry:
       role: table_name_and_id_dictionary

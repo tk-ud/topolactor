@@ -15,6 +15,24 @@
 
 ニューラル訓練不要。学習は純粋な集計（バッチ or near-realtime）。
 
+## Registry Tensor Principle（SSOT）
+
+registry は単なる辞書/設定ではなく、topology vocabulary の basis（tensor basis / vector basis）として扱う。
+registry id は意味軸の基底であり、registry id の組み合わせは sparse vector / tensor coordinate である。
+
+DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic は個別主語ではなく、
+同一 registry tensor の projection / expansion surface として扱う。
+
+- DB = tensor persistence
+- UI = tensor projection
+- endpoint = tensor projection
+- runtime = tensor expansion
+- scheduler = tensor expansion
+- function = tensor expansion
+- CI / diagnostic = tensor projection
+
+JSONB は潜在/半構造特徴保持層、column 化は観測可能意味軸、runtime 展開は tensor expansion として扱う。
+
 ---
 
 ## 推薦の二軸
@@ -195,6 +213,8 @@ PostgreSQL 上の `UUID[]` / `JSONB` / GIN index / relation weight / transition 
 source of truth の業務データではなく recommendation current / projection 用の materialized signal として扱う。
 外部 embedding / pgvector / learned neural weights / neural attention 実装は必須ではない。
 レコメンドや UI 遷移はこの Attention 表現の一部ユースケースであり、本質そのものではない。
+集計値は attention weight であり、registryId は意味単位の loop / collapse 制御に利用される。
+hub は線形空間として扱い、連続性シナリオを DB 上で観測・監査可能にする。
 
 ```text
 Query  = current hub / operation / runtime context
@@ -286,6 +306,12 @@ UUID + weight = weighted sparse vector
 - ID 配列を保持する row が vector を持つ topology node
 - 文字列 label / name は検索補助であり、意味近傍の主軸ではない
 - 既存の GIN index は候補集合の粗探索に利用する
+
+UI topology 接続:
+- packageId / layoutId / wiringId は UI tensor axis として扱う
+- UI topology table は UI 部品カタログではなく registry tensor の UI projection
+- CRUD wiring / CanDI wiring は UI topology tensor の wiring axis
+- frontend は判定主体ではなく projection surface
 
 ### SQL Cosine Neighbor Search
 

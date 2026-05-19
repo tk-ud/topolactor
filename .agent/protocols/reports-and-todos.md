@@ -96,5 +96,6 @@ Classification policy for audit conclusions:
 - BLOCKING: completion/merge/[x] update prohibited until resolved in-scope or explicitly deferred under gate rules.
 - TODO: out-of-scope remaining work preserved as incomplete follow-up.
 
-Conditional pass, caution, and non-fatal findings must not be treated as unconditional PASS.
+Registry/topology semantics audits must classify drift/GAP using `.agent/protocols/registry-tensor-policy.md` when the change touches SSOT, recommendation runtime design, registrar UI spec, or topology governance policy text.
 
+Conditional pass, caution, and non-fatal findings must not be treated as unconditional PASS.

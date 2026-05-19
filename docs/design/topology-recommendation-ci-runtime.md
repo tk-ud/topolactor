@@ -12,6 +12,10 @@ topology 更新候補（recommendation candidate）を、
 C# package runtime の validation runner によって CI 検証し、
 `checked=true` の候補のみを update / promote 対象とする設計。
 
+この CI runtime も registry tensor の projection surface であり、
+candidate 検証は DB / UI / endpoint / runtime / scheduler / function と同一 tensor continuity を
+監査する操作として扱う。CI を個別実装層として分断しない。
+
 ```text
 self_learning_statistics
 → generate topology_recommendation_candidate

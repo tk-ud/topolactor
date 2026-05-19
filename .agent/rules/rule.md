@@ -138,6 +138,7 @@ Detailed procedures are split under `.agent/protocols/` and scenario contract ve
 - Policy Judgment Gate and V1〜V16 table: `.agent/protocols/policy-judgment.md`
 - Completion Sequence and local gate order: `.agent/protocols/completion.md`
 - Reports and TODO operation surfaces: `.agent/protocols/reports-and-todos.md`
+- Registry Tensor audit/drift policy: `.agent/protocols/registry-tensor-policy.md`
 
 Recursive Verification Gate: Any blocking audit failure across CI/local checks, scenario contract, boundary matrix, full diff verification, or policy judgment blocks completion and requires fix-and-reverify within scope before completion.
 
