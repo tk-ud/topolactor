@@ -1,5 +1,8 @@
 # Skill: Structure Check
 
+This is a task skill, not an always-on governance protocol.
+Read and apply it only when running the structure check task.
+
 ## When to Run
 
 Run `.agent/tests/check-structure.sh` before reporting any task as complete.
@@ -8,39 +11,5 @@ Run it after any refactor that touches directories listed in `.agent/docs/requir
 
 ## What Structure Check Means
 
-Structure check verifies:
-
-1. Required directories exist.
-2. Required files exist.
-3. Architecture-critical content terms are present in key files.
-
-It confirms the repository has the minimum expected shape for the data-defined topology runtime skeleton.
-
-## What Structure Check Does Not Mean
-
-- It does not confirm that the code compiles.
-- It does not confirm that SQL executes correctly.
-- It does not confirm that the Fresh/Deno frontend builds.
-- It does not confirm that the runtime produces correct emissions.
-- It does not confirm that any business workflow is correct.
-- Passing this check does not mean the implementation is complete.
-
-## How to Interpret Failures
-
-Each failure line is prefixed with `FAIL:` and describes either:
-
-- `Directory missing: <path>` — the directory must be created.
-- `File missing: <path>` — the file must be created.
-- `Term not found in <file>: "<term>"` — the file exists but is missing a required architecture term. Add the term to the file content.
-
-Fix all failures before reporting task completion.
-
-## Avoiding False Confidence
-
-Structure check passes when the skeleton is present. It does not guarantee correctness.
-
-After structure check passes:
-
-- Verify that file contents reflect the actual intended design.
-- Check `.agent/tasks/todo.md` for remaining implementation work.
-- Do not conflate structural presence with behavioral correctness.
+Structure check verifies required directories, required files, and architecture-critical terms.
+Passing this check confirms repository structure only; it is not behavioral correctness.

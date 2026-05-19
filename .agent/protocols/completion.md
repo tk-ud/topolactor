@@ -1,63 +1,69 @@
-# Completion Sequence
+# Completion Governance Protocol (Agenda: completion-governance)
 
-Mandatory completion order:
+Completion Sequence
 
-Detailed classification criteria for required-check scope, failure triage, and audit-gap reporting are defined in `.agent/protocols/reports-and-todos.md`.
+## Trigger condition
+
+Run this protocol only when any of the following is attempted:
+
+- writing completion summary / completion report
+- completion eligibility decision
+- updating `.agent/tasks/todo.md` item to `[x]`
+
+This is the SSOT for completion-governance decisions.
+
+## Scope
+
+This protocol owns:
+
+- Recursive Verification Gate
+- Required Check Scope Declaration Gate
+- Remote CI Equivalence Gate
+- Failure Triage Self-Recursion Gate
+- Audit Gap Response Gate
+- completion order and blocking criteria
+
+## Execution procedure
 
 1. Inspect full branch diff (`git status --short`, `git diff -- . ":(exclude).git"`, `git diff --cached -- . ":(exclude).git"`).
-2. Verify full diff against Temporary Scenario Contract when required.
-3. Verify Runtime Boundary Failure Matrix coverage when required.
-4. For boundary extension scope, run Boundary Identity Gate with a PR-specific temporary answer file (`bash .agent/checklists/check-boundary-identity.sh <pr-specific-temp-file>`), and record the result in the completion report.
-5. Run Policy Judgment Checklist with Policy-Judgment-Need classification. If Policy-Judgment-Need is REQUIRED_*, complete and validate the normal 15 answers. If classification is NOT_REQUIRED_* or OUT_OF_SCOPE, still run `bash .agent/checklists/check-policy-judgment.sh <checklist-file>` and record declaration-validation result plus rationale in the completion report.
-6. Declare Required Check Scope Declaration Gate result from full changed scope, classify checks (REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE), and record rationale before running completion decision gates.
-7. Run relevant local CI checks for touched scope.
-8. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
-9. Apply Failure Triage Self-Recursion Gate over all executed commands and record failure triage result before any completion decision or TODO `[x]` update.
-10. Apply Audit Gap Response Gate checks for any audit/completion/todo decision surface before completion or TODO `[x]` updates.
-11. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, missing required check scope declaration, ambiguous check scope classification, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
-    - For registry/topology recommendation and UI topology semantics, include `.agent/protocols/registry-tensor-policy.md` drift checks.
-12. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
-13. Run `bash .agent/tests/check-structure.sh` last.
-14. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
+2. Run scenario-contract verification when its trigger applies.
+3. Run Runtime Boundary Failure Matrix and boundary identity verification when trigger applies.
+4. Run policy-judgment gate when trigger applies; if not triggered, declare NOT_REQUIRED/OUT_OF_SCOPE with rationale.
+5. Declare required check scope from changed scope with per-check label (required check scope declaration):
+   - REQUIRED_EXECUTED
+   - REQUIRED_NOT_EXECUTED
+   - NOT_REQUIRED
+   - OUT_OF_SCOPE
+6. Execute required local checks for touched scope.
+7. Apply Remote CI Equivalence Gate for each scope-relevant REQUIRED_NOT_EXECUTED check.
+8. Apply Failure Triage Self-Recursion Gate across all executed command failures.
+9. Apply Audit Gap Response Gate sections and classification.
+10. Apply Recursive Verification Gate.
+11. If `.agent/tmp/tmp.txt` exists and all recursive verification tasks are complete, delete via `bash .agent/scripts/delete-tmp.sh`.
+12. Run `bash .agent/tests/check-structure.sh` last.
+13. Only after gate pass may TODO items be marked `[x]`.
 
-Completion report must include:
+## Completion / failure decision
 
-- changed files
-- scenario contract verification result
-- boundary matrix verification result
-- boundary identity gate result (when boundary extension scope exists)
-- policy judgment result (need classification, rationale, and checklist/declaration validation result)
-- required check scope declaration (check inventory, REQUIRED_EXECUTED/REQUIRED_NOT_EXECUTED/NOT_REQUIRED/OUT_OF_SCOPE classification, and rationale per non-executed check)
-- failure triage result (failed-command inventory, classification per failure, blocking decision, and recursion action)
-- audit gap response result (required sections, classification, and evidence eligibility check)
-- local check status (PASS / FAIL / NOT EXECUTED)
-- remote CI equivalence status for each required NOT EXECUTED local check
-- tmp deletion status
-- remaining TODOs
+Blocking (completion prohibited):
+
+- any required gate/check status is FAIL
+- missing or ambiguous Required Check Scope declaration
+- REQUIRED_NOT_EXECUTED without equivalent remote CI success (scope-relevant)
+- remote CI equivalent queued/in_progress/failure/cancelled/skipped-unjustified for required scope
+- scenario-contract mismatch when triggered
+- boundary matrix or boundary identity gap when triggered
+- policy-judgment violation when triggered
+- unclassified failure in failure triage
+- missing required sections for audit gap response
+- report/diff contradiction
+
+Pass eligibility requires all blocking items resolved or explicitly preserved as Remaining TODO under gate rules.
 
 NOT EXECUTED ≠ PASS.
-
-Environment-limited NOT EXECUTED can be completion-eligible only when all of the following are true:
-
-- reason is explicit and verifiable,
-- the skipped check is not mandatory for the changed scope or is already executed in CI with equivalent coverage,
-- no blocking failure remains for the same risk surface.
-
-Remote CI Equivalence Gate:
-
-- NOT EXECUTED is never PASS.
-- If a mandatory scope-relevant local check is NOT EXECUTED due to environment limits, completion is blocked until the equivalent GitHub Actions workflow run is completed with success.
-- queued or in_progress equivalent CI is blocking (not PASS).
-- failure, cancelled, or skipped-unjustified equivalent CI is blocking and requires recursion to fix phase when in-scope.
-- scope-irrelevant CI must not be treated as required.
-
-If a mandatory scope-relevant check is NOT EXECUTED and no equivalent remote CI success is verified, completion is blocked.
+Structure Check is the always-on required gate.
+scope-irrelevant workflow-level skip is not blocking.
+Remote CI Equivalence Gate: REQUIRED_NOT_EXECUTED is never PASS without equivalent remote CI success.
 
 
-CI policy baseline:
-
-- Structure Check is the always-on required gate.
-- Heavy CI workflows are path-scoped.
-- scope-irrelevant workflow-level skip is not blocking.
-- scope-relevant workflow success is required when local equivalent is NOT EXECUTED.
-- heavy CI should not be configured as always-required branch protection unless pending-skip behavior is explicitly handled.
+Completion report entries include failure triage result and required check scope declaration.

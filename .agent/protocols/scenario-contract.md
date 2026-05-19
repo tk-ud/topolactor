@@ -1,5 +1,11 @@
 # Temporary Scenario Contract
 
+This protocol is condition-triggered. It is not an always-on read.
+
+## Trigger scope
+
+Create and verify `.agent/tmp/tmp.txt` when changes include runtime claim, canonical route behavior, persistence behavior, or projection behavior.
+
 `.agent/tmp/tmp.txt` is a temporary scenario contract, not a free-form memo.
 
 Create with:
@@ -21,63 +27,13 @@ Required fields:
 7. required side effects including failure paths
 8. Runtime Boundary Failure Matrix coverage and intentional out-of-scope reasons
 9. known non-goals
-10. Recursive Verification Gate notes (blocking failures found / fix recursion performed / remaining out-of-scope TODO)
+10. Recursive Verification Gate notes
 
 Before completion, verify full branch diff against this contract.
 
-Negative Scenarios (same `.agent/tmp/tmp.txt`, immediately after contract creation):
+Failure or mismatch is blocking under Recursive Verification Gate.
 
-- This section is attention context, not completion evidence and not PASS/FAIL.
-- Write common overlooked risks for the current task.
-- Write failure-prone implementation directions that can drift from intended behavior.
-- Write completion-claim risks (overstatements that must not appear in summary/PR).
-- Write reminder viewpoints to revisit during later checklist and summary drafting.
-
-
-Recursive verification requirements:
-
-- Scenario-contract verification failure is blocking; completion is not allowed.
-- If tmp contract and actual diff conflict, either:
-  - fix implementation and re-verify, or
-  - when the contract was wrong, update contract with explicit reason and re-verify.
-- Complete recursive verification before deleting tmp.txt.
-
-Rules:
-
-- tmp is commit-prohibited
-- tmp remaining must fail structure check
 
 ## Boundary Extension Scenario
 
-When creating the Scenario Contract, agents must explicitly answer before implementation:
-
-- Which existing boundary identity / state / policy / projection / UI action this change extends
-- Whether boundary multi-instance operation could cause cross-boundary leakage in DB / Backend / API / Frontend projection / UI action
-- What the minimum leakage-detection scenario is
-
-Boundary Identity Gate requirement:
-
-- If Boundary Extension Scenario is required for the change, Boundary Identity Gate execution is also required.
-- Run `bash .agent/checklists/check-boundary-identity.sh <pr-specific-temp-file>` using a PR-specific temporary answer file; do not answer in the checklist template.
-
-Required verification items:
-
-- existing boundary being extended
-- DB primary key / unique key / FK / CHECK identity
-- contract / event / DTO identity
-- API request / response identity
-- repository INSERT / UPSERT conflict identity
-- repository UPDATE / DELETE WHERE identity
-- Frontend projection identity
-  - list key
-  - cache key
-  - selected item key
-  - form state key
-- UI action identity
-  - button click
-  - feedback
-  - update
-  - delete
-- Multi-instance leakage scenario where omitted identity columns would cause cross-boundary leakage
-- explanation for any intentionally omitted identity field
-
+Boundary Extension Scenario must include Multi-instance leakage review and explicit identity checks, including Frontend projection identity and UI action identity.
