@@ -515,12 +515,71 @@ public class ContextRouteRecommendationResolverTests
         Assert.Equal("CONTEXT_ROUTE_POLICY_NOT_FOUND", result.StatusDetail);
     }
 
+    // --- Hub attention identity tests ---
+
+    [Fact]
+    public async Task ResolveAsync_WithHubId_HubAttentionWritesUseHubId()
+    {
+        // sessionId and hubId are different Guids so we can verify which was actually used.
+        var sessionId = Guid.NewGuid();
+        var hubId = Guid.NewGuid();
+        Assert.NotEqual(sessionId, hubId);
+
+        var tokenId = Guid.NewGuid();
+        var tracking = new HubAttentionTrackingRepository(tokenId);
+        var resolver = CreateResolver(tracking, new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: sessionId.ToString(),
+            contextTokenIds: tokenId.ToString(),
+            hubId: hubId);
+
+        await resolver.ResolveAsync(shape);
+
+        // All three hub attention DB calls must use hubId, not sessionId.
+        Assert.NotEmpty(tracking.LoadHubIds);
+        Assert.All(tracking.LoadHubIds, id => Assert.Equal(hubId, id));
+
+        Assert.NotEmpty(tracking.UpsertHubIds);
+        Assert.All(tracking.UpsertHubIds, id => Assert.Equal(hubId, id));
+
+        Assert.NotEmpty(tracking.RecalculateHubIds);
+        Assert.All(tracking.RecalculateHubIds, id => Assert.Equal(hubId, id));
+
+        Assert.DoesNotContain(sessionId, tracking.LoadHubIds);
+        Assert.DoesNotContain(sessionId, tracking.UpsertHubIds);
+        Assert.DoesNotContain(sessionId, tracking.RecalculateHubIds);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_WithoutHubId_HubAttentionCurrentNotWritten()
+    {
+        // Hub attention must be skipped when IdOrHubId is null — hub attention is
+        // hub-entity-scoped; no hub entity means no hub attention current write.
+        // This holds even when session, tokenIds, and hub_attention policy are all present.
+        var tokenId = Guid.NewGuid();
+        var tracking = new HubAttentionTrackingRepository(tokenId);
+        var resolver = CreateResolver(tracking, new StubValidPolicyTopologyRepository());
+
+        var shape = MakeShape(
+            sessionId: Guid.NewGuid().ToString(),
+            contextTokenIds: tokenId.ToString(),
+            hubId: null);
+
+        await resolver.ResolveAsync(shape);
+
+        Assert.Empty(tracking.LoadHubIds);
+        Assert.Empty(tracking.UpsertHubIds);
+        Assert.Empty(tracking.RecalculateHubIds);
+    }
+
     // --- Helper ---
 
     private static RuntimeWorkingShape MakeShape(
         string? sessionId,
         string? contextTokenIds = null,
-        string? statePolicyJson = null)
+        string? statePolicyJson = null,
+        Guid? hubId = null)
     {
         var vector = new OperationVector(
             Target: "default",
@@ -533,7 +592,8 @@ public class ContextRouteRecommendationResolverTests
             ContextSessionId: sessionId,
             ContextUserId: null,
             ContextTokenIds: contextTokenIds,
-            ContextRecordId: null
+            ContextRecordId: null,
+            IdOrHubId: hubId
         );
 
         return new RuntimeWorkingShape(
@@ -754,6 +814,53 @@ public class ContextRouteRecommendationResolverTests
         public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
         {
             WasAppendCalled = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// Tracks the hubId passed to LoadHubAttentionCurrentAsync, UpsertHubAttentionCurrentAsync,
+    /// and RecalculateHubAttentionRanksAsync. Used to verify hub-entity-scoped identity.
+    /// </summary>
+    private sealed class HubAttentionTrackingRepository(Guid tokenId) : ContextRouteRepository(
+        NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public List<Guid> LoadHubIds { get; } = new();
+        public List<Guid> UpsertHubIds { get; } = new();
+        public List<Guid> RecalculateHubIds { get; } = new();
+
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
+            IEnumerable<Guid> tokenIds,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<ContextTokenRecord> result =
+                [new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")];
+            return Task.FromResult(result);
+        }
+
+        public override Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(
+            Guid hubId,
+            int scopeLimit,
+            CancellationToken ct = default)
+        {
+            LoadHubIds.Add(hubId);
+            return Task.FromResult<IReadOnlyList<HubAttentionCurrentRecord>>([]);
+        }
+
+        public override Task UpsertHubAttentionCurrentAsync(
+            HubAttentionCurrentRecord record,
+            CancellationToken ct = default)
+        {
+            UpsertHubIds.Add(record.HubId);
+            return Task.CompletedTask;
+        }
+
+        public override Task RecalculateHubAttentionRanksAsync(
+            Guid hubId,
+            int scopeLimit,
+            CancellationToken ct = default)
+        {
+            RecalculateHubIds.Add(hubId);
             return Task.CompletedTask;
         }
     }

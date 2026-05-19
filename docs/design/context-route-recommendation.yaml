@@ -700,6 +700,15 @@ topology_vector_runtime:
         store topology definition, context_hub_recommendation_current (rebuildable),
         context_hub_feedback_event (append-only)
 
+  hub_attention_identity:
+    requirement: >
+      context_hub_recommendation_current writes are hub-entity-scoped.
+      A dispatch must supply IdOrHubId for hub attention current to be materialized.
+      Dispatches without IdOrHubId skip hub attention current writes entirely.
+      sessionId must not be used as a hubId substitute.
+    hub_identity_source: EndpointRequestDto.IdOrHubId → OperationVector.IdOrHubId → hubId param
+    skip_condition: hubId is null
+
   prohibited:
     - "magic numbers for threshold/alpha/delta/limit in runtime code"
     - "independent config table for topology_vector_runtime"
@@ -707,6 +716,7 @@ topology_vector_runtime:
     - "production fallback on policy missing or invalid"
     - "cosine/topology/MLP judgment in frontend"
     - "treating context_hub_recommendation_current as source of truth"
+    - "using sessionId as hubId substitute in hub attention current writes"
 
 registrar_wide_topology_attention:
   role: topology_attention_scope
