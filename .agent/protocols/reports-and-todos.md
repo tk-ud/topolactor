@@ -60,6 +60,31 @@ Rules:
 5. failure triage must be completed before TODO `[x]` updates.
 6. if triage finds blocking conditions, recurse without waiting for user instruction (fix phase, report reclassification, TODO rollback, or Remaining TODO preservation).
 
+## Negative Consistency Gate Reporting Requirements
+
+Any completion summary or completion-facing audit report must include the fixed heading and three fixed questions below exactly once:
+
+- `## Negative Consistency Gate`
+- `### Q1. タスク目的と実装差分が意味的にズレているように見えるが、問題ないか？`
+- `### Q2. AGENTS.md / policy / scenario contract / boundary contract に違反しているように見えるが、問題ないか？`
+- `### Q3. 成功扱いになっているが、未完了・未検証・部分失敗が残っているように見えるが、問題ないか？`
+
+Each Q section must include all three fields:
+
+- `Answer:`
+- `Evidence:`
+- `Remaining risk:`
+
+Rules:
+
+1. `問題なし` with empty Evidence is BLOCKING.
+2. Evidence must reference at least one of: diff / contract / test / CI / checklist / TODO.
+3. If Remaining risk exists, connect it to TODO preservation or explicit out-of-scope reason.
+4. If CI not PASS, required checks not executed, or unresolved blocking failure exists, Q3 must be `問題あり` and completion is blocked pending recursion.
+5. If policy/boundary/scenario/AGENTS violation suspicion cannot be disproven with evidence, Q2 must be `問題あり`.
+6. If task-purpose to implementation-diff mapping cannot be explained with evidence, Q1 must be `問題あり`.
+7. Any `問題あり` answer is completion-blocking and returns to fix phase under Recursive Verification Gate.
+
 ## Audit Gap Response Gate Reporting Requirements
 
 When producing any governance audit report (including completion-facing audit summaries), include all of the following sections:

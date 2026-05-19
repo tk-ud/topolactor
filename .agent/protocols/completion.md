@@ -14,11 +14,12 @@ Detailed classification criteria for required-check scope, failure triage, and a
 8. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
 9. Apply Failure Triage Self-Recursion Gate over all executed commands and record failure triage result before any completion decision or TODO `[x]` update.
 10. Apply Audit Gap Response Gate checks for any audit/completion/todo decision surface before completion or TODO `[x]` updates.
-11. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, missing required check scope declaration, ambiguous check scope classification, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, unresolved governance GAP without required improvements/TODO handling, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
+11. Apply Negative Consistency Gate in completion summary before completion decision: include fixed Q1–Q3 headings with Answer / Evidence / Remaining risk, and require explicit evidence references (diff / contract / test / CI / checklist / TODO) for any "問題なし" answer.
+12. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, missing required check scope declaration, ambiguous check scope classification, required-check failure in failure triage, unclassified failure in failure triage, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, missing audit-gap response sections, missing Negative Consistency Gate fields, "問題なし" without evidence, unresolved governance GAP without required improvements/TODO handling, unresolved remaining risk without TODO or explicit out-of-scope reason, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
     - For registry/topology recommendation and UI topology semantics, include `.agent/protocols/registry-tensor-policy.md` drift checks.
-12. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
-13. Run `bash .agent/tests/check-structure.sh` last.
-14. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
+13. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
+14. Run `bash .agent/tests/check-structure.sh` last.
+15. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
 
 Completion report must include:
 
@@ -30,6 +31,7 @@ Completion report must include:
 - required check scope declaration (check inventory, REQUIRED_EXECUTED/REQUIRED_NOT_EXECUTED/NOT_REQUIRED/OUT_OF_SCOPE classification, and rationale per non-executed check)
 - failure triage result (failed-command inventory, classification per failure, blocking decision, and recursion action)
 - audit gap response result (required sections, classification, and evidence eligibility check)
+- negative consistency gate result (Q1–Q3 Answer / Evidence / Remaining risk, evidence-source declaration, and risk-to-TODO/out-of-scope linkage)
 - local check status (PASS / FAIL / NOT EXECUTED)
 - remote CI equivalence status for each required NOT EXECUTED local check
 - tmp deletion status
@@ -52,6 +54,17 @@ Remote CI Equivalence Gate:
 - scope-irrelevant CI must not be treated as required.
 
 If a mandatory scope-relevant check is NOT EXECUTED and no equivalent remote CI success is verified, completion is blocked.
+
+Negative Consistency Gate minimum rules:
+
+- Use the fixed heading `## Negative Consistency Gate` in completion summary/report surfaces.
+- Include all fixed questions (Q1–Q3) and each of `Answer:`, `Evidence:`, `Remaining risk:`.
+- If Answer is `問題なし`, Evidence must be non-empty and must name at least one of: diff, contract, test, CI, checklist, TODO.
+- If Remaining risk is non-empty, connect it to TODO preservation or explicit out-of-scope reason.
+- If CI is not PASS, required checks are not executed, or unresolved blocking failures remain, Q3 must be `問題あり`.
+- If policy-violation suspicion cannot be disproven with evidence, Q2 must be `問題あり`.
+- If task-purpose to diff mapping cannot be explained with evidence, Q1 must be `問題あり`.
+- Any `問題あり` answer is completion-blocking and returns to fix phase.
 
 
 CI policy baseline:

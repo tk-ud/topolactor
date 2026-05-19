@@ -129,6 +129,10 @@ Details:
 - `.agent/protocols/reports-and-todos.md`
 - `.agent/protocols/completion.md`
 
+## Negative Consistency Gate
+
+Completion-facing summaries must include `## Negative Consistency Gate` (Q1–Q3 with Answer / Evidence / Remaining risk) and follow detailed judgment/reporting rules in `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md`.
+
 ## Protocol References
 
 Detailed procedures are split under `.agent/protocols/` and scenario contract verification must follow those protocols:

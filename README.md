@@ -1,6 +1,6 @@
 # topolactor
 
-Topolactor is a **Data-Driven OS** for building runtime-defined applications from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
+Topolactor is a **Data-Driven OS** for building a data-driven topology runtime from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
 
 The core architecture treats the registry table as a **semantic matrix**. DB, UI, endpoint, runtime, scheduler, and function surfaces are projected or expanded from the same registry tensor rather than implemented as disconnected CRUD screens.
 
@@ -95,3 +95,5 @@ UI definitions become topology entities only after persistence and ID issuance. 
 - Heavy CI workflows are path-scoped.
 - Scope-irrelevant skipped heavy CI is not blocking.
 - If a local required check is not executed, equivalent remote CI evidence or an explicit remaining TODO is required.
+
+- IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT
