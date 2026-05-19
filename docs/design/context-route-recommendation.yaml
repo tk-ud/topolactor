@@ -167,60 +167,35 @@ core_ideas:
       "Axis/meaning discovery" is optional and comes from clustering similar sessions.
       Naming is a human/LLM labeling layer, not required for function.
 
-vector_model:
-  token_value_schema:
-    domain: "token.group is UI grouping tag; not used in computation"
-    value_range:
-      recommended: [-1.0, 1.0]
-      alternative: [0.0, 1.0]
-    value_assignment:
-      method: "human discrete ordering (spacing non-uniform allowed)"
-      examples:
-        status:
-          - { label: "critical",  value: -1.0 }
-          - { label: "warning",   value: -0.5 }
-          - { label: "caution",   value:  0.0 }
-          - { label: "normal",    value:  1.0 }
-        task:
-          - { label: "failed",    value: -1.0 }
-          - { label: "aborted",   value: -0.5 }
-          - { label: "pending",   value:  0.0 }
-          - { label: "in_progress", value: 0.5 }
-          - { label: "completed", value:  1.0 }
-    notes:
-      - "Only cosine similarity prediction is required; per-token cos(theta) is not required."
-
-aggregation_rules:
-  event_vector:
+topology_observation_model:
+  tensor_state_source:
+    - registry_id_references
+    - relation_bindings
+    - jsonb_features_and_promoted_columns
+    - logs_and_observations
+  prefix_observation:
     definition: >
-      v_event is sparse map(token_id -> token_value).
-      Missing tokens are treated as 0.
-
-  session_vector:
+      A session prefix accumulates topology observations and attention evidence
+      over record tensor states. It does not define meaning by manually authored
+      token-value vectors.
+  neighborhood_filtering:
     definition: >
-      v_session_prefix = SUM(v_event) over events in the session prefix up to current time.
-      (SUM chosen for low compute and statistical meaning)
-
-  cosine_similarity:
-    definition: "cos(v_a, v_b) = dot(v_a, v_b) / (||v_a|| * ||v_b||)"
-    zero_norm_policy: "if norm == 0 then similarity = 0"
-
-  neighborhood_inference:
-    k_nearest_sessions: 50       # → function_parameters default_policy.top_k
-    min_similarity: 0.05         # → function_parameters default_policy.min_similarity
-    tie_breaker: "recency_weighted"
-
-  strength_sigmoid:
-    intent: "evidence strength display (not accept/reject)"
+      Theta/cosine may be used only as a bounded neighborhood filter over
+      limited tensor-state candidates.
+    parameters:
+      k_nearest_sessions: 50
+      min_similarity: 0.05
+      tie_breaker: recency_weighted
+  attention_weight_observation:
     definition: >
-      strength = sigmoid((cos_sim - tau) / s)
-      where tau is derived from the local neighborhood (kth similarity),
-      and s is a scale factor.
-    default_params:
-      s: 0.05
-      tau_policy:
-        - "tau = similarity_of_kth_neighbor (k = min_neighbors) if enough neighbors"
-        - "else tau = min_similarity"
+      Attention weight is observed from aggregation, transition, recency,
+      frequency, diff, and logs.
+    strength_display:
+      intent: evidence_strength_display_not_accept_reject
+      definition: neighborhood_weight_relative_evidence
+  projection_cache:
+    fields: [vector_sparse, l2_norm]
+    rule: rebuildable_helper_not_meaning_sot
 
 recommendation_targets:
   A_next_action:
@@ -245,14 +220,14 @@ entities:
     description: >
       Discrete token dictionary.
       token_id is used in context_event.token_ids.
-      value is the meaning direction component in [-1.0, 1.0] (cosine-compatible).
-      group is UI grouping only — not used in vector computation.
-      Missing tokens are treated as 0 in the sparse vector.
+      value is an operational observation scalar and is not semantic SoT.
+      group is UI grouping only — not used as meaning authority.
+      token/value fields must not be interpreted as manually authored semantic vectors.
     fields:
       token_id:   { type: uuid, pk: true }
       label:      { type: string }
       group:      { type: string, note: "UI grouping tag; not used in computation" }
-      value:      { type: float, note: "meaning direction component [-1.0, 1.0]" }
+      value:      { type: float, note: "operational observation scalar (not meaning SoT)" }
       status:     { type: enum, values: [active, deprecated], default: active }
       created_at: { type: timestamp }
       updated_at: { type: timestamp }
