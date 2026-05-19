@@ -40,6 +40,17 @@ framework_policy:
       jsonb: latent_and_semi_structured_feature_retention
       columnar: observable_semantic_axis_for_auditability
       expansion: execute_abstract_function_with_registry_tensor_on_runtime_surfaces
+    record_tensor_state_rule:
+      definition: record_referencing_registry_ids_is_tensor_state
+      coordinate_derivation:
+        - registry_id_references
+        - relation_bindings
+        - jsonb_features_and_promoted_columns
+        - logs_and_observations
+      prohibition:
+        - record_manual_vector_ownership
+        - record_direct_vector_sparse_authoring
+      vector_cache: vector_sparse_l2_norm_are_rebuildable_projection_caches
 
   ui_topology_tensor_persistence:
     components_bucket:

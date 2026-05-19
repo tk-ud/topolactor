@@ -26,6 +26,10 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - jsonb keys are promotable to columns as observable semantic axes for attention/audit/projection.
 - logs.diffs is append-only diff surface with basic shape id/tableId/jsonb/created; it is audit/rebuild history and must not replace current-state SoT.
 - vector_sparse/l2_norm caches are rebuildable materialized projections, never SoT and never direct authoring targets.
+- a record that references registry IDs is treated as a tensor state.
+- record does not own a manually-authored vector.
+- record tensor coordinate is derived from registry_id references, relation bindings, jsonb/promoted columns, and logs/observations.
+- vector_sparse/l2_norm are rebuildable projection caches derived from that record tensor state.
 
 ## Projection surface map
 
@@ -81,6 +85,8 @@ Treat the following as drift/GAP during audit:
 20. vector cache (vector_sparse/l2_norm) is treated as SoT
 21. record-level direct vector authoring is introduced
 22. seed/UI/API directly authors vector_sparse as normal path
+23. record is treated as manual vector container instead of tensor state derived from registry references
+24. record tensor coordinate derivation path (registry/relation/jsonb+promoted/logs) is bypassed
 
 ## Gate usage
 

@@ -54,8 +54,10 @@ jsonb key は観測頻度・意味重要度・監査要件に応じて column �
 
 ## Vector Cache Clarification
 
-`vector_sparse` / `l2_norm` は SoT ではなく、registry semantic matrix と token_ids から再生成可能な materialized projection である。
-record へ vector を直接保持・直接入力する設計は採用しない。
+registry_id 群を参照する record は Tensor state として扱う。
+record は手入力 vector を所有しない。
+record の tensor coordinate は registry_id 参照、relation binding、jsonb/promoted column、logs/observations から導出される。
+`vector_sparse` / `l2_norm` は SoT ではなく、その Tensor state から再生成可能な materialized projection cache である。
 seed / UI / API から vector cache を直接 authoring する導線は drift/GAP として扱う。
 
 

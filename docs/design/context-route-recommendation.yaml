@@ -55,8 +55,18 @@ logs_diffs_principle:
   basic_shape: id_tableId_jsonb_created
   note: logs_diffs_is_not_current_state_sot
 
+record_tensor_state:
+  definition: record_referencing_registry_ids_is_tensor_state
+  manual_vector_ownership: prohibited
+  coordinate_derivation:
+    - registry_id_references
+    - relation_bindings
+    - jsonb_features_and_promoted_columns
+    - logs_and_observations
+
 vector_cache_authority:
   vector_sparse_l2_norm: rebuildable_projection_only
+  source: record_tensor_state
   sot: false
   direct_authoring:
     seed: prohibited_as_normal_path
