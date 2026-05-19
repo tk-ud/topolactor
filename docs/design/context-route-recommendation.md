@@ -67,6 +67,39 @@ record の tensor coordinate は registry_id 参照、relation binding、jsonb/p
 `vector_sparse` / `l2_norm` は SoT ではなく、その Tensor state から再生成可能な materialized projection cache である。
 seed / UI / API から vector cache を直接 authoring する導線は drift/GAP として扱う。
 
+### context_token_registry.value の取り扱い方針
+
+`context_token_registry.value` は人間が設定する表示用参照値であり、推薦計算には使用しない。
+推薦エンジンは token ID の **存在（multi-hot: 1.0）** を topology observation signal として使用する。
+token.value を sparse vector の重みとして使用する実装は旧導線であり、drift/GAP として扱う。
+
+### Multi-Hot Topology Observation
+
+event vector は token_ids (UUID[]) の multi-hot として構成する:
+- token 存在 → 1.0
+- token 不在 → 0.0（sparse 表現から省略）
+
+この multi-hot vector の SUM が prefix vector になる（低計算コスト・統計的安定性は維持）。
+近傍検索は multi-hot cosine（= intersection_count / sqrt(|a| × |b|)）を使用し、
+これは **neighborhood filter**（Θ）として扱う。cosine 自体は意味 SoT ではない。
+
+### DB CHECK 制約と policy 可変値の分離方針（A4 fix）
+
+`context_hub_recommendation_current` / `context_hub_feedback_event` の各フィールドについて:
+
+| フィールド | 制約戦略 | 根拠 |
+|---|---|---|
+| `scope_limit` | `CHECK (scope_limit > 0)` のみ | policy-defined（`hub_attention.scope_limits`）が列挙権限。DDL 移行不要で policy 拡張可能 |
+| `candidate_kind` | `CHECK (IN ('registry','hub','entity','relation','operation','token'))` | topology vocabulary。新 kind 追加時は DDL 移行が必要 |
+| `feedback_kind` | `CHECK (IN ('selected','ignored','missing_candidate'))` | topology vocabulary。新 kind 追加時は DDL 移行が必要 |
+
+**scope_limit** は function_parameters（`topology_vector_runtime.hub_attention.scope_limits`）が
+列挙値の権限を持つ。DB は正値ガード（`> 0`）のみを担い、policy が変更されても DDL 移行は不要。
+
+**candidate_kind / feedback_kind** は topology vocabulary として CHECK 制約で保護する。
+新しい kind を追加する場合は DDL 移行が必要であり、これは意図的な設計決定である。
+vocabulary 拡張は topology schema 変更と同等の重みを持つため、軽率な拡張を防ぐ。
+
 
 ## 推薦の二軸
 

@@ -1,30 +1,26 @@
-using Topolactor.Schema;
-
 namespace Topolactor.Runtime;
 
 /// <summary>
-/// Builds sparse event vectors and prefix vectors from token registry values.
+/// Builds multi-hot event vectors and prefix vectors from token ID presence (1.0 per token).
+/// Token IDs are treated as topology vocabulary axes — presence = 1.0, absence = 0.0.
+/// Cosine computed on these vectors is intersection/sqrt(|a|*|b|), used as neighborhood filter.
+/// token.value from context_token_registry is NOT used here; that field is for reference only.
 /// Uses SUM aggregation for prefix vectors (low compute, statistical stability).
-/// Missing tokens are treated as 0 — not added to the sparse representation.
-/// Dense embeddings are not used.
 /// </summary>
 public class ContextVectorBuilder
 {
     /// <summary>
-    /// Builds a sparse event vector from a token ID list and a token-value map.
-    /// Token IDs not present in tokenValueMap are omitted (treated as 0).
+    /// Builds a multi-hot event vector: each token ID present maps to 1.0.
+    /// Token IDs not in tokenIds are absent (0 — not added to the sparse representation).
+    /// No value weighting; token presence is the topology observation signal.
     /// </summary>
-    public IReadOnlyDictionary<Guid, float> BuildEventVector(
-        IEnumerable<Guid> tokenIds,
-        IReadOnlyDictionary<Guid, float> tokenValueMap)
+    public IReadOnlyDictionary<Guid, float> BuildMultiHotVector(IEnumerable<Guid> tokenIds)
     {
         ArgumentNullException.ThrowIfNull(tokenIds);
-        ArgumentNullException.ThrowIfNull(tokenValueMap);
 
         var vector = new Dictionary<Guid, float>();
         foreach (var id in tokenIds)
-            if (tokenValueMap.TryGetValue(id, out var v))
-                vector[id] = v;
+            vector[id] = 1.0f;
 
         return vector;
     }
@@ -48,7 +44,8 @@ public class ContextVectorBuilder
 
     /// <summary>
     /// Computes the L2 norm of a sparse vector.
-    /// Returns 0 for an empty or all-zero vector.
+    /// For a multi-hot vector of N tokens, this equals sqrt(N).
+    /// Returns 0 for an empty vector.
     /// </summary>
     public float ComputeL2Norm(IReadOnlyDictionary<Guid, float> vector)
     {

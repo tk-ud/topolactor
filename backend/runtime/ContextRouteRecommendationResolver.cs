@@ -109,19 +109,10 @@ public class ContextRouteRecommendationResolver
         var role = vector.UserRole;
         var tableName = (string?)null;
 
-        // Load token registry values for the current event
-        IReadOnlyDictionary<Guid, float> tokenValueMap;
-        if (tokenIds.Count > 0)
-        {
-            var tokens = await _contextRouteRepository.LoadActiveTokensAsync(tokenIds, ct);
-            tokenValueMap = tokens.ToDictionary(t => t.TokenId, t => t.Value);
-        }
-        else
-        {
-            tokenValueMap = new Dictionary<Guid, float>();
-        }
-
-        var eventVector = _vectorBuilder.BuildEventVector(tokenIds, tokenValueMap);
+        // Multi-hot event vector: token presence = 1.0, absence = 0.0.
+        // token.value from context_token_registry is NOT the vector weight;
+        // the topology observation signal is token ID presence (multi-hot).
+        var eventVector = _vectorBuilder.BuildMultiHotVector(tokenIds);
         var eventNorm = _vectorBuilder.ComputeL2Norm(eventVector);
 
         // Read 1: prefix candidates — MUST run before AppendContextEventAsync.
@@ -199,7 +190,7 @@ public class ContextRouteRecommendationResolver
             try
             {
                 await RunTopologyVectorRuntimeExtensionAsync(
-                    tvPolicy, currentOperation, tokenIds, tokenValueMap, tableName, sessionId, vector.IdOrHubId, ct);
+                    tvPolicy, currentOperation, tokenIds, tableName, sessionId, vector.IdOrHubId, ct);
             }
             catch (Exception ex)
             {
@@ -258,19 +249,18 @@ public class ContextRouteRecommendationResolver
         TopologyVectorRuntimePolicy tvPolicy,
         string? currentOperation,
         IReadOnlyList<Guid> tokenIds,
-        IReadOnlyDictionary<Guid, float> tokenValueMap,
         string? tableName,
         Guid sessionId,
         Guid? hubId,
         CancellationToken ct)
     {
         // 1. Extract transition key evidence (static — no DB).
-        // tokenIds proxy as relation IDs in evidence attribution.
-        // topNeighbors = [] in the recommendation path (no registry validation here).
+        // relationIds: [] — token IDs are not relation IDs; actual relation IDs are unavailable
+        // at this point in the recommendation route. topNeighbors = [] (no registry validation here).
         var evidence = TopologyVectorRuntime.ExtractTransitionKeyEvidence(
             hubId: hubId ?? sessionId,
             currentOperation: currentOperation,
-            relationIds: tokenIds,
+            relationIds: [],
             stateIds: [],
             tableNames: tableName is not null ? [tableName] : [],
             topNeighbors: [],
@@ -304,9 +294,9 @@ public class ContextRouteRecommendationResolver
                 {
                     existingByCandidate.TryGetValue(tokenId, out var existing);
 
-                    var currentValue = tokenValueMap.TryGetValue(tokenId, out var v)
-                        ? Math.Abs(v)
-                        : 0.0f;
+                    // Multi-hot observation: token presence = 1.0 (not weighted by token.value).
+                    // EMA observes token presence frequency, not a manually-authored value.
+                    const float currentValue = 1.0f;
 
                     var newEmaFast = TopologyVectorRuntime.ComputeEma(
                         currentValue, existing?.EmaFast, hubPolicy.EmaFastAlpha);
@@ -327,7 +317,7 @@ public class ContextRouteRecommendationResolver
                         BaseProbability:      null,
                         CosineSimilarity:     null,
                         StaticRelationWeight: null,
-                        StatisticalWeight:    currentValue > 0.0f ? currentValue : null,
+                        StatisticalWeight:    currentValue,
                         MlpFeatureScore:      mlpScore > 0.0f ? mlpScore : null,
                         FeedbackAdjustment:   existing?.FeedbackAdjustment ?? 0.0f,
                         EmaFast:              newEmaFast,

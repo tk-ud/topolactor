@@ -29,48 +29,41 @@ public class ContextRouteRecommendationResolverTests
     // --- ContextVectorBuilder tests ---
 
     [Fact]
-    public void BuildEventVector_MapsTokenIdsToValues()
+    public void BuildMultiHotVector_MapsTokenIdsToOnePointZero()
     {
         var builder = VectorBuilder();
         var tokenA = Guid.NewGuid();
         var tokenB = Guid.NewGuid();
-        var tokenC = Guid.NewGuid();
 
-        var valueMap = new Dictionary<Guid, float>
-        {
-            [tokenA] = 1.0f,
-            [tokenB] = -0.5f,
-        };
-
-        var vector = builder.BuildEventVector([tokenA, tokenB, tokenC], valueMap);
+        var vector = builder.BuildMultiHotVector([tokenA, tokenB]);
 
         Assert.Equal(1.0f, vector[tokenA]);
-        Assert.Equal(-0.5f, vector[tokenB]);
-        Assert.False(vector.ContainsKey(tokenC)); // missing token treated as 0 — omitted
+        Assert.Equal(1.0f, vector[tokenB]);
+        Assert.Equal(2, vector.Count);
     }
 
     [Fact]
-    public void BuildEventVector_EmptyTokenIds_ReturnsEmptyVector()
+    public void BuildMultiHotVector_EmptyTokenIds_ReturnsEmptyVector()
     {
         var builder = VectorBuilder();
-        var vector = builder.BuildEventVector([], new Dictionary<Guid, float>());
+        var vector = builder.BuildMultiHotVector([]);
         Assert.Empty(vector);
     }
 
     [Fact]
-    public void BuildPrefixVector_SumsEventVectors()
+    public void BuildPrefixVector_SumsMultiHotEventVectors()
     {
         var builder = VectorBuilder();
         var tokenA = Guid.NewGuid();
         var tokenB = Guid.NewGuid();
 
         var ev1 = new Dictionary<Guid, float> { [tokenA] = 1.0f };
-        var ev2 = new Dictionary<Guid, float> { [tokenA] = 0.5f, [tokenB] = -1.0f };
+        var ev2 = new Dictionary<Guid, float> { [tokenA] = 1.0f, [tokenB] = 1.0f };
 
         var prefix = builder.BuildPrefixVector([ev1, ev2]);
 
-        Assert.Equal(1.5f, prefix[tokenA], precision: 5);
-        Assert.Equal(-1.0f, prefix[tokenB], precision: 5);
+        Assert.Equal(2.0f, prefix[tokenA], precision: 5); // token A appears in both events
+        Assert.Equal(1.0f, prefix[tokenB], precision: 5); // token B appears in ev2 only
     }
 
     [Fact]
@@ -82,16 +75,17 @@ public class ContextRouteRecommendationResolverTests
     }
 
     [Fact]
-    public void ComputeL2Norm_CalculatesCorrectly()
+    public void ComputeL2Norm_MultiHotThreeTokens_ReturnsSqrt3()
     {
         var builder = VectorBuilder();
         var tokenA = Guid.NewGuid();
         var tokenB = Guid.NewGuid();
-        var vector = new Dictionary<Guid, float> { [tokenA] = 3.0f, [tokenB] = 4.0f };
+        var tokenC = Guid.NewGuid();
+        var vector = new Dictionary<Guid, float> { [tokenA] = 1.0f, [tokenB] = 1.0f, [tokenC] = 1.0f };
 
         var norm = builder.ComputeL2Norm(vector);
 
-        Assert.Equal(5.0f, norm, precision: 5); // sqrt(9 + 16) = 5
+        Assert.Equal((float)Math.Sqrt(3), norm, precision: 5); // sqrt(1+1+1) = sqrt(3)
     }
 
     [Fact]
