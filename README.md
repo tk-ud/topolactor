@@ -115,11 +115,3 @@ source ~/.topolactor-tools/env.sh
 bash .agent/tests/check-backend-tests.sh
 bash .agent/tests/check-frontend-types.sh
 ```
-
-## CI / Verification Notes
-
-- Structure Check is the always-on required gate.
-- Heavy CI workflows are path-scoped.
-- Scope-irrelevant skipped heavy CI is not blocking.
-- If a local required check is not executed, equivalent remote CI evidence or an explicit remaining TODO is required.
-- IF_LOCAL_NOT_EXECUTED_VERIFY_REMOTE_CI_EQUIVALENT
