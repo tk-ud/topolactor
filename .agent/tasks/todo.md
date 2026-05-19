@@ -37,14 +37,6 @@
       → 対象ファイル名: .agent/tests/check-runtime-semantics.sh, .github/workflows/*
       → 次の判断点: CI確認。未確認なら未完了のまま保持。
 
-## Documentation Boundary Hygiene
-
-- [ ] [Codex] optional / future / implemented 境界のSSOT横断一覧を整備する
-      → 問題点: 実装済み/未実装境界の可視化が分散し、監査コストと誤読余地が残る。
-      → 目的: optional / future / implemented の境界を単一の参照面で追跡可能にする。
-      → 対象ファイル候補: docs/design/*, docs/file-structure.yaml
-      → 次の判断点: 既存ドキュメントへの統合位置を決め、一覧形式を確定する。
-
 ## Registry Tensor Continuity
 
 - [ ] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
