@@ -247,8 +247,11 @@ public class ContextRouteRecommendationResolver
     /// Timing: called after AppendContextEventAsync so the event is in context.
     /// Non-fatal: caller wraps in try-catch; failure does not affect recommendation result.
     ///
-    /// Hub attention scope: sessionId is used as hubId (session-scoped attention).
-    /// Per-record hub attention (using ContextRecordId) can be added in a future scope.
+    /// Hub identity (PROVISIONAL): sessionId is used as hubId here because the recommendation
+    /// resolver receives OperationVector which does not carry IdOrHubId from the caller.
+    /// This means hub attention is session-scoped, not hub-entity-scoped.
+    /// Correct hub identity (caller-supplied IdOrHubId) requires surfacing IdOrHubId through
+    /// OperationVector or passing it separately — tracked as a remaining TODO.
     ///
     /// enabled=false is handled by the caller (this method is not called when disabled).
     /// </summary>
@@ -280,7 +283,8 @@ public class ContextRouteRecommendationResolver
 
         // 3. Hub attention current: load → compute EMA → upsert → recalculate ranks.
         // Runs only when HubAttention policy is present and enabled.
-        // Uses sessionId as hubId (session-scoped hub attention).
+        // PROVISIONAL: uses sessionId as hubId (session-scoped). Proper hub-entity-scoped
+        // attention requires IdOrHubId to be threaded through OperationVector — see TODO.
         // Skipped when tokenIds is empty (no candidates to track).
         if (tvPolicy.HubAttention is { Enabled: true } hubPolicy && tokenIds.Count > 0)
         {

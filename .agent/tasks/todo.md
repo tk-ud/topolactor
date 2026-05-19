@@ -16,8 +16,9 @@
 
 ## Issue #60 — Topology Vector Runtime Completion
 
-- [x] TopologyVectorRuntime を canonical context route recommendation runtime に接続する
-      → 完了: ContextRouteRecommendationResolver.ResolveAsync に TVR 拡張を接続。context event append 後に evidence extraction / MLP feature crossing / hub attention current upsert-rank recalculation を実行。enabled=false / tokenIds空はスキップ。非致命的ラッパー（try-catch）でエラー時も推薦結果に影響なし。
+- [x] TopologyVectorRuntime を canonical context route recommendation runtime に接続する（TVR接続自体は完了、hub identity は暫定）
+      → TVR接続完了: ContextRouteRecommendationResolver.ResolveAsync に TVR 拡張を接続。evidence extraction / MLP feature crossing / hub attention EMA-upsert-rank を実行。enabled=false / tokenIds空はスキップ。非致命的ラッパー。
+      → hub attention identity 暫定: OperationVector に IdOrHubId が存在しないため、sessionId を hubId として使用中。hub-entity-scoped hub attention は未完了（下記 TODO 参照）。
 
 - [x] Registrar validation flow に registry vector validation を接続する
       → 完了: RegistrarValidationService 新規作成。function_parameters から registry_validation policy を読み込み、TopologyVectorRuntime.ValidateRegistryVectorAsync を呼び出す。AdminEndpoint.HandleValidateRegistryVectorAsync / POST /admin/registry-vector-validate 追加。policy missing / invalid / DB unavailable は全て ExplicitError（blocking）。
@@ -25,8 +26,14 @@
 - [x] Registrar admin UI / frontend projection に topology vector validation result と attention evidence を表示する
       → 完了: RegistryVectorValidator island 新規作成。/admin/registry-vector-validate ページ追加。/api/admin/registry-vector-validate proxy route 追加。adminApi.ts に validateRegistryVector / 型定義追加。fresh.gen.ts manifest 更新。frontend は backend structured result を projection するのみ（cosine/MLP判定なし）。
 
-- [x] Issue #60 close 前の acceptance audit を実施する
-      → 完了: Tasks 1-3 / 5 実装完了。TVR接続 / Registrar validation / frontend projection / topology_edit_log 分離 が全て完了。check-runtime-semantics.sh は dotnet/deno 非利用環境のため NOT EXECUTED（Remote CI equivalence 要確認）。
+- [ ] Issue #60 close 前の acceptance audit を実施する
+      → ブロッカー残存のため未完了: (a) hub attention identity が session-scoped 暫定のまま（hub-entity-scoped が未実装）、(b) remote CI (backend-tests / frontend-types) の pass 確認が必要。上記が解消されるまで Issue #60 は close 不可。
+
+- [ ] Hub attention の hub identity を session-scoped 暫定から hub-entity-scoped へ移行する
+      → 理由: ContextRouteRecommendationResolver.RunTopologyVectorRuntimeExtensionAsync は sessionId を hubId として context_hub_recommendation_current に書き込んでいるが、Issue #60 の hub attention current は hub-entity を Query とする設計。OperationVector には IdOrHubId が未伝達のため hub-entity identity が利用できない。
+      → 改善方針: IdOrHubId を OperationVector / RuntimeWorkingShape に伝達するか、hub identity の取得元を policy で定義する。sessionId による暫定書き込みは Issue #60 close 前に解消するか、残 TODO として明示して Issue を分割する。
+      → 対象ファイル: backend/schema/Contracts.cs (OperationVector), backend/runtime/ContextRouteRecommendationResolver.cs, backend/runtime/RuntimeExecutor.cs, backend/mapper/SemanticMapper.cs
+      → 次の判断点: Issue #60 内で解消するか、別 Issue に分離するか。
 
 ## Runtime Persistence Completion
 

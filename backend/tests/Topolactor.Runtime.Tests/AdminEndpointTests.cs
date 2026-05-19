@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Endpoint;
 using Topolactor.Repository;
+using Topolactor.Runtime;
 using Topolactor.Schema;
 using Xunit;
 
@@ -51,8 +52,44 @@ internal static class AdminEndpointFactory
     internal static (AdminEndpoint Endpoint, StubAdminContextRouteRepository Repository) Create()
     {
         var repo = new StubAdminContextRouteRepository();
-        var endpoint = new AdminEndpoint(NullLogger<AdminEndpoint>.Instance, repo);
+        var endpoint = new AdminEndpoint(
+            NullLogger<AdminEndpoint>.Instance,
+            repo,
+            BuildMissingPolicyValidationService());
         return (endpoint, repo);
+    }
+
+    /// <summary>
+    /// RegistrarValidationService backed by the base (no-DB) TopologyRepository.
+    /// LoadFunctionParameterAsync returns null → ValidateAsync returns
+    /// ExplicitError("REGISTRY_VALIDATION_POLICY_NOT_FOUND").
+    /// Safe to use in tests that never call HandleValidateRegistryVectorAsync.
+    /// </summary>
+    internal static RegistrarValidationService BuildMissingPolicyValidationService()
+    {
+        var tvr = new TopologyVectorRuntime(
+            NullLogger<TopologyVectorRuntime>.Instance,
+            new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy"));
+        return new RegistrarValidationService(
+            NullLogger<RegistrarValidationService>.Instance,
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy"),
+            tvr);
+    }
+
+    /// <summary>
+    /// RegistrarValidationService backed by StubValidPolicyTopologyRepository.
+    /// ValidateAsync will reach TVR; the base ContextRouteRepository returns
+    /// empty neighbors → ValidateAsync returns Pass (or ZeroVector when queryIds empty).
+    /// </summary>
+    internal static RegistrarValidationService BuildPassValidationService()
+    {
+        var tvr = new TopologyVectorRuntime(
+            NullLogger<TopologyVectorRuntime>.Instance,
+            new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy"));
+        return new RegistrarValidationService(
+            NullLogger<RegistrarValidationService>.Instance,
+            new StubValidPolicyTopologyRepository(),
+            tvr);
     }
 }
 
@@ -239,7 +276,10 @@ public class AdminEndpointTests
     {
         var skeletonRepo = new ContextRouteRepository(
             NullLogger<ContextRouteRepository>.Instance, "dummy");
-        var endpoint = new AdminEndpoint(NullLogger<AdminEndpoint>.Instance, skeletonRepo);
+        var endpoint = new AdminEndpoint(
+            NullLogger<AdminEndpoint>.Instance,
+            skeletonRepo,
+            AdminEndpointFactory.BuildMissingPolicyValidationService());
 
         var result = await endpoint.HandleCreateTokenAsync(
             new AdminCreateTokenRequestDto("test_token", null, 0.5f));
@@ -307,5 +347,102 @@ public class AdminEndpointTests
 
         Assert.True(found);
         Assert.True(response.Ok);
+    }
+
+    // -----------------------------------------------------------------------
+    // HandleValidateRegistryVectorAsync — input validation
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleValidateRegistryVectorAsync_Returns400_WhenRegistryTableIsEmpty()
+    {
+        var (endpoint, _) = AdminEndpointFactory.Create();
+
+        var (result, statusCode) = await endpoint.HandleValidateRegistryVectorAsync(
+            new AdminRegistryVectorValidateRequestDto("", [Guid.NewGuid().ToString()]));
+
+        Assert.Equal(400, statusCode);
+        Assert.Equal("explicit_error", result.ValidationClass);
+        Assert.True(result.IsBlocking);
+        Assert.Equal("REGISTRY_TABLE_REQUIRED", result.StatusDetail);
+    }
+
+    [Fact]
+    public async Task HandleValidateRegistryVectorAsync_Returns400_WhenQueryIdIsNotAValidUuid()
+    {
+        var (endpoint, _) = AdminEndpointFactory.Create();
+
+        var (result, statusCode) = await endpoint.HandleValidateRegistryVectorAsync(
+            new AdminRegistryVectorValidateRequestDto("relation_registry", ["not-a-uuid"]));
+
+        Assert.Equal(400, statusCode);
+        Assert.Equal("explicit_error", result.ValidationClass);
+        Assert.True(result.IsBlocking);
+        Assert.NotNull(result.StatusDetail);
+        Assert.StartsWith("INVALID_QUERY_ID:", result.StatusDetail);
+    }
+
+    // -----------------------------------------------------------------------
+    // HandleValidateRegistryVectorAsync — policy-missing path
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleValidateRegistryVectorAsync_Returns422ExplicitError_WhenPolicyMissing()
+    {
+        // AdminEndpointFactory.Create() uses BuildMissingPolicyValidationService:
+        // base TopologyRepository.LoadFunctionParameterAsync returns null
+        // → RegistrarValidationService returns REGISTRY_VALIDATION_POLICY_NOT_FOUND.
+        var (endpoint, _) = AdminEndpointFactory.Create();
+
+        var (result, statusCode) = await endpoint.HandleValidateRegistryVectorAsync(
+            new AdminRegistryVectorValidateRequestDto(
+                "relation_registry", [Guid.NewGuid().ToString()]));
+
+        Assert.Equal(422, statusCode);
+        Assert.Equal("explicit_error", result.ValidationClass);
+        Assert.True(result.IsBlocking);
+        Assert.Equal("REGISTRY_VALIDATION_POLICY_NOT_FOUND", result.StatusDetail);
+    }
+
+    // -----------------------------------------------------------------------
+    // HandleValidateRegistryVectorAsync — pass / zero-vector paths (policy present)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleValidateRegistryVectorAsync_ReturnsZeroVector_WhenQueryIdsEmpty()
+    {
+        // BuildPassValidationService uses StubValidPolicyTopologyRepository so policy is
+        // present. Empty queryIds → TopologyVectorRuntime returns ZeroVector (non-blocking).
+        var endpoint = new AdminEndpoint(
+            NullLogger<AdminEndpoint>.Instance,
+            new StubAdminContextRouteRepository(),
+            AdminEndpointFactory.BuildPassValidationService());
+
+        var (result, statusCode) = await endpoint.HandleValidateRegistryVectorAsync(
+            new AdminRegistryVectorValidateRequestDto("relation_registry", []));
+
+        Assert.Equal(200, statusCode);
+        Assert.Equal("zero_vector", result.ValidationClass);
+        Assert.False(result.IsBlocking);
+    }
+
+    [Fact]
+    public async Task HandleValidateRegistryVectorAsync_ReturnsPass_WhenNoNeighborsFound()
+    {
+        // BuildPassValidationService: valid policy + base ContextRouteRepository returns
+        // empty neighbors → TopologyVectorRuntime returns Pass (non-blocking, no neighbors).
+        var endpoint = new AdminEndpoint(
+            NullLogger<AdminEndpoint>.Instance,
+            new StubAdminContextRouteRepository(),
+            AdminEndpointFactory.BuildPassValidationService());
+
+        var (result, statusCode) = await endpoint.HandleValidateRegistryVectorAsync(
+            new AdminRegistryVectorValidateRequestDto(
+                "relation_registry", [Guid.NewGuid().ToString()]));
+
+        Assert.Equal(200, statusCode);
+        Assert.Equal("pass", result.ValidationClass);
+        Assert.False(result.IsBlocking);
+        Assert.Empty(result.Neighbors);
     }
 }
