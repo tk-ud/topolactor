@@ -354,10 +354,13 @@ Topology Recommendation CI (上記) は、topology 更新候補の事前検証 (
 
 ### 対象実装
 
-- `backend/runtime/SystemOperationCiRuntime.cs` — 検査ロジック本体
-- `backend/schema/SystemCiContracts.cs` — `SystemCiDiagnosticResult` / `SystemCiFinding` / `HubAttentionCiSummary`
-- `backend/repository/ContextRouteRepository.cs` — `LoadHubAttentionSummaryForCiAsync` / `CountContextEventsAsync`
-- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiRuntimeTests.cs` — ユニットテスト
+- `backend/runtime/SystemOperationCiRuntime.cs` — 検査ロジック本体 (event-driven / cron 両系統)
+- `backend/schema/SystemCiContracts.cs` — `SystemCiDiagnosticResult` / `SystemCiFinding` / `HubAttentionCiSummary` / `RegistryTokenCiSummary`
+- `backend/repository/ContextRouteRepository.cs` — `LoadHubAttentionSummaryForCiAsync` / `CountContextEventsAsync` / `CountFeedbackEventsAsync` / `LoadRegistryTokenSummaryForCiAsync`
+- `backend/runtime/ContextRouteRecommendationResolver.cs` — event-driven CI 接続点 (`RunTopologyVectorRuntimeExtensionAsync` 内で `InspectEvidenceIntegrity` / `InspectHubAttentionAfterUpdate` を呼び出す; Blocking → `TVR_EXTENSION_FAILED`)
+- `backend/scheduler/SystemOperationCiScheduler.cs` — cron trigger 接続 (BackgroundService; `InspectHubAttentionContinuityAsync` / `InspectCurrentRebuildabilityAsync` / `InspectRegistryContinuityAsync` を定期呼び出し)
+- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiRuntimeTests.cs` — event-driven / cron CI ユニットテスト
+- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiSchedulerTests.cs` — スケジューラ統合テスト
 
 ### Event-driven inspection (EventDriven)
 
@@ -396,18 +399,18 @@ Topology Recommendation CI (上記) は、topology 更新候補の事前検証 (
 | `CRON_EMA_FAST_NOT_FINITE` | Blocking | DB 上の ema_fast が NaN / Infinity |
 | `CRON_EMA_SLOW_NOT_FINITE` | Blocking | DB 上の ema_slow が NaN / Infinity |
 | `CRON_EVIDENCE_MISSING` | Gap | evidence_json が空 (HasEvidence=false) |
-| `CURRENT_NOT_REBUILDABLE_NO_EVENTS` | Gap | hub attention records > 0 だが context_event count = 0 |
+| `CURRENT_NOT_REBUILDABLE_NO_EVENTS` | Gap | hub attention records > 0 だが context_event / feedback_event が両方 0 件 |
+| `CRON_ORPHANED_REGISTRY` | Gap | active token が hub attention record に参照されていない (孤立 token) |
 
-**Cron trigger 接続**: TODO — background worker / scheduled job へのルーティングは未実装。
-検査ロジックは `SystemOperationCiRuntime` に定義済み。接続が完成したら以下のフローとなる:
+**Cron trigger 接続**: 実装済み — `backend/scheduler/SystemOperationCiScheduler.cs` (BackgroundService) が
+`SYSTEM_CI_STARTUP_DELAY_SECONDS` 秒の起動遅延後、`SYSTEM_CI_INTERVAL_HOURS` 時間間隔で以下を定期呼び出しする:
 
 ```text
-cron trigger
-→ trigger context { operation: "system:ci:topology:continuity" }
-→ Runtime excitation
+cron trigger (SystemOperationCiScheduler BackgroundService)
 → SystemOperationCiRuntime.InspectHubAttentionContinuityAsync
 → SystemOperationCiRuntime.InspectCurrentRebuildabilityAsync
-→ diagnostic result → .agent/reports/ or admin diagnostic surface
+→ SystemOperationCiRuntime.InspectRegistryContinuityAsync
+→ diagnostic result → structured logging (Pass: LogInformation / Gap: LogWarning / Blocking: LogError)
 ```
 
 ### 検査結果の扱い
