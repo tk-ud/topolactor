@@ -24,6 +24,35 @@ framework_policy:
       columnar: observable_semantic_axis_for_auditability
       expansion: execute_abstract_function_with_registry_tensor_on_runtime_surfaces
 
+  ui_topology_tensor_persistence:
+    components_bucket:
+      role: unpackaged_component_staging_surface
+      rule: components_in_bucket_are_not_ui_topology_tensor_entities
+      prohibition: component_without_component_id_must_not_be_projected
+    package_generator:
+      role: issue_ids_and_promote_bucket_components
+      issues:
+        - component_id
+        - package_id
+        - layout_id
+        - wiring_id
+      wiring:
+        - connect_package_component_layout_wiring_axes
+        - persist_to_ui_topology_db
+    persistence_tables:
+      - ui_component_bucket
+      - ui_component_registry
+      - ui_component_package
+      - ui_package_component_map
+      - ui_layout_registry
+      - ui_wiring_registry
+      - ui_topology_tensor
+    frontend_projection_rule: frontend_projects_db_topology_definition_only
+    drift_gap:
+      - code_only_component_is_not_topology_entity
+      - code_only_package_is_not_topology_entity
+      - ui_topology_component_catalog_only_interpretation_is_prohibited
+
   registries:
     master_registry:
       role: table_name_and_id_dictionary

@@ -135,6 +135,7 @@ check_file ".agent/tmp/.gitkeep"
 
 check_file "db/schema.sql"
 check_file "db/topology_tables.sql"
+check_file "db/ui_topology_tables.sql"
 check_file "db/promotion_tables.sql"
 check_file "db/seed_empty.sql"
 check_file "db/README.md"
@@ -265,6 +266,10 @@ check_content "docs/registrar-admin-ui-specification.md" "Promote to active regi
 check_content "docs/registrar-admin-ui-specification.md" "Broken refs are explicit validation errors"
 check_content "docs/registrar-admin-ui-specification.md" "not CRUD"
 check_content "docs/registrar-admin-ui-specification.md" "frontend must not become source of truth"
+check_content "docs/registrar-admin-ui-specification.md" "components bucket"
+check_content "docs/registrar-admin-ui-specification.md" "package generator"
+check_content "db/ui_topology_tables.sql" "ui_component_bucket"
+check_content "db/ui_topology_tables.sql" "ui_topology_tensor"
 
 check_file "docs/promotion-manifest-editor-specification.md"
 check_content "docs/promotion-manifest-editor-specification.md" "Promotion manifest editor"

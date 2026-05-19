@@ -43,6 +43,9 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - UI topology tables are tensor UI projection surfaces, not component catalogs.
 - CRUD wiring / CanDI wiring are wiring-axis projections over UI topology tensor.
 
+- code-only component/package without ID issuance + DB persistence is drift/GAP.
+- components bucket is staging only; projection eligibility begins after package generator ID issuance and topology DB save.
+
 ## Drift / GAP classification (blocking unless explicitly out-of-scope)
 
 Treat the following as drift/GAP during audit:
@@ -57,7 +60,9 @@ Treat the following as drift/GAP during audit:
 8. runtime canonical route is not treated as tensor expansion
 9. data-driven explanation is reduced to external settings or CRUD metadata
 10. SQL Attention is reduced to recommendation UI only, simple aggregation, or ranking-only semantics
-11. semantic continuity is not verified across projection surfaces
+11. code-only component/package is treated as acceptable topology entity
+12. components bucket staging state is projected before ID issuance/DB save
+13. semantic continuity is not verified across projection surfaces
 
 ## Gate usage
 

@@ -57,6 +57,24 @@ stored_topology_data
 The Registrar surface feeds into `stored_topology_data` only after successful
 draft → validate → promote flow. It does not short-circuit or bypass any step.
 
+## 2.5 Components Bucket → Package Generator → DB Save
+
+The UI topology registration flow is strict and immediate:
+
+```text
+components bucket
+→ package generator
+→ ID issuance (componentId / packageId / layoutId / wiringId)
+→ UI topology DB save
+→ frontend projection target
+```
+
+- Components bucket is an unpackaged-component holding surface; bucket entries are not UI topology tensor entities yet.
+- Components without issued `componentId` must not be connected to CRUD/CanDI/route/layout/wiring projection surfaces.
+- Package generator promotes bucket entries into packageable topology units, issues required IDs, wires layout/wiring axes, and persists the result.
+- Persisted rows in UI topology DB are the source of truth for projection; frontend projects DB topology definitions and does not judge topology meaning.
+- Code-only component or code-only package is drift/GAP because it is detached from registry tensor / semantic matrix persistence.
+
 ## 3. Managed Objects
 
 The Registrar admin UI manages the following topology registration objects at a
