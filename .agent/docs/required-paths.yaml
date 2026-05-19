@@ -52,10 +52,13 @@ required_files:
     - docs/registrar-admin-ui-specification.md
     - docs/promotion-manifest-editor-specification.md
     - docs/design/relation-registry-fk-audit-and-abstract-migration.md
+    - docs/design/context-route-recommendation.md
+    - docs/design/context-route-recommendation.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
     - .agent/docs/required-paths.yaml
+    - .agent/docs/ssot-map.yaml
     - .agent/rules/rule.md
     - .agent/protocols/completion.md
     - .agent/protocols/policy-judgment.md
@@ -67,6 +70,7 @@ required_files:
     - .agent/tests/check-backend-tests.sh
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
+    - .agent/tests/check-completion-judgment.sh
     - .agent/scripts/create-tmp.sh
     - .agent/scripts/delete-tmp.sh
     - .agent/tmp/.gitkeep
@@ -208,6 +212,11 @@ required_content_terms:
     - "not a signal to read all docs/"
     - "Runtime Boundary Failure Matrix"
     - "routine inspection"
+  .agent/docs/ssot-map.yaml:
+    - "change-surface"
+    - "required_docs"
+    - "supporting_docs"
+    - "protocols"
   .agent/reports/README.md:
     - "routine inspection reports"
     - "Do not use this directory as the default place for normal PR summaries"

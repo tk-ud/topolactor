@@ -8,7 +8,7 @@ It separates always-read guidance from condition-triggered references, and separ
 1. `AGENTS.md` (repository entry contract)
 2. `.agent/README.md` (this role-and-route guide)
 3. `.agent/rules/rule.md` (always-read operating rules and trigger map)
-4. `.agent/skills/agent-workflow.md` (lightweight execution order)
+4. `.agent/skills/agent-workflow.md` (execution order: materials → target surfaces → scope → scenario gate → implementation → verification)
 5. Only when needed, open relevant `.agent/docs/` resume/index, `.agent/skills/structure-check.md` (and other task skills), and `.agent/protocols/*.md`
 
 ## Directory Roles
@@ -16,7 +16,7 @@ It separates always-read guidance from condition-triggered references, and separ
 - `AGENTS.md`:
   Defines the agent role, provides the entry handoff to `.agent/README.md`, and routes readers to `.agent/rules/rule.md`; it is not a direct entrypoint for reading all `docs/`.
 - `.agent/docs/`:
-  Resume/index surface for SSOT materials under `docs/`; not a signal to read all `docs/` by default.
+  Resume/index surface for SSOT materials under `docs/`. `ssot-map.yaml` defines change-surface → docs/ SSOT mappings; not a signal to read all `docs/` by default.
 - `.agent/rules/`:
   Always-read rule surface. Defines required behavior boundaries, prohibitions, and directory-role framing under `.agent/`.
 - `.agent/skills/`:
@@ -50,6 +50,8 @@ These define baseline obligations and operating posture for every task.
 - other `.agent/skills/*.md`: read only when executing the corresponding task/check procedure.
 
 This avoids the misread that all protocols must be read and applied on every task.
+
+Workflow Order Invariant is defined in `.agent/rules/rule.md` and must be preserved across all entry routes.
 
 ## Reports / Tasks / Tmp Usage
 

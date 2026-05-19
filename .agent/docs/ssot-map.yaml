@@ -1,0 +1,92 @@
+# ssot-map.yaml — Change-Surface to docs/ SSOT Mapping
+#
+# Purpose:
+# - Provide task-time mapping from change surface to docs/ SSOT read set.
+# - Keep this as resume/index (not docs bundle always-read).
+
+version: 1
+
+mapping:
+  - work_type: repository_overview
+    change_surfaces:
+      - repository-level orientation
+      - governance entry overview
+    required_docs:
+      - docs/agent-development-os.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: framework_core_runtime_canonical_route
+    change_surfaces:
+      - backend/runtime/*
+      - canonical route claims
+      - runtime flow semantics
+    required_docs:
+      - docs/framework-core.yaml
+    supporting_docs: []
+    protocols: []
+
+  - work_type: policy_scoring_threshold_routing_validation_projection
+    change_surfaces:
+      - runtime policy values
+      - scoring thresholds
+      - routing or validation behavior
+      - projection behavior
+    required_docs:
+      - docs/framework-policy.yaml
+    supporting_docs: []
+    protocols:
+      - .agent/protocols/policy-judgment.md
+
+  - work_type: file_structure_required_path_directory_governance
+    change_surfaces:
+      - repository structure checks
+      - required paths
+      - directory governance surfaces
+    required_docs:
+      - docs/file-structure.yaml
+    supporting_docs: []
+    protocols: []
+
+  - work_type: registrar_admin_ui_registry_registration
+    change_surfaces:
+      - registrar admin UI
+      - registry registration boundary
+    required_docs:
+      - docs/registrar-admin-ui-specification.md
+    supporting_docs: []
+    protocols:
+      - .agent/protocols/runtime-boundary-matrix.md
+
+  - work_type: promotion_manifest_disclosure_manifest_editing
+    change_surfaces:
+      - promotion manifest editor
+      - disclosure requirements
+      - manifest editing boundary
+    required_docs:
+      - docs/promotion-manifest-editor-specification.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: relation_registry_fk_abstract_migration
+    change_surfaces:
+      - relation registry
+      - foreign key policy
+      - abstract migration semantics
+    required_docs:
+      - docs/design/relation-registry-fk-audit-and-abstract-migration.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: context_route_recommendation_sql_attention_registry_tensor
+    change_surfaces:
+      - context route recommendation
+      - SQL Attention behavior
+      - registry tensor semantics
+    required_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+    supporting_docs:
+      - docs/framework-policy.yaml
+    protocols:
+      - .agent/protocols/registry-tensor-policy.md

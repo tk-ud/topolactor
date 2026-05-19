@@ -2,6 +2,11 @@
 
 This protocol is condition-triggered. It is not an always-on read.
 
+## Workflow Guard
+
+- Use as a reference point during READ_TARGET_SURFACES / DEFINE_SCOPE / JUDGMENT when registry tensor semantics are in scope.
+- Do not use this protocol to bypass workflow order.
+
 ## Trigger scope
 
 Run this policy when changes touch registry tensor semantics, topology semantics, SSOT semantics, recommendation runtime semantics, registrar UI spec semantics, or topology governance policy text.

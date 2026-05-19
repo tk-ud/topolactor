@@ -27,6 +27,40 @@ Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope
 
 Work execution order follows `.agent/skills/agent-workflow.md`.
 
+
+
+
+## Workflow Order Invariant
+
+The following workflow order is a mandatory invariant for all work routes:
+
+```text
+READ_ENTRY
+→ READ_TASK_MATERIALS
+→ READ_TARGET_SURFACES
+→ DEFINE_SCOPE
+→ SCENARIO_CONTRACT
+→ IMPLEMENT
+→ FILL_CHECKLISTS
+→ VERIFY_SCENARIO_DIFF
+→ JUDGMENT
+→ STRUCTURE_CHECK
+→ PUSH_OR_PR
+```
+
+- This order must be followed across all work entry routes.
+- Opening protocol / checklist / script / test surfaces directly must not bypass this order.
+- If work starts from a mid-step, return to incomplete prerequisite steps first.
+- structure check is not a judgment substitute.
+- push / PR update / TODO `[x]` / completion summary are allowed only after JUDGMENT and STRUCTURE_CHECK.
+
+## Task-Required Reading Rules
+
+- Issue / prompt explicit materials and required-read lists are task-required input.
+- Read corresponding `.agent/docs/` resume/index for changed target surfaces, including `.agent/docs/ssot-map.yaml`.
+- When `.agent/docs/ssot-map.yaml` maps the change surface to `docs/` SSOT, read the mapped `docs/` SSOT before implementation or audit.
+- This requirement does not make the entire `docs/` bundle always-read scope.
+
 ## Architecture Rules
 
 - Data-defined topology is the architecture subject. Not DTOs, not CRUD, not layered MVC.
