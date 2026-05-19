@@ -89,6 +89,12 @@ builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
 
+string? ExtractBearerToken(HttpContext ctx)
+{
+    var h = ctx.Request.Headers.Authorization.FirstOrDefault();
+    return h?.StartsWith("Bearer ", StringComparison.Ordinal) == true ? h[7..] : null;
+}
+
 // Health check — used by Docker healthcheck and nginx upstream check
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
@@ -101,10 +107,7 @@ app.MapPost("/dispatch", async (
     DispatchEndpoint dispatch,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
@@ -133,10 +136,7 @@ app.MapGet("/admin/context-token-registry", async (
     AdminEndpoint admin,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
@@ -151,10 +151,7 @@ app.MapPost("/admin/context-token-registry", async (
     AdminEndpoint admin,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
@@ -176,10 +173,7 @@ app.MapPost("/admin/registry-vector-validate", async (
     AdminEndpoint admin,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
@@ -194,10 +188,7 @@ app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (
     AdminEndpoint admin,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
@@ -218,10 +209,7 @@ app.MapGet("/admin/ui-component-bucket", async (
     PackageGeneratorEndpoint packageGenerator,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
@@ -241,10 +229,7 @@ app.MapPost("/admin/package-generator/generate", async (
     PackageGeneratorEndpoint packageGenerator,
     JwtGuard jwtGuard) =>
 {
-    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
-    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
-        ? authHeader[7..]
-        : null;
+    var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
