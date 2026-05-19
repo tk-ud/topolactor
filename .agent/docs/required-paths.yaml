@@ -15,6 +15,7 @@ required_directories:
     - .agent/reports
     - .agent/checklists
     - .agent/checklists/fixtures/policy-judgment
+    - .agent/checklists/fixtures/boundary-identity
     - .agent/scripts
     - .agent/tmp
   docs:
@@ -71,6 +72,13 @@ required_files:
     - .agent/tasks/todo.md
     - .agent/reports/README.md
     - .agent/checklists/policy-judgment.md
+    - .agent/checklists/boundary-identity.md
+    - .agent/checklists/check-boundary-identity.sh
+    - .agent/checklists/fixtures/boundary-identity/pass.md
+    - .agent/checklists/fixtures/boundary-identity/fail-unanswered.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-identity.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-leakage-test.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-todo-update.md
     - .agent/checklists/check-policy-judgment.sh
     - .agent/checklists/fixtures/policy-judgment/pass.md
     - .agent/checklists/fixtures/policy-judgment/fail-unanswered.md
@@ -253,6 +261,18 @@ required_content_terms:
     - "scenario contract"
     - "equivalent remote CI success"
     - "Structure Check is always-on"
+  .agent/checklists/boundary-identity.md:
+    - "Answer:"
+    - "End-to-End Boundary Identity"
+    - "Multi-instance leakage"
+    - "minimum leakage detection test"
+    - "repository mutation identity"
+    - "Frontend projection identity"
+    - "UI action identity"
+  .agent/checklists/check-boundary-identity.sh:
+    - "Answer:"
+    - "--self-test"
+    - "Q1=yes AND Q12=no AND Q13=no"
   .agent/checklists/check-policy-judgment.sh:
     - "Answer:"
     - "--self-test"
