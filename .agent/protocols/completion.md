@@ -25,23 +25,37 @@ This protocol owns:
 
 ## Execution procedure
 
-1. Inspect full branch diff (`git status --short`, `git diff -- . ":(exclude).git"`, `git diff --cached -- . ":(exclude).git"`).
-2. Run scenario-contract verification when its trigger applies.
-3. Run Runtime Boundary Failure Matrix and boundary identity verification when trigger applies.
-4. Run policy-judgment gate when trigger applies; if not triggered, declare NOT_REQUIRED/OUT_OF_SCOPE with rationale.
-5. Declare required check scope from changed scope with per-check label (required check scope declaration):
-   - REQUIRED_EXECUTED
-   - REQUIRED_NOT_EXECUTED
-   - NOT_REQUIRED
-   - OUT_OF_SCOPE
-6. Execute required local checks for touched scope.
-7. Apply Remote CI Equivalence Gate for each scope-relevant REQUIRED_NOT_EXECUTED check.
-8. Apply Failure Triage Self-Recursion Gate across all executed command failures.
-9. Apply Audit Gap Response Gate sections and classification.
-10. Apply Recursive Verification Gate.
-11. If `.agent/tmp/tmp.txt` exists and all recursive verification tasks are complete, delete via `bash .agent/scripts/delete-tmp.sh`.
-12. Run `bash .agent/tests/check-structure.sh` last.
-13. Only after gate pass may TODO items be marked `[x]`.
+1. Scenario Contract
+   - When scenario-contract trigger applies, create `.agent/tmp/tmp.txt` before implementation.
+   - Fix intent before coding: user-visible scenario/runtime claim, expected route, expected read/write/append/cache/return order, expected status, and failure paths.
+2. Implementation
+   - Implement against the scenario contract when present.
+   - If implementation intentionally diverges from contract, update contract with explicit reason.
+3. Checklist Fill
+   - After implementation, fill applicable checklist/declaration surfaces.
+   - Fill policy-judgment / boundary-identity / required check scope only when each trigger applies.
+   - Checklist fill at this stage is viewpoint capture, not final completion judgment.
+4. Scenario Diff Verification
+   - Inspect full branch diff (`git status --short`, `git diff -- . ":(exclude).git"`, `git diff --cached -- . ":(exclude).git"`).
+   - Verify full diff against scenario contract when triggered.
+   - Verify contract/checklist/actual-diff consistency.
+   - If mismatch exists, fix implementation or update contract with reason, then re-verify.
+5. Judgment
+   - Apply Failure Triage Self-Recursion Gate.
+   - Execute policy judgment / boundary judgment / completion eligibility / failure triage / remote CI equivalence in triggered scope.
+   - Apply Required Check Scope declaration labels:
+     - REQUIRED_EXECUTED
+     - REQUIRED_NOT_EXECUTED
+     - NOT_REQUIRED
+     - OUT_OF_SCOPE
+   - Apply Recursive Verification Gate and blocking criteria.
+   - Only after gate pass may TODO items be marked `[x]`.
+6. Structure Verification
+   - Run `bash .agent/tests/check-structure.sh` last.
+   - Structure Check is the always-on required gate.
+   - Structure verification is structural consistency check; it is not a semantic substitute.
+7. Push
+   - Push only after all triggered gates pass and no blocking condition remains.
 
 ## Completion / failure decision
 
@@ -61,9 +75,7 @@ Blocking (completion prohibited):
 Pass eligibility requires all blocking items resolved or explicitly preserved as Remaining TODO under gate rules.
 
 NOT EXECUTED ≠ PASS.
-Structure Check is the always-on required gate.
 scope-irrelevant workflow-level skip is not blocking.
 Remote CI Equivalence Gate: REQUIRED_NOT_EXECUTED is never PASS without equivalent remote CI success.
-
 
 Completion report entries include failure triage result and required check scope declaration.

@@ -6,6 +6,11 @@ This protocol is condition-triggered. It is not an always-on read.
 
 Create and verify `.agent/tmp/tmp.txt` when changes include runtime claim, canonical route behavior, persistence behavior, or projection behavior.
 
+## Position in completion sequence
+
+- Scenario Contract is created before implementation (intent fixation stage).
+- Scenario Diff Verification is executed after implementation and checklist fill, and before final judgment.
+
 `.agent/tmp/tmp.txt` is a temporary scenario contract, not a free-form memo.
 
 Create with:
@@ -32,7 +37,6 @@ Required fields:
 Before completion, verify full branch diff against this contract.
 
 Failure or mismatch is blocking under Recursive Verification Gate.
-
 
 ## Boundary Extension Scenario
 
