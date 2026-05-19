@@ -176,17 +176,29 @@ data-defined topology runtime 拡張。
 ### SQL Attention
 
 SQL Attention は Topology Vector Runtime の説明ラベルであり、別 Runtime 名ではない。
+ここでの中核は「提案エンジン」ではなく、**トポロジ連続性シナリオを監査可能な Attention として表現すること**である。
 PostgreSQL 上の `UUID[]` / `JSONB` / GIN index / relation weight / transition stats / EMA trend を使い、
 source of truth の業務データではなく recommendation current / projection 用の materialized signal として扱う。
 外部 embedding / pgvector / learned neural weights / neural attention 実装は必須ではない。
+レコメンドや UI 遷移はこの Attention 表現の一部ユースケースであり、本質そのものではない。
 
 ```text
 Query  = current hub / operation / runtime context
+         （hub を線形空間上の現在位置として扱う連続性シナリオ文脈）
 Key    = registry sparse vector / relation / hub / entity / token
+         （連続性を説明する観測軸。jsonb特徴とカラム特徴の双方を含む）
 Value  = candidate hub / registry / operation / token
+         （次の連結候補。推薦専用ではなく、監査対象となる遷移候補集合）
 Score  = cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback
-Output = ranked recommendation current / projection input
+         （集計値を attention weight として統合）
+Output = ranked recommendation current / projection input + continuity evidence
+         （UI表示だけでなく、後続CI監査に回せる説明可能結果）
 ```
+
+- `JSONB` は潜在的・半構造な特徴保持層として使う。
+- カラム化は観測可能な意味軸の増設として扱い、Attention 対象を再帰的/フラクタルに増やせるようにする。
+- 動的可変シナリオの連結ログ（例: `context_hub_feedback_event`）は、後続の統計重み更新・hub語彙・Topology Context Vocabulary 拡張源として扱う。
+- TODO (future extension): トポロジ連続性シナリオに対する CI 監査の自動ゲート化は設計方針として定義済みだが、実装完了扱いにはしない。
 
 ### 設計定義
 
@@ -195,7 +207,8 @@ Topology Attention:
   遷移に効いている重要 Key を抽出する
 
 Transition Key Evidence:
-  どの table / relation / state / entity が遷移 Key になっているかを説明する
+  どの table / relation / state / entity がトポロジ連続性の Key になっているかを説明する
+  推薦理由の説明だけでなく、シナリオ連続性監査の証跡として保持する
 
 Topology MLP:
   抽出された Key 群を組み合わせ、次状態 / 次候補 score へ変換する
@@ -207,6 +220,7 @@ Feedback Weight Update:
   selected → 重み強化
   ignored  → 重み弱化
   missing candidate → 欠落特徴を補正
+  動的可変な連結ログを語彙拡張の入力として保持する
 ```
 
 「BP」という名称は初期実装では使わない。

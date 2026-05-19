@@ -491,22 +491,48 @@ topology_vector_runtime:
   sql_attention:
     role: "descriptive label for Topology Vector Runtime; not a separate runtime"
     definition: >
-      Uses PostgreSQL UUID[], JSONB, GIN indexes, relation weight, transition stats,
-      EMA trends, and feedback to integrate topology-vector evidence into an
-      attention_score for recommendation current and projection input.
+      SQL Attention is an auditable Attention representation for topology continuity
+      scenarios, not merely a proposal engine. Uses PostgreSQL UUID[], JSONB,
+      GIN indexes, relation weight, transition stats, EMA trends, and feedback to
+      integrate topology-vector evidence into an attention_score for recommendation
+      current and projection input.
       It does not require external embeddings, pgvector, learned neural weights,
       or a neural attention implementation. Recommendation current is a rebuildable
-      materialized signal, not source-of-truth business data.
+      materialized signal, not source-of-truth business data. Recommendation/UI
+      transition is a model case only and not the semantic core.
     mapping:
-      query: "current hub / operation / runtime context"
-      key: "registry sparse vector / relation / hub / entity / token"
-      value: "candidate hub / registry / operation / token"
-      score: "cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback"
-      output: "ranked recommendation current / projection input"
+      query: >
+        current hub / operation / runtime context as a continuity scenario position;
+        hub is treated as a linear space coordinate.
+      key: >
+        registry sparse vector / relation / hub / entity / token as continuity
+        evidence axes; includes jsonb latent features and columnized observable axes.
+      value: >
+        candidate hub / registry / operation / token as possible next links for
+        continuity auditing, not recommendation-only targets.
+      score: >
+        cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback;
+        aggregated statistics are treated as attention weights.
+      output: >
+        ranked recommendation current / projection input + continuity evidence that
+        can be audited in dynamic-variable scenario CI pipelines.
+    feature_axes:
+      jsonb_role: "latent/semi-structured feature retention layer"
+      columnar_role: "observable semantic axes for explicit monitoring and audits"
+      fractal_attention: >
+        As jsonb features are columnized, attention targets recursively increase and
+        can be handled as fractal context expansions.
+    ci_auditability:
+      status: partial
+      todo: >
+        Automatic CI gate enforcement for dynamic-variable continuity scenarios is a
+        future extension; current document defines direction, not completed runtime.
 
   design_definitions:
     topology_attention:
-      definition: "Extract important transition Keys from the current hub/relation context."
+      definition: >
+        Extract important continuity Keys from the current hub/relation context
+        and represent topology continuity in auditable Attention form.
     transition_key_evidence:
       definition: >
         Explain which table / relation / state / entity is the transition Key.
@@ -523,6 +549,8 @@ topology_vector_runtime:
         selected  → positive_delta
         ignored   → negative_delta
         missing candidate → missing_candidate_delta
+        Dynamic-variable link logs are retained as inputs for later hub vocabulary
+        and Topology Context Vocabulary expansion.
 
   registry_sparse_vector:
     multi_hot: "UUID[] = multi-hot sparse vector (unweighted)"
@@ -725,6 +753,7 @@ registrar_wide_topology_attention:
     The entire registrar is treated as a topology-wide Key-Value Memory.
     Operational pressure signals in the data (record counts, edit activity, state transitions)
     become Query sources. The runtime attends over the full registrar space.
+    Recommendation and UI transition are only one model case in this wider attention scope.
   query_sources:
     - high_record_count_table
     - high_edit_diff_count_table
