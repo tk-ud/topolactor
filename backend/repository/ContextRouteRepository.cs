@@ -329,4 +329,38 @@ public class ContextRouteRepository
             events.Count);
         return Task.FromResult(0);
     }
+
+    // ---------------------------------------------------------------------------
+    // System Operation CI — read-only inspection surfaces
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads lightweight hub attention summaries for system CI inspection.
+    /// Returns HubAttentionCiSummary with key fields only (no full evidence/MLP blobs).
+    /// HasEvidence is true when evidence_json contains at least one element.
+    ///
+    /// Used by SystemOperationCiRuntime cron-triggered checks.
+    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<HubAttentionCiSummary>> LoadHubAttentionSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.LoadHubAttentionSummaryForCiAsync: in-memory skeleton — returning empty.");
+        return Task.FromResult<IReadOnlyList<HubAttentionCiSummary>>([]);
+    }
+
+    /// <summary>
+    /// Returns the total count of rows in context_event.
+    /// Used by SystemOperationCiRuntime to check current rebuildability:
+    /// if hub attention records exist but event count is 0, current is not rebuildable.
+    ///
+    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// </summary>
+    public virtual Task<long> CountContextEventsAsync(CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "ContextRouteRepository.CountContextEventsAsync: in-memory skeleton — returning 0.");
+        return Task.FromResult(0L);
+    }
 }

@@ -326,3 +326,99 @@ cron trigger（定期実行）
 
 cron trigger は「いつ実行するか」という context を Runtime に渡すだけ。
 「何を検証するか」「どの candidate type を対象とするか」「有効かどうか」は topology データが決める。
+
+---
+
+## System Operation CI — SQL Attention / Registry Continuity
+
+### 概念
+
+Topology Recommendation CI (上記) は、topology 更新候補の事前検証 (candidate CI gate) である。
+
+**System Operation CI** はこれとは別の目的を持つ。
+
+- **対象**: 稼働中の SQL Attention (hub attention current / evidence_json) と Registry Continuity (registry / relation / context_event) の意味連続性を、システム側の不変条件として継続検査する。
+- **目的**: 推薦精度ではなく topology 連続性の invariant 検査。候補の事前承認とは分離される。
+- **threshold / 検査種別は hardcode OK**: system CI の検査ルールはシステム不変条件であり、runtime policy ではない。
+
+### System CI と runtime policy の境界
+
+| 項目 | 格納場所 | 変更主体 |
+|---|---|---|
+| system CI 検査ルール | C# hardcode (system invariant) | 開発者 |
+| EMA alpha / scope_limits / delta | function_parameters | 運用 policy |
+| 推薦スコア threshold | function_parameters | 運用 policy |
+| CI 候補種別 / expiry_days | function_parameters | 運用 policy |
+
+**禁止**: system CI の検査ルールを function_parameters に外出しする (runtime policy と混同する)。
+
+### 対象実装
+
+- `backend/runtime/SystemOperationCiRuntime.cs` — 検査ロジック本体
+- `backend/schema/SystemCiContracts.cs` — `SystemCiDiagnosticResult` / `SystemCiFinding` / `HubAttentionCiSummary`
+- `backend/repository/ContextRouteRepository.cs` — `LoadHubAttentionSummaryForCiAsync` / `CountContextEventsAsync`
+- `backend/tests/Topolactor.Runtime.Tests/SystemOperationCiRuntimeTests.cs` — ユニットテスト
+
+### Event-driven inspection (EventDriven)
+
+ランタイムイベント直後に in-memory で実行する軽量検査。追加の DB 往復なし。
+
+**対象イベント**:
+- hub attention current upsert 後 → `InspectHubAttentionAfterUpdate`
+- evidence extraction 後 → `InspectEvidenceIntegrity`
+- feedback event 構築後 → `InspectFeedbackEvents`
+
+**検査観点 (hardcoded invariants)**:
+
+| チェック名 | 種別 | 条件 |
+|---|---|---|
+| `HUB_ID_EMPTY` | Blocking | hub_id が Guid.Empty |
+| `CANDIDATE_ID_EMPTY` | Blocking | candidate_id が Guid.Empty |
+| `ATTENTION_SCORE_NOT_FINITE` | Blocking | attention_score が NaN / Infinity |
+| `EMA_FAST_NOT_FINITE` | Blocking | ema_fast が NaN / Infinity |
+| `EMA_SLOW_NOT_FINITE` | Blocking | ema_slow が NaN / Infinity |
+| `EVIDENCE_JSON_NOT_PARSEABLE` | Gap | evidence_json が JSON array としてパース不可 |
+| `MLP_FEATURE_JSON_NOT_PARSEABLE` | Gap | mlp_feature_json が JSON array としてパース不可 |
+| `EVIDENCE_EMPTY_WITH_OPERATION` | Gap | operation が存在するが evidence が空 |
+| `EVIDENCE_NEGATIVE_CONTRIBUTION` | Blocking | contribution_score < 0 |
+| `FEEDBACK_DELTA_ZERO` | Blocking | delta_applied = 0 |
+| `FEEDBACK_DELTA_SIGN_VIOLATION` | Blocking | delta 符号が feedback_kind に矛盾 |
+
+### Cron-triggered inspection (CronContinuity)
+
+定期実行で DB を読み取り、より重い連続性探索を行う。
+
+**検査観点 (hardcoded invariants)**:
+
+| チェック名 | 種別 | 条件 |
+|---|---|---|
+| `CRON_ATTENTION_SCORE_NOT_FINITE` | Blocking | DB 上の attention_score が NaN / Infinity |
+| `CRON_EMA_FAST_NOT_FINITE` | Blocking | DB 上の ema_fast が NaN / Infinity |
+| `CRON_EMA_SLOW_NOT_FINITE` | Blocking | DB 上の ema_slow が NaN / Infinity |
+| `CRON_EVIDENCE_MISSING` | Gap | evidence_json が空 (HasEvidence=false) |
+| `CURRENT_NOT_REBUILDABLE_NO_EVENTS` | Gap | hub attention records > 0 だが context_event count = 0 |
+
+**Cron trigger 接続**: TODO — background worker / scheduled job へのルーティングは未実装。
+検査ロジックは `SystemOperationCiRuntime` に定義済み。接続が完成したら以下のフローとなる:
+
+```text
+cron trigger
+→ trigger context { operation: "system:ci:topology:continuity" }
+→ Runtime excitation
+→ SystemOperationCiRuntime.InspectHubAttentionContinuityAsync
+→ SystemOperationCiRuntime.InspectCurrentRebuildabilityAsync
+→ diagnostic result → .agent/reports/ or admin diagnostic surface
+```
+
+### 検査結果の扱い
+
+```text
+Blocking → fail-close / ExplicitError / caller must not proceed
+Gap      → reportable diagnostic / caller logs warning and continues
+Pass     → no action required
+```
+
+- silent fallback 禁止
+- LogError-only 禁止 (Blocking の場合)
+- Blocking は ExplicitError として接続する
+- Gap は reportable diagnostic として記録する

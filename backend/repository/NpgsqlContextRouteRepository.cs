@@ -1229,6 +1229,64 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     }
 
     // ---------------------------------------------------------------------------
+    // System Operation CI — read-only inspection surfaces
+    // ---------------------------------------------------------------------------
+
+    /// <summary>
+    /// Loads lightweight hub attention summaries for system CI cron inspection.
+    /// Queries context_hub_recommendation_current for key fields only.
+    /// HasEvidence: true when jsonb_array_length(evidence_json) > 0 and evidence_json is an array.
+    /// </summary>
+    public override async Task<IReadOnlyList<HubAttentionCiSummary>> LoadHubAttentionSummaryForCiAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT hub_id, candidate_id, scope_limit, " +
+            "       attention_score, ema_fast_30, ema_slow_10, " +
+            "       (jsonb_typeof(evidence_json) = 'array' AND jsonb_array_length(evidence_json) > 0) AS has_evidence, " +
+            "       updated_at " +
+            "FROM context_hub_recommendation_current " +
+            "ORDER BY updated_at DESC";
+
+        var records = new List<HubAttentionCiSummary>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            records.Add(new HubAttentionCiSummary(
+                HubId:          reader.GetGuid(0),
+                CandidateId:    reader.GetGuid(1),
+                ScopeLimit:     reader.GetInt32(2),
+                AttentionScore: reader.IsDBNull(3) ? null : (float)reader.GetDouble(3),
+                EmaFast:        reader.IsDBNull(4) ? null : (float)reader.GetDouble(4),
+                EmaSlow:        reader.IsDBNull(5) ? null : (float)reader.GetDouble(5),
+                HasEvidence:    reader.GetBoolean(6),
+                UpdatedAt:      reader.GetFieldValue<DateTimeOffset>(7)
+            ));
+        }
+
+        return records;
+    }
+
+    /// <summary>
+    /// Returns the total count of rows in context_event.
+    /// Used by system CI rebuildability check.
+    /// </summary>
+    public override async Task<long> CountContextEventsAsync(CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM context_event";
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is long l ? l : Convert.ToInt64(result);
+    }
+
+    // ---------------------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------------------
 

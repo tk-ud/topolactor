@@ -17,6 +17,29 @@
 - [ ] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
       → 対象: `db/init.sql`, `infra/docker-compose.yml`。`ui_component_bucket` / `ui_topology_tensor` 作成確認まで実施し、確認後に削除/完了化。
 
+## System Operation CI (Issue #83)
+
+- [ ] [Claude] SystemOperationCiRuntime の backend-tests CI 検証
+      → 実装完了 (branch: claude/issue-83-tasks-PbiMy)。
+      → 対象: `backend/runtime/SystemOperationCiRuntime.cs`, `backend/tests/.../SystemOperationCiRuntimeTests.cs`
+      → dotnet が環境にないため local 実行不可。remote CI (backend-tests workflow) で確認後に [x] 化。
+
+- [ ] [Claude] SystemOperationCiRuntime の event-driven CI 接続 (RunTopologyVectorRuntimeExtensionAsync)
+      → 現状: InspectHubAttentionAfterUpdate / InspectEvidenceIntegrity / InspectFeedbackEvents は定義済み。
+      → 未完: ContextRouteRecommendationResolver.RunTopologyVectorRuntimeExtensionAsync から呼び出しを追加する。
+      → Blocking → ExplicitError("TVR_EXTENSION_FAILED") / Gap → LogWarning and continue。
+      → 完了条件: resolver に SystemOperationCiRuntime を DI し、event 後に呼び出す実装 + テスト追加。
+
+- [ ] [Claude] Cron trigger 接続 (background worker / scheduled job)
+      → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync は定義済み。
+      → cron trigger → Runtime excitation → SystemOperationCiRuntime 呼び出し導線が未実装。
+      → 完了条件: cron dispatch endpoint / background worker から呼び出す実装 + .agent/reports/ への診断結果書き込み。
+
+- [ ] [Claude] Registry 連続性探索 (orphaned registry detection) の実装
+      → 孤立 registry (どの hub からも参照されない registry) の DB 検査クエリが未実装。
+      → 対象: ContextRouteRepository に LoadOrphanedTokenSummaryForCiAsync などを追加する。
+      → 完了条件: CRON_ORPHANED_REGISTRY finding を持つ InspectRegistryContinuityAsync を実装・テスト。
+
 ## Registry Tensor Continuity
 
 - [ ] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
