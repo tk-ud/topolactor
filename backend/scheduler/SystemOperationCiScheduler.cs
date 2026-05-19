@@ -27,9 +27,14 @@ namespace Topolactor.Scheduler;
 ///   and does not block the remaining inspections. Service does not crash on inspection
 ///   failures. OperationCanceledException is re-thrown for clean shutdown.
 ///
-/// Bootstrap delay: waits SYSTEM_CI_STARTUP_DELAY_SECONDS (env, default 30) before
+/// Log severity:
+///   Pass:     LogInformation — no action required.
+///   Gap:      LogWarning    — reportable diagnostic; caller may continue.
+///   Blocking: LogError      — system invariant violated; requires investigation.
+///
+/// Bootstrap delay: waits SYSTEM_CI_STARTUP_DELAY_SECONDS (env, 1-3600, default 30) before
 /// the first run to allow the database to be ready.
-/// Run interval: SYSTEM_CI_INTERVAL_HOURS (env, default 1) between runs.
+/// Run interval: SYSTEM_CI_INTERVAL_HOURS (env, 1-24, default 1) between runs.
 ///
 /// Diagnostic results are emitted via structured logging only — not persisted to DB.
 /// </summary>
@@ -86,7 +91,8 @@ public class SystemOperationCiScheduler : BackgroundService
         _logger.LogInformation("SystemOperationCiScheduler: stopped.");
     }
 
-    private async Task RunInspectionsAsync(CancellationToken ct)
+    // internal for test access (compiled into the same test assembly via Compile Include)
+    internal async Task RunInspectionsAsync(CancellationToken ct)
     {
         await RunSingleInspectionAsync(
             () => _ciRuntime.InspectHubAttentionContinuityAsync(ct),
@@ -131,32 +137,51 @@ public class SystemOperationCiScheduler : BackgroundService
         if (result.OverallStatus == SystemCiStatus.Pass)
         {
             _logger.LogInformation(
-                "SystemOperationCiScheduler: target={Target} status=Pass findings=0.",
-                result.InspectionTarget);
+                "SystemOperationCiScheduler: target={Target} kind={Kind} " +
+                "status=Pass findings=0 inspectedAt={InspectedAt}.",
+                result.InspectionTarget, result.InspectionKind, result.InspectedAt);
             return;
         }
 
+        _logger.LogInformation(
+            "SystemOperationCiScheduler: target={Target} kind={Kind} " +
+            "status={Status} findings={FindingCount} inspectedAt={InspectedAt}.",
+            result.InspectionTarget, result.InspectionKind,
+            result.OverallStatus, result.Findings.Count, result.InspectedAt);
+
         foreach (var f in result.Findings)
         {
-            _logger.LogWarning(
-                "SystemOperationCiScheduler: target={Target} status={Status} " +
-                "check={Check} detail={Detail} targetId={TargetId}.",
-                result.InspectionTarget, f.Status, f.CheckName, f.Detail, f.TargetId);
+            if (f.Status == SystemCiStatus.Blocking)
+            {
+                _logger.LogError(
+                    "SystemOperationCiScheduler: BLOCKING target={Target} " +
+                    "check={Check} detail={Detail} targetId={TargetId}.",
+                    result.InspectionTarget, f.CheckName, f.Detail, f.TargetId);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "SystemOperationCiScheduler: GAP target={Target} " +
+                    "check={Check} detail={Detail} targetId={TargetId}.",
+                    result.InspectionTarget, f.CheckName, f.Detail, f.TargetId);
+            }
         }
     }
 
-    private static TimeSpan ParseEnvSeconds(string envVar, TimeSpan fallback)
+    // Valid range: 1-3600 seconds (1 second to 1 hour). Outside range -> fallback.
+    internal static TimeSpan ParseEnvSeconds(string envVar, TimeSpan fallback)
     {
         var raw = Environment.GetEnvironmentVariable(envVar);
-        return int.TryParse(raw, out var v) && v > 0
+        return int.TryParse(raw, out var v) && v >= 1 && v <= 3600
             ? TimeSpan.FromSeconds(v)
             : fallback;
     }
 
-    private static TimeSpan ParseEnvHours(string envVar, TimeSpan fallback)
+    // Valid range: 1-24 hours. Outside range -> fallback.
+    internal static TimeSpan ParseEnvHours(string envVar, TimeSpan fallback)
     {
         var raw = Environment.GetEnvironmentVariable(envVar);
-        return int.TryParse(raw, out var v) && v > 0
+        return int.TryParse(raw, out var v) && v >= 1 && v <= 24
             ? TimeSpan.FromHours(v)
             : fallback;
     }
