@@ -5,19 +5,21 @@ Mandatory completion order:
 1. Inspect full branch diff (`git status --short`, `git diff -- . ":(exclude).git"`, `git diff --cached -- . ":(exclude).git"`).
 2. Verify full diff against Temporary Scenario Contract when required.
 3. Verify Runtime Boundary Failure Matrix coverage when required.
-4. Run Policy Judgment Checklist and keep 15 answers valid.
-5. Run relevant local CI checks for touched scope.
-6. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
-7. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
-8. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
-9. Run `bash .agent/tests/check-structure.sh` last.
-10. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
+4. For boundary extension scope, run Boundary Identity Gate with a PR-specific temporary answer file (`bash .agent/checklists/check-boundary-identity.sh <pr-specific-temp-file>`), and record the result in the completion report.
+5. Run Policy Judgment Checklist and keep 15 answers valid.
+6. Run relevant local CI checks for touched scope.
+7. Apply Remote CI Equivalence Gate for any scope-relevant local check that is NOT EXECUTED.
+8. Apply the Recursive Verification Gate: if any blocking failure exists (FAIL, required NOT EXECUTED without equivalent remote CI success, remote CI queued/in_progress, remote CI failure/cancelled/skipped-unjustified, contract/diff mismatch, matrix gap, policy violation, or report/diff contradiction), do not complete; return to fix phase within scope or leave explicit remaining TODO when out of scope.
+9. Delete `.agent/tmp/tmp.txt` via `bash .agent/scripts/delete-tmp.sh` when it was created and recursive verification is complete.
+10. Run `bash .agent/tests/check-structure.sh` last.
+11. Only after the Recursive Verification Gate passes may `.agent/tasks/todo.md` items be marked `[x]`.
 
 Completion report must include:
 
 - changed files
 - scenario contract verification result
 - boundary matrix verification result
+- boundary identity gate result (when boundary extension scope exists)
 - policy judgment result
 - local check status (PASS / FAIL / NOT EXECUTED)
 - remote CI equivalence status for each required NOT EXECUTED local check
