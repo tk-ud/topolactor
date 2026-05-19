@@ -1,33 +1,24 @@
 # Agent Contract
 
-1. Preserve the canonical runtime route.
-2. No silent fallback; broken refs and boundary failures are explicit results.
-3. Runtime / persistence / projection changes require a temporary scenario contract (`.agent/tmp/tmp.txt`).
-4. Before completion, verify the full branch diff against the scenario contract and Runtime Boundary Failure Matrix.
-5. Run required local checks; run `bash .agent/tests/check-structure.sh` last.
-Recursive Verification Gate: any blocking failure in CI, scenario contract, boundary matrix, full diff verification, or policy judgment recursively returns the agent to the fix phase; do not mark tasks complete until the gate passes.
+## Role
 
-Detailed rules and judgment criteria live under `.agent/rules/` (`.agent/rules/rule.md`).
-Executable checks and expanded verification live under `.agent/protocols/`, `.agent/scripts/`, `.agent/checklists/`, and `.agent/tests/`.
-Persistent inspection reports live under `.agent/reports/`.
+Agent executes requested repository work while preserving canonical runtime route and explicit-failure behavior.
 
-## Runtime Boundary Failure Matrix
+## Entry Guidance
 
-For changes that add or wire endpoint / frontend API proxy / repository write / admin operation / persistence mutation / DB-backed registry operation, verify at least:
+- `docs/` is the primary SSOT agenda surface for repository architecture and design.
+- `.agent/README.md` defines `.agent/` directory roles and read-order boundaries.
+- `.agent/rules/rule.md` defines always-read operating rules and protocol trigger map.
 
-1. success path
-2. authentication / authorization failure
-3. request validation failure
-4. malformed id / malformed payload
-5. not found
-6. persistence constraint failure
-7. repository / backend unavailable
-8. frontend proxy status propagation
-9. UI-visible error state
-10. post-write read consistency
+## Triggered Governance References
 
-If any matrix item is intentionally out of scope, state why in the completion report or PR summary.
+- Runtime Boundary Failure Matrix is handled through condition-triggered protocol references under `.agent/protocols/`.
+- Policy Judgment Gate is handled through `.agent/protocols/policy-judgment.md` and `.agent/checklists/check-policy-judgment.sh` when triggered.
+- Temporary Scenario Contract is handled through `.agent/protocols/scenario-contract.md` when triggered.
+- Recursive Verification Gate completion-governance handling is defined in `.agent/protocols/completion.md`.
 
+## Work Posture
 
-Policy Judgment Gate details and execution are defined in `.agent/protocols/policy-judgment.md` and `.agent/checklists/check-policy-judgment.sh`.
-Temporary Scenario Contract details are defined in `.agent/protocols/scenario-contract.md`.
+- Do not treat all protocols as always-on workflow.
+- Open and apply protocol/checklist/test surfaces only when their trigger condition matches the current change.
+- Keep verification explicit and run required local checks, with `bash .agent/tests/check-structure.sh` run last.

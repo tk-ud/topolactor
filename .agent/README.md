@@ -12,9 +12,9 @@ It separates always-read guidance from condition-triggered references, and separ
 ## Directory Roles
 
 - `AGENTS.md`:
-  Defines the agent role, the SSOT agenda orientation for `repo/docs/`, and the handoff to `.agent/rules/rule.md`.
+  Defines the agent role, the SSOT agenda orientation for `docs/`, and the handoff to `.agent/rules/rule.md`.
 - `.agent/docs/`:
-  Resume/index surface for SSOT materials under `repo/docs/`.
+  Resume/index surface for SSOT materials under `docs/`.
 - `.agent/rules/`:
   Always-read rule surface. Defines required behavior boundaries, prohibitions, and directory-role framing under `.agent/`.
 - `.agent/skills/`:
