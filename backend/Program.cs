@@ -227,7 +227,9 @@ app.MapGet("/admin/ui-component-bucket", async (
     var status = ctx.Request.Query.TryGetValue("status", out var statusVal)
         ? statusVal.ToString()
         : "bucketed";
-    var items = await packageGenerator.HandleListBucketItemsAsync(status, ctx.RequestAborted);
+    var (items, listStatus) = await packageGenerator.HandleListBucketItemsAsync(status, ctx.RequestAborted);
+    if (listStatus != 200)
+        return Results.Json(new { ok = false, message = "Repository unavailable." }, statusCode: listStatus);
     return Results.Json(items);
 });
 

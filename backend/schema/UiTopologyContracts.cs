@@ -24,7 +24,7 @@ public record PackageGenerateRequestDto(
 );
 
 /// <summary>
-/// Result code for PackageGeneratorRuntime.GenerateAsync.
+/// Result code for PackageGeneratorRuntime.GenerateAsync / UiTopologyRepository.PromoteBucketItemAsync.
 /// </summary>
 public enum PackageGenerateCode
 {
@@ -33,11 +33,11 @@ public enum PackageGenerateCode
     NotBucketed,
     ConstraintViolation,
     DbUnavailable,
-    ValidationError,
+    PromotionFailed,
 }
 
 /// <summary>
-/// Internal result of PackageGeneratorRuntime.GenerateAsync.
+/// Internal result of the promotion pipeline.
 /// All IDs are non-null only when Code = Success.
 /// </summary>
 public record PackageGenerateResult(

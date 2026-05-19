@@ -31,14 +31,25 @@ public class PackageGeneratorEndpoint
 
     /// <summary>
     /// Lists bucket items with the given status (default 'bucketed').
-    /// Returns an empty list when no items match.
+    /// Returns (items, 200) on success.
+    /// Returns (null, 503) when the repository is unavailable.
     /// </summary>
-    public async Task<IReadOnlyList<UiComponentBucketItemDto>> HandleListBucketItemsAsync(
+    public async Task<(IReadOnlyList<UiComponentBucketItemDto>? Items, int StatusCode)> HandleListBucketItemsAsync(
         string status = "bucketed",
         CancellationToken ct = default)
     {
-        var records = await _uiTopologyRepository.ListBucketItemsAsync(status, ct);
-        return records
+        IReadOnlyList<UiComponentBucketRecord> records;
+        try
+        {
+            records = await _uiTopologyRepository.ListBucketItemsAsync(status, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "PackageGeneratorEndpoint.HandleListBucketItemsAsync: repository unavailable.");
+            return (null, 503);
+        }
+
+        var dtos = records
             .Select(r => new UiComponentBucketItemDto(
                 r.BucketItemId.ToString(),
                 r.ComponentKey,
@@ -46,6 +57,7 @@ public class PackageGeneratorEndpoint
                 r.ComponentKind,
                 r.Status))
             .ToList();
+        return (dtos, 200);
     }
 
     /// <summary>
@@ -56,7 +68,7 @@ public class PackageGeneratorEndpoint
     ///   404 — bucket item not found
     ///   409 — bucket item not in 'bucketed' status
     ///   422 — constraint violation (duplicate registry key)
-    ///   503 — DB unavailable
+    ///   503 — DB unavailable or final promotion update failed
     /// </summary>
     public async Task<(PackageGenerateResponseDto Response, int StatusCode)> HandleGenerateAsync(
         PackageGenerateRequestDto request,
@@ -121,7 +133,7 @@ public class PackageGeneratorEndpoint
                     result.Message ?? "Registry key conflict.", result.ErrorCode),
                 422),
 
-            PackageGenerateCode.DbUnavailable =>
+            PackageGenerateCode.DbUnavailable or PackageGenerateCode.PromotionFailed =>
                 (new PackageGenerateResponseDto(false, null, null, null, null, null,
                     result.Message ?? "Repository unavailable.", result.ErrorCode),
                 503),

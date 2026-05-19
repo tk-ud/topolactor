@@ -4,12 +4,14 @@ using Topolactor.Schema;
 namespace Topolactor.Repository;
 
 /// <summary>
-/// Repository for ui_topology_tables: ui_component_bucket, ui_component_registry,
-/// ui_component_package, ui_package_component_map, ui_layout_registry,
-/// ui_wiring_registry, ui_topology_tensor.
+/// Repository for ui_topology_tables: ui_component_bucket and the
+/// package-generation pipeline tables defined in db/ui_topology_tables.sql.
 ///
-/// In-memory skeleton: all reads return empty results and all writes are no-ops.
-/// Production implementation overrides these stubs with real SQL via Npgsql.
+/// No in-memory skeleton or no-op fallback: both methods throw NotImplementedException
+/// to make unintended injection an explicit failure rather than a silent fake success.
+///
+/// Production wiring: NpgsqlUiTopologyRepository overrides both methods.
+/// Test stubs: override both methods in the test class.
 /// </summary>
 public class UiTopologyRepository
 {
@@ -24,149 +26,46 @@ public class UiTopologyRepository
 
     /// <summary>
     /// Lists bucket items with the given status (default 'bucketed').
-    /// In-memory skeleton: returns empty. Override in production.
+    /// Production: overridden by NpgsqlUiTopologyRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<UiComponentBucketRecord>> ListBucketItemsAsync(
         string status = "bucketed",
         CancellationToken ct = default)
     {
-        _logger.LogDebug("UiTopologyRepository.ListBucketItemsAsync: in-memory skeleton — returning empty.");
-        return Task.FromResult<IReadOnlyList<UiComponentBucketRecord>>([]);
+        throw new NotImplementedException(
+            "UiTopologyRepository.ListBucketItemsAsync must be overridden by a production implementation.");
     }
 
     /// <summary>
-    /// Loads a single bucket item by PK.
-    /// Returns null when not found.
-    /// In-memory skeleton: returns null. Override in production.
+    /// Atomically promotes a bucket item from 'bucketed' to 'promoted' by:
+    ///   1. SELECT + UPDATE status bucketed->packaging (fail fast if not bucketed)
+    ///   2. INSERT ui_component_registry, ui_component_package, ui_package_component_map,
+    ///      ui_layout_registry, ui_wiring_registry, ui_topology_tensor
+    ///   3. UPDATE status packaging->promoted (verify rows==1; fail if not)
+    ///   All steps execute in a single DB connection + transaction.
+    ///   On any failure the transaction is rolled back — no partial state in DB.
+    ///
+    /// Key derivation:
+    ///   component_key = bucket.component_key (verbatim)
+    ///   package_key   = "{routeKey}:{bucket.component_key}:pkg"
+    ///   layout_key    = "{routeKey}:{bucket.component_key}:layout"
+    ///   wiring_key    = "{routeKey}:{bucket.component_key}:wiring"
+    ///
+    /// Returns PackageGenerateCode.NotFound         when bucket item does not exist.
+    /// Returns PackageGenerateCode.NotBucketed      when bucket item is not in 'bucketed' status.
+    /// Returns PackageGenerateCode.ConstraintViolation when a unique key conflict occurs.
+    /// Returns PackageGenerateCode.PromotionFailed  when final promoted update returns 0 rows.
+    /// Returns PackageGenerateCode.DbUnavailable    when DB connection/transaction fails.
+    /// Returns PackageGenerateCode.Success          with all issued IDs on success.
+    ///
+    /// Production: overridden by NpgsqlUiTopologyRepository.
     /// </summary>
-    public virtual Task<UiComponentBucketRecord?> LoadBucketItemAsync(
+    public virtual Task<PackageGenerateResult> PromoteBucketItemAsync(
         Guid bucketItemId,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.LoadBucketItemAsync: in-memory skeleton — returning null for id={Id}.",
-            bucketItemId);
-        return Task.FromResult<UiComponentBucketRecord?>(null);
-    }
-
-    /// <summary>
-    /// Atomically transitions a bucket item status from expectedStatus to newStatus.
-    /// Returns true when exactly one row was updated.
-    /// Returns false when the item does not exist or is not in expectedStatus.
-    /// In-memory skeleton: returns false. Override in production.
-    /// </summary>
-    public virtual Task<bool> TransitionBucketStatusAsync(
-        Guid bucketItemId,
-        string expectedStatus,
-        string newStatus,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.TransitionBucketStatusAsync: in-memory skeleton — returning false for id={Id}.",
-            bucketItemId);
-        return Task.FromResult(false);
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_component_registry.
-    /// Returns the issued component_id on success.
-    /// Throws on constraint violation or DB unavailability.
-    /// In-memory skeleton: returns a new Guid. Override in production.
-    /// </summary>
-    public virtual Task<Guid> InsertComponentRegistryAsync(
-        string componentKey,
-        string componentKind,
-        string sourcePath,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertComponentRegistryAsync: in-memory skeleton for key={Key}.",
-            componentKey);
-        return Task.FromResult(Guid.NewGuid());
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_component_package.
-    /// Returns the issued package_id on success.
-    /// Throws on constraint violation or DB unavailability.
-    /// In-memory skeleton: returns a new Guid. Override in production.
-    /// </summary>
-    public virtual Task<Guid> InsertComponentPackageAsync(
-        string packageKey,
-        string packageKind,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertComponentPackageAsync: in-memory skeleton for key={Key}.",
-            packageKey);
-        return Task.FromResult(Guid.NewGuid());
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_package_component_map.
-    /// In-memory skeleton: no-op. Override in production.
-    /// </summary>
-    public virtual Task InsertPackageComponentMapAsync(
-        Guid packageId,
-        Guid componentId,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertPackageComponentMapAsync: in-memory skeleton.");
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_layout_registry.
-    /// Returns the issued layout_id on success.
-    /// Throws on constraint violation or DB unavailability.
-    /// In-memory skeleton: returns a new Guid. Override in production.
-    /// </summary>
-    public virtual Task<Guid> InsertLayoutRegistryAsync(
-        string layoutKey,
-        string layoutKind,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertLayoutRegistryAsync: in-memory skeleton for key={Key}.",
-            layoutKey);
-        return Task.FromResult(Guid.NewGuid());
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_wiring_registry.
-    /// Returns the issued wiring_id on success.
-    /// Throws on constraint violation or DB unavailability.
-    /// In-memory skeleton: returns a new Guid. Override in production.
-    /// </summary>
-    public virtual Task<Guid> InsertWiringRegistryAsync(
-        string wiringKey,
-        string wiringKind,
-        string targetSurface,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertWiringRegistryAsync: in-memory skeleton for key={Key}.",
-            wiringKey);
-        return Task.FromResult(Guid.NewGuid());
-    }
-
-    /// <summary>
-    /// Inserts a row into ui_topology_tensor.
-    /// Returns the issued tensor_id on success.
-    /// Throws on constraint violation or DB unavailability.
-    /// In-memory skeleton: returns a new Guid. Override in production.
-    /// </summary>
-    public virtual Task<Guid> InsertTopologyTensorAsync(
         string routeKey,
-        Guid packageId,
-        Guid layoutId,
-        Guid wiringId,
         CancellationToken ct = default)
     {
-        _logger.LogDebug(
-            "UiTopologyRepository.InsertTopologyTensorAsync: in-memory skeleton for route={Route}.",
-            routeKey);
-        return Task.FromResult(Guid.NewGuid());
+        throw new NotImplementedException(
+            "UiTopologyRepository.PromoteBucketItemAsync must be overridden by a production implementation.");
     }
 }

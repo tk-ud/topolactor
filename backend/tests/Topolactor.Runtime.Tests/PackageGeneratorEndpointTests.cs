@@ -9,70 +9,78 @@ namespace Topolactor.Runtime.Tests;
 
 // ---------------------------------------------------------------------------
 // Stub repository for PackageGenerator tests.
+//
+// Overrides ListBucketItemsAsync and PromoteBucketItemAsync.
+// All failure modes (constraint violation, DB unavailable, promotion failed)
+// are set via properties; the stub does NOT throw from the base NotImplemented
+// methods because it overrides them.
 // ---------------------------------------------------------------------------
 
 internal sealed class StubUiTopologyRepository()
     : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "dummy")
 {
     private readonly List<UiComponentBucketRecord> _bucket = [];
-    private readonly List<(Guid PackageId, Guid ComponentId)> _maps = [];
 
     public void AddBucketItem(UiComponentBucketRecord record) => _bucket.Add(record);
 
-    public bool ConstraintViolation { get; set; }
-    public bool DbUnavailable { get; set; }
-
-    public override Task<IReadOnlyList<UiComponentBucketRecord>> ListBucketItemsAsync(
-        string status = "bucketed", CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<UiComponentBucketRecord>>(
-            _bucket.Where(b => b.Status == status).ToList());
-
-    public override Task<UiComponentBucketRecord?> LoadBucketItemAsync(
-        Guid bucketItemId, CancellationToken ct = default)
-        => Task.FromResult(_bucket.FirstOrDefault(b => b.BucketItemId == bucketItemId));
-
-    public override Task<bool> TransitionBucketStatusAsync(
-        Guid bucketItemId, string expectedStatus, string newStatus, CancellationToken ct = default)
-    {
-        var idx = _bucket.FindIndex(b => b.BucketItemId == bucketItemId && b.Status == expectedStatus);
-        if (idx < 0) return Task.FromResult(false);
-        _bucket[idx] = _bucket[idx] with { Status = newStatus };
-        return Task.FromResult(true);
-    }
-
-    public override Task<Guid> InsertComponentRegistryAsync(
-        string componentKey, string componentKind, string sourcePath, CancellationToken ct = default)
-    {
-        if (DbUnavailable) throw new InvalidOperationException("DB unavailable (stub)");
-        if (ConstraintViolation) throw new Npgsql.PostgresException("duplicate", "ERROR", "ERROR", "23505");
-        return Task.FromResult(Guid.NewGuid());
-    }
-
-    public override Task<Guid> InsertComponentPackageAsync(
-        string packageKey, string packageKind, CancellationToken ct = default)
-        => Task.FromResult(Guid.NewGuid());
-
-    public override Task InsertPackageComponentMapAsync(
-        Guid packageId, Guid componentId, CancellationToken ct = default)
-    {
-        _maps.Add((packageId, componentId));
-        return Task.CompletedTask;
-    }
-
-    public override Task<Guid> InsertLayoutRegistryAsync(
-        string layoutKey, string layoutKind, CancellationToken ct = default)
-        => Task.FromResult(Guid.NewGuid());
-
-    public override Task<Guid> InsertWiringRegistryAsync(
-        string wiringKey, string wiringKind, string targetSurface, CancellationToken ct = default)
-        => Task.FromResult(Guid.NewGuid());
-
-    public override Task<Guid> InsertTopologyTensorAsync(
-        string routeKey, Guid packageId, Guid layoutId, Guid wiringId, CancellationToken ct = default)
-        => Task.FromResult(Guid.NewGuid());
+    public bool SimulateConstraintViolation { get; set; }
+    public bool SimulateDbUnavailable { get; set; }
+    public bool SimulateFinalTransitionFailure { get; set; }
 
     public string GetBucketStatus(Guid id) =>
         _bucket.First(b => b.BucketItemId == id).Status;
+
+    public override Task<IReadOnlyList<UiComponentBucketRecord>> ListBucketItemsAsync(
+        string status = "bucketed", CancellationToken ct = default)
+    {
+        if (SimulateDbUnavailable)
+            throw new InvalidOperationException("DB unavailable (stub)");
+        return Task.FromResult<IReadOnlyList<UiComponentBucketRecord>>(
+            _bucket.Where(b => b.Status == status).ToList());
+    }
+
+    public override Task<PackageGenerateResult> PromoteBucketItemAsync(
+        Guid bucketItemId, string routeKey, CancellationToken ct = default)
+    {
+        if (SimulateDbUnavailable)
+            return Task.FromResult(new PackageGenerateResult(
+                PackageGenerateCode.DbUnavailable, null, null, null, null, null,
+                "DB_UNAVAILABLE", "DB unavailable (stub)"));
+
+        var item = _bucket.FirstOrDefault(b => b.BucketItemId == bucketItemId);
+        if (item is null)
+            return Task.FromResult(new PackageGenerateResult(
+                PackageGenerateCode.NotFound, null, null, null, null, null,
+                "NOT_FOUND", $"Bucket item {bucketItemId} not found."));
+
+        if (item.Status != "bucketed")
+            return Task.FromResult(new PackageGenerateResult(
+                PackageGenerateCode.NotBucketed, null, null, null, null, null,
+                "NOT_BUCKETED",
+                $"Bucket item {bucketItemId} is in status '{item.Status}', expected 'bucketed'."));
+
+        // Simulate constraint violation — no status change (transaction rolled back in production)
+        if (SimulateConstraintViolation)
+            return Task.FromResult(new PackageGenerateResult(
+                PackageGenerateCode.ConstraintViolation, null, null, null, null, null,
+                "CONSTRAINT_VIOLATION",
+                "A registry key derived from this bucket item already exists."));
+
+        // Simulate final transition failure — no status change (transaction rolled back)
+        if (SimulateFinalTransitionFailure)
+            return Task.FromResult(new PackageGenerateResult(
+                PackageGenerateCode.PromotionFailed, null, null, null, null, null,
+                "PROMOTION_FAILED",
+                "Final status update to 'promoted' did not affect exactly one row."));
+
+        // Happy path: update status to 'promoted' and return issued IDs
+        var idx = _bucket.FindIndex(b => b.BucketItemId == bucketItemId);
+        _bucket[idx] = _bucket[idx] with { Status = "promoted" };
+
+        return Task.FromResult(new PackageGenerateResult(
+            PackageGenerateCode.Success,
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+    }
 }
 
 internal static class PackageGeneratorFactory
@@ -100,11 +108,13 @@ public class PackageGeneratorEndpointTests
     // ── List bucket items ──────────────────────────────────────────────────
 
     [Fact]
-    public async Task HandleListBucketItemsAsync_EmptyBucket_ReturnsEmptyList()
+    public async Task HandleListBucketItemsAsync_EmptyBucket_Returns200EmptyList()
     {
         var (endpoint, _) = PackageGeneratorFactory.Create();
-        var result = await endpoint.HandleListBucketItemsAsync();
-        Assert.Empty(result);
+        var (items, statusCode) = await endpoint.HandleListBucketItemsAsync();
+        Assert.Equal(200, statusCode);
+        Assert.NotNull(items);
+        Assert.Empty(items);
     }
 
     [Fact]
@@ -114,11 +124,23 @@ public class PackageGeneratorEndpointTests
         var id = Guid.NewGuid();
         repo.AddBucketItem(new UiComponentBucketRecord(id, "comp_key", "/path", "island", "bucketed"));
 
-        var result = await endpoint.HandleListBucketItemsAsync("bucketed");
+        var (items, statusCode) = await endpoint.HandleListBucketItemsAsync("bucketed");
 
-        Assert.Single(result);
-        Assert.Equal(id.ToString(), result[0].BucketItemId);
-        Assert.Equal("comp_key", result[0].ComponentKey);
+        Assert.Equal(200, statusCode);
+        Assert.NotNull(items);
+        Assert.Single(items);
+        Assert.Equal(id.ToString(), items[0].BucketItemId);
+        Assert.Equal("comp_key", items[0].ComponentKey);
+    }
+
+    [Fact]
+    public async Task HandleListBucketItemsAsync_DbUnavailable_Returns503()
+    {
+        var (endpoint, repo) = PackageGeneratorFactory.Create();
+        repo.SimulateDbUnavailable = true;
+        var (items, statusCode) = await endpoint.HandleListBucketItemsAsync();
+        Assert.Equal(503, statusCode);
+        Assert.Null(items);
     }
 
     // ── Generate: validation errors ───────────────────────────────────────
@@ -207,15 +229,15 @@ public class PackageGeneratorEndpointTests
         Assert.Equal("promoted", repo.GetBucketStatus(id));
     }
 
-    // ── Generate: constraint violation ───────────────────────────────────
+    // ── Generate: constraint violation — no partial INSERT ────────────────
 
     [Fact]
-    public async Task HandleGenerateAsync_ConstraintViolation_Returns422AndRevertsStatus()
+    public async Task HandleGenerateAsync_ConstraintViolation_Returns422_AndBucketStatusUnchanged()
     {
         var (endpoint, repo) = PackageGeneratorFactory.Create();
         var id = Guid.NewGuid();
         repo.AddBucketItem(new UiComponentBucketRecord(id, "comp_key", "/path", "island", "bucketed"));
-        repo.ConstraintViolation = true;
+        repo.SimulateConstraintViolation = true;
 
         var request = new PackageGenerateRequestDto(id.ToString(), "test:route");
         var (response, statusCode) = await endpoint.HandleGenerateAsync(request);
@@ -223,7 +245,45 @@ public class PackageGeneratorEndpointTests
         Assert.Equal(422, statusCode);
         Assert.False(response.Ok);
         Assert.Equal("CONSTRAINT_VIOLATION", response.ErrorCode);
-        // Status reverted to 'bucketed' after failure
+        // Transaction rolled back: bucket remains 'bucketed' (no partial INSERT)
+        Assert.Equal("bucketed", repo.GetBucketStatus(id));
+    }
+
+    // ── Generate: DB unavailable ──────────────────────────────────────────
+
+    [Fact]
+    public async Task HandleGenerateAsync_DbUnavailable_Returns503()
+    {
+        var (endpoint, repo) = PackageGeneratorFactory.Create();
+        var id = Guid.NewGuid();
+        repo.AddBucketItem(new UiComponentBucketRecord(id, "comp_key", "/path", "island", "bucketed"));
+        repo.SimulateDbUnavailable = true;
+
+        var request = new PackageGenerateRequestDto(id.ToString(), "test:route");
+        var (response, statusCode) = await endpoint.HandleGenerateAsync(request);
+
+        Assert.Equal(503, statusCode);
+        Assert.False(response.Ok);
+        Assert.Equal("DB_UNAVAILABLE", response.ErrorCode);
+    }
+
+    // ── Generate: final transition failure → success must NOT be returned ─
+
+    [Fact]
+    public async Task HandleGenerateAsync_FinalTransitionFailure_Returns503_NotSuccess()
+    {
+        var (endpoint, repo) = PackageGeneratorFactory.Create();
+        var id = Guid.NewGuid();
+        repo.AddBucketItem(new UiComponentBucketRecord(id, "comp_key", "/path", "island", "bucketed"));
+        repo.SimulateFinalTransitionFailure = true;
+
+        var request = new PackageGenerateRequestDto(id.ToString(), "test:route");
+        var (response, statusCode) = await endpoint.HandleGenerateAsync(request);
+
+        Assert.Equal(503, statusCode);
+        Assert.False(response.Ok);
+        Assert.Equal("PROMOTION_FAILED", response.ErrorCode);
+        // Transaction rolled back: bucket remains 'bucketed'
         Assert.Equal("bucketed", repo.GetBucketStatus(id));
     }
 }
