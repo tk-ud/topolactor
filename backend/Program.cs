@@ -36,6 +36,10 @@ builder.Services.AddSingleton<ContextRouteRepository>(sp =>
     new NpgsqlContextRouteRepository(
         sp.GetRequiredService<ILogger<NpgsqlContextRouteRepository>>(),
         connectionString));
+builder.Services.AddSingleton<UiTopologyRepository>(sp =>
+    new NpgsqlUiTopologyRepository(
+        sp.GetRequiredService<ILogger<NpgsqlUiTopologyRepository>>(),
+        connectionString));
 
 // ---------------------------------------------------------------------------
 // Runtime layer
@@ -59,6 +63,7 @@ builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<RuntimeExecutor>();
 builder.Services.AddSingleton<LogRetentionRuntime>();
+builder.Services.AddSingleton<PackageGeneratorRuntime>();
 
 // ---------------------------------------------------------------------------
 // Endpoint layer
@@ -66,6 +71,7 @@ builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<DispatchEndpoint>();
 builder.Services.AddSingleton<AuthEndpoint>();
 builder.Services.AddSingleton<AdminEndpoint>();
+builder.Services.AddSingleton<PackageGeneratorEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
@@ -199,6 +205,50 @@ app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (
 
     var (result, found) = await admin.HandleDeprecateTokenAsync(tokenGuid, ctx.RequestAborted);
     return Results.Json(result, statusCode: found ? 200 : 404);
+});
+
+// Package generator routes — JWT-guarded.
+// GET  /admin/ui-component-bucket              — list bucket items (default status=bucketed)
+// POST /admin/package-generator/generate       — promote bucket item to ui_topology_tensor
+
+app.MapGet("/admin/ui-component-bucket", async (
+    HttpContext ctx,
+    PackageGeneratorEndpoint packageGenerator,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    var status = ctx.Request.Query.TryGetValue("status", out var statusVal)
+        ? statusVal.ToString()
+        : "bucketed";
+    var (items, listStatus) = await packageGenerator.HandleListBucketItemsAsync(status, ctx.RequestAborted);
+    if (listStatus != 200)
+        return Results.Json(new { ok = false, message = "Repository unavailable." }, statusCode: listStatus);
+    return Results.Json(items);
+});
+
+app.MapPost("/admin/package-generator/generate", async (
+    HttpContext ctx,
+    PackageGenerateRequestDto request,
+    PackageGeneratorEndpoint packageGenerator,
+    JwtGuard jwtGuard) =>
+{
+    var authHeader = ctx.Request.Headers.Authorization.FirstOrDefault();
+    var token = authHeader?.StartsWith("Bearer ", StringComparison.Ordinal) == true
+        ? authHeader[7..]
+        : null;
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
+
+    var (result, statusCode) = await packageGenerator.HandleGenerateAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: statusCode);
 });
 
 app.Run();

@@ -1,6 +1,6 @@
 # topolactor
 
-Topolactor is a **Data-Driven OS** for building runtime-defined applications from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
+Topolactor is a **data-driven topology runtime** and **Data-Driven OS** for building runtime-defined applications from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
 
 Topolactor provides a data-driven topology runtime with explicit runtime-route and policy governance boundaries.
 
