@@ -25,6 +25,15 @@ Required fields:
 
 Before completion, verify full branch diff against this contract.
 
+Negative Scenarios (same `.agent/tmp/tmp.txt`, immediately after contract creation):
+
+- This section is attention context, not completion evidence and not PASS/FAIL.
+- Write common overlooked risks for the current task.
+- Write failure-prone implementation directions that can drift from intended behavior.
+- Write completion-claim risks (overstatements that must not appear in summary/PR).
+- Write reminder viewpoints to revisit during later checklist and summary drafting.
+
+
 Recursive verification requirements:
 
 - Scenario-contract verification failure is blocking; completion is not allowed.

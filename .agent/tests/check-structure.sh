@@ -305,13 +305,6 @@ check_content ".agent/protocols/policy-judgment.md" "scope-irrelevant workflow-l
 check_content ".agent/checklists/policy-judgment.md" "equivalent remote CI success"
 check_content ".agent/checklists/policy-judgment.md" "Structure Check is always-on"
 check_content ".agent/scripts/create-tmp.sh" "Remote CI Equivalence Gate"
-check_content ".agent/protocols/completion.md" "Negative Consistency Gate"
-check_content ".agent/protocols/reports-and-todos.md" "Negative Consistency Gate Reporting Requirements"
-check_content ".agent/rules/rule.md" "Negative Consistency Gate"
-check_content ".agent/protocols/completion.md" "Q1. タスク目的と実装差分が意味的にズレているように見えるが、問題ないか？"
-check_content ".agent/protocols/completion.md" "Answer:"
-check_content ".agent/protocols/completion.md" "Evidence:"
-check_content ".agent/protocols/completion.md" "Remaining risk:"
 
 
 check_content "AGENTS.md" "Temporary Scenario Contract"

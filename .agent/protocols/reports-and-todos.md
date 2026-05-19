@@ -110,23 +110,3 @@ For registry tensor continuity routine/periodic audits, use:
 - static validator: `bash .agent/checklists/check-registry-tensor-projection-continuity.sh <checklist-file>`
 
 Gate intent is intentionally lightweight: validate 6-surface presence (runtime/endpoint/scheduler/function/UI/DB), write/read surface visibility, explicit unimplemented boundaries, and remaining TODO preservation.
-
-
-## Negative Consistency Gate Reporting Requirements
-
-All completion-facing summaries must include the fixed heading `## Negative Consistency Gate` and all Q1/Q2/Q3 blocks with:
-
-- `Answer:`
-- `Evidence:`
-- `Remaining risk:`
-
-Validation scope for scripts/checkers is format-presence only; semantic judgment remains a GPT audit responsibility.
-
-Rules:
-
-1. `Answer: 問題なし` with empty `Evidence` is BLOCKING.
-2. `Evidence` must mention at least one of: diff / test / CI / contract / checklist / TODO.
-3. Any remaining risk must be connected to an explicit remaining TODO or explicit out-of-scope reason.
-4. If required checks are not executed without equivalent remote CI PASS, if CI is not PASS, or if blocking failures remain unresolved, Q3 must be `問題あり` and completion is blocked.
-5. If policy/boundary/scenario-contract compliance cannot be disproved with evidence, Q2 must be `問題あり` and completion is blocked.
-6. If task-purpose-to-diff consistency cannot be evidenced, Q1 must be `問題あり` and completion is blocked.
