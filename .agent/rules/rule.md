@@ -16,12 +16,13 @@ These are always-on governance sources. Protocols and skills are conditional and
 Use this lightweight read route:
 
 1. `AGENTS.md`
-2. `.agent/README.md`
-3. `.agent/rules/rule.md`
+2. `.agent/rules/rule.md`
+3. `.agent/README.md`
 4. `.agent/skills/agent-workflow.md`
-5. only when needed, open relevant `.agent/docs/` resume/index
-6. only when needed, open corresponding `.agent/skills/structure-check.md` and other task skills
-7. only when needed, open `docs/` source pages and condition-triggered `.agent/protocols/` / checklists / scripts / tests
+5. when applicable, open matching `.agent/prompt/<work-type>.md`
+6. when target surface needs SSOT mapping, open `.agent/docs/ssot-map.yaml` and relevant `.agent/docs/` resume/index
+7. only when needed, open mapped `docs/` SSOT source pages
+8. only when needed, open condition-triggered `.agent/protocols/` / checklists / scripts / tests and corresponding task skills
 
 Do not treat protocol bundle, docs bundle, or skills bundle as always-read scope.
 

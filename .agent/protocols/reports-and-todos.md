@@ -45,3 +45,13 @@ When producing governance audit style summaries, include:
 
 Failure Triage Self-Recursion Gate Reporting Requirements are defined in `.agent/protocols/completion.md`.
 Required Check Scope Declaration Gate Reporting Requirements are defined in `.agent/protocols/completion.md`.
+
+
+## Roadmap Status vs TODO Responsibility
+
+- `docs/system-roadmap.yaml` is the primary implementation status source.
+- `.agent/tasks/todo.md` is a task queue, not an implementation status registry.
+- Remaining TODO entries should reference roadmap `implementation_registry` entries or `known_gap_ref` where applicable.
+- Do not duplicate the full roadmap status matrix into TODO.
+- If TODO completion changes implementation status, update `docs/system-roadmap.yaml` in the same PR.
+- CI waiting / remote pass confirmation / local tool absence remain verification-section records, not TODO queue items.

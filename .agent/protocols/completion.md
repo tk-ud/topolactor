@@ -80,6 +80,14 @@ Blocking (completion prohibited):
 - missing required sections for audit gap response
 - report/diff contradiction
 
+- Roadmap Status Gate
+  - When completion summary / TODO `[x]` / implemented claim / production_ready claim appears, verify `docs/system-roadmap.yaml` implementation_registry for target components.
+  - If component remains `skeleton` / `partial` / `not_started`, do not report completed/production_ready.
+  - Raising to `status: implemented` requires satisfied `completion_condition` and evidence.
+  - Raising to `production_ready: true` requires no remaining `known_gap_ref`.
+  - If production code still contains skeleton/stub/dummy/pass-through markers, `implemented` / `production_ready` is blocking.
+  - Any contradiction between roadmap status and PR summary / completion report / TODO update is blocking.
+
 Pass eligibility requires all blocking items resolved or, when the blocker exposes unfinished implementation/design/SSOT/test-authoring work, explicitly preserved as Remaining TODO under gate rules.
 
 Verification-only blockers are not `.agent/tasks/todo.md` items. CI waiting, remote CI pass confirmation, local tool absence, and unexecuted-check bookkeeping belong in the completion report's Required Check Scope / verification section. If such verification reveals concrete follow-up work, preserve only that concrete work in `.agent/tasks/todo.md`.
