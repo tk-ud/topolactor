@@ -85,6 +85,38 @@ SSOT参照必読:
       → SSOT `frontend_routes.admin`: /admin/manifests, /admin/contents, /admin/ui-builder が未実装。
       → 対象: `frontend/routes/admin/manifests.tsx` / `contents.tsx` / `ui-builder.tsx` (新規 skeleton)
 
+## Seed Import/Export Runtime (Issue #84)
+
+- [ ] [Claude] seed Runtime の SSOT 位置づけを確定し、save / validate / preview / import 導線を実装する
+      → Issue #84: UI-managed `/storage/seed.json` を正規導線とする seed Runtime。
+      → まず seed Runtime を SSOT (runtime-orchestration-ssot / registrar-admin-ui-specification) 上のどの境界に置くか明記する。
+      → `/storage/seed.json` の save / load / validate / preview / import を段階分離して実装する。import 失敗は silent fallback 禁止。
+      → docker-compose.yml に `/storage` volume mount を追加する。
+      → 前提: manifest_dispatcher / topology_function_binder Gap 解消後が望ましいが、SSOT位置づけ明記は先行可能。
+      → 対象: `backend/runtime/`、`backend/repository/`、`frontend/routes/admin/`、`docs/registrar-admin-ui-specification.md`、`infra/docker-compose.yml`
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
+
+## Frontend UI Component System (Issue #86)
+
+- [ ] [Claude] Tailwind ベース primitive/packaged component system と UI topology DB 登録導線を実装する
+      → Issue #86: primitive component → componentId/packageId 発行 → UI topology DB 保存 → CRUD/CanDI wiring。
+      → code-only component は drift/GAP 扱い。component / package は必ず DB 上の UI topology tensor に接続する。
+      → primitive (Button/Input/Table/Card 等) と packaged/composite component の境界を明確化する。
+      → CRUD wiring / CanDI wiring の責務境界を定義する。frontend が runtime/topology 判定を持たないことを明記する。
+      → 対象: `frontend/components/`、`db/ui_topology_tables.sql`、`docs/registrar-admin-ui-specification.md`、`docs/file-structure.yaml`
+      → Scenario Contract 必須。
+
+## Admin Visual Layout Builder (Issue #89)
+
+- [ ] [Claude] admin visual layout builder と layout tensor / variable CSS 管理導線を設計・実装する
+      → Issue #89: admin 画面で layout を mouse 操作で構成し、layoutId / styleTokenId / responsiveRuleId を DB に保存する。
+      → Tailwind を画面ごとの直書きにせず、layout token / style token として DB 管理する。
+      → components bucket → package generator → visual layout builder → UI topology DB の接続を明記する。
+      → frontend adapter は固定 projection surface とし、仕様追加は registry tensor / UI topology data で表現する。
+      → 前提: Issue #86 (component system) の方針定義後。
+      → 対象: `db/ui_topology_tables.sql`、`frontend/routes/admin/`、`frontend/islands/`、`docs/registrar-admin-ui-specification.md`
+      → Scenario Contract 必須。
+
 ## Demo — Auth Guard パターン例示
 
 - [ ] [Claude] demo article ページを作成し、返信 UI にコンポーネント auth ガードを実装する
