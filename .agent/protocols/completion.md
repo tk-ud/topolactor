@@ -57,6 +57,9 @@ This protocol owns:
      - OUT_OF_SCOPE
    - Apply Recursive Verification Gate and blocking criteria.
    - Record unexecuted / queued / remote-CI-dependent checks in the completion report verification section, not as `.agent/tasks/todo.md` items.
+   - Batch execution is allowed, but batch completion is not automatic.
+   - For batch work, judge every TODO item independently against its own completion condition, roadmap status, required evidence, and required checks.
+   - Partial / skeleton implementation, remaining `known_gap_ref`, unmet `completion_condition`, unconnected runtime lane, or missing required test evidence blocks TODO `[x]` for that item.
    - Only after gate pass may TODO items be marked `[x]`.
 6. Structure Verification
    - Run `bash .agent/tests/check-structure.sh` last.
@@ -87,6 +90,23 @@ Blocking (completion prohibited):
   - Raising to `production_ready: true` requires no remaining `known_gap_ref`.
   - If production code still contains skeleton/stub/dummy/pass-through markers, `implemented` / `production_ready` is blocking.
   - Any contradiction between roadmap status and PR summary / completion report / TODO update is blocking.
+
+- Batch Completion Gate
+  - A batch PR may touch multiple TODO items, but each item must be classified separately as completed, partial, out-of-scope, or still remaining.
+  - Do not mark a parent TODO `[x]` when the PR only adds a partial surface, skeleton boundary, unconnected helper, or implementation note.
+  - If an item still has concrete implementation / design / SSOT / test-authoring residue, keep it open or rewrite it into a smaller remaining TODO.
+  - Do not leave residual work under an `[x]` TODO item.
+
+- CI Failure Index Gate
+  - Required check failures are semantic indexes, not just terminal blockers.
+  - For each failed required check, map the failure to:
+    1. failed surface,
+    2. responsible SSOT / protocol / target file,
+    3. concrete implementation fix or remaining TODO.
+  - Compilation and typecheck failures index implementation surface and contract-boundary mismatches.
+  - Runtime-semantics failures index canonical route / runtime policy mismatches.
+  - Pipeline-continuity failures index lane identity / route continuity mismatches.
+  - Structure Check success must not override compile, type, runtime, pipeline, or domain test failure.
 
 Pass eligibility requires all blocking items resolved or, when the blocker exposes unfinished implementation/design/SSOT/test-authoring work, explicitly preserved as Remaining TODO under gate rules.
 
