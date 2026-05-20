@@ -56,6 +56,7 @@ This protocol owns:
      - NOT_REQUIRED
      - OUT_OF_SCOPE
    - Apply Recursive Verification Gate and blocking criteria.
+   - Record unexecuted / queued / remote-CI-dependent checks in the completion report verification section, not as `.agent/tasks/todo.md` items.
    - Only after gate pass may TODO items be marked `[x]`.
 6. Structure Verification
    - Run `bash .agent/tests/check-structure.sh` last.
@@ -79,7 +80,9 @@ Blocking (completion prohibited):
 - missing required sections for audit gap response
 - report/diff contradiction
 
-Pass eligibility requires all blocking items resolved or explicitly preserved as Remaining TODO under gate rules.
+Pass eligibility requires all blocking items resolved or, when the blocker exposes unfinished implementation/design/SSOT/test-authoring work, explicitly preserved as Remaining TODO under gate rules.
+
+Verification-only blockers are not `.agent/tasks/todo.md` items. CI waiting, remote CI pass confirmation, local tool absence, and unexecuted-check bookkeeping belong in the completion report's Required Check Scope / verification section. If such verification reveals concrete follow-up work, preserve only that concrete work in `.agent/tasks/todo.md`.
 
 NOT EXECUTED ≠ PASS.
 scope-irrelevant workflow-level skip is not blocking.
