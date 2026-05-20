@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'db/**/*.sql'
+      - 'docs/design/db-schema.yaml'
       - '.agent/tests/check-db-schema.sh'
       - '.github/workflows/db-schema-check.yml'
   push:
@@ -11,6 +12,7 @@ on:
       - main
     paths:
       - 'db/**/*.sql'
+      - 'docs/design/db-schema.yaml'
       - '.agent/tests/check-db-schema.sh'
       - '.github/workflows/db-schema-check.yml'
 

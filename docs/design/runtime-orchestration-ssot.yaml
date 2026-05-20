@@ -178,6 +178,14 @@ runtime_orchestration_ssot:
       - ui_projection_mapping
       - topology_function_binding_mapping
       - projection_constructor_mapping
+    manifest_resolution:
+      api:
+        key: [role, target, layer, action]
+        strategy: resolve_active_manifest_by_axes
+        role_source: jwt_token_claim
+      sse:
+        key: manifest_id
+        source: db_notify_payload
     prohibited:
       - role_behavior_hardcoded_in_dispatcher
       - dispatcher_silent_fallback
@@ -444,8 +452,21 @@ runtime_orchestration_ssot:
   notify_listen_contract:
     db_notify:
       output_lane: backend
+      payload:
+        - table_id
+        - table_registry_id
+        - manifest_id
     db_listen:
       trigger_kind: hook
+      backend:
+        holder: background_service
+        feeds: backend_scheduler_queue_as_hook_trigger
+      frontend:
+        holder: sse_receiver
+        feeds: frontend_scheduler_queue_as_hook_trigger
+    symmetry:
+      description: frontend_and_backend_scheduler_are_isomorphic_queue_structures
+      pattern: external_event_listener_feeds_hook_trigger_into_scheduler_queue
     invariants:
       - notify_payload_preserves_runtime_identity
       - listen_event_enters_scheduler_before_projection_runtime

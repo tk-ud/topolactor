@@ -27,7 +27,7 @@ export default function Demo(): JSX.Element {
         The emission shown below comes from{" "}
         <code>backend RuntimeExecutor → DB → emission</code>,
         not from frontend-only resolution.{" "}
-        Login is required — use <a href="/login">login</a> first.
+        Login is required — use <a href="/auth">login</a> first.
         For the static structure diagram, see <a href="/demo-static">/demo-static</a>.
       </div>
 

@@ -42,7 +42,7 @@ export default function RegistryVectorValidator(): JSX.Element {
   if (notAuthed) {
     return (
       <p style={{ fontFamily: "monospace", color: "#888" }}>
-        ログインが必要です — <a href="/login">ログインページ</a> で認証してから再度アクセスしてください。
+        ログインが必要です — <a href="/auth">ログインページ</a> で認証してから再度アクセスしてください。
       </p>
     );
   }

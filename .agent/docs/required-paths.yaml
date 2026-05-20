@@ -55,6 +55,7 @@ required_files:
     - docs/design/context-route-recommendation.md
     - docs/design/context-route-recommendation.yaml
     - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/db-schema.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
@@ -267,6 +268,11 @@ required_content_terms:
     - "runtime_timeline_scheduler"
     - "manifest_dispatcher"
     - "topology_transform_runtime"
+  docs/design/db-schema.yaml:
+    - "db_schema"
+    - "topology_definition"
+    - "manifest"
+    - "wiring_definition_for_dispatcher_and_projection"
   .github/workflows/structure-check.yml:
     - ".agent/tests/check-structure.sh"
   .github/workflows/backend-tests.yml:

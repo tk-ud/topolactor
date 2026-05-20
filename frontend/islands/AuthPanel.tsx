@@ -4,22 +4,22 @@ import { loginDemo, authErrorText, type LoginResponse } from "../api/authApi.ts"
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
-type LoginState =
+type AuthState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "success"; token: string }
   | { status: "error"; errors: LoginResponse["errors"] };
 
 /**
- * Demo login form island.
+ * Demo auth form island.
  * Sends credentials to /api/auth/login, stores the JWT token in sessionStorage
  * under demo_jwt_token, and displays the result.
  * Not for production use — demo scaffold only.
  */
-export default function LoginPanel(): JSX.Element {
+export default function AuthPanel(): JSX.Element {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [state, setState] = useState<LoginState>({ status: "idle" });
+  const [state, setState] = useState<AuthState>({ status: "idle" });
 
   async function handleSubmit(e: JSX.TargetedEvent<HTMLFormElement, Event>) {
     e.preventDefault();

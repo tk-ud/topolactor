@@ -1,14 +1,14 @@
 import { JSX } from "preact";
-import LoginPanel from "../islands/LoginPanel.tsx";
+import AuthPanel from "../islands/AuthPanel.tsx";
 
 /**
- * /login — demo login scaffold.
+ * /auth — demo login scaffold.
  *
  * Shows a login form for the public demo and admin demo paths.
  * Authentication is handled by /api/auth/login (proxied to backend when configured).
  * Demo scaffold only — not for production use.
  */
-export default function LoginPage(): JSX.Element {
+export default function AuthPage(): JSX.Element {
   return (
     <main style={{ fontFamily: "sans-serif", padding: "24px", maxWidth: "480px" }}>
       <h1>topolactor — demo login</h1>
@@ -28,7 +28,7 @@ export default function LoginPage(): JSX.Element {
         Backend auth requires <code>DEMO_BACKEND_URL</code>.
       </div>
 
-      <LoginPanel />
+      <AuthPanel />
 
       <hr style={{ margin: "24px 0" }} />
       <p style={{ color: "#888", fontSize: "0.85em" }}>

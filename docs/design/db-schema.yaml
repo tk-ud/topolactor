@@ -1,0 +1,498 @@
+db_schema:
+  name: topolactor_db_schema
+  version: 0.1.0
+  status: ssot_design_document
+  source_files:
+    - db/schema.sql
+    - db/topology_tables.sql
+    - db/promotion_tables.sql
+    - db/context_route_tables.sql
+    - db/ui_topology_tables.sql
+    - db/manifest_tables.sql
+
+  categories:
+    - topology_definition
+    - converged_entity
+    - promotion_policy
+    - context_route
+    - ui_topology
+    - manifest
+
+  principles:
+    - sql_files_are_implementation_not_ssot
+    - tensor_or_json_key_value_only_in_communication
+    - bare_id_alone_is_not_processable
+    - manifest_stores_wiring_not_data
+    - vector_caches_are_rebuildable_projection_not_sot
+
+  tables:
+
+    # -------------------------------------------------------------------------
+    # topology_definition — システムのトポロジ空間を定義するレジストリ群
+    # -------------------------------------------------------------------------
+
+    registrar_entries:
+      category: topology_definition
+      file: db/schema.sql
+      role: meta_registry_of_all_topology_tables
+      key_columns:
+        - name: registrar_entry_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+          role: canonical_name
+        - name: table_ref
+          type: text
+          role: physical_table_name_nullable
+        - name: category
+          type: text
+          role: topology_category_label
+        - name: active
+          type: boolean
+
+    master_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: top_level_domain_concept_anchor
+      key_columns:
+        - name: master_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: category
+          type: text
+          role: domain_category_label
+        - name: active
+          type: boolean
+
+    state_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: named_state_definition
+      key_columns:
+        - name: state_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: owner
+          type: text
+          values: [system, business, none]
+
+    relation_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: abstract_space_definition
+      key_columns:
+        - name: relation_registry_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: master_ids
+          type: uuid[]
+          role: linked_master_registry_ids
+        - name: manifest_candidate
+          type: boolean
+          role: eligible_for_manifest_promotion
+        - name: active
+          type: boolean
+
+    package_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: package_resolved_in_canonical_flow
+      key_columns:
+        - name: package_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: package_def
+          type: jsonb
+          role: package_definition_blob
+        - name: active
+          type: boolean
+
+    schema_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: schema_resolved_in_canonical_flow
+      key_columns:
+        - name: schema_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: schema_def
+          type: jsonb
+          role: schema_definition_blob
+        - name: active
+          type: boolean
+
+    component_registry:
+      category: topology_definition
+      file: db/schema.sql
+      role: component_expanded_in_canonical_flow
+      key_columns:
+        - name: component_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: component_type
+          type: text
+        - name: component_def
+          type: jsonb
+        - name: active
+          type: boolean
+
+    function_parameters:
+      category: topology_definition
+      file: db/schema.sql
+      role: data_defined_runtime_policy_storage
+      key_columns:
+        - name: function_parameter_id
+          type: uuid
+          role: pk
+        - name: function_name
+          type: text
+          role: canonical_flow_function_name
+        - name: parameter_key
+          type: text
+        - name: parameter_value
+          type: jsonb
+          role: policy_value_not_hardcoded_constant
+        - name: active
+          type: boolean
+
+    structure_maps:
+      category: topology_definition
+      file: db/topology_tables.sql
+      role: attractor_key_to_package_schema_component_mapping
+      key_columns:
+        - name: structure_map_id
+          type: uuid
+          role: pk
+        - name: attractor_key
+          type: text
+          role: canonical_dispatch_address
+        - name: package_id
+          type: uuid
+          role: fk_package_registry
+        - name: schema_id
+          type: uuid
+          role: fk_schema_registry
+        - name: component_ids
+          type: uuid[]
+        - name: active
+          type: boolean
+
+    # -------------------------------------------------------------------------
+    # converged_entity — canonical flow で収束した実体データ
+    # -------------------------------------------------------------------------
+
+    hubs:
+      category: converged_entity
+      file: db/topology_tables.sql
+      role: abstract_concrete_connection_point
+      key_columns:
+        - name: hub_id
+          type: uuid
+          role: pk
+        - name: relation_registry_id
+          type: uuid
+          role: fk_relation_registry
+        - name: entity_id
+          type: uuid
+          role: fk_entities_nullable
+        - name: state_id
+          type: uuid
+          role: fk_state_registry
+
+    entities:
+      category: converged_entity
+      file: db/topology_tables.sql
+      role: concrete_domain_data_body
+      key_columns:
+        - name: entity_id
+          type: uuid
+          role: pk
+        - name: hub_id
+          type: uuid
+          role: fk_hubs
+        - name: relation_ids
+          type: uuid[]
+        - name: entity_jsonb
+          type: jsonb
+          role: variable_payload
+        - name: state_id
+          type: uuid
+
+    hub_relations:
+      category: converged_entity
+      file: db/topology_tables.sql
+      role: hub_to_hub_structural_link
+      key_columns:
+        - name: hub_relation_id
+          type: uuid
+          role: pk
+        - name: source_hub_id
+          type: uuid
+        - name: target_hub_id
+          type: uuid
+        - name: relation_registry_id
+          type: uuid
+
+    topology_edit_log:
+      category: converged_entity
+      file: db/topology_tables.sql
+      role: append_only_diff_log
+
+    # -------------------------------------------------------------------------
+    # promotion_policy — 利用統計と昇格候補
+    # -------------------------------------------------------------------------
+
+    usage_metrics:
+      category: promotion_policy
+      file: db/promotion_tables.sql
+      role: operation_usage_pattern_tracking
+
+    promotion_candidates:
+      category: promotion_policy
+      file: db/promotion_tables.sql
+      role: advisory_structural_change_suggestions
+
+    # -------------------------------------------------------------------------
+    # context_route — 推薦エンジンの SQL Attention 層
+    # -------------------------------------------------------------------------
+
+    context_token_registry:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: discrete_token_dictionary_semantic_matrix
+      note: registry_table_is_semantic_basis_not_config
+
+    context_token_binding:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: token_to_hub_binding
+
+    context_session:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: user_session_identity
+
+    context_event:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: operation_event_log_hot_storage
+      note: retention_policy_via_function_parameters
+
+    context_event_cold:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: archived_context_event_cold_storage
+
+    context_record_snapshot_cache:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: rebuildable_projection_cache
+      note: not_source_of_truth
+
+    context_event_vector_cache:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: rebuildable_multi_hot_vector_cache
+      note: not_source_of_truth
+
+    context_prefix_vector_cache:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: rebuildable_prefix_vector_cache
+      note: not_source_of_truth
+
+    context_transition_stats:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: operation_transition_frequency_aggregation
+
+    context_cluster:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: session_cluster_grouping
+
+    context_cluster_label:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: cluster_label_assignment
+
+    context_drift_signal:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: distribution_drift_observation
+
+    context_hub_recommendation_current:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: current_recommendation_projection_cache
+      note: rebuildable_not_source_of_truth
+
+    context_hub_feedback_event:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: recommendation_feedback_log
+
+    # -------------------------------------------------------------------------
+    # ui_topology — UI コンポーネントのトポロジテンソル
+    # -------------------------------------------------------------------------
+
+    ui_component_bucket:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: unpackaged_component_candidates
+      status_lifecycle: [bucketed, packaging, promoted, archived]
+      key_columns:
+        - name: bucket_item_id
+          type: uuid
+          role: pk
+        - name: component_key
+          type: text
+        - name: source_path
+          type: text
+        - name: component_kind
+          type: text
+        - name: status
+          type: text
+
+    ui_component_registry:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: promoted_component_registry
+
+    ui_component_package:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: component_group_bundle
+
+    ui_package_component_map:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: package_to_component_membership
+
+    ui_layout_registry:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: layout_definition
+
+    ui_wiring_registry:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: wiring_definition
+
+    ui_topology_tensor:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: route_to_package_layout_wiring_tensor
+      key_columns:
+        - name: tensor_id
+          type: uuid
+          role: pk
+        - name: route_key
+          type: text
+        - name: package_id
+          type: uuid
+          role: fk_ui_component_package
+        - name: layout_id
+          type: uuid
+          role: fk_ui_layout_registry
+        - name: wiring_id
+          type: uuid
+          role: fk_ui_wiring_registry
+
+    # -- UI Component Builder (authoring layer) --------------------------------
+
+    components:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: event_driven_component_definitions
+      status_lifecycle: [draft, active, deprecated]
+      key_columns:
+        - name: component_id
+          type: uuid
+          role: pk
+        - name: state
+          type: text
+        - name: name
+          type: text
+        - name: event
+          type: jsonb
+          role: event_binding_array
+          shape: "[{key: string, value: string}, ...]"
+
+    design:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: component_styling_definition
+      key_columns:
+        - name: design_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: design
+          type: jsonb
+          role: styling_with_soft_component_ref
+          shape: "{componentId: uuid, classname: string, tailwind: string}"
+          note: componentId_is_soft_ref_for_editor_filtering_not_fk
+
+    packages:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: component_design_bundle_referenced_by_manifest
+      status_lifecycle: [draft, active, deprecated]
+      key_columns:
+        - name: package_id
+          type: uuid
+          role: pk
+        - name: state
+          type: text
+        - name: name
+          type: text
+        - name: layout
+          type: jsonb
+          role: component_design_pair_vector
+          shape: "[{componentId: uuid, designId: uuid}, ...]"
+          note: same_component_can_appear_with_multiple_designs
+      manifest_reference: manifest.topology[ui_projection].packageIds
+
+    # -------------------------------------------------------------------------
+    # manifest — dispatcher / projection の配線定義
+    # -------------------------------------------------------------------------
+
+    manifest:
+      category: manifest
+      file: db/manifest_tables.sql
+      role: wiring_definition_for_dispatcher_and_projection
+      status_lifecycle: [draft, active, deprecated]
+      key_columns:
+        - name: manifest_id
+          type: uuid
+          role: pk
+        - name: relation_registry_id
+          type: uuid
+          role: fk_relation_registry_nullable
+        - name: topology
+          type: jsonb[]
+          role: id_references_and_vectors_only_no_actual_data
+      manifest_resolution:
+        api: resolve_active_by_role_target_layer_action
+        sse: manifest_id_from_db_notify_payload
+      topology_entry_types:
+        - dispatcher_mapping
+        - runtime_mapping
+        - ui_projection
+        - projection_constructor_mapping
+        - sse_projection
