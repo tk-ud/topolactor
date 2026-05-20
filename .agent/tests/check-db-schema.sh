@@ -104,6 +104,12 @@ query_equals_one "table exists: manifest" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'manifest' AND table_schema = 'public';"
 query_equals_one "table exists: context_token_registry" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'context_token_registry' AND table_schema = 'public';"
+query_equals_one "table exists: components" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'components' AND table_schema = 'public';"
+query_equals_one "table exists: design" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'design' AND table_schema = 'public';"
+query_equals_one "table exists: packages" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'packages' AND table_schema = 'public';"
 
 echo "=== Validating required default rows ==="
 query_equals_one "structure_maps contains attractor_key='default:entity:search'" \

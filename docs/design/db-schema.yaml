@@ -412,6 +412,62 @@ db_schema:
           type: uuid
           role: fk_ui_wiring_registry
 
+    # -- UI Component Builder (authoring layer) --------------------------------
+
+    components:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: event_driven_component_definitions
+      status_lifecycle: [draft, active, deprecated]
+      key_columns:
+        - name: component_id
+          type: uuid
+          role: pk
+        - name: state
+          type: text
+        - name: name
+          type: text
+        - name: event
+          type: jsonb
+          role: event_binding_array
+          shape: "[{key: string, value: string}, ...]"
+
+    design:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: component_styling_definition
+      key_columns:
+        - name: design_id
+          type: uuid
+          role: pk
+        - name: name
+          type: text
+        - name: design
+          type: jsonb
+          role: styling_with_soft_component_ref
+          shape: "{componentId: uuid, classname: string, tailwind: string}"
+          note: componentId_is_soft_ref_for_editor_filtering_not_fk
+
+    packages:
+      category: ui_topology
+      file: db/ui_topology_tables.sql
+      role: component_design_bundle_referenced_by_manifest
+      status_lifecycle: [draft, active, deprecated]
+      key_columns:
+        - name: package_id
+          type: uuid
+          role: pk
+        - name: state
+          type: text
+        - name: name
+          type: text
+        - name: layout
+          type: jsonb
+          role: component_design_pair_vector
+          shape: "[{componentId: uuid, designId: uuid}, ...]"
+          note: same_component_can_appear_with_multiple_designs
+      manifest_reference: manifest.topology[ui_projection].packageIds
+
     # -------------------------------------------------------------------------
     # manifest — dispatcher / projection の配線定義
     # -------------------------------------------------------------------------

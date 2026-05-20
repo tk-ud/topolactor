@@ -25,8 +25,11 @@
 --   { "type": "dispatcher_mapping", "role": "...", "runtime": "..." }
 --   { "type": "runtime_mapping", "triggerKind": "...", "target": "..." }
 --   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid" }
+--       packageIds → packages.package_id (UI Component Builder layer)
 --   { "type": "projection_constructor_mapping", "constructorKey": "...", "packageIds": [...] }
+--       packageIds → packages.package_id
 --   { "type": "sse_projection", "eventKind": "...", "packageIds": [...] }
+--       packageIds → packages.package_id
 -- =============================================================================
 
 CREATE TABLE IF NOT EXISTS manifest (
