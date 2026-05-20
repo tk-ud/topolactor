@@ -3,7 +3,10 @@
 このファイルは agent task surface として使用する。
 
 完了済み作業・PR修正履歴・旧方針の残骸は残さない。
-未完了の task がある場合のみ、次の形式で追加する。
+未完了の implementation / design / SSOT / test-authoring task がある場合のみ、次の形式で追加する。
+
+CI検証待ち、remote CI pass確認、local tool不足、未実行チェックの記録はこのファイルに追加しない。
+それらはPRサマリ/完了レポートの verification / Required Check Scope に記載する。
 
 ```md
 ## <Area>
