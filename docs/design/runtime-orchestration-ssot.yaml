@@ -170,7 +170,6 @@ runtime_orchestration_ssot:
       - target
       - layer
       - action
-      - context
       - manifest_id
     manifest_authority:
       - role_definition
