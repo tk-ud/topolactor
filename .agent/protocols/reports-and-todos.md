@@ -19,11 +19,17 @@ Read this protocol only when deciding where to store reports/summaries/TODO carr
 
 Do not place normal PR audit logs, implementation summaries, or scenario verification detail logs here.
 PR-level audit results belong in PR body, PR comments, or conversation summary.
-Only remaining work that must survive beyond the PR/conversation should be copied to `.agent/tasks/todo.md`.
+
+Only remaining implementation/design work that must survive beyond the PR/conversation should be copied to `.agent/tasks/todo.md`.
+
+CI/check/remote-verification status is not a `.agent/tasks/todo.md` item by itself. Record it in the PR summary or completion report under verification/check-scope status.
+
+If a failed or unexecuted check reveals concrete follow-up work, copy only that concrete implementation/design/SSOT task to `.agent/tasks/todo.md`; do not copy the check-running activity itself as the TODO.
 
 ## TODO carry-over rules
 
-- `.agent/tasks/todo.md` is for unresolved work that must survive beyond the current PR/conversation.
+- `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.
+- `.agent/tasks/todo.md` is not for CI waiting, remote CI pass confirmation, local environment absence, or verification-only bookkeeping.
 - Completion decision and TODO `[x]` eligibility are governed by `.agent/protocols/completion.md`.
 - Recursive Verification Gate, Required Check Scope Declaration Gate, Failure Triage Self-Recursion Gate, Audit Gap Response Gate, and Remote CI Equivalence Gate are defined in completion-governance SSOT.
 
