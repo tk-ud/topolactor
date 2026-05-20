@@ -457,17 +457,16 @@ runtime_orchestration_ssot:
       - target
       - layer
       - action
-      - manifest_id
-      - runtime_id
       - payload
-      - trace_id
     identity_fields:
       - trigger_kind
       - role
       - target
       - layer
       - action
+    payload_examples:
       - manifest_id
+      - runtime_id
       - trace_id
 
   canonical_flow_summary:
