@@ -20,7 +20,7 @@ pipeline_continuity_ssot:
         client command enters via ui_action, passes through frontend_scheduler,
         api_client, backend_endpoint, backend_scheduler, manifest_dispatcher,
         topology_transform_runtime (RuntimeExecutor), entity/emission, and projects back
-        through frontend projection components. All nodes are skeleton-implemented.
+        through frontend projection components. Node wiring status in this document is lane-level implementation detail; public completion status is governed by docs/system-roadmap.yaml.
       direction: client_to_server_to_client
 
       required_identity:
@@ -46,7 +46,7 @@ pipeline_continuity_ssot:
             - frontend/runtime/frontendScheduler.ts
           status: implemented
           implementation_note: >
-            Skeleton: synchronous pass-through. Wraps resolveOperationVector +
+            Lane-wired skeleton: synchronous pass-through. Wraps resolveOperationVector +
             dispatchOperation via queueClientCommand. Ordering, batching, and
             rollback boundaries are future scope.
 
@@ -66,7 +66,7 @@ pipeline_continuity_ssot:
             - backend/scheduler/RuntimeTimelineScheduler.cs
           status: implemented
           implementation_note: >
-            Skeleton: synchronous delegate to ManifestDispatcher. Client requests now
+            Lane-wired skeleton: synchronous delegate to ManifestDispatcher. Client requests now
             enter via RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
             Ordering and collision control are future scope.
 
@@ -75,7 +75,7 @@ pipeline_continuity_ssot:
             - backend/runtime/ManifestDispatcher.cs
           status: implemented
           implementation_note: >
-            Skeleton: synchronous delegate to RuntimeExecutor. Manifest-driven routing
+            Lane-wired skeleton: synchronous delegate to RuntimeExecutor. Manifest-driven routing
             by axes (role, target, layer, action) is future scope.
 
         - node: backend.topology_transform_runtime
@@ -144,8 +144,7 @@ pipeline_continuity_ssot:
     sse_projection_lane:
       description: >
         server event propagates through backend_sse_emitter, frontend_sse_receiver,
-        frontend_sse_dispatcher, and projects through projection_runtime. All nodes
-        are skeleton-implemented. End-to-end SSE data flow is future scope.
+        frontend_sse_dispatcher, and projects through projection_runtime. Node wiring status in this document is lane-level implementation detail; public completion status is governed by docs/system-roadmap.yaml. End-to-end SSE data flow is future scope.
       direction: server_to_client
       event_types:
         - projection
@@ -167,7 +166,7 @@ pipeline_continuity_ssot:
             - backend/endpoint/SseEndpoint.cs
           status: implemented
           implementation_note: >
-            Skeleton: keep-alive ping only (event: ping / data: connected,
+            Lane-wired skeleton: keep-alive ping only (event: ping / data: connected,
             then event: ping / data: keep-alive every 30s).
             Real event streaming is future scope.
 
@@ -176,7 +175,7 @@ pipeline_continuity_ssot:
             - frontend/runtime/sseReceiver.ts
           status: implemented
           implementation_note: >
-            Skeleton: EventSource-based receiver with connect/disconnect interface.
+            Lane-wired skeleton: EventSource-based receiver with connect/disconnect interface.
             Wiring to dispatcher and scheduler is future scope.
 
         - node: frontend.sse_dispatcher
@@ -184,7 +183,7 @@ pipeline_continuity_ssot:
             - frontend/runtime/sseDispatcher.ts
           status: implemented
           implementation_note: >
-            Skeleton: handler map with register/route interface. Feeds into
+            Lane-wired skeleton: handler map with register/route interface. Feeds into
             frontend projection runtime as hook_trigger.
 
         - node: frontend.sse_projection

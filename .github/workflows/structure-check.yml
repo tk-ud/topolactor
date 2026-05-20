@@ -15,8 +15,11 @@ jobs:
       - name: Run completion judgment invariant guard
         run: bash .agent/tests/check-completion-judgment.sh
 
-      - name: Run structure check
-        run: bash .agent/tests/check-structure.sh
+      - name: Run system roadmap check
+        run: bash .agent/tests/check-system-roadmap.sh
 
       - name: Run pipeline continuity check
         run: bash .agent/tests/check-pipeline-continuity.sh
+
+      - name: Run structure check
+        run: bash .agent/tests/check-structure.sh
