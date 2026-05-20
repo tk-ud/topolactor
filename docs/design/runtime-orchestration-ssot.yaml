@@ -16,7 +16,7 @@ runtime_orchestration_ssot:
     scheduler: runtime_timeline_scheduler
     scheduler_alias: runtime_queue_scheduler
     dispatcher: manifest_dispatcher
-    dispatcher_alias: dispatchar
+    dispatcher_legacy_alias: dispatchar
     frontend_api_lane: client_command_lane
     frontend_sse_lane: projection_event_lane
     frontend_projection_runtime: projection_runtime
@@ -49,7 +49,7 @@ runtime_orchestration_ssot:
     prohibited:
       - runtime_policy_hidden_in_constants
       - frontend_sql_attention_judgment
-      - scheduler_as_polling_owner
+      - scheduler_as_data_polling_owner
       - dispatcher_as_execution_order_owner
       - direct_vector_authoring_from_client
       - silent_fallback_for_broken_topology_refs
@@ -115,6 +115,10 @@ runtime_orchestration_ssot:
       - client_trigger
     output:
       - scheduler_aligned_runtime_event
+    allowed_driver_loops:
+      - cron_trigger_time_driver_loop
+      - delayed_runtime_time_driver_loop
+      - background_service_as_trigger_driver
     owns:
       - trigger_alignment
       - runtime_queue
@@ -154,13 +158,18 @@ runtime_orchestration_ssot:
       - manifest_mapping
     output:
       - runtime_destination
+      - manifest_projection_response
+    manifest_query_output:
+      input:
+        - manifest_id
+      output:
+        - manifest_projection_response
     axes:
       - trigger_kind
       - role
       - target
       - layer
       - action
-      - context
       - manifest_id
     manifest_authority:
       - role_definition
@@ -175,24 +184,33 @@ runtime_orchestration_ssot:
       - dispatcher_bypassing_scheduler_alignment
 
   runtime_contract:
+    scope: shared_runtime_taxonomy
+    not_scope: backend_dispatch_destination_only
     input:
       - runtime_destination
       - runtime_event
     output:
       - runtime_effect
     kinds:
-      projection_runtime:
-        phase: frontend
-        output: ui_projection
-      topology_transform_runtime:
-        phase: backend
-        output: topology_output_lanes
-      registry_attractor_runtime:
-        phase: backend
-        output: sql_attention_observation
+      frontend:
+        projection_runtime:
+          output: ui_projection
+      backend:
+        topology_transform_runtime:
+          output: topology_output_lanes
+        registry_attractor_runtime:
+          output: sql_attention_observation
+    backend_dispatchable_kinds:
+      - topology_transform_runtime
+      - registry_attractor_runtime
+    backend_to_frontend_bridge:
+      lanes:
+        - response
+        - db_notify
+        - sse_projection_event
     invariants:
       - runtime_executes_after_scheduler_alignment
-      - runtime_destination_is_resolved_by_dispatcher
+      - backend_runtime_destination_is_resolved_by_manifest_dispatcher
       - runtime_policy_values_are_data_defined
 
   frontend_contract:
@@ -200,6 +218,16 @@ runtime_orchestration_ssot:
     roles:
       - projection_surface
       - client_trigger_surface
+    manifest_access:
+      direct_db_access: false
+      path:
+        - api_client
+        - backend_single_endpoint
+        - manifest_dispatcher
+        - manifest_projection_response
+      output:
+        - projection_definition
+        - projection_constructor_mapping
     lanes:
       client_command_lane:
         path:
@@ -223,6 +251,12 @@ runtime_orchestration_ssot:
         - form_inputs
         - component_projection
         - ui_projection
+    abstract_functions:
+      source: hardcoded_shapes
+      input:
+        - projection_definition
+        - json_key_value
+      output: ui_projection_args
     owns:
       - route
       - api_client
@@ -247,16 +281,37 @@ runtime_orchestration_ssot:
       - topology_transform_surface
       - registry_attractor_surface
     entry:
-      - Program.cs
-      - single_endpoint
-    flow:
-      path:
-        - endpoint
-        - backend_scheduler
-        - manifest_dispatcher
-        - topology_transform_runtime
-        - topology_function_binder
-        - topology_output_lanes
+      program: Program.cs
+      client: single_endpoint
+      cron: backend_scheduler
+      hook:
+        - db_listen
+        - webhook_endpoint_if_applicable
+    flows:
+      client:
+        path:
+          - endpoint
+          - backend_scheduler
+          - manifest_dispatcher
+          - topology_transform_runtime
+          - topology_function_binder
+          - topology_output_lanes
+      cron:
+        path:
+          - cron_trigger
+          - backend_scheduler
+          - manifest_dispatcher
+          - topology_transform_runtime
+          - topology_function_binder
+          - topology_output_lanes
+      hook:
+        path:
+          - hook_event
+          - backend_scheduler
+          - manifest_dispatcher
+          - topology_transform_runtime
+          - topology_function_binder
+          - topology_output_lanes
     topology_transform_runtime:
       input:
         - topology_payload
@@ -315,6 +370,27 @@ runtime_orchestration_ssot:
       - manifest_is_not_frontend_local_config
       - manifest_is_not_compile_time_constant_surface
       - manifest_drives_projection_and_dispatcher_mapping
+
+  abstract_function_contract:
+    source: hardcoded_shapes
+    phases:
+      frontend:
+        input:
+          - projection_definition
+          - json_key_value
+        output:
+          - ui_projection_args
+          - api_trigger_args
+      backend:
+        input:
+          - topology_payload
+          - topology_function_interface_args
+        output:
+          - topology_output_lanes
+    prohibited:
+      - runtime_policy_hidden_in_abstract_function
+      - abstract_function_direct_db_authoring
+      - frontend_topology_meaning_judgment
 
   function_binding_and_constructor_contract:
     dto:
@@ -381,17 +457,16 @@ runtime_orchestration_ssot:
       - target
       - layer
       - action
-      - manifest_id
-      - runtime_id
       - payload
-      - context
-      - trace_id
     identity_fields:
       - trigger_kind
+      - role
       - target
       - layer
       - action
+    payload_examples:
       - manifest_id
+      - runtime_id
       - trace_id
 
   canonical_flow_summary:
