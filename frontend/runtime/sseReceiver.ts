@@ -40,6 +40,10 @@ export function createSseReceiver(options: SseReceiverOptions): SseReceiver {
       options.onEvent("ping", e.data);
     });
 
+    source.addEventListener("projection", (e: MessageEvent) => {
+      options.onEvent("projection", e.data);
+    });
+
     source.onmessage = (e: MessageEvent) => {
       options.onEvent("message", e.data);
     };

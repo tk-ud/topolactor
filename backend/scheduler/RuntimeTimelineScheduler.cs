@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Topolactor.Runtime;
 using Topolactor.Schema;
@@ -5,18 +7,28 @@ using Topolactor.Schema;
 namespace Topolactor.Scheduler;
 
 /// <summary>
-/// Client-flow trigger alignment layer. Sits between the dispatch endpoint and
-/// ManifestDispatcher, owning trigger_alignment, runtime_queue, and execution_boundary
-/// per runtime-orchestration-ssot.
+/// Unified trigger alignment layer for cron, hook, and client triggers.
 ///
-/// Skeleton: currently executes synchronously (no queue). When scheduler semantics
-/// (ordering, batching, collision control) are implemented, they are confined to this class.
+/// Per SSOT scheduler_contract:
+///   - Owns: trigger_alignment, runtime_queue, runtime_phase, causal_order, execution_boundary
+///   - Not owns: target_runtime_selection_policy, role_semantics, topology_meaning_judgment
+///   - input: cron_trigger | hook_trigger | client_trigger
+///   - output: scheduler_aligned_runtime_event → ManifestDispatcher
+///
+/// Client triggers (AlignAndDispatchAsync) execute synchronously through ManifestDispatcher
+/// and return results directly. This preserves testability and response contract.
+///
+/// Cron/hook triggers (EnqueueCronTrigger / EnqueueHookTrigger) are queued in the
+/// in-memory Channel and processed by the BackgroundService consumer loop.
+///
+/// All three trigger kinds share the same ManifestDispatcher path.
 /// ManifestDispatcher and RuntimeExecutor must not know about trigger alignment.
 /// </summary>
-public class RuntimeTimelineScheduler
+public class RuntimeTimelineScheduler : BackgroundService
 {
     private readonly ILogger<RuntimeTimelineScheduler> _logger;
     private readonly ManifestDispatcher _manifestDispatcher;
+    private readonly Channel<SchedulerItem> _bgQueue;
 
     public RuntimeTimelineScheduler(
         ILogger<RuntimeTimelineScheduler> logger,
@@ -24,20 +36,90 @@ public class RuntimeTimelineScheduler
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _manifestDispatcher = manifestDispatcher ?? throw new ArgumentNullException(nameof(manifestDispatcher));
+        _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(256)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true,
+        });
     }
 
     /// <summary>
     /// Accepts a client trigger, aligns it on the runtime timeline, and forwards
-    /// to the manifest dispatcher. Currently a synchronous pass-through skeleton.
+    /// synchronously to the manifest dispatcher. Returns the dispatch result.
+    ///
+    /// Client triggers execute synchronously to preserve the HTTP response contract.
+    /// Ordering, batching, and collision control can be applied here without changing callers.
     /// </summary>
     public Task<EndpointResponseDto> AlignAndDispatchAsync(
         EndpointRequestDto request,
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         _logger.LogDebug(
             "RuntimeTimelineScheduler: aligning client trigger Target={Target} Layer={Layer} Action={Action}",
-            request?.Target, request?.Layer, request?.Action);
+            request.Target, request.Layer, request.Action);
 
-        return _manifestDispatcher.DispatchAsync(request!, ct);
+        var aligned = request with { TriggerKind = request.TriggerKind ?? "client" };
+        return _manifestDispatcher.DispatchAsync(aligned, ct);
+    }
+
+    /// <summary>
+    /// Enqueues a cron trigger for background processing (fire-and-forget).
+    /// </summary>
+    public void EnqueueCronTrigger(EndpointRequestDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var item = new SchedulerItem(request with { TriggerKind = "cron" });
+
+        if (!_bgQueue.Writer.TryWrite(item))
+        {
+            _logger.LogWarning("RuntimeTimelineScheduler: background queue full; dropping cron trigger.");
+        }
+    }
+
+    /// <summary>
+    /// Enqueues a hook trigger for background processing (fire-and-forget).
+    /// </summary>
+    public void EnqueueHookTrigger(EndpointRequestDto request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var item = new SchedulerItem(request with { TriggerKind = "hook" });
+
+        if (!_bgQueue.Writer.TryWrite(item))
+        {
+            _logger.LogWarning("RuntimeTimelineScheduler: background queue full; dropping hook trigger.");
+        }
+    }
+
+    /// <summary>
+    /// Background consumer: dequeues cron/hook trigger items and dispatches through ManifestDispatcher.
+    /// </summary>
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("RuntimeTimelineScheduler: background queue consumer started.");
+
+        await foreach (var item in _bgQueue.Reader.ReadAllAsync(stoppingToken))
+        {
+            try
+            {
+                await _manifestDispatcher.DispatchAsync(item.Request, stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "RuntimeTimelineScheduler: background dispatch failed for TriggerKind={TriggerKind} Target={Target}",
+                    item.Request.TriggerKind, item.Request.Target);
+            }
+        }
+
+        _logger.LogInformation("RuntimeTimelineScheduler: background queue consumer stopped.");
     }
 }
+
+/// <summary>
+/// An item in the background runtime queue (cron/hook triggers only).
+/// </summary>
+internal record SchedulerItem(EndpointRequestDto Request);

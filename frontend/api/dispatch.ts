@@ -51,6 +51,10 @@ export type DispatchRequest = {
   idOrHubId?: string;
   payload?: Record<string, unknown>;
   context?: Record<string, string>;
+  /** trigger_kind per SSOT minimal_event_shape: cron | hook | client */
+  triggerKind?: "cron" | "hook" | "client";
+  /** role from JWT token claim for manifest axis resolution */
+  role?: string;
 };
 
 export type DispatchResponse = {

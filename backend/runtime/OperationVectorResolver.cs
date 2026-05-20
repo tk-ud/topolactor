@@ -38,19 +38,23 @@ public class OperationVectorResolver
             request.Context.TryGetValue("ContextRecordId", out contextRecordId);
         }
 
+        // role from direct field takes precedence over Context["UserRole"]
+        var resolvedRole = request.Role ?? userRole;
+
         return new OperationVector(
             Target: request.Target,
             Layer: request.Layer,
             Action: request.Action,
             AttractorKey: attractorKey,
-            UserRole: userRole,
+            UserRole: resolvedRole,
             Payload: request.Payload,
             RequestedProjection: requestedProjection,
             ContextSessionId: contextSessionId,
             ContextUserId: contextUserId,
             ContextTokenIds: contextTokenIds,
             ContextRecordId: contextRecordId,
-            IdOrHubId: request.IdOrHubId
+            IdOrHubId: request.IdOrHubId,
+            TriggerKind: request.TriggerKind
         );
     }
 
