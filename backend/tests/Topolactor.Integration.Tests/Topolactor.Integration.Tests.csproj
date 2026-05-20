@@ -35,7 +35,9 @@
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
-    <!-- RuntimeTimelineScheduler required by DispatchEndpoint and DefaultEntitySearchIntegrationTests -->
-    <Compile Include="../../scheduler/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <!-- RuntimeTimelineScheduler required by DispatchEndpoint and DefaultEntitySearchIntegrationTests.
+         Include only this file to avoid pulling in RetentionScheduler / SystemOperationCiScheduler
+         which depend on Microsoft.Extensions.Hosting (BackgroundService) not available here. -->
+    <Compile Include="../../scheduler/RuntimeTimelineScheduler.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
