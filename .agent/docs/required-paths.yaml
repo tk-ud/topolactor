@@ -262,6 +262,11 @@ required_content_terms:
     - "frontend must not become source of truth"
     - "disclosure text must be explicit"
     - "editor does not execute runtime"
+  docs/design/runtime-orchestration-ssot.yaml:
+    - "runtime_orchestration_ssot"
+    - "runtime_timeline_scheduler"
+    - "manifest_dispatcher"
+    - "topology_transform_runtime"
   .github/workflows/structure-check.yml:
     - ".agent/tests/check-structure.sh"
   .github/workflows/backend-tests.yml:
