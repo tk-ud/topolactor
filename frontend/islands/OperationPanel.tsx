@@ -134,13 +134,13 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
             <>
               <strong>Authenticated.</strong> JWT token loaded from sessionStorage.
               {" "}
-              <a href="/login" style={{ fontSize: "0.9em" }}>Re-login</a>
+              <a href="/auth" style={{ fontSize: "0.9em" }}>Re-login</a>
             </>
           )
           : (
             <>
               <strong>Not logged in.</strong> Dispatch requires authentication.{" "}
-              <a href="/login" style={{ fontWeight: "bold" }}>Login →</a>
+              <a href="/auth" style={{ fontWeight: "bold" }}>Login →</a>
               {" "}
               <span style={{ color: "#888" }}>
                 (Without a token, the backend returns AUTH_TOKEN_MISSING.)

@@ -28,7 +28,7 @@ export default function ContextTokenRegistryPage() {
       </p>
       <p style={{ color: "#555" }}>
         自動学習（キャッシュ再構築）とレコメンドはこのレジストリを参照します。
-        操作には <a href="/login">ログイン</a> が必要です（JWT Bearer）。
+        操作には <a href="/auth">ログイン</a> が必要です（JWT Bearer）。
         DEMO_BACKEND_URL と DATABASE_URL が設定された環境では DB に永続化されます。
       </p>
 
