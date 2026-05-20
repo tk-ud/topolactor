@@ -94,4 +94,26 @@ public class DefaultEntitySearchIntegrationTests
         Assert.Null(response.Emission);
         Assert.Contains(response.Errors, e => e.Code == "REQUEST_NULL");
     }
+
+    [Fact]
+    public async Task PipelineIdentity_DefaultEntitySearch_RequiredIdentityFieldsSurviveFullDispatch()
+    {
+        // Data-driven pipeline identity continuity check.
+        // Verifies all required_identity fields from docs/design/pipeline-continuity-ssot.yaml
+        // api_command_lane survive the full dispatch path:
+        // EndpointRequestDto{target, layer, action} → DispatchEndpoint → RuntimeExecutor → Emission.
+        var endpoint = CreateEndpoint();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await endpoint.HandleAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+        Assert.NotNull(response.Emission!.StructureMapId);   // required_identity: structure_map_id
+        Assert.NotNull(response.Emission.PackageId);         // required_identity: package_id
+        Assert.NotNull(response.Emission.SchemaId);          // required_identity: schema_id
+        Assert.NotNull(response.Emission.ComponentIds);      // required_identity: component_ids
+        Assert.NotEmpty(response.Emission.ComponentIds!);
+    }
 }

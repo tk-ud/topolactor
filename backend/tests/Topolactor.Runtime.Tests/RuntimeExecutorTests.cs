@@ -150,6 +150,29 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_DefaultEntitySearch_RequestIdentityProducesAttractorKeyAndEmissionIdentity()
+    {
+        // Verifies pipeline identity chain from docs/design/pipeline-continuity-ssot.yaml
+        // api_command_lane.required_identity:
+        // request{target, layer, action} → vector.AttractorKey → emission{structureMapId, packageId, schemaId, componentIds}.
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var vector = new OperationVectorResolver().Resolve(request);
+        Assert.Equal("default:entity:search", vector.AttractorKey); // required_identity: attractor_key
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.NotNull(response.Emission!.StructureMapId);  // required_identity: structure_map_id
+        Assert.NotNull(response.Emission.PackageId);        // required_identity: package_id
+        Assert.NotNull(response.Emission.SchemaId);         // required_identity: schema_id
+        Assert.NotNull(response.Emission.ComponentIds);     // required_identity: component_ids
+        Assert.NotEmpty(response.Emission.ComponentIds!);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_DemoEntityList_ReachesPostAttractorFlow()
     {
         var repo = new DemoEntityValidRouteTopologyRepository();

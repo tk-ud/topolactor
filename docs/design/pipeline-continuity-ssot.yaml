@@ -1,101 +1,103 @@
 pipeline_continuity_ssot:
   name: topolactor_pipeline_continuity_ssot
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
 
   purpose:
-    - bidirectional_pipeline_identity_continuity
-    - api_command_lane_and_sse_projection_lane_validation
-    - make_pipeline_gaps_visible_in_ci
+    - data_driven_vertical_slice_continuity
+    - hardcode_guard_for_dispatcher_bypass_and_fallback_detection
+    - gap_tracking_for_not_yet_implemented_nodes
 
-  # Relationship to runtime-orchestration-ssot.yaml:
-  # runtime-orchestration-ssot defines naming, wiring, and boundaries.
-  # This SSOT defines the concrete node → file → identity_field continuity
-  # for the two runtime lanes, and explicitly marks not-yet-implemented gaps.
+  # Pipeline body checks use data-driven fixture execution, not vocabulary grep.
+  # See pipeline_body_test.ci_script for the delegation target in each lane.
+  # check-pipeline-continuity.sh covers hardcode_guard and gap_status only (bash).
+  # Pipeline body runs in default-entity-search.yml via check-default-entity-search.sh.
 
   lanes:
 
     api_command_lane:
       description: >
-        frontend component triggers entity operation (create/delete/update/search),
-        backend runtime executes and emits projection back to frontend component.
+        client command enters via ui_action, passes through frontend_scheduler (gap),
+        api_client, backend_endpoint, backend_scheduler (gap), manifest_dispatcher (gap),
+        topology_transform_runtime (currently RuntimeExecutor as skeleton until
+        scheduler/dispatcher are connected), entity/emission, and projects back through
+        frontend projection components.
       direction: client_to_server_to_client
-      operation_types:
-        - Search
-        - Create
-        - diffUpdate
-        - logicalDelete
+
+      required_identity:
+        # Data identity fields that must survive the full pipeline.
+        # These are the subject of the data-driven fixture test, not code symbols.
+        - target
+        - layer
+        - action
+        - attractor_key
+        - structure_map_id
+        - package_id
+        - schema_id
+        - component_ids
 
       nodes:
-        - node: frontend.component
+        - node: frontend.ui_action
           files:
             - frontend/islands/OperationPanel.tsx
-          identity_fields:
-            - operationType
-            - dispatchOperation
           status: implemented
 
-        - node: frontend.resolve_vector
-          files:
-            - frontend/runtime/resolveOperationVector.ts
-          identity_fields:
-            - OperationType
-            - attractorKey
-            - Create
-            - diffUpdate
-            - logicalDelete
-          status: implemented
+        - node: frontend.scheduler
+          files: []
+          status: gap
+          gap_note: >
+            Frontend scheduler (client_command_order / sse_projection_order manager per
+            runtime-orchestration-ssot) not yet implemented. Currently frontend dispatches
+            directly from component to api_client without scheduler alignment.
 
-        - node: frontend.api_dispatch
+        - node: frontend.api_client
           files:
             - frontend/api/dispatch.ts
-          identity_fields:
-            - DispatchRequest
-            - DispatchResponse
-            - Emission
-            - componentIds
+            - frontend/routes/api/dispatch.ts
           status: implemented
 
         - node: backend.endpoint
           files:
             - backend/endpoint/DispatchEndpoint.cs
-          identity_fields:
-            - EndpointRequestDto
-            - RuntimeExecutor
           status: implemented
 
-        - node: backend.runtime_executor
+        - node: backend.scheduler
+          files: []
+          status: gap
+          gap_note: >
+            Backend scheduler (runtime_timeline_scheduler / runtime_queue_scheduler) not
+            yet connected. Client requests enter RuntimeExecutor directly from endpoint.
+            Canonical path per runtime-orchestration-ssot:
+            endpoint → backend_scheduler → manifest_dispatcher.
+
+        - node: backend.manifest_dispatcher
+          files: []
+          status: gap
+          gap_note: >
+            Manifest dispatcher not yet connected to client flow. RuntimeExecutor currently
+            handles dispatch internally. Canonical path: manifest_dispatcher resolves
+            runtime_destination from manifest by axes (role, target, layer, action).
+
+        - node: backend.topology_transform_runtime
           files:
             - backend/runtime/RuntimeExecutor.cs
-          identity_fields:
-            - ExecuteAsync
-            - OperationVectorResolver
-            - AttractorResolver
           status: implemented
+          implementation_note: >
+            RuntimeExecutor currently covers the roles of backend_scheduler,
+            manifest_dispatcher, and topology_transform_runtime as a skeleton.
+            When scheduler and dispatcher are connected, RuntimeExecutor scope narrows.
 
-        - node: backend.schema
-          files:
-            - backend/schema/Contracts.cs
-          identity_fields:
-            - OperationType
-            - AttractorKey
-            - ComponentIds
-          status: implemented
-
-        - node: backend.emission_builder
+        - node: backend.entity_and_emission
           files:
             - backend/runtime/EmissionBuilder.cs
-          identity_fields:
-            - Emission
-            - ComponentIds
+            - backend/repository/TopologyRepository.cs
           status: implemented
 
         - node: frontend.projection
           files:
             - frontend/components/EmissionView.tsx
             - frontend/components/ProjectionView.tsx
-          identity_fields:
-            - componentIds
+            - frontend/runtime/renderEmission.ts
           status: implemented
 
       required_endpoint:
@@ -103,52 +105,111 @@ pipeline_continuity_ssot:
         frontend_route: frontend/routes/api/dispatch.ts
         backend_handler: backend/endpoint/DispatchEndpoint.cs
 
+      pipeline_body_test:
+        kind: data_driven_fixture_execution
+        ci_script: .agent/tests/check-default-entity-search.sh
+        fixture_path: default:entity:search
+        verifies:
+          - EndpointRequestDto{target=default,layer=entity,action=Search} flows through RuntimeExecutor to Emission
+          - emission.structureMapId is present and non-null
+          - emission.packageId is present and non-null
+          - emission.schemaId is present and non-null
+          - emission.componentIds is non-empty
+          - frontend renderEmission expands componentIds through registry to non-error specs
+        test_files:
+          - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+          - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+          - frontend/tests/defaultEntitySearch.test.ts
+
+      hardcode_guard:
+        description: >
+          Checks that topology_transform_runtime (RuntimeExecutor) does not accumulate
+          hardcoded target/layer/action dispatch branching beyond documented skeleton
+          exceptions. Such branching replaces data-driven manifest_dispatcher routing.
+        file: backend/runtime/RuntimeExecutor.cs
+        checks:
+          - id: target_dispatch_branching
+            patterns:
+              - 'vector\.Target =='
+              - 'string\.Equals(vector\.Target'
+            allowed_count: 3
+            allowed_exceptions:
+              - demo_entity_check_in_ExecuteAsync
+              - admin_path_in_ExecuteAsync
+              - demo_validation_in_ValidateDemoEntityRequest
+            note: >
+              Count above 3 indicates a new hardcoded dispatch target being added.
+              New targets must be routed through manifest_dispatcher, not hardcoded here.
+
     sse_projection_lane:
       description: >
-        backend Attention event propagates via SSE to frontend component.
-        This is the event/projection return lane: server-initiated state
-        changes reach the frontend without a client command.
+        server event propagates through backend_sse_emitter (not_implemented),
+        frontend_sse_receiver (not_implemented), frontend_scheduler (not_implemented),
+        frontend_sse_dispatcher (not_implemented), and projects through projection_runtime.
       direction: server_to_client
       event_types:
         - projection
         - Attention
 
+      required_identity:
+        - manifest_id
+        - component_ids
+        - attention_score
+
       nodes:
         - node: backend.attention_compute
           files:
             - backend/schema/ContextRouteContracts.cs
-          identity_fields:
-            - HubAttentionCurrentRecord
-            - AttentionScore
           status: implemented
 
         - node: backend.sse_emitter
           files: []
-          identity_fields:
-            - text/event-stream
           status: not_implemented
           gap_note: >
             SSE endpoint not yet added to backend.
-            Expected location: backend/endpoint or backend/scheduler.
-            Required identity: text/event-stream content-type header.
+            Required: Content-Type text/event-stream endpoint file in backend/endpoint.
+            Status must not change based on incidental string search.
 
         - node: frontend.sse_receiver
           files: []
-          identity_fields:
-            - EventSource
           status: not_implemented
           gap_note: >
             SSE receiver not yet added to frontend.
-            Expected location: frontend/runtime or frontend/islands.
-            Required identity: EventSource constructor call.
+            Required: EventSource-based receiver file in frontend/runtime or frontend/islands.
+            Status must not change based on incidental string search.
+
+        - node: frontend.sse_dispatcher
+          files: []
+          status: not_implemented
+          gap_note: >
+            SSE dispatcher not yet implemented.
+            Required: dispatcher file in frontend/runtime.
 
         - node: frontend.sse_projection
           files:
             - frontend/components/ProjectionView.tsx
-          identity_fields:
-            - componentIds
           status: implemented
 
       required_endpoint:
         path: /api/sse
         status: not_implemented
+
+      pipeline_body_test:
+        kind: not_implemented
+        note: >
+          SSE lane body test requires sse_emitter, sse_receiver, and sse_dispatcher
+          to be implemented first. Do not add SSE body test until all three are done.
+
+      gap_rule: >
+        Nodes with status=not_implemented are GAP-fixed.
+        Status must not change to implemented based on incidental grep match.
+        Implementing a node requires: file listed in files[], a pipeline body test,
+        and an explicit SSOT status update with evidence.
+
+  gap_summary:
+    - "api_command_lane.frontend.scheduler: frontend scheduler not yet implemented"
+    - "api_command_lane.backend.scheduler: runtime_timeline_scheduler not yet connected to client flow"
+    - "api_command_lane.backend.manifest_dispatcher: manifest_dispatcher not yet connected"
+    - "sse_projection_lane.backend.sse_emitter: SSE endpoint not implemented"
+    - "sse_projection_lane.frontend.sse_receiver: SSE receiver not implemented"
+    - "sse_projection_lane.frontend.sse_dispatcher: SSE dispatcher not implemented"

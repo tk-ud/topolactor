@@ -1,116 +1,120 @@
 #!/usr/bin/env bash
-# check-pipeline-continuity.sh — bidirectional pipeline identity continuity check
-# Validates API command lane and SSE projection lane identity fields at each node.
-# Requires only bash and grep — no build tools, no credentials.
+# check-pipeline-continuity.sh — pipeline continuity CI gate
 #
-# API lane failures exit non-zero (broken continuity).
-# SSE lane gaps report as GAP (not_implemented nodes are expected and do not fail CI).
+# Structure (see docs/design/pipeline-continuity-ssot.yaml for node/gap definitions):
+#
+#   1. PIPELINE BODY   — data-driven vertical slice fixture execution.
+#                        Reference only: body runs in default-entity-search.yml via
+#                        check-default-entity-search.sh (requires dotnet + deno).
+#                        This script confirms the delegation target is present.
+#   2. HARDCODE GUARD  — detects dispatcher bypass and hardcoded routing anti-patterns
+#                        in topology_transform_runtime (RuntimeExecutor).
+#   3. GAP STATUS      — enumerates known not-yet-implemented nodes from SSOT
+#                        gap_summary. Not failures.
+#
+# Pipeline body is NOT vocabulary grep. This script does not re-define node lists —
+# node/required_identity/status are defined in docs/design/pipeline-continuity-ssot.yaml.
+# Hardcode guard patterns correspond to pipeline-continuity-ssot.yaml hardcode_guard.checks.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+SSOT="$REPO_ROOT/docs/design/pipeline-continuity-ssot.yaml"
 
 FAILURES=0
-GAPS=0
 
 fail() {
   echo "FAIL: $1" >&2
   FAILURES=$((FAILURES + 1))
 }
 
-gap() {
-  echo "GAP:  $1"
-  GAPS=$((GAPS + 1))
-}
-
-check_term() {
-  local file="$REPO_ROOT/$1"
-  local term="$2"
-  local node="$3"
-  if [ ! -f "$file" ]; then
-    fail "[$node] file missing: $1"
-    return
-  fi
-  if grep -qF -- "$term" "$file"; then
-    echo "OK  [$node] $(basename "$1") → \"$term\""
-  else
-    fail "[$node] $1 missing identity: \"$term\""
-  fi
-}
-
-check_term_gap() {
-  local path="$REPO_ROOT/$1"
-  local term="$2"
-  local node="$3"
-  if grep -rqF -- "$term" "$path" 2>/dev/null; then
-    echo "OK  [$node] $1 → \"$term\""
-  else
-    gap "[$node] \"$term\" absent from $1 — not_implemented (see pipeline-continuity-ssot.yaml)"
-  fi
-}
-
-# ─── API command lane ─────────────────────────────────────────────────────────
+# ─── 1. PIPELINE BODY — delegation reference ──────────────────────────────────
+# Data-driven vertical slice: fixture flows through full dispatch path end-to-end.
+# Implemented in check-default-entity-search.sh (dotnet + deno) running in the
+# default-entity-search.yml workflow. This check confirms the script is present.
 
 echo ""
-echo "=== API command lane ==="
+echo "=== [pipeline.body] data-driven vertical slice: default:entity:search ==="
+echo "    Body test: .agent/tests/check-default-entity-search.sh (default-entity-search.yml)"
+echo "    Fixture:   EndpointRequestDto{target=default,layer=entity,action=Search}"
+echo "    Verifies:  structureMapId / packageId / schemaId / componentIds survive full dispatch"
 
-echo "--- [frontend.component] ---"
-check_term "frontend/islands/OperationPanel.tsx"          "operationType"     "frontend.component"
-check_term "frontend/islands/OperationPanel.tsx"          "dispatchOperation"  "frontend.component"
+BODY_SCRIPT="$SCRIPT_DIR/check-default-entity-search.sh"
+if [ -f "$BODY_SCRIPT" ]; then
+  echo "OK  [pipeline.body] check-default-entity-search.sh present"
+else
+  fail "[pipeline.body] check-default-entity-search.sh not found — pipeline body test missing"
+fi
 
-echo "--- [frontend.resolve_vector] ---"
-check_term "frontend/runtime/resolveOperationVector.ts"   "OperationType"     "frontend.resolve_vector"
-check_term "frontend/runtime/resolveOperationVector.ts"   "attractorKey"      "frontend.resolve_vector"
-check_term "frontend/runtime/resolveOperationVector.ts"   "Create"            "frontend.resolve_vector"
-check_term "frontend/runtime/resolveOperationVector.ts"   "diffUpdate"        "frontend.resolve_vector"
-check_term "frontend/runtime/resolveOperationVector.ts"   "logicalDelete"     "frontend.resolve_vector"
-
-echo "--- [frontend.api_dispatch] ---"
-check_term "frontend/api/dispatch.ts"                     "DispatchRequest"   "frontend.api_dispatch"
-check_term "frontend/api/dispatch.ts"                     "DispatchResponse"  "frontend.api_dispatch"
-check_term "frontend/api/dispatch.ts"                     "Emission"          "frontend.api_dispatch"
-check_term "frontend/api/dispatch.ts"                     "componentIds"      "frontend.api_dispatch"
-
-echo "--- [backend.endpoint] ---"
-check_term "backend/endpoint/DispatchEndpoint.cs"         "EndpointRequestDto" "backend.endpoint"
-check_term "backend/endpoint/DispatchEndpoint.cs"         "RuntimeExecutor"   "backend.endpoint"
-
-echo "--- [backend.runtime_executor] ---"
-check_term "backend/runtime/RuntimeExecutor.cs"           "ExecuteAsync"      "backend.runtime_executor"
-check_term "backend/runtime/RuntimeExecutor.cs"           "OperationVectorResolver" "backend.runtime_executor"
-check_term "backend/runtime/RuntimeExecutor.cs"           "AttractorResolver" "backend.runtime_executor"
-
-echo "--- [backend.schema] ---"
-check_term "backend/schema/Contracts.cs"                  "OperationType"     "backend.schema"
-check_term "backend/schema/Contracts.cs"                  "AttractorKey"      "backend.schema"
-check_term "backend/schema/Contracts.cs"                  "ComponentIds"      "backend.schema"
-
-echo "--- [backend.emission_builder] ---"
-check_term "backend/runtime/EmissionBuilder.cs"           "Emission"          "backend.emission_builder"
-check_term "backend/runtime/EmissionBuilder.cs"           "ComponentIds"      "backend.emission_builder"
-
-echo "--- [frontend.projection] ---"
-check_term "frontend/components/EmissionView.tsx"         "componentIds"      "frontend.projection"
-check_term "frontend/components/ProjectionView.tsx"       "componentIds"      "frontend.projection"
-
-# ─── SSE projection lane ──────────────────────────────────────────────────────
+# ─── 2. HARDCODE GUARD — dispatcher bypass and fallback detection ──────────────
+# Guards that topology_transform_runtime (RuntimeExecutor) does not accumulate
+# hardcoded target/layer/action dispatch branching that replaces data-driven
+# manifest_dispatcher routing.
+#
+# Allowed count and exceptions defined in:
+#   docs/design/pipeline-continuity-ssot.yaml hardcode_guard.checks.target_dispatch_branching
 
 echo ""
-echo "=== SSE projection lane ==="
+echo "=== [pipeline.hardcode_guard] dispatcher bypass and hardcode detection ==="
 
-echo "--- [backend.attention_compute] ---"
-check_term "backend/schema/ContextRouteContracts.cs"      "HubAttentionCurrentRecord" "backend.attention_compute"
-check_term "backend/schema/ContextRouteContracts.cs"      "AttentionScore"    "backend.attention_compute"
+RUNTIME_EXEC="$REPO_ROOT/backend/runtime/RuntimeExecutor.cs"
 
-echo "--- [backend.sse_emitter] (gap check — not_implemented) ---"
-check_term_gap "backend"                                  "text/event-stream" "backend.sse_emitter"
+if [ ! -f "$RUNTIME_EXEC" ]; then
+  fail "[hardcode.guard] RuntimeExecutor.cs not found"
+else
+  # Count target string literal comparisons in RuntimeExecutor.
+  # Allowed: 3 — demo_entity_check_in_ExecuteAsync (1) + admin_path_in_ExecuteAsync (1)
+  #             + demo_validation_in_ValidateDemoEntityRequest (1).
+  # Any count above 3 indicates a new hardcoded dispatch target.
+  DIRECT_EQ=$(grep -c 'vector\.Target ==' "$RUNTIME_EXEC")
+  STRING_EQ=$(grep -c 'string\.Equals(vector\.Target' "$RUNTIME_EXEC")
+  TOTAL=$((DIRECT_EQ + STRING_EQ))
+  ALLOWED=3
+  if [ "$TOTAL" -gt "$ALLOWED" ]; then
+    fail "[hardcode.guard] $TOTAL target-dispatch branches in RuntimeExecutor.cs (allowed: $ALLOWED; excess indicates hardcoded routing replacing manifest_dispatcher)"
+  else
+    echo "OK  [hardcode.guard] target-dispatch branches: $TOTAL (within allowed $ALLOWED)"
+  fi
 
-echo "--- [frontend.sse_receiver] (gap check — not_implemented) ---"
-check_term_gap "frontend"                                 "EventSource"       "frontend.sse_receiver"
+  # Check for silent fallback to default target.
+  if grep -q '?? "default"' "$RUNTIME_EXEC"; then
+    fail "[hardcode.guard] silent fallback '?? \"default\"' found in RuntimeExecutor.cs"
+  else
+    echo "OK  [hardcode.guard] no silent fallback to default target"
+  fi
 
-echo "--- [frontend.sse_projection] ---"
-check_term "frontend/components/ProjectionView.tsx"       "componentIds"      "frontend.sse_projection"
+  # Check that fixed topology ID literals do not appear in production runtime paths.
+  # These IDs are test fixture values and must remain isolated under tests/.
+  FIXED_ID=$(grep -rn \
+    '"00000000-0000-0000-0000-000000000001"\|"00000000-0000-0000-0000-000000000002"\|"00000000-0000-0000-0000-000000000003"\|"00000000-0000-0000-0000-000000000004"' \
+    "$REPO_ROOT/backend/runtime" \
+    "$REPO_ROOT/backend/endpoint" \
+    "$REPO_ROOT/backend/mapper" \
+    2>/dev/null || true)
+  if [ -n "$FIXED_ID" ]; then
+    fail "[hardcode.guard] fixed topology fixture ID found in production runtime/endpoint/mapper (must stay in tests only): $FIXED_ID"
+  else
+    echo "OK  [hardcode.guard] no fixed topology fixture IDs in production runtime"
+  fi
+fi
+
+# ─── 3. GAP STATUS — read from SSOT gap_summary ───────────────────────────────
+# Known gaps from pipeline-continuity-ssot.yaml gap_summary.
+# Not failures — these enumerate nodes that are not yet implemented.
+# To implement a node: add file to SSOT files[], update status, add pipeline body test.
+
+echo ""
+echo "=== [pipeline.gap_status] known gaps (from pipeline-continuity-ssot.yaml) ==="
+if [ -f "$SSOT" ]; then
+  sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" \
+    | sed 's/^ *- "//;s/"$//' \
+    | while IFS= read -r line; do
+        echo "GAP  $line"
+      done
+else
+  fail "[pipeline.gap_status] pipeline-continuity-ssot.yaml not found"
+fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
@@ -120,8 +124,4 @@ if [ "$FAILURES" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$GAPS" -gt 0 ]; then
-  echo "=== Pipeline continuity: API lane OK | SSE lane: $GAPS gap(s) (not_implemented — see docs/design/pipeline-continuity-ssot.yaml) ==="
-else
-  echo "=== Pipeline continuity: all checks passed ==="
-fi
+echo "=== Pipeline continuity: hardcode guard OK | see gap_status for not-implemented nodes ==="

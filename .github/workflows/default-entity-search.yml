@@ -8,6 +8,7 @@ on:
       - 'db/**/*.sql'
       - '.agent/tests/check-default-entity-search.sh'
       - '.github/workflows/default-entity-search.yml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
   push:
     branches:
       - main
@@ -17,6 +18,7 @@ on:
       - 'db/**/*.sql'
       - '.agent/tests/check-default-entity-search.sh'
       - '.github/workflows/default-entity-search.yml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
 
 jobs:
   default-entity-search:
