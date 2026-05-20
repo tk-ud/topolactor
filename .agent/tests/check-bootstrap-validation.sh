@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-bootstrap-validation.sh — fresh DB bootstrap validation
-# Applies init.sql-equivalent SQL chain to a fresh database with ON_ERROR_STOP=1.
+# Executes db/init.sql (compose initializer SSOT) on a fresh database with ON_ERROR_STOP=1.
 
 set -euo pipefail
 
@@ -37,29 +37,22 @@ cd "${REPO_ROOT}"
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 PSQL=(psql -v ON_ERROR_STOP=1 -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}")
 
-SQL_CHAIN=(
-  "db/schema.sql"
-  "db/topology_tables.sql"
-  "db/promotion_tables.sql"
-  "db/context_route_tables.sql"
-  "db/ui_topology_tables.sql"
-  "db/manifest_tables.sql"
-  "db/seed_empty.sql"
-  "db/demo_seed.sql"
-)
-
 echo "=== Verify bootstrap inputs ==="
 test -f db/init.sql
-for sql in "${SQL_CHAIN[@]}"; do
-  test -f "${sql}"
-  echo "OK  [file] ${sql}"
-done
+require_tool mktemp
+require_tool sed
 
-echo "=== Apply init.sql-equivalent SQL chain to fresh database ==="
-for sql in "${SQL_CHAIN[@]}"; do
-  echo "[bootstrap] applying ${sql}"
-  "${PSQL[@]}" -f "${sql}" >/dev/null
-done
+tmp_init="$(mktemp)"
+cleanup() {
+  rm -f "${tmp_init}"
+}
+trap cleanup EXIT
+
+echo "=== Prepare temporary host-path init from db/init.sql ==="
+sed 's#/db/#db/#g' db/init.sql > "${tmp_init}"
+
+echo "=== Apply db/init.sql-derived chain to fresh database ==="
+"${PSQL[@]}" -f "${tmp_init}" >/dev/null
 
 echo "=== Verify required bootstrap tables exist ==="
 required_tables=(
