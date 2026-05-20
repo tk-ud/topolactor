@@ -1,0 +1,154 @@
+pipeline_continuity_ssot:
+  name: topolactor_pipeline_continuity_ssot
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - bidirectional_pipeline_identity_continuity
+    - api_command_lane_and_sse_projection_lane_validation
+    - make_pipeline_gaps_visible_in_ci
+
+  # Relationship to runtime-orchestration-ssot.yaml:
+  # runtime-orchestration-ssot defines naming, wiring, and boundaries.
+  # This SSOT defines the concrete node → file → identity_field continuity
+  # for the two runtime lanes, and explicitly marks not-yet-implemented gaps.
+
+  lanes:
+
+    api_command_lane:
+      description: >
+        frontend component triggers entity operation (create/delete/update/search),
+        backend runtime executes and emits projection back to frontend component.
+      direction: client_to_server_to_client
+      operation_types:
+        - Search
+        - Create
+        - diffUpdate
+        - logicalDelete
+
+      nodes:
+        - node: frontend.component
+          files:
+            - frontend/islands/OperationPanel.tsx
+          identity_fields:
+            - operationType
+            - dispatchOperation
+          status: implemented
+
+        - node: frontend.resolve_vector
+          files:
+            - frontend/runtime/resolveOperationVector.ts
+          identity_fields:
+            - OperationType
+            - attractorKey
+            - Create
+            - diffUpdate
+            - logicalDelete
+          status: implemented
+
+        - node: frontend.api_dispatch
+          files:
+            - frontend/api/dispatch.ts
+          identity_fields:
+            - DispatchRequest
+            - DispatchResponse
+            - Emission
+            - componentIds
+          status: implemented
+
+        - node: backend.endpoint
+          files:
+            - backend/endpoint/DispatchEndpoint.cs
+          identity_fields:
+            - EndpointRequestDto
+            - RuntimeExecutor
+          status: implemented
+
+        - node: backend.runtime_executor
+          files:
+            - backend/runtime/RuntimeExecutor.cs
+          identity_fields:
+            - ExecuteAsync
+            - OperationVectorResolver
+            - AttractorResolver
+          status: implemented
+
+        - node: backend.schema
+          files:
+            - backend/schema/Contracts.cs
+          identity_fields:
+            - OperationType
+            - AttractorKey
+            - ComponentIds
+          status: implemented
+
+        - node: backend.emission_builder
+          files:
+            - backend/runtime/EmissionBuilder.cs
+          identity_fields:
+            - Emission
+            - ComponentIds
+          status: implemented
+
+        - node: frontend.projection
+          files:
+            - frontend/components/EmissionView.tsx
+            - frontend/components/ProjectionView.tsx
+          identity_fields:
+            - componentIds
+          status: implemented
+
+      required_endpoint:
+        path: /api/dispatch
+        frontend_route: frontend/routes/api/dispatch.ts
+        backend_handler: backend/endpoint/DispatchEndpoint.cs
+
+    sse_projection_lane:
+      description: >
+        backend Attention event propagates via SSE to frontend component.
+        This is the event/projection return lane: server-initiated state
+        changes reach the frontend without a client command.
+      direction: server_to_client
+      event_types:
+        - projection
+        - Attention
+
+      nodes:
+        - node: backend.attention_compute
+          files:
+            - backend/schema/ContextRouteContracts.cs
+          identity_fields:
+            - HubAttentionCurrentRecord
+            - AttentionScore
+          status: implemented
+
+        - node: backend.sse_emitter
+          files: []
+          identity_fields:
+            - text/event-stream
+          status: not_implemented
+          gap_note: >
+            SSE endpoint not yet added to backend.
+            Expected location: backend/endpoint or backend/scheduler.
+            Required identity: text/event-stream content-type header.
+
+        - node: frontend.sse_receiver
+          files: []
+          identity_fields:
+            - EventSource
+          status: not_implemented
+          gap_note: >
+            SSE receiver not yet added to frontend.
+            Expected location: frontend/runtime or frontend/islands.
+            Required identity: EventSource constructor call.
+
+        - node: frontend.sse_projection
+          files:
+            - frontend/components/ProjectionView.tsx
+          identity_fields:
+            - componentIds
+          status: implemented
+
+      required_endpoint:
+        path: /api/sse
+        status: not_implemented

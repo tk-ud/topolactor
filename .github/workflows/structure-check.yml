@@ -17,3 +17,6 @@ jobs:
 
       - name: Run structure check
         run: bash .agent/tests/check-structure.sh
+
+      - name: Run pipeline continuity check
+        run: bash .agent/tests/check-pipeline-continuity.sh
