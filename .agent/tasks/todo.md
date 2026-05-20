@@ -31,11 +31,11 @@ SSOT参照必読:
       → 対象: `backend/schema/Contracts.cs`、`frontend/api/dispatch.ts`
       → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
-- [ ] [Claude] Gap-1: `manifest_dispatcher` を実装する
-      → SSOT `backend_contract.flows`: endpoint → backend_scheduler → manifest_dispatcher → topology_transform_runtime
-      → API: role+target+layer+action で active manifest を解決。role は JWT claim から取得。
+- [ ] [Claude] Gap-1: `manifest_dispatcher` を完全実装する
+      → スケルトン実装済み: `backend/runtime/ManifestDispatcher.cs` (RuntimeExecutor への同期 delegate)。
+      → 残り: role+target+layer+action で active manifest を DB から解決する manifest-driven routing。
       → RuntimeExecutor 内の target/layer/action ハードコード分岐を移管。
-      → 対象: `backend/runtime/ManifestDispatcher.cs` (新規)、`backend/runtime/RuntimeExecutor.cs`
+      → 対象: `backend/runtime/ManifestDispatcher.cs`、`backend/runtime/RuntimeExecutor.cs`
       → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
 - [ ] [Claude] Gap-3: `topology_function_binder` / `topology_function_interface` を実装する
@@ -43,11 +43,12 @@ SSOT参照必読:
       → 対象: `backend/runtime/TopologyFunctionBinder.cs` (新規)、`backend/schema/TopologyFunctionInterface.cs` (新規)
       → Scenario Contract 必須。
 
-- [ ] [Claude] Gap-2: `runtime_timeline_scheduler` をクライアント dispatch パスに接続する
-      → SSOT `scheduler_contract`: cron / hook / client の3トリガを同一キューで整列。
-      → 現状 client trigger はスケジューラを経由せず直接 RuntimeExecutor に到達する。
-      → 前提: Gap-1 (manifest_dispatcher) 完了後。
-      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs` (新規)、`backend/Program.cs`
+- [ ] [Claude] Gap-2: `runtime_timeline_scheduler` のトリガ統合を完全実装する
+      → スケルトン実装済み: `backend/scheduler/RuntimeTimelineScheduler.cs` — client trigger は
+         DispatchEndpoint → RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor の経路に接続済み。
+      → 残り: cron (RetentionScheduler) / hook (SystemOperationCiScheduler) / client の3トリガを
+         同一キューで整列する unified queue 実装。前提: Gap-1 (manifest_dispatcher) 完了後。
+      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`、`backend/Program.cs`
       → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
 - [ ] [Claude] Gap-6: output lane `db_notify_emission` / `registry_attractor_update` を実装する
@@ -60,12 +61,17 @@ SSOT参照必読:
 
 ### Frontend
 
-- [ ] [Claude] Gap-7: SSE projection lane を実装する
-      → SSOT `frontend_contract.lanes.projection_event_lane`:
-         sse_receiver → frontend_scheduler → sse_dispatcher → projection_runtime → ui_projection
-      → SSE receiver が hook_trigger として frontend_scheduler キューへ送る (backend と対称構造)。
+- [ ] [Claude] Gap-7: SSE projection lane を完全実装する
+      → スケルトン実装済み:
+         - `backend/endpoint/SseEndpoint.cs` (keep-alive ping のみ)
+         - `frontend/runtime/sseReceiver.ts` (EventSource connect/disconnect skeleton)
+         - `frontend/runtime/sseDispatcher.ts` (handler-map skeleton)
+         - `frontend/routes/api/sse.ts` (proxy skeleton)
+      → 残り: 実際の projection/Attention イベント送信・受信・projection_runtime への接続。
+         SSE receiver が hook_trigger として frontend_scheduler キューへ送る (backend と対称構造)。
       → 前提: Gap-6 (db_notify_emission) 完了後。
-      → 対象: `frontend/runtime/sseReceiver.ts` (新規)、`frontend/runtime/projectionRuntime.ts` (新規)
+      → 対象: `backend/endpoint/SseEndpoint.cs`、`frontend/runtime/sseReceiver.ts`、
+         `frontend/runtime/projectionRuntime.ts` (新規)
       → Scenario Contract 必須。
 
 - [ ] [Claude] Gap-8: `projection_constructor` を実装する
