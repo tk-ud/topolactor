@@ -6,4 +6,5 @@ obj/
 deno.lock
 
 # Agent temporary planning memo (must not be committed)
-.agent/tmp/tmp.txt
+.agent/tmp/*
+!.agent/tmp/.gitkeep
