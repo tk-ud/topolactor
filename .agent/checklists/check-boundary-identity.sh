@@ -116,6 +116,11 @@ fi
 if [ -z "${1:-}" ]; then
   echo "Usage: bash .agent/checklists/check-boundary-identity.sh <checklist-file>" >&2
   echo "   or: bash .agent/checklists/check-boundary-identity.sh --self-test" >&2
+  echo "Recommended flow:" >&2
+  echo "  - copy template to .agent/tmp/" >&2
+  echo "  - fill only the .agent/tmp/ copy" >&2
+  echo "  - run this check on the .agent/tmp/ copy" >&2
+  echo "  - delete .agent/tmp/ copy before completion" >&2
   exit 1
 fi
 

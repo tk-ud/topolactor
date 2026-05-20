@@ -82,6 +82,11 @@ if [ -z "$CHECKLIST" ]; then
   echo "Usage:" >&2
   echo "  check-policy-judgment.sh <checklist-file>" >&2
   echo "  check-policy-judgment.sh --self-test" >&2
+  echo "Recommended flow for normal work:" >&2
+  echo "  1) copy template to .agent/tmp/" >&2
+  echo "  2) fill answers in .agent/tmp/ copy (never template)" >&2
+  echo "  3) run this check against the .agent/tmp/ copy" >&2
+  echo "  4) delete .agent/tmp/ copy before completion" >&2
   exit 1
 fi
 

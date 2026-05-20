@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# check-bootstrap-validation.sh — fresh DB bootstrap validation
-# Executes db/init.sql (compose initializer SSOT) on a fresh database with ON_ERROR_STOP=1.
+# check-bootstrap-validation.sh — postgres bootstrap SQL validation (parse-independent, non-compose execution)
+# Executes db/init.sql-derived SQL against a provided Postgres service with ON_ERROR_STOP=1. This script does not run docker compose.
 
 set -euo pipefail
 
@@ -37,7 +37,7 @@ cd "${REPO_ROOT}"
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 PSQL=(psql -v ON_ERROR_STOP=1 -h "${POSTGRES_HOST}" -p "${POSTGRES_PORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}")
 
-echo "=== Verify bootstrap inputs ==="
+echo "=== Verify bootstrap inputs (no docker compose execution) ==="
 test -f db/init.sql
 require_tool mktemp
 require_tool sed

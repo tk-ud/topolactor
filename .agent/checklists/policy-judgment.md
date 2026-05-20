@@ -3,8 +3,8 @@
 This checklist is a lightweight **compliance-signature gate** for AGENTS.md / rule.md policy judgment requirements.
 Detailed rule definitions belong in `AGENTS.md` and `.agent/protocols/policy-judgment.md`, not in incident-specific checklist expansion.
 
-Policy-Judgment-Need: REQUIRED_RUNTIME_CHANGE
-Policy-Judgment-Rationale: Step 2 of issue-84 architecture fix. Adds 6 structure_map entries to seed_empty.sql (admin attractor keys: admin:context_token_registry:{list,create,deprecate}, admin:registry_vector:validate, admin:ui_component_bucket:list, admin:package_generator:generate) with deterministic UUIDs. Adds AdminRuntime class that owns admin business logic moved from AdminEndpoint. Routes admin operations through Step 10 of the canonical pipeline (same pattern as demo:entity:*), using AdminRuntime.ExecuteDataAsync to populate ResolvedData before EmissionBuilder. AdminEndpoint thinned to delegate to AdminRuntime typed methods. RuntimeExecutor gains AdminRuntime dependency injected via DI. All admin attractor keys require structure_map DB entries (AttractorResolver throws on missing — no fallback). No policy threshold, scoring, or retention values introduced; only topology routing definition.
+Policy-Judgment-Need:
+Policy-Judgment-Rationale:
 
 Allowed Policy-Judgment-Need values:
 - REQUIRED_RUNTIME_CHANGE
@@ -35,6 +35,8 @@ Answer each question with exactly one of: `yes` / `no` / `n/a`
 
 Any NO on blocking items requires recursion to fix phase before completion.
 
+Template rule: keep this file blank. Create a PR-specific working copy under `.agent/tmp/`, record answers there, run gate checks against that copy, and delete it before completion.
+
 Audit order reminder: create tmp scenario contract when required → implement → inspect full branch diff → verify full diff against tmp scenario contract when required → checklist → scope/claim audits → relevant local CI → `bash .agent/tests/check-structure.sh` (last).
 
 ---
@@ -45,8 +47,7 @@ Does this change introduce or modify a value that controls runtime behavior,
 policy behavior, scoring, thresholds, limits, retention windows, sort order,
 routing, validation, promotion, disclosure, projection shape, or emission?
 
-Answer: yes
-
+Answer:
 ---
 
 ## Q2 — Production fallback constant present?
@@ -62,8 +63,7 @@ Examples:
 
 If Q1=no or n/a, answer n/a.
 
-Answer: n/a
-
+Answer:
 ---
 
 ## Q3 — Explicit missing-policy status returned?
@@ -73,8 +73,7 @@ invalid-policy status instead of substituting the fallback constant?
 
 If Q2=no or n/a, answer n/a.
 
-Answer: n/a
-
+Answer:
 ---
 
 ## Q4 — Value resolved from a policy surface?
@@ -91,8 +90,7 @@ Examples:
 
 If Q1=no or n/a, answer n/a.
 
-Answer: yes
-
+Answer:
 ---
 
 ## Q5 — Silent fallback introduced?
@@ -100,8 +98,7 @@ Answer: yes
 Does this change introduce a silent fallback where missing runtime / policy data
 is automatically replaced without surfacing an explicit error or status?
 
-Answer: no
-
+Answer:
 ---
 
 ## Q6 — Unexplained production policy constant introduced?
@@ -113,8 +110,7 @@ disclosure, or projection behavior?
 Test fixtures, loop counters, protocol constants, and display-only values are
 exempt.
 
-Answer: no
-
+Answer:
 ---
 
 ## Q7 — Canonical runtime route bypassed?
@@ -127,8 +123,7 @@ stored_topology_data → user_operation → operation_vector → attractor_resol
 → component_expand → emission_or_projection
 ```
 
-Answer: no
-
+Answer:
 ---
 
 ## Q8 — Business logic added to frontend projection layer?
@@ -136,8 +131,7 @@ Answer: no
 Does this change add data computation, business logic, or state derivation to
 the frontend projection layer beyond rendering resolved data as props?
 
-Answer: no
-
+Answer:
 ---
 
 ## Q9 — Broken reference swallowed silently?
@@ -145,8 +139,7 @@ Answer: no
 Does this change suppress a broken-reference error or resolve a missing ref
 silently instead of returning an explicit validation error or status?
 
-Answer: no
-
+Answer:
 ---
 
 ## Q10 — Policy fields consumed by runtime / policy executor?
@@ -157,8 +150,7 @@ relevant policy executor?
 
 If no policy field is added or modified, answer n/a.
 
-Answer: yes
-
+Answer:
 ---
 
 ## Q11 — Demo / mock / static values isolated?
@@ -168,8 +160,7 @@ runtime / policy behavior claims?
 
 If no demo / mock / static values are added, answer n/a.
 
-Answer: n/a
-
+Answer:
 ---
 
 ## Q12 — Full branch diff inspected, and tmp scenario contract verified when required?
@@ -181,8 +172,7 @@ If a mismatch or missing required verification is found, recurse to fix phase be
 Use `git diff main...HEAD` or an equivalent full branch diff — not only the
 latest commit or edited files.
 
-Answer: yes
-
+Answer:
 ---
 
 ## Q13 — Checklist based on full branch diff and scenario contract verification when required?
@@ -191,8 +181,7 @@ Are these checklist answers based on the full branch diff and scenario contract
 verification when required, not only the latest commit or edited files?
 Any boundary-matrix or scenario-contract verification gap here is a recursive blocking failure.
 
-Answer: yes
-
+Answer:
 ---
 
 ## Q14 — Required local checks passed?
@@ -210,16 +199,14 @@ summary. Do not answer `yes` for a check that was not actually run.
 Relevant local CI includes domain checks (db-schema, backend-tests, frontend-types)
 and change-triggered custom agent tests such as `check-default-entity-search.sh`.
 
-Answer: n/a
-
+Answer:
 ---
 
 ## Q15 — Remaining TODOs listed?
 
 Are remaining TODOs explicitly listed in the completion report or PR summary?
 
-Answer: yes
-
+Answer:
 ---
 
 ## Violation Summary
