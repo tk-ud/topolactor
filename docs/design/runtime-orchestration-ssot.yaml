@@ -30,10 +30,12 @@ runtime_orchestration_ssot:
     frontend_api_lane: client_command_lane
     frontend_sse_lane: projection_event_lane
     frontend_projection_runtime: projection_runtime
+    frontend_constructor: projection_constructor
     backend_runtime: topology_transform_runtime
     backend_attractor: registry_attractor
     topology_payload: topology_payload
-    entity_builder: topology_entity_builder
+    topology_function_interface: topology_function_interface
+    topology_function_binder: topology_function_binder
 
   hardcoded_boundary:
     hardcode:
@@ -50,7 +52,8 @@ runtime_orchestration_ssot:
       - ui_projection_definition
       - dispatcher_mapping
       - runtime_mapping
-      - entity_builder_mapping
+      - topology_function_binding_mapping
+      - projection_constructor_mapping
       - function_parameters
       - registry_attractor_policy
     prohibition:
@@ -60,6 +63,7 @@ runtime_orchestration_ssot:
       - dispatcher_as_execution_order_owner
       - direct_vector_authoring_from_client
       - silent_fallback_for_broken_topology_refs
+      - backend_entity_constructor_factory
 
   endpoints:
     frontend:
@@ -168,7 +172,8 @@ runtime_orchestration_ssot:
       dispatcher_mapping: manifest
       runtime_mapping: manifest
       ui_projection_mapping: manifest
-      entity_builder_mapping: manifest
+      topology_function_binding_mapping: manifest
+      projection_constructor_mapping: manifest
     prohibition:
       - role_behavior_hardcoded_in_dispatcher
       - dispatcher_silent_fallback
@@ -216,6 +221,7 @@ runtime_orchestration_ssot:
       - sse_dispatcher
       - frontend_scheduler
       - projection_runtime
+      - projection_constructor
       - abstract_functions
       - components
       - component_wrappers
@@ -239,7 +245,7 @@ runtime_orchestration_ssot:
         - backend_scheduler
         - manifest_dispatcher
         - topology_transform_runtime
-        - topology_entity_builder
+        - topology_function_binder
         - topology_output_lanes
     topology_transform_runtime:
       responsibility:
@@ -247,7 +253,8 @@ runtime_orchestration_ssot:
         - convert_topology_payload_to_vector_projection
         - link_topology_data_json_to_json
         - organize_topology_data
-        - build_dto_entity_through_entity_builder
+        - select_topology_function_from_where_condition
+        - bind_jsonb_array_to_topology_function_interface
     output_lanes:
       response_emission:
         role: return_runtime_result_to_caller
@@ -262,7 +269,8 @@ runtime_orchestration_ssot:
       - endpoint
       - dto
       - entity
-      - entity_builder
+      - topology_function_interface
+      - topology_function_binder
       - db_notify_listen
       - topology_payload_handler
       - vector_converter
@@ -278,7 +286,8 @@ runtime_orchestration_ssot:
       - ui_projection_definition
       - dispatcher_mapping
       - runtime_mapping
-      - entity_builder_mapping
+      - topology_function_binding_mapping
+      - projection_constructor_mapping
       - api_action_definition
       - sse_projection_definition
     invariant:
@@ -286,18 +295,38 @@ runtime_orchestration_ssot:
       - manifest_is_not_compile_time_constant_surface
       - manifest_drives_projection_and_dispatcher_mapping
 
-  dto_entity_builder_contract:
-    role: endpoint_contract_and_topology_entity_materialization_boundary
+  function_binding_and_constructor_contract:
+    role: separate_backend_function_interface_from_frontend_projection_constructor
     dto:
       role: endpoint_contract_only
     entity:
       role: concrete_or_system_data_surface_observed_from_topology
-    entity_builder:
-      role: build_entity_from_manifest_and_topology_payload
+    topology_function_interface:
+      role: function_parameter_surface
+      meaning: interface_is_the_parameter_surface_of_the_function_itself
+    topology_function_binder:
+      role: bind_topology_selected_function_name_and_jsonb_array_to_interface
+      input:
+        - topology_data_function_name
+        - where_condition_selected_function
+        - jsonb_as_plain_argument_array
+      not:
+        - entity_constructor
+        - csharp_factory
+        - domain_invariant_constructor
+    projection_constructor:
+      owner: frontend_projection_phase
+      role: construct_ui_structure_from_projection_definition
+      meaning: constructor_is_existence_proof_for_projected_ui_structure
+      examples:
+        - construct_form_inputs_from_json_key_value_pairs
+        - construct_component_projection_from_manifest_shape
     prohibition:
       - dto_as_architecture_subject
       - primitive_crud_as_architecture_subject
       - direct_record_vector_authoring
+      - backend_constructor_ownership
+      - one_by_one_manual_input_construction_as_runtime_policy
 
   registry_attractor_contract:
     role: sql_attention_observation_surface
@@ -354,4 +383,4 @@ runtime_orchestration_ssot:
     frontend_sse_projection: >
       sse_receiver -> frontend_scheduler -> sse_dispatcher -> projection_runtime -> ui_projection
     backend_topology_runtime: >
-      cron|hook|client -> backend_scheduler -> manifest_dispatcher -> topology_transform_runtime -> response|db_notify|registry_attractor
+      cron|hook|client -> backend_scheduler -> manifest_dispatcher -> topology_transform_runtime -> topology_function_binder -> response|db_notify|registry_attractor
