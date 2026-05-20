@@ -38,10 +38,12 @@ SSOT参照必読:
       → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler = partial
 
-- [x] [Claude] Gap-6: `OutputLaneRouter` を `RuntimeExecutor` パイプラインから呼び出す
-      → OutputLaneRouter を RuntimeExecutor に注入し、emission 構築後に RouteAsync を呼び出す実装完了。
-      → manifestId を ManifestDispatcher → RuntimeExecutor → OutputLaneRouter に転送済み。
-      → docs/system-roadmap.yaml: backend.output_lanes = implemented
+- [ ] [Claude] Gap-6 残: `OutputLaneRouter` の `registry_attractor_update` 実処理を実装する
+      → OutputLaneRouter を RuntimeExecutor pipeline に接続済み (RouteAsync は emission 後に呼ばれる)。
+      → db_notify_emission は実装済み (manifestId 転送含む)。
+      → 残: RouteRegistryAttractorLane の skeleton/no-op を実際の attractor rebuild トリガーに置き換える。
+      → 対象: `backend/runtime/OutputLaneRouter.cs`
+      → docs/system-roadmap.yaml: backend.output_lanes = partial (known_gap_ref: Gap-6 registry_attractor_update real implementation)
 
 - [ ] [Claude] Gap-7 残: SSE end-to-end integration test の DbNotifyListener → pg_notify 経路を実装する (Issue #123)
       → SseEventBroadcaster fan-out / SSE wire format テストは実装済み (SseEndToEndTests.cs)。

@@ -325,7 +325,15 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: ManifestDispatcher resolves active manifest from DB by role+target+layer+action axes via NpgsqlManifestRepository. runtime_mapping topology entry is read and validated against known kinds (topology_transform_runtime, registry_attractor_runtime); unknown destination returns RUNTIME_DESTINATION_UNKNOWN. manifestId forwarded to RuntimeExecutor for output lane routing. Fallthrough to RuntimeExecutor when no manifest registered (dev/demo bypass). Ambiguity returns explicit MANIFEST_AMBIGUOUS error. Remaining gap: RuntimeExecutor demo/admin target dispatch branches not yet removed/isolated.
+      public_summary: >
+        ManifestDispatcher resolves active manifest from DB by role+target+layer+action axes
+        via NpgsqlManifestRepository. runtime_mapping topology entry is read and validated
+        against known kinds (topology_transform_runtime, registry_attractor_runtime);
+        unknown destination returns RUNTIME_DESTINATION_UNKNOWN. manifestId forwarded to
+        RuntimeExecutor for output lane routing. Fallthrough to RuntimeExecutor when no
+        manifest registered (dev/demo bypass). Ambiguity returns explicit MANIFEST_AMBIGUOUS
+        error. Remaining gap - RuntimeExecutor demo/admin target dispatch branches not yet
+        removed/isolated.
       files:
         - backend/runtime/ManifestDispatcher.cs
       evidence:
@@ -406,10 +414,15 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.output_lanes:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: OutputLaneRouter called from RuntimeExecutor pipeline after emission. db_notify_emission sends pg_notify with {table_id, table_registry_id, manifest_id} (manifestId forwarded from ManifestDispatcher). registry_attractor_update lane is skeleton (log-only, explicit). All three lanes are explicit output surfaces.
+      public_summary: >
+        OutputLaneRouter called from RuntimeExecutor pipeline after emission (Gap-6 pipeline
+        connection complete). db_notify_emission sends pg_notify with {table_id,
+        table_registry_id, manifest_id} (manifestId forwarded from ManifestDispatcher).
+        registry_attractor_update lane is skeleton (log-only); actual rebuild trigger not yet
+        implemented.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/runtime/RuntimeExecutor.cs
@@ -424,6 +437,8 @@ system_roadmap_ssot:
         - response_emission_db_notify_emission_and_registry_attractor_update_are_explicit_output_lanes
         - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
         - registry_attractor_update_is_not_hidden_in_response_flow
+      known_gap_ref:
+        - Gap-6 registry_attractor_update real implementation
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -431,7 +446,12 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener holds pg LISTEN and broadcasts to subscribers. Projection events stream to connected clients. SseEventBroadcaster fan-out and SSE wire format covered by integration tests. Full E2E pipeline (DbNotifyListener → pg_notify) not yet tested (requires live DB).
+      public_summary: >
+        SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener holds
+        pg LISTEN and broadcasts to subscribers. Projection events stream to connected
+        clients. SseEventBroadcaster fan-out and SSE wire format covered by integration
+        tests. Full E2E pipeline (DbNotifyListener -> pg_notify) not yet tested (requires
+        live DB).
       files:
         - backend/endpoint/SseEndpoint.cs
         - backend/Program.cs
