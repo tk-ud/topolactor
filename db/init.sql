@@ -18,6 +18,9 @@
 \echo '[init.sql] applying ui_topology_tables.sql'
 \i /db/ui_topology_tables.sql
 
+\echo '[init.sql] applying manifest_tables.sql'
+\i /db/manifest_tables.sql
+
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 
