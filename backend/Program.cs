@@ -72,8 +72,6 @@ builder.Services.AddSingleton<PackageGeneratorRuntime>();
 // ---------------------------------------------------------------------------
 builder.Services.AddSingleton<DispatchEndpoint>();
 builder.Services.AddSingleton<AuthEndpoint>();
-builder.Services.AddSingleton<AdminEndpoint>();
-builder.Services.AddSingleton<PackageGeneratorEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
@@ -125,118 +123,6 @@ app.MapPost("/auth/login", async (
 {
     var result = await auth.HandleAsync(request, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
-});
-
-// Admin routes — JWT-guarded, same guard as /dispatch.
-// GET  /admin/context-token-registry  — list all tokens
-// POST /admin/context-token-registry  — create a token
-// POST /admin/context-token-registry/{tokenId}/deprecate — deprecate a token
-
-app.MapGet("/admin/context-token-registry", async (
-    HttpContext ctx,
-    AdminEndpoint admin,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    var tokens = await admin.HandleListTokensAsync(ctx.RequestAborted);
-    return Results.Json(tokens);
-});
-
-app.MapPost("/admin/context-token-registry", async (
-    HttpContext ctx,
-    AdminCreateTokenRequestDto request,
-    AdminEndpoint admin,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    var result = await admin.HandleCreateTokenAsync(request, ctx.RequestAborted);
-    int createStatus = result.Ok ? 200
-        : result.ErrorCode == "DUPLICATE_LABEL_GROUP" ? 409
-        : 422;
-    return Results.Json(result, statusCode: createStatus);
-});
-
-// POST /admin/registry-vector-validate — validate a candidate registry ID array.
-// Returns RegistryVectorValidationResult. Policy from function_parameters.
-// Policy missing → 422 REGISTRY_VALIDATION_POLICY_NOT_FOUND.
-// DB unavailable → 422 REGISTRY_VECTOR_VALIDATION_DB_UNAVAILABLE (blocking).
-app.MapPost("/admin/registry-vector-validate", async (
-    HttpContext ctx,
-    AdminRegistryVectorValidateRequestDto request,
-    AdminEndpoint admin,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    var (result, statusCode) = await admin.HandleValidateRegistryVectorAsync(request, ctx.RequestAborted);
-    return Results.Json(result, statusCode: statusCode);
-});
-
-app.MapPost("/admin/context-token-registry/{tokenId}/deprecate", async (
-    HttpContext ctx,
-    string tokenId,
-    AdminEndpoint admin,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    if (!Guid.TryParse(tokenId, out var tokenGuid))
-        return Results.Json(new { ok = false, message = "tokenId must be a valid UUID." }, statusCode: 400);
-
-    var (result, found) = await admin.HandleDeprecateTokenAsync(tokenGuid, ctx.RequestAborted);
-    return Results.Json(result, statusCode: found ? 200 : 404);
-});
-
-// Package generator routes — JWT-guarded.
-// GET  /admin/ui-component-bucket              — list bucket items (default status=bucketed)
-// POST /admin/package-generator/generate       — promote bucket item to ui_topology_tensor
-
-app.MapGet("/admin/ui-component-bucket", async (
-    HttpContext ctx,
-    PackageGeneratorEndpoint packageGenerator,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    var status = ctx.Request.Query.TryGetValue("status", out var statusVal)
-        ? statusVal.ToString()
-        : "bucketed";
-    var (items, listStatus) = await packageGenerator.HandleListBucketItemsAsync(status, ctx.RequestAborted);
-    if (listStatus != 200)
-        return Results.Json(new { ok = false, message = "Repository unavailable." }, statusCode: listStatus);
-    return Results.Json(items);
-});
-
-app.MapPost("/admin/package-generator/generate", async (
-    HttpContext ctx,
-    PackageGenerateRequestDto request,
-    PackageGeneratorEndpoint packageGenerator,
-    JwtGuard jwtGuard) =>
-{
-    var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
-    if (authErrors.Count > 0)
-        return Results.Json(new { ok = false, errors = authErrors }, statusCode: 401);
-
-    var (result, statusCode) = await packageGenerator.HandleGenerateAsync(request, ctx.RequestAborted);
-    return Results.Json(result, statusCode: statusCode);
 });
 
 app.Run();

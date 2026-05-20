@@ -15,7 +15,7 @@
 ## Current TODO
 
 - [ ] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
-      → 対象: `db/init.sql`, `infra/docker-compose.yml`。`ui_component_bucket` / `ui_topology_tensor` 作成確認まで実施し、確認後に削除/完了化。
+      → 対象: `db/init.sql`, `infra/docker-compose.yml`。2026-05-20 現在、作業環境で `docker` コマンド未提供のため実行不能（`.agent/reports/2026-05-20-db-init-compose-bootstrap-attempt.md`）。Docker有効環境で `ui_component_bucket` / `ui_topology_tensor` 作成確認後に完了化。
 
 ## Architecture Fix — Single Dispatch Endpoint (SSOT: framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`)
 
@@ -47,7 +47,7 @@ SSOT参照必読:
       → Scenario Contract 更新必須 (canonical route 変更を伴うため)
       → Runtime Boundary Failure Matrix (全10項目) を checklist に記入必須
 
-- [ ] [Claude] Step 3: Program.cs の admin/package-generator 専用 route を削除し、POST /dispatch に集約
+- [x] [Claude] Step 3: Program.cs の admin/package-generator 専用 route を削除し、POST /dispatch に集約
       → 対象: `backend/Program.cs`。
       → 削除対象 route: GET|POST /admin/context-token-registry、POST /admin/context-token-registry/{id}/deprecate、
                          POST /admin/registry-vector-validate、GET /admin/ui-component-bucket、POST /admin/package-generator/generate。
@@ -56,7 +56,7 @@ SSOT参照必読:
       → SSOT: docs/framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`
       → Scenario Contract + Runtime Boundary Failure Matrix 必須
 
-- [ ] [Claude] Step 4: frontend admin proxy ファイルを削除し /api/dispatch に集約
+- [x] [Claude] Step 4: frontend admin proxy ファイルを削除し /api/dispatch に集約
       → 対象削除: `frontend/routes/api/admin/context-token-registry.ts`、
                   `frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts`、
                   `frontend/routes/api/admin/registry-vector-validate.ts`。
