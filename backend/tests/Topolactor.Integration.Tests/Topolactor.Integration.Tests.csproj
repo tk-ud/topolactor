@@ -6,6 +6,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- SseEndpoint.cs (in ../../endpoint/) uses HttpResponse from ASP.NET Core.
+       FrameworkReference provides Microsoft.AspNetCore.Http without switching to Sdk.Web. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.0" />
@@ -29,5 +35,7 @@
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <!-- RuntimeTimelineScheduler required by DispatchEndpoint and DefaultEntitySearchIntegrationTests -->
+    <Compile Include="../../scheduler/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
