@@ -1,6 +1,6 @@
 system_roadmap_ssot:
   name: topolactor_system_roadmap
-  version: 0.1.0
+  version: 0.2.0
   status: public_status_ssot
   visibility: public
 
@@ -10,6 +10,8 @@ system_roadmap_ssot:
     - define_milestones_and_completion_conditions
     - provide_ci_readable_implementation_registry
     - prevent_skeleton_stub_dummy_work_from_being_reported_as_complete
+    - define_external_integration_as_human_editing_surface_not_system_SSOT
+    - expose_non_IT_business_system_authoring_roadmap
 
   document_role:
     summary: >
@@ -22,12 +24,14 @@ system_roadmap_ssot:
       - implementation_registry
       - public_completion_terms
       - ci_status_expectations
+      - external_integration_direction
     does_not_own:
       - low_level_design_detail
       - temporary_task_queue
       - audit_report_logs
       - agent_operating_rules
       - private_work_notes
+      - external_service_operational_credentials
 
   related_surfaces:
     detailed_design_ssot:
@@ -64,6 +68,52 @@ system_roadmap_ssot:
     - skeleton_stub_dummy_marker_must_not_coexist_with_status_implemented
     - known_skeleton_or_partial_work_must_be_listed_in_implementation_registry
     - task_queue_must_not_be_used_as_the_primary_status_source
+    - external_service_connection_must_not_be_treated_as_runtime_SSOT
+    - external_import_must_have_preview_validate_apply_stages
+    - external_sync_failure_must_be_explicit_not_silent_fallback
+
+  external_integration_policy:
+    summary: >
+      External tools are human editing and intake surfaces. They are not the canonical
+      runtime source of truth. The canonical source is topolactor DB topology, manifest,
+      registry, schema, relation, package, and diff/log surfaces. External tools may
+      propose, draft, import, preview, or trigger changes only through explicit runtime
+      boundaries.
+    canonical_authority:
+      - topolactor_db
+      - manifest
+      - registry
+      - schema
+      - relation_registry
+      - ui_topology_tensor
+      - diff_log
+      - runtime_event_log
+    external_surface_role:
+      - human_friendly_business_input
+      - draft_authoring
+      - intake_queue
+      - preview_surface
+      - notification_surface
+      - approval_surface
+      - external_trigger_source
+    prohibited:
+      - notion_as_system_SSOT
+      - spreadsheet_as_runtime_policy_SSOT
+      - external_tool_direct_DB_write
+      - silent_external_sync_fallback
+      - implicit_schema_creation_without_preview
+      - frontend_or_external_tool_SQL_attention_judgment
+      - webhook_direct_runtime_execution_without_scheduler
+    required_flow:
+      - external_source
+      - connector_adapter
+      - intake_snapshot
+      - topology_payload_candidate
+      - validate
+      - preview
+      - explicit_apply
+      - canonical_runtime_route
+      - diff_log_or_runtime_event_log
 
   milestones:
     M1_runtime_skeleton:
@@ -143,6 +193,61 @@ system_roadmap_ssot:
         - Issue #86 frontend UI component system
         - Issue #89 admin visual layout builder
         - Gap-9 admin route skeletons
+
+    M6_external_integration:
+      title: External integration and non-IT authoring surfaces
+      status: not_started
+      goal: >
+        Connect human-friendly external tools as editing, intake, trigger, and approval
+        surfaces so non-IT users can author business vocabulary, tables, states, actions,
+        workflows, and UI drafts without directly editing code. External tools are never
+        the runtime SSOT; they feed candidates into topolactor's validate/preview/apply
+        route.
+      primary_entry_surface:
+        - Notion
+      secondary_entry_surfaces:
+        - Google Sheets
+        - Slack
+        - GitHub Issues
+        - generic webhooks
+        - CSV or JSON file import
+        - external REST API connectors
+      intended_non_IT_loop:
+        - business_user_edits_external_database_or_form
+        - connector_captures_snapshot
+        - topolactor_maps_input_to_topology_payload_candidate
+        - validation_reports_missing_fields_ambiguous_relations_and_policy_gaps
+        - preview_shows_generated_schema_manifest_projection_and_runtime_effects
+        - human_or_admin_approves_apply
+        - canonical_runtime_route_persists_topology
+        - CI_and_runtime_diagnostics_detect_semantic_breakage
+      unlocks:
+        - notion_intake_runtime: skeleton
+        - external_connector_contract: skeleton
+        - topology_payload_import_preview: partial
+        - non_IT_business_app_authoring_loop: partial
+        - external_change_diff_log: partial
+        - approval_workflow: partial
+      blocking_gaps:
+        - external connector contract SSOT not defined
+        - Notion intake runtime not implemented
+        - external snapshot storage not implemented
+        - import preview and validation are not generalized beyond seed runtime
+        - approval/apply workflow not implemented
+        - external change diff log not implemented
+        - connector auth and permission boundary not defined
+      completion_condition:
+        - Notion database can be registered as an external intake source
+        - Notion data is imported only as candidate topology payload not canonical SSOT
+        - validate_preview_apply stages are separated
+        - external change snapshot and applied canonical diff are both recorded
+        - broken mapping or missing required property returns explicit validation error
+        - external webhook events enter runtime scheduler before runtime execution
+        - non_IT_user_can_define_business_vocabulary_state_action_and_table_draft_without_code
+      public_summary: >
+        External integration makes topolactor a business app authoring OS rather than a
+        conventional admin tool. Notion and similar tools are the human editing surface;
+        topolactor remains the semantic runtime and validation authority.
 
   implementation_registry:
     frontend.ui_action:
@@ -505,6 +610,87 @@ system_roadmap_ssot:
         - frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
       known_gap_ref:
         - Gap-13 frontend scheduler runtime completion
+    external_connector_contract:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: Generic connector contract for Notion, Sheets, Slack, GitHub, webhooks, files, and external APIs is not defined.
+      completion_condition:
+        - connector_adapter_contract_defines_source_identity_auth_scope_snapshot_and_mapping
+        - external_source_identity_is_preserved_through_intake_validate_preview_apply
+        - connector_output_is_topology_payload_candidate_not_canonical_state
+        - connector_failures_return_structured_errors
+        - external_tool_write_permissions_are_never_equivalent_to_runtime_authority
+      known_gap_ref:
+        - external connector contract SSOT not defined
+
+    notion_intake_runtime:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: Notion database intake is the first planned non-IT authoring surface, but no connector runtime exists yet.
+      completion_condition:
+        - notion_database_can_be_registered_as_external_source
+        - notion_pages_and_properties_are_snapshotted_before_mapping
+        - notion_database_properties_map_to_business_vocabulary_state_action_or_table_candidates
+        - validation_reports_ambiguous_property_type_relation_and_required_field_gaps
+        - notion_is_never_treated_as_canonical_topolactor_SSOT
+      known_gap_ref:
+        - Notion intake runtime not implemented
+
+    external_snapshot_store:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: External source snapshots are not persisted yet, so external-to-canonical diff evidence cannot be audited.
+      completion_condition:
+        - raw_external_snapshot_is_stored_with_source_type_source_id_revision_and_fetched_at
+        - mapped_topology_payload_candidate_is_stored_separately_from_raw_snapshot
+        - applied_canonical_diff_links_back_to_snapshot_id
+        - reimport_can_detect_external_changes_without_silent_overwrite
+      known_gap_ref:
+        - external snapshot storage not implemented
+
+    external_import_preview_runtime:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: General external import preview/validation runtime does not exist beyond the planned seed runtime direction.
+      completion_condition:
+        - external_import_uses_validate_preview_apply_stages
+        - preview_shows_schema_manifest_registry_projection_and_runtime_effect_candidates
+        - apply_requires_explicit_approval_or_policy_defined_auto_apply
+        - invalid_external_mapping_returns_explicit_errors
+        - apply_writes_through_canonical_runtime_route
+      known_gap_ref:
+        - import preview and validation are not generalized beyond seed runtime
+
+    external_approval_workflow:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: Approval and apply workflow for externally-authored changes is not implemented.
+      completion_condition:
+        - approval_subject_preserves_external_source_identity_and_topology_payload_identity
+        - approver_role_and_policy_are_resolved_by_manifest_or_registry_policy
+        - rejected_external_candidate_is_recorded_without_applying_runtime_state
+        - approved_external_candidate_enters_scheduler_before_runtime_execution
+      known_gap_ref:
+        - approval/apply workflow not implemented
+
+    non_IT_business_authoring_loop:
+      status: not_started
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: The planned non-IT loop lets business users define vocabulary, states, actions, tables, and UI drafts from external tools.
+      completion_condition:
+        - business_user_can_author_business_vocabulary_without_code
+        - business_user_can_author_state_and_transition_candidates_without_code
+        - business_user_can_author_table_or_property_candidates_without_code
+        - system_can_validate_and_preview_generated_runtime_topology
+        - CI_or_runtime_diagnostics_detect_semantic_breakage_before_completion_claim
+      known_gap_ref:
+        - non-IT business app authoring loop not implemented
 
   ci_expectations:
     source_of_truth:
@@ -516,14 +702,19 @@ system_roadmap_ssot:
       - production_ready_components_must_not_have_known_blocking_gaps
       - skeleton_stub_dummy_markers_are_allowed_only_when_registered_as_skeleton_or_partial
       - tests_or_fixtures_may_use_stub_dummy_mock_only_when_isolated_from_production_runtime
+      - external_connector_status_must_not_claim_SSOT_authority_for_external_services
+      - external_import_entries_must_declare_validate_preview_apply_completion_conditions
     recommended_checks:
       - check_system_roadmap_status_consistency
       - check_skeleton_markers_against_implementation_registry
       - check_implemented_entries_have_evidence
       - check_production_ready_entries_have_no_known_gap_ref
+      - check_external_integration_entries_do_not_make_external_tools_canonical
 
   public_notes:
     - This roadmap is a status SSOT, not a promise of release dates.
     - Implementation status is scoped per component and may differ from overall milestone status.
     - A component can be implemented for a skeleton milestone while still not production_ready.
     - Detailed runtime semantics remain in docs/design/*.
+    - External integrations are human editing/intake surfaces; topolactor remains the runtime SSOT.
+    - The long-term product direction is non-IT business app authoring through validated topology, manifest, registry, projection, and CI feedback loops.
