@@ -15,7 +15,7 @@ It separates always-read guidance from condition-triggered references, and separ
 ## Directory Roles
 
 - `AGENTS.md`:
-  Defines the agent role, provides the entry handoff to `.agent/README.md`, and routes readers to `.agent/rules/rule.md`; it is not a direct entrypoint for reading all `docs/`.
+  Defines the agent role and provides the entry handoff to `.agent/rules/rule.md`, then `.agent/README.md`; it is not a direct entrypoint for reading all `docs/`.
 - `.agent/docs/`:
   Resume/index surface for SSOT materials under `docs/`. `ssot-map.yaml` defines change-surface → docs/ SSOT mappings; not a signal to read all `docs/` by default.
 - `.agent/rules/`:
@@ -40,8 +40,8 @@ It separates always-read guidance from condition-triggered references, and separ
 ## What Is Always Read
 
 - `AGENTS.md`
-- `.agent/README.md`
 - `.agent/rules/rule.md`
+- `.agent/README.md`
 - `.agent/skills/agent-workflow.md`
 
 These define baseline obligations and operating posture for every task.
