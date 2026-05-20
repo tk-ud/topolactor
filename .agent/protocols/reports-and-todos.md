@@ -26,6 +26,15 @@ CI/check/remote-verification status is not a `.agent/tasks/todo.md` item by itse
 
 If a failed or unexecuted check reveals concrete follow-up work, copy only that concrete implementation/design/SSOT task to `.agent/tasks/todo.md`; do not copy the check-running activity itself as the TODO.
 
+## PR body and follow-up comment policy
+
+- Keep the PR body as a thin entry summary: purpose, high-level scope, and durable references only.
+- Do not use the PR body as a rolling implementation log, CI status ledger, or follow-up audit thread.
+- When a PR receives follow-up fixes, CI re-runs, audit findings, or remaining-risk notes, add a PR comment instead of continuously rewriting the PR body.
+- If the PR body becomes materially false or misleading, update it only to restore a thin, accurate entry summary.
+- Detailed pass/fail/not executed notes, CI failure indexes, audit responses, and residual TODO classification belong in PR comments or completion summaries, not in the PR body.
+- This keeps the PR body stable while preserving follow-up traceability in chronological comments.
+
 ## TODO carry-over rules
 
 - `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.
