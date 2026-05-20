@@ -27,6 +27,7 @@ public class RuntimeExecutor
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
     private readonly AdminRuntime _adminRuntime;
+    private readonly OutputLaneRouter? _outputLaneRouter;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -41,7 +42,8 @@ public class RuntimeExecutor
         DiffLogRepository diffLogRepository,
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
-        AdminRuntime adminRuntime)
+        AdminRuntime adminRuntime,
+        OutputLaneRouter? outputLaneRouter = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -56,13 +58,16 @@ public class RuntimeExecutor
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
         _adminRuntime = adminRuntime ?? throw new ArgumentNullException(nameof(adminRuntime));
+        _outputLaneRouter = outputLaneRouter;
     }
 
     /// <summary>
     /// Executes the canonical pipeline. No fallbacks. Broken references yield explicit errors.
+    /// manifestId is forwarded from the manifest dispatcher to the output lane router for db_notify.
     /// </summary>
     public async Task<EndpointResponseDto> ExecuteAsync(
         EndpointRequestDto request,
+        Guid? manifestId = null,
         CancellationToken ct = default)
     {
         _logger.LogInformation("RuntimeExecutor.ExecuteAsync started.");
@@ -195,12 +200,19 @@ public class RuntimeExecutor
 
         var emission = _emissionBuilder.Build(workingShape);
 
-        _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");
-
-        return new EndpointResponseDto(
+        var response = new EndpointResponseDto(
             Success: emission.Errors.Count == 0,
             Emission: emission,
             Errors: emission.Errors);
+
+        if (_outputLaneRouter is not null)
+        {
+            await _outputLaneRouter.RouteAsync(vector, response, manifestId, ct);
+        }
+
+        _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");
+
+        return response;
     }
 
     private static EndpointResponseDto ErrorResponse(string code, string message) =>
