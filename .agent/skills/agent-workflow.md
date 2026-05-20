@@ -72,6 +72,10 @@ READ_ENTRY
 - PUSH_OR_PR
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
+  - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
+  - for an existing PR update, push first, then add a follow-up PR comment with changed summary, check status, and remaining TODO
+  - if a PR comment cannot be posted, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste
+  - do not rely on chat-only completion summary for existing PR follow-up updates
 
 ## Scope Discipline
 
