@@ -1,0 +1,477 @@
+system_roadmap_ssot:
+  name: topolactor_system_roadmap
+  version: 0.1.0
+  status: public_status_ssot
+  visibility: public
+
+  purpose:
+    - publish_system_direction
+    - distinguish_implemented_from_skeleton_or_partial
+    - define_milestones_and_completion_conditions
+    - provide_ci_readable_implementation_registry
+    - prevent_skeleton_stub_dummy_work_from_being_reported_as_complete
+
+  document_role:
+    summary: >
+      Public-facing project status SSOT. This file describes the system roadmap,
+      milestone state, implementation status, evidence, and completion conditions.
+      It is intentionally higher level than docs/design/* and more structured than README.
+    owns:
+      - roadmap
+      - milestones
+      - implementation_registry
+      - public_completion_terms
+      - ci_status_expectations
+    does_not_own:
+      - low_level_design_detail
+      - temporary_task_queue
+      - audit_report_logs
+      - agent_operating_rules
+      - private_work_notes
+
+  related_surfaces:
+    detailed_design_ssot:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+    task_queue:
+      - .agent/tasks/todo.md
+    audit_reports:
+      - .agent/reports/
+
+  status_terms:
+    not_started:
+      meaning: required by roadmap or design SSOT, but no implementation surface exists yet
+      production_ready: false
+    skeleton:
+      meaning: boundary or adapter exists, but runtime behavior is pass-through, placeholder, or incomplete
+      production_ready: false
+    partial:
+      meaning: some runtime behavior exists, but completion conditions are not fully satisfied
+      production_ready: false
+    implemented:
+      meaning: completion conditions for the declared scope are satisfied and covered by evidence checks
+      production_ready: false
+    production_ready:
+      meaning: implemented, wired through canonical runtime route, verified by required CI, and no known blocking gap remains
+      production_ready: true
+
+  completion_rules:
+    - status_implemented_requires_completion_conditions
+    - status_implemented_requires_evidence_tests_or_ci
+    - production_ready_requires_no_known_blocking_gap
+    - skeleton_stub_dummy_marker_must_not_coexist_with_status_implemented
+    - known_skeleton_or_partial_work_must_be_listed_in_implementation_registry
+    - task_queue_must_not_be_used_as_the_primary_status_source
+
+  milestones:
+    M1_runtime_skeleton:
+      title: Canonical runtime route skeleton
+      status: partial
+      goal: >
+        Establish visible frontend/backend runtime route boundaries so future work can move
+        behavior into the canonical data-defined route instead of adding direct branches.
+      implemented_scope:
+        - frontend ui action to dispatch api client path
+        - backend dispatch endpoint boundary
+        - backend runtime timeline scheduler skeleton
+        - backend manifest dispatcher skeleton
+        - default entity search vertical slice
+        - SSE endpoint and frontend receiver/dispatcher skeletons
+      remaining_scope:
+        - manifest-driven active routing
+        - unified cron/hook/client queue semantics
+        - real SSE projection event flow
+        - explicit trigger_kind and role request identity
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    M2_manifest_runtime:
+      title: Manifest-driven runtime routing
+      status: not_started
+      goal: >
+        Move runtime destination selection from hardcoded RuntimeExecutor branches into
+        active manifest resolution by role, target, layer, and action.
+      unlocks:
+        - backend.manifest_dispatcher: implemented
+        - backend.runtime_timeline_scheduler: partial
+        - backend.runtime_executor_dispatch_scope: narrowed
+      blocking_gaps:
+        - Gap-1 manifest_dispatcher full implementation
+        - Gap-5 minimal_event_shape trigger_kind and role
+
+    M3_unified_timeline_and_output_lanes:
+      title: Unified trigger timeline and output lanes
+      status: not_started
+      goal: >
+        Align cron, hook, and client triggers on the same backend runtime timeline,
+        then route effects into response, db_notify, and registry_attractor output lanes.
+      unlocks:
+        - backend.runtime_timeline_scheduler: implemented
+        - backend.output_lane_router: partial
+        - backend.db_notify_listener: partial
+      blocking_gaps:
+        - Gap-2 unified runtime_timeline_scheduler
+        - Gap-6 db_notify_emission and registry_attractor_update
+
+    M4_projection_runtime:
+      title: SSE and projection runtime
+      status: not_started
+      goal: >
+        Connect backend projection events through SSE into frontend scheduler,
+        dispatcher, projection runtime, and UI projection without frontend topology judgment.
+      unlocks:
+        - backend.sse_emitter: partial
+        - frontend.sse_receiver: partial
+        - frontend.sse_dispatcher: partial
+        - frontend.projection_runtime: partial
+      blocking_gaps:
+        - Gap-7 SSE projection lane full implementation
+        - Gap-8 projection_constructor
+        - pipeline continuity SSE end-to-end integration test
+
+    M5_admin_and_ui_topology:
+      title: Admin UI, component topology, and seed runtime
+      status: not_started
+      goal: >
+        Provide admin-facing registry, seed, component, layout, and projection management
+        surfaces while keeping DB topology and backend runtime as the semantic authority.
+      blocking_gaps:
+        - Issue #84 seed import/export runtime
+        - Issue #86 frontend UI component system
+        - Issue #89 admin visual layout builder
+        - Gap-9 admin route skeletons
+
+  implementation_registry:
+    frontend.ui_action:
+      status: implemented
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: Demo UI operation surface can create a dispatch request.
+      files:
+        - frontend/islands/OperationPanel.tsx
+      evidence:
+        ci:
+          - default-entity-search
+          - frontend-types
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    frontend.api_client:
+      status: implemented
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: Frontend dispatch API client exists and sends DispatchRequest to /api/dispatch.
+      files:
+        - frontend/api/dispatch.ts
+        - frontend/routes/api/dispatch.ts
+      evidence:
+        ci:
+          - default-entity-search
+          - frontend-types
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    backend.dispatch_endpoint:
+      status: implemented
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: Backend dispatch endpoint delegates into the runtime timeline scheduler.
+      files:
+        - backend/endpoint/DispatchEndpoint.cs
+        - backend/Program.cs
+      evidence:
+        ci:
+          - backend-tests
+          - default-entity-search
+          - pipeline-continuity
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    backend.runtime_timeline_scheduler:
+      status: skeleton
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: Scheduler boundary exists, but currently executes client triggers as synchronous pass-through.
+      files:
+        - backend/scheduler/RuntimeTimelineScheduler.cs
+      evidence:
+        tests:
+          - SchedulerDispatcherChainTests
+        ci:
+          - backend-tests
+      completion_condition:
+        - cron_hook_client_triggers_are_aligned_in_one_runtime_queue
+        - scheduler_owns_ordering_collision_control_and_execution_boundary
+        - runtime_executor_does_not_own_trigger_alignment
+      known_gap_ref:
+        - Gap-2 runtime_timeline_scheduler full implementation
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.manifest_dispatcher:
+      status: skeleton
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: ManifestDispatcher exists, but active manifest DB routing is not implemented yet.
+      files:
+        - backend/runtime/ManifestDispatcher.cs
+      evidence:
+        tests:
+          - SchedulerDispatcherChainTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
+      completion_condition:
+        - active_manifest_is_resolved_from_db_by_role_target_layer_action
+        - dispatcher_mapping_and_runtime_mapping_are_used_for_runtime_destination
+        - RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
+        - broken_manifest_or_mapping_reference_returns_explicit_error
+      known_gap_ref:
+        - Gap-1 manifest_dispatcher full implementation
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.runtime_executor:
+      status: partial
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: RuntimeExecutor supports the default entity search vertical slice, but still carries temporary routing responsibility.
+      files:
+        - backend/runtime/RuntimeExecutor.cs
+      evidence:
+        tests:
+          - RuntimeExecutorTests
+          - DefaultEntitySearchIntegrationTests
+        ci:
+          - backend-tests
+          - default-entity-search
+          - pipeline-continuity
+      completion_condition:
+        - runtime_executor_only_executes_resolved_runtime_destination
+        - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
+        - no_new_hardcoded_dispatch_branch_is_added
+      known_gap_ref:
+        - Gap-1 manifest_dispatcher full implementation
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    backend.manifest_storage:
+      status: skeleton
+      production_ready: false
+      milestone: M2_manifest_runtime
+      public_summary: Manifest table exists, but contract completeness for active routing is not yet proven.
+      files:
+        - db/manifest_tables.sql
+        - db/init.sql
+      evidence:
+        ci:
+          - structure-check
+      completion_condition:
+        - manifest_storage_supports_role_definition_route_definition_dispatcher_mapping_runtime_mapping
+        - active_manifest_resolution_can_be_executed_by_manifest_dispatcher
+        - manifest_contract_is_covered_by_repository_or_runtime_tests
+      known_gap_ref:
+        - Gap-1 manifest_dispatcher full implementation
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.minimal_event_shape:
+      status: not_started
+      production_ready: false
+      milestone: M2_manifest_runtime
+      public_summary: EndpointRequestDto and frontend DispatchRequest do not yet carry trigger_kind and role.
+      files:
+        - backend/schema/Contracts.cs
+        - frontend/api/dispatch.ts
+      completion_condition:
+        - request_contract_includes_trigger_kind
+        - request_contract_includes_role_or_role_is_resolved_from_jwt_claim_at_boundary
+        - frontend_and_backend_request_contracts_are_synchronized
+      known_gap_ref:
+        - Gap-5 minimal_event_shape trigger_kind and role
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.output_lanes:
+      status: not_started
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: response_emission exists, but db_notify_emission and registry_attractor_update lanes are not implemented.
+      files:
+        - backend/runtime/OutputLaneRouter.cs
+        - backend/repository/DbNotifyRepository.cs
+      completion_condition:
+        - response_emission_db_notify_emission_and_registry_attractor_update_are_explicit_output_lanes
+        - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
+        - registry_attractor_update_is_not_hidden_in_response_flow
+      known_gap_ref:
+        - Gap-6 output lanes
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.sse_emitter:
+      status: skeleton
+      production_ready: false
+      milestone: M4_projection_runtime
+      public_summary: SSE endpoint exists, but currently emits keep-alive ping events only.
+      files:
+        - backend/endpoint/SseEndpoint.cs
+        - backend/Program.cs
+      evidence:
+        ci:
+          - default-entity-search
+          - pipeline-continuity
+      completion_condition:
+        - backend_sse_emitter_streams_projection_events_not_only_ping
+        - event_payload_preserves_manifest_id_component_ids_attention_score_or_documented_identity
+        - hook_or_db_notify_event_enters_scheduler_before_sse_emission
+      known_gap_ref:
+        - Gap-7 SSE projection lane
+        - Issue #123 SSE end-to-end integration test
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    frontend.sse_receiver:
+      status: skeleton
+      production_ready: false
+      milestone: M4_projection_runtime
+      public_summary: EventSource receiver exists, but scheduler/dispatcher/projection runtime wiring is not complete.
+      files:
+        - frontend/runtime/sseReceiver.ts
+        - frontend/routes/api/sse.ts
+      evidence:
+        tests:
+          - pipelineContinuity.test.ts
+        ci:
+          - frontend-types
+          - default-entity-search
+      completion_condition:
+        - sse_receiver_feeds_frontend_scheduler_as_hook_trigger
+        - receiver_preserves_projection_event_identity
+        - backend_sse_error_states_are_explicit
+      known_gap_ref:
+        - Gap-7 SSE projection lane
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    frontend.sse_dispatcher:
+      status: skeleton
+      production_ready: false
+      milestone: M4_projection_runtime
+      public_summary: Handler-map dispatcher exists, but projection runtime connection is not complete.
+      files:
+        - frontend/runtime/sseDispatcher.ts
+      evidence:
+        tests:
+          - pipelineContinuity.test.ts
+        ci:
+          - frontend-types
+          - default-entity-search
+      completion_condition:
+        - dispatcher_routes_projection_events_into_projection_runtime
+        - unhandled_event_policy_is_explicit
+        - projection_event_identity_is_preserved
+      known_gap_ref:
+        - Gap-7 SSE projection lane
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+
+    frontend.projection_constructor:
+      status: not_started
+      production_ready: false
+      milestone: M4_projection_runtime
+      public_summary: Projection constructor from manifest projection definition is not implemented.
+      files:
+        - frontend/runtime/projectionConstructor.ts
+      completion_condition:
+        - projection_definition_and_json_key_value_build_form_inputs_component_projection_or_ui_projection
+        - projection_constructor_mapping_is_read_from_manifest_response
+        - frontend_does_not_make_topology_or_sql_attention_judgment
+      known_gap_ref:
+        - Gap-8 projection_constructor
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    frontend.admin_routes:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Admin base route exists; manifest, contents, and ui-builder route skeletons remain pending.
+      files:
+        - frontend/routes/admin/
+      completion_condition:
+        - admin_manifests_route_exists
+        - admin_contents_route_exists
+        - admin_ui_builder_route_exists
+        - routes_remain_projection_surfaces_not_runtime_judgment_owners
+      known_gap_ref:
+        - Gap-9 admin route skeletons
+      detail_ssot:
+        - docs/design/runtime-orchestration-ssot.yaml
+
+    seed_import_export_runtime:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: UI-managed /storage/seed.json runtime is not implemented.
+      completion_condition:
+        - seed_runtime_boundary_is_defined_in_SSOT
+        - save_load_validate_preview_import_are_separated
+        - backend_reads_and_writes_storage_seed_json_through_canonical_route
+        - import_failure_is_explicit_and_fail_close
+        - docker_compose_mounts_storage_volume
+      known_gap_ref:
+        - Issue #84
+
+    frontend_ui_component_system:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Primitive and packaged UI component system with UI topology DB registration is not implemented.
+      completion_condition:
+        - primitive_and_packaged_component_boundary_is_defined
+        - componentId_packageId_layoutId_wiringId_are_registered_in_UI_topology_DB
+        - code_only_components_are_treated_as_drift_or_gap
+        - frontend_does_not_own_runtime_or_topology_judgment
+      known_gap_ref:
+        - Issue #86
+
+    admin_visual_layout_builder:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Admin visual layout builder and layout tensor management are not implemented.
+      completion_condition:
+        - layout_tensor_and_variable_css_boundaries_are_defined
+        - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
+        - frontend_adapter_is_a_stable_projection_surface
+        - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
+      known_gap_ref:
+        - Issue #89
+
+  ci_expectations:
+    source_of_truth:
+      - docs/system-roadmap.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+    rules:
+      - roadmap_status_must_not_conflict_with_code_markers
+      - implemented_components_must_have_evidence
+      - production_ready_components_must_not_have_known_blocking_gaps
+      - skeleton_stub_dummy_markers_are_allowed_only_when_registered_as_skeleton_or_partial
+      - tests_or_fixtures_may_use_stub_dummy_mock_only_when_isolated_from_production_runtime
+    recommended_checks:
+      - check_system_roadmap_status_consistency
+      - check_skeleton_markers_against_implementation_registry
+      - check_implemented_entries_have_evidence
+      - check_production_ready_entries_have_no_known_gap_ref
+
+  public_notes:
+    - This roadmap is a status SSOT, not a promise of release dates.
+    - Implementation status is scoped per component and may differ from overall milestone status.
+    - A component can be implemented for a skeleton milestone while still not production_ready.
+    - Detailed runtime semantics remain in docs/design/*.
