@@ -5,10 +5,10 @@
 Every task starts by reading:
 
 1. `AGENTS.md`
-2. `.agent/README.md`
-3. `.agent/rules/rule.md`
+2. `.agent/rules/rule.md`
+3. `.agent/README.md`
 
-These are always-on governance sources. Protocols and skills are conditional and must be opened only when their trigger applies.
+These are always-on governance sources. Prompt bundle, protocol bundle, docs bundle, and skills bundle are not always-read; open them only when their trigger or task scope applies.
 
 
 ## Read Route
