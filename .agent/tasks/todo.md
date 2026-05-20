@@ -12,111 +12,92 @@
       → <理由・対象ファイル・次の判断点>
 ```
 
-## Current TODO
+## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
-- [x] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
-      → 実装完了 (branch: claude/process-todo-tasks-LkGVp)。
-      → PostgreSQL 16 ローカル起動で全 SQL ファイル (schema.sql → topology_tables.sql → promotion_tables.sql → context_route_tables.sql → ui_topology_tables.sql → seed_empty.sql → demo_seed.sql) を ON_ERROR_STOP=1 で実行。
-      → `ui_component_bucket` (8列) / `ui_topology_tensor` (12列) 作成確認済み。
-      → 診断レポート: `.agent/reports/2026-05-20-db-init-compose-bootstrap-validation.md`
-
-## Architecture Fix — Single Dispatch Endpoint (SSOT: framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`)
+点検レポート: `.agent/reports/2026-05-20-runtime-orchestration-ssot-inspection.md`
 
 SSOT参照必読:
-- `docs/framework-policy.yaml` (backend_flow, runtime_boundary_failure_matrix)
-- `docs/framework-core.yaml` (canonical route, frontend_to_backend_dispatch flow)
-- `docs/file-structure.yaml` (backend.principle: endpoint_is_thin_boundary)
-- `docs/registrar-admin-ui-specification.md` (Section 8: Backend Boundary Policy)
+- `docs/design/runtime-orchestration-ssot.yaml` (manifest_dispatcher, scheduler_contract, minimal_event_shape, output_lanes)
+- `docs/framework-core.yaml` (canonical route)
+- `docs/framework-policy.yaml` (backend_flow)
 
-違反現状:
-- Program.cs に 7 本の HTTP route が存在。正しくは POST /dispatch 1本 + GET /health + POST /auth/login のみ。
-- AdminEndpoint / PackageGeneratorEndpoint が Repository を直接呼び出し、canonical route を経由しない。
-- frontend/routes/api/admin/ に複数の proxy ファイルが存在。正しくは /api/dispatch 1本に集約。
+### Backend Structural Gaps
 
----
+- [ ] [Claude] Gap-4: Manifest DB テーブルを追加する
+      → SSOT `manifest_contract.storage: db`。role_definition / route_definition / ui_projection_definition /
+         dispatcher_mapping / runtime_mapping / topology_function_binding_mapping / projection_constructor_mapping
+         の各テーブルが未実装。manifest_dispatcher と projection_constructor の前提となる DB 層。
+      → 対象: `db/manifest_tables.sql` (新規)、`db/init.sql` (\i 追記)
+      → 実装前に SSOT の manifest_contract.invariants を再確認必須。
+      → Scenario Contract 必須 (DB スキーマ変更を伴う)。
 
-- [x] [Claude] Step 1: Program.cs の JWT ベアラートークン抽出を `ExtractBearerToken` ヘルパー関数に抽出 (behavior-preserving refactor)
-      → 対象: `backend/Program.cs`。全 7 route handler の3行抽出パターンを1行呼び出しに置換。
+- [ ] [Claude] Gap-5: `minimal_event_shape` フィールドを EndpointRequestDto / DispatchRequest に追加する
+      → SSOT `minimal_event_shape.identity_fields`: trigger_kind, manifest_id, trace_id が欠如。
+      → `EndpointRequestDto` に `trigger_kind` (cron|hook|client)、`manifest_id` (nullable Guid)、
+         `trace_id` (nullable string) を追加。`OperationType` との関係を整理。
+      → frontend `DispatchRequest` 型 (`frontend/api/dispatch.ts`) も同期して追加。
+      → 対象: `backend/schema/Contracts.cs`、`frontend/api/dispatch.ts`
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
-- [x] [Claude] Step 2: RuntimeExecutor に admin 操作ハンドラーを追加
-      → 対象: `backend/runtime/RuntimeExecutor.cs`。
-      → `context_token_registry` / `registry_vector_validate` / `ui_component_bucket` / `package_generator` の
-         operation target を canonical route で dispatch できるよう case を追加。
-      → AdminEndpoint / PackageGeneratorEndpoint のロジックを RuntimeExecutor 内ハンドラーへ移管。
-      → SSOT: docs/framework-core.yaml `frontend_to_backend_dispatch.flow`、
-               docs/framework-policy.yaml `backend_flow.processing_flow`
-      → 事前読み必須: backend/runtime/RuntimeExecutor.cs、backend/runtime/OperationVectorResolver.cs、
-                       backend/endpoint/AdminEndpoint.cs、backend/endpoint/PackageGeneratorEndpoint.cs
-      → Scenario Contract 更新必須 (canonical route 変更を伴うため)
-      → Runtime Boundary Failure Matrix (全10項目) を checklist に記入必須
+- [ ] [Claude] Gap-1: `manifest_dispatcher` を実装する
+      → SSOT `backend_contract.flow`: endpoint → backend_scheduler → manifest_dispatcher → topology_transform_runtime
+      → ManifestDispatcher は manifest DB の dispatcher_mapping / runtime_mapping を読んで
+         runtime destination を決定する。RuntimeExecutor 内の target/layer/action ハードコード分岐を移管。
+      → 前提: Gap-4 (manifest DB) が完了していること。
+      → 対象: `backend/runtime/ManifestDispatcher.cs` (新規)、`backend/runtime/RuntimeExecutor.cs` (分岐移管)
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
-- [x] [Claude] Step 3: Program.cs の admin/package-generator 専用 route を削除し、POST /dispatch に集約
-      → 対象: `backend/Program.cs`。
-      → 削除対象 route: GET|POST /admin/context-token-registry、POST /admin/context-token-registry/{id}/deprecate、
-                         POST /admin/registry-vector-validate、GET /admin/ui-component-bucket、POST /admin/package-generator/generate。
-      → AdminEndpoint / PackageGeneratorEndpoint の DI 登録も削除 (Step 2 完了後)。
-      → 残留: GET /health、POST /auth/login、POST /dispatch の3本のみ。
-      → SSOT: docs/framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`
-      → Scenario Contract + Runtime Boundary Failure Matrix 必須
+- [ ] [Claude] Gap-3: `topology_function_binder` / `topology_function_interface` を実装する
+      → SSOT `backend_contract.topology_function_binder`: function_name + where_condition + jsonb_array → interface_args
+      → SSOT prohibited: entity_constructor / csharp_factory / domain_invariant_constructor
+      → 関数バインディング層として Repository 内の直接 SQL 組み立てを整理し、
+         TopologyFunctionInterface を経由する形に移行する。
+      → 対象: `backend/runtime/TopologyFunctionBinder.cs` (新規)、`backend/schema/TopologyFunctionInterface.cs` (新規)
+      → Scenario Contract 必須。
 
-- [x] [Claude] Step 4: frontend admin proxy ファイルを削除し /api/dispatch に集約
-      → 対象削除: `frontend/routes/api/admin/context-token-registry.ts`、
-                  `frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts`、
-                  `frontend/routes/api/admin/registry-vector-validate.ts`。
-      → /api/dispatch.ts は既存のまま維持 (変更不要)。
-      → admin UI 側の fetch 呼び出しを /api/admin/* → /api/dispatch に書き換え。
-      → SSOT: docs/file-structure.yaml `frontend.directories.api: backend_contract_client`、
-               docs/framework-core.yaml `runtime_wiring.frontend_to_backend_dispatch`
-      → Scenario Contract + Runtime Boundary Failure Matrix (frontend proxy 項目) 必須
+- [ ] [Claude] Gap-2: `runtime_timeline_scheduler` をクライアント dispatch パスに接続する
+      → SSOT `scheduler_contract.input: cron_trigger | hook_trigger | client_trigger`
+      → 現状 client trigger は RetentionScheduler 等を経由せず直接 RuntimeExecutor に到達する。
+      → scheduler alignment (causal order, execution_boundary, collision_control) を client dispatch にも適用。
+      → 前提: Gap-1 (manifest_dispatcher) が完了していること。
+      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs` (新規)、`backend/Program.cs`
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
-## System Operation CI (Issue #83)
+- [ ] [Claude] Gap-6: output lane `db_notify_emission` / `registry_attractor_update` を実装する
+      → SSOT `backend_contract.output_lanes`: response_emission (実装済み) に加え
+         db_notify_emission と registry_attractor_update lane が必要。
+      → `notify_listen_contract` の db_notify + pg LISTEN インフラを実装。
+      → 前提: Gap-1 (manifest_dispatcher) が完了していること。
+      → 対象: `backend/runtime/OutputLaneRouter.cs` (新規)、`backend/repository/DbNotifyRepository.cs` (新規)
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
 
-- [x] [Claude] SystemOperationCiRuntime の backend-tests CI 検証
-      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104 wiring 含む)。
-      → 対象: 全 backend/runtime/*, backend/repository/*, backend/tests/.../*.cs
-      → remote CI (backend-tests workflow) PASS 確認済み (PR #104)。
+### Frontend Structural Gaps
 
-- [x] [Claude] SystemOperationCiRuntime の event-driven CI 接続 (RunTopologyVectorRuntimeExtensionAsync)
-      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104)。
-      → InspectEvidenceIntegrity: evidence extraction 後に呼び出し。Blocking → throw → TVR_EXTENSION_FAILED。
-      → InspectHubAttentionAfterUpdate: hub attention record 構築後 (upsert 前) に呼び出し。Blocking → throw → TVR_EXTENSION_FAILED。
-      → Gap → LogWarning + recommendation 継続。
-      → SystemOperationCiRuntime を Program.cs に DI 登録済み。
-      → テスト追加: StubBlockingEvidenceCiRuntime / StubGapEvidenceCiRuntime / NanEmaFastExistingRepository。
+- [ ] [Claude] Gap-7: SSE projection lane を実装する
+      → SSOT `frontend_contract.lanes.projection_event_lane`:
+         sse_receiver → frontend_scheduler → sse_dispatcher → projection_runtime → ui_projection
+      → フロントエンドに SSE 受信インフラが存在しない。
+      → 前提: Gap-6 (db_notify_emission) が完了していること。
+      → 対象: `frontend/runtime/sseReceiver.ts` (新規)、`frontend/runtime/projectionRuntime.ts` (新規)
+      → Scenario Contract 必須。
 
-- [x] [Claude] Registry 連続性探索 (orphaned registry detection) の実装
-      → 実装完了 (branch: claude/issue-83-tasks-PbiMy, PR #104)。
-      → InspectRegistryContinuityAsync: LoadRegistryTokenSummaryForCiAsync → CRON_ORPHANED_REGISTRY (Gap)。
-      → RegistryTokenCiSummary を SystemCiContracts.cs に追加。
-      → NpgsqlContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: context_token_registry で孤立 token カウント。
-      → テスト追加: StubRegistryCiRepository + InspectRegistryContinuityAsync 3テスト。
+- [ ] [Claude] Gap-8: `projection_constructor` を実装する
+      → SSOT `frontend_contract.projection_constructor`:
+         json_key_value + projection_definition → form_inputs | component_projection | ui_projection
+      → 現状 `renderEmission.ts` は ComponentRegistry から ComponentSpec を取得するのみ。
+         projection_definition を参照する構築フローがない。
+      → 前提: Gap-4 (manifest DB) の projection_constructor_mapping が必要。
+      → 対象: `frontend/runtime/projectionConstructor.ts` (新規)
+      → Scenario Contract 必須。
 
-- [x] [Claude] Cron trigger 接続 (background worker / scheduled job)
-      → 実装完了 (branch: claude/process-todo-tasks-Ns7fy)。
-      → SystemOperationCiScheduler (BackgroundService) を追加。InspectHubAttentionContinuityAsync /
-         InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync を定期呼び出し。
-      → Program.cs に AddHostedService<SystemOperationCiScheduler>() 登録済み。
-      → 診断結果レポート: .agent/reports/2026-05-19-system-operation-ci-scheduler.md
-      → remote CI (backend-tests workflow) PASS 確認済み (PR #108)。
+- [ ] [Claude] Gap-9: frontend admin routes を SSOT に合わせて追加する
+      → SSOT `frontend_routes.admin`: /admin (実装済み), /admin/manifests, /admin/contents, /admin/ui-builder
+      → skeleton ページで構わない。SSOT ルート定義との一致を確立する。
+      → 対象: `frontend/routes/admin/manifests.tsx` / `contents.tsx` / `ui-builder.tsx` (新規)
 
-## Registry Tensor Continuity
-
-- [x] [Claude] Context Route / Topology Vector Runtime の旧vector実装を DB topology observation runtime へ移行する
-      → 実装完了 (branch: claude/process-todo-tasks-yXNvS, commit: 6db556c)。
-      → 実施内容: BuildEventVector → BuildMultiHotVector (1.0f per token ID)、tokenValueMap 依存を除去、tokenIds proxy as relationIds を廃止、DDLコメント・UI文言・DTO名を multi-hot / rebuildable projection cache に更新。
-      → remote CI (backend-tests workflow) PASS 確認済み (PR #93)。
-
-- [x] [Codex] Implement package-generator runtime/endpoint wiring for ui_component_bucket -> ui_topology_tensor persistence (tracked after SSOT/schema alignment).
-      → 実装完了 (branch: claude/process-todo-tasks-wPH6O)。
-      → 実施内容: UiTopologyRepository (abstract + NpgsqlUiTopologyRepository), PackageGeneratorRuntime, PackageGeneratorEndpoint を追加。Program.cs に DI登録・ルート (GET /admin/ui-component-bucket, POST /admin/package-generator/generate) を追加。ユニットテスト (PackageGeneratorEndpointTests) 追加。
-      → CI同期: PR #99 merge 後の main 最新 CI で backend-tests / Structure Check / default-entity-search の success を確認済み。
-      → サマリ: package-generator runtime/endpoint wiring は完了。残TODOは本ファイルの未チェック項目のみ。
-
-- [x] [Codex] registry tensor projection continuity 軽量チェックリストを追加する
-      → 問題点: registry tensor projection surface の定期点検観点（runtime / endpoint / scheduler / function / UI / DB の6面）が未定義で、drift 判定が属人的になる。
-      → 目的: projection/expansion continuity の静的監査観点を軽量チェックリスト化し、routine/periodic audit の判定基準を安定化する。
-      → 改善方針: checklist肥大化を避け、6面の存在確認・write/read surface・未実装境界・残TODO保存だけを確認する軽量ゲートにする。
-      → 対象ファイル名: .agent/checklists/*, .agent/protocols/reports-and-todos.md
-      → 対象関数名: なし
-      → 実装完了: `.agent/checklists/registry-tensor-projection-continuity.md` と `check-registry-tensor-projection-continuity.sh --self-test` を追加。
-      → 判断結果: check-policy-judgment.sh から分離した専用静的監査チェックとして実装済み。
+- [ ] [Claude] Gap-10: `/login` ルートを SSOT の `/auth` に合わせるか SSOT を更新する
+      → SSOT `frontend_routes.public: [/, /auth]` だが現状は `/login` ルートが存在する。
+      → 選択肢:
+        (a) `frontend/routes/login.tsx` → `frontend/routes/auth.tsx` にリネーム
+        (b) SSOT を `/login` に更新する
+      → SSOT が `/auth` を規定している理由を確認してから判断。対象: `frontend/routes/login.tsx` or SSOT
