@@ -30,6 +30,11 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 
 - `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.
 - `.agent/tasks/todo.md` is not for CI waiting, remote CI pass confirmation, local environment absence, or verification-only bookkeeping.
+- `.agent/tasks/todo.md` is not an implementation report or PR changelog.
+- Do not leave completed work logs under `[x]` items in `.agent/tasks/todo.md`.
+- Do not mark a TODO `[x]` when the same item still contains concrete remaining work, partial/skeleton status, missing tests, unconnected runtime lanes, or unmet completion conditions.
+- For batch PRs, each TODO item must be judged independently. A batch implementation may complete some items while leaving others open.
+- If a batch PR creates a partial surface, skeleton boundary, or helper that still needs wiring/test/SSOT work, rewrite that residue as a smaller `[ ]` TODO instead of marking the parent item `[x]`.
 - Completion decision and TODO `[x]` eligibility are governed by `.agent/protocols/completion.md`.
 - Recursive Verification Gate, Required Check Scope Declaration Gate, Failure Triage Self-Recursion Gate, Audit Gap Response Gate, and Remote CI Equivalence Gate are defined in completion-governance SSOT.
 
