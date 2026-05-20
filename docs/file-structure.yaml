@@ -361,3 +361,8 @@ data_driven_topology_runtime_file_structure:
     - agenda_executes
     - resume_restores
     - broken_refs_are_errors_not_silent_noops
+
+  ssot_references:
+    runtime_orchestration:
+      path: docs/design/runtime-orchestration-ssot.yaml
+      role: independent_runtime_orchestration_ssot_for_scheduler_dispatcher_and_projection_topology_runtime

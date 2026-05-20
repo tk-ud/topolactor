@@ -54,6 +54,7 @@ required_files:
     - docs/design/relation-registry-fk-audit-and-abstract-migration.md
     - docs/design/context-route-recommendation.md
     - docs/design/context-route-recommendation.yaml
+    - docs/design/runtime-orchestration-ssot.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
