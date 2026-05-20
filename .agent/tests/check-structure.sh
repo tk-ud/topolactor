@@ -435,6 +435,10 @@ check_content ".agent/checklists/policy-judgment.md" "scenario contract"
 check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
 
 echo ""
+echo ""
+echo "=== Public status consistency checks ==="
+bash "$REPO_ROOT/.agent/tests/check-system-roadmap.sh"
+
 echo "=== Checklist self-tests ==="
 bash "$REPO_ROOT/.agent/checklists/check-policy-judgment.sh" --self-test
 bash "$REPO_ROOT/.agent/checklists/check-boundary-identity.sh" --self-test

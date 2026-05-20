@@ -454,6 +454,68 @@ system_roadmap_ssot:
       known_gap_ref:
         - Issue #89
 
+    backend.context_route_repository:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Context route repository surfaces exist, with placeholder and stub paths still present.
+      files:
+        - backend/repository/ContextRouteRepository.cs
+        - backend/repository/NpgsqlContextRouteRepository.cs
+      completion_condition:
+        - context_route_repository_uses_production_runtime_paths_without_placeholder_behavior
+      known_gap_ref:
+        - Gap-10 context_route_repository implementation hardening
+
+    backend.topology_repository:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Npgsql topology repository includes temporary skeleton behavior for selected routes.
+      files:
+        - backend/repository/NpgsqlTopologyRepository.cs
+        - backend/repository/UiTopologyRepository.cs
+      completion_condition:
+        - topology_repository_removes_skeleton_shortcuts_and_uses_full_registry_resolution
+      known_gap_ref:
+        - Gap-11 topology_repository production hardening
+
+    backend.admin_contracts:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Admin contract surface includes temporary placeholder fields and needs completion hardening.
+      files:
+        - backend/schema/AdminContracts.cs
+      completion_condition:
+        - admin_contracts_replace_temporary_fields_with_validated_runtime_schema
+      known_gap_ref:
+        - Gap-12 admin_contracts finalization
+
+    frontend.admin_routes:
+      status: skeleton
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Admin route shells exist as UI skeletons and are not production-ready.
+      files:
+        - frontend/routes/admin/index.tsx
+      completion_condition:
+        - admin_routes_are_wired_to_validated_backend_registry_flows
+      known_gap_ref:
+        - Gap-9 admin route skeletons
+
+    frontend.runtime_scheduler:
+      status: skeleton
+      production_ready: false
+      milestone: M1_runtime_skeleton
+      public_summary: Frontend scheduler queue exists, but ordering/async runtime semantics are still skeleton behavior.
+      files:
+        - frontend/runtime/frontendScheduler.ts
+      completion_condition:
+        - frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
+      known_gap_ref:
+        - Gap-13 frontend scheduler runtime completion
+
   ci_expectations:
     source_of_truth:
       - docs/system-roadmap.yaml
