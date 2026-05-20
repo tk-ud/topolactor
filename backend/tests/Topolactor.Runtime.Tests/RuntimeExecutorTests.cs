@@ -15,6 +15,7 @@ public class RuntimeExecutorTests
     {
         var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
+        var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
 
         return new RuntimeExecutor(
@@ -40,7 +41,7 @@ public class RuntimeExecutorTests
             adminRuntime: new AdminRuntime(
                 NullLogger<AdminRuntime>.Instance,
                 contextRouteRepository,
-                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRouteRepository, contextRoutePolicyRepository),
+                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
                 new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
                 new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
     }

@@ -12,7 +12,7 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-async function callAdminDispatch(request: DispatchRequest): Promise<Emission> {
+async function callAdminDispatch(request: DispatchRequest): Promise<Emission | null> {
   const res = await fetch("/api/dispatch", {
     method: "POST",
     headers: getAuthHeaders(),
@@ -24,7 +24,7 @@ async function callAdminDispatch(request: DispatchRequest): Promise<Emission> {
   const body = await res.json() as { success?: boolean; emission?: Emission | null; errors?: ValidationError[] };
   if (res.status === 501) {
     const code = body.errors?.[0]?.code ?? body.errors?.[0]?.Code;
-    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return { data: null } as Emission;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
   }
 
   if (!res.ok || !body.success || !body.emission) {
@@ -50,6 +50,7 @@ export async function fetchContextTokens(): Promise<ContextToken[] | null> {
     layer: "context_token_registry",
     action: "list",
   });
+  if (emission === null) return null;
   return (emission.data ?? null) as ContextToken[] | null;
 }
 
@@ -63,6 +64,7 @@ export async function createContextToken(
     action: "create",
     payload: token,
   });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   return emission.data as { ok: boolean; message: string; tokenId?: string; errorCode?: string };
 }
 
@@ -76,6 +78,7 @@ export async function deprecateContextToken(
     action: "deprecate",
     idOrHubId: tokenId,
   });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   return emission.data as { ok: boolean; message: string };
 }
 
@@ -111,5 +114,6 @@ export async function validateRegistryVector(
     action: "validate",
     payload: { registryTable, queryIds },
   });
+  if (emission === null) return null;
   return (emission.data ?? null) as RegistryVectorValidationResult | null;
 }

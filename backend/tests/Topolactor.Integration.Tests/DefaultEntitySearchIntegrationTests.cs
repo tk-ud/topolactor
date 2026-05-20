@@ -21,6 +21,7 @@ public class DefaultEntitySearchIntegrationTests
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
         var contextRoutePolicyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
         var executor = new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -44,7 +45,7 @@ public class DefaultEntitySearchIntegrationTests
             adminRuntime: new AdminRuntime(
                 NullLogger<AdminRuntime>.Instance,
                 contextRouteRepository,
-                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRouteRepository, contextRoutePolicyRepository),
+                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
                 new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
                 new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
