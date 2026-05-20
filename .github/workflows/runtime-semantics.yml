@@ -1,0 +1,49 @@
+name: runtime-semantics
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - '.agent/tests/check-runtime-semantics.sh'
+      - '.github/workflows/runtime-semantics.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - '.agent/tests/check-runtime-semantics.sh'
+      - '.github/workflows/runtime-semantics.yml'
+
+jobs:
+  runtime-semantics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run runtime semantics check
+        run: bash .agent/tests/check-runtime-semantics.sh

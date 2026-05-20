@@ -1,0 +1,54 @@
+name: bootstrap-validation
+
+on:
+  pull_request:
+    paths:
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - '.agent/tests/check-bootstrap-validation.sh'
+      - '.github/workflows/bootstrap-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - '.agent/tests/check-bootstrap-validation.sh'
+      - '.github/workflows/bootstrap-validation.yml'
+
+jobs:
+  bootstrap-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: topolactor_bootstrap
+          POSTGRES_USER: topolactor
+          POSTGRES_PASSWORD: topolactor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U topolactor -d topolactor_bootstrap"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: topolactor_bootstrap
+      POSTGRES_USER: topolactor
+      POSTGRES_PASSWORD: topolactor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Validate docker compose config parse
+        run: |
+          docker compose -f infra/docker-compose.yml config > /dev/null
+
+      - name: Run fresh bootstrap validation
+        run: bash .agent/tests/check-bootstrap-validation.sh
