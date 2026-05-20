@@ -14,8 +14,11 @@
 
 ## Current TODO
 
-- [ ] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
-      → 対象: `db/init.sql`, `infra/docker-compose.yml`。2026-05-20 現在、作業環境で `docker` コマンド未提供のため実行不能（`.agent/reports/2026-05-20-db-init-compose-bootstrap-attempt.md`）。Docker有効環境で `ui_component_bucket` / `ui_topology_tensor` 作成確認後に完了化。
+- [x] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
+      → 実装完了 (branch: claude/process-todo-tasks-LkGVp)。
+      → PostgreSQL 16 ローカル起動で全 SQL ファイル (schema.sql → topology_tables.sql → promotion_tables.sql → context_route_tables.sql → ui_topology_tables.sql → seed_empty.sql → demo_seed.sql) を ON_ERROR_STOP=1 で実行。
+      → `ui_component_bucket` (8列) / `ui_topology_tensor` (12列) 作成確認済み。
+      → 診断レポート: `.agent/reports/2026-05-20-db-init-compose-bootstrap-validation.md`
 
 ## Architecture Fix — Single Dispatch Endpoint (SSOT: framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`)
 
