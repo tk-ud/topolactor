@@ -108,8 +108,9 @@ mapping:
       - frontend/routes/*
       - backend topology transform runtime
       - topology payload vector conversion and json linking
-      - entity builder mapping and runtime mapping
-      - manifest authority over role dispatcher runtime entity_builder
+      - topology_function_binder mapping and runtime mapping
+      - projection_constructor mapping
+      - manifest authority over role dispatcher runtime topology_function_binding
     required_docs:
       - docs/design/runtime-orchestration-ssot.yaml
     supporting_docs:
