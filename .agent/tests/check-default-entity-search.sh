@@ -51,6 +51,15 @@ else
 fi
 
 echo ""
+echo "=== Frontend pipeline continuity test: SSE dispatcher / scheduler / projection identity ==="
+if deno test "${REPO_ROOT}/frontend/tests/pipelineContinuity.test.ts" --allow-read; then
+  echo "OK  [frontend] pipeline continuity test passed"
+else
+  echo "FAIL: frontend pipeline continuity test failed" >&2
+  FAILURES=$((FAILURES + 1))
+fi
+
+echo ""
 if [ "${FAILURES}" -eq 0 ]; then
   echo "=== All default:entity:search checks passed ==="
   exit 0

@@ -138,3 +138,24 @@ mapping:
     supporting_docs:
       - docs/design/runtime-orchestration-ssot.yaml
     protocols: []
+
+  - work_type: pipeline_continuity_api_sse_identity_validation
+    change_surfaces:
+      - frontend/islands/OperationPanel.tsx
+      - frontend/runtime/resolveOperationVector.ts
+      - frontend/api/dispatch.ts
+      - frontend/components/EmissionView.tsx
+      - frontend/components/ProjectionView.tsx
+      - backend/endpoint/DispatchEndpoint.cs
+      - backend/runtime/RuntimeExecutor.cs
+      - backend/schema/Contracts.cs
+      - backend/runtime/EmissionBuilder.cs
+      - backend/schema/ContextRouteContracts.cs
+      - api command lane node identity
+      - sse projection lane node identity
+      - pipeline continuity check
+    required_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols: []

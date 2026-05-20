@@ -4,6 +4,7 @@ using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 using Xunit;
 
@@ -11,7 +12,8 @@ namespace Topolactor.Integration.Tests;
 
 /// <summary>
 /// Integration tests for the default:entity:search vertical skeleton.
-/// Tests the full dispatch boundary: EndpointRequestDto → DispatchEndpoint → RuntimeExecutor → emission.
+/// Tests the full dispatch boundary:
+/// EndpointRequestDto → DispatchEndpoint → RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor → emission.
 /// No DB credentials, no production HTTP host, no real business data required.
 /// </summary>
 public class DefaultEntitySearchIntegrationTests
@@ -48,7 +50,9 @@ public class DefaultEntitySearchIntegrationTests
                 new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
                 new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
                 new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
-        return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler);
     }
 
     [Fact]
@@ -93,5 +97,27 @@ public class DefaultEntitySearchIntegrationTests
         Assert.False(response.Success);
         Assert.Null(response.Emission);
         Assert.Contains(response.Errors, e => e.Code == "REQUEST_NULL");
+    }
+
+    [Fact]
+    public async Task PipelineIdentity_DefaultEntitySearch_RequiredIdentityFieldsSurviveFullDispatch()
+    {
+        // Data-driven pipeline identity continuity check.
+        // Verifies all required_identity fields from docs/design/pipeline-continuity-ssot.yaml
+        // api_command_lane survive the full dispatch path:
+        // EndpointRequestDto{target, layer, action} → DispatchEndpoint → RuntimeExecutor → Emission.
+        var endpoint = CreateEndpoint();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await endpoint.HandleAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+        Assert.NotNull(response.Emission!.StructureMapId);   // required_identity: structure_map_id
+        Assert.NotNull(response.Emission.PackageId);         // required_identity: package_id
+        Assert.NotNull(response.Emission.SchemaId);          // required_identity: schema_id
+        Assert.NotNull(response.Emission.ComponentIds);      // required_identity: component_ids
+        Assert.NotEmpty(response.Emission.ComponentIds!);
     }
 }

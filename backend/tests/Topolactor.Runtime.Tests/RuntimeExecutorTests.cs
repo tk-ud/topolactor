@@ -4,6 +4,7 @@ using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 using Xunit;
 
@@ -150,6 +151,29 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_DefaultEntitySearch_RequestIdentityProducesAttractorKeyAndEmissionIdentity()
+    {
+        // Verifies pipeline identity chain from docs/design/pipeline-continuity-ssot.yaml
+        // api_command_lane.required_identity:
+        // request{target, layer, action} → vector.AttractorKey → emission{structureMapId, packageId, schemaId, componentIds}.
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var vector = new OperationVectorResolver().Resolve(request);
+        Assert.Equal("default:entity:search", vector.AttractorKey); // required_identity: attractor_key
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.NotNull(response.Emission!.StructureMapId);  // required_identity: structure_map_id
+        Assert.NotNull(response.Emission.PackageId);        // required_identity: package_id
+        Assert.NotNull(response.Emission.SchemaId);         // required_identity: schema_id
+        Assert.NotNull(response.Emission.ComponentIds);     // required_identity: component_ids
+        Assert.NotEmpty(response.Emission.ComponentIds!);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_DemoEntityList_ReachesPostAttractorFlow()
     {
         var repo = new DemoEntityValidRouteTopologyRepository();
@@ -163,6 +187,45 @@ public class RuntimeExecutorTests
         Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
         Assert.DoesNotContain(res.Errors, e => e.Code == "STRUCTURE_MAP_RESOLVE_FAILED");
         Assert.True(repo.DemoEntityListCalled);
+    }
+}
+
+public class SchedulerDispatcherChainTests
+{
+    [Fact]
+    public async Task SchedulerDispatcherChain_DefaultEntitySearch_PassesThroughToExecutor()
+    {
+        // Verifies wiring: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
+        // Scheduler and dispatcher are pass-through skeletons; emission must be identical.
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await scheduler.AlignAndDispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission!.StructureMapId);
+        Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission.PackageId);
+        Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission.SchemaId);
+        Assert.Contains(TopologyRepository.DefaultComponentId, response.Emission.ComponentIds ?? []);
+    }
+
+    [Fact]
+    public async Task SchedulerDispatcherChain_BrokenAttractor_PropagatesExplicitError()
+    {
+        // Broken refs must propagate through the full chain — no silent fallback.
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+
+        var response = await scheduler.AlignAndDispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
     }
 }
 

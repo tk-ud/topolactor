@@ -36,6 +36,22 @@ Deno.test("renderEmission: emission structureMapId and packageId are consumed co
   assertEquals(specs.length, 1);
 });
 
+Deno.test("pipeline identity: componentIds from emission project to non-error specs", () => {
+  // Verifies frontend projection identity from docs/design/pipeline-continuity-ssot.yaml
+  // api_command_lane.required_identity: emission.componentIds → renderEmission →
+  // ComponentSpec[] where all specs resolve to non-error componentType.
+  const specs = renderEmission(successEmission, defaultComponentRegistry);
+
+  assertEquals(specs.length, successEmission.componentIds!.length);
+  for (const spec of specs) {
+    assertEquals(
+      spec.componentType !== "error",
+      true,
+      `componentId "${spec.componentId}" must resolve to non-error type in registry`,
+    );
+  }
+});
+
 Deno.test("validationErrorText: ATTRACTOR_RESOLVE_FAILED error is rendered correctly", () => {
   const text = validationErrorText(attractorFailedError);
 

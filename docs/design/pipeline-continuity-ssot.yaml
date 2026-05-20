@@ -1,0 +1,221 @@
+pipeline_continuity_ssot:
+  name: topolactor_pipeline_continuity_ssot
+  version: 0.2.0
+  status: ssot_design_document
+
+  purpose:
+    - data_driven_vertical_slice_continuity
+    - hardcode_guard_for_dispatcher_bypass_and_fallback_detection
+    - gap_tracking_for_not_yet_implemented_nodes
+
+  # Pipeline body checks use data-driven fixture execution, not vocabulary grep.
+  # See pipeline_body_test.ci_script for the delegation target in each lane.
+  # check-pipeline-continuity.sh covers hardcode_guard and gap_status only (bash).
+  # Pipeline body runs in default-entity-search.yml via check-default-entity-search.sh.
+
+  lanes:
+
+    api_command_lane:
+      description: >
+        client command enters via ui_action, passes through frontend_scheduler,
+        api_client, backend_endpoint, backend_scheduler, manifest_dispatcher,
+        topology_transform_runtime (RuntimeExecutor), entity/emission, and projects back
+        through frontend projection components. All nodes are skeleton-implemented.
+      direction: client_to_server_to_client
+
+      required_identity:
+        # Data identity fields that must survive the full pipeline.
+        # These are the subject of the data-driven fixture test, not code symbols.
+        - target
+        - layer
+        - action
+        - attractor_key
+        - structure_map_id
+        - package_id
+        - schema_id
+        - component_ids
+
+      nodes:
+        - node: frontend.ui_action
+          files:
+            - frontend/islands/OperationPanel.tsx
+          status: implemented
+
+        - node: frontend.scheduler
+          files:
+            - frontend/runtime/frontendScheduler.ts
+          status: implemented
+          implementation_note: >
+            Skeleton: synchronous pass-through. Wraps resolveOperationVector +
+            dispatchOperation via queueClientCommand. Ordering, batching, and
+            rollback boundaries are future scope.
+
+        - node: frontend.api_client
+          files:
+            - frontend/api/dispatch.ts
+            - frontend/routes/api/dispatch.ts
+          status: implemented
+
+        - node: backend.endpoint
+          files:
+            - backend/endpoint/DispatchEndpoint.cs
+          status: implemented
+
+        - node: backend.scheduler
+          files:
+            - backend/scheduler/RuntimeTimelineScheduler.cs
+          status: implemented
+          implementation_note: >
+            Skeleton: synchronous delegate to ManifestDispatcher. Client requests now
+            enter via RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
+            Ordering and collision control are future scope.
+
+        - node: backend.manifest_dispatcher
+          files:
+            - backend/runtime/ManifestDispatcher.cs
+          status: implemented
+          implementation_note: >
+            Skeleton: synchronous delegate to RuntimeExecutor. Manifest-driven routing
+            by axes (role, target, layer, action) is future scope.
+
+        - node: backend.topology_transform_runtime
+          files:
+            - backend/runtime/RuntimeExecutor.cs
+          status: implemented
+          implementation_note: >
+            RuntimeExecutor currently covers the roles of backend_scheduler,
+            manifest_dispatcher, and topology_transform_runtime as a skeleton.
+            When scheduler and dispatcher are connected, RuntimeExecutor scope narrows.
+
+        - node: backend.entity_and_emission
+          files:
+            - backend/runtime/EmissionBuilder.cs
+            - backend/repository/TopologyRepository.cs
+          status: implemented
+
+        - node: frontend.projection
+          files:
+            - frontend/components/EmissionView.tsx
+            - frontend/components/ProjectionView.tsx
+            - frontend/runtime/renderEmission.ts
+          status: implemented
+
+      required_endpoint:
+        path: /api/dispatch
+        frontend_route: frontend/routes/api/dispatch.ts
+        backend_handler: backend/endpoint/DispatchEndpoint.cs
+
+      pipeline_body_test:
+        kind: data_driven_fixture_execution
+        ci_script: .agent/tests/check-default-entity-search.sh
+        fixture_path: default:entity:search
+        verifies:
+          - EndpointRequestDto{target=default,layer=entity,action=Search} flows through RuntimeExecutor to Emission
+          - emission.structureMapId is present and non-null
+          - emission.packageId is present and non-null
+          - emission.schemaId is present and non-null
+          - emission.componentIds is non-empty
+          - frontend renderEmission expands componentIds through registry to non-error specs
+        test_files:
+          - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+          - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+          - frontend/tests/defaultEntitySearch.test.ts
+
+      hardcode_guard:
+        description: >
+          Checks that topology_transform_runtime (RuntimeExecutor) does not accumulate
+          hardcoded target/layer/action dispatch branching beyond documented skeleton
+          exceptions. Such branching replaces data-driven manifest_dispatcher routing.
+        file: backend/runtime/RuntimeExecutor.cs
+        checks:
+          - id: target_dispatch_branching
+            patterns:
+              - 'vector\.Target =='
+              - 'string\.Equals(vector\.Target'
+            allowed_count: 3
+            allowed_exceptions:
+              - demo_entity_check_in_ExecuteAsync
+              - admin_path_in_ExecuteAsync
+              - demo_validation_in_ValidateDemoEntityRequest
+            note: >
+              Count above 3 indicates a new hardcoded dispatch target being added.
+              New targets must be routed through manifest_dispatcher, not hardcoded here.
+
+    sse_projection_lane:
+      description: >
+        server event propagates through backend_sse_emitter, frontend_sse_receiver,
+        frontend_sse_dispatcher, and projects through projection_runtime. All nodes
+        are skeleton-implemented. End-to-end SSE data flow is future scope.
+      direction: server_to_client
+      event_types:
+        - projection
+        - Attention
+
+      required_identity:
+        - manifest_id
+        - component_ids
+        - attention_score
+
+      nodes:
+        - node: backend.attention_compute
+          files:
+            - backend/schema/ContextRouteContracts.cs
+          status: implemented
+
+        - node: backend.sse_emitter
+          files:
+            - backend/endpoint/SseEndpoint.cs
+          status: implemented
+          implementation_note: >
+            Skeleton: keep-alive ping only (event: ping / data: connected,
+            then event: ping / data: keep-alive every 30s).
+            Real event streaming is future scope.
+
+        - node: frontend.sse_receiver
+          files:
+            - frontend/runtime/sseReceiver.ts
+          status: implemented
+          implementation_note: >
+            Skeleton: EventSource-based receiver with connect/disconnect interface.
+            Wiring to dispatcher and scheduler is future scope.
+
+        - node: frontend.sse_dispatcher
+          files:
+            - frontend/runtime/sseDispatcher.ts
+          status: implemented
+          implementation_note: >
+            Skeleton: handler map with register/route interface. Feeds into
+            frontend projection runtime as hook_trigger.
+
+        - node: frontend.sse_projection
+          files:
+            - frontend/components/ProjectionView.tsx
+          status: implemented
+
+      required_endpoint:
+        path: /api/sse
+        frontend_route: frontend/routes/api/sse.ts
+        backend_handler: backend/endpoint/SseEndpoint.cs
+        status: implemented
+
+      pipeline_body_test:
+        kind: unit_skeleton
+        ci_script: .agent/tests/check-default-entity-search.sh
+        note: >
+          SSE lane unit tests cover dispatcher/receiver/projection identity via
+          frontend/tests/pipelineContinuity.test.ts. End-to-end SSE integration test
+          (real server push through full lane) requires sse_emitter beyond skeleton
+          (future scope — not_implemented at integration level).
+        test_files:
+          - frontend/tests/pipelineContinuity.test.ts
+
+      gap_rule: >
+        Nodes with status=not_implemented are GAP-fixed.
+        Status must not change to implemented based on incidental grep match.
+        Implementing a node requires: file listed in files[], a pipeline body test,
+        and an explicit SSOT status update with evidence.
+
+  gap_summary:
+    # All previously tracked gaps are resolved at skeleton level.
+    # SSE end-to-end integration (real server push) remains future scope but is not a node gap.
+    - "sse_projection_lane.pipeline_body_test: end-to-end SSE integration test not yet implemented (skeleton only)"
