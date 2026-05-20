@@ -4,6 +4,7 @@ using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 using Xunit;
 
@@ -11,7 +12,8 @@ namespace Topolactor.Integration.Tests;
 
 /// <summary>
 /// Integration tests for the default:entity:search vertical skeleton.
-/// Tests the full dispatch boundary: EndpointRequestDto → DispatchEndpoint → RuntimeExecutor → emission.
+/// Tests the full dispatch boundary:
+/// EndpointRequestDto → DispatchEndpoint → RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor → emission.
 /// No DB credentials, no production HTTP host, no real business data required.
 /// </summary>
 public class DefaultEntitySearchIntegrationTests
@@ -48,7 +50,9 @@ public class DefaultEntitySearchIntegrationTests
                 new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
                 new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
                 new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
-        return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler);
     }
 
     [Fact]

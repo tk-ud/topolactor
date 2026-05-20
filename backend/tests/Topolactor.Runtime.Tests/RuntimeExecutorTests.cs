@@ -4,6 +4,7 @@ using Topolactor.Guard;
 using Topolactor.Mapper;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 using Xunit;
 
@@ -186,6 +187,45 @@ public class RuntimeExecutorTests
         Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
         Assert.DoesNotContain(res.Errors, e => e.Code == "STRUCTURE_MAP_RESOLVE_FAILED");
         Assert.True(repo.DemoEntityListCalled);
+    }
+}
+
+public class SchedulerDispatcherChainTests
+{
+    [Fact]
+    public async Task SchedulerDispatcherChain_DefaultEntitySearch_PassesThroughToExecutor()
+    {
+        // Verifies wiring: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
+        // Scheduler and dispatcher are pass-through skeletons; emission must be identical.
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await scheduler.AlignAndDispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission!.StructureMapId);
+        Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission.PackageId);
+        Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission.SchemaId);
+        Assert.Contains(TopologyRepository.DefaultComponentId, response.Emission.ComponentIds ?? []);
+    }
+
+    [Fact]
+    public async Task SchedulerDispatcherChain_BrokenAttractor_PropagatesExplicitError()
+    {
+        // Broken refs must propagate through the full chain — no silent fallback.
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+
+        var response = await scheduler.AlignAndDispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
     }
 }
 

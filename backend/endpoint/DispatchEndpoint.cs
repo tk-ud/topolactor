@@ -1,29 +1,30 @@
 using Microsoft.Extensions.Logging;
-using Topolactor.Runtime;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 
 namespace Topolactor.Endpoint;
 
 /// <summary>
-/// Thin boundary entry point. Receives an EndpointRequestDto, delegates entirely
-/// to RuntimeExecutor, and returns the response. Contains no business logic.
+/// Thin boundary entry point. Receives an EndpointRequestDto and delegates to
+/// RuntimeTimelineScheduler (trigger alignment) → ManifestDispatcher → RuntimeExecutor.
+/// Contains no business logic.
 /// </summary>
 public class DispatchEndpoint
 {
     private readonly ILogger<DispatchEndpoint> _logger;
-    private readonly RuntimeExecutor _runtimeExecutor;
+    private readonly RuntimeTimelineScheduler _scheduler;
 
     public DispatchEndpoint(
         ILogger<DispatchEndpoint> logger,
-        RuntimeExecutor runtimeExecutor)
+        RuntimeTimelineScheduler scheduler)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _runtimeExecutor = runtimeExecutor ?? throw new ArgumentNullException(nameof(runtimeExecutor));
+        _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
     }
 
     /// <summary>
-    /// Handles an inbound request by delegating to the runtime executor.
-    /// This method is the single entry point from the outside world into the runtime.
+    /// Single entry point from the outside world into the runtime pipeline.
+    /// Null guard is here; all other logic is owned by scheduler, dispatcher, and executor.
     /// </summary>
     public async Task<EndpointResponseDto> HandleAsync(
         EndpointRequestDto request,
@@ -42,6 +43,6 @@ public class DispatchEndpoint
             "Dispatching request: OperationType={OperationType} Target={Target} Layer={Layer} Action={Action}",
             request.OperationType, request.Target, request.Layer, request.Action);
 
-        return await _runtimeExecutor.ExecuteAsync(request, ct);
+        return await _scheduler.AlignAndDispatchAsync(request, ct);
     }
 }

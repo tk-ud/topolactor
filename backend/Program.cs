@@ -64,6 +64,7 @@ builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>();
 builder.Services.AddSingleton<RuntimeExecutor>();
+builder.Services.AddSingleton<ManifestDispatcher>();
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();
 
@@ -71,8 +72,14 @@ builder.Services.AddSingleton<PackageGeneratorRuntime>();
 // Endpoint layer
 // ---------------------------------------------------------------------------
 builder.Services.AddSingleton<DispatchEndpoint>();
+builder.Services.AddSingleton<SseEndpoint>();
 builder.Services.AddSingleton<AuthEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
+
+// ---------------------------------------------------------------------------
+// Scheduler layer — client-flow trigger alignment
+// ---------------------------------------------------------------------------
+builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 
 // ---------------------------------------------------------------------------
 // Background services
@@ -123,6 +130,14 @@ app.MapPost("/auth/login", async (
 {
     var result = await auth.HandleAsync(request, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+// GET /sse — SSE projection lane skeleton.
+// Streams keep-alive ping events. Actual topology events require notify_listen
+// implementation (see pipeline-continuity-ssot.yaml sse_projection_lane).
+app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse) =>
+{
+    await sse.StreamAsync(ctx.Response, ctx.RequestAborted);
 });
 
 app.Run();

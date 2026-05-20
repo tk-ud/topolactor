@@ -2,7 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { JSX } from "preact";
 import type { UserOperation, OperationType } from "../runtime/resolveOperationVector.ts";
 import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
-import { dispatchOperation } from "../api/dispatch.ts";
+import { queueClientCommand } from "../runtime/frontendScheduler.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { EmissionView } from "../components/EmissionView.tsx";
 
@@ -71,15 +71,10 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     if (contextSessionId.trim()) context["ContextSessionId"] = contextSessionId.trim();
     if (contextTokenIds.trim()) context["ContextTokenIds"] = contextTokenIds.trim();
 
-    const response = await dispatchOperation(
-      {
-        operationType: op.operationType,
-        target: op.target,
-        layer: op.layer,
-        action: op.action,
-        context: Object.keys(context).length > 0 ? context : undefined,
-      },
+    const response = await queueClientCommand(
+      op,
       currentToken ?? undefined,
+      context,
     );
 
     setLoading(false);
