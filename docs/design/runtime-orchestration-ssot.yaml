@@ -158,6 +158,12 @@ runtime_orchestration_ssot:
       - manifest_mapping
     output:
       - runtime_destination
+      - manifest_projection_response
+    manifest_query_output:
+      input:
+        - manifest_id
+      output:
+        - manifest_projection_response
     axes:
       - trigger_kind
       - role
@@ -205,7 +211,7 @@ runtime_orchestration_ssot:
         - sse_projection_event
     invariants:
       - runtime_executes_after_scheduler_alignment
-      - runtime_destination_is_resolved_by_dispatcher
+      - backend_runtime_destination_is_resolved_by_manifest_dispatcher
       - runtime_policy_values_are_data_defined
 
   frontend_contract:
