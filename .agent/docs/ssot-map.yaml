@@ -97,8 +97,15 @@ mapping:
       - runtime_timeline_scheduler
       - runtime_queue_scheduler
       - manifest_dispatcher
+      - backend/Program.cs
+      - backend/endpoint/DispatchEndpoint.cs
+      - backend/runtime/*
+      - backend/jobs/*
       - frontend api trigger lane
       - frontend sse projection lane
+      - frontend/api/dispatch.ts
+      - frontend/runtime/*
+      - frontend/routes/*
       - backend topology transform runtime
       - topology payload vector conversion and json linking
       - entity builder mapping and runtime mapping

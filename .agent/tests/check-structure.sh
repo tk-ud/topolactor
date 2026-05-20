@@ -101,6 +101,7 @@ check_file "docs/framework-core.yaml"
 check_file "docs/framework-policy.yaml"
 check_file "docs/file-structure.yaml"
 check_file "docs/registrar-admin-ui-specification.md"
+check_file "docs/design/runtime-orchestration-ssot.yaml"
 
 check_file ".agent/README.md"
 check_file ".agent/docs/structure-map.yaml"
@@ -234,6 +235,10 @@ check_content ".agent/docs/required-paths.yaml" "Runtime Boundary Failure Matrix
 check_content ".agent/docs/ssot-map.yaml" "required_docs"
 check_content ".agent/docs/ssot-map.yaml" "supporting_docs"
 check_content ".agent/docs/ssot-map.yaml" "protocols"
+check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_orchestration_ssot"
+check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_timeline_scheduler"
+check_content "docs/design/runtime-orchestration-ssot.yaml" "manifest_dispatcher"
+check_content "docs/design/runtime-orchestration-ssot.yaml" "topology_transform_runtime"
 check_content ".agent/reports/README.md" "routine inspection reports"
 check_content ".agent/reports/README.md" "Do not use this directory as the default place for normal PR summaries"
 check_content ".agent/README.md" "Skills are task procedures"
@@ -432,4 +437,3 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
-
