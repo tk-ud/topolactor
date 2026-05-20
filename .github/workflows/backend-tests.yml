@@ -6,6 +6,7 @@ on:
       - 'backend/**/*.cs'
       - 'backend/**/*.csproj'
       - 'backend/**/*.sln'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -15,6 +16,7 @@ on:
       - 'backend/**/*.cs'
       - 'backend/**/*.csproj'
       - 'backend/**/*.sln'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 

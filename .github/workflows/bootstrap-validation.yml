@@ -1,0 +1,28 @@
+name: bootstrap-validation
+
+on:
+  pull_request:
+    paths:
+      - 'db/init.sql'
+      - 'infra/docker-compose.yml'
+      - '.github/workflows/bootstrap-validation.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'db/init.sql'
+      - 'infra/docker-compose.yml'
+      - '.github/workflows/bootstrap-validation.yml'
+
+jobs:
+  bootstrap-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate bootstrap files exist and parse
+        run: |
+          test -f db/init.sql
+          test -f infra/docker-compose.yml
+          docker compose -f infra/docker-compose.yml config > /dev/null
