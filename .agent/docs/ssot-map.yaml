@@ -116,4 +116,24 @@ mapping:
       - docs/framework-core.yaml
       - docs/framework-policy.yaml
       - docs/design/context-route-recommendation.md
+      - docs/design/db-schema.yaml
+    protocols: []
+
+  - work_type: db_schema_table_structure_manifest
+    change_surfaces:
+      - db/*.sql
+      - db/schema.sql
+      - db/topology_tables.sql
+      - db/promotion_tables.sql
+      - db/context_route_tables.sql
+      - db/ui_topology_tables.sql
+      - db/manifest_tables.sql
+      - manifest table
+      - topology_definition tables
+      - context_route tables
+      - ui_topology tables
+    required_docs:
+      - docs/design/db-schema.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
     protocols: []
