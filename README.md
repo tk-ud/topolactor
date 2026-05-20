@@ -53,9 +53,17 @@ UI definitions become topology entities only after persistence and ID issuance. 
 
 ## Implementation Status
 
-- **Implemented now:** registry semantic-matrix principle, topology registry surfaces, SQL-backed context/recommendation runtime surfaces, UI topology persistence surfaces, admin UI boundary docs, and agent governance surfaces.
-- **Design-guarded:** tensor-first projection discipline, package-generator promotion semantics, fixed surface-adapter posture, and explicit no-silent-fallback policy.
-- **Future / planned:** items explicitly marked as planned in SSOT docs and `.agent/tasks/todo.md`.
+Topolactor is currently a **public design + scaffold reference** with a **canonical runtime-route skeleton** under active construction; it is **not production-ready** as a completed application platform.
+
+- **Public status SSOT:** `docs/system-roadmap.yaml` is the canonical public status source for milestone and component state (`implemented` / `partial` / `skeleton` / `not_started` / `production_ready`).
+- **Current repository state (high level):**
+  - **Implemented surfaces:** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, and governance/check surfaces.
+  - **Partial surfaces:** runtime executor behavior and M1 runtime skeleton milestone progress.
+  - **Skeleton surfaces:** manifest dispatcher, runtime timeline scheduler, and SSE projection lane wiring.
+  - **Planned / not started:** most M2+ milestone scopes remain not started in roadmap SSOT.
+- **Design-guarded policy posture:** tensor-first projection discipline, package-generator promotion semantics, fixed surface-adapter posture, and explicit no-silent-fallback policy.
+
+For exact status/evidence and completion conditions, follow `docs/system-roadmap.yaml` first, then drill down into linked design SSOT files.
 
 ## Detail Entry Points
 
