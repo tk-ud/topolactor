@@ -14,6 +14,7 @@ unless File.exist?(roadmap)
   failf.call('docs/system-roadmap.yaml not found')
   puts "=== system roadmap check ==="; failures.each{|x| puts "FAIL: #{x}"}; exit 1
 end
+
 def detect_duplicate_keys(path)
   duplicates = []
   mapping_stack = [{indent: -1, keys: {}}]
@@ -39,6 +40,15 @@ def detect_duplicate_keys(path)
   duplicates
 end
 
+def statuses_for_path(path, file_statuses, dir_statuses)
+  statuses = []
+  statuses.concat(file_statuses[path] || [])
+  dir_statuses.each do |dir, dir_entry_statuses|
+    statuses.concat(dir_entry_statuses) if path.start_with?(dir)
+  end
+  statuses.uniq
+end
+
 detect_duplicate_keys(roadmap).each do |dup|
   failf.call("duplicate YAML key detected: #{dup}")
 end
@@ -51,7 +61,8 @@ failf.call('system_roadmap_ssot.status_terms must be defined') if status_terms.e
 allowed = status_terms.keys
 impl = root['implementation_registry'].is_a?(Hash) ? root['implementation_registry'] : {}
 failf.call('implementation_registry must exist') if impl.empty?
-file_to_status={}
+file_statuses = Hash.new { |h, k| h[k] = [] }
+dir_statuses = Hash.new { |h, k| h[k] = [] }
 impl.each do |k,v|
   unless v.is_a?(Hash)
     failf.call("implementation_registry.#{k} must be a map"); next
@@ -64,7 +75,15 @@ impl.each do |k,v|
   failf.call("production_ready entry #{k} must not keep known_gap_ref") if ready && !kg.nil?
   failf.call("#{k} requires public_summary for implemented/production_ready") if (st=='implemented' || ready) && (ps.nil? || ps.to_s.strip.empty?)
   failf.call("#{k} status #{st} requires known_gap_ref or completion_condition") if ['skeleton','partial'].include?(st) && kg.nil? && cc.nil?
-  (v['files'] || []).each { |fp| file_to_status[fp]=st }
+  (v['files'] || []).each do |fp|
+    next if fp.nil? || fp.to_s.strip.empty?
+    normalized = fp.to_s
+    if normalized.end_with?('/')
+      dir_statuses[normalized] << st
+    else
+      file_statuses[normalized] << st
+    end
+  end
 end
 regex = /(skeleton|stub|dummy|mock|fake|pass-through|passthrough|temporary|not implemented)/i
 exclude = %w[/tests/ /fixtures/ /bin/ /obj/ /node_modules/ /.git/]
@@ -76,11 +95,11 @@ Dir.glob(File.join(repo,'{backend,frontend}','**','*')).each do |path|
   next if exclude.any?{|e| norm.include?(e)}
   txt = File.read(path, encoding: 'UTF-8', invalid: :replace, undef: :replace)
   next unless txt.match?(regex)
-  st = file_to_status[norm]
-  if ['skeleton','partial'].include?(st)
-    warnf.call("marker in registered #{st} file: #{norm}")
-  elsif ['implemented','production_ready'].include?(st)
-    failf.call("marker found in #{st} file: #{norm}")
+  statuses = statuses_for_path(norm, file_statuses, dir_statuses)
+  if statuses.any? { |st| ['skeleton','partial'].include?(st) }
+    warnf.call("marker in registered #{statuses.join('/')} file: #{norm}")
+  elsif statuses.any? { |st| ['implemented','production_ready'].include?(st) }
+    failf.call("marker found in #{statuses.join('/')} file: #{norm}")
   else
     failf.call("marker found in unregistered file: #{norm}")
   end
