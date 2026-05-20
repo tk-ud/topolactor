@@ -46,11 +46,17 @@ Deno.test("frontendScheduler: queueClientCommand shape matches DispatchRequest c
   // Verifies that queueClientCommand constructs a valid DispatchRequest.
   // No real backend — fetch will fail; we verify the error is explicit (not silent fallback).
   // See docs/design/pipeline-continuity-ssot.yaml api_command_lane.frontend.scheduler.
-  let capturedRequest: Request | null = null;
+  //
+  // Note: dispatchOperation fetches "/api/dispatch" (relative URL). In Deno,
+  // new Request(relativeUrl, init) throws — so we capture input/init directly
+  // and parse init.body instead of constructing a Request object.
+  let capturedInput: string | URL | Request | null = null;
+  let capturedInit: RequestInit | undefined;
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-    capturedRequest = new Request(input, init);
+    capturedInput = input;
+    capturedInit = init;
     throw new Error("TEST_NO_NETWORK");
   };
 
@@ -65,8 +71,9 @@ Deno.test("frontendScheduler: queueClientCommand shape matches DispatchRequest c
     assertEquals(result.success, false);
     assertExists(result.errors);
 
-    assertExists(capturedRequest);
-    const body = await capturedRequest!.json();
+    assertExists(capturedInput);
+    assertExists(capturedInit);
+    const body = JSON.parse(capturedInit!.body as string);
     assertEquals(body.target, "default");
     assertEquals(body.layer, "entity");
     assertEquals(body.action, "Search");
