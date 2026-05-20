@@ -461,7 +461,6 @@ runtime_orchestration_ssot:
       - manifest_id
       - runtime_id
       - payload
-      - context
       - trace_id
     identity_fields:
       - trigger_kind
@@ -469,7 +468,6 @@ runtime_orchestration_ssot:
       - target
       - layer
       - action
-      - context
       - manifest_id
       - trace_id
 
