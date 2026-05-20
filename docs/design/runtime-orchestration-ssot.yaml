@@ -182,6 +182,7 @@ runtime_orchestration_ssot:
       api:
         key: [role, target, layer, action]
         strategy: resolve_active_manifest_by_axes
+        role_source: jwt_token_claim
       sse:
         key: manifest_id
         source: db_notify_payload
@@ -451,6 +452,10 @@ runtime_orchestration_ssot:
   notify_listen_contract:
     db_notify:
       output_lane: backend
+      payload:
+        - table_id
+        - table_registry_id
+        - manifest_id
     db_listen:
       trigger_kind: hook
     invariants:
