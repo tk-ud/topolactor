@@ -1,0 +1,357 @@
+runtime_orchestration_ssot:
+  name: topolactor_runtime_orchestration_ssot
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - define_hardcoded_runtime_wiring_boundary
+    - define_manifest_db_as_variable_control_surface
+    - define_scheduler_as_runtime_timeline_queue_not_polling
+    - define_dispatcher_as_manifest_based_runtime_routing_layer
+    - define_frontend_as_parallel_api_trigger_and_sse_projection_surface
+    - define_backend_as_topology_vector_conversion_json_linking_and_attractor_surface
+
+  architecture_subject:
+    primary: data_defined_topology_runtime_os
+    not_primary:
+      - dto
+      - crud
+      - mvc_layering
+      - polling_loop
+      - frontend_local_judgment
+      - raw_sql_command_generation
+
+  naming:
+    system: runtime_orchestration_os
+    scheduler: runtime_timeline_scheduler
+    scheduler_alias: runtime_queue_scheduler
+    dispatcher: manifest_dispatcher
+    dispatcher_alias: dispatchar
+    frontend_api_lane: client_command_lane
+    frontend_sse_lane: projection_event_lane
+    frontend_projection_runtime: projection_runtime
+    backend_runtime: topology_transform_runtime
+    backend_attractor: registry_attractor
+    topology_payload: topology_payload
+    entity_builder: topology_entity_builder
+
+  hardcoded_boundary:
+    hardcode:
+      - wiring_routes
+      - abstract_function_shapes
+      - runtime_skeleton
+      - scheduler_skeleton
+      - dispatcher_skeleton
+      - endpoint_shape
+    data_defined:
+      - manifest_db_records
+      - role_definition
+      - route_projection_definition
+      - ui_projection_definition
+      - dispatcher_mapping
+      - runtime_mapping
+      - entity_builder_mapping
+      - function_parameters
+      - registry_attractor_policy
+    prohibition:
+      - runtime_policy_hidden_in_constants
+      - frontend_sql_attention_judgment
+      - scheduler_as_polling_owner
+      - dispatcher_as_execution_order_owner
+      - direct_vector_authoring_from_client
+      - silent_fallback_for_broken_topology_refs
+
+  endpoints:
+    frontend:
+      count: 1
+      role: application_projection_entry
+    backend:
+      count: 1
+      role: runtime_command_entry
+      request_subject: topology_payload_or_manifest_addressed_operation
+
+  frontend_routes:
+    public:
+      - /
+      - /auth
+    admin:
+      - /admin
+      - /admin/manifests
+      - /admin/contents
+      - /admin/ui-builder
+
+  trigger_contract:
+    definition: scheduler_input_event_source
+    allowed_trigger_kinds:
+      cron:
+        role: scheduled_or_reserved_excitation
+        examples:
+          - retention_cleanup
+          - registry_attractor_rebuild
+          - delayed_runtime_execution
+      hook:
+        role: event_driven_excitation
+        examples:
+          - db_notify_listen
+          - external_webhook
+          - internal_runtime_event
+          - topology_changed
+      client:
+        role: ui_operation_excitation
+        examples:
+          - button_action
+          - form_submit
+          - route_action
+          - admin_operation
+    invariant:
+      - trigger_kind_is_not_runtime_destination
+      - all_trigger_kinds_enter_scheduler_before_runtime_execution
+      - trigger_kind_set_is_closed_to_cron_hook_client_until_ssot_revision
+
+  scheduler_contract:
+    formal_name: runtime_timeline_scheduler
+    short_name: scheduler
+    metaphor: queue
+    definition: >
+      The scheduler aligns cron, hook, and client triggers into a single coherent
+      Runtime timeline. It manages data and execution on the same Runtime time axis.
+      It is a queue-like time-axis normalization layer, not a polling owner.
+    owns:
+      - trigger_alignment
+      - runtime_queue
+      - runtime_phase
+      - runtime_context
+      - runtime_state_window
+      - causal_order
+      - execution_boundary
+      - collision_control
+    does_not_own:
+      - target_runtime_selection_policy
+      - role_semantics
+      - topology_meaning_judgment
+      - polling_as_primary_behavior
+    frontend_scope:
+      role: ui_time_axis_controller
+      manages:
+        - client_command_order
+        - sse_projection_order
+        - projection_batch_boundary
+        - optimistic_update_boundary
+        - rollback_boundary
+    backend_scope:
+      role: topology_time_axis_controller
+      manages:
+        - topology_payload_processing_order
+        - vector_conversion_order
+        - topology_json_linking_order
+        - registry_attractor_update_boundary
+        - response_boundary
+        - db_notify_boundary
+
+  dispatcher_contract:
+    formal_name: manifest_dispatcher
+    short_name: dispatcher
+    definition: >
+      The dispatcher resolves where an already aligned Runtime event should go.
+      It uses manifest-defined role, target, layer, action, and context mappings.
+      It does not create the Runtime timeline; that is the scheduler boundary.
+    axes:
+      - trigger_kind
+      - role
+      - target
+      - layer
+      - action
+      - context
+      - manifest_id
+    manifest_authority:
+      role_definition: manifest
+      dispatcher_mapping: manifest
+      runtime_mapping: manifest
+      ui_projection_mapping: manifest
+      entity_builder_mapping: manifest
+    prohibition:
+      - role_behavior_hardcoded_in_dispatcher
+      - dispatcher_silent_fallback
+      - dispatcher_bypassing_scheduler_alignment
+
+  runtime_contract:
+    definition: dispatcher_selected_execution_unit_on_scheduler_aligned_timeline
+    kinds:
+      frontend_projection_runtime:
+        role: project_sse_or_manifest_events_to_ui
+      backend_topology_transform_runtime:
+        role: convert_and_organize_topology_payload
+      registry_attractor_runtime:
+        role: update_sql_attention_observation_surface
+    invariant:
+      - runtime_executes_after_scheduler_alignment
+      - runtime_destination_is_resolved_by_dispatcher
+      - runtime_policy_values_are_loaded_from_manifest_or_function_parameters
+
+  frontend_contract:
+    role:
+      - projection_surface
+      - client_trigger_surface
+    lanes:
+      client_command_lane:
+        definition: UI operation becomes client trigger and is sent through API.
+        path:
+          - ui_action
+          - client_trigger
+          - frontend_scheduler
+          - api_client
+          - backend_endpoint
+      projection_event_lane:
+        definition: SSE/hook event is projected to UI through projection runtime.
+        path:
+          - sse_receiver
+          - frontend_scheduler
+          - sse_dispatcher
+          - projection_runtime
+          - ui_projection
+    owns:
+      - route
+      - api_client
+      - sse_receiver
+      - sse_dispatcher
+      - frontend_scheduler
+      - projection_runtime
+      - abstract_functions
+      - components
+      - component_wrappers
+    does_not_own:
+      - topology_vector_conversion
+      - topology_json_linking
+      - registry_attractor_update
+      - sql_attention_judgment
+
+  backend_contract:
+    role:
+      - abstract_runtime_surface
+      - topology_transform_surface
+      - registry_attractor_surface
+    entry:
+      - Program.cs
+      - single_endpoint
+    flow:
+      path:
+        - endpoint
+        - backend_scheduler
+        - manifest_dispatcher
+        - topology_transform_runtime
+        - topology_entity_builder
+        - topology_output_lanes
+    topology_transform_runtime:
+      responsibility:
+        - receive_topology_payload
+        - convert_topology_payload_to_vector_projection
+        - link_topology_data_json_to_json
+        - organize_topology_data
+        - build_dto_entity_through_entity_builder
+    output_lanes:
+      response_emission:
+        role: return_runtime_result_to_caller
+      db_notify_emission:
+        role: publish_database_notification_for_projection_or_followup_runtime
+      registry_attractor_update:
+        role: update_registry_attractor_sql_attention_observation
+    owns:
+      - scheduler
+      - dispatcher
+      - runtime
+      - endpoint
+      - dto
+      - entity
+      - entity_builder
+      - db_notify_listen
+      - topology_payload_handler
+      - vector_converter
+      - topology_json_linker
+      - registry_attractor
+
+  manifest_contract:
+    storage: db
+    role: variable_runtime_control_surface
+    owns:
+      - role_definition
+      - route_definition
+      - ui_projection_definition
+      - dispatcher_mapping
+      - runtime_mapping
+      - entity_builder_mapping
+      - api_action_definition
+      - sse_projection_definition
+    invariant:
+      - manifest_is_not_frontend_local_config
+      - manifest_is_not_compile_time_constant_surface
+      - manifest_drives_projection_and_dispatcher_mapping
+
+  dto_entity_builder_contract:
+    role: endpoint_contract_and_topology_entity_materialization_boundary
+    dto:
+      role: endpoint_contract_only
+    entity:
+      role: concrete_or_system_data_surface_observed_from_topology
+    entity_builder:
+      role: build_entity_from_manifest_and_topology_payload
+    prohibition:
+      - dto_as_architecture_subject
+      - primitive_crud_as_architecture_subject
+      - direct_record_vector_authoring
+
+  registry_attractor_contract:
+    role: sql_attention_observation_surface
+    definition: registry_tensor_attention_weight_and_topology_continuity_observation
+    input_sources:
+      - registry_id_references
+      - relation_bindings
+      - topology_json_links
+      - promoted_columns
+      - logs_and_diffs
+      - aggregation_observations
+    output_role:
+      - continuity_evidence
+      - attention_weight_observation
+      - projection_or_ci_input
+    invariant:
+      - registry_tables_remain_semantic_basis
+      - aggregates_are_attention_weights_not_meaning_source
+      - vector_caches_are_rebuildable_projection_not_sot
+      - sql_attention_is_not_transformer_qk_reimplementation
+
+  notify_listen_contract:
+    db_notify:
+      role: backend_output_lane_for_projection_or_followup_runtime
+    db_listen:
+      role: hook_trigger_source_for_scheduler
+    invariant:
+      - notify_payload_must_preserve_runtime_identity
+      - listen_event_must_enter_scheduler_before_projection_runtime
+
+  minimal_event_shape:
+    fields:
+      - trigger_kind
+      - role
+      - target
+      - layer
+      - action
+      - manifest_id
+      - runtime_id
+      - payload
+      - context
+      - trace_id
+    identity_fields:
+      - trigger_kind
+      - target
+      - layer
+      - action
+      - manifest_id
+      - trace_id
+
+  canonical_flow_summary:
+    frontend_client_command: >
+      ui_action -> client_trigger -> frontend_scheduler -> api_client -> backend_endpoint
+    frontend_sse_projection: >
+      sse_receiver -> frontend_scheduler -> sse_dispatcher -> projection_runtime -> ui_projection
+    backend_topology_runtime: >
+      cron|hook|client -> backend_scheduler -> manifest_dispatcher -> topology_transform_runtime -> response|db_notify|registry_attractor
