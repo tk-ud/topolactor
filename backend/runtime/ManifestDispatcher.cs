@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -55,7 +56,7 @@ public class ManifestDispatcher
         {
             // Dev/demo bypass: no manifest repository configured.
             _logger.LogDebug("ManifestDispatcher: no manifest repository configured; delegating to RuntimeExecutor (dev/demo bypass).");
-            return await _runtimeExecutor.ExecuteAsync(request, ct);
+            return await _runtimeExecutor.ExecuteAsync(request, manifestId: null, ct);
         }
 
         try
@@ -73,9 +74,11 @@ public class ManifestDispatcher
                     "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
                     manifest.ManifestId);
 
-                // Manifest resolved — delegate to RuntimeExecutor with original request.
-                // runtime_mapping destination routing is a known gap (Gap-1 partial).
-                return await _runtimeExecutor.ExecuteAsync(request, ct);
+                var runtimeDestinationError = ValidateRuntimeDestination(manifest.Topology);
+                if (runtimeDestinationError is not null)
+                    return new EndpointResponseDto(Success: false, Emission: null, Errors: [runtimeDestinationError]);
+
+                return await _runtimeExecutor.ExecuteAsync(request, manifest.ManifestId, ct);
             }
 
             _logger.LogWarning(
@@ -97,5 +100,52 @@ public class ManifestDispatcher
                 Emission: null,
                 Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
         }
+    }
+
+    private static readonly HashSet<string> KnownRuntimeDestinations =
+        new(StringComparer.OrdinalIgnoreCase) { "topology_transform_runtime", "registry_attractor_runtime" };
+
+    /// <summary>
+    /// Extracts the runtime_destination from a runtime_mapping topology entry.
+    /// Returns null when no runtime_mapping entry is present (not an error — manifest may omit it).
+    /// Returns a ValidationError when runtime_destination is present but not a known kind.
+    /// </summary>
+    private ValidationError? ValidateRuntimeDestination(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                !string.Equals(typeEl.GetString(), "runtime_mapping", StringComparison.Ordinal))
+                continue;
+
+            if (!entry.TryGetProperty("runtime_destination", out var destEl))
+                continue;
+
+            var destination = destEl.GetString();
+            if (string.IsNullOrWhiteSpace(destination))
+                continue;
+
+            if (!KnownRuntimeDestinations.Contains(destination))
+            {
+                _logger.LogError(
+                    "ManifestDispatcher: unknown runtime_destination '{Destination}' in runtime_mapping entry.",
+                    destination);
+                return new ValidationError(
+                    "RUNTIME_DESTINATION_UNKNOWN",
+                    $"runtime_destination '{destination}' is not a known kind. Known: topology_transform_runtime, registry_attractor_runtime.");
+            }
+
+            _logger.LogDebug(
+                "ManifestDispatcher: runtime_mapping resolved runtime_destination={Destination}.",
+                destination);
+            return null;
+        }
+
+        // No runtime_mapping entry — log and continue (not an error).
+        _logger.LogDebug("ManifestDispatcher: no runtime_mapping entry in manifest topology; using default path.");
+        return null;
     }
 }

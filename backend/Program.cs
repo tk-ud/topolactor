@@ -71,9 +71,27 @@ builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>();
-builder.Services.AddSingleton<RuntimeExecutor>();
 builder.Services.AddSingleton<TopologyFunctionBinder>();
-builder.Services.AddSingleton<OutputLaneRouter>();
+builder.Services.AddSingleton<OutputLaneRouter>(sp =>
+    new OutputLaneRouter(
+        sp.GetRequiredService<ILogger<OutputLaneRouter>>(),
+        sp.GetRequiredService<DbNotifyRepository>()));
+builder.Services.AddSingleton<RuntimeExecutor>(sp =>
+    new RuntimeExecutor(
+        sp.GetRequiredService<ILogger<RuntimeExecutor>>(),
+        sp.GetRequiredService<OperationVectorResolver>(),
+        sp.GetRequiredService<AttractorResolver>(),
+        sp.GetRequiredService<StructureMapResolver>(),
+        sp.GetRequiredService<PackageResolver>(),
+        sp.GetRequiredService<SchemaResolver>(),
+        sp.GetRequiredService<EmissionBuilder>(),
+        sp.GetRequiredService<SemanticMapper>(),
+        sp.GetRequiredService<TopologyRepository>(),
+        sp.GetRequiredService<DiffLogRepository>(),
+        sp.GetRequiredService<RuntimeGuard>(),
+        sp.GetRequiredService<ContextRouteRecommendationResolver>(),
+        sp.GetRequiredService<AdminRuntime>(),
+        sp.GetRequiredService<OutputLaneRouter>()));
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
     new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
