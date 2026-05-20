@@ -9,6 +9,8 @@
 
 Read this protocol only when deciding where to store reports/summaries/TODO carry-over.
 
+Also read this protocol when updating an existing PR after follow-up fixes, CI reruns, audit findings, or remaining-risk classification.
+
 ## Surface rules
 
 `.agent/reports/` is the persistent surface for:
@@ -31,6 +33,14 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 - Keep the PR body as a thin entry summary: purpose, high-level scope, and durable references only.
 - Do not use the PR body as a rolling implementation log, CI status ledger, or follow-up audit thread.
 - When a PR receives follow-up fixes, CI re-runs, audit findings, or remaining-risk notes, add a PR comment instead of continuously rewriting the PR body.
+- Existing PR updates require a follow-up PR comment after push unless the only change is a purely local draft with no remote PR.
+- Follow-up PR comments must include:
+  - changed summary
+  - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED
+  - remaining TODOs
+  - whether the PR body is intentionally left thin or was updated because it was materially misleading
+- If the environment cannot post a PR comment, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste.
+- Do not claim the follow-up comment was posted unless it was actually posted to the PR conversation.
 - If the PR body becomes materially false or misleading, update it only to restore a thin, accurate entry summary.
 - Detailed pass/fail/not executed notes, CI failure indexes, audit responses, and residual TODO classification belong in PR comments or completion summaries, not in the PR body.
 - This keeps the PR body stable while preserving follow-up traceability in chronological comments.
