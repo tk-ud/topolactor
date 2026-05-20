@@ -159,3 +159,25 @@ mapping:
     supporting_docs:
       - docs/design/runtime-orchestration-ssot.yaml
     protocols: []
+
+  - work_type: system_roadmap_status_and_implementation_registry
+    change_surfaces:
+      - docs/system-roadmap.yaml
+      - implementation_registry
+      - milestone status
+      - production_ready claim
+      - implemented claim
+      - skeleton / partial / not_started status update
+      - completion summary
+      - TODO [x] update
+      - public roadmap status
+    required_docs:
+      - docs/system-roadmap.yaml
+    supporting_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    prompt:
+      - .agent/prompt/system-roadmap-status.md
+    protocols:
+      - .agent/protocols/completion.md
+      - .agent/protocols/reports-and-todos.md

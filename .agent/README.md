@@ -6,10 +6,11 @@ It separates always-read guidance from condition-triggered references, and separ
 ## Read Order
 
 1. `AGENTS.md` (repository entry contract)
-2. `.agent/README.md` (this role-and-route guide)
-3. `.agent/rules/rule.md` (always-read operating rules and trigger map)
+2. `.agent/rules/rule.md` (always-read operating rules and trigger map)
+3. `.agent/README.md` (this role-and-route guide)
 4. `.agent/skills/agent-workflow.md` (execution order: materials → target surfaces → scope → scenario gate → implementation → verification)
-5. Only when needed, open relevant `.agent/docs/` resume/index, `.agent/skills/structure-check.md` (and other task skills), and `.agent/protocols/*.md`
+5. When applicable, open matching `.agent/prompt/<work-type>.md` as work-type router
+6. Only when needed, open relevant `.agent/docs/` resume/index, mapped `docs/` SSOT, corresponding task skills, and condition-triggered `.agent/protocols/*.md`
 
 ## Directory Roles
 
@@ -21,6 +22,8 @@ It separates always-read guidance from condition-triggered references, and separ
   Always-read rule surface. Defines required behavior boundaries, prohibitions, and directory-role framing under `.agent/`.
 - `.agent/skills/`:
   `agent-workflow.md` is the always-read lightweight execution workflow. Other skill files are task procedures read only when executing the corresponding task/check. Skills are task procedures.
+- `.agent/prompt/`:
+  Work-type router surface for selecting required SSOT and triggered governance gates. Prompt files are not protocols and not an always-read bundle.
 - `.agent/protocols/`:
   Condition-triggered governance reference points. Protocols are not an always-read bundle and not a single always-on workflow.
 - `.agent/reports/`:
@@ -45,8 +48,9 @@ These define baseline obligations and operating posture for every task.
 
 ## What Is Read Only When Needed
 
+- `.agent/prompt/*.md`: read only when the current work type matches the router trigger.
 - `.agent/protocols/*.md`: read only when that protocol's trigger condition matches the change.
-- `.agent/skills/agent-workflow.md`: always read as the lightweight execution workflow.
+- `.agent/docs/` resume/index and mapped `docs/` SSOT: read only when target surfaces require SSOT mapping.
 - other `.agent/skills/*.md`: read only when executing the corresponding task/check procedure.
 
 This avoids the misread that all protocols must be read and applied on every task.
