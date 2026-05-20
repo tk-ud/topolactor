@@ -2,11 +2,18 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TMP_FILE="$REPO_ROOT/.agent/tmp/tmp.txt"
+TMP_DIR="$REPO_ROOT/.agent/tmp"
 
-if [ -f "$TMP_FILE" ]; then
-  rm -f "$TMP_FILE"
-  echo "deleted: .agent/tmp/tmp.txt"
-else
-  echo "already absent: .agent/tmp/tmp.txt"
-fi
+cleanup() {
+  local target="$1"
+  if [ -e "$target" ]; then
+    rm -rf "$target"
+    echo "deleted: ${target#$REPO_ROOT/}"
+  else
+    echo "already absent: ${target#$REPO_ROOT/}"
+  fi
+}
+
+cleanup "$TMP_DIR/tmp.txt"
+cleanup "$TMP_DIR/workflow-state.env"
+cleanup "$TMP_DIR/checklists"

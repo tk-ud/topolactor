@@ -47,6 +47,29 @@ check_content() {
 }
 
 
+
+check_checklist_template_clean() {
+  local file="$1"
+  local bad
+  bad="$(grep -En '^Answer:[[:space:]]*(yes|no|n/a)[[:space:]]*$' "$file" || true)"
+  if [ -n "$bad" ]; then
+    fail "$file contains filled Answer values; template must remain blank"
+    return
+  fi
+  echo "OK  [template-clean] $file"
+}
+
+check_tmp_runtime_artifacts() {
+  local tmp_dir="$REPO_ROOT/.agent/tmp"
+  local leftovers
+  leftovers="$(find "$tmp_dir" -mindepth 1 \( -type f -o -type d \) ! -path "$tmp_dir/.gitkeep" | sort || true)"
+  if [ -n "$leftovers" ]; then
+    fail "Runtime tmp artifacts must be cleaned before completion; found: ${leftovers//$'\n'/, }"
+  else
+    echo "OK  [tmp]  runtime artifacts cleaned (.gitkeep only)"
+  fi
+}
+
 check_tmp_tracked_files() {
   local tracked
   tracked="$(git -C "$REPO_ROOT" ls-files .agent/tmp)"
@@ -127,6 +150,7 @@ check_file ".agent/checklists/policy-judgment.md"
 check_file ".agent/checklists/boundary-identity.md"
 check_file ".agent/checklists/check-boundary-identity.sh"
 check_file ".agent/checklists/check-policy-judgment.sh"
+check_file ".agent/checklists/README.md"
 check_file ".agent/checklists/fixtures/policy-judgment/pass.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-unanswered.md"
 check_file ".agent/checklists/fixtures/policy-judgment/fail-policy-violation.md"
@@ -254,6 +278,7 @@ check_content ".github/workflows/runtime-semantics.yml" ".agent/tests/check-runt
 check_content ".github/workflows/bootstrap-validation.yml" "db/**/*.sql"
 check_content ".github/workflows/bootstrap-validation.yml" "infra/docker-compose.yml"
 check_content ".github/workflows/bootstrap-validation.yml" "docker compose -f infra/docker-compose.yml config"
+check_content ".github/workflows/bootstrap-validation.yml" "compose smoke"
 check_content ".github/workflows/bootstrap-validation.yml" "bash .agent/tests/check-bootstrap-validation.sh"
 check_content ".agent/tests/check-bootstrap-validation.sh" "ON_ERROR_STOP=1"
 check_content ".agent/tests/check-bootstrap-validation.sh" "db/init.sql"
@@ -435,6 +460,11 @@ check_content ".agent/checklists/policy-judgment.md" "scenario contract"
 check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
 
 echo ""
+echo "=== Template checklist pollution guard ==="
+check_checklist_template_clean "$REPO_ROOT/.agent/checklists/policy-judgment.md"
+check_checklist_template_clean "$REPO_ROOT/.agent/checklists/boundary-identity.md"
+
+echo ""
 echo "=== Checklist self-tests ==="
 bash "$REPO_ROOT/.agent/checklists/check-policy-judgment.sh" --self-test
 bash "$REPO_ROOT/.agent/checklists/check-boundary-identity.sh" --self-test
@@ -446,6 +476,7 @@ else
   echo "OK  [tmp]  .agent/tmp/tmp.txt absent"
 fi
 
+check_tmp_runtime_artifacts
 check_tmp_tracked_files
 
 # Protocol split guard

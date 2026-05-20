@@ -4,52 +4,38 @@ Purpose: fail-fast gate for End-to-End Boundary Identity and Multi-instance leak
 
 Answer rules:
 - Use only: `yes` / `no` / `n/a`
-- Fill answers in a temporary PR-specific checklist file, not this template.
-- Keep this template answer slots blank.
+- Fill answers in a temporary PR-specific checklist file under `.agent/tmp/`, not this template.
+- Keep this template answer slots blank; delete tmp checklist artifacts before completion.
 
 ## Questions
 
 Q1. Does this change extend an existing boundary?
-Answer: yes
-
+Answer:
 Q2. If Q1=yes, did you explicitly identify the existing boundary being extended?
-Answer: yes
-
+Answer:
 Q3. If Q1=yes, did you document DB primary / unique / FK / CHECK identity?
-Answer: yes
-
+Answer:
 Q4. If Q1=yes, did you document contract / event / DTO identity?
-Answer: yes
-
+Answer:
 Q5. If Q1=yes, did you document API request / response identity?
-Answer: yes
-
+Answer:
 Q6. If Q1=yes, did you document repository INSERT / UPSERT conflict identity?
-Answer: yes
-
+Answer:
 Q7. If Q1=yes, did you document repository UPDATE / DELETE WHERE identity?
-Answer: yes
-
+Answer:
 Q8. If Q1=yes, did you document Frontend projection identity?
-Answer: n/a
-
+Answer:
 Q9. If Q1=yes, did you document UI action identity?
-Answer: n/a
-
+Answer:
 Q10. If Q1=yes, does DB identity match repository mutation identity?
-Answer: yes
-
+Answer:
 Q11. If Q1=yes, did you document a Multi-instance leakage scenario?
-Answer: yes
-
+Answer:
 Q12. If Q1=yes, did you add a minimum leakage detection test?
-Answer: no
-
+Answer:
 Q13. If Q12=no, did you document an explicit omission reason?
-Answer: yes
-
+Answer:
 Q14. If Q1=yes, did you update remaining TODO surface?
-Answer: yes
-
+Answer:
 Q15. If Q1=yes, did you verify full branch diff against Boundary Extension Scenario?
-Answer: yes
+Answer:

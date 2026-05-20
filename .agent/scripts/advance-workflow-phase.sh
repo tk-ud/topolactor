@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# deprecated helper: optional local memo only.
+# Do not treat this as mandatory workflow authority.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 STATE_FILE="$REPO_ROOT/.agent/tmp/workflow-state.env"
@@ -94,6 +96,6 @@ fi
 
 write_state "$NEW_NEXT" "$NEW_COMPLETED"
 
-echo "WORKFLOW_PHASE_ADVANCED:"
+echo "WORKFLOW_PHASE_ADVANCED (optional local memo):"
 echo "  completed=$NEW_COMPLETED"
 echo "  next_required=$NEW_NEXT"

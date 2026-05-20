@@ -46,9 +46,37 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Validate docker compose config parse
-        run: |
-          docker compose -f infra/docker-compose.yml config > /dev/null
+      - name: Validate docker compose config parse (always for scoped workflow runs)
+        run: docker compose -f infra/docker-compose.yml config > /dev/null
 
-      - name: Run fresh bootstrap validation
+      - name: Detect infra/docker-compose.yml change
+        id: detect-compose-change
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_ref="origin/${{ github.base_ref }}"
+            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+            if git diff --name-only "$base_ref"...HEAD | grep -Fxq 'infra/docker-compose.yml'; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -Fxq 'infra/docker-compose.yml'; then
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: compose smoke (infra/docker-compose.yml changed only)
+        if: steps.detect-compose-change.outputs.changed == 'true'
+        run: |
+          docker compose --env-file infra/.env.example -f infra/docker-compose.yml up -d postgres
+          docker compose --env-file infra/.env.example -f infra/docker-compose.yml ps
+          docker compose --env-file infra/.env.example -f infra/docker-compose.yml down -v
+
+      - name: Run bootstrap SQL validation (non-compose execution)
         run: bash .agent/tests/check-bootstrap-validation.sh
