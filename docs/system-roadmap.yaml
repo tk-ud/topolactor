@@ -297,10 +297,10 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     backend.runtime_timeline_scheduler:
-      status: skeleton
+      status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: Scheduler boundary exists, but currently executes client triggers as synchronous pass-through.
+      public_summary: Unified Channel-based queue aligns cron/hook/client triggers. Client trigger awaits result via TCS; cron/hook are fire-and-forget. BackgroundService consumer dequeues to ManifestDispatcher. Queue persistence not implemented.
       files:
         - backend/scheduler/RuntimeTimelineScheduler.cs
       evidence:
@@ -318,10 +318,10 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.manifest_dispatcher:
-      status: skeleton
+      status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: ManifestDispatcher exists, but active manifest DB routing is not implemented yet.
+      public_summary: ManifestDispatcher resolves active manifest from DB by role+target+layer+action axes via NpgsqlManifestRepository. Fallthrough to RuntimeExecutor when no manifest registered. Ambiguity returns explicit error. runtime_mapping destination routing not yet used.
       files:
         - backend/runtime/ManifestDispatcher.cs
       evidence:
@@ -385,10 +385,10 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.minimal_event_shape:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M2_manifest_runtime
-      public_summary: EndpointRequestDto and frontend DispatchRequest do not yet carry trigger_kind and role.
+      public_summary: trigger_kind and role fields added to EndpointRequestDto and DispatchRequest. OperationVector carries TriggerKind. Guard validation for trigger_kind enum not yet enforced.
       files:
         - backend/schema/Contracts.cs
         - frontend/api/dispatch.ts
@@ -402,10 +402,10 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.output_lanes:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: response_emission exists, but db_notify_emission and registry_attractor_update lanes are not implemented.
+      public_summary: OutputLaneRouter and NpgsqlDbNotifyRepository implemented. db_notify_emission sends pg_notify with {table_id, table_registry_id, manifest_id}. registry_attractor_update lane is skeleton (log-only). OutputLaneRouter not yet called from RuntimeExecutor pipeline.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/repository/DbNotifyRepository.cs
@@ -419,10 +419,10 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.sse_emitter:
-      status: skeleton
+      status: partial
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: SSE endpoint exists, but currently emits keep-alive ping events only.
+      public_summary: SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener holds pg LISTEN and broadcasts to subscribers. Projection events stream to connected clients. End-to-end test not yet present.
       files:
         - backend/endpoint/SseEndpoint.cs
         - backend/Program.cs
@@ -487,10 +487,10 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.projection_constructor:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: Projection constructor from manifest projection definition is not implemented.
+      public_summary: projectionConstructor.ts implements form_inputs, component_projection, and ui_projection output kinds from projection_definition + json_key_value. projection_constructor_mapping read from manifest not yet wired end-to-end.
       files:
         - frontend/runtime/projectionConstructor.ts
       completion_condition:
@@ -506,10 +506,13 @@ system_roadmap_ssot:
       status: skeleton
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Admin base route exists as skeleton; manifest, contents, and ui-builder route completion remains pending.
+      public_summary: Admin skeleton routes exist for /admin/manifests, /admin/contents, /admin/ui-builder. Routes display planned capabilities but are not wired to validated backend registry flows.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
+        - frontend/routes/admin/manifests.tsx
+        - frontend/routes/admin/contents.tsx
+        - frontend/routes/admin/ui-builder.tsx
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists

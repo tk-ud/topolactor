@@ -4,6 +4,8 @@ namespace Topolactor.Schema;
 
 /// <summary>
 /// Inbound DTO from the caller/frontend. Represents a user operation request.
+/// trigger_kind identifies the trigger origin (cron|hook|client) per SSOT minimal_event_shape.
+/// role carries the JWT token claim for manifest axis resolution.
 /// </summary>
 public record EndpointRequestDto(
     string? OperationType,
@@ -12,7 +14,9 @@ public record EndpointRequestDto(
     string? Action,
     Guid? IdOrHubId,
     JsonElement? Payload,
-    Dictionary<string, string>? Context
+    Dictionary<string, string>? Context,
+    string? TriggerKind = null,
+    string? Role = null
 );
 
 /// <summary>
@@ -44,7 +48,9 @@ public record OperationVector(
     string? ContextUserId = null,
     string? ContextTokenIds = null,     // comma-separated Guid list
     string? ContextRecordId = null,
-    Guid? IdOrHubId = null
+    Guid? IdOrHubId = null,
+    // trigger_kind from SSOT minimal_event_shape: cron | hook | client
+    string? TriggerKind = null
 );
 
 /// <summary>

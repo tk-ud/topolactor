@@ -24,6 +24,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="BCrypt.Net-Next" Version="3.1.3" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
     <PackageReference Include="Npgsql" Version="8.0.7" />
   </ItemGroup>
@@ -35,9 +36,11 @@
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../repository/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
-    <!-- RuntimeTimelineScheduler required by DispatchEndpoint and DefaultEntitySearchIntegrationTests.
-         Include only this file to avoid pulling in RetentionScheduler / SystemOperationCiScheduler
-         which depend on Microsoft.Extensions.Hosting (BackgroundService) not available here. -->
+    <!-- Include scheduler files required by DispatchEndpoint and SseEndpoint compilation.
+         RetentionScheduler and SystemOperationCiScheduler are excluded (not needed by tests).
+         Microsoft.Extensions.Hosting.Abstractions provides BackgroundService. -->
     <Compile Include="../../scheduler/RuntimeTimelineScheduler.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/SseEventBroadcaster.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../scheduler/DbNotifyListener.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -40,6 +40,14 @@ builder.Services.AddSingleton<UiTopologyRepository>(sp =>
     new NpgsqlUiTopologyRepository(
         sp.GetRequiredService<ILogger<NpgsqlUiTopologyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<ManifestRepository>(sp =>
+    new NpgsqlManifestRepository(
+        sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
+        connectionString));
+builder.Services.AddSingleton<DbNotifyRepository>(sp =>
+    new NpgsqlDbNotifyRepository(
+        sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
+        connectionString));
 
 // ---------------------------------------------------------------------------
 // Runtime layer
@@ -64,28 +72,47 @@ builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
 builder.Services.AddSingleton<AdminRuntime>();
 builder.Services.AddSingleton<RuntimeExecutor>();
-builder.Services.AddSingleton<ManifestDispatcher>();
+builder.Services.AddSingleton<TopologyFunctionBinder>();
+builder.Services.AddSingleton<OutputLaneRouter>();
+builder.Services.AddSingleton<ManifestDispatcher>(sp =>
+    new ManifestDispatcher(
+        sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
+        sp.GetRequiredService<RuntimeExecutor>(),
+        sp.GetRequiredService<ManifestRepository>()));
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();
+
+// ---------------------------------------------------------------------------
+// SSE broadcaster — fan-out projection events to all connected SSE clients
+// ---------------------------------------------------------------------------
+builder.Services.AddSingleton<SseEventBroadcaster>();
 
 // ---------------------------------------------------------------------------
 // Endpoint layer
 // ---------------------------------------------------------------------------
 builder.Services.AddSingleton<DispatchEndpoint>();
-builder.Services.AddSingleton<SseEndpoint>();
+builder.Services.AddSingleton<SseEndpoint>(sp =>
+    new SseEndpoint(
+        sp.GetRequiredService<ILogger<SseEndpoint>>(),
+        sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<AuthEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
-// Scheduler layer — client-flow trigger alignment
+// Scheduler layer — unified cron/hook/client trigger alignment
 // ---------------------------------------------------------------------------
 builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 
 // ---------------------------------------------------------------------------
 // Background services
 // ---------------------------------------------------------------------------
+builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineScheduler>());
 builder.Services.AddHostedService<RetentionScheduler>();
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
+builder.Services.AddHostedService(sp => new DbNotifyListener(
+    sp.GetRequiredService<ILogger<DbNotifyListener>>(),
+    connectionString,
+    sp.GetRequiredService<SseEventBroadcaster>()));
 
 // ---------------------------------------------------------------------------
 // HTTP layer
@@ -132,9 +159,9 @@ app.MapPost("/auth/login", async (
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
 });
 
-// GET /sse — SSE projection lane skeleton.
-// Streams keep-alive ping events. Actual topology events require notify_listen
-// implementation (see pipeline-continuity-ssot.yaml sse_projection_lane).
+// GET /sse — SSE projection lane.
+// Streams projection events from DbNotifyListener via SseEventBroadcaster.
+// Per pipeline-continuity-ssot.yaml sse_projection_lane.
 app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse) =>
 {
     await sse.StreamAsync(ctx.Response, ctx.RequestAborted);
