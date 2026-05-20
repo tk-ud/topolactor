@@ -90,3 +90,23 @@ mapping:
       - docs/framework-policy.yaml
     protocols:
       - .agent/protocols/registry-tensor-policy.md
+
+  - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
+    change_surfaces:
+      - runtime orchestration os
+      - runtime_timeline_scheduler
+      - runtime_queue_scheduler
+      - manifest_dispatcher
+      - frontend api trigger lane
+      - frontend sse projection lane
+      - backend topology transform runtime
+      - topology payload vector conversion and json linking
+      - entity builder mapping and runtime mapping
+      - manifest authority over role dispatcher runtime entity_builder
+    required_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    supporting_docs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/context-route-recommendation.md
+    protocols: []
