@@ -51,6 +51,12 @@ UI definitions become topology entities only after persistence and ID issuance. 
 - **Not** a framework that recreates endpoint/UI/scheduler/function per spec.
 - **Not** a recommendation-only or ranking-only subsystem.
 
+## AI-Driven Development OS Trade-off
+
+The AI-Driven Development OS intentionally spends agent context on repository-local governance. This helps agents preserve design intent, follow SSOT documents, and avoid unsafe completion claims.
+
+The trade-off is **token and quota cost**. Agents may need to read entry contracts, prompt routers, protocols, roadmap entries, TODO surfaces, and target implementation files before making a small change. This improves semantic continuity and completion judgment, but it consumes more context, model usage, and time than ordinary one-shot code generation.
+
 ## Implementation Status
 
 Topolactor is currently a **public design + scaffold reference** with a **canonical runtime-route skeleton** under active construction; it is **not production-ready** as a completed application platform.
