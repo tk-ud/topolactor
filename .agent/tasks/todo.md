@@ -34,6 +34,9 @@ SSOT参照必読:
 - [ ] [Claude] Gap-1: `manifest_dispatcher` を完全実装する
       → スケルトン実装済み: `backend/runtime/ManifestDispatcher.cs` (RuntimeExecutor への同期 delegate)。
       → 残り: role+target+layer+action で active manifest を DB から解決する manifest-driven routing。
+      → `db/manifest_tables.sql` / `db/init.sql` の表面追加は skeleton として存在するが、
+         `role_definition` / `route_definition` / `dispatcher_mapping` / `runtime_mapping` を
+         active manifest 解決に利用できる contract completeness へ整理する必要がある。
       → RuntimeExecutor 内の target/layer/action ハードコード分岐を移管。
       → 対象: `backend/runtime/ManifestDispatcher.cs`、`backend/runtime/RuntimeExecutor.cs`
       → Scenario Contract + Runtime Boundary Failure Matrix 必須。
@@ -69,6 +72,8 @@ SSOT参照必読:
          - `frontend/routes/api/sse.ts` (proxy skeleton)
       → 残り: 実際の projection/Attention イベント送信・受信・projection_runtime への接続。
          SSE receiver が hook_trigger として frontend_scheduler キューへ送る (backend と対称構造)。
+      → Issue #123 残件として、`docs/design/pipeline-continuity-ssot.yaml` に記載の
+         SSE end-to-end integration test (real server push through full lane) 未実装をここへ包含して完了させる。
       → 前提: Gap-6 (db_notify_emission) 完了後。
       → 対象: `backend/endpoint/SseEndpoint.cs`、`frontend/runtime/sseReceiver.ts`、
          `frontend/runtime/projectionRuntime.ts` (新規)
