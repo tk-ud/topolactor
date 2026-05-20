@@ -33,6 +33,13 @@ check_term ".agent/skills/agent-workflow.md" "READ_TARGET_SURFACES"
 check_term ".agent/skills/agent-workflow.md" "DEFINE_SCOPE"
 check_term ".agent/skills/agent-workflow.md" "NOT_EXECUTED"
 check_term ".agent/skills/agent-workflow.md" "completion summary must include remaining TODO"
+check_term ".agent/skills/agent-workflow.md" "follow-up PR comment"
+
+check_term ".agent/prompt/README.md" "work-type router surface"
+check_term ".agent/prompt/README.md" "not an always-read bundle"
+check_term ".agent/prompt/todo-maintenance.md" "Todo Maintenance Prompt Router"
+check_term ".agent/prompt/todo-maintenance.md" ".agent/protocols/reports-and-todos.md"
+check_term ".agent/prompt/todo-maintenance.md" "Open issues are not automatically TODOs"
 
 check_term ".agent/protocols/scenario-contract.md" "Scenario Contract is created before implementation"
 check_term ".agent/protocols/scenario-contract.md" "Precondition: Workflow Order Invariant Gate"
