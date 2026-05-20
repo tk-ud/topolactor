@@ -17,6 +17,55 @@
 - [ ] [Codex] Validate db/init.sql compose bootstrap on fresh postgres volume in docker-enabled environment
       → 対象: `db/init.sql`, `infra/docker-compose.yml`。`ui_component_bucket` / `ui_topology_tensor` 作成確認まで実施し、確認後に削除/完了化。
 
+## Architecture Fix — Single Dispatch Endpoint (SSOT: framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`)
+
+SSOT参照必読:
+- `docs/framework-policy.yaml` (backend_flow, runtime_boundary_failure_matrix)
+- `docs/framework-core.yaml` (canonical route, frontend_to_backend_dispatch flow)
+- `docs/file-structure.yaml` (backend.principle: endpoint_is_thin_boundary)
+- `docs/registrar-admin-ui-specification.md` (Section 8: Backend Boundary Policy)
+
+違反現状:
+- Program.cs に 7 本の HTTP route が存在。正しくは POST /dispatch 1本 + GET /health + POST /auth/login のみ。
+- AdminEndpoint / PackageGeneratorEndpoint が Repository を直接呼び出し、canonical route を経由しない。
+- frontend/routes/api/admin/ に複数の proxy ファイルが存在。正しくは /api/dispatch 1本に集約。
+
+---
+
+- [x] [Claude] Step 1: Program.cs の JWT ベアラートークン抽出を `ExtractBearerToken` ヘルパー関数に抽出 (behavior-preserving refactor)
+      → 対象: `backend/Program.cs`。全 7 route handler の3行抽出パターンを1行呼び出しに置換。
+
+- [ ] [Claude] Step 2: RuntimeExecutor に admin 操作ハンドラーを追加
+      → 対象: `backend/runtime/RuntimeExecutor.cs`。
+      → `context_token_registry` / `registry_vector_validate` / `ui_component_bucket` / `package_generator` の
+         operation target を canonical route で dispatch できるよう case を追加。
+      → AdminEndpoint / PackageGeneratorEndpoint のロジックを RuntimeExecutor 内ハンドラーへ移管。
+      → SSOT: docs/framework-core.yaml `frontend_to_backend_dispatch.flow`、
+               docs/framework-policy.yaml `backend_flow.processing_flow`
+      → 事前読み必須: backend/runtime/RuntimeExecutor.cs、backend/runtime/OperationVectorResolver.cs、
+                       backend/endpoint/AdminEndpoint.cs、backend/endpoint/PackageGeneratorEndpoint.cs
+      → Scenario Contract 更新必須 (canonical route 変更を伴うため)
+      → Runtime Boundary Failure Matrix (全10項目) を checklist に記入必須
+
+- [ ] [Claude] Step 3: Program.cs の admin/package-generator 専用 route を削除し、POST /dispatch に集約
+      → 対象: `backend/Program.cs`。
+      → 削除対象 route: GET|POST /admin/context-token-registry、POST /admin/context-token-registry/{id}/deprecate、
+                         POST /admin/registry-vector-validate、GET /admin/ui-component-bucket、POST /admin/package-generator/generate。
+      → AdminEndpoint / PackageGeneratorEndpoint の DI 登録も削除 (Step 2 完了後)。
+      → 残留: GET /health、POST /auth/login、POST /dispatch の3本のみ。
+      → SSOT: docs/framework-policy.yaml `backend_flow.style = vector_runtime_and_dispatcher_based`
+      → Scenario Contract + Runtime Boundary Failure Matrix 必須
+
+- [ ] [Claude] Step 4: frontend admin proxy ファイルを削除し /api/dispatch に集約
+      → 対象削除: `frontend/routes/api/admin/context-token-registry.ts`、
+                  `frontend/routes/api/admin/context-token-registry/[tokenId]/deprecate.ts`、
+                  `frontend/routes/api/admin/registry-vector-validate.ts`。
+      → /api/dispatch.ts は既存のまま維持 (変更不要)。
+      → admin UI 側の fetch 呼び出しを /api/admin/* → /api/dispatch に書き換え。
+      → SSOT: docs/file-structure.yaml `frontend.directories.api: backend_contract_client`、
+               docs/framework-core.yaml `runtime_wiring.frontend_to_backend_dispatch`
+      → Scenario Contract + Runtime Boundary Failure Matrix (frontend proxy 項目) 必須
+
 ## System Operation CI (Issue #83)
 
 - [x] [Claude] SystemOperationCiRuntime の backend-tests CI 検証

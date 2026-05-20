@@ -113,6 +113,100 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
+-- Admin topology nodes — deterministic IDs for admin attractor resolution.
+--
+-- Admin attractor keys (6) all reference these three nodes:
+--   admin_package:   00000000-0000-0000-0000-000000000020
+--   admin_schema:    00000000-0000-0000-0000-000000000021
+--   admin_component: 00000000-0000-0000-0000-000000000022
+-- ---------------------------------------------------------------------------
+INSERT INTO package_registry (package_id, name, type, package_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000020',
+    'admin_package', 'admin', '{}', true
+)
+ON CONFLICT (package_id) DO NOTHING;
+
+INSERT INTO schema_registry (schema_id, name, schema_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000021',
+    'admin_schema', '{}', true
+)
+ON CONFLICT (schema_id) DO NOTHING;
+
+INSERT INTO component_registry (component_id, name, component_type, component_def, active)
+VALUES (
+    '00000000-0000-0000-0000-000000000022',
+    'admin_component', 'admin',
+    '{}', true
+)
+ON CONFLICT (component_id) DO NOTHING;
+
+-- structure_maps for admin attractor keys.
+-- attractor_key format: "{target}:{layer}:{action}" (lowercase, matches OperationVectorResolver output).
+INSERT INTO structure_maps (
+    structure_map_id, name, attractor_key,
+    package_id, schema_id, component_ids, active
+)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000030',
+        'admin_context_token_registry_list',
+        'admin:context_token_registry:list',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000031',
+        'admin_context_token_registry_create',
+        'admin:context_token_registry:create',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000032',
+        'admin_context_token_registry_deprecate',
+        'admin:context_token_registry:deprecate',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000033',
+        'admin_registry_vector_validate',
+        'admin:registry_vector:validate',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000034',
+        'admin_ui_component_bucket_list',
+        'admin:ui_component_bucket:list',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000035',
+        'admin_package_generator_generate',
+        'admin:package_generator:generate',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    )
+ON CONFLICT (structure_map_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- function_parameters — context route recommendation policy
 --
 -- Policy source for ContextRouteRecommendationResolver.
