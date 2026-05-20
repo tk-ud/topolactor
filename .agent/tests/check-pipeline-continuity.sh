@@ -64,17 +64,18 @@ if [ ! -f "$RUNTIME_EXEC" ]; then
   fail "[hardcode.guard] RuntimeExecutor.cs not found"
 else
   # Count target string literal comparisons in RuntimeExecutor.
-  # Allowed: 3 — demo_entity_check_in_ExecuteAsync (1) + admin_path_in_ExecuteAsync (1)
-  #             + demo_validation_in_ValidateDemoEntityRequest (1).
-  # Any count above 3 indicates a new hardcoded dispatch target.
-  DIRECT_EQ=$(grep -c 'vector\.Target ==' "$RUNTIME_EXEC")
-  STRING_EQ=$(grep -c 'string\.Equals(vector\.Target' "$RUNTIME_EXEC")
+  # Allowed: up to 3 legacy/isolated branches; 0 is preferred (complete isolation achieved).
+  # When branches exist they must be documented exceptions in pipeline-continuity-ssot.yaml.
+  # Any count above 3 indicates a new hardcoded dispatch target being added.
+  # || true: grep -c exits 1 on 0 matches; treat 0 matches as 0, not a script failure.
+  DIRECT_EQ=$(grep -c 'vector\.Target ==' "$RUNTIME_EXEC" || true)
+  STRING_EQ=$(grep -c 'string\.Equals(vector\.Target' "$RUNTIME_EXEC" || true)
   TOTAL=$((DIRECT_EQ + STRING_EQ))
   ALLOWED=3
   if [ "$TOTAL" -gt "$ALLOWED" ]; then
-    fail "[hardcode.guard] $TOTAL target-dispatch branches in RuntimeExecutor.cs (allowed: $ALLOWED; excess indicates hardcoded routing replacing manifest_dispatcher)"
+    fail "[hardcode.guard] $TOTAL target-dispatch branches in RuntimeExecutor.cs (allowed: up to $ALLOWED; excess indicates hardcoded routing replacing manifest_dispatcher)"
   else
-    echo "OK  [hardcode.guard] target-dispatch branches: $TOTAL (within allowed $ALLOWED)"
+    echo "OK  [hardcode.guard] target-dispatch branches: $TOTAL (allowed: up to $ALLOWED; 0 is preferred)"
   fi
 
   # Check for silent fallback to default target.
