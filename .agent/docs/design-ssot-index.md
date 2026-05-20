@@ -60,13 +60,13 @@
 **概要**: Runtime Orchestration OS の独立 SSOT。
 `runtime_timeline_scheduler` / `runtime_queue_scheduler` を polling ではない時間軸整列層として定義し、
 `manifest_dispatcher`、frontend の API trigger lane と SSE projection lane、
-backend の topology payload 変換・json linking・entity builder・response/db notify/registry attractor を定義する。
+backend の topology payload 変換・json linking・topology_function_binder・response/db notify/registry attractor を定義する。
 
 **参照すべき場面**:
 - scheduler / dispatcher / runtime destination の責務境界を変更するとき
 - frontend の API trigger lane / SSE projection lane の経路意味を変更するとき
-- backend topology runtime（vector conversion / json linking / entity builder / output lanes）の設計境界を変更するとき
-- manifest authority（role / dispatcher / runtime / entity_builder mapping）を変更するとき
+- backend topology runtime（vector conversion / json linking / topology_function_binder / output lanes）の設計境界を変更するとき
+- manifest authority（role / dispatcher / runtime / topology_function_binding mapping / projection_constructor mapping）を変更するとき
 
 ---
 
