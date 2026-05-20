@@ -22,8 +22,13 @@ async function callAdminDispatch(request: DispatchRequest): Promise<Emission> {
   if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
 
   const body = await res.json() as { success?: boolean; emission?: Emission | null; errors?: ValidationError[] };
+  if (res.status === 501) {
+    const code = body.errors?.[0]?.code ?? body.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return { data: null } as Emission;
+  }
+
   if (!res.ok || !body.success || !body.emission) {
-    const msg = body.errors?.[0]?.message ?? `HTTP ${res.status}`;
+    const msg = body.errors?.[0]?.message ?? body.errors?.[0]?.Message ?? `HTTP ${res.status}`;
     throw new Error(msg);
   }
 

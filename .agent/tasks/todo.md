@@ -35,7 +35,7 @@ SSOT参照必読:
 - [x] [Claude] Step 1: Program.cs の JWT ベアラートークン抽出を `ExtractBearerToken` ヘルパー関数に抽出 (behavior-preserving refactor)
       → 対象: `backend/Program.cs`。全 7 route handler の3行抽出パターンを1行呼び出しに置換。
 
-- [ ] [Claude] Step 2: RuntimeExecutor に admin 操作ハンドラーを追加
+- [x] [Claude] Step 2: RuntimeExecutor に admin 操作ハンドラーを追加
       → 対象: `backend/runtime/RuntimeExecutor.cs`。
       → `context_token_registry` / `registry_vector_validate` / `ui_component_bucket` / `package_generator` の
          operation target を canonical route で dispatch できるよう case を追加。

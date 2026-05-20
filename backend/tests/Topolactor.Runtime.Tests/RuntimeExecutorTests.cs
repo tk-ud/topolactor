@@ -36,7 +36,13 @@ public class RuntimeExecutorTests
                 new ContextNeighborSearch(),
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
+            adminRuntime: new AdminRuntime(
+                NullLogger<AdminRuntime>.Instance,
+                contextRouteRepository,
+                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRouteRepository, contextRoutePolicyRepository),
+                new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
+                new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
     }
 
     [Fact]

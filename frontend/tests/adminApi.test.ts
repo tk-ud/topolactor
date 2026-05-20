@@ -35,3 +35,21 @@ Deno.test("create/deprecate/validate throw on dispatch error", async () => {
     await assertRejects(() => validateRegistryVector("relation_registry", ["x"]), Error);
   } finally { globalThis.fetch = original; }
 });
+
+Deno.test("fetchContextTokens: dispatch 501 not configured -> null", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = makeFetch(501, { success: false, errors: [{ code: "DISPATCH_BACKEND_NOT_CONFIGURED", message: "not configured" }] });
+  try {
+    const result = await fetchContextTokens();
+    assertEquals(result, null);
+  } finally { globalThis.fetch = original; }
+});
+
+Deno.test("validateRegistryVector: dispatch 501 not configured -> null", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = makeFetch(501, { success: false, errors: [{ code: "DISPATCH_BACKEND_NOT_CONFIGURED", message: "not configured" }] });
+  try {
+    const result = await validateRegistryVector("relation_registry", []);
+    assertEquals(result, null);
+  } finally { globalThis.fetch = original; }
+});
