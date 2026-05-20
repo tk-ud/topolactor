@@ -151,16 +151,15 @@ public class AdminRuntime
     }
 
     // ---------------------------------------------------------------------------
-    // Step 10 dispatch — called by RuntimeExecutor after the canonical pipeline
-    // steps 1-9 (attractor_resolve through context_route_recommendation).
+    // Target override dispatch — called by TargetDispatchOverride.TryHandleAsync
+    // at Step 10 of the canonical pipeline, after attractor_resolve and
+    // structure_map_resolve have validated the admin attractor key.
     // Returns (data, null) on success or (null, error) on failure.
-    // Pattern mirrors ApplyDemoStateLoopAsync in RuntimeExecutor.
     // ---------------------------------------------------------------------------
 
     /// <summary>
-    /// Executes the admin operation data step. Called at Step 10 of the canonical
-    /// pipeline, after attractor_resolve and structure_map_resolve have validated
-    /// that the admin attractor key exists in the topology DB.
+    /// Executes the admin operation data step. Called via TargetDispatchOverride
+    /// at Step 10, after canonical pipeline validation steps 1-9.
     /// </summary>
     public async Task<(JsonElement? data, ValidationError? error)> ExecuteDataAsync(
         OperationVector vector, CancellationToken ct = default)

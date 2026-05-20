@@ -22,11 +22,10 @@ public class RuntimeExecutor
     private readonly SchemaResolver _schemaResolver;
     private readonly EmissionBuilder _emissionBuilder;
     private readonly SemanticMapper _semanticMapper;
-    private readonly TopologyRepository _topologyRepository;
     private readonly DiffLogRepository _diffLogRepository;
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
-    private readonly AdminRuntime _adminRuntime;
+    private readonly TargetDispatchOverride? _targetDispatchOverride;
     private readonly OutputLaneRouter? _outputLaneRouter;
 
     public RuntimeExecutor(
@@ -38,11 +37,10 @@ public class RuntimeExecutor
         SchemaResolver schemaResolver,
         EmissionBuilder emissionBuilder,
         SemanticMapper semanticMapper,
-        TopologyRepository topologyRepository,
         DiffLogRepository diffLogRepository,
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
-        AdminRuntime adminRuntime,
+        TargetDispatchOverride? targetDispatchOverride = null,
         OutputLaneRouter? outputLaneRouter = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -53,11 +51,10 @@ public class RuntimeExecutor
         _schemaResolver = schemaResolver ?? throw new ArgumentNullException(nameof(schemaResolver));
         _emissionBuilder = emissionBuilder ?? throw new ArgumentNullException(nameof(emissionBuilder));
         _semanticMapper = semanticMapper ?? throw new ArgumentNullException(nameof(semanticMapper));
-        _topologyRepository = topologyRepository ?? throw new ArgumentNullException(nameof(topologyRepository));
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
-        _adminRuntime = adminRuntime ?? throw new ArgumentNullException(nameof(adminRuntime));
+        _targetDispatchOverride = targetDispatchOverride;
         _outputLaneRouter = outputLaneRouter;
     }
 
@@ -86,10 +83,11 @@ public class RuntimeExecutor
                 Errors: guardErrors);
         }
 
-        var demoValidationError = ValidateDemoEntityRequest(vector);
-        if (demoValidationError is not null)
+        // TargetDispatchOverride provides early validation for isolated target overrides (Gap-1).
+        var overrideValidationError = _targetDispatchOverride?.ValidateRequest(vector);
+        if (overrideValidationError is not null)
         {
-            return ErrorResponse(demoValidationError.Code, demoValidationError.Message);
+            return ErrorResponse(overrideValidationError.Code, overrideValidationError.Message);
         }
 
         // Step 3: Resolve attractor — no silent fallback
@@ -184,20 +182,21 @@ public class RuntimeExecutor
 
         workingShape = workingShape with { ContextRouteRecommendation = recommendation };
 
-        // Step 10: Build emission from resolved working shape
-        if (vector.Target == "demo" && vector.Layer == "entity")
+        // Step 10: Target override data injection (TargetDispatchOverride — isolated non-canonical path).
+        if (_targetDispatchOverride is not null)
         {
-            var stateResult = await ApplyDemoStateLoopAsync(vector, ct);
-            if (stateResult.error is not null) return ErrorResponse(stateResult.error.Code, stateResult.error.Message);
-            workingShape = workingShape with { ResolvedData = stateResult.data };
-        }
-        else if (string.Equals(vector.Target, "admin", StringComparison.OrdinalIgnoreCase))
-        {
-            var adminResult = await _adminRuntime.ExecuteDataAsync(vector, ct);
-            if (adminResult.error is not null) return ErrorResponse(adminResult.error.Code, adminResult.error.Message);
-            workingShape = workingShape with { ResolvedData = adminResult.data };
+            var (handled, overrideData, overrideError) =
+                await _targetDispatchOverride.TryHandleAsync(vector, ct);
+            if (handled)
+            {
+                if (overrideError is not null)
+                    return ErrorResponse(overrideError.Code, overrideError.Message);
+                if (overrideData.HasValue)
+                    workingShape = workingShape with { ResolvedData = overrideData };
+            }
         }
 
+        // Step 11: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
 
         var response = new EndpointResponseDto(
@@ -220,82 +219,4 @@ public class RuntimeExecutor
             Success: false,
             Emission: null,
             Errors: [new ValidationError(code, message)]);
-
-    private static ValidationError? ValidateDemoEntityRequest(OperationVector vector)
-    {
-        if (!string.Equals(vector.Target, "demo", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(vector.Layer, "entity", StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        var action = vector.Action?.ToLowerInvariant();
-        if (action is not ("list" or "detail" or "create" or "advance"))
-        {
-            return new ValidationError("INVALID_OPERATION", "demo/entity supports only list, detail, create, advance");
-        }
-
-        if (action is "detail" or "create" or "advance")
-        {
-            if (vector.Payload is null ||
-                !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) ||
-                string.IsNullOrWhiteSpace(entityIdEl.GetString()) ||
-                !Guid.TryParse(entityIdEl.GetString(), out _))
-            {
-                return new ValidationError("INVALID_PAYLOAD", "entityId UUID is required");
-            }
-        }
-
-        return null;
-    }
-
-    private async Task<(JsonElement? data, ValidationError? error)> ApplyDemoStateLoopAsync(OperationVector vector, CancellationToken ct)
-    {
-        var action = vector.Action?.ToLowerInvariant();
-        if (action is not ("list" or "detail" or "create" or "advance"))
-        {
-            return (null, new ValidationError("INVALID_OPERATION", "demo/entity supports only list, detail, create, advance"));
-        }
-
-        try
-        {
-            Guid? entityId = null;
-            if (action is "detail" or "create" or "advance")
-            {
-                if (vector.Payload is null ||
-                    !vector.Payload.Value.TryGetProperty("entityId", out var entityIdEl) ||
-                    string.IsNullOrWhiteSpace(entityIdEl.GetString()) ||
-                    !Guid.TryParse(entityIdEl.GetString(), out var parsedId))
-                {
-                    return (null, new ValidationError("INVALID_PAYLOAD", "entityId UUID is required"));
-                }
-                entityId = parsedId;
-            }
-
-            if (action is "create" or "advance")
-            {
-                var title = vector.Payload!.Value.TryGetProperty("title", out var titleEl) ? titleEl.GetString() : null;
-                var apply = await _topologyRepository.ApplyDemoTransitionAsync(entityId!.Value, action, title, ct);
-                if (!apply.Success)
-                    return (null, new ValidationError(apply.ErrorCode ?? "TRANSITION_FAILED", apply.ErrorMessage ?? "transition failed"));
-            }
-
-            var list = await _topologyRepository.LoadDemoEntityListAsync(ct);
-            DemoEntityProjection? detail = null;
-            if (action == "detail" || entityId is not null)
-            {
-                detail = await _topologyRepository.LoadDemoEntityDetailAsync(entityId!.Value, ct);
-                if (detail is null)
-                    return (null, new ValidationError("STATE_NOT_FOUND", "requested entity does not exist"));
-            }
-
-            var history = detail is null ? Array.Empty<object>() : await _topologyRepository.LoadDemoTransitionHistoryAsync(detail.EntityId, ct);
-            var data = JsonSerializer.SerializeToElement(new { items = list, detail, history });
-            return (data, null);
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("NOT_CONNECTED", StringComparison.Ordinal))
-        {
-            return (null, new ValidationError("REPOSITORY_NOT_CONNECTED", ex.Message));
-        }
-    }
 }

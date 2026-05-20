@@ -76,6 +76,11 @@ builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(
         sp.GetRequiredService<ILogger<OutputLaneRouter>>(),
         sp.GetRequiredService<DbNotifyRepository>()));
+builder.Services.AddSingleton<TargetDispatchOverride>(sp =>
+    new TargetDispatchOverride(
+        sp.GetRequiredService<ILogger<TargetDispatchOverride>>(),
+        sp.GetRequiredService<TopologyRepository>(),
+        sp.GetRequiredService<AdminRuntime>()));
 builder.Services.AddSingleton<RuntimeExecutor>(sp =>
     new RuntimeExecutor(
         sp.GetRequiredService<ILogger<RuntimeExecutor>>(),
@@ -86,11 +91,10 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<SchemaResolver>(),
         sp.GetRequiredService<EmissionBuilder>(),
         sp.GetRequiredService<SemanticMapper>(),
-        sp.GetRequiredService<TopologyRepository>(),
         sp.GetRequiredService<DiffLogRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
-        sp.GetRequiredService<AdminRuntime>(),
+        sp.GetRequiredService<TargetDispatchOverride>(),
         sp.GetRequiredService<OutputLaneRouter>()));
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
     new ManifestDispatcher(

@@ -151,3 +151,70 @@ public class SseEndpointStreamFormatTests
         return (ctx.Response, body);
     }
 }
+
+/// <summary>
+/// DbNotifyListener payload handling tests.
+/// Verifies that HandleNotificationPayload broadcasts the correct SseEvent
+/// without requiring a live PostgreSQL connection.
+///
+/// Known gap (Gap-7): full DbNotifyListener → pg_notify → broadcaster → SSE E2E
+/// path requires a live DB and is not covered here.
+/// Known gap (Gap-7): per SSOT, db_notify events should enter the scheduler queue
+/// as hook_triggers before SSE emission (scheduler routing not yet implemented).
+/// </summary>
+public class DbNotifyListenerPayloadTests
+{
+    private sealed class TestableDbNotifyListener : DbNotifyListener
+    {
+        public TestableDbNotifyListener(SseEventBroadcaster broadcaster)
+            : base(NullLogger<DbNotifyListener>.Instance, "test-double", broadcaster) { }
+
+        public void SimulateNotification(string payload) => HandleNotificationPayload(payload);
+    }
+
+    [Fact]
+    public void HandleNotificationPayload_BroadcastsProjectionEvent()
+    {
+        var broadcaster = new SseEventBroadcaster();
+        var ch = broadcaster.Subscribe();
+        var listener = new TestableDbNotifyListener(broadcaster);
+
+        listener.SimulateNotification("""{"table_id":"t1","manifest_id":"m1"}""");
+
+        Assert.True(ch.Reader.TryRead(out var evt));
+        Assert.Equal("projection", evt.EventType);
+        Assert.Equal("""{"table_id":"t1","manifest_id":"m1"}""", evt.Data);
+    }
+
+    [Fact]
+    public void HandleNotificationPayload_EmptyPayload_BroadcastsEmptyJson()
+    {
+        var broadcaster = new SseEventBroadcaster();
+        var ch = broadcaster.Subscribe();
+        var listener = new TestableDbNotifyListener(broadcaster);
+
+        listener.SimulateNotification("{}");
+
+        Assert.True(ch.Reader.TryRead(out var evt));
+        Assert.Equal("projection", evt.EventType);
+        Assert.Equal("{}", evt.Data);
+    }
+
+    [Fact]
+    public void HandleNotificationPayload_MultipleSubscribers_AllReceiveEvent()
+    {
+        var broadcaster = new SseEventBroadcaster();
+        var ch1 = broadcaster.Subscribe();
+        var ch2 = broadcaster.Subscribe();
+        var listener = new TestableDbNotifyListener(broadcaster);
+
+        listener.SimulateNotification("""{"table_id":"t2"}""");
+
+        Assert.True(ch1.Reader.TryRead(out var e1));
+        Assert.True(ch2.Reader.TryRead(out var e2));
+        Assert.Equal("projection", e1.EventType);
+        Assert.Equal("projection", e2.EventType);
+        Assert.Equal("""{"table_id":"t2"}""", e1.Data);
+        Assert.Equal("""{"table_id":"t2"}""", e2.Data);
+    }
+}

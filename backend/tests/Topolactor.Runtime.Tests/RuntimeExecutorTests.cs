@@ -19,6 +19,18 @@ public class RuntimeExecutorTests
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
 
+        var adminRuntime = new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            contextRouteRepository,
+            new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
+            new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
+            new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
+
+        var targetDispatchOverride = new TargetDispatchOverride(
+            NullLogger<TargetDispatchOverride>.Instance,
+            topologyRepository,
+            adminRuntime);
+
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -28,7 +40,6 @@ public class RuntimeExecutorTests
             schemaResolver: new SchemaResolver(topologyRepository),
             emissionBuilder: new EmissionBuilder(),
             semanticMapper: new SemanticMapper(),
-            topologyRepository: topologyRepository,
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
             runtimeGuard: new RuntimeGuard(),
             contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
@@ -39,12 +50,7 @@ public class RuntimeExecutorTests
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
-            adminRuntime: new AdminRuntime(
-                NullLogger<AdminRuntime>.Instance,
-                contextRouteRepository,
-                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
-                new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
-                new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
+            targetDispatchOverride: targetDispatchOverride);
     }
 
     [Fact]
