@@ -178,6 +178,13 @@ runtime_orchestration_ssot:
       - ui_projection_mapping
       - topology_function_binding_mapping
       - projection_constructor_mapping
+    manifest_resolution:
+      api:
+        key: [role, target, layer, action]
+        strategy: resolve_active_manifest_by_axes
+      sse:
+        key: manifest_id
+        source: db_notify_payload
     prohibited:
       - role_behavior_hardcoded_in_dispatcher
       - dispatcher_silent_fallback
