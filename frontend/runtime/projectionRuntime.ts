@@ -68,14 +68,15 @@ export function createProjectionRuntime(): ProjectionRuntime {
     const jsonKeyValue: Record<string, unknown> = payload.data ?? {};
     const result = constructProjection(jsonKeyValue, currentDefinition);
 
-    if (result.error) {
+    if (!result.projection) {
       console.error("[projectionRuntime] projection construction failed:", result.error);
       return;
     }
 
+    const projection = result.projection;
     for (const handler of handlers) {
       try {
-        handler(result.projection, payload);
+        handler(projection, payload);
       } catch (err) {
         console.error("[projectionRuntime] handler threw:", err);
       }

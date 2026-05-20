@@ -300,7 +300,11 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: Unified Channel-based queue aligns cron/hook/client triggers. Client trigger awaits result via TCS; cron/hook are fire-and-forget. BackgroundService consumer dequeues to ManifestDispatcher. Queue persistence not implemented.
+      public_summary: >
+        BackgroundService with Channel-based queue for cron/hook triggers (fire-and-forget).
+        Client trigger dispatches synchronously to ManifestDispatcher (explicit exception: preserves HTTP response contract).
+        Unified single-queue alignment for all three trigger kinds is a known gap.
+        Queue persistence not implemented.
       files:
         - backend/scheduler/RuntimeTimelineScheduler.cs
       evidence:

@@ -19,7 +19,7 @@ namespace Topolactor.Scheduler;
 public class SseEventBroadcaster
 {
     private readonly List<Channel<SseEvent>> _subscribers = [];
-    private readonly Lock _lock = new();
+    private readonly object _lock = new();
 
     /// <summary>
     /// Registers a new subscriber channel. The returned channel is per-connection.

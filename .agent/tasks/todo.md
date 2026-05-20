@@ -24,43 +24,29 @@ SSOT参照必読:
 
 ### Backend
 
-- [x] [Claude] Gap-5: `EndpointRequestDto` / `DispatchRequest` に `trigger_kind` / `role` を追加する
-      → 実装済み: `backend/schema/Contracts.cs`, `frontend/api/dispatch.ts`, `backend/runtime/OperationVectorResolver.cs`
-
-- [x] [Claude] Gap-1: `manifest_dispatcher` を完全実装する
-      → 実装済み: NpgsqlManifestRepository (role+target+layer+action 軸 DB lookup), ManifestDispatcher 更新
-      → 残課題: runtime_mapping による runtime_destination 分岐は未接続 (skeleton)。
+- [ ] [Claude] Gap-1 partial: `manifest_dispatcher` の `runtime_mapping` による `runtime_destination` 分岐を接続する
+      → ManifestDispatcher はマニフェスト解決まで実装済み。解決後の runtime_mapping エントリを使った runtime_destination 選択が未接続 (skeleton)。
+      → 対象: `backend/runtime/ManifestDispatcher.cs`, `backend/repository/NpgsqlManifestRepository.cs`
       → docs/system-roadmap.yaml: backend.manifest_dispatcher = partial
 
-- [x] [Claude] Gap-3: `topology_function_binder` / `topology_function_interface` を実装する
-      → 実装済み: `backend/runtime/TopologyFunctionBinder.cs`, `backend/schema/TopologyFunctionInterface.cs`
-
-- [x] [Claude] Gap-2: `runtime_timeline_scheduler` のトリガ統合を完全実装する
-      → 実装済み: RuntimeTimelineScheduler (BackgroundService) — cron/hook は Channel キュー, client は同期
-      → 実装済み: EnqueueCronTrigger / EnqueueHookTrigger メソッド追加
+- [ ] [Claude] Gap-2 partial: `runtime_timeline_scheduler` の client trigger を統一キューに整列させる
+      → 現在 client trigger は ManifestDispatcher に直接同期呼び出し (HTTP response contract 保持のための意図的例外)。
+      → cron/hook/client の 3 トリガ全てを同一 Channel で整列する完全実装は未達。
+      → 判断点: HTTP response contract を壊さずに統一整列を実現できるか設計が必要。
+      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler = partial
 
-- [x] [Claude] Gap-6: output lane `db_notify_emission` / `registry_attractor_update` を実装する
-      → 実装済み: `backend/runtime/OutputLaneRouter.cs`, `backend/repository/NpgsqlDbNotifyRepository.cs`
-      → 残課題: OutputLaneRouter は RuntimeExecutor パイプラインから未呼び出し (接続待ち)
+- [ ] [Claude] Gap-6 partial: `OutputLaneRouter` を `RuntimeExecutor` パイプラインから呼び出す
+      → OutputLaneRouter / NpgsqlDbNotifyRepository は実装済みだが RuntimeExecutor pipeline に未接続。
+      → db_notify_emission / registry_attractor_update lane が実際には通っていない。
+      → 対象: `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/RuntimeExecutor.cs`
       → docs/system-roadmap.yaml: backend.output_lanes = partial
 
-### Frontend
-
-- [x] [Claude] Gap-7: SSE projection lane を完全実装する
-      → 実装済み: SseEventBroadcaster (broadcaster), DbNotifyListener (BackgroundService, pg LISTEN)
-      → 実装済み: SseEndpoint (per-connection subscriber channel)
-      → 実装済み: `frontend/runtime/projectionRuntime.ts` (新規)
-      → 実装済み: sseReceiver.ts に projection event listener 追加
-      → 残課題: SSE end-to-end integration test (Issue #123) は未実装
-      → docs/system-roadmap.yaml: backend.sse_emitter = partial
-
-- [x] [Claude] Gap-8: `projection_constructor` を実装する
-      → 実装済み: `frontend/runtime/projectionConstructor.ts` (新規)
-      → docs/system-roadmap.yaml: frontend.projection_constructor = partial
-
-- [x] [Claude] Gap-9: frontend admin routes skeleton を追加する
-      → 実装済み: `frontend/routes/admin/manifests.tsx` / `contents.tsx` / `ui-builder.tsx`
+- [ ] [Claude] Gap-7 partial: SSE end-to-end integration test を実装する (Issue #123)
+      → SseEventBroadcaster / DbNotifyListener / SseEndpoint は実装済みだが E2E テストが未実装。
+      → backend → pg_notify → DbNotifyListener → SseEventBroadcaster → SseEndpoint → client の通し確認が未実施。
+      → 対象: `backend/tests/`, `docs/design/pipeline-continuity-ssot.yaml`
+      → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Issue #123)
 
 ## Seed Import/Export Runtime (Issue #84)
 
@@ -93,8 +79,3 @@ SSOT参照必読:
       → 前提: Issue #86 (component system) の方針定義後。
       → 対象: `db/ui_topology_tables.sql`、`frontend/routes/admin/`、`frontend/islands/`、`docs/registrar-admin-ui-specification.md`
       → Scenario Contract 必須。
-
-## Demo — Auth Guard パターン例示
-
-- [x] [Claude] demo article ページを作成し、返信 UI にコンポーネント auth ガードを実装する
-      → 実装済み: `frontend/routes/demo-article.tsx`, `frontend/islands/ReplyPanel.tsx`

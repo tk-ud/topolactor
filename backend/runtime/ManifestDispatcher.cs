@@ -14,10 +14,10 @@ namespace Topolactor.Runtime;
 ///   - Ambiguous manifests (multiple active for same axes) -> MANIFEST_AMBIGUOUS error.
 ///   - Does not own topology transform logic.
 ///
-/// When no active manifest exists for the given axes (e.g., demo/development),
-/// the dispatcher falls through to RuntimeExecutor using the request axes directly.
-/// This fallthrough is logged as a warning and is not a silent fallback — it is the
-/// explicit policy when no manifest has been registered for the axes.
+/// Dev/demo bypass: when _manifestRepository is null (not injected), the dispatcher
+/// delegates directly to RuntimeExecutor without manifest resolution. This is an
+/// explicit bypass for dev/demo environments without a manifest DB. It is not a
+/// silent fallback — it is documented and isolated here.
 /// </summary>
 public class ManifestDispatcher
 {
@@ -37,8 +37,9 @@ public class ManifestDispatcher
 
     /// <summary>
     /// Resolves the runtime destination from manifest axes and dispatches the request.
-    /// Attempts DB manifest lookup; falls through to RuntimeExecutor when no manifest
-    /// is registered for the axes (explicit warning logged, not silent).
+    /// When _manifestRepository is null, delegates directly (dev/demo bypass).
+    /// When a manifest repository is configured and no active manifest matches the axes,
+    /// returns MANIFEST_NOT_FOUND — no implicit fallthrough to RuntimeExecutor.
     /// </summary>
     public async Task<EndpointResponseDto> DispatchAsync(
         EndpointRequestDto request,
@@ -50,49 +51,51 @@ public class ManifestDispatcher
             "ManifestDispatcher: resolving destination for Role={Role} Target={Target} Layer={Layer} Action={Action} TriggerKind={TriggerKind}",
             request.Role, request.Target, request.Layer, request.Action, request.TriggerKind);
 
-        if (_manifestRepository is not null)
+        if (_manifestRepository is null)
         {
-            try
-            {
-                var manifest = await _manifestRepository.ResolveActiveManifestAsync(
-                    role: request.Role,
-                    target: request.Target,
-                    layer: request.Layer,
-                    action: request.Action,
-                    ct: ct);
-
-                if (manifest is not null)
-                {
-                    _logger.LogDebug(
-                        "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
-                        manifest.ManifestId);
-
-                    // Manifest resolved — delegate to RuntimeExecutor with original request.
-                    // When runtime_mapping entries exist in the manifest, this is where
-                    // runtime_destination routing would select the appropriate runtime.
-                    // Currently routes to RuntimeExecutor (topology_transform_runtime).
-                    return await _runtimeExecutor.ExecuteAsync(request, ct);
-                }
-
-                _logger.LogWarning(
-                    "ManifestDispatcher: no active manifest for Role={Role} Target={Target} Layer={Layer} Action={Action}. " +
-                    "Falling through to RuntimeExecutor (manifest-unregistered axes).",
-                    request.Role, request.Target, request.Layer, request.Action);
-            }
-            catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
-            {
-                _logger.LogError(ex, "ManifestDispatcher: ambiguous manifest lookup rejected.");
-                return new EndpointResponseDto(
-                    Success: false,
-                    Emission: null,
-                    Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
-            }
-        }
-        else
-        {
-            _logger.LogDebug("ManifestDispatcher: no manifest repository configured; delegating to RuntimeExecutor.");
+            // Dev/demo bypass: no manifest repository configured.
+            _logger.LogDebug("ManifestDispatcher: no manifest repository configured; delegating to RuntimeExecutor (dev/demo bypass).");
+            return await _runtimeExecutor.ExecuteAsync(request, ct);
         }
 
-        return await _runtimeExecutor.ExecuteAsync(request, ct);
+        try
+        {
+            var manifest = await _manifestRepository.ResolveActiveManifestAsync(
+                role: request.Role,
+                target: request.Target,
+                layer: request.Layer,
+                action: request.Action,
+                ct: ct);
+
+            if (manifest is not null)
+            {
+                _logger.LogDebug(
+                    "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
+                    manifest.ManifestId);
+
+                // Manifest resolved — delegate to RuntimeExecutor with original request.
+                // runtime_mapping destination routing is a known gap (Gap-1 partial).
+                return await _runtimeExecutor.ExecuteAsync(request, ct);
+            }
+
+            _logger.LogWarning(
+                "ManifestDispatcher: no active manifest for Role={Role} Target={Target} Layer={Layer} Action={Action}.",
+                request.Role, request.Target, request.Layer, request.Action);
+
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError(
+                    "MANIFEST_NOT_FOUND",
+                    $"No active manifest for Role={request.Role} Target={request.Target} Layer={request.Layer} Action={request.Action}.")]);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
+        {
+            _logger.LogError(ex, "ManifestDispatcher: ambiguous manifest lookup rejected.");
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
+        }
     }
 }

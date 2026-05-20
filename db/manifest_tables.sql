@@ -22,7 +22,7 @@
 --   deprecated — no longer in use, retained for audit
 --
 -- topology jsonb[] ENTRY SHAPE (ID references and vectors only, no actual data):
---   { "type": "dispatcher_mapping", "role": "...", "runtime": "..." }
+--   { "type": "dispatcher_mapping", "role": "...", "target": "...", "layer": "...", "action": "..." }
 --   { "type": "runtime_mapping", "triggerKind": "...", "target": "..." }
 --   { "type": "ui_projection", "packageIds": ["uuid", ...], "layoutId": "uuid" }
 --       packageIds → packages.package_id (UI Component Builder layer)
