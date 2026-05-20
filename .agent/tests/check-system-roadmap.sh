@@ -14,6 +14,35 @@ unless File.exist?(roadmap)
   failf.call('docs/system-roadmap.yaml not found')
   puts "=== system roadmap check ==="; failures.each{|x| puts "FAIL: #{x}"}; exit 1
 end
+def detect_duplicate_keys(path)
+  duplicates = []
+  mapping_stack = [{indent: -1, keys: {}}]
+  File.readlines(path, chomp: true).each_with_index do |line, idx|
+    next if line.strip.empty? || line.lstrip.start_with?('#')
+    indent = line[/\A */].size
+    stripped = line.strip
+    while mapping_stack.length > 1 && indent <= mapping_stack[-1][:indent]
+      mapping_stack.pop
+    end
+    next if stripped.start_with?('- ')
+    if (m = stripped.match(/\A([A-Za-z0-9_.\-]+):(?:\s|$)/))
+      key = m[1]
+      scope = mapping_stack[-1][:keys]
+      if scope.key?(key)
+        duplicates << "#{key} (lines #{scope[key]} and #{idx + 1})"
+      else
+        scope[key] = idx + 1
+      end
+      mapping_stack << {indent: indent, keys: {}} if stripped.end_with?(':')
+    end
+  end
+  duplicates
+end
+
+detect_duplicate_keys(roadmap).each do |dup|
+  failf.call("duplicate YAML key detected: #{dup}")
+end
+
 raw = YAML.load_file(roadmap) || {}
 root = raw['system_roadmap_ssot'].is_a?(Hash) ? raw['system_roadmap_ssot'] : {}
 failf.call('system_roadmap_ssot must exist') if root.empty?
@@ -30,9 +59,10 @@ impl.each do |k,v|
   st=v['status']
   failf.call("implementation_registry.#{k}.status '#{st}' is not in status_terms") unless allowed.include?(st)
   pr=!!v['production_ready']; evidence=v['evidence']; cc=v['completion_condition']; kg=v['known_gap_ref']; ps=v['public_summary']
+  ready = (st == 'production_ready' || pr)
   failf.call("implemented entry #{k} requires evidence or completion_condition") if st=='implemented' && evidence.nil? && cc.nil?
-  failf.call("production_ready=true entry #{k} must not keep known_gap_ref") if pr && !kg.nil?
-  failf.call("#{k} requires public_summary for implemented/production_ready") if (st=='implemented' || st=='production_ready' || pr) && (ps.nil? || ps.to_s.strip.empty?)
+  failf.call("production_ready entry #{k} must not keep known_gap_ref") if ready && !kg.nil?
+  failf.call("#{k} requires public_summary for implemented/production_ready") if (st=='implemented' || ready) && (ps.nil? || ps.to_s.strip.empty?)
   failf.call("#{k} status #{st} requires known_gap_ref or completion_condition") if ['skeleton','partial'].include?(st) && kg.nil? && cc.nil?
   (v['files'] || []).each { |fp| file_to_status[fp]=st }
 end

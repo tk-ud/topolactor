@@ -398,16 +398,18 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     frontend.admin_routes:
-      status: partial
+      status: skeleton
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Admin base route exists; manifest, contents, and ui-builder route skeletons remain pending.
+      public_summary: Admin base route exists as skeleton; manifest, contents, and ui-builder route completion remains pending.
       files:
         - frontend/routes/admin/
+        - frontend/routes/admin/index.tsx
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
+        - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
         - Gap-9 admin route skeletons
@@ -491,18 +493,6 @@ system_roadmap_ssot:
         - admin_contracts_replace_temporary_fields_with_validated_runtime_schema
       known_gap_ref:
         - Gap-12 admin_contracts finalization
-
-    frontend.admin_routes:
-      status: skeleton
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: Admin route shells exist as UI skeletons and are not production-ready.
-      files:
-        - frontend/routes/admin/index.tsx
-      completion_condition:
-        - admin_routes_are_wired_to_validated_backend_registry_flows
-      known_gap_ref:
-        - Gap-9 admin route skeletons
 
     frontend.runtime_scheduler:
       status: skeleton
