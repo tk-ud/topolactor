@@ -26,6 +26,15 @@ db_schema:
     - vector_caches_are_rebuildable_projection_not_sot
 
   tables:
+    sql_attention_logs_alignment:
+      canonical_reference:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+      initial_minimal_signal_basis:
+        - table
+        - column
+        - ui
+
 
     # -------------------------------------------------------------------------
     # topology_definition — システムのトポロジ空間を定義するレジストリ群
@@ -250,6 +259,10 @@ db_schema:
       category: converged_entity
       file: db/topology_tables.sql
       role: append_only_diff_log
+      sql_attention_logs_mapping:
+        classification: mismatch
+        reason: target_table_is_domain_scope_identifier_not_physical_tableid
+        note: logs.diff_reuse_requires_explicit_physical_table_identity
 
     # -------------------------------------------------------------------------
     # promotion_policy — 利用統計と昇格候補
@@ -259,11 +272,24 @@ db_schema:
       category: promotion_policy
       file: db/promotion_tables.sql
       role: operation_usage_pattern_tracking
+      sql_attention_logs_mapping:
+        classification: conditional
+        candidate_for: logs.candidate
+        condition:
+          - preserve_table_column_jsonb_path_axis_pressure_trace
+          - preserve_audit_archive_semantics
 
     promotion_candidates:
       category: promotion_policy
       file: db/promotion_tables.sql
       role: advisory_structural_change_suggestions
+      sql_attention_logs_mapping:
+        classification: conditional
+        candidate_for: logs.candidate
+        condition:
+          - status_lifecycle_pending_approved_or_rejected
+          - column_jsonb_path_axis_candidate_pressure_traceable
+          - archive_audit_possible
 
     # -------------------------------------------------------------------------
     # context_route — 推薦エンジンの SQL Attention 層
@@ -290,6 +316,13 @@ db_schema:
       file: db/context_route_tables.sql
       role: operation_event_log_hot_storage
       note: retention_policy_via_function_parameters
+      sql_attention_logs_mapping:
+        classification: conditional
+        candidate_for: logs.ui_operation
+        condition:
+          - treat_as_component_or_operation_usage_signal_source
+          - retention_manifest_or_policy_driven
+          - not_sql_attention_core_tables
 
     context_event_cold:
       category: context_route
@@ -339,6 +372,9 @@ db_schema:
       file: db/context_route_tables.sql
       role: current_recommendation_projection_cache
       note: rebuildable_not_source_of_truth
+      sql_attention_logs_mapping:
+        classification: mismatch
+        note: not_logs_current_calculation_basis
 
     context_hub_feedback_event:
       category: context_route

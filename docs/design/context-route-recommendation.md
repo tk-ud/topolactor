@@ -59,6 +59,21 @@ jsonb key は観測頻度・意味重要度・監査要件に応じて column �
 `logs.diffs` は append-only diff surface（基本形: `id / tableId / jsonb / created`）として扱う。
 これは監査・再構築・履歴面であり、現在状態 SoT の代替ではない。
 
+
+
+## SQL Attention Logs SSOT との境界
+
+この文書は context route recommendation の SSOT であり、SQL Attention Logs SSOT 本体ではない。
+SQL Attention logs の canonical 意味定義は以下を参照する。
+
+- `docs/design/sql-attention-logs-ssot.md`
+- `docs/design/sql-attention-logs-ssot.yaml`
+
+境界ルール:
+- `context_event` は SQL Attention の `logs.ui_operation` 相当になり得る **signal source**（条件付き）
+- `context_hub_recommendation_current` は hub recommendation current であり、SQL Attention の `logs.current` calculation basis ではない
+- context route recommendation と SQL Attention logs は別導線で扱う
+
 ## Vector Cache Clarification
 
 registry_id 群を参照する record は Tensor state として扱う。

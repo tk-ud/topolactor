@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS usage_metrics (
 COMMENT ON TABLE usage_metrics IS
     'Records observed access patterns on topology tables and JSONB paths. '
     'Consumed by the promotion engine to generate promotion_candidates. '
-    'Rows are advisory observations — no structural changes are made here.';
+    'Rows are advisory observations — no structural changes are made here. '
+    'SQL Attention logs alignment: this table can be used as conditional logs.candidate pressure source '
+    'when table/column/jsonb_path/axis pressure tracking is preserved.';
 
 COMMENT ON COLUMN usage_metrics.jsonb_path IS
     'JSONB path expression (e.g. ''$.category'', ''$.metadata.owner'') identifying '
@@ -92,7 +94,9 @@ COMMENT ON TABLE promotion_candidates IS
     'References a usage_metrics observation and carries a structural action '
     'suggestion and topology manifest snapshot. '
     'IMPORTANT: Actual migration execution is out of scope for this skeleton. '
-    'Approved candidates must be acted on by a separate migration/approval workflow.';
+    'Approved candidates must be acted on by a separate migration/approval workflow. '
+    'SQL Attention logs alignment: conditional logs.candidate source when status lifecycle '
+    '(pending/approved/rejected) and pressure-axis traceability are preserved for audit/archive.';
 
 COMMENT ON COLUMN promotion_candidates.promotion_action IS
     'Suggested structural action. Expected values (non-exhaustive): '
