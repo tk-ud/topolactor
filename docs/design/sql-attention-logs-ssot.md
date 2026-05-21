@@ -387,6 +387,24 @@ k = UI / component operation
 
 For other registry kinds (relation/component/state), i/j/k basis must be defined according to each registry grammar before physical implementation.
 
+### relation registry N×N calculation rule (contract)
+
+In relation registry exploration, source_axis and target_axis array lengths may differ.
+
+For N×N calculation, the shorter side is adjusted by **calculation-local zero padding** only.
+
+Contract rules:
+
+- zero padding is calculation-time only (calculation-local), not persistent schema
+- padded elements are not real registry candidates
+- padded elements must be excluded from:
+  - population_count
+  - z-score denominator
+  - phase candidate output
+- `phase_vector_json` stores real candidate components only
+- optional metadata such as `padding_applied` / `padded_size` may be stored only as calculation metadata in `evidence_json`
+
+
 Draft behavior:
 
 ```text

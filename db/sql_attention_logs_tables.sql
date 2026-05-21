@@ -73,6 +73,9 @@ CREATE TABLE IF NOT EXISTS logs.registry_current (
 COMMENT ON TABLE logs.registry_current IS
   'Registry-side population current / phase-basis current for z-score and phase movement distance. Projection cache only; no adoption/mutation.';
 
+COMMENT ON COLUMN logs.registry_current.registry_matrix_json IS
+  'Registry exploration plane cache. Relation-registry calculation-local zero padding metadata, when needed, should remain in evidence_json/metadata and not as dedicated persistent padding columns.';
+
 -- ---------------------------------------------------------------------------
 -- logs.attention
 -- Append-only evidence log for physical current × registry exploration plane.

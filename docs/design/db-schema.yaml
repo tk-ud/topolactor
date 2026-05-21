@@ -409,6 +409,7 @@ db_schema:
       role: sql_attention_registry_side_phase_basis_current_n_by_n_exploration_plane
       physical_table: logs.registry_current
       persistence: regenerable_projection_cache
+      note: relation_registry_zero_padding_is_calculation_local_not_persistent_schema
 
     logs_attention:
       category: context_route

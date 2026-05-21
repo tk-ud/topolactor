@@ -43,6 +43,22 @@ physical_schema_status:
     - topK_per_registry_kind
     - phase_expansion_limit
     - max_attention_rows_saved
+  relation_registry_calculation_contract:
+    n_by_n_shape: calculation_time_only
+    source_target_length_mismatch: allowed
+    padding_policy:
+      type: zero_padding
+      timing: calculation_local
+      persistent_schema: forbidden
+      candidate_semantics: not_registry_candidate
+      excluded_from:
+        - population_count
+        - z_score_denominator
+        - phase_candidate_output
+      metadata_allowed_in:
+        - evidence_json
+    output_rule:
+      phase_vector_json: real_candidate_components_only
   out_of_scope_not_implemented:
     - refresh_function_bodies
     - norm_watch_function_bodies
