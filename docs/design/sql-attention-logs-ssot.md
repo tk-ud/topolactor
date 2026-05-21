@@ -77,19 +77,37 @@ logs.*
 - exploration candidate creation
 ```
 
-### logs.attention — neighbor hit / evidence log
+### logs.attention — neighbor hit / phase evidence log
 
-`logs.attention` stores the results of registry-neighbor exploration.
+`logs.attention` stores the result of registry-neighbor exploration and its phase-shifted candidate vector.
 
 If `logs.current` exists, `logs.attention` must be linked to it so that every attention hit has evidence back to the current basis that produced it.
 
 ```text
 logs.current
 → registry-neighbor exploration
-→ logs.attention
+→ logs.attention(vector, phase_vector)
 ```
 
 `logs.attention` is append-only / archive-required evidence, not an in-memory-only result.
+
+The minimal mental model is:
+
+```text
+id
+l2_norm
+vector
+phase_vector
+```
+
+Meaning:
+
+```text
+vector       = registry-neighbor hit vector
+phase_vector = vector distorted by Phase Attention across i/table, j/column, k/ui axes
+```
+
+Keeping `phase_vector` on `logs.attention` makes later phase-candidate aggregation and norm-trend visualization straightforward.
 
 ## Physical table pressure is the aggregation target
 
@@ -217,6 +235,55 @@ attention evidence save limit
 archive policy
 ```
 
+## Phase Attention draft
+
+Phase Attention is part of the `logs.attention` evidence shape, not a separate candidate table by default.
+
+When registry-neighbor exploration produces a hit, Phase Attention may distort the hit vector into a phase vector.
+
+```text
+neighbor hit vector
+→ l2_norm strength
+→ i/table, j/column, k/ui phase distortion
+→ phase_vector stored on logs.attention
+```
+
+Draft basis:
+
+```text
+i = table direction
+j = column / jsonb_path / axis direction
+k = UI / component operation direction
+```
+
+Draft behavior:
+
+```text
+stronger l2_norm allows farther movement from the attention vector.
+movement distance is corrected by normalized table-registry i/j/k population, such as z-score.
+```
+
+This is an experimental over-optimization guard: a strong attention hit does not only choose the nearest known candidate. It can also create a deliberately shifted candidate vector for later review and aggregation.
+
+Draft calculation shape:
+
+```text
+base_vector = logs.attention.vector
+axis_z_score = z_score(table_registry_i_j_k_population)
+move_distance = f(l2_norm, axis_z_score, policy_caps)
+phase_vector = distort(base_vector, i_table, j_column, k_ui, move_distance)
+```
+
+Guardrails:
+
+```text
+- phase_vector is evidence/candidate data, not adopted topology state
+- no direct registry mutation
+- no automatic migration execution
+- no automatic column promotion
+- no unbounded phase movement
+```
+
 ## Completion boundary
 
 Dangerous misunderstanding:
@@ -230,7 +297,8 @@ Correct boundary:
 ```text
 logs aggregation completed = attention-query basis is ready
 registry-neighbor hit and evidence saved = attention observation completed
-quaternion/topology expansion candidate created = topology-change candidate completed
+phase_vector generated on logs.attention = phase candidate visible for later review/aggregation
+adoption/migration = separate implementation path
 ```
 
 ## Existing repository mismatch notes
@@ -374,7 +442,7 @@ fixed literals are not embedded in contract implementation.
 Role contract:
 
 ```text
-registry-neighbor exploration hit evidence log
+registry-neighbor exploration hit and phase-vector evidence log
 ```
 
 Suggested schema fields:
@@ -383,7 +451,9 @@ Suggested schema fields:
 attention_id
 current_id
 source_set_id
-query_vector_json
+l2_norm
+vector_json
+phase_vector_json
 permutation_key
 registry_table
 registry_id
@@ -399,6 +469,8 @@ Persistence semantics:
 ```text
 logs.attention is append-only and archive-required evidence.
 each attention row must reference logs.current.current_id.
+vector_json stores the neighbor hit vector.
+phase_vector_json stores the phase-shifted candidate vector.
 ```
 
 ### existing table alignment contract
@@ -431,6 +503,8 @@ context_hub_recommendation_current
 - no scheduler/runtime exploration implementation
 - no destructive changes to existing tables
 - no large-scale SQL replacement
+- no automatic registry mutation from phase_vector
+- no automatic migration or column promotion from phase_vector
 
 ## Implementation order
 
@@ -439,9 +513,10 @@ context_hub_recommendation_current
 3. Align README/internal design docs with this SSOT without changing public article intent.
 4. Define schema/function/trigger contracts.
 5. Implement logs.current basis update and norm-level monitoring.
-6. Implement logs.attention evidence persistence.
+6. Implement logs.attention evidence persistence with vector and phase_vector.
 7. Implement scheduler/runtime registry-neighbor exploration.
+8. Implement Phase Attention vector distortion only after policy caps and evidence linkage are fixed.
 
 ## One-sentence definition
 
-SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records the hit/evidence into `logs.attention`.
+SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention`.
