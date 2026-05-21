@@ -12,7 +12,11 @@ on:
       - 'frontend/import_map.json'
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - 'infra/.env.example'
       - '.agent/tests/check-unified-test-gate.sh'
+      - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
   push:
     branches:
@@ -27,7 +31,11 @@ on:
       - 'frontend/import_map.json'
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - 'infra/.env.example'
       - '.agent/tests/check-unified-test-gate.sh'
+      - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
 
 jobs:
@@ -35,7 +43,7 @@ jobs:
     # Runs all test layers via check-unified-test-gate.sh (SSOT for test details).
     # Layers: FUNCTION_BOUNDARY, RUNTIME_INTEGRATION, FRONTEND_CONTRACT.
     # NOT_COVERED: OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync.
-    # REMAINING_TODO: docker-compose / DB / migration / env / volume verification.
+    # REMAINING_TODO: env / volume / live API-route E2E verification.
     name: "Unified test gate (FUNCTION_BOUNDARY / RUNTIME_INTEGRATION / FRONTEND_CONTRACT)"
     runs-on: ubuntu-latest
     steps:
@@ -55,10 +63,26 @@ jobs:
       - name: Run unified test gate
         run: bash .agent/tests/check-unified-test-gate.sh
 
+  runtime-environment-gate:
+    name: "[RUNTIME_ENV] Docker compose / DB / migration gate"
+    needs: [test-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run runtime environment gate
+        run: bash .agent/tests/check-runtime-environment.sh
+
   structure-gate:
     # STRUCTURE_GATE — must run after all test layers complete.
     name: "[STRUCTURE_GATE] Structure check (must run last)"
-    needs: [test-gate]
+    needs: [test-gate, runtime-environment-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
