@@ -82,18 +82,20 @@ Current `.agent` read overhead estimate:
 
 | Route | Estimated tokens |
 |---|---:|
-| Always-read baseline: `AGENTS.md` + `.agent/rules/rule.md` + `.agent/README.md` + `.agent/skills/agent-workflow.md` | ~3,200-4,000 |
-| Baseline + `.agent/protocols/index.yaml` | ~5,200-6,300 |
-| Baseline + index + 1 targeted protocol section | ~5,500-7,000 |
-| Baseline + index + completion/report judgment sections | ~6,200-8,500 |
+| Always-read baseline: `AGENTS.md` + `.agent/rules/rule.md` + `.agent/README.md` + `.agent/skills/agent-workflow.md` | ~4,500-5,000 |
+| Baseline + small protocol direct-read (policy-judgment / boundary-matrix / scenario-contract) | ~5,000-5,500 |
+| Baseline + `.agent/protocols/index.yaml` | ~6,400-7,000 |
+| Baseline + index + 1 targeted protocol section | ~6,700-7,500 |
+| Baseline + index + completion/report judgment sections | ~7,500-9,000 |
 | Heavy route with prompt router + ssot-map + mapped docs/SSOT + multiple protocol sections | ~10,000-20,000+ |
 
 Practical formula:
 
 ```text
-light_task_tokens ~= normal_prompt_tokens + 3.5k
-protocol_task_tokens ~= normal_prompt_tokens + 6k-8k
-ssot_heavy_task_tokens ~= normal_prompt_tokens + 10k-20k+
+light_task_tokens               ~= normal_prompt_tokens + 5k
+small_protocol_task_tokens      ~= normal_prompt_tokens + 5k-5.5k
+protocol_task_tokens            ~= normal_prompt_tokens + 7k-9k
+ssot_heavy_task_tokens          ~= normal_prompt_tokens + 10k-20k+
 ```
 
 These are provisional estimates, not exact tokenizer measurements. Update them when token accounting or file size changes materially.

@@ -39,7 +39,12 @@ READ_ENTRY
 - READ_TARGET_SURFACES
   - read target files / target functions / target directories
   - use the matched `.agent/prompt/<work-type>.md` to decide required SSOT and triggered protocols when applicable
-  - after a protocol target is selected by trigger/prompt/ssot-map, use `.agent/protocols/index.yaml` to locate section markers before reading protocol body sections
+  - after a protocol target is selected by trigger/prompt/ssot-map:
+    - for protocols named as direct-read in `.agent/rules/rule.md`
+      (policy-judgment.md, runtime-boundary-matrix.md, scenario-contract.md),
+      read the protocol file directly without opening index.yaml
+    - for all other protocols, use `.agent/protocols/index.yaml` to locate
+      section markers before reading protocol body sections
   - protocol index grep hits are route selection aids only (not PASS/FAIL judgment)
   - read `.agent/docs/ssot-map.yaml` only when the target surface needs SSOT mapping or the prompt/task explicitly requires it
   - read corresponding `.agent/docs/` resume/index only when ssot-map or task materials require it
@@ -66,7 +71,8 @@ READ_ENTRY
   - verify consistency across contract, checklist, and actual diff
 - JUDGMENT
   - open `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only for completion / TODO[x] / report judgment
-  - before reading triggered JUDGMENT protocol bodies, use `.agent/protocols/index.yaml` section-level `sections[].grep_keys` / `sections[].marker` routes to read only the minimal protocol sections
+  - before reading triggered JUDGMENT protocol bodies (completion.md, reports-and-todos.md, registry-tensor-policy.md), use `.agent/protocols/index.yaml` section-level `sections[].grep_keys` / `sections[].marker` routes to read only the minimal protocol sections
+  - for small direct-read protocols (policy-judgment.md, runtime-boundary-matrix.md, scenario-contract.md) triggered at JUDGMENT, read them directly without index.yaml
   - `.agent/protocols/index.yaml` is not a judgment SSOT; protocol body remains the decision source
   - grep hits are read-route selection only and must not be used as PASS/FAIL judgment
   - `NOT_EXECUTED` is not `PASS`
