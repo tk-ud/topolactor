@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
 using Xunit;
