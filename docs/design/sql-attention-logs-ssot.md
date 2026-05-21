@@ -254,6 +254,184 @@ context_hub_recommendation_current
 - not the same as logs.current pressure basis
 ```
 
+
+## Schema contract (design-only)
+
+This section defines DB schema contracts only.
+It does not implement functions, triggers, scheduler jobs, or runtime exploration execution.
+
+### logs source contract
+
+`logs.*` is a signal-source family, not a single table.
+Each source table must publish explicit pressure semantics and source kind.
+
+Abstract source schema contract:
+
+```text
+source_id
+source_name
+source_kind
+physical_table_id
+physical_table_name
+source_axis_kind
+source_axis_ref
+count_value
+recordcount_value
+weight_value
+recency_window
+observed_at
+archive_policy
+retention_policy
+evidence_json
+```
+
+Initial minimal signal basis:
+
+```text
+table pressure                 = logs.diff
+column / axis pressure         = logs.candidate
+ui / component operation pressure = logs.ui_operation
+```
+
+Extensibility condition:
+
+```text
+new logs.* source is allowed only when:
+- source_kind is explicitly defined
+- pressure semantics are explicitly defined
+- physical_table_id identity semantics are preserved
+```
+
+### logs.current contract
+
+Role contract:
+
+```text
+- calculation basis memo
+- pressure matrix basis
+- l2 norm calculation basis
+- topN norm-level snapshot comparison basis
+```
+
+Suggested schema fields:
+
+```text
+current_id
+source_set_id
+basis_window
+physical_table_id
+physical_table_name
+basis_vector_json
+pressure_matrix_json
+count_total
+recordcount_total
+l2_norm
+norm_rank
+norm_level
+previous_norm_level
+level_changed
+evaluated_at
+updated_at
+```
+
+Persistence semantics:
+
+```text
+logs.current is a regenerable projection/cache.
+it is not final attention evidence and not archive-required append log.
+```
+
+### norm-level watch contract
+
+Watch policy contract (initial):
+
+```text
+watch target = top3 norm-level records
+watch timing = every logs.current refresh
+if no level/membership/order/delta change: return
+if changed: mark as exploration candidate
+```
+
+Trigger conditions:
+
+```text
+- top3 membership changed
+- top3 order changed
+- norm delta exceeds policy threshold
+- norm level changed
+```
+
+Policy-source contract:
+
+```text
+threshold/watch values are policy-resolved
+(from Manifest / function_parameters / policy table in future)
+fixed literals are not embedded in contract implementation.
+```
+
+### logs.attention contract
+
+Role contract:
+
+```text
+registry-neighbor exploration hit evidence log
+```
+
+Suggested schema fields:
+
+```text
+attention_id
+current_id
+source_set_id
+query_vector_json
+permutation_key
+registry_table
+registry_id
+neighbor_score
+hit_rank
+evidence_json
+created_at
+archive_policy
+```
+
+Persistence semantics:
+
+```text
+logs.attention is append-only and archive-required evidence.
+each attention row must reference logs.current.current_id.
+```
+
+### existing table alignment contract
+
+Existing tables remain non-canonical unless this contract is satisfied:
+
+```text
+topology_edit_log
+- classification: mismatch by default
+- reason: target_table semantics are not guaranteed physical_table_id
+- alignment requirement: explicit physical table identity contract
+
+promotion_candidates
+- classification: conditional logs.candidate
+- requirement: candidate pressure axis semantics + lifecycle retention
+
+context_event
+- classification: conditional logs.ui_operation
+- requirement: operation/component usage semantics + policy-driven retention
+
+context_hub_recommendation_current
+- classification: mismatch
+- reason: recommendation projection current != logs.current calculation basis
+```
+
+### non-goals
+
+- no function implementation
+- no DB trigger implementation
+- no scheduler/runtime exploration implementation
+- no destructive changes to existing tables
+- no large-scale SQL replacement
+
 ## Implementation order
 
 1. Create this SSOT and matching YAML.

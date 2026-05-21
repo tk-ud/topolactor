@@ -70,6 +70,27 @@ layers:
       - created_at
       - archive_policy
       - retention_policy
+    schema_contract:
+      abstract_fields:
+        - source_id
+        - source_name
+        - source_kind
+        - physical_table_id
+        - physical_table_name
+        - source_axis_kind
+        - source_axis_ref
+        - count_value
+        - recordcount_value
+        - weight_value
+        - recency_window
+        - observed_at
+        - archive_policy
+        - retention_policy
+        - evidence_json
+      extension_condition:
+        - source_kind_is_explicit
+        - pressure_semantics_are_explicit
+        - physical_table_id_identity_semantics_preserved
 
   logs_current:
     role: calculation_basis_memo
@@ -101,6 +122,30 @@ layers:
     probability_policy: >-
       Pressure values are observations. They do not need to be rounded into
       probabilities.
+    schema_contract:
+      role:
+        - calculation_basis_memo
+        - pressure_matrix_basis
+        - l2_norm_calculation_basis
+        - top_n_norm_level_snapshot_comparison_basis
+      suggested_fields:
+        - current_id
+        - source_set_id
+        - basis_window
+        - physical_table_id
+        - physical_table_name
+        - basis_vector_json
+        - pressure_matrix_json
+        - count_total
+        - recordcount_total
+        - l2_norm
+        - norm_rank
+        - norm_level
+        - previous_norm_level
+        - level_changed
+        - evaluated_at
+        - updated_at
+      persistence_semantics: regenerable_projection_cache_not_archive_required_append_log
 
   norm_trigger:
     role: exploration_gate
@@ -122,6 +167,17 @@ layers:
       - top3_norm_level_snapshot_compare
       - no_level_change_return
       - level_change_enqueue_or_expose_exploration_candidate
+    schema_contract:
+      watch_target: top3_norm_level_records_initial_policy
+      watch_timing: every_logs_current_refresh
+      no_change_action: return
+      change_action: mark_exploration_candidate
+      trigger_conditions:
+        - top3_membership_changed
+        - top3_order_changed
+        - norm_delta_exceeds_policy_threshold
+        - norm_level_changed
+      policy_source: manifest_or_function_parameters_or_policy_table_future_resolved_no_fixed_literals
 
   exploration:
     role: scheduler_runtime_responsibility
@@ -163,6 +219,25 @@ layers:
       - evidence_json
       - created_at
       - archive_policy
+    schema_contract:
+      role: registry_neighbor_hit_evidence_log
+      suggested_fields:
+        - attention_id
+        - current_id
+        - source_set_id
+        - query_vector_json
+        - permutation_key
+        - registry_table
+        - registry_id
+        - neighbor_score
+        - hit_rank
+        - evidence_json
+        - created_at
+        - archive_policy
+      persistence_semantics:
+        - append_only
+        - archive_required
+        - must_reference_logs_current_current_id
 
 physical_table_pressure:
   tableid_semantics: physical_table_identity
@@ -235,3 +310,35 @@ implementation_order:
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence
   - implement_scheduler_runtime_registry_neighbor_exploration
+
+initial_minimal_basis:
+  table_pressure: logs.diff
+  column_axis_pressure: logs.candidate
+  ui_component_operation_pressure: logs.ui_operation
+
+existing_table_alignment:
+  topology_edit_log:
+    classification: mismatch
+    reason: target_table_scope_identifier_not_guaranteed_physical_tableid
+    alignment_requirement: explicit_physical_table_identity_contract
+  promotion_candidates:
+    classification: conditional_logs_candidate
+    condition:
+      - status_lifecycle_preserved
+      - column_axis_pressure_semantics_traceable
+      - archive_audit_possible
+  context_event:
+    classification: conditional_logs_ui_operation
+    condition:
+      - component_or_operation_usage_signal_source_semantics
+      - retention_manifest_or_policy_driven
+  context_hub_recommendation_current:
+    classification: mismatch
+    reason: recommendation_current_projection_not_logs_current_calculation_basis
+
+non_goals:
+  - function_implementation
+  - db_trigger_implementation
+  - scheduler_runtime_registry_neighbor_exploration_implementation
+  - destructive_existing_table_change
+  - large_scale_existing_sql_replacement
