@@ -566,6 +566,206 @@ context_hub_recommendation_current
 - no automatic migration or column promotion from phase_vector
 - no evidence-layer collapse into a single score
 
+
+## Function / trigger contract (design-only)
+
+This section defines contract boundaries only.
+No DB migration, DB function body, trigger body, scheduler code, or runtime implementation is included in this phase.
+
+### Source append / source aggregation contract
+
+`logs.diff` / `logs.candidate` / `logs.ui_operation` append events are source facts.
+Aggregation contract is:
+
+```text
+source append
+→ source aggregation window resolve
+→ refresh_logs_current(source_set_id, basis_window)
+```
+
+Contract rule:
+
+```text
+trigger can observe every append, but no-change paths must return early.
+```
+
+### DB trigger boundary contract
+
+DB trigger responsibility is intentionally lightweight.
+
+Allowed in DB trigger scope:
+
+```text
+- call current refresh contract surface
+- update logs.current lightweight basis rows/projection
+- evaluate l2_norm / norm-level snapshot contract hooks
+- mark dirty flag / level_changed
+- mark exploration candidate metadata
+- return without side effects when no change
+```
+
+Prohibited in DB trigger scope:
+
+```text
+- registry-neighbor exploration execution
+- phase_vector distortion/generation execution
+- direct registry mutation
+- automatic migration execution
+- automatic column promotion execution
+```
+
+### Function contract surfaces
+
+Concrete names may change at implementation time, but responsibility boundaries are fixed by this SSOT.
+
+#### 1) `refresh_logs_current(source_set_id, basis_window)`
+
+Role:
+
+```text
+- aggregate logs.* into logs.current calculation basis
+- refresh basis_vector_json / pressure_matrix_json
+- compute/update count_total / recordcount_total
+- preserve regenerable projection semantics
+```
+
+#### 2) `calculate_l2_norm(current_id or basis_vector)`
+
+Role:
+
+```text
+- compute l2_norm from current basis vector
+- persist/return l2_norm for watch comparison
+- no registry exploration side effect
+```
+
+#### 3) `compare_norm_level_snapshot(top_n)`
+
+Role:
+
+```text
+- compare topN membership/order/level and norm delta
+- no-change => return
+- changed => level_changed/dirty signal
+```
+
+Initial policy:
+
+```text
+top_n default = 3 (policy-resolved, not hardcoded literal in implementation)
+```
+
+#### 4) `mark_attention_exploration_candidate(current_id)`
+
+Role:
+
+```text
+- mark candidate for scheduler/runtime exploration queue surface
+- candidate marking only (no exploration execution)
+```
+
+#### 5) `write_logs_attention(...)`
+
+Role:
+
+```text
+- append evidence row to logs.attention
+- require current_id linkage to logs.current
+- persist statistics_json / ema_score / l2_norm / vector_json / phase_vector_json / neighbor_score / evidence_json
+- keep evidence meanings separated (no single-score collapse)
+```
+
+#### 6) `generate_phase_vector(...)`
+
+Boundary:
+
+```text
+- scheduler/runtime-side function contract
+- not executed inside every-write DB trigger
+- output is candidate evidence only
+```
+
+### No-change return contract
+
+No-change short-circuit is mandatory:
+
+```text
+if topN membership/order/level/delta has no effective change:
+  return
+```
+
+Monitoring may run every refresh; heavy exploration work must not run without change.
+
+### Exploration candidate marking contract
+
+When norm-level change is detected:
+
+```text
+mark exploration candidate
+→ scheduler/runtime consumes candidate
+→ registry-neighbor exploration executed outside DB trigger
+```
+
+### Attention evidence write contract
+
+`logs.attention` is evidence log, not adoption state.
+
+Required evidence payload contract:
+
+```text
+statistics_json
+ema_score
+l2_norm
+vector_json
+phase_vector_json
+neighbor_score
+evidence_json
+```
+
+### statistics / Attention / Phase Attention separation contract
+
+Separation is mandatory at function contract level:
+
+```text
+statistics_json / ema_score
+= convergence confidence / stability / continuity
+
+l2_norm / vector_json / neighbor_score
+= current excitation / neighbor hit
+
+phase_vector_json
+= exploratory variance / phase candidate direction
+```
+
+These are not merged into one scalar score in this layer.
+
+### Phase Attention function contract
+
+Input contract:
+
+```text
+- logs.attention.vector_json
+- logs.attention.l2_norm
+- table registry i/j/k population
+- z-score normalized values
+- policy caps (manifest/function_parameters/policy table resolved)
+```
+
+Output contract:
+
+```text
+- logs.attention.phase_vector_json
+```
+
+Guardrails:
+
+```text
+- phase_vector is candidate/evidence, not adopted state
+- phase_vector does not auto-trigger registry mutation
+- phase_vector does not auto-trigger migration
+- phase_vector does not auto-trigger column promotion
+```
+
 ## Implementation order
 
 1. Create this SSOT and matching YAML.

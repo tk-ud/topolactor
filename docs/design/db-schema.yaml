@@ -35,6 +35,13 @@ db_schema:
         - layers.logs_current.schema_contract
         - layers.norm_trigger.schema_contract
         - layers.logs_attention.schema_contract
+        - function_contract
+        - trigger_contract
+        - db_trigger_boundary
+        - scheduler_runtime_boundary
+        - phase_attention_function_contract
+        - evidence_layer_separation
+        - policy_sources
         - initial_minimal_basis
         - existing_table_alignment
         - non_goals
