@@ -55,6 +55,9 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 
 ## Completion Summary Template scope mapping
 
+Completion Summary Template is the terminal reporting endpoint for completion-governance output surfaces.
+No prompt router or workflow note may replace it with an alternate final summary shape.
+
 - summary source:
   - `.agent/protocols/reports-and-todos.md` / `## Completion Summary Template`
 - summary sinks:

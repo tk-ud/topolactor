@@ -47,6 +47,8 @@ check_term ".agent/prompt/README.md" "not an always-read bundle"
 check_term ".agent/prompt/todo-maintenance.md" "Todo Maintenance Prompt Router"
 check_term ".agent/prompt/todo-maintenance.md" ".agent/protocols/reports-and-todos.md"
 check_term ".agent/prompt/todo-maintenance.md" "Open issues are not automatically TODOs"
+check_term ".agent/prompt/todo-maintenance.md" "must converge to"
+check_term ".agent/prompt/todo-maintenance.md" "Do not define an independent terminal summary format in this router."
 
 check_term ".agent/protocols/scenario-contract.md" "Scenario Contract is created before implementation"
 check_term ".agent/protocols/scenario-contract.md" "Precondition: Workflow Order Invariant Gate"

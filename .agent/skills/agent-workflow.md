@@ -100,7 +100,7 @@ READ_ENTRY
     9. only then emit final summary
   - for existing-PR updates, follow-up PR comment is required and uses the same template structure
   - follow-up PR comment requirement applies only to existing-PR updates
-  - check/report sequence in PUSH_OR_PR order: (1) thin PR body when needed, (2) compose final completion summary with template, (3) post follow-up PR comment for existing PR update, (4) run required completion-protocol checks with NOT_EXECUTED kept separate from PASS, (5) run `bash .agent/tests/check-structure.sh` last, (6) emit final summary
+  - check/report sequence in PUSH_OR_PR order: (1) run required local checks in triggered scope with NOT_EXECUTED kept separate from PASS, (2) run `bash .agent/tests/check-structure.sh` last, (3) push / remote PR update, (4) for existing PR update post follow-up PR comment and verify posted state (or emit `PR_COMMENT_NOT_POSTED` evidence), (5) emit final completion summary in template scope
   - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
   - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 

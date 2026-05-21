@@ -85,12 +85,14 @@ Before push / PR update:
 
 ## Expected output shape
 
-Summaries should separate:
+Do not define an independent terminal summary format in this router.
+This router must converge to `.agent/protocols/reports-and-todos.md` `## Completion Summary Template`.
 
-- removed completed TODOs
-- rewritten remaining TODOs
-- open issues added to TODO
-- open issues intentionally not added and why
-- open issue inspection status, including NOT_EXECUTED / REMOTE_REQUIRED when applicable
-- checks executed / not executed
-- remaining TODOs
+For TODO-maintenance specific reporting, map facts into that template:
+
+- removed completed TODOs → `作業内容`
+- rewritten remaining TODOs → `作業内容` or `残タスク引き継ぎ指示`
+- open issues added / intentionally not added → `作業内容` + `残タスク引き継ぎ指示`
+- open issue inspection status (`NOT_EXECUTED` / `REMOTE_REQUIRED`含む) → `test結果` / `Required check scope`
+- checks executed / not executed → `test結果`
+- remaining TODOs → `残タスク引き継ぎ指示`
