@@ -45,17 +45,22 @@ public class SystemOperationCiScheduler : BackgroundService
 
     private readonly ILogger<SystemOperationCiScheduler> _logger;
     private readonly SystemOperationCiRuntime _ciRuntime;
+    private readonly OutputLaneRouter? _outputLaneRouter;
 
     public SystemOperationCiScheduler(
         ILogger<SystemOperationCiScheduler> logger,
-        SystemOperationCiRuntime ciRuntime)
+        SystemOperationCiRuntime ciRuntime,
+        OutputLaneRouter? outputLaneRouter = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _ciRuntime = ciRuntime ?? throw new ArgumentNullException(nameof(ciRuntime));
+        _outputLaneRouter = outputLaneRouter;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var laneConsumerTask = RunAttractorSignalConsumerAsync(stoppingToken);
+
         var startupDelay = ParseEnvSeconds("SYSTEM_CI_STARTUP_DELAY_SECONDS", DefaultStartupDelay);
         _logger.LogInformation(
             "SystemOperationCiScheduler: starting — startup delay {Delay}.", startupDelay);
@@ -88,6 +93,7 @@ public class SystemOperationCiScheduler : BackgroundService
             }
         }
 
+        await laneConsumerTask;
         _logger.LogInformation("SystemOperationCiScheduler: stopped.");
     }
 
@@ -129,6 +135,28 @@ public class SystemOperationCiScheduler : BackgroundService
             _logger.LogError(ex,
                 "SystemOperationCiScheduler: {Method} failed — inspection skipped for this run.",
                 methodName);
+        }
+    }
+
+    private async Task RunAttractorSignalConsumerAsync(CancellationToken ct)
+    {
+        if (_outputLaneRouter is null)
+        {
+            _logger.LogDebug("SystemOperationCiScheduler: attractor signal consumer disabled (no OutputLaneRouter).");
+            return;
+        }
+
+        await foreach (var signal in _outputLaneRouter.RebuildSignalChannel.Reader.ReadAllAsync(ct))
+        {
+            _logger.LogInformation(
+                "SystemOperationCiScheduler: received registry_attractor_update signal AttractorKey={AttractorKey} ManifestId={ManifestId}.",
+                signal.AttractorKey,
+                signal.ManifestId);
+
+            await RunSingleInspectionAsync(
+                () => _ciRuntime.InspectCurrentRebuildabilityAsync(ct),
+                "InspectCurrentRebuildabilityAsync(signal)",
+                ct);
         }
     }
 

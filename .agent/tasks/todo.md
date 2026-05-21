@@ -38,12 +38,6 @@ SSOT参照必読:
       → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler = partial
 
-- [ ] [Claude] Gap-6 残: `OutputLaneRouter.RebuildSignalChannel` のコンシューマーを実装する
-      → RouteRegistryAttractorLane を Channel<AttractorRebuildSignal> によるインプロセス queue 実装に置き換え済み (skeleton/no-op 解消)。
-      → 残: RebuildSignalChannel のコンシューマー (SystemOperationCiScheduler への接続または専用 BackgroundService) が未実装。
-      → 対象: `backend/runtime/OutputLaneRouter.cs`, `backend/scheduler/SystemOperationCiScheduler.cs`
-      → docs/system-roadmap.yaml: backend.output_lanes = partial (known_gap_ref: Gap-6 channel consumer)
-
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
       → 残: DbNotifyListener → pg_notify → broadcaster の live DB 経路テスト (live DB 必要)。
