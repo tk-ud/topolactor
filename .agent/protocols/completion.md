@@ -61,11 +61,33 @@ This protocol owns:
    - For batch work, judge every TODO item independently against its own completion condition, roadmap status, required evidence, and required checks.
    - Partial / skeleton implementation, remaining `known_gap_ref`, unmet `completion_condition`, unconnected runtime lane, or missing required test evidence blocks TODO `[x]` for that item.
    - Only after gate pass may TODO items be marked `[x]`.
-6. Structure Verification
+6. Responsibility boundary judgment (implementation agent vs auditor)
+   - Implementation agent must provide decision material, not self-author completion truth by default.
+   - Implementation agent responsibilities:
+     - produce implementation diff
+     - provide completion summary / PR follow-up material
+     - classify checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED
+     - keep local NOT_EXECUTED and remote CI success as separate facts; never collapse them
+     - provide remaining risks, close candidates, and roadmap-update candidates as Auditor TODO inputs
+   - Auditor responsibilities:
+     - confirm required checks / PR CI all-green (or equivalent required-success evidence)
+     - judge whether implementation meaningfully satisfies target gap / TODO semantics
+     - resolve Auditor TODO classification
+     - finalize canonical updates to `.agent/tasks/todo.md` and `docs/system-roadmap.yaml`
+   - Implementation agent is not the default final arbiter for canonical TODO/roadmap closure on its own diff unless explicit direct-update conditions are all satisfied.
+7. Implementation-agent direct canonical update conditions
+   - Implementation agent may directly update `.agent/tasks/todo.md` and/or `docs/system-roadmap.yaml` only when all conditions hold:
+     1) task scope explicitly includes TODO/roadmap canonical maintenance,
+     2) required checks (or remote CI equivalent required success) are confirmed,
+     3) target TODO/gap completion condition is semantically satisfied,
+     4) no remaining concrete implementation/design/SSOT/test-authoring residue exists,
+     5) update is consistent with completion and reports-and-todos protocols.
+   - If any condition is unknown, disputed, or pending auditor judgment, defer canonical closure and emit Auditor TODO instead.
+8. Structure Verification
    - Run `bash .agent/tests/check-structure.sh` last.
    - Structure Check is the always-on required gate.
    - Structure verification is structural consistency check; it is not a semantic substitute.
-7. Push
+9. Push
    - Push only after all triggered gates pass and no blocking condition remains.
 
 ## Completion / failure decision
@@ -111,6 +133,13 @@ Blocking (completion prohibited):
 Pass eligibility requires all blocking items resolved or, when the blocker exposes unfinished implementation/design/SSOT/test-authoring work, explicitly preserved as Remaining TODO under gate rules.
 
 Verification-only blockers are not `.agent/tasks/todo.md` items. CI waiting, remote CI pass confirmation, local tool absence, and unexecuted-check bookkeeping belong in the completion report's Required Check Scope / verification section. If such verification reveals concrete follow-up work, preserve only that concrete work in `.agent/tasks/todo.md`.
+
+Defer-to-auditor conditions (do not directly close canonical TODO/roadmap in implementation pass):
+- required PR CI interpretation is pending auditor confirmation
+- roadmap status raise requires semantic judgment beyond executed diff evidence
+- TODO closure would rely on implementer self-judgment without independent confirmation
+- local NOT_EXECUTED ↔ remote CI evidence mapping needs explicit reconciliation
+- remaining-work classification (implementation residue vs verification bookkeeping) is still ambiguous
 
 NOT EXECUTED ≠ PASS.
 scope-irrelevant workflow-level skip is not blocking.

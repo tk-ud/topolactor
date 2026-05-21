@@ -49,6 +49,8 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 
 - `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.
 - `.agent/tasks/todo.md` is not for CI waiting, remote CI pass confirmation, local environment absence, or verification-only bookkeeping.
+- Implementation agent should normally propose canonical TODO/roadmap actions as Auditor TODO inputs, not finalize closure by self-assertion.
+- Auditor is the default finalizer for canonical TODO/roadmap updates unless completion protocol direct-update conditions are explicitly satisfied.
 - `.agent/tasks/todo.md` is not an implementation report or PR changelog.
 - Do not leave completed work logs under `[x]` items in `.agent/tasks/todo.md`.
 - Do not mark a TODO `[x]` when the same item still contains concrete remaining work, partial/skeleton status, missing tests, unconnected runtime lanes, or unmet completion conditions.
@@ -78,4 +80,5 @@ Required Check Scope Declaration Gate Reporting Requirements are defined in `.ag
 - Remaining TODO entries should reference roadmap `implementation_registry` entries or `known_gap_ref` where applicable.
 - Do not duplicate the full roadmap status matrix into TODO.
 - If TODO completion changes implementation status, update `docs/system-roadmap.yaml` in the same PR.
+- When implementation-side certainty is insufficient, keep roadmap/TODO closure as Auditor TODO and defer canonical status finalization to auditor judgment.
 - CI waiting / remote pass confirmation / local tool absence remain verification-section records, not TODO queue items.
