@@ -67,6 +67,7 @@ protocols:
       - marker: "## PR body and follow-up comment policy"
         grep_keys:
           - "existing PR update"
+          - "follow-up comment"
           - "follow-up PR comment"
           - "PR_COMMENT_NOT_POSTED"
           - "changed summary"
@@ -95,6 +96,8 @@ protocols:
       - marker: "## TODO carry-over rules"
         grep_keys:
           - "todo"
+          - "remaining TODO"
+          - "TODO carry-over"
           - ".agent/tasks/todo.md"
           - "Auditor TODO"
           - "canonical TODO"
