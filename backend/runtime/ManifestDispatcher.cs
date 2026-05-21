@@ -102,6 +102,59 @@ public class ManifestDispatcher
         }
     }
 
+    
+    /// <summary>
+    /// Maps legacy change intake shape to canonical dispatch request.
+    /// table_name is preserved as Target for registry resolution.
+    /// Returns explicit validation errors when minimum identity is missing.
+    /// </summary>
+    public (EndpointRequestDto? Request, IReadOnlyList<ValidationError> Errors) BuildLegacyHookRequest(LegacyChangeIntakeRequestDto intake)
+    {
+        ArgumentNullException.ThrowIfNull(intake);
+
+        var errors = new List<ValidationError>();
+        if (string.IsNullOrWhiteSpace(intake.TableName))
+            errors.Add(new ValidationError("LEGACY_TABLE_NAME_REQUIRED", "table_name is required."));
+        if (string.IsNullOrWhiteSpace(intake.RowId))
+            errors.Add(new ValidationError("LEGACY_ROW_ID_REQUIRED", "row_id is required."));
+        if (string.IsNullOrWhiteSpace(intake.Operation))
+            errors.Add(new ValidationError("LEGACY_OPERATION_REQUIRED", "operation is required."));
+        else if (!AllowedLegacyOperations.Contains(intake.Operation))
+            errors.Add(new ValidationError("LEGACY_OPERATION_UNSUPPORTED", "operation must be one of: create, update, delete, transition."));
+        if (intake.ChangedDataJsonb is null && intake.DiffJsonb is null)
+            errors.Add(new ValidationError("LEGACY_CHANGE_PAYLOAD_REQUIRED", "changed_data_jsonb or diff_jsonb is required."));
+
+        if (errors.Count > 0)
+            return (null, errors);
+
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            table_name = intake.TableName,
+            row_id = intake.RowId,
+            operation = intake.Operation,
+            changed_data_jsonb = intake.ChangedDataJsonb,
+            diff_jsonb = intake.DiffJsonb,
+            actor = intake.Actor,
+            source = intake.Source,
+            occurred_at = intake.OccurredAt
+        });
+
+        return (new EndpointRequestDto(
+            OperationType: "LegacyChangeIntake",
+            Target: intake.TableName,
+            Layer: "legacy_mirror",
+            Action: intake.Operation,
+            IdOrHubId: null,
+            Payload: payload,
+            Context: null,
+            TriggerKind: "hook",
+            Role: intake.Role ?? "legacy_system"
+        ), []);
+    }
+
+private static readonly HashSet<string> AllowedLegacyOperations =
+        new(StringComparer.OrdinalIgnoreCase) { "create", "update", "delete", "transition" };
+
     private static readonly HashSet<string> KnownRuntimeDestinations =
         new(StringComparer.OrdinalIgnoreCase) { "topology_transform_runtime", "registry_attractor_runtime" };
 

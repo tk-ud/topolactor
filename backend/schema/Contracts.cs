@@ -110,3 +110,27 @@ public record ValidationError(
     string Code,
     string Message
 );
+
+
+/// <summary>
+/// Minimal legacy change intake contract for existing-system island embedding.
+/// table_name is the registry resolution key candidate.
+/// changed_data_jsonb or diff_jsonb must be present.
+/// </summary>
+public record LegacyChangeIntakeRequestDto(
+    string? TableName,
+    string? RowId,
+    string? Operation,
+    JsonElement? ChangedDataJsonb,
+    JsonElement? DiffJsonb,
+    string? Actor = null,
+    string? Source = null,
+    DateTimeOffset? OccurredAt = null,
+    string? Role = null
+);
+
+public record LegacyChangeIntakeResponseDto(
+    bool Accepted,
+    string? QueueStatus,
+    IReadOnlyList<ValidationError> Errors
+);

@@ -21,6 +21,9 @@
 \echo '[init.sql] applying manifest_tables.sql'
 \i /db/manifest_tables.sql
 
+\echo '[init.sql] applying legacy_mirror_tables.sql'
+\i /db/legacy_mirror_tables.sql
+
 \echo '[init.sql] applying seed_empty.sql'
 \i /db/seed_empty.sql
 

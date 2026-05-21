@@ -691,6 +691,30 @@ system_roadmap_ssot:
       known_gap_ref:
         - Notion intake runtime not implemented
 
+
+
+    legacy_island_embedding_intake:
+      status: partial
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: Topolactor core scaffold introduces legacy mirror SQL schema, change-event intake endpoint, table_name -> Target mapping, hook scheduler enqueue, and unsupported operation explicit validation. Production promotion remains adopter-specific integration responsibility and is not production-ready at this stage.
+      files:
+        - db/legacy_mirror_tables.sql
+        - db/init.sql
+        - backend/schema/Contracts.cs
+        - backend/endpoint/LegacyChangeIntakeEndpoint.cs
+        - backend/scheduler/RuntimeTimelineScheduler.cs
+        - backend/runtime/ManifestDispatcher.cs
+      completion_condition:
+        - legacy_physical_table_state_can_be_stored_as_jsonb_mirror_observation_layer
+        - api_change_intake_accepts_table_name_row_id_operation_and_change_payload
+        - table_name_is_used_as_registry_resolution_key_candidate
+        - intake_dispatches_as_hook_trigger_through_scheduler_to_manifest_dispatcher
+        - unresolved_registry_or_manifest_routes_are_explicit_errors_without_silent_fallback
+      known_gap_ref:
+        - Adopter-specific integration: repository persistence / replay / correlation visibility are outside core scaffold and required for production promotion
+        - Issue #134 legacy runtime destination mapping policy for adopter-specific manifest/registry operation remains partial
+
     external_snapshot_store:
       status: not_started
       production_ready: false
