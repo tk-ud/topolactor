@@ -96,6 +96,10 @@ This protocol owns:
 
 When a required local check cannot run because a required tool is absent, classify it as `REQUIRED_NOT_EXECUTED` (not PASS), then reconcile it only via equivalent remote CI success evidence.
 
+This local/remote mapping is applied only after Required Check Scope declaration:
+- if the check is `REQUIRED_EXECUTED` / `REQUIRED_NOT_EXECUTED`, matching remote evidence rules apply.
+- if the check is `NOT_REQUIRED` or `OUT_OF_SCOPE` for the current PR scope, missing local tool does not create a remote-evidence requirement for that check.
+
 | Local scope | Local command | Missing tool behavior | Local status | Remote workflow | Remote job/check | Remote evidence rule |
 |---|---|---|---|---|---|---|
 | backend test scope | `bash .agent/tests/check-backend-tests.sh` | `dotnet` missing returns non-zero and states not executed / not pass | `REQUIRED_NOT_EXECUTED` | `backend-tests` | `backend-tests` | `REMOTE_REQUIRED` is satisfied only when PR check is `success` for the matching scope. |
@@ -106,6 +110,14 @@ Remote states `queued`, `in_progress`, `failure`, `cancelled`, and unjustified `
 Completion summary must keep these as separate facts:
 - local execution fact (`PASS` vs `REQUIRED_NOT_EXECUTED`)
 - remote evidence fact (`REMOTE_REQUIRED` pending vs remote `success`)
+
+
+Scope-sensitive reporting example for PR summaries (fact separation):
+- frontend local check: `NOT_EXECUTED` due to missing `deno`
+- frontend remote evidence: `frontend-types / check-frontend-types` success (when required scope includes frontend type-check)
+- backend local check: `NOT_EXECUTED` due to missing `dotnet`, but informational only when backend test scope is `NOT_REQUIRED` for this PR
+- backend remote evidence: not required when backend scope is `NOT_REQUIRED`/`OUT_OF_SCOPE` (e.g., backend-tests not run under path filters)
+- structure check: `PASS`
 
 ## Completion / failure decision
 
