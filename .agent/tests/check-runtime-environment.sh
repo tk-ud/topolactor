@@ -134,8 +134,63 @@ if [ -z "${token}" ] || [ "${token}" = "null" ]; then
   exit 1
 fi
 
+mapping_json="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "
+WITH active_manifests AS (
+  SELECT manifest_id, topology
+  FROM manifest
+  WHERE status = 'active'
+),
+dispatcher AS (
+  SELECT
+    am.manifest_id,
+    e->>'role' AS role,
+    e->>'target' AS target,
+    e->>'layer' AS layer,
+    e->>'action' AS action
+  FROM active_manifests am
+  CROSS JOIN LATERAL unnest(am.topology) AS e
+  WHERE e->>'type' = 'dispatcher_mapping'
+    AND COALESCE(e->>'target','') NOT IN ('demo','admin')
+)
+SELECT json_build_object(
+  'role', d.role,
+  'target', d.target,
+  'layer', d.layer,
+  'action', d.action,
+  'structureMapId', sm.structure_map_id::text
+)::text
+FROM dispatcher d
+LEFT JOIN structure_maps sm
+  ON lower(sm.attractor_key) = lower(concat_ws(':', d.target, d.layer, d.action))
+ AND sm.active = true
+ORDER BY d.manifest_id
+LIMIT 1;
+")"
+
+if [ -z "${mapping_json}" ]; then
+  echo "ERROR: no non-override active manifest dispatcher_mapping found for live /dispatch E2E" >&2
+  dump_logs
+  exit 1
+fi
+
+dispatch_target="$(printf '%s' "${mapping_json}" | jq -r '.target // empty')"
+dispatch_layer="$(printf '%s' "${mapping_json}" | jq -r '.layer // empty')"
+dispatch_action="$(printf '%s' "${mapping_json}" | jq -r '.action // empty')"
+dispatch_role="$(printf '%s' "${mapping_json}" | jq -r '.role // empty')"
+expected_structure_map_id="$(printf '%s' "${mapping_json}" | jq -r '.structureMapId // empty')"
+
+if [ -z "${dispatch_target}" ] || [ -z "${dispatch_layer}" ] || [ -z "${dispatch_action}" ] || [ -z "${expected_structure_map_id}" ]; then
+  echo "ERROR: non-override manifest-backed route is incomplete: ${mapping_json}" >&2
+  dump_logs
+  exit 1
+fi
+
 dispatch_response="$(jq -n \
-  '{operationType:"DemoEntity",target:"demo",layer:"entity",action:"list",idOrHubId:null,payload:null,context:null,role:null}' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
+  --arg target "${dispatch_target}" \
+  --arg layer "${dispatch_layer}" \
+  --arg action "${dispatch_action}" \
+  --arg role "${dispatch_role}" \
+  '{operationType:"Search",target:$target,layer:$layer,action:$action,idOrHubId:null,payload:null,context:null,role:(if $role=="" then null else $role end)}' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/json" \
   --data-binary @-)"
@@ -149,8 +204,8 @@ if [ "${dispatch_success}" != "true" ]; then
   exit 1
 fi
 
-if [ "${dispatch_structure_map_id}" != "null" ]; then
-  echo "ERROR: dispatch structureMapId must be null for demo/entity override route; response body:" >&2
+if [ "${dispatch_structure_map_id}" != "${expected_structure_map_id}" ]; then
+  echo "ERROR: dispatch structureMapId mismatch (expected=${expected_structure_map_id}, actual=${dispatch_structure_map_id}); response body:" >&2
   echo "${dispatch_response}" >&2
   dump_logs
   exit 1
