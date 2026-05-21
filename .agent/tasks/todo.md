@@ -16,22 +16,22 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ```
 
 
-## SQL Attention Logs SSOT 配線後の次フェーズ
+## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] function / trigger contract を実装可能な粒度で固定する
-      → l2 norm trigger と attention evidence の入力・算出・保持境界を runtime-orchestration と整合させる。
+- [ ] function / trigger contract を設計契約として固定する
+      → schema contract は docs/design/sql-attention-logs-ssot.md / .yaml に定義済み。次は logs.* source append、logs.current basis update、l2 norm level watch、変動なし return、変動あり exploration candidate 化、logs.attention evidence write の責務境界を契約化する。function / trigger 本実装はこの契約後に行う。
 
 - [ ] norm-level watch policy implementation を実装する
-      → 監視条件・threshold 解決（Manifest / function_parameters / policy table）と return/trigger 分岐を実装する。
+      → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
 - [ ] logs.current / logs.attention physical schema implementation を行う
-      → schema contract は docs/design/sql-attention-logs-ssot.md / .yaml に定義済み。DB migration と runtime read/write contract を実装する。
+      → schema contract に基づき DB migration と runtime read/write contract を実装する。logs.current は再生成可能な calculation basis memo、logs.attention は archive-required evidence log として分離する。
 
 - [ ] scheduler/runtime registry-neighbor exploration を実装する
-      → exploration 実行責務 (scheduler vs runtime) と evidence persistence 連携を実装する。
+      → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
 
 - [ ] physical tableid 対応の実装判断を行う
-      → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する（今回、schema本実装は未着手）。
+      → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する。現状は domain scope identifier であり canonical logs.diff ではない。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
