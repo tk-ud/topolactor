@@ -87,6 +87,7 @@ Before push / PR update:
 
 Do not define an independent terminal summary format in this router.
 This router must converge to `.agent/protocols/reports-and-todos.md` `## Completion Summary Template`.
+For existing-PR updates, this template convergence does not replace required PR comment posting action; follow Output Switch required action/evidence.
 
 For TODO-maintenance specific reporting, map facts into that template:
 

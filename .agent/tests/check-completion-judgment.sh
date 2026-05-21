@@ -41,6 +41,11 @@ check_term ".agent/skills/agent-workflow.md" "identify target PR number/URL and 
 check_term ".agent/skills/agent-workflow.md" "verify posted comment exists in PR conversation"
 check_term ".agent/protocols/reports-and-todos.md" "Existing PR updates require a follow-up PR comment after push"
 check_term ".agent/protocols/reports-and-todos.md" "PR_COMMENT_NOT_POSTED"
+check_term ".agent/protocols/reports-and-todos.md" "Prompt Type / Work Type Output Switch"
+check_term ".agent/protocols/reports-and-todos.md" "| existing PR update |"
+check_term ".agent/protocols/reports-and-todos.md" "Completion Summary Template defines body shape."
+check_term ".agent/protocols/reports-and-todos.md" "It does not satisfy required external actions by itself."
+check_term ".agent/protocols/reports-and-todos.md" "POSTED + VERIFIED"
 
 check_term ".agent/prompt/README.md" "work-type router surface"
 check_term ".agent/prompt/README.md" "not an always-read bundle"
