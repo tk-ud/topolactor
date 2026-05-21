@@ -40,6 +40,8 @@ protocols:
         grep_keys:
           - "Roadmap Status Gate"
           - "REQUIRED_NOT_EXECUTED"
+          - "TODO `[x]`"
+          - "completion eligibility"
           - "blocking"
           - "completion summary"
           - "TODO close"
