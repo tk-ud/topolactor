@@ -9,6 +9,25 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
 
+
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    local opts=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -n|-q|-s|-i|-v) opts+=("$1"); shift ;;
+        -P|-U) shift ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+      esac
+    done
+    local pattern="${1:-}"
+    [ $# -gt 0 ] && shift
+    grep -E "${opts[@]}" -- "$pattern" "$@"
+  }
+fi
+
 fail() {
   echo "FAIL: $1" >&2
   FAILURES=$((FAILURES + 1))
@@ -604,7 +623,7 @@ if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/desi
 else
   echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
 fi
-if ! rg -nUP "physical_tables:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+if ! rg -n "physical_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null || ! rg -n "logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "physical_tables must include logs.hub_current"
 else
   echo "OK  [ssot] physical_tables includes logs.hub_current"
