@@ -12,6 +12,9 @@ on:
       - 'frontend/import_map.json'
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - 'infra/.env.example'
       - '.agent/tests/check-unified-test-gate.sh'
       - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
@@ -28,6 +31,9 @@ on:
       - 'frontend/import_map.json'
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
+      - 'db/**/*.sql'
+      - 'infra/docker-compose.yml'
+      - 'infra/.env.example'
       - '.agent/tests/check-unified-test-gate.sh'
       - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
@@ -37,7 +43,7 @@ jobs:
     # Runs all test layers via check-unified-test-gate.sh (SSOT for test details).
     # Layers: FUNCTION_BOUNDARY, RUNTIME_INTEGRATION, FRONTEND_CONTRACT.
     # NOT_COVERED: OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync.
-    # REMAINING_TODO: docker-compose / DB / migration / env / volume verification.
+    # REMAINING_TODO: env / volume / live API-route E2E verification.
     name: "Unified test gate (FUNCTION_BOUNDARY / RUNTIME_INTEGRATION / FRONTEND_CONTRACT)"
     runs-on: ubuntu-latest
     steps:

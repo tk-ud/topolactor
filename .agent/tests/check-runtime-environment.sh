@@ -14,6 +14,20 @@ require_tool() {
 
 require_tool docker
 require_tool dotnet
+require_tool psql
+
+
+assert_relation_exists() {
+  local relation="$1"
+  local exists
+  exists="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "SELECT to_regclass('${relation}') IS NOT NULL;")"
+  if [ "${exists}" != "t" ]; then
+    echo "ERROR: required relation is missing: ${relation}" >&2
+    docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "\dt public.*" || true
+    exit 1
+  fi
+  echo "OK: relation exists -> ${relation}"
+}
 
 cleanup() {
   docker compose -f "${COMPOSE_FILE}" down -v --remove-orphans || true
@@ -42,10 +56,10 @@ if [ "${status}" != "healthy" ]; then
   exit 1
 fi
 
-echo "=== [RUNTIME_ENV] Verify DB connectivity and init migration ==="
+echo "=== [RUNTIME_ENV] Verify DB connectivity and required schema relations ==="
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT 1;"
-docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT to_regclass('public.manifest');"
-docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT to_regclass('public.topology_edit_log');"
+assert_relation_exists "public.manifest"
+assert_relation_exists "public.topology_edit_log"
 
 echo "=== [RUNTIME_ENV] Run integration tests against live DB ==="
 DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo' \

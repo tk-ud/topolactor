@@ -97,7 +97,7 @@ echo ""
 echo "=== [NOT_COVERED] Functions without direct test coverage (remaining todo) ==="
 echo "NOT_COVERED  OutputLaneRouter.RouteAsync — no unit test; requires SSE route integration fixture"
 echo "NOT_COVERED  AdminRuntime.ExecuteDataAsync — no unit test; covered only indirectly via Integration.Tests fixture"
-echo "REMAINING_TODO  env / volume / live API-route E2E verification is not included in this gate"
+echo "REMAINING_TODO  runtime-environment-gate covers docker-compose/DB/migration; env / volume / live API-route E2E is still not included"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
