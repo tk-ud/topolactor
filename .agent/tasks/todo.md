@@ -24,12 +24,12 @@ SSOT参照必読:
 
 ### Backend
 
-- [ ] [Claude] Gap-1 残: `RuntimeExecutor` の target/layer/action ハードコード dispatch 分岐を削除または明示隔離する
-      → runtime_mapping 読み取り・RUNTIME_DESTINATION_UNKNOWN バリデーション・manifestId 転送は実装済み (PR #this)。
-      → 残: RuntimeExecutor 内の demo/admin target dispatch 分岐の ManifestDispatcher への移管または隔離。
-      → 完了条件: RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
-      → 対象: `backend/runtime/RuntimeExecutor.cs`, `backend/runtime/ManifestDispatcher.cs`
-      → docs/system-roadmap.yaml: backend.manifest_dispatcher = partial (completion_condition 3 未充足)
+- [ ] [Claude] Gap-1 残: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管
+      → RuntimeExecutor 内の demo/admin target dispatch 分岐を TargetDispatchOverride クラスに隔離済み (RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated 充足)。
+      → 残: TargetDispatchOverride → ManifestDispatcher への完全移管 (manifest-driven routing)。これには ManifestDispatcher への依存注入変更が必要。設計判断が先決。
+      → 完了条件: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
+      → 対象: `backend/runtime/TargetDispatchOverride.cs`, `backend/runtime/ManifestDispatcher.cs`
+      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = partial
 
 - [ ] [Claude] Gap-2 partial: `runtime_timeline_scheduler` の client trigger を統一キューに整列させる
       → 現在 client trigger は ManifestDispatcher に直接同期呼び出し (HTTP response contract 保持のための意図的例外)。
@@ -38,19 +38,18 @@ SSOT参照必読:
       → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler = partial
 
-- [ ] [Claude] Gap-6 残: `OutputLaneRouter` の `registry_attractor_update` 実処理を実装する
-      → OutputLaneRouter を RuntimeExecutor pipeline に接続済み (RouteAsync は emission 後に呼ばれる)。
-      → db_notify_emission は実装済み (manifestId 転送含む)。
-      → 残: RouteRegistryAttractorLane の skeleton/no-op を実際の attractor rebuild トリガーに置き換える。
-      → 対象: `backend/runtime/OutputLaneRouter.cs`
-      → docs/system-roadmap.yaml: backend.output_lanes = partial (known_gap_ref: Gap-6 registry_attractor_update real implementation)
+- [ ] [Claude] Gap-6 残: `OutputLaneRouter.RebuildSignalChannel` のコンシューマーを実装する
+      → RouteRegistryAttractorLane を Channel<AttractorRebuildSignal> によるインプロセス queue 実装に置き換え済み (skeleton/no-op 解消)。
+      → 残: RebuildSignalChannel のコンシューマー (SystemOperationCiScheduler への接続または専用 BackgroundService) が未実装。
+      → 対象: `backend/runtime/OutputLaneRouter.cs`, `backend/scheduler/SystemOperationCiScheduler.cs`
+      → docs/system-roadmap.yaml: backend.output_lanes = partial (known_gap_ref: Gap-6 channel consumer)
 
-- [ ] [Claude] Gap-7 残: SSE end-to-end integration test の DbNotifyListener → pg_notify 経路を実装する (Issue #123)
-      → SseEventBroadcaster fan-out / SSE wire format テストは実装済み (SseEndToEndTests.cs)。
-      → 残: DbNotifyListener → pg_notify → broadcaster → SSE client の通し確認 (live DB 必要)。
-      → hook_or_db_notify_event_enters_scheduler_before_sse_emission 完了条件も未充足。
-      → 対象: `backend/tests/`, `backend/scheduler/DbNotifyListener.cs`
-      → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Issue #123)
+- [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
+      → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
+      → 残: DbNotifyListener → pg_notify → broadcaster の live DB 経路テスト (live DB 必要)。
+      → 残: hook_or_db_notify_event_enters_scheduler_before_sse_emission 完了条件。現在 DbNotifyListener が broadcaster に直接 Broadcast しており scheduler を経由していない。scheduler routing 変更は設計判断が先決。
+      → 対象: `backend/scheduler/DbNotifyListener.cs`, `backend/tests/`
+      → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Gap-7)
 
 ## Seed Import/Export Runtime (Issue #84)
 

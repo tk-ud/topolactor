@@ -17,6 +17,10 @@ namespace Topolactor.Scheduler;
 ///
 /// Events are broadcast to all connected SSE clients via SseEventBroadcaster.
 /// Connection is re-established on disconnect; errors are logged and retried.
+///
+/// Known gap (Gap-7): direct broadcast bypasses the scheduler queue.
+/// Per SSOT, db_notify events should enter the scheduler as hook_triggers before
+/// SSE emission. Full scheduler routing requires architectural wiring (live DB needed).
 /// </summary>
 public class DbNotifyListener : BackgroundService
 {
@@ -84,7 +88,19 @@ public class DbNotifyListener : BackgroundService
             "DbNotifyListener: received notification channel={Channel} subscribers={Count}.",
             e.Channel, _broadcaster.SubscriberCount);
 
-        _broadcaster.Broadcast(new SseEvent(EventType: "projection", Data: e.Payload ?? "{}"));
+        HandleNotificationPayload(e.Payload ?? "{}");
+    }
+
+    /// <summary>
+    /// Handles a db_notify payload by broadcasting it to SSE subscribers.
+    /// Extracted for testability — callers can invoke this directly without a live DB connection.
+    ///
+    /// Known gap (Gap-7): this broadcasts directly, bypassing the scheduler queue.
+    /// Per SSOT the hook event should enter the scheduler before SSE emission.
+    /// </summary>
+    internal protected virtual void HandleNotificationPayload(string payload)
+    {
+        _broadcaster.Broadcast(new SseEvent(EventType: "projection", Data: payload));
     }
 }
 

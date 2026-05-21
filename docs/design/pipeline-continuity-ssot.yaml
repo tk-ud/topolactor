@@ -133,13 +133,16 @@ pipeline_continuity_ssot:
               - 'vector\.Target =='
               - 'string\.Equals(vector\.Target'
             allowed_count: 3
+            preferred_count: 0
             allowed_exceptions:
-              - demo_entity_check_in_ExecuteAsync
-              - admin_path_in_ExecuteAsync
-              - demo_validation_in_ValidateDemoEntityRequest
+              - demo_entity_check_in_TargetDispatchOverride
+              - admin_path_in_TargetDispatchOverride
+              - demo_validation_in_TargetDispatchOverride
             note: >
-              Count above 3 indicates a new hardcoded dispatch target being added.
-              New targets must be routed through manifest_dispatcher, not hardcoded here.
+              0 is preferred — branches have been isolated to TargetDispatchOverride (Gap-1).
+              Allowed up to 3 for legacy/isolated branches pending manifest-driven migration.
+              Count above 3 indicates a new hardcoded dispatch target being added to RuntimeExecutor;
+              new targets must be routed through manifest_dispatcher, not hardcoded.
 
     sse_projection_lane:
       description: >

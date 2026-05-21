@@ -24,6 +24,16 @@ public class DefaultEntitySearchIntegrationTests
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
         var contextRoutePolicyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
+        var adminRuntime = new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            contextRouteRepository,
+            new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
+            new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
+            new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
+        var targetDispatchOverride = new TargetDispatchOverride(
+            NullLogger<TargetDispatchOverride>.Instance,
+            topologyRepository,
+            adminRuntime);
         var executor = new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
             operationVectorResolver: new OperationVectorResolver(),
@@ -33,7 +43,6 @@ public class DefaultEntitySearchIntegrationTests
             schemaResolver: new SchemaResolver(topologyRepository),
             emissionBuilder: new EmissionBuilder(),
             semanticMapper: new SemanticMapper(),
-            topologyRepository: topologyRepository,
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
             runtimeGuard: new RuntimeGuard(),
             contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
@@ -44,12 +53,7 @@ public class DefaultEntitySearchIntegrationTests
                 topologyRepository,
                 new SystemOperationCiRuntime(
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
-            adminRuntime: new AdminRuntime(
-                NullLogger<AdminRuntime>.Instance,
-                contextRouteRepository,
-                new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, contextRoutePolicyRepository, topologyVectorRuntime),
-                new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
-                new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")));
+            targetDispatchOverride: targetDispatchOverride);
         var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler);

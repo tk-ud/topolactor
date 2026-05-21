@@ -332,10 +332,13 @@ system_roadmap_ssot:
         unknown destination returns RUNTIME_DESTINATION_UNKNOWN. manifestId forwarded to
         RuntimeExecutor for output lane routing. Fallthrough to RuntimeExecutor when no
         manifest registered (dev/demo bypass). Ambiguity returns explicit MANIFEST_AMBIGUOUS
-        error. Remaining gap - RuntimeExecutor demo/admin target dispatch branches not yet
-        removed/isolated.
+        error. RuntimeExecutor demo/admin target dispatch branches are now explicitly isolated
+        in TargetDispatchOverride (Gap-1 completion condition satisfied).
+        Remaining gap: target_layer_action_destination_selection not yet fully migrated to
+        manifest-driven ManifestDispatcher routing.
       files:
         - backend/runtime/ManifestDispatcher.cs
+        - backend/runtime/TargetDispatchOverride.cs
       evidence:
         tests:
           - SchedulerDispatcherChainTests
@@ -348,7 +351,7 @@ system_roadmap_ssot:
         - RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
         - broken_manifest_or_mapping_reference_returns_explicit_error
       known_gap_ref:
-        - Gap-1 manifest_dispatcher full implementation
+        - Gap-1 target_layer_action_selection pending manifest-driven migration
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -356,9 +359,16 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: RuntimeExecutor supports the default entity search vertical slice, but still carries temporary routing responsibility.
+      public_summary: >
+        RuntimeExecutor executes the canonical pipeline (vector → attractor → structure map →
+        package → schema → emission). Target-specific dispatch branches (demo/entity, admin)
+        are now explicitly isolated in TargetDispatchOverride (Gap-1). RuntimeExecutor has no
+        hardcoded target/layer/action string comparisons in its main pipeline.
+        Remaining gap: target_layer_action_destination_selection not yet fully migrated to
+        manifest-driven ManifestDispatcher routing (migration requires further design).
       files:
         - backend/runtime/RuntimeExecutor.cs
+        - backend/runtime/TargetDispatchOverride.cs
       evidence:
         tests:
           - RuntimeExecutorTests
@@ -372,7 +382,7 @@ system_roadmap_ssot:
         - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
         - no_new_hardcoded_dispatch_branch_is_added
       known_gap_ref:
-        - Gap-1 manifest_dispatcher full implementation
+        - Gap-1 target_layer_action_selection pending manifest-driven migration
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
@@ -418,11 +428,12 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
-        OutputLaneRouter called from RuntimeExecutor pipeline after emission (Gap-6 pipeline
-        connection complete). db_notify_emission sends pg_notify with {table_id,
-        table_registry_id, manifest_id} (manifestId forwarded from ManifestDispatcher).
-        registry_attractor_update lane is skeleton (log-only); actual rebuild trigger not yet
-        implemented.
+        OutputLaneRouter called from RuntimeExecutor pipeline after emission. db_notify_emission
+        sends pg_notify with {table_id, table_registry_id, manifest_id} (manifestId forwarded
+        from ManifestDispatcher). registry_attractor_update lane now enqueues
+        AttractorRebuildSignal to RebuildSignalChannel (bounded Channel, Gap-6 skeleton
+        replaced with real in-process signal queue). Channel consumers can trigger registry
+        attractor recalculation; consumer wiring is a known remaining gap.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/runtime/RuntimeExecutor.cs
@@ -438,7 +449,7 @@ system_roadmap_ssot:
         - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
         - registry_attractor_update_is_not_hidden_in_response_flow
       known_gap_ref:
-        - Gap-6 registry_attractor_update real implementation
+        - Gap-6 registry_attractor_update channel consumer wiring not yet implemented
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -450,16 +461,21 @@ system_roadmap_ssot:
         SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener holds
         pg LISTEN and broadcasts to subscribers. Projection events stream to connected
         clients. SseEventBroadcaster fan-out and SSE wire format covered by integration
-        tests. Full E2E pipeline (DbNotifyListener -> pg_notify) not yet tested (requires
-        live DB).
+        tests. DbNotifyListener.HandleNotificationPayload now has unit tests via
+        TestableDbNotifyListener (Gap-7 partial). Full E2E pipeline (DbNotifyListener ->
+        pg_notify) not yet tested (requires live DB). hook_or_db_notify_event_enters_scheduler
+        completion condition not satisfied: DbNotifyListener broadcasts directly without
+        entering the scheduler queue first (architectural gap, design decision needed).
       files:
         - backend/endpoint/SseEndpoint.cs
         - backend/Program.cs
+        - backend/scheduler/DbNotifyListener.cs
         - backend/tests/Topolactor.Integration.Tests/SseEndToEndTests.cs
       evidence:
         tests:
           - SseEventBroadcasterTests
           - SseEndpointStreamFormatTests
+          - DbNotifyListenerPayloadTests
         ci:
           - default-entity-search
           - pipeline-continuity
@@ -469,8 +485,8 @@ system_roadmap_ssot:
         - event_payload_preserves_manifest_id_component_ids_attention_score_or_documented_identity
         - hook_or_db_notify_event_enters_scheduler_before_sse_emission
       known_gap_ref:
-        - Gap-7 SSE projection lane
-        - Issue #123 SSE end-to-end integration test
+        - Gap-7 hook_or_db_notify_event_enters_scheduler_before_sse_emission (design needed)
+        - Issue #123 SSE end-to-end integration test (live DB required)
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 

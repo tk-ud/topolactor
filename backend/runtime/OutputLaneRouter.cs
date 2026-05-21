@@ -1,3 +1,4 @@
+using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -10,15 +11,28 @@ namespace Topolactor.Runtime;
 /// Per SSOT backend_contract.output_lanes:
 ///   response_emission    — return response (implemented, pre-existing)
 ///   db_notify_emission   — send pg_notify with {table_id, table_registry_id, manifest_id}
-///   registry_attractor_update — trigger registry attractor rebuild (skeleton)
+///   registry_attractor_update — enqueue attractor rebuild signal to RebuildSignalChannel
 ///
 /// Owned by RuntimeExecutor pipeline; called after emission is built.
 /// db_notify failure is non-blocking (logged, not propagated to caller).
+/// registry_attractor_update signals are written to RebuildSignalChannel (bounded, drop-oldest).
 /// </summary>
 public class OutputLaneRouter
 {
     private readonly ILogger<OutputLaneRouter> _logger;
     private readonly DbNotifyRepository? _dbNotifyRepository;
+
+    /// <summary>
+    /// In-process attractor rebuild signal queue.
+    /// Consumers read from this channel to trigger registry attractor rebuilds.
+    /// Bounded (capacity 64); overflow drops oldest signals without blocking.
+    /// </summary>
+    public Channel<AttractorRebuildSignal> RebuildSignalChannel { get; } =
+        Channel.CreateBounded<AttractorRebuildSignal>(new BoundedChannelOptions(64)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = false,
+        });
 
     public OutputLaneRouter(
         ILogger<OutputLaneRouter> logger,
@@ -46,7 +60,7 @@ public class OutputLaneRouter
         }
 
         await RouteDbNotifyLaneAsync(vector, manifestId, ct);
-        RouteRegistryAttractorLane(vector);
+        RouteRegistryAttractorLane(vector, manifestId);
     }
 
     private async Task RouteDbNotifyLaneAsync(
@@ -74,13 +88,32 @@ public class OutputLaneRouter
             tableId, manifestId);
     }
 
-    private void RouteRegistryAttractorLane(OperationVector vector)
+    private void RouteRegistryAttractorLane(OperationVector vector, Guid? manifestId)
     {
-        // registry_attractor_update lane skeleton.
-        // Full implementation requires attractor rebuild trigger after topology change.
-        // Per SSOT: registry_attractor_update output carries the attractor rebuild signal.
-        _logger.LogDebug(
-            "OutputLaneRouter: registry_attractor_update lane — skeleton, no-op. " +
-            "AttractorKey={AttractorKey}", vector.AttractorKey);
+        var signal = new AttractorRebuildSignal(
+            AttractorKey: vector.AttractorKey,
+            ManifestId: manifestId);
+
+        if (RebuildSignalChannel.Writer.TryWrite(signal))
+        {
+            _logger.LogDebug(
+                "OutputLaneRouter: registry_attractor_update signal enqueued. " +
+                "AttractorKey={AttractorKey} ManifestId={ManifestId}",
+                signal.AttractorKey, signal.ManifestId);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "OutputLaneRouter: registry_attractor_update signal dropped (channel full). " +
+                "AttractorKey={AttractorKey}",
+                signal.AttractorKey);
+        }
     }
 }
+
+/// <summary>
+/// Attractor rebuild signal emitted by the registry_attractor_update output lane.
+/// Consumers (e.g. SystemOperationCiScheduler) read from OutputLaneRouter.RebuildSignalChannel
+/// to trigger registry attractor recalculation after topology changes.
+/// </summary>
+public record AttractorRebuildSignal(string? AttractorKey, Guid? ManifestId);
