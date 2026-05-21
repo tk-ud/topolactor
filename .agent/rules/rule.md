@@ -112,6 +112,11 @@ Protocol agenda map (condition-triggered):
 
 Protocols are not always-on reading. Use each protocol only when its trigger condition applies.
 
+Protocol body routing:
+- After Protocol Agenda Map / Protocol Trigger Map / prompt router / ssot-map selects protocol targets, use `.agent/protocols/index.yaml` as a lightweight grep route for section markers.
+- `.agent/protocols/index.yaml` is not protocol body and not a judgment gate SSOT.
+- grep hits are read-route hints only; PASS/FAIL judgment remains in each protocol body.
+
 - Completion report / TODO `[x]` update / completion eligibility decision:
   - `.agent/protocols/completion.md`
   - `.agent/protocols/reports-and-todos.md`

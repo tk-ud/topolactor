@@ -63,6 +63,7 @@ required_files:
     - .agent/docs/ssot-map.yaml
     - .agent/rules/rule.md
     - .agent/protocols/completion.md
+    - .agent/protocols/index.yaml
     - .agent/protocols/policy-judgment.md
     - .agent/protocols/scenario-contract.md
     - .agent/protocols/runtime-boundary-matrix.md
@@ -168,6 +169,12 @@ required_content_terms:
     - "Policy Judgment Gate"
     - "End-to-End Boundary Identity"
     - "Multi-instance leakage"
+  .agent/protocols/index.yaml:
+    - "grep route"
+    - "not a judgment SSOT"
+    - "section_markers"
+    - "completion-governance"
+    - "reports-and-todo-surfaces"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"

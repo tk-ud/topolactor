@@ -39,6 +39,8 @@ READ_ENTRY
 - READ_TARGET_SURFACES
   - read target files / target functions / target directories
   - use the matched `.agent/prompt/<work-type>.md` to decide required SSOT and triggered protocols when applicable
+  - after a protocol target is selected by trigger/prompt/ssot-map, use `.agent/protocols/index.yaml` to locate section markers before reading protocol body sections
+  - protocol index grep hits are route selection aids only (not PASS/FAIL judgment)
   - read `.agent/docs/ssot-map.yaml` only when the target surface needs SSOT mapping or the prompt/task explicitly requires it
   - read corresponding `.agent/docs/` resume/index only when ssot-map or task materials require it
   - read mapped `docs/` SSOT required_docs before implementation/audit only after mapping confirms they are relevant
@@ -55,6 +57,7 @@ READ_ENTRY
   - preserve canonical route / explicit failure / no silent fallback
 - FILL_CHECKLISTS
   - after implementation, fill only triggered checklists
+  - protocol index routing does not allow skipping checklist/protocol workflow steps
   - policy changes: policy-judgment
   - boundary changes: runtime-boundary-matrix / boundary-identity
   - checklist is viewpoint recording, not final pass judgment
@@ -63,6 +66,9 @@ READ_ENTRY
   - verify consistency across contract, checklist, and actual diff
 - JUDGMENT
   - open `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only for completion / TODO[x] / report judgment
+  - before reading triggered JUDGMENT protocol bodies, use `.agent/protocols/index.yaml` grep_keys / section_markers to route the minimal sections to read
+  - `.agent/protocols/index.yaml` is not a judgment SSOT; protocol body remains the decision source
+  - grep hits are read-route selection only and must not be used as PASS/FAIL judgment
   - `NOT_EXECUTED` is not `PASS`
   - if blocking exists, do not push / complete / TODO[x]
   - CI executes completion judgment checks before structure check as post-implementation verification order; this does not reorder workflow steps
@@ -73,9 +79,18 @@ READ_ENTRY
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
-  - for an existing PR update, push first, then add a follow-up PR comment with changed summary, check status, and remaining TODO
-  - if a PR comment cannot be posted, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste
-  - do not rely on chat-only completion summary for existing PR follow-up updates
+  - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
+    1. determine whether this work is an existing-PR update
+    2. confirm push or remote PR update actually occurred
+    3. identify target PR number/URL and head commit
+    4. apply follow-up comment requirement from `.agent/protocols/reports-and-todos.md`
+    5. confirm whether PR comment posting capability is available
+    6. when posting is available, post follow-up PR comment after push
+    7. verify posted comment exists in PR conversation
+    8. if posting is unavailable or post-verification is unavailable, emit `PR_COMMENT_NOT_POSTED` with exact paste-ready comment body in final summary
+    9. only then emit final summary
+  - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
+  - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 
 ## Scope Discipline
 

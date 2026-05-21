@@ -34,12 +34,15 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 - Do not use the PR body as a rolling implementation log, CI status ledger, or follow-up audit thread.
 - When a PR receives follow-up fixes, CI re-runs, audit findings, or remaining-risk notes, add a PR comment instead of continuously rewriting the PR body.
 - Existing PR updates require a follow-up PR comment after push unless the only change is a purely local draft with no remote PR.
+- For existing PR updates, treat follow-up comment state as mandatory completion evidence: (a) posted in PR conversation after push, or (b) `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body in final summary when posting is unavailable.
 - Follow-up PR comments must include:
   - changed summary
   - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED
   - remaining TODOs
   - whether the PR body is intentionally left thin or was updated because it was materially misleading
 - If the environment cannot post a PR comment, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste.
+- Chat/final summary by itself is never a substitute for required existing-PR follow-up comment handling.
+- Passing local checks (including structure/completion checks) does not imply follow-up comment was posted.
 - Do not claim the follow-up comment was posted unless it was actually posted to the PR conversation.
 - If the PR body becomes materially false or misleading, update it only to restore a thin, accurate entry summary.
 - Detailed pass/fail/not executed notes, CI failure indexes, audit responses, and residual TODO classification belong in PR comments or completion summaries, not in the PR body.
