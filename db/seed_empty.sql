@@ -111,6 +111,28 @@ VALUES (
 )
 ON CONFLICT (structure_map_id) DO NOTHING;
 
+-- ---------------------------------------------------------------------------
+-- manifest — active runtime route for manifest-backed dispatch verification.
+-- This route intentionally targets default/entity/Search so /dispatch can verify
+-- ManifestDispatcher -> RuntimeExecutor path (non demo/admin override).
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (
+    manifest_id,
+    relation_registry_id,
+    topology,
+    status
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000040',
+    NULL,
+    ARRAY[
+      '{"type":"dispatcher_mapping","role":"admin","target":"default","layer":"entity","action":"Search"}'::jsonb,
+      '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO NOTHING;
+
 
 -- ---------------------------------------------------------------------------
 -- Admin topology nodes — deterministic IDs for admin attractor resolution.
