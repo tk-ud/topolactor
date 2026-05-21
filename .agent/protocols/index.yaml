@@ -16,29 +16,30 @@ protocols:
         grep_keys:
           - "completion eligibility"
           - "TODO `[x]`"
-          - "NOT_EXECUTED"
-          - "REMOTE_REQUIRED"
         read_when:
           - "completion eligibility decision"
           - "TODO completion intent"
       - marker: "## Scope"
         grep_keys:
-          - "Required Check Scope"
-          - "Roadmap Status Gate"
-          - "Auditor TODO"
+          - "required check scope declaration"
+          - "scope-relevant checks"
+          - "REQUIRED_NOT_EXECUTED"
         read_when:
           - "required check scope declaration"
-          - "roadmap/TODO scope review"
+          - "scope and evidence boundary確認"
       - marker: "## Execution procedure"
         grep_keys:
           - "Remote CI Equivalence Gate"
-          - "Required Check Scope Declaration Gate"
           - "Failure Triage Self-Recursion Gate"
+          - "Auditor TODO"
+          - "defer canonical closure"
         read_when:
           - "completion sequence execution"
-          - "remote CI equivalence handling"
+          - "auditor defer/direct-update handling"
       - marker: "## Completion / failure decision"
         grep_keys:
+          - "Roadmap Status Gate"
+          - "REQUIRED_NOT_EXECUTED"
           - "blocking"
           - "completion summary"
           - "TODO close"
@@ -59,7 +60,6 @@ protocols:
         grep_keys:
           - "routine inspection reports"
           - "normal PR summaries"
-          - "report placement"
         read_when:
           - "report storage/update routing"
       - marker: "## PR body and follow-up comment policy"
@@ -76,10 +76,10 @@ protocols:
           - "PR_COMMENT_NOT_POSTED fallback"
       - marker: "## TODO carry-over rules"
         grep_keys:
-          - ".agent/tasks/todo.md"
           - "remaining TODO"
           - "TODO carry-over"
           - "Auditor TODO"
+          - ".agent/tasks/todo.md"
         read_when:
           - "remaining work classification"
           - "TODO queue update"
@@ -182,10 +182,17 @@ protocols:
           - "routing"
           - "validation"
           - "projection behavior"
-          - "CI queued/in_progress is not PASS"
         read_when:
           - "policy change trigger confirmation"
           - "policy checklist preparation"
+      - marker: "Violation table:"
+        grep_keys:
+          - "Violation table"
+          - "policy violation"
+          - "CI queued/in_progress is not PASS"
+        read_when:
+          - "policy violation判定"
+          - "CI state handling for policy judgment"
 
   - id: registry-topology-semantics
     file: .agent/protocols/registry-tensor-policy.md
@@ -208,8 +215,8 @@ protocols:
           - "registry-topology intent alignment"
       - marker: "## Mandatory interpretation"
         grep_keys:
-          - "Mandatory interpretation"
-          - "authoritative"
+          - "tensor basis / vector basis"
+          - "registry table must be explained as semantic matrix"
         read_when:
           - "mandatory interpretation confirmation"
       - marker: "## Projection surface map"
@@ -226,6 +233,7 @@ protocols:
       - marker: "## Drift / GAP classification"
         grep_keys:
           - "Drift / GAP classification"
-          - "known_gap_ref"
+          - "drift"
+          - "GAP"
         read_when:
           - "drift/gap classification review"
