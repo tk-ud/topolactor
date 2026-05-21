@@ -106,3 +106,15 @@ recursive_verification_gate:
     - ".agent/protocols/policy-judgment.md"
     - ".agent/protocols/scenario-contract.md"
     - ".agent/protocols/runtime-boundary-matrix.md"
+
+
+design_ssot:
+  role: design_and_machine_readable_ssot_registry
+  description: >
+    Design SSOT surfaces used for implementation judgment.
+    Public article surfaces under docs/articles/* are explanatory and are not authoritative implementation SSOT.
+  files:
+    - path: docs/design/sql-attention-logs-ssot.md
+      role: design_ssot
+    - path: docs/design/sql-attention-logs-ssot.yaml
+      role: machine_readable_ssot

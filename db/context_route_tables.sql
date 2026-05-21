@@ -115,7 +115,7 @@ CREATE INDEX IF NOT EXISTS idx_cs_role_time
 
 -- ---------------------------------------------------------------------------
 -- context_event
--- Append-only operation event log. The only required log table.
+-- Append-only operation event log. The only required log table for context-route recommendation.
 -- Each event records the active token_ids snapshot at the time of the operation.
 -- The ordered event sequence within a session defines the token_context.
 -- Supervision signals (next_operation_hint, next_token_ids_hint) are optional.
@@ -137,13 +137,15 @@ CREATE TABLE IF NOT EXISTS context_event (
 );
 
 COMMENT ON TABLE context_event IS
-    'Append-only operation event log. The ordered sequence within a session '
+    'Append-only operation event log for context-route recommendation. The ordered sequence within a session '
     'defines the token_context. token_ids is the active enum snapshot used for '
-    'sparse vector reconstruction. supervision signals are optional.';
+    'sparse vector reconstruction. supervision signals are optional. '
+    'SQL Attention logs alignment: context_event is a conditional logs.ui_operation-like signal source '
+    '(component/operation usage pressure), not canonical logs.current or logs.attention.';
 
 COMMENT ON COLUMN context_event.token_ids IS
     'Active token snapshot at event time. Used to reconstruct the sparse event '
-    'vector via context_token_registry.value. Missing tokens treated as 0.';
+    'multi-hot vector by token presence (1.0), not token value weighting. Missing tokens are 0.';
 
 CREATE INDEX IF NOT EXISTS idx_ce_session_time
     ON context_event (session_id, created_at);
@@ -458,6 +460,8 @@ CREATE TABLE IF NOT EXISTS context_hub_recommendation_current (
 COMMENT ON TABLE context_hub_recommendation_current IS
     'Rebuildable materialized current for hub attention recommendations. '
     'NOT a source of truth. Rebuilt from topology data + context_hub_feedback_event. '
+    'This table is not SQL Attention logs.current calculation basis; hub recommendation current and '
+    'SQL Attention logs.current must be treated as separate semantics. '
     'scope_limit IN (1000, 3000, 10000): isolated by unique key — no cross-limit mixing. '
     'evidence_json: transition key evidence. mlp_feature_json: feature crossing breakdown.';
 

@@ -181,7 +181,7 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
 -- ---------------------------------------------------------------------------
 -- topology_edit_log
 -- Converged entity data table (append-only audit).
--- Records topology mutations as an append-only edit diff log.
+-- Records topology mutations as an append-only edit diff log (domain-scope operation logs).
 -- Distinct from demo_state_transitions (which records state machine transitions).
 -- Used for runtime audit, recommendation feedback, and persistence tracing.
 -- ---------------------------------------------------------------------------
@@ -200,11 +200,15 @@ CREATE TABLE IF NOT EXISTS topology_edit_log (
 COMMENT ON TABLE topology_edit_log IS
     'Append-only audit log for topology mutations. Distinct from demo_state_transitions '
     'which records state machine transitions. Each row is immutable once inserted. '
-    'Used for runtime audit, recommendation feedback, and persistence tracing.';
+    'Used for runtime audit, recommendation feedback, and persistence tracing. '
+    'SQL Attention logs SSOT alignment note: this table is not canonical logs.diff because target_table '
+    'is currently an attractor/domain scope identifier, not a physical table identity (tableid). '
+    'logs.diff reuse requires explicit physical table identity mapping/column.';
 
 COMMENT ON COLUMN topology_edit_log.target_table IS
     'Attractor key or domain scope identifier (e.g. default:entity:create). '
-    'Not a literal DB table name; identifies the topology operation scope.';
+    'Not a literal DB table name; identifies the topology operation scope. '
+    'Therefore this column does not satisfy logs.diff.tableid (physical table identity) semantics by itself.';
 
 COMMENT ON COLUMN topology_edit_log.diff_json IS
     'JSON diff between before_json and after_json. Null when not computed '

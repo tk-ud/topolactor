@@ -74,6 +74,19 @@ jsonb_key_promotion:
     - semantic_importance
     - audit_requirement
 
+sql_attention_logs_boundary:
+  canonical_reference:
+    - docs/design/sql-attention-logs-ssot.md
+    - docs/design/sql-attention-logs-ssot.yaml
+  separation_rules:
+    - context_event_is_conditional_logs_ui_operation_signal_source
+    - context_hub_recommendation_current_is_not_logs_current
+    - context_route_recommendation_and_sql_attention_logs_are_distinct_routes
+  initial_minimal_signal_basis:
+    - table
+    - column
+    - ui
+
 logs_diffs_principle:
   role: append_only_diff_surface
   basic_shape: id_tableId_jsonb_created

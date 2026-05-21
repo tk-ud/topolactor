@@ -91,6 +91,37 @@ mapping:
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
+
+  - work_type: sql_attention_logs_current_attention_norm_trigger
+    change_surfaces:
+      - SQL Attention logs
+      - logs.diff
+      - logs.candidate
+      - logs.ui_operation
+      - logs.current
+      - logs.attention
+      - signal source
+      - current calculation basis
+      - l2 norm trigger
+      - norm level watch
+      - registry-neighbor exploration
+      - table registry vector search
+      - physical table pressure
+      - attention evidence
+      - promotion candidates as candidate pressure
+      - context_event as ui operation pressure
+      - topology_edit_log mismatch with physical tableid
+    required_docs:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    supporting_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/registry-tensor-policy.md
+
   - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
     change_surfaces:
       - runtime orchestration os
