@@ -12,12 +12,12 @@ Physical schema implementation status:
 
 
 
-Registry-aware naming boundary:
+Hub-attractor boundary:
 
 - `logs.current` / `logs.hub_current` / `logs.attention` are physical implementation tables in this phase.
 - `logs.current` is the physical log-pressure current.
 - `logs.hub_current` is the hub Tensor/attractor current.
-- `logs.attention` is the registry exploration evidence plane linked to physical current.
+- `logs.attention` is the physical pressure × hub current evidence plane.
 - table-specific names `logs.table_current` / `logs.table_attention` are not adopted.
 
 
@@ -186,9 +186,9 @@ logs.*
 - exploration candidate creation
 ```
 
-### logs.hub_current — registry-side population/phase basis current
+### logs.hub_current — hub-side Tensor/attractor current
 
-`logs.hub_current` stores registry-side population current used to calculate phase basis, z-score normalization, and movement distance guardrails.
+`logs.hub_current` stores hub-side Tensor/attractor current used to calculate phase basis, z-score normalization, and movement distance guardrails.
 
 It is a projection/cache current and is not an adopted topology state, and it does not mutate registries.
 
@@ -248,43 +248,9 @@ physical column/candidate pressure
 physical operation/component usage pressure
 ```
 
-## Registry meaning
+## Support surfaces (not SQL Attention target)
 
-Registry tables are composition tables.
-
-They are closer to grammar tables than vocabulary rows.
-
-Core registry/composition examples:
-
-```text
-registrar_entries
-master_registry
-state_registry
-relation_registry
-package_registry
-schema_registry
-component_registry
-function_parameters
-structure_maps
-hub_relations
-```
-
-UI topology composition examples:
-
-```text
-ui_component_bucket
-ui_component_registry
-ui_component_package
-ui_package_component_map
-ui_layout_registry
-ui_wiring_registry
-ui_topology_tensor
-components
-design
-packages
-```
-
-SQL Attention applies physical-side pressure to these registry/composition tables through bounded neighbor exploration.
+Registry/topology references can exist as support/projection surfaces, but SQL Attention target is hubs.* Tensor/attractor.
 
 ## Pressure matrix
 
@@ -382,52 +348,6 @@ k = UI / component operation
 ```
 
 For other registry kinds (relation/component/state), i/j/k basis must be defined according to each registry grammar before physical implementation.
-
-### relation registry N×N calculation rule (contract)
-
-In relation registry exploration, source_axis and target_axis array lengths may differ.
-
-For N×N calculation, the shorter side is adjusted by **calculation-local zero padding** only.
-
-Contract rules:
-
-- zero padding is calculation-time only (calculation-local), not persistent schema
-- padded elements are not real registry candidates
-- padded elements must be excluded from:
-  - population_count
-  - z-score denominator
-  - phase candidate output
-- `phase_vector_json` stores real candidate components only
-- optional metadata such as `padding_applied` / `padded_size` may be stored only as calculation metadata in `evidence_json`
-
-
-Draft behavior:
-
-```text
-stronger l2_norm allows farther movement from the attention vector.
-movement distance is corrected by normalized table-registry i/j/k population, such as z-score.
-```
-
-This is an experimental over-optimization guard: a strong attention hit does not only choose the nearest known candidate. It can also create a deliberately shifted candidate vector for later review and aggregation.
-
-Draft calculation shape:
-
-```text
-base_vector = logs.attention.vector_json
-axis_z_score = z_score(table_registry_i_j_k_population)
-move_distance = f(l2_norm, axis_z_score, policy_caps)
-phase_vector = distort(base_vector, i_table, j_column, k_ui, move_distance)
-```
-
-Guardrails:
-
-```text
-- phase_vector is evidence/candidate data, not adopted topology state
-- no direct registry mutation
-- no automatic migration execution
-- no automatic column promotion
-- no unbounded phase movement
-```
 
 ## Completion boundary
 

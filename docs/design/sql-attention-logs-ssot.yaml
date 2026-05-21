@@ -21,23 +21,15 @@ projection_boundary:
     - usage_history
     - trend
 deprecated_or_rejected:
-  - logs.hub_current
   - registry_neighbor exploration as SQL Attention target (deprecated wording)
-  - registry_kind as attention target axis (rejected)
 physical_schema_status:
   physical_tables:
     - logs.current
-    - logs.hub_current
-    - logs.attention
+      - logs.attention
   non_adopted_table_names:
     - logs.table_current
     - logs.table_attention
   initial_implementation: hub_attractor_target_aware_generic_schema
-  table_registry_phase_basis:
-    i: table
-    j: column_jsonb_path_axis
-    k: ui_component_operation
-  registry_kind_phase_basis_rule: define_i_j_k_by_hub_attractor_tensor_grammar
   neighbor_score_policy_range:
     min: 0.85
     max: 1.00
@@ -55,22 +47,6 @@ physical_schema_status:
     - topK_per_hub_kind
     - phase_expansion_limit
     - max_attention_rows_saved
-  relation_registry_calculation_contract:
-    n_by_n_shape: calculation_time_only
-    source_target_length_mismatch: allowed
-    padding_policy:
-      type: zero_padding
-      timing: calculation_local
-      persistent_schema: forbidden
-      candidate_semantics: not_registry_candidate
-      excluded_from:
-        - population_count
-        - z_score_denominator
-        - phase_candidate_output
-      metadata_allowed_in:
-        - evidence_json
-    output_rule:
-      phase_vector_json: real_candidate_components_only
   out_of_scope_not_implemented:
     - refresh_function_bodies
     - norm_watch_function_bodies
@@ -391,7 +367,7 @@ layers:
 physical_table_pressure:
   tableid_semantics: physical_table_identity
   aggregation_target: physical_side
-  not_target: registry_table_popularity
+  not_target: topologys_or_registry_direct_search
   observes:
     - physical_table_mutation_pressure
     - physical_column_candidate_pressure

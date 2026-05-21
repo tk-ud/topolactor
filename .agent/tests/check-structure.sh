@@ -281,10 +281,6 @@ check_content "docs/design/sql-attention-logs-ssot.md" "norm-level"
 check_content "docs/design/sql-attention-logs-ssot.md" "phase_expansion_limit"
 check_content "docs/design/sql-attention-logs-ssot.md" "neighbor_score_min"
 check_content "docs/design/sql-attention-logs-ssot.md" "phase_vector_json"
-check_content "docs/design/sql-attention-logs-ssot.md" "z-score denominator"
-check_content "docs/design/sql-attention-logs-ssot.md" "relation registry"
-check_content "docs/design/sql-attention-logs-ssot.md" "zero padding"
-check_content "docs/design/sql-attention-logs-ssot.md" "calculation-local"
 check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not topology search"
 check_content "docs/design/sql-attention-logs-ssot.md" "hub-attractor exploration"
 check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not registry search"
@@ -592,6 +588,11 @@ if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attentio
   fail "Initial registry_kind candidates should not remain"
 else
   echo "OK  [ssot] Initial registry_kind candidates removed"
+fi
+if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "logs.hub_current must not be in deprecated_or_rejected"
+else
+  echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
 fi
 if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry_table/registry_id should not remain in SQL Attention attention contract"

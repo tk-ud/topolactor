@@ -23,7 +23,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [x] SQL Attention target boundary correction を完了
       → SQL Attention target を hubs Tensor/attractor に固定し、topologys/registry 直接探索主語を除去した。
 - [x] registry_current 誤主語の除去を完了
-      → logs.hub_current を logs.hub_current に置換し、attention証跡を current_id + hub_current_id 接続へ統一した。
+      → logs.registry_current を logs.hub_current に置換し、attention証跡を current_id + hub_current_id 接続へ統一した。
 
 - [ ] refresh logs.current / l2 norm watch function implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。

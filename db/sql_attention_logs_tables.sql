@@ -106,7 +106,7 @@ CREATE TABLE IF NOT EXISTS logs.attention (
 );
 
 COMMENT ON TABLE logs.attention IS
-  'SQL Attention evidence log linking physical current and hub current. SQL Attention target is hubs Tensor/attractor, not topology/registry search. Keeps statistics, attention, and phase-attention meanings separated.';
+  'SQL Attention evidence log linking physical pressure current and hub current. SQL Attention target is hubs Tensor/attractor, not direct topologys/registry search. Keeps statistics, attention, and phase-attention meanings separated.';
 
 CREATE INDEX IF NOT EXISTS idx_logs_current_source_table
   ON logs.current (source_set_id, physical_table_id);
