@@ -479,7 +479,7 @@ public class AdminRuntime
         return (JsonSerializer.SerializeToElement(
             new SeedImportResponseDto(
                 true,
-                result.ImportedCount,
+                result.ValidatedRuntimeCount,
                 "Seed validated. Full canonical import requires Gap-1 manifest-driven routing resolution.",
                 [])), null);
     }

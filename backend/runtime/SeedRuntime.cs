@@ -146,9 +146,16 @@ public class SeedRuntime
 
         _logger.LogInformation(
             "SeedRuntime.ImportAsync: seed validated — {Count} runtime(s) declared. " +
-            "Full canonical import requires Gap-1 resolution (manifest-driven routing).",
+            "Import blocked pending Gap-1 resolution (manifest-driven routing).",
             runtimeCount);
 
-        return new SeedImportResult(true, runtimeCount, []);
+        return new SeedImportResult(
+            false,
+            runtimeCount,
+            [new SeedValidationError(
+                "SEED_IMPORT_PENDING_GAP1",
+                $"Import blocked pending Gap-1 resolution. " +
+                $"{runtimeCount} runtime(s) declared and validated. " +
+                "Full canonical import requires manifest-driven routing (ManifestDispatcher migration).")]);
     }
 }

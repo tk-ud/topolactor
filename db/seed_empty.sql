@@ -207,6 +207,64 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
+-- Seed Runtime admin structure_maps (Issue #84)
+-- attractor_key format: "admin:seed_runtime:{action}" (lowercase)
+-- All operations share the admin package / schema / component topology nodes.
+-- ---------------------------------------------------------------------------
+INSERT INTO structure_maps (
+    structure_map_id, name, attractor_key,
+    package_id, schema_id, component_ids, active
+)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000036',
+        'admin_seed_runtime_save',
+        'admin:seed_runtime:save',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000037',
+        'admin_seed_runtime_load',
+        'admin:seed_runtime:load',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000038',
+        'admin_seed_runtime_validate',
+        'admin:seed_runtime:validate',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000039',
+        'admin_seed_runtime_preview',
+        'admin:seed_runtime:preview',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000040',
+        'admin_seed_runtime_import',
+        'admin:seed_runtime:import',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    )
+ON CONFLICT (structure_map_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- function_parameters — context route recommendation policy
 --
 -- Policy source for ContextRouteRecommendationResolver.

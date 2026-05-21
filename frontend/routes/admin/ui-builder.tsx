@@ -109,7 +109,7 @@ function BucketSection(): JSX.Element {
     setStatus(null);
     try {
       const body = await dispatchAdminOp("ui_component_bucket", "list");
-      const data = body?.emission?.resolvedData;
+      const data = body?.emission?.data;
       if (Array.isArray(data)) {
         setItems(data);
         setStatus(`Loaded ${data.length} bucket item(s).`);
@@ -136,8 +136,8 @@ function BucketSection(): JSX.Element {
         bucketItemId: selectedId,
         routeKey,
       });
-      if (body?.success || body?.emission?.resolvedData?.ok) {
-        const data = body?.emission?.resolvedData;
+      if (body?.success || body?.emission?.data?.ok) {
+        const data = body?.emission?.data;
         setStatus(
           `Package generated: tensorId=${data?.tensorId}, componentId=${data?.componentId}, packageId=${data?.packageId}`
         );
@@ -240,7 +240,8 @@ function LayoutBuilderSection(): JSX.Element {
       <h2>Visual Layout Builder (Issue #89 — skeleton)</h2>
       <p style={{ color: "#555", fontSize: "0.9rem" }}>
         Layout builder connects component packages to route-specific layout definitions.
-        layoutId / styleTokenId / responsiveRuleId are persisted to <code>ui_layout_registry</code>.
+        <strong> Planned (not yet implemented):</strong> layoutId / styleTokenId / responsiveRuleId
+        persistent to <code>ui_layout_registry</code> (DB schema pending).
         Frontend adapter is a stable projection surface; spec changes via registry tensor data.
       </p>
       <p style={{ color: "#888" }}>

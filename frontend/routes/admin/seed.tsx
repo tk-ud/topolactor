@@ -54,14 +54,14 @@ export default function SeedAdmin(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [errors, setErrors] = useState<SeedValidationError[]>([]);
   const [previewRuntimes, setPreviewRuntimes] = useState<SeedRuntime[]>([]);
-  const [importResult, setImportResult] = useState<{ importedCount: number; note?: string } | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const clearState = () => {
     setStatus(null);
     setErrors([]);
     setPreviewRuntimes([]);
-    setImportResult(null);
+    setPendingMessage(null);
   };
 
   const handleLoad = async () => {
@@ -69,8 +69,8 @@ export default function SeedAdmin(): JSX.Element {
     setLoading(true);
     try {
       const body = await dispatchSeedOp("seed_runtime", "load");
-      if (body?.emission?.resolvedData?.content) {
-        setLoadedContent(body.emission.resolvedData.content);
+      if (body?.emission?.data?.content) {
+        setLoadedContent(body.emission.data.content);
         setStatus("Loaded seed.json from /storage.");
       } else if (body?.errors?.length) {
         setErrors(body.errors);
@@ -112,10 +112,10 @@ export default function SeedAdmin(): JSX.Element {
     setLoading(true);
     try {
       const body = await dispatchSeedOp("seed_runtime", "validate");
-      if (body?.emission?.resolvedData?.valid) {
+      if (body?.emission?.data?.valid) {
         setStatus("Validation passed. seed.json is structurally valid.");
       } else {
-        setErrors(body?.emission?.resolvedData?.errors ?? body?.errors ?? []);
+        setErrors(body?.emission?.data?.errors ?? body?.errors ?? []);
         setStatus("Validation failed.");
       }
     } catch (e) {
@@ -130,7 +130,7 @@ export default function SeedAdmin(): JSX.Element {
     setLoading(true);
     try {
       const body = await dispatchSeedOp("seed_runtime", "preview");
-      const data = body?.emission?.resolvedData;
+      const data = body?.emission?.data;
       if (data?.runtimes) {
         setPreviewRuntimes(data.runtimes);
         setStatus(`Preview: ${data.runtimeCount} runtime(s) declared.`);
@@ -150,13 +150,18 @@ export default function SeedAdmin(): JSX.Element {
     setLoading(true);
     try {
       const body = await dispatchSeedOp("seed_runtime", "import");
-      if (body?.success || body?.emission?.resolvedData?.ok) {
-        const data = body?.emission?.resolvedData;
-        setImportResult({ importedCount: data?.importedCount ?? 0, note: data?.note });
-        setStatus("Import completed (skeleton).");
-      } else {
-        setErrors(body?.errors ?? []);
+      const pendingError = body?.errors?.find(
+        (e: SeedValidationError) => e.code === "SEED_IMPORT_PENDING_GAP1",
+      );
+      if (pendingError) {
+        setPendingMessage(
+          `Import blocked — pending Gap-1 canonical routing. ${pendingError.message}`,
+        );
+      } else if (body?.errors?.length) {
+        setErrors(body.errors);
         setStatus("Import failed.");
+      } else {
+        setStatus("Import: unexpected response state.");
       }
     } catch (e) {
       setStatus(`Error: ${e}`);
@@ -222,6 +227,12 @@ export default function SeedAdmin(): JSX.Element {
         </p>
       )}
 
+      {pendingMessage && (
+        <p style={{ color: "#c80" }}>
+          <strong>{pendingMessage}</strong>
+        </p>
+      )}
+
       {errors.length > 0 && (
         <section style={{ marginBottom: "16px" }}>
           <h3 style={{ color: "#c00" }}>Errors</h3>
@@ -284,18 +295,6 @@ export default function SeedAdmin(): JSX.Element {
               ))}
             </tbody>
           </table>
-        </section>
-      )}
-
-      {importResult && (
-        <section style={{ marginBottom: "16px" }}>
-          <h3 style={{ color: "#090" }}>Import result</h3>
-          <p>
-            Imported count: <strong>{importResult.importedCount}</strong>
-          </p>
-          {importResult.note && (
-            <p style={{ color: "#888", fontSize: "0.85rem" }}>{importResult.note}</p>
-          )}
         </section>
       )}
 

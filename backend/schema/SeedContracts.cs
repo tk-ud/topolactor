@@ -16,7 +16,7 @@ public record SeedPreviewData(IReadOnlyList<SeedRuntimePreview> Runtimes, int Ru
 
 public record SeedPreviewResult(bool Success, SeedPreviewData? Data, IReadOnlyList<SeedValidationError> Errors);
 
-public record SeedImportResult(bool Success, int ImportedCount, IReadOnlyList<SeedValidationError> Errors);
+public record SeedImportResult(bool Success, int ValidatedRuntimeCount, IReadOnlyList<SeedValidationError> Errors);
 
 public record SeedSaveResponseDto(
     [property: JsonPropertyName("ok")]      bool Ok,
@@ -55,8 +55,8 @@ public record SeedPreviewResponseDto(
 );
 
 public record SeedImportResponseDto(
-    [property: JsonPropertyName("ok")]            bool Ok,
-    [property: JsonPropertyName("importedCount")] int ImportedCount,
-    [property: JsonPropertyName("note")]          string? Note,
-    [property: JsonPropertyName("errors")]        IReadOnlyList<SeedValidationErrorDto> Errors
+    [property: JsonPropertyName("ok")]                    bool Ok,
+    [property: JsonPropertyName("validatedRuntimeCount")] int ValidatedRuntimeCount,
+    [property: JsonPropertyName("note")]                  string? Note,
+    [property: JsonPropertyName("errors")]                IReadOnlyList<SeedValidationErrorDto> Errors
 );
