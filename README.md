@@ -39,6 +39,10 @@ DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are treated 
 
 SQL Attention observes what the runtime should attend to in DB topology space. It combines candidate narrowing from registry IDs and relations with attention-weight evidence from aggregation, transition, recency, frequency, diff, and log signals.
 
+The DB-side SQL Attention observation surface already exists in `db/context_route_tables.sql`: append-only `context_event`, rebuildable `context_event_vector_cache` / `context_prefix_vector_cache`, `context_transition_stats`, hub-attention `context_hub_recommendation_current`, and append-only `context_hub_feedback_event`. These are implemented SQL observation and materialized-signal tables; they are not the runtime authority by themselves, and roadmap entries may still be `partial` while runtime wiring, production hardening, or CI coverage remains incomplete.
+
+`context_token_registry.value` is an ordering/display/audit reference, not a sparse-vector computation weight. Token presence is observed as multi-hot `token_id -> 1.0`; `vector_sparse` and `l2_norm` remain rebuildable projection caches, not meaning SoT.
+
 ### UI Topology Tensor
 
 UI definitions become topology entities only after persistence and ID issuance. Code-only components remain staging artifacts until promoted by package-generation flow.
@@ -63,7 +67,7 @@ Topolactor is currently a **public design + scaffold reference** with a **canoni
 
 - **Public status SSOT:** `docs/system-roadmap.yaml` is the canonical public status source for milestone and component state (`implemented` / `partial` / `skeleton` / `not_started` / `production_ready`).
 - **Current repository state (high level):**
-  - **Implemented surfaces:** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, and governance/check surfaces.
+  - **Implemented surfaces:** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, SQL Attention DB observation tables, and governance/check surfaces.
   - **Partial surfaces:** runtime executor behavior and M1 runtime skeleton milestone progress.
   - **Skeleton surfaces:** manifest dispatcher, runtime timeline scheduler, and SSE projection lane wiring.
   - **Planned / not started:** most M2+ milestone scopes remain not started in roadmap SSOT.
@@ -98,6 +102,7 @@ For exact status/evidence and completion conditions, follow `docs/system-roadmap
 - `docs/articles/registry-semantic-matrix.md`
 - `docs/articles/sql-attention.md`
 - `docs/articles/ui-topology-tensor.md`
+- SQL observation surface: `db/context_route_tables.sql`
 
 ### DB Schema Surfaces
 
