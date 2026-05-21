@@ -79,7 +79,8 @@ READ_ENTRY
   - if blocking exists, do not push / complete / TODO[x]
   - CI executes completion judgment checks before structure check as post-implementation verification order; this does not reorder workflow steps
 - STRUCTURE_CHECK
-  - run `bash .agent/tests/check-structure.sh` last
+  - run pre-push required local checks in triggered scope
+  - run `bash .agent/tests/check-structure.sh` as the final pre-push gate
   - structure check is structural validation, not semantic substitute
 - PUSH_OR_PR
   - execute only after all triggered gates pass
@@ -100,7 +101,10 @@ READ_ENTRY
     9. only then emit final summary
   - for existing-PR updates, follow-up PR comment is required and uses the same template structure
   - follow-up PR comment requirement applies only to existing-PR updates
-  - check/report sequence in PUSH_OR_PR order: (1) thin PR body when needed, (2) compose final completion summary with template, (3) post follow-up PR comment for existing PR update, (4) run required completion-protocol checks with NOT_EXECUTED kept separate from PASS, (5) run `bash .agent/tests/check-structure.sh` last, (6) emit final summary
+  - pre-push and post-push scopes must stay separated:
+    - pre-push gate: diff確認, required local checks, and `STRUCTURE_CHECK` (last)
+    - post-push external-state gate: target PR number/URL/head commit confirmation, follow-up PR comment posting, and PR conversation verification
+  - check/report sequence in PUSH_OR_PR order: (1) thin PR body when needed, (2) complete pre-push gates (required local checks + structure check last), (3) push or confirm remote PR update, (4) post/verify follow-up PR comment evidence for existing PR update, (5) compose/emit final completion summary using template evidence fields
   - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
   - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 

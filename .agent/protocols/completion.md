@@ -86,11 +86,17 @@ This protocol owns:
      5) update is consistent with completion and reports-and-todos protocols.
    - If any condition is unknown, disputed, or pending auditor judgment, defer canonical closure and emit Auditor TODO instead.
 8. Structure Verification
-   - Run `bash .agent/tests/check-structure.sh` last.
+   - Run required local checks in triggered scope.
+   - Run `bash .agent/tests/check-structure.sh` last as the pre-push structure gate.
    - Structure Check is the always-on required gate.
    - Structure verification is structural consistency check; it is not a semantic substitute.
 9. Push
-   - Push only after all triggered gates pass and no blocking condition remains.
+   - Push only after all triggered pre-push gates pass and no blocking condition remains.
+10. Post-push external-state verification (existing PR updates)
+   - Confirm target PR number/URL/head commit for the pushed update.
+   - Post required follow-up PR comment.
+   - Verify posted comment exists in PR conversation.
+   - If posting or verification is unavailable, record `PR_COMMENT_NOT_POSTED` and exact paste-ready comment body in completion summary evidence fields.
 
 
 

@@ -41,6 +41,11 @@ check_term ".agent/skills/agent-workflow.md" "identify target PR number/URL and 
 check_term ".agent/skills/agent-workflow.md" "verify posted comment exists in PR conversation"
 check_term ".agent/protocols/reports-and-todos.md" "Existing PR updates require a follow-up PR comment after push"
 check_term ".agent/protocols/reports-and-todos.md" "PR_COMMENT_NOT_POSTED"
+check_term ".agent/protocols/reports-and-todos.md" "Existing PR update"
+check_term ".agent/protocols/reports-and-todos.md" "Follow-up PR comment evidence"
+check_term ".agent/protocols/reports-and-todos.md" "POSTED"
+check_term ".agent/protocols/reports-and-todos.md" "VERIFIED"
+check_term ".agent/protocols/reports-and-todos.md" "paste-ready comment body"
 
 check_term ".agent/prompt/README.md" "work-type router surface"
 check_term ".agent/prompt/README.md" "not an always-read bundle"

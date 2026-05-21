@@ -101,6 +101,17 @@ Implementation agent must write completion / follow-up summaries using this shap
 - `command`: REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE
   - remote CI 代替が必要か:
 
+### Existing PR update follow-up evidence
+
+- Existing PR update: YES / NO
+- Target PR:
+- Head commit:
+- Follow-up PR comment evidence:
+  - POSTED / PR_COMMENT_NOT_POSTED / NOT_REQUIRED
+- Posted comment verification:
+  - VERIFIED / NOT_EXECUTED / UNAVAILABLE
+- Paste-ready comment body when not posted:
+
 ### 残タスク引き継ぎ指示
 
 This section is Auditor TODO input, not canonical TODO closure.
