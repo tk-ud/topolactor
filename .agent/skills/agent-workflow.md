@@ -84,7 +84,9 @@ READ_ENTRY
 - PUSH_OR_PR
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
+  - when needed, create/update PR body first as a thin entry summary only
   - completion / follow-up summary composition must follow `## Completion Summary Template` in `.agent/protocols/reports-and-todos.md`
+  - initial Codex / Agent final completion summary is in template scope even on first PR creation
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
   - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
     1. determine whether this work is an existing-PR update
@@ -96,6 +98,9 @@ READ_ENTRY
     7. verify posted comment exists in PR conversation
     8. if posting is unavailable or post-verification is unavailable, emit `PR_COMMENT_NOT_POSTED` with exact paste-ready comment body in final summary
     9. only then emit final summary
+  - for existing-PR updates, follow-up PR comment is required and uses the same template structure
+  - follow-up PR comment requirement applies only to existing-PR updates
+  - check/report sequence in PUSH_OR_PR order: (1) thin PR body when needed, (2) compose final completion summary with template, (3) post follow-up PR comment for existing PR update, (4) run required completion-protocol checks with NOT_EXECUTED kept separate from PASS, (5) run `bash .agent/tests/check-structure.sh` last, (6) emit final summary
   - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
   - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 

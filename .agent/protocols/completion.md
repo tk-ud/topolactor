@@ -14,6 +14,8 @@ Completion Sequence
 Run this protocol only when any of the following is attempted:
 
 - writing completion summary / completion report
+  - includes initial final summary and existing PR follow-up comment
+  - excludes initial PR body (follow thin PR body policy in `.agent/protocols/reports-and-todos.md`)
 - completion eligibility decision
 - updating `.agent/tasks/todo.md` item to `[x]`
 
@@ -167,3 +169,7 @@ scope-irrelevant workflow-level skip is not blocking.
 Remote CI Equivalence Gate: REQUIRED_NOT_EXECUTED is never PASS without equivalent remote CI success.
 
 Completion report entries include failure triage result and required check scope declaration.
+Completion Summary Template Gate scope reminder:
+- writing completion summary trigger includes initial final summary and existing PR follow-up comment
+- initial PR body is out of scope and remains thin PR body policy
+- final summary omission from template scope is a completion reporting gap
