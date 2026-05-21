@@ -3,7 +3,7 @@
 -- SQL Attention physical tables (design contract implementation surface)
 --
 -- Scope of this file:
---   - Implement initial physical schema for table-registry attention: logs.table_current / logs.table_attention.
+--   - Implement registry-aware physical schema: logs.current / logs.registry_current / logs.attention.
 --   - Implement indexes/constraints for query and linkage contracts.
 --
 -- Out of scope:
@@ -17,10 +17,10 @@
 CREATE SCHEMA IF NOT EXISTS logs;
 
 -- ---------------------------------------------------------------------------
--- logs.table_current
--- Regenerable projection/cache for SQL Attention calculation basis.
+-- logs.current
+-- Physical log-pressure current (regenerable projection/cache).
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS logs.table_current (
+CREATE TABLE IF NOT EXISTS logs.current (
     current_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_set_id         TEXT        NOT NULL,
     basis_window          TEXT        NOT NULL,
@@ -38,56 +38,90 @@ CREATE TABLE IF NOT EXISTS logs.table_current (
     dirty                 BOOLEAN     NOT NULL DEFAULT false,
     evaluated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_logs_table_current_source_table
+    CONSTRAINT uq_logs_current_source_table
       UNIQUE (source_set_id, basis_window, physical_table_id)
 );
 
-COMMENT ON TABLE logs.table_current IS
-  'SQL Attention calculation basis memo. Regenerable projection/cache, not append-only archive evidence.';
+COMMENT ON TABLE logs.current IS
+  'Physical current for log-pressure aggregation. Regenerable projection/cache, not append-only archive evidence.';
+
+
 
 -- ---------------------------------------------------------------------------
--- logs.table_attention
--- Append-only / archive-required evidence log.
+-- logs.registry_current
+-- Registry-side population/phase-basis current for z-score and phase distance.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS logs.table_attention (
+CREATE TABLE IF NOT EXISTS logs.registry_current (
+    registry_current_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    registry_kind          TEXT        NOT NULL,
+    registry_table         TEXT        NOT NULL,
+    registry_id            TEXT        NOT NULL,
+    basis_window           TEXT        NOT NULL,
+    population_count       BIGINT      NOT NULL DEFAULT 0,
+    population_recordcount BIGINT      NOT NULL DEFAULT 0,
+    axis_population_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    axis_z_score_json      JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    phase_basis_json       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    evaluated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_logs_registry_current_basis
+      UNIQUE (registry_kind, registry_table, registry_id, basis_window)
+);
+
+COMMENT ON TABLE logs.registry_current IS
+  'Registry-side population current / phase-basis current for z-score and phase movement distance. Projection cache only; no adoption/mutation.';
+
+-- ---------------------------------------------------------------------------
+-- logs.attention
+-- Append-only evidence log for physical current × registry exploration plane.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS logs.attention (
     attention_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    current_id            UUID        NOT NULL REFERENCES logs.table_current(current_id) ON DELETE RESTRICT,
+    current_id            UUID        NOT NULL REFERENCES logs.current(current_id) ON DELETE RESTRICT,
     source_set_id         TEXT        NOT NULL,
     statistics_json       JSONB       NOT NULL DEFAULT '{}'::jsonb,
     ema_score             DOUBLE PRECISION,
-    l2_norm               DOUBLE PRECISION,
+    l2_norm               DOUBLE PRECISION NOT NULL DEFAULT 0,
     vector_json           JSONB       NOT NULL DEFAULT '{}'::jsonb,
     phase_vector_json     JSONB       NOT NULL DEFAULT '{}'::jsonb,
     permutation_key       TEXT,
-    registry_kind         TEXT,
-    registry_table        TEXT,
-    registry_id           TEXT,
-    neighbor_score        DOUBLE PRECISION,
+    registry_kind         TEXT        NOT NULL,
+    registry_table        TEXT        NOT NULL,
+    registry_id           TEXT        NOT NULL,
+    neighbor_score        DOUBLE PRECISION NOT NULL DEFAULT 0,
     hit_rank              INTEGER,
     evidence_json         JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     archive_policy        TEXT        NOT NULL DEFAULT 'required'
 );
 
-COMMENT ON TABLE logs.table_attention IS
-  'SQL Attention evidence log. Append-only/archive-required. Keeps statistics, attention, and phase-attention meanings separated.';
+COMMENT ON TABLE logs.attention IS
+  'Registry-exploration evidence log linked to physical logs.current. Append-only/archive-required; keeps statistics, attention, and phase-attention meanings separated.';
 
-CREATE INDEX IF NOT EXISTS idx_logs_table_current_source_table
-  ON logs.table_current (source_set_id, physical_table_id);
-CREATE INDEX IF NOT EXISTS idx_logs_table_current_level_rank
-  ON logs.table_current (level_changed, norm_rank);
-CREATE INDEX IF NOT EXISTS idx_logs_table_current_updated_at
-  ON logs.table_current (updated_at);
+CREATE INDEX IF NOT EXISTS idx_logs_current_source_table
+  ON logs.current (source_set_id, physical_table_id);
+CREATE INDEX IF NOT EXISTS idx_logs_current_level_rank
+  ON logs.current (level_changed, norm_rank);
+CREATE INDEX IF NOT EXISTS idx_logs_current_updated_at
+  ON logs.current (updated_at);
 
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_current_id
-  ON logs.table_attention (current_id);
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_source_set_id
-  ON logs.table_attention (source_set_id);
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_registry_ref
-  ON logs.table_attention (registry_kind, registry_id);
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_created_at
-  ON logs.table_attention (created_at);
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_l2_norm
-  ON logs.table_attention (l2_norm);
-CREATE INDEX IF NOT EXISTS idx_logs_table_attention_neighbor_score
-  ON logs.table_attention (neighbor_score);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_current_id
+  ON logs.attention (current_id);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_source_set_id
+  ON logs.attention (source_set_id);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_registry_ref
+  ON logs.attention (registry_kind, registry_id);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_registry_table
+  ON logs.attention (registry_kind, registry_table);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_created_at
+  ON logs.attention (created_at);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_l2_norm
+  ON logs.attention (l2_norm);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_neighbor_score
+  ON logs.attention (neighbor_score);
+
+
+CREATE INDEX IF NOT EXISTS idx_logs_registry_current_registry_ref
+  ON logs.registry_current (registry_kind, registry_id);
+CREATE INDEX IF NOT EXISTS idx_logs_registry_current_registry_table_window
+  ON logs.registry_current (registry_kind, registry_table, basis_window);

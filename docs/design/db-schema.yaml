@@ -396,26 +396,32 @@ db_schema:
       category: context_route
       file: db/context_route_tables.sql
       role: recommendation_feedback_log
-
-    logs_table_current:
+    logs_current:
       category: context_route
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_table_registry_current_calculation_basis_cache
-      physical_table: logs.table_current
+      role: sql_attention_physical_pressure_current
+      physical_table: logs.current
       persistence: regenerable_projection_cache
-      sql_attention_logs_mapping:
-        classification: canonical_initial_physical
-        abstract_contract_name: logs.current
 
-    logs_table_attention:
+    logs_registry_current:
       category: context_route
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_table_registry_append_only_evidence_log
-      physical_table: logs.table_attention
+      role: sql_attention_registry_side_phase_basis_current
+      physical_table: logs.registry_current
+      persistence: regenerable_projection_cache
+
+    logs_attention:
+      category: context_route
+      file: db/sql_attention_logs_tables.sql
+      role: sql_attention_registry_exploration_evidence_log
+      physical_table: logs.attention
       persistence: append_only_archive_required
       sql_attention_logs_mapping:
-        classification: canonical_initial_physical
-        abstract_contract_name: logs.attention
+        classification: canonical_physical
+        holds_registry_plane_identity:
+          - registry_kind
+          - registry_table
+          - registry_id
         evidence_layers:
           - statistics_json_ema_score
           - l2_norm_vector_neighbor_score

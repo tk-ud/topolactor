@@ -3,23 +3,29 @@ id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
 physical_schema_status:
-  abstract_contract:
-    - logs_current
-    - logs_attention
-  initial_physical_tables:
+  physical_tables:
+    - logs.current
+    - logs.registry_current
+    - logs.attention
+  non_adopted_table_names:
     - logs.table_current
     - logs.table_attention
-  future_registry_tables:
-    - logs.relation_current
-    - logs.relation_attention
-    - logs.component_current
-    - logs.component_attention
-    - logs.state_current
-    - logs.state_attention
+  initial_implementation: all_registry_kind_aware_generic_schema
+  initial_registry_kinds:
+    - table
+    - relation
+    - component
+    - state
+    - schema
+    - package
+    - function
+    - hub
+    - ui
   table_registry_phase_basis:
     i: table
     j: column_jsonb_path_axis
     k: ui_component_operation
+  registry_kind_phase_basis_rule: define_i_j_k_by_registry_grammar
   out_of_scope_not_implemented:
     - refresh_function_bodies
     - norm_watch_function_bodies
@@ -263,9 +269,7 @@ layers:
   logs_attention:
     role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores registry-neighbor exploration hit results, stable
-      statistics, and phase-shifted candidate vectors. It must link back to
-      logs.current so every attention hit has evidence.
+      logs.attention stores registry-neighbor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to registry exploration planes via registry_kind/registry_table/registry_id.
     retention: archive_required
     suggested_fields:
       - attention_id

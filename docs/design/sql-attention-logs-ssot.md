@@ -7,22 +7,32 @@ This document is the design SSOT for SQL Attention logs, pressure-current calcul
 Physical schema implementation status:
 
 - Abstract contract names: `logs.current` and `logs.attention` (contract-level names).
-- Implemented initial physical tables (table registry): `logs.table_current` and `logs.table_attention` (schema/index/constraint surface).
+- Implemented physical tables (registry-aware): `logs.current`, `logs.registry_current`, and `logs.attention` (schema/index/constraint surface).
 - Not implemented: refresh function bodies, norm watch function bodies, DB triggers, scheduler/runtime registry-neighbor exploration, phase_vector generation runtime logic.
 
 
 
 Registry-aware naming boundary:
 
-- `logs.current` / `logs.attention` are abstract contract names.
-- Physical DB tables are registry-kind specific.
-- Initial implementation scope in this phase is table registry only:
-  - `logs.table_current`
-  - `logs.table_attention`
-- Future registry physical expansions (not implemented in this phase):
-  - `logs.relation_current` / `logs.relation_attention`
-  - `logs.component_current` / `logs.component_attention`
-  - `logs.state_current` / `logs.state_attention`
+- `logs.current` / `logs.registry_current` / `logs.attention` are physical implementation tables in this phase.
+- `logs.current` is the physical log-pressure current.
+- `logs.registry_current` is the registry-side population/phase-basis current.
+- `logs.attention` is the registry exploration evidence plane linked to physical current.
+- table-specific names `logs.table_current` / `logs.table_attention` are not adopted.
+
+Initial registry_kind candidates:
+
+- `table`
+- `relation`
+- `component`
+- `state`
+- `schema`
+- `package`
+- `function`
+- `hub`
+- `ui`
+
+Each registry kind defines its i/j/k basis by registry grammar.
 
 This document does not define public marketing copy. Public articles may describe SQL Attention at a higher level, but implementation and audit decisions must follow this SSOT.
 
@@ -152,6 +162,12 @@ logs.*
 - top norm-level snapshot comparison
 - exploration candidate creation
 ```
+
+### logs.registry_current — registry-side population/phase basis current
+
+`logs.registry_current` stores registry-side population current used to calculate phase basis, z-score normalization, and movement distance guardrails.
+
+It is a projection/cache current and is not an adopted topology state, and it does not mutate registries.
 
 ### logs.attention — neighbor hit / phase evidence log
 
@@ -321,7 +337,7 @@ When registry-neighbor exploration produces a hit, Phase Attention may distort t
 neighbor hit vector
 → l2_norm strength
 → i/table, j/column, k/ui phase distortion
-→ phase_vector stored on logs.table_attention (initial physical table-registry implementation)
+→ phase_vector stored on logs.attention
 ```
 
 Draft basis:
@@ -354,7 +370,7 @@ This is an experimental over-optimization guard: a strong attention hit does not
 Draft calculation shape:
 
 ```text
-base_vector = logs.table_attention.vector (initial physical table-registry implementation)
+base_vector = logs.attention.vector_json
 axis_z_score = z_score(table_registry_i_j_k_population)
 move_distance = f(l2_norm, axis_z_score, policy_caps)
 phase_vector = distort(base_vector, i_table, j_column, k_ui, move_distance)
@@ -774,8 +790,8 @@ These are not merged into one scalar score in this layer.
 Input contract:
 
 ```text
-- logs.table_attention.vector_json (initial physical table-registry implementation)
-- logs.table_attention.l2_norm (initial physical table-registry implementation)
+- logs.attention.vector_json
+- logs.attention.l2_norm
 - table registry i/j/k population
 - z-score normalized values
 - policy caps (manifest/function_parameters/policy table resolved)
@@ -784,7 +800,7 @@ Input contract:
 Output contract:
 
 ```text
-- logs.table_attention.phase_vector_json (initial physical table-registry implementation)
+- logs.attention.phase_vector_json
 ```
 
 Guardrails:
