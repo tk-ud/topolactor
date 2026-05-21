@@ -40,7 +40,7 @@ READ_ENTRY
   - read target files / target functions / target directories
   - use the matched `.agent/prompt/<work-type>.md` to decide required SSOT and triggered protocols when applicable
   - after a protocol target is selected by trigger/prompt/ssot-map, use `.agent/protocols/index.yaml` to locate section markers before reading protocol body sections
-  - grep hits from protocol index are route selection aids only and must not be used as PASS/FAIL judgment
+  - protocol index grep hits are route selection aids only (not PASS/FAIL judgment)
   - read `.agent/docs/ssot-map.yaml` only when the target surface needs SSOT mapping or the prompt/task explicitly requires it
   - read corresponding `.agent/docs/` resume/index only when ssot-map or task materials require it
   - read mapped `docs/` SSOT required_docs before implementation/audit only after mapping confirms they are relevant
@@ -66,6 +66,9 @@ READ_ENTRY
   - verify consistency across contract, checklist, and actual diff
 - JUDGMENT
   - open `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only for completion / TODO[x] / report judgment
+  - before reading triggered JUDGMENT protocol bodies, use `.agent/protocols/index.yaml` grep_keys / section_markers to route the minimal sections to read
+  - `.agent/protocols/index.yaml` is not a judgment SSOT; protocol body remains the decision source
+  - grep hits are read-route selection only and must not be used as PASS/FAIL judgment
   - `NOT_EXECUTED` is not `PASS`
   - if blocking exists, do not push / complete / TODO[x]
   - CI executes completion judgment checks before structure check as post-implementation verification order; this does not reorder workflow steps
