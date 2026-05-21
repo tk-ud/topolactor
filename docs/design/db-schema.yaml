@@ -30,6 +30,14 @@ db_schema:
       canonical_reference:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
+      contract_reference:
+        - layers.logs_signal_sources.schema_contract
+        - layers.logs_current.schema_contract
+        - layers.norm_trigger.schema_contract
+        - layers.logs_attention.schema_contract
+        - initial_minimal_basis
+        - existing_table_alignment
+        - non_goals
       initial_minimal_signal_basis:
         - table
         - column
