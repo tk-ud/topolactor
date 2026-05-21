@@ -8,25 +8,61 @@ canonical_markdown: docs/design/sql-attention-logs-ssot.md
 purpose:
   summary: >-
     Define SQL Attention logs, current calculation basis, norm-level trigger,
-    registry-neighbor exploration, and attention evidence persistence.
+    registry-neighbor exploration, phase vector evidence, and attention evidence
+    persistence.
   non_goal:
     - public_marketing_copy
     - sql_side_transformer_qk_reproduction
     - every_log_append_registry_search
     - direct_registry_mutation_from_trigger
+    - evidence_layer_single_score_collapse
 
 core_definition:
   one_sentence: >-
     SQL Attention converts physical-side logs.* signals into a logs.current
     calculation basis, watches l2 norm-level changes, and only when the level
-    changes explores registry composition neighbors and records hit/evidence
-    into logs.attention.
+    changes explores registry composition neighbors and records statistics,
+    l2_norm, vector, phase_vector, and hit evidence into logs.attention without
+    collapsing statistics, Attention, and Phase Attention into one score.
   flow:
     - logs_signal_sources
     - logs_current_calculation_basis
     - l2_norm_level_watch
     - scheduler_runtime_registry_neighbor_exploration
     - logs_attention_evidence
+
+philosophy_and_structure:
+  separation_required: true
+  layers:
+    statistics:
+      meaning: convergence_confidence_stability_continuity
+      examples:
+        - count
+        - recordcount
+        - EMA
+        - trend
+        - feedback
+    attention:
+      meaning: current_excitation_neighbor_hit_strength
+      examples:
+        - l2_norm
+        - neighbor_score
+        - vector_json
+    phase_attention:
+      meaning: exploratory_variance_shifted_candidate_vector
+      examples:
+        - phase_vector_json
+  evidence_layer_rule: >-
+    Statistics, Attention, and Phase Attention must be preserved as separate
+    evidence meanings and must not be collapsed into a single score at the
+    evidence layer.
+  duality:
+    vector_json: convergent_neighbor_hit
+    phase_vector_json: divergent_exploratory_candidate_direction
+  visualization_targets:
+    - statistics_trend
+    - attention_norm_trend
+    - phase_vector_trend
 
 layers:
   logs_signal_sources:
@@ -201,16 +237,21 @@ layers:
       - archive_policy
 
   logs_attention:
-    role: neighbor_hit_evidence_log
+    role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores registry-neighbor exploration hit results. It must
-      link back to logs.current so every attention hit has evidence.
+      logs.attention stores registry-neighbor exploration hit results, stable
+      statistics, and phase-shifted candidate vectors. It must link back to
+      logs.current so every attention hit has evidence.
     retention: archive_required
     suggested_fields:
       - attention_id
       - current_id
       - source_set_id
-      - query_vector
+      - statistics_json
+      - ema_score
+      - l2_norm
+      - vector_json
+      - phase_vector_json
       - permutation_key
       - registry_table
       - registry_id
@@ -220,12 +261,16 @@ layers:
       - created_at
       - archive_policy
     schema_contract:
-      role: registry_neighbor_hit_evidence_log
+      role: registry_neighbor_hit_and_phase_vector_evidence_log
       suggested_fields:
         - attention_id
         - current_id
         - source_set_id
-        - query_vector_json
+        - statistics_json
+        - ema_score
+        - l2_norm
+        - vector_json
+        - phase_vector_json
         - permutation_key
         - registry_table
         - registry_id
@@ -238,6 +283,32 @@ layers:
         - append_only
         - archive_required
         - must_reference_logs_current_current_id
+        - statistics_json_and_ema_score_store_stable_confidence_layer
+        - vector_json_stores_convergent_neighbor_hit_vector
+        - phase_vector_json_stores_exploratory_phase_shifted_candidate_vector
+
+  phase_attention:
+    role: evidence_embedded_exploratory_vector
+    description: >-
+      Phase Attention is stored as phase_vector_json on logs.attention by
+      default, not as a separate candidate table. It distorts the neighbor hit
+      vector across i/table, j/column, and k/ui axes using l2_norm strength and
+      normalized registry population.
+    basis:
+      i: table_direction
+      j: column_jsonb_path_axis_direction
+      k: ui_component_operation_direction
+    calculation_shape:
+      base_vector: logs.attention.vector_json
+      axis_z_score: z_score_table_registry_i_j_k_population
+      move_distance: f_l2_norm_axis_z_score_policy_caps
+      result: logs.attention.phase_vector_json
+    guardrails:
+      - phase_vector_is_evidence_candidate_data_not_adopted_topology_state
+      - no_direct_registry_mutation
+      - no_automatic_migration_execution
+      - no_automatic_column_promotion
+      - no_unbounded_phase_movement
 
 physical_table_pressure:
   tableid_semantics: physical_table_identity
@@ -279,9 +350,11 @@ registry_semantics:
 completion_boundary:
   aggregation_completed: attention_query_basis_ready
   attention_observation_completed: registry_neighbor_hit_and_evidence_saved
-  topology_change_candidate_completed: quaternion_or_topology_expansion_candidate_created
+  phase_candidate_visible: phase_vector_generated_on_logs_attention
+  adoption_or_migration: separate_implementation_path
   dangerous_misunderstanding:
     - logs_aggregation_completed_equals_sql_attention_completed
+    - phase_vector_generated_equals_adopted_topology_state
 
 existing_repository_mismatch_notes:
   topology_edit_log:
@@ -308,8 +381,9 @@ implementation_order:
   - align_internal_readme_and_design_docs_without_changing_public_article_intent
   - define_schema_function_trigger_contracts
   - implement_logs_current_basis_update_and_norm_level_monitoring
-  - implement_logs_attention_evidence_persistence
+  - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
   - implement_scheduler_runtime_registry_neighbor_exploration
+  - implement_phase_attention_vector_distortion_after_policy_caps_and_evidence_linkage_are_fixed
 
 initial_minimal_basis:
   table_pressure: logs.diff
@@ -342,3 +416,6 @@ non_goals:
   - scheduler_runtime_registry_neighbor_exploration_implementation
   - destructive_existing_table_change
   - large_scale_existing_sql_replacement
+  - automatic_registry_mutation_from_phase_vector
+  - automatic_migration_or_column_promotion_from_phase_vector
+  - evidence_layer_single_score_collapse
