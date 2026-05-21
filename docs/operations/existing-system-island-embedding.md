@@ -297,6 +297,18 @@ Good first candidates:
 - topology state inspector;
 - dynamic read-only table projection.
 
+
+## Core Scaffold vs Adapter Responsibility
+
+Topolactor core provides the mirror/intake scaffold (schema surface, intake contract, and runtime routing entry).
+
+Adopter-specific integration remains outside the core scaffold and must be designed per existing system, including:
+
+- repository persistence strategy for mirrored snapshots/change archives;
+- replay policy and re-dispatch controls;
+- correlation and background dispatch result visibility;
+- rollback/promotion design before production authority changes.
+
 ## Summary
 
 Topolactor can enter an existing system through scaffolded islands.

@@ -697,7 +697,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M6_external_integration
-      public_summary: Legacy mirror SQL schema and change-event intake routing to hook scheduler are introduced for island embedding. Intake persistence/archive/replay and background dispatch result visibility are not implemented yet.
+      public_summary: Topolactor core scaffold introduces legacy mirror SQL schema, change-event intake endpoint, table_name -> Target mapping, hook scheduler enqueue, and unsupported operation explicit validation. Production promotion remains adopter-specific integration responsibility and is not production-ready at this stage.
       files:
         - db/legacy_mirror_tables.sql
         - db/init.sql
@@ -712,10 +712,8 @@ system_roadmap_ssot:
         - intake_dispatches_as_hook_trigger_through_scheduler_to_manifest_dispatcher
         - unresolved_registry_or_manifest_routes_are_explicit_errors_without_silent_fallback
       known_gap_ref:
-        - Issue #134 legacy_change_event / legacy_table_snapshot repository persistence is not implemented
-        - Issue #134 dispatch correlation ID and background dispatch result visibility are not implemented
-        - Issue #134 replay path for archived legacy events is not implemented
-        - Issue #134 runtime destination mapping policy for legacy operations remains partial
+        - Adopter-specific integration: repository persistence / replay / correlation visibility are outside core scaffold and required for production promotion
+        - Issue #134 legacy runtime destination mapping policy for adopter-specific manifest/registry operation remains partial
 
     external_snapshot_store:
       status: not_started
