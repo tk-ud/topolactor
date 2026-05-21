@@ -37,6 +37,8 @@ Minimum required surfaces:
 
 When open issues are mentioned, inspect open GitHub issues and map only unresolved implementation / design / SSOT / test-authoring work into `.agent/tasks/todo.md`.
 
+When open issue inspection cannot be executed because the required tool or remote access is unavailable, classify the issue-inspection check as `NOT_EXECUTED` / `REMOTE_REQUIRED`. Do not claim there are no unreflected open issues from local references alone.
+
 When a TODO references a roadmap component, known gap, or implementation status, inspect the relevant `docs/system-roadmap.yaml` entry before deleting or completing the TODO.
 
 When a TODO references target files or functions, inspect only the referenced target surfaces required to verify whether the TODO is complete.
@@ -66,6 +68,11 @@ Out of scope unless explicitly requested:
 - Closed issues are not added to `.agent/tasks/todo.md` unless they expose a still-unresolved concrete follow-up.
 - Open issues are not automatically TODOs. Add only the actionable unresolved work that must survive beyond the current conversation.
 - If an open issue is already represented by an existing TODO, do not duplicate it; refine the existing TODO only when needed.
+- If open issue listing is `NOT_EXECUTED` / `REMOTE_REQUIRED`, separate the claim scope:
+  - local-reference inspection result
+  - remote open-issue inspection status
+  - final issue-reflection judgment pending remote verification
+- Do not convert `tool unavailable`, `gh missing`, remote access failure, or API failure into a clean "no unreflected open issues" claim.
 - If evidence is insufficient to delete a TODO, keep it open and narrow it to the concrete verification or implementation gap.
 
 ## Completion expectations
@@ -84,5 +91,6 @@ Summaries should separate:
 - rewritten remaining TODOs
 - open issues added to TODO
 - open issues intentionally not added and why
+- open issue inspection status, including NOT_EXECUTED / REMOTE_REQUIRED when applicable
 - checks executed / not executed
 - remaining TODOs
