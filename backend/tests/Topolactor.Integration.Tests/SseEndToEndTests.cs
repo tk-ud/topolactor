@@ -130,9 +130,9 @@ public class SseEndpointStreamFormatTests
             catch (OperationCanceledException) { }
         }, cts.Token);
 
-        await Task.Delay(20, CancellationToken.None);
+        await WaitUntilBodyContains(body, "event: ping\n", TimeSpan.FromMilliseconds(150));
         broadcaster.Broadcast(new SseEvent("projection", """{"table_id":"t1"}"""));
-        await Task.Delay(20, CancellationToken.None);
+        await WaitUntilBodyContains(body, "event: projection\n", TimeSpan.FromMilliseconds(150));
         await cts.CancelAsync();
 
         try { await streamTask; } catch (OperationCanceledException) { }
@@ -149,6 +149,26 @@ public class SseEndpointStreamFormatTests
         var body = new MemoryStream();
         ctx.Response.Body = body;
         return (ctx.Response, body);
+    }
+
+    private static async Task WaitUntilBodyContains(
+        MemoryStream body,
+        string expected,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var text = Encoding.UTF8.GetString(body.ToArray());
+            if (text.Contains(expected, StringComparison.Ordinal))
+                return;
+
+            await Task.Delay(5, CancellationToken.None);
+        }
+
+        var snapshot = Encoding.UTF8.GetString(body.ToArray());
+        throw new Xunit.Sdk.XunitException(
+            $"Timed out waiting for SSE body to contain '{expected}'. Current body: '{snapshot}'");
     }
 }
 
