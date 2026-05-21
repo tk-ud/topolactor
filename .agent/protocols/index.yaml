@@ -1,7 +1,7 @@
-version: 1
-purpose: "Lightweight grep route for condition-triggered protocol sections. This is not a judgment SSOT."
+version: 2
+purpose: "Section-level grep route for condition-triggered protocol reading. This is not a judgment SSOT."
 usage:
-  - "Use only to locate protocol files and section markers after a trigger or work-type route selects a protocol."
+  - "Use only to locate protocol files and target sections after a trigger or work-type route selects a protocol."
   - "Do not use grep hit as PASS/FAIL judgment."
   - "Protocol body remains the judgment source."
   - "Do not read the whole protocol bundle by default."
@@ -11,20 +11,43 @@ protocols:
     file: .agent/protocols/completion.md
     stage:
       - JUDGMENT
-    grep_keys:
-      - "completion eligibility"
-      - "TODO `[x]`"
-      - "NOT_EXECUTED"
-      - "REMOTE_REQUIRED"
-      - "Remote CI Equivalence Gate"
-      - "Required Check Scope"
-      - "Auditor TODO"
-      - "Roadmap Status Gate"
-    section_markers:
-      - "## Trigger condition"
-      - "## Scope"
-      - "## Execution procedure"
-      - "## Completion / failure decision"
+    sections:
+      - marker: "## Trigger condition"
+        grep_keys:
+          - "completion eligibility"
+          - "TODO `[x]`"
+        read_when:
+          - "completion eligibility decision"
+          - "TODO completion intent"
+      - marker: "## Scope"
+        grep_keys:
+          - "required check scope declaration"
+          - "scope-relevant checks"
+          - "REQUIRED_NOT_EXECUTED"
+        read_when:
+          - "required check scope declaration"
+          - "scope and evidence boundary確認"
+      - marker: "## Execution procedure"
+        grep_keys:
+          - "Remote CI Equivalence Gate"
+          - "Failure Triage Self-Recursion Gate"
+          - "Auditor TODO"
+          - "defer canonical closure"
+        read_when:
+          - "completion sequence execution"
+          - "auditor defer/direct-update handling"
+      - marker: "## Completion / failure decision"
+        grep_keys:
+          - "Roadmap Status Gate"
+          - "REQUIRED_NOT_EXECUTED"
+          - "TODO `[x]`"
+          - "completion eligibility"
+          - "blocking"
+          - "completion summary"
+          - "TODO close"
+        read_when:
+          - "final completion/failure determination"
+          - "blocking condition confirmation"
     related_surfaces:
       - .agent/protocols/reports-and-todos.md
       - .agent/tests/check-completion-judgment.sh
@@ -34,18 +57,49 @@ protocols:
     stage:
       - JUDGMENT
       - PUSH_OR_PR
-    grep_keys:
-      - "PR body"
-      - "follow-up comment"
-      - "remaining TODO"
-      - ".agent/tasks/todo.md"
-      - "Auditor TODO"
-      - "Roadmap Status vs TODO Responsibility"
-    section_markers:
-      - "## Surface rules"
-      - "## PR body and follow-up comment policy"
-      - "## TODO carry-over rules"
-      - "## Roadmap Status vs TODO Responsibility"
+    sections:
+      - marker: "## Surface rules"
+        grep_keys:
+          - "routine inspection reports"
+          - "normal PR summaries"
+        read_when:
+          - "report storage/update routing"
+      - marker: "## PR body and follow-up comment policy"
+        grep_keys:
+          - "follow-up comment"
+          - "existing PR update"
+          - "PR_COMMENT_NOT_POSTED"
+          - "PR body"
+          - "posted in PR conversation"
+        read_when:
+          - "existing PR update"
+          - "PR follow-up"
+          - "PR comment missing"
+          - "PR_COMMENT_NOT_POSTED fallback"
+      - marker: "## TODO carry-over rules"
+        grep_keys:
+          - "remaining TODO"
+          - "TODO carry-over"
+          - "Auditor TODO"
+          - ".agent/tasks/todo.md"
+        read_when:
+          - "remaining work classification"
+          - "TODO queue update"
+      - marker: "## Required reporting sections"
+        grep_keys:
+          - "Governance Gaps"
+          - "Proposed Governance Improvements"
+          - "Completion Eligibility"
+        read_when:
+          - "completion summary section composition"
+      - marker: "## Roadmap Status vs TODO Responsibility"
+        grep_keys:
+          - "roadmap"
+          - "implementation_registry"
+          - "known_gap_ref"
+        read_when:
+          - "roadmap status update"
+          - "TODO completion changes implementation status"
     related_surfaces:
       - .agent/protocols/completion.md
 
@@ -54,55 +108,93 @@ protocols:
     stage:
       - SCENARIO_CONTRACT
       - VERIFY_SCENARIO_DIFF
-    grep_keys:
-      - "runtime claim"
-      - "canonical route"
-      - "persistence behavior"
-      - "projection behavior"
-      - "docs/ SSOT reload"
-      - "Boundary Extension Scenario"
-    section_markers:
-      - "## Trigger scope"
-      - "## Precondition: Workflow Order Invariant Gate"
-      - "## Position in completion sequence"
-      - "## Boundary Extension Scenario"
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys:
+          - "runtime claim"
+          - "canonical route"
+          - "persistence behavior"
+          - "projection behavior"
+        read_when:
+          - "scenario-contract trigger check"
+      - marker: "## Precondition: Workflow Order Invariant Gate"
+        grep_keys:
+          - "docs/ SSOT reload"
+          - "READ_TARGET_SURFACES"
+          - "DEFINE_SCOPE"
+        read_when:
+          - "pre-implementation workflow validation"
+      - marker: "## Position in completion sequence"
+        grep_keys:
+          - "Recursive Verification Gate"
+          - "VERIFY_SCENARIO_DIFF"
+        read_when:
+          - "completion-sequence positioning"
+      - marker: "## Boundary Extension Scenario"
+        grep_keys:
+          - "Boundary Extension Scenario"
+          - "Multi-instance leakage"
+          - "Frontend projection identity"
+          - "UI action identity"
+        read_when:
+          - "boundary extension / leakage scenario handling"
 
   - id: boundary-identity
     file: .agent/protocols/runtime-boundary-matrix.md
     stage:
       - FILL_CHECKLISTS
       - JUDGMENT
-    grep_keys:
-      - "endpoint wiring"
-      - "frontend API proxy wiring"
-      - "repository write"
-      - "persistence mutation"
-      - "DB-backed registry operation"
-      - "End-to-End Boundary Identity"
-      - "Frontend projection identity"
-      - "UI action identity"
-    section_markers:
-      - "## Workflow Guard"
-      - "## Trigger scope"
+    sections:
+      - marker: "## Workflow Guard"
+        grep_keys:
+          - "Use this protocol only in FILL_CHECKLISTS or JUDGMENT stages"
+        read_when:
+          - "workflow-stage gating for boundary protocol"
+      - marker: "## Trigger scope"
+        grep_keys:
+          - "endpoint wiring"
+          - "frontend API proxy wiring"
+          - "repository write"
+          - "persistence mutation"
+          - "DB-backed registry operation"
+          - "End-to-End Boundary Identity"
+          - "Frontend projection identity"
+          - "UI action identity"
+        read_when:
+          - "boundary identity trigger confirmation"
+          - "boundary checklist preparation"
 
   - id: policy-judgment
     file: .agent/protocols/policy-judgment.md
     stage:
       - FILL_CHECKLISTS
       - JUDGMENT
-    grep_keys:
-      - "runtime/policy-affecting value"
-      - "scoring"
-      - "threshold"
-      - "routing"
-      - "validation"
-      - "projection behavior"
-      - "Policy Judgment Gate"
-      - "Violation table"
-    section_markers:
-      - "## Workflow Guard"
-      - "## Trigger scope"
-      - "Violation table"
+    sections:
+      - marker: "## Workflow Guard"
+        grep_keys:
+          - "Policy Judgment Gate"
+          - "Recursive Verification Gate"
+        read_when:
+          - "workflow-stage gating for policy protocol"
+      - marker: "## Trigger scope"
+        grep_keys:
+          - "runtime/policy-affecting value"
+          - "scoring"
+          - "threshold"
+          - "routing"
+          - "validation"
+          - "projection behavior"
+        read_when:
+          - "policy change trigger confirmation"
+          - "policy checklist preparation"
+      - marker: "Violation table:"
+        grep_keys:
+          - "Violation table"
+          - "policy violation"
+          - "CI queued/in_progress is not PASS"
+        read_when:
+          - "policy violation判定"
+          - "CI state handling for policy judgment"
 
   - id: registry-topology-semantics
     file: .agent/protocols/registry-tensor-policy.md
@@ -110,16 +202,40 @@ protocols:
       - READ_TARGET_SURFACES
       - DEFINE_SCOPE
       - JUDGMENT
-    grep_keys:
-      - "registry tensor semantics"
-      - "semantic matrix"
-      - "SQL Attention"
-      - "Projection surface map"
-      - "Drift / GAP classification"
-    section_markers:
-      - "## Trigger scope"
-      - "## Purpose"
-      - "## Mandatory interpretation"
-      - "## Projection surface map"
-      - "## SQL Attention interpretation"
-      - "## Drift / GAP classification"
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys:
+          - "registry tensor semantics"
+          - "semantic matrix"
+        read_when:
+          - "registry-topology protocol trigger check"
+      - marker: "## Purpose"
+        grep_keys:
+          - "projection semantics"
+          - "registry topology"
+        read_when:
+          - "registry-topology intent alignment"
+      - marker: "## Mandatory interpretation"
+        grep_keys:
+          - "tensor basis / vector basis"
+          - "registry table must be explained as semantic matrix"
+        read_when:
+          - "mandatory interpretation confirmation"
+      - marker: "## Projection surface map"
+        grep_keys:
+          - "Projection surface map"
+          - "projection surfaces"
+        read_when:
+          - "projection mapping checks"
+      - marker: "## SQL Attention interpretation"
+        grep_keys:
+          - "SQL Attention"
+        read_when:
+          - "SQL interpretation checks"
+      - marker: "## Drift / GAP classification"
+        grep_keys:
+          - "Drift / GAP classification"
+          - "drift"
+          - "GAP"
+        read_when:
+          - "drift/gap classification review"

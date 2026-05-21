@@ -66,7 +66,7 @@ READ_ENTRY
   - verify consistency across contract, checklist, and actual diff
 - JUDGMENT
   - open `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only for completion / TODO[x] / report judgment
-  - before reading triggered JUDGMENT protocol bodies, use `.agent/protocols/index.yaml` grep_keys / section_markers to route the minimal sections to read
+  - before reading triggered JUDGMENT protocol bodies, use `.agent/protocols/index.yaml` section-level `sections[].grep_keys` / `sections[].marker` routes to read only the minimal protocol sections
   - `.agent/protocols/index.yaml` is not a judgment SSOT; protocol body remains the decision source
   - grep hits are read-route selection only and must not be used as PASS/FAIL judgment
   - `NOT_EXECUTED` is not `PASS`
