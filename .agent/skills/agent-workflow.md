@@ -84,6 +84,7 @@ READ_ENTRY
 - PUSH_OR_PR
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
+  - completion / follow-up summary composition must follow `## Completion Summary Template` in `.agent/protocols/reports-and-todos.md`
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
   - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
     1. determine whether this work is an existing-PR update

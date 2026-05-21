@@ -35,6 +35,7 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 - When a PR receives follow-up fixes, CI re-runs, audit findings, or remaining-risk notes, add a PR comment instead of continuously rewriting the PR body.
 - Existing PR updates require a follow-up PR comment after push unless the only change is a purely local draft with no remote PR.
 - For existing PR updates, treat follow-up comment state as mandatory completion evidence: (a) posted in PR conversation after push, or (b) `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body in final summary when posting is unavailable.
+- Follow-up PR comments for existing PR updates must follow the `## Completion Summary Template` structure.
 - Follow-up PR comments must include:
   - changed summary
   - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED
@@ -48,11 +49,77 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 - Detailed pass/fail/not executed notes, CI failure indexes, audit responses, and residual TODO classification belong in PR comments or completion summaries, not in the PR body.
 - This keeps the PR body stable while preserving follow-up traceability in chronological comments.
 
+
+## Completion Summary Template
+
+Implementation agent must write completion / follow-up summaries using this shape.
+
+### 作業内容
+
+- 対応 Issue / Gap:
+- 目的:
+- 実装したこと:
+- 実装しなかったこと / OUT_OF_SCOPE:
+- partial / skeleton / known_gap が残る場合の理由:
+
+### 変更ファイル
+
+- `path`
+  - 変更内容:
+  - 対象関数:
+  - 意味境界:
+
+### test結果
+
+#### Local
+- `command`: PASS / FAIL / NOT_EXECUTED
+  - 理由:
+
+#### Remote CI
+- `workflow/job`: PASS / FAIL / PENDING / NOT_REQUIRED
+  - 理由:
+
+#### Required check scope
+- `command`: REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE
+  - remote CI 代替が必要か:
+
+### 残タスク引き継ぎ指示
+
+This section is Auditor TODO input, not canonical TODO closure.
+
+#### 残すべき TODO 候補
+- [ ] 内容:
+      → 理由:
+      → 対象ファイル:
+      → 対象関数:
+      → 完了条件:
+
+#### 削除 / close 候補
+- 内容:
+  → 理由:
+  → 監査役確認ポイント:
+
+#### roadmap 更新候補
+- component:
+  - 現状:
+  - 更新候補:
+  - 根拠:
+  - known_gap_ref:
+
+#### TODOに入れてはいけない検証メモ
+- CI待ち:
+- local tool不足:
+- remote CI確認待ち:
+
 ## TODO carry-over rules
 
 - `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.
 - `.agent/tasks/todo.md` is not for CI waiting, remote CI pass confirmation, local environment absence, or verification-only bookkeeping.
 - Implementation agent should normally propose canonical TODO/roadmap actions as Auditor TODO inputs, not finalize closure by self-assertion.
+- Completion/follow-up summary `残タスク引き継ぎ指示` is Auditor TODO input, not canonical TODO closure.
+- Final reflection into `.agent/tasks/todo.md` is auditor responsibility by default.
+- Implementation agent may directly update canonical TODO/roadmap only when completion protocol direct-update conditions are all explicitly satisfied.
+- If any condition is unmet/unknown, or partial/skeleton/known_gap remains, defer to Auditor TODO input instead of self-closing canonical TODO.
 - Auditor is the default finalizer for canonical TODO/roadmap updates unless completion protocol direct-update conditions are explicitly satisfied.
 - `.agent/tasks/todo.md` is not an implementation report or PR changelog.
 - Do not leave completed work logs under `[x]` items in `.agent/tasks/todo.md`.
