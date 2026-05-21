@@ -14,8 +14,6 @@ require_tool() {
 
 require_tool docker
 require_tool dotnet
-require_tool psql
-
 
 assert_relation_exists() {
   local relation="$1"
