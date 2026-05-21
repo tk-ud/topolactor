@@ -3,15 +3,36 @@ id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
 postgresql_namespace: logs
+sql_attention_target:
+  target_schema: hubs
+  target_semantics:
+    - tensor
+    - attractor
+    - collapse_point
+  not_target:
+    - topologys
+    - registry
+projection_boundary:
+  attention_hit: hubs
+  projected_meaning_space: topologys
+  topology_recommendation_basis:
+    - statistics
+    - ema
+    - usage_history
+    - trend
+deprecated_or_rejected:
+  - logs.hub_current
+  - registry_neighbor exploration as SQL Attention target (deprecated wording)
+  - registry_kind as attention target axis
 physical_schema_status:
   physical_tables:
     - logs.current
-    - logs.registry_current
+    - logs.hub_current
     - logs.attention
   non_adopted_table_names:
     - logs.table_current
     - logs.table_attention
-  initial_implementation: all_registry_kind_aware_generic_schema
+  initial_implementation: hub_attractor_target_aware_generic_schema
   initial_registry_kinds:
     - table
     - relation
@@ -26,7 +47,7 @@ physical_schema_status:
     i: table
     j: column_jsonb_path_axis
     k: ui_component_operation
-  registry_kind_phase_basis_rule: define_i_j_k_by_registry_grammar
+  registry_kind_phase_basis_rule: define_i_j_k_by_hub_attractor_tensor_grammar
   neighbor_score_policy_range:
     min: 0.85
     max: 1.00
@@ -72,7 +93,7 @@ canonical_markdown: docs/design/sql-attention-logs-ssot.md
 purpose:
   summary: >-
     Define SQL Attention logs, current calculation basis, norm-level trigger,
-    registry-neighbor exploration, phase vector evidence, and attention evidence
+    hub-attractor exploration, phase vector evidence, and attention evidence
     persistence.
   non_goal:
     - public_marketing_copy
@@ -303,7 +324,7 @@ layers:
   logs_attention:
     role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores registry-neighbor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to registry exploration planes via registry_kind/registry_table/registry_id.
+      logs.attention stores hub-attractor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub-attractor exploration planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
     retention: archive_required
     suggested_fields:
       - attention_id
@@ -327,7 +348,7 @@ layers:
       suggested_fields:
         - attention_id
         - current_id
-        - registry_current_id
+        - hub_current_id
         - source_set_id
         - statistics_json
         - ema_score

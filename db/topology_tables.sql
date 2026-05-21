@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS hubs.hubs (
 );
 
 COMMENT ON TABLE hubs.hubs IS
-    'Converged entity data. Hubs are resolved grouping points in the topology '
+    'Converged entity data. Hubs are Tensor/attractor/collapse points resolved in the topology '
     'space, populated during attractor_resolve. Not source-of-truth business data.';
 
 COMMENT ON COLUMN hubs.hubs.relation_registry_id IS
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS topologys.entities (
 );
 
 COMMENT ON TABLE topologys.entities IS
-    'Converged entity data. Each entity is a resolved data node within a hub, '
+    'Converged entity data. Each entity is a resolved data node within a hub and meaning/projection payload surface, '
     'populated by schema_resolve + component_expand in the canonical flow. '
     'entity_jsonb is the converged projection — not raw business input.';
 
@@ -102,9 +102,9 @@ CREATE TABLE IF NOT EXISTS hubs.hub_relations (
 );
 
 COMMENT ON TABLE hubs.hub_relations IS
-    'Topology definition table. Configures weighted relation bindings between '
+    'Topology definition table. Configures weighted hub Tensor relation bindings between '
     'hubs and relation_registry entries. Governs attractor resolution traversal '
-    'weights. Distinct from converged entity data.';
+    'weights. Distinct from converged entity data. Not a direct SQL Attention registry-search target.';
 
 COMMENT ON COLUMN hubs.hub_relations.weight IS
     'Traversal weight used during attractor_resolve. Higher weight increases '

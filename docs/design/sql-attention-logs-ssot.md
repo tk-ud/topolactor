@@ -7,16 +7,16 @@ This document is the design SSOT for SQL Attention logs, pressure-current calcul
 Physical schema implementation status:
 
 - Abstract contract names: `logs.current` and `logs.attention` (contract-level names).
-- Implemented physical tables (registry-aware): `logs.current`, `logs.registry_current`, and `logs.attention` (schema/index/constraint surface).
-- Not implemented: refresh function bodies, norm watch function bodies, DB triggers, scheduler/runtime registry-neighbor exploration, phase_vector generation runtime logic.
+- Implemented physical tables (registry-aware): `logs.current`, `logs.hub_current`, and `logs.attention` (schema/index/constraint surface).
+- Not implemented: refresh function bodies, norm watch function bodies, DB triggers, scheduler/runtime hub-attractor exploration, phase_vector generation runtime logic.
 
 
 
 Registry-aware naming boundary:
 
-- `logs.current` / `logs.registry_current` / `logs.attention` are physical implementation tables in this phase.
+- `logs.current` / `logs.hub_current` / `logs.attention` are physical implementation tables in this phase.
 - `logs.current` is the physical log-pressure current.
-- `logs.registry_current` is the registry-side population/phase-basis current.
+- `logs.hub_current` is the hub Tensor/attractor current.
 - `logs.attention` is the registry exploration evidence plane linked to physical current.
 - table-specific names `logs.table_current` / `logs.table_attention` are not adopted.
 
@@ -63,7 +63,7 @@ Policy values above are contracts and must be resolved from manifest/function_pa
 
 PostgreSQL namespace alignment:
 
-- SQL Attention logs are implemented under PostgreSQL `logs` schema (`logs.current`, `logs.registry_current`, `logs.attention`).
+- SQL Attention logs are implemented under PostgreSQL `logs` schema (`logs.current`, `logs.hub_current`, `logs.attention`).
 - This namespace boundary separates statistics/observation evidence from `hubs` and `topologys` meaning layers.
 
 This document does not define public marketing copy. Public articles may describe SQL Attention at a higher level, but implementation and audit decisions must follow this SSOT.
@@ -74,11 +74,15 @@ SQL Attention is not SQL-side Transformer QK dot-product reproduction.
 
 SQL Attention is a DB-native runtime observation mechanism:
 
+- SQL Attention is not topology search.
+- SQL Attention is not registry search.
+- SQL Attention target is hubs.* Tensor / attractor.
+
 ```text
 logs.* signal sources
 → logs.current calculation basis
 → l2 norm level watch
-→ scheduler/runtime registry-neighbor exploration
+→ scheduler/runtime hub-attractor exploration
 → logs.attention evidence
 ```
 
@@ -195,23 +199,23 @@ logs.*
 - exploration candidate creation
 ```
 
-### logs.registry_current — registry-side population/phase basis current
+### logs.hub_current — registry-side population/phase basis current
 
-`logs.registry_current` stores registry-side population current used to calculate phase basis, z-score normalization, and movement distance guardrails.
+`logs.hub_current` stores registry-side population current used to calculate phase basis, z-score normalization, and movement distance guardrails.
 
 It is a projection/cache current and is not an adopted topology state, and it does not mutate registries.
 
 ### logs.attention — neighbor hit / phase evidence log
 
-`logs.attention` stores the result of registry-neighbor exploration and its phase-shifted candidate vector.
+`logs.attention` stores the result of hub-attractor exploration and its phase-shifted candidate vector.
 
-`logs.attention` must carry both `current_id` (physical current reference) and `registry_current_id` (registry plane reference).
+`logs.attention` must carry both `current_id` (physical current reference) and `hub_current_id` (hub-attractor plane reference).
 
 If `logs.current` exists, `logs.attention` must be linked to it so that every attention hit has evidence back to the current basis that produced it.
 
 ```text
 logs.current
-→ registry-neighbor exploration
+→ hub-attractor exploration
 → logs.attention(vector, phase_vector)
 ```
 
@@ -337,7 +341,7 @@ logs.* append
 → top3 norm-level snapshot compare
 → no level change: return
 → level change: enqueue/expose exploration candidate
-→ scheduler/runtime registry-neighbor exploration
+→ scheduler/runtime hub-attractor exploration
 ```
 
 The trigger is norm-level change, not raw log arrival.
@@ -365,7 +369,7 @@ archive policy
 
 Phase Attention is part of the `logs.attention` abstract evidence contract shape, not a separate candidate table by default.
 
-When registry-neighbor exploration produces a hit, Phase Attention may distort the hit vector into a phase vector.
+When hub-attractor exploration produces a hit, Phase Attention may distort the hit vector into a phase vector.
 
 ```text
 neighbor hit vector
@@ -596,7 +600,7 @@ fixed literals are not embedded in contract implementation.
 Role contract:
 
 ```text
-registry-neighbor exploration hit and phase-vector evidence log
+hub-attractor exploration hit and phase-vector evidence log
 ```
 
 Suggested schema fields:
@@ -705,7 +709,7 @@ Allowed in DB trigger scope:
 Prohibited in DB trigger scope:
 
 ```text
-- registry-neighbor exploration execution
+- hub-attractor exploration execution
 - phase_vector distortion/generation execution
 - direct registry mutation
 - automatic migration execution
@@ -801,7 +805,7 @@ When norm-level change is detected:
 ```text
 mark exploration candidate
 → scheduler/runtime consumes candidate
-→ registry-neighbor exploration executed outside DB trigger
+→ hub-attractor exploration executed outside DB trigger
 ```
 
 ### Attention evidence write contract
@@ -872,9 +876,15 @@ Guardrails:
 4. Define schema/function/trigger contracts.
 5. Implement logs.current basis update and norm-level monitoring.
 6. Implement logs.attention evidence persistence with statistics, vector, and phase_vector.
-7. Implement scheduler/runtime registry-neighbor exploration.
+7. Implement scheduler/runtime hub-attractor exploration.
 8. Implement Phase Attention vector distortion only after policy caps and evidence linkage are fixed.
 
 ## One-sentence definition
 
 SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records statistics, `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention` without collapsing statistics, Attention, and Phase Attention into one score.
+
+## Target boundary clarification
+
+- SQL Attention explores hubs.* Tensor/attractor from logs pressure.
+- topologys.* is not SQL Attention direct search target; it is projected meaning space attached to hit hub/attractor.
+- topology-side recommendation is based on statistics/EMA/history/usage trend only.

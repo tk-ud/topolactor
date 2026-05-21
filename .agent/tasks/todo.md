@@ -20,21 +20,25 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [x] schema namespace migration (hubs/topologys/logs) を完了
       → DB table を意味層 namespace に再分類し、SQL Attention の logs.* 境界を固定した。
+- [x] SQL Attention target boundary correction を完了
+      → SQL Attention target を hubs Tensor/attractor に固定し、topologys/registry 直接探索主語を除去した。
+- [x] registry_current 誤主語の除去を完了
+      → logs.registry_current を logs.hub_current に置換し、attention証跡を current_id + hub_current_id 接続へ統一した。
 
 - [ ] refresh logs.current / l2 norm watch function implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
-- [ ] scheduler/runtime registry-neighbor exploration を実装する
+- [ ] scheduler/runtime hub-attractor exploration を実装する
       → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
 
 - [ ] phase_vector generation implementation を行う
-      → scheduler/runtime 側で registry-neighbor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
+      → scheduler/runtime 側で hub-attractor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
 
-- [ ] statistics / EMA integration を実装する
-      → statistics_json / ema_score を安定性レイヤとして計算・保存し、Attention(l2_norm/vector/neighbor_score) と分離した evidence 層を runtime/DB write contract に反映する。
+- [ ] statistics / EMA integration for topology projection recommendation を実装する
+      → hit hub から投影される topologys 意味空間の提示順/候補強度を統計・EMA・履歴・利用頻度で扱う recommendation basis を実装する。
 
-- [ ] refresh logs.registry_current population / z-score function implementation を実装する
-      → registry-side population current と axis z-score を算出・更新する function contract を実装し、phase_vector 移動距離計算に必要な母数を提供する。
+- [ ] refresh logs.hub_current / attractor current function implementation を実装する
+      → hub-side attractor current と axis z-score を算出・更新する function contract を実装し、phase_vector 移動距離計算に必要な母数を提供する。
 
 - [ ] physical tableid 対応の実装判断を行う
       → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する。現状は domain scope identifier であり canonical logs.diff ではない。

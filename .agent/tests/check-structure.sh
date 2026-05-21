@@ -199,11 +199,10 @@ check_content "db/sql_attention_logs_tables.sql" "statistics_json"
 check_content "db/sql_attention_logs_tables.sql" "phase_vector_json"
 check_content "db/sql_attention_logs_tables.sql" "logs.attention"
 check_content "db/sql_attention_logs_tables.sql" "logs.current"
-check_content "db/sql_attention_logs_tables.sql" "logs.registry_current"
-check_content "db/sql_attention_logs_tables.sql" "registry_kind"
+check_content "db/sql_attention_logs_tables.sql" "logs.hub_current"
 check_content "db/sql_attention_logs_tables.sql" "score_band"
 check_content "db/sql_attention_logs_tables.sql" "neighbor_score"
-check_content "db/sql_attention_logs_tables.sql" "registry_current_id"
+check_content "db/sql_attention_logs_tables.sql" "hub_current_id"
 
 check_file "backend/endpoint/DispatchEndpoint.cs"
 check_file "backend/endpoint/SseEndpoint.cs"
@@ -286,6 +285,10 @@ check_content "docs/design/sql-attention-logs-ssot.md" "z-score denominator"
 check_content "docs/design/sql-attention-logs-ssot.md" "relation registry"
 check_content "docs/design/sql-attention-logs-ssot.md" "zero padding"
 check_content "docs/design/sql-attention-logs-ssot.md" "calculation-local"
+check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not topology search"
+check_content "docs/design/sql-attention-logs-ssot.md" "projection"
+check_content "docs/design/sql-attention-logs-ssot.md" "Tensor"
+check_content "docs/design/sql-attention-logs-ssot.md" "attractor_key"
 
 check_content ".agent/rules/rule.md" "Runtime Boundary Failure Matrix"
 check_content ".agent/protocols/runtime-boundary-matrix.md" "Runtime Boundary Failure Matrix"
@@ -570,6 +573,19 @@ else
   echo "OK  [compact] rule.md gate details remain in protocols"
 fi
 
+
+# SQL Attention target-boundary negative checks
+if rg -n "logs\.registry_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_current should not remain in SQL Attention SSOT"
+else
+  echo "OK  [ssot] registry_current removed from SQL Attention target docs"
+fi
+if rg -n "registry-neighbor exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry-neighbor exploration should not remain as SQL Attention target"
+else
+  echo "OK  [ssot] registry-neighbor exploration removed from SQL Attention target docs"
+fi
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -580,3 +596,4 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
+

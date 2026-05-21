@@ -44,7 +44,7 @@ db_schema:
         - logs.usage_metrics
         - logs.promotion_candidates
         - logs.current
-        - logs.registry_current
+        - logs.hub_current
         - logs.attention
     registry_schema_policy:
       has_dedicated_schema: false
@@ -434,13 +434,13 @@ db_schema:
       physical_table: logs.current
       persistence: regenerable_projection_cache
 
-    logs_registry_current:
+    logs_hub_current:
       category: context_route
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_registry_side_phase_basis_current_n_by_n_exploration_plane
-      physical_table: logs.registry_current
+      role: sql_attention_hub_tensor_attractor_current
+      physical_table: logs.hub_current
       persistence: regenerable_projection_cache
-      note: relation_registry_zero_padding_is_calculation_local_not_persistent_schema
+      note: sql_attention_target_is_hubs_tensor_attractor_not_topology_registry_search
 
     logs_attention:
       category: context_route
@@ -450,14 +450,15 @@ db_schema:
       persistence: append_only_archive_required
       sql_attention_logs_mapping:
         classification: canonical_physical
-        holds_registry_plane_identity:
-          - registry_kind
-          - registry_table
-          - registry_id
-          - registry_current_id
+        holds_hub_plane_identity:
+          - hub_id
+          - attractor_key
+          - hub_relation_id
+          - relation_registry_id
+          - hub_current_id
         references:
           - current_id_to_logs_current
-          - registry_current_id_to_logs_registry_current
+          - hub_current_id_to_logs_hub_current
         evidence_layers:
           - statistics_json_ema_score
           - l2_norm_vector_neighbor_score
@@ -614,3 +615,11 @@ db_schema:
         - ui_projection
         - projection_constructor_mapping
         - sse_projection
+
+
+sql_attention_target_boundary:
+  search_target: hubs
+  not_search_target:
+    - topologys
+    - registry
+  projection_path: hit_hub_to_topologys_meaning_space
