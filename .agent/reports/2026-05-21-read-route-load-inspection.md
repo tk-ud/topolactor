@@ -9,13 +9,13 @@ protocol bulk-read era, then designed and applied a small protocol direct-read e
 
 - Full-read of always-read baseline files and all protocol files
 - Character count via `wc -m`; section-level counts via `awk` section extraction
-- Token estimate formula: English-heavy Markdown `chars / 4.0`; Japanese/Markdown mixed `chars / 3.0`
-- Conservative estimate used throughout: `chars / 4.0`
+- Token estimate formula: primary `chars / 4.0` for English-heavy Markdown; `chars / 3.0` as conservative upper-bound for mixed Japanese/Markdown content
+- All measurements in this report use `chars / 4.0` as the primary estimate
 - Tokenizer not used; estimates carry ±15-20% margin
 
 ## File Sizes (at time of inspection)
 
-### Always-Read Baseline
+### Always-Read Baseline (before PR #140 changes)
 
 | File | chars | est. tokens |
 |---|---:|---:|
@@ -23,7 +23,19 @@ protocol bulk-read era, then designed and applied a small protocol direct-read e
 | `.agent/rules/rule.md` | 7,163 | ~1,791 |
 | `.agent/README.md` | 5,191 | ~1,298 |
 | `.agent/skills/agent-workflow.md` | 5,349 | ~1,337 |
-| **Baseline total** | **19,048** | **~4,762** |
+| **Baseline total (pre-change)** | **19,048** | **~4,762** |
+
+### Always-Read Baseline (after PR #140 changes — re-measured)
+
+| File | chars | est. tokens |
+|---|---:|---:|
+| `AGENTS.md` | 1,345 | ~336 |
+| `.agent/rules/rule.md` | 7,930 | ~1,983 |
+| `.agent/README.md` | 5,402 | ~1,351 |
+| `.agent/skills/agent-workflow.md` | 5,829 | ~1,457 |
+| **Baseline total (post-change)** | **20,506** | **~5,127** |
+
+Post-change baseline (~5,127 tokens at chars/4.0) falls within the updated README range of ~5,000-5,500.
 
 ### Protocol Files
 
@@ -119,10 +131,11 @@ README itself notes: "Update them when token accounting or file size changes mat
 - Updated JUDGMENT step to reflect same direct-read exception
 
 ### `.agent/README.md`
-- Updated `## Estimated Token Consumption` table: baseline row corrected to ~4,500-5,000
-- Added new row for small protocol direct-read route (~5,000-5,500)
+- Updated `## Estimated Token Consumption` table: baseline row corrected to ~5,000-5,500 (re-measured post-change: ~5,127 tokens)
+- Added new row for small protocol direct-read route (~5,500-6,000)
 - Updated all downstream rows to reflect correct baseline
 - Updated practical formula (4 tiers: light / small-protocol / protocol / ssot-heavy)
+- Added estimate methodology note: `chars / 4.0` primary; `chars / 3.0` conservative upper-bound
 
 ## Conclusion
 
@@ -135,6 +148,5 @@ README itself notes: "Update them when token accounting or file size changes mat
 
 ## Remaining TODO
 
-- After file growth from these changes, re-measure baseline to confirm it stays within ~4,500-5,000
 - index.yaml `usage` note could be updated to reflect that small protocols are out of scope for index routing (low priority — index.yaml is metadata only)
 - completion.md single-section case: even large protocol index routing can be marginally more expensive than direct full-read for certain section combinations; acceptable given multi-section use cases are the common case

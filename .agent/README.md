@@ -82,23 +82,25 @@ Current `.agent` read overhead estimate:
 
 | Route | Estimated tokens |
 |---|---:|
-| Always-read baseline: `AGENTS.md` + `.agent/rules/rule.md` + `.agent/README.md` + `.agent/skills/agent-workflow.md` | ~4,500-5,000 |
-| Baseline + small protocol direct-read (policy-judgment / boundary-matrix / scenario-contract) | ~5,000-5,500 |
-| Baseline + `.agent/protocols/index.yaml` | ~6,400-7,000 |
-| Baseline + index + 1 targeted protocol section | ~6,700-7,500 |
-| Baseline + index + completion/report judgment sections | ~7,500-9,000 |
+| Always-read baseline: `AGENTS.md` + `.agent/rules/rule.md` + `.agent/README.md` + `.agent/skills/agent-workflow.md` | ~5,000-5,500 |
+| Baseline + small protocol direct-read (policy-judgment / boundary-matrix / scenario-contract) | ~5,500-6,000 |
+| Baseline + `.agent/protocols/index.yaml` | ~7,000-7,500 |
+| Baseline + index + 1 targeted protocol section | ~7,000-8,000 |
+| Baseline + index + completion/report judgment sections | ~8,500-10,000 |
 | Heavy route with prompt router + ssot-map + mapped docs/SSOT + multiple protocol sections | ~10,000-20,000+ |
 
 Practical formula:
 
 ```text
-light_task_tokens               ~= normal_prompt_tokens + 5k
-small_protocol_task_tokens      ~= normal_prompt_tokens + 5k-5.5k
-protocol_task_tokens            ~= normal_prompt_tokens + 7k-9k
+light_task_tokens               ~= normal_prompt_tokens + 5k-5.5k
+small_protocol_task_tokens      ~= normal_prompt_tokens + 5.5k-6k
+protocol_task_tokens            ~= normal_prompt_tokens + 7.5k-10k
 ssot_heavy_task_tokens          ~= normal_prompt_tokens + 10k-20k+
 ```
 
-These are provisional estimates, not exact tokenizer measurements. Update them when token accounting or file size changes materially.
+These are provisional estimates, not exact tokenizer measurements.
+Estimates use `chars / 4.0` for English-heavy Markdown (primary); `chars / 3.0` as a conservative upper-bound for mixed Japanese/Markdown content.
+Update them when token accounting or file size changes materially.
 
 ## Non-Goals
 
