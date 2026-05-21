@@ -4,6 +4,11 @@
 
 This document is the design SSOT for SQL Attention logs, pressure-current calculation, norm-triggered exploration, and attention evidence persistence.
 
+Physical schema implementation status:
+
+- Implemented: `logs.current` and `logs.attention` physical DB tables (schema/index/constraint surface).
+- Not implemented: refresh function bodies, norm watch function bodies, DB triggers, scheduler/runtime registry-neighbor exploration, phase_vector generation runtime logic.
+
 This document does not define public marketing copy. Public articles may describe SQL Attention at a higher level, but implementation and audit decisions must follow this SSOT.
 
 ## Core definition

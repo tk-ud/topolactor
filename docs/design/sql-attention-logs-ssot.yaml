@@ -2,6 +2,15 @@ version: 1
 id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
+physical_schema_status:
+  logs_current: implemented
+  logs_attention: implemented
+  out_of_scope_not_implemented:
+    - refresh_function_bodies
+    - norm_watch_function_bodies
+    - db_triggers
+    - scheduler_runtime_registry_neighbor_exploration
+    - phase_vector_generation_runtime_logic
 public_article: false
 canonical_markdown: docs/design/sql-attention-logs-ssot.md
 

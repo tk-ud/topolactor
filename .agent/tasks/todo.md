@@ -21,9 +21,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] norm-level watch policy implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
-- [ ] logs.current / logs.attention physical schema implementation を行う
-      → schema contract に基づき DB migration と runtime read/write contract を実装する。logs.current は再生成可能な calculation basis memo、logs.attention は archive-required evidence log として分離する。
-
 - [ ] scheduler/runtime registry-neighbor exploration を実装する
       → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
 
