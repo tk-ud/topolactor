@@ -8,10 +8,26 @@ export default function AdminIndex() {
   return (
     <main style={{ fontFamily: "monospace", padding: "2rem" }}>
       <h1>topolactor — admin topology inspection</h1>
-      <p>
-        This page shows the current default topology skeleton. Real admin UI is
-        out of scope for this skeleton.
-      </p>
+
+      <section style={{ marginBottom: "24px" }}>
+        <h2>Admin surfaces</h2>
+        <ul>
+          <li>
+            <a href="/admin/seed">seed — Seed Runtime (Issue #84)</a>
+            <br />
+            <small style={{ color: "#666" }}>
+              /storage/seed.json の save / load / validate / preview / import 導線
+            </small>
+          </li>
+          <li style={{ marginTop: "8px" }}>
+            <a href="/admin/ui-builder">ui-builder — UI コンポーネント & レイアウト (Issue #86/#89)</a>
+            <br />
+            <small style={{ color: "#666" }}>
+              Primitive コンポーネント管理、バケット→パッケージ生成、UI topology DB 登録
+            </small>
+          </li>
+        </ul>
+      </section>
 
       <section style={{ marginBottom: "24px" }}>
         <h2>Context Route Registry (推薦エンジン)</h2>

@@ -47,32 +47,26 @@ SSOT参照必読:
 
 ## Seed Import/Export Runtime (Issue #84)
 
-- [ ] [Claude] seed Runtime の SSOT 位置づけを確定し、save / validate / preview / import 導線を実装する
-      → Issue #84: UI-managed `/storage/seed.json` を正規導線とする seed Runtime。
-      → まず seed Runtime を SSOT (runtime-orchestration-ssot / registrar-admin-ui-specification) 上のどの境界に置くか明記する。
-      → `/storage/seed.json` の save / load / validate / preview / import を段階分離して実装する。import 失敗は silent fallback 禁止。
-      → docker-compose.yml に `/storage` volume mount を追加する。
-      → 前提: manifest_dispatcher / topology_function_binder Gap 解消後が望ましいが、SSOT位置づけ明記は先行可能。
-      → 対象: `backend/runtime/`、`backend/repository/`、`frontend/routes/admin/`、`docs/registrar-admin-ui-specification.md`、`infra/docker-compose.yml`
-      → Scenario Contract + Runtime Boundary Failure Matrix 必須。
+- [ ] [Claude] Seed import の Gap-1 依存部分を完全実装する (manifest-driven routing 確立後)
+      → save / load / validate / preview は実装済み。import は skeleton (Gap-1 依存)。
+      → Gap-1 (target_layer_action_destination_selection → ManifestDispatcher 移管) 解消後に ImportAsync を完全実装する。
+      → 完了条件: seed_import_export_runtime status=implemented (docs/system-roadmap.yaml)
+      → 対象: `backend/runtime/SeedRuntime.cs` (ImportAsync の skeleton 部分)、`backend/runtime/ManifestDispatcher.cs`
 
 ## Frontend UI Component System (Issue #86)
 
-- [ ] [Claude] Tailwind ベース primitive/packaged component system と UI topology DB 登録導線を実装する
-      → Issue #86: primitive component → componentId/packageId 発行 → UI topology DB 保存 → CRUD/CanDI wiring。
-      → code-only component は drift/GAP 扱い。component / package は必ず DB 上の UI topology tensor に接続する。
-      → primitive (Button/Input/Table/Card 等) と packaged/composite component の境界を明確化する。
-      → CRUD wiring / CanDI wiring の責務境界を定義する。frontend が runtime/topology 判定を持たないことを明記する。
-      → 対象: `frontend/components/`、`db/ui_topology_tables.sql`、`docs/registrar-admin-ui-specification.md`、`docs/file-structure.yaml`
-      → Scenario Contract 必須。
+- [ ] [Claude] primitive component を UI topology tensor に DB 登録し drift を解消する
+      → Button / Input / Table / Card は frontend/components/ にコードのみ存在 (drift / GAP 状態)。
+      → 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
+      → CRUD wiring / CanDI wiring の責務境界を registrar-admin-ui-specification.md に明記する。
+      → 完了条件: code-only component が 0 件になる (全て DB topology tensor に接続)
+      → 対象: `db/ui_topology_tables.sql` (component 登録 surface 追加)、`docs/registrar-admin-ui-specification.md`
 
 ## Admin Visual Layout Builder (Issue #89)
 
-- [ ] [Claude] admin visual layout builder と layout tensor / variable CSS 管理導線を設計・実装する
-      → Issue #89: admin 画面で layout を mouse 操作で構成し、layoutId / styleTokenId / responsiveRuleId を DB に保存する。
-      → Tailwind を画面ごとの直書きにせず、layout token / style token として DB 管理する。
-      → components bucket → package generator → visual layout builder → UI topology DB の接続を明記する。
-      → frontend adapter は固定 projection surface とし、仕様追加は registry tensor / UI topology data で表現する。
-      → 前提: Issue #86 (component system) の方針定義後。
-      → 対象: `db/ui_topology_tables.sql`、`frontend/routes/admin/`、`frontend/islands/`、`docs/registrar-admin-ui-specification.md`
-      → Scenario Contract 必須。
+- [ ] [Claude] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
+      → LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装 (drag/drop) は未着手。
+      → layoutId / styleTokenId / responsiveRuleId の DB schema 未追加。
+      → 前提: Issue #86 component DB 登録完了後。
+      → 完了条件: admin_visual_layout_builder status=implemented (docs/system-roadmap.yaml)
+      → 対象: `db/ui_topology_tables.sql` (layout token schema)、`frontend/islands/` (drag/drop UI island)、`docs/registrar-admin-ui-specification.md`

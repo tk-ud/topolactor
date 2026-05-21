@@ -6,6 +6,10 @@ import * as $$0 from "./routes/index.tsx";
 import * as $$1 from "./routes/admin/index.tsx";
 import * as $$2 from "./routes/admin/context-token-registry.tsx";
 import * as $$2b from "./routes/admin/registry-vector-validate.tsx";
+import * as $$2c from "./routes/admin/manifests.tsx";
+import * as $$2d from "./routes/admin/contents.tsx";
+import * as $$2e from "./routes/admin/ui-builder.tsx";
+import * as $$2f from "./routes/admin/seed.tsx";
 import * as $$3 from "./routes/demo.tsx";
 import * as $$3b from "./routes/demo-static.tsx";
 import * as $$4 from "./routes/auth.tsx";
@@ -23,6 +27,10 @@ const manifest = {
     "./routes/admin/index.tsx": $$1,
     "./routes/admin/context-token-registry.tsx": $$2,
     "./routes/admin/registry-vector-validate.tsx": $$2b,
+    "./routes/admin/manifests.tsx": $$2c,
+    "./routes/admin/contents.tsx": $$2d,
+    "./routes/admin/ui-builder.tsx": $$2e,
+    "./routes/admin/seed.tsx": $$2f,
     "./routes/demo.tsx": $$3,
     "./routes/demo-static.tsx": $$3b,
     "./routes/auth.tsx": $$4,

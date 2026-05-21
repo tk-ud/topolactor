@@ -296,6 +296,57 @@ Frontend API proxy and UI must propagate backend status classes without silent r
 must present UI-visible error states. Post-write reads must remain consistent with the persisted
 state (or return explicit inconsistency errors).
 
+## 8.5 Seed Runtime Boundary (Issue #84)
+
+The Seed Runtime is a controlled registration boundary positioned between external file input
+and the canonical topolactor DB runtime.
+
+```text
+/storage/seed.json (UI-managed topology payload candidate)
+→ load → validate → preview → explicit import
+→ canonical runtime route (requires Gap-1 manifest-driven routing resolution)
+→ topolactor DB (canonical runtime authority)
+```
+
+### Seed Runtime position in the layer stack
+
+```text
+DB        = semantic topology space (canonical runtime authority)
+Backend   = abstract runtime / function execution space
+Frontend  = physical projection space
+Seed      = controlled import boundary for topology payload candidates
+Registrar = controlled registration boundary for topology data
+```
+
+The Seed Runtime is NOT:
+- a direct DB editor
+- a canonical state source
+- a silent auto-import pipeline
+
+### Seed Runtime operations
+
+- **save**: write JSON to `/storage/seed.json` (validates JSON structure first)
+- **load**: read `/storage/seed.json`; returns explicit SEED_NOT_FOUND if absent
+- **validate**: structural validation of seed.json (version, runtimes array, required fields)
+- **preview**: dry-run showing what import would declare (no DB write)
+- **import**: validate + explicit apply through canonical runtime route
+  - Current status: skeleton — validates structure and counts runtimes
+  - Full canonical import requires Gap-1 (manifest-driven routing) resolution
+  - Import failure is explicit (fail-close). No silent fallback.
+
+### Seed failure handling requirements
+
+- `/storage/seed.json` not found → explicit SEED_NOT_FOUND
+- Malformed JSON → explicit SEED_PARSE_ERROR
+- Validation failure → import blocked (fail-close)
+- File write failure → explicit SEED_WRITE_FAILED
+- /storage not mounted → explicit STORAGE_NOT_AVAILABLE via SEED_RUNTIME_NOT_AVAILABLE
+
+### Docker Compose volume
+
+`/storage` must be mounted as a named volume in docker-compose.yml for the backend container.
+See `infra/docker-compose.yml` `topolactor_seed_storage` volume.
+
 ## 9. Out of Scope
 
 The following are explicitly out of scope for this specification:
