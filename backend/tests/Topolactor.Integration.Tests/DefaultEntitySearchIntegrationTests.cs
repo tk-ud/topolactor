@@ -53,8 +53,12 @@ public class DefaultEntitySearchIntegrationTests
                 topologyRepository,
                 new SystemOperationCiRuntime(
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
-            targetDispatchOverride: targetDispatchOverride);
-        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+            outputLaneRouter: null);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            targetDispatchOverride);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler);
     }

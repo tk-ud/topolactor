@@ -101,12 +101,13 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<DiffLogRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
-        sp.GetRequiredService<TargetDispatchOverride>(),
         sp.GetRequiredService<OutputLaneRouter>()));
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
     new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
         sp.GetRequiredService<RuntimeExecutor>(),
+        sp.GetRequiredService<OperationVectorResolver>(),
+        sp.GetRequiredService<TargetDispatchOverride>(),
         sp.GetRequiredService<ManifestRepository>()));
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();

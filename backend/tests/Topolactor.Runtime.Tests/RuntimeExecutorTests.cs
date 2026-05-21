@@ -12,9 +12,8 @@ namespace Topolactor.Runtime.Tests;
 
 public class RuntimeExecutorTests
 {
-    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
+    internal static TargetDispatchOverride CreateTargetDispatchOverride(TopologyRepository topologyRepository)
     {
-        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
@@ -26,10 +25,14 @@ public class RuntimeExecutorTests
             new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
             new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
 
-        var targetDispatchOverride = new TargetDispatchOverride(
-            NullLogger<TargetDispatchOverride>.Instance,
-            topologyRepository,
-            adminRuntime);
+        return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, topologyRepository, adminRuntime);
+    }
+
+    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
+    {
+        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
+        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
 
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
@@ -49,8 +52,7 @@ public class RuntimeExecutorTests
                 new ContextNeighborSearch(),
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
-            targetDispatchOverride: targetDispatchOverride);
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
     }
 
     [Fact]
@@ -118,43 +120,6 @@ public class RuntimeExecutorTests
         Assert.Null(functionParameter);
     }
 
-    [Fact]
-    public async Task ExecuteAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
-    {
-        var executor = CreateExecutor();
-        var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
-
-        var res = await executor.ExecuteAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_OPERATION");
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
-    {
-        var executor = CreateExecutor();
-        var payload = JsonSerializer.SerializeToElement(new { title = "x" });
-        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
-
-        var res = await executor.ExecuteAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_DemoEntityDetailMalformedEntityId_ReturnsInvalidPayload()
-    {
-        var executor = CreateExecutor();
-        var payload = JsonSerializer.SerializeToElement(new { entityId = "not-a-uuid" });
-        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
-
-        var res = await executor.ExecuteAsync(req);
-
-        Assert.False(res.Success);
-        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
-    }
 
     [Fact]
     public async Task ExecuteAsync_DefaultEntitySearch_RequestIdentityProducesAttractorKeyAndEmissionIdentity()
@@ -179,21 +144,6 @@ public class RuntimeExecutorTests
         Assert.NotEmpty(response.Emission.ComponentIds!);
     }
 
-    [Fact]
-    public async Task ExecuteAsync_DemoEntityList_ReachesPostAttractorFlow()
-    {
-        var repo = new DemoEntityValidRouteTopologyRepository();
-        var executor = CreateExecutor(repo);
-        var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
-
-        var res = await executor.ExecuteAsync(req);
-
-        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_OPERATION");
-        Assert.DoesNotContain(res.Errors, e => e.Code == "INVALID_PAYLOAD");
-        Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
-        Assert.DoesNotContain(res.Errors, e => e.Code == "STRUCTURE_MAP_RESOLVE_FAILED");
-        Assert.True(repo.DemoEntityListCalled);
-    }
 }
 
 public class SchedulerDispatcherChainTests
@@ -204,7 +154,11 @@ public class SchedulerDispatcherChainTests
         // Verifies wiring: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
         // Scheduler and dispatcher are pass-through skeletons; emission must be identical.
         var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
 
@@ -223,7 +177,11 @@ public class SchedulerDispatcherChainTests
     {
         // Broken refs must propagate through the full chain — no silent fallback.
         var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
 
@@ -232,6 +190,75 @@ public class SchedulerDispatcherChainTests
         Assert.False(response.Success);
         Assert.Null(response.Emission);
         Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+    }
+}
+
+public class ManifestDispatcherOverrideTests
+{
+    [Fact]
+    public async Task DispatchAsync_DemoEntityUnknownAction_ReturnsInvalidOperation()
+    {
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var dispatcher = CreateDispatcher(repo);
+        var req = new EndpointRequestDto("Search", "demo", "entity", "noop", null, null, null);
+
+        var res = await dispatcher.DispatchAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_OPERATION");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DemoEntityDetailWithoutEntityId_ReturnsInvalidPayload()
+    {
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var dispatcher = CreateDispatcher(repo);
+        var payload = JsonSerializer.SerializeToElement(new { title = "x" });
+        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
+
+        var res = await dispatcher.DispatchAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DemoEntityDetailMalformedEntityId_ReturnsInvalidPayload()
+    {
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var dispatcher = CreateDispatcher(repo);
+        var payload = JsonSerializer.SerializeToElement(new { entityId = "not-a-uuid" });
+        var req = new EndpointRequestDto("Search", "demo", "entity", "detail", null, payload, null);
+
+        var res = await dispatcher.DispatchAsync(req);
+
+        Assert.False(res.Success);
+        Assert.Contains(res.Errors, e => e.Code == "INVALID_PAYLOAD");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DemoEntityList_ReachesOverrideRepositoryFlow()
+    {
+        var repo = new DemoEntityValidRouteTopologyRepository();
+        var dispatcher = CreateDispatcher(repo);
+        var req = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
+
+        var res = await dispatcher.DispatchAsync(req);
+
+        Assert.True(res.Success);
+        Assert.NotNull(res.Emission);
+        Assert.DoesNotContain(res.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.True(repo.DemoEntityListCalled);
+    }
+
+    private static ManifestDispatcher CreateDispatcher(TopologyRepository topologyRepository)
+    {
+        var executor = RuntimeExecutorTests.CreateExecutor(topologyRepository);
+        return new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepository));
     }
 }
 

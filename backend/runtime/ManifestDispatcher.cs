@@ -25,14 +25,20 @@ public class ManifestDispatcher
     private readonly ILogger<ManifestDispatcher> _logger;
     private readonly RuntimeExecutor _runtimeExecutor;
     private readonly ManifestRepository? _manifestRepository;
+    private readonly OperationVectorResolver _operationVectorResolver;
+    private readonly TargetDispatchOverride _targetDispatchOverride;
 
     public ManifestDispatcher(
         ILogger<ManifestDispatcher> logger,
         RuntimeExecutor runtimeExecutor,
+        OperationVectorResolver operationVectorResolver,
+        TargetDispatchOverride targetDispatchOverride,
         ManifestRepository? manifestRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _runtimeExecutor = runtimeExecutor ?? throw new ArgumentNullException(nameof(runtimeExecutor));
+        _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
+        _targetDispatchOverride = targetDispatchOverride ?? throw new ArgumentNullException(nameof(targetDispatchOverride));
         _manifestRepository = manifestRepository;
     }
 
@@ -51,6 +57,38 @@ public class ManifestDispatcher
         _logger.LogDebug(
             "ManifestDispatcher: resolving destination for Role={Role} Target={Target} Layer={Layer} Action={Action} TriggerKind={TriggerKind}",
             request.Role, request.Target, request.Layer, request.Action, request.TriggerKind);
+        
+        var vector = _operationVectorResolver.Resolve(request);
+        var overrideValidationError = _targetDispatchOverride.ValidateRequest(vector);
+        if (overrideValidationError is not null)
+        {
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [overrideValidationError]);
+        }
+
+        var (handled, overrideData, overrideError) = await _targetDispatchOverride.TryHandleAsync(vector, ct);
+        if (handled)
+        {
+            if (overrideError is not null)
+            {
+                return new EndpointResponseDto(
+                    Success: false,
+                    Emission: null,
+                    Errors: [overrideError]);
+            }
+
+            var emission = new Emission(
+                StructureMapId: null,
+                PackageId: null,
+                SchemaId: null,
+                ComponentIds: [],
+                Data: overrideData,
+                Errors: [],
+                ContextRouteRecommendation: null);
+            return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
+        }
 
         if (_manifestRepository is null)
         {
