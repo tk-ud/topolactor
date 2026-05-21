@@ -38,6 +38,8 @@ required_directories:
     - frontend/registry
     - frontend/runtime
     - frontend/api
+  infra:
+    - infra
 
 required_files:
   root:
@@ -146,6 +148,10 @@ required_files:
     - frontend/structure_map.ts
     - frontend/README.md
     - frontend/tests/defaultEntitySearch.test.ts
+  infra:
+    - infra/docker-compose.yml
+    - infra/nginx.conf
+    - infra/.env.example
 
 required_content_terms:
   README.md:

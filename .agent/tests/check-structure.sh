@@ -110,6 +110,7 @@ check_dir "frontend/schema"
 check_dir "frontend/registry"
 check_dir "frontend/runtime"
 check_dir "frontend/api"
+check_dir "infra"
 
 # ─── Required files ───────────────────────────────────────────────────────────
 
@@ -235,6 +236,10 @@ check_file "frontend/structure_map.ts"
 check_file "frontend/README.md"
 check_file "frontend/tests/defaultEntitySearch.test.ts"
 check_file "frontend/tests/pipelineContinuity.test.ts"
+
+check_file "infra/docker-compose.yml"
+check_file "infra/nginx.conf"
+check_file "infra/.env.example"
 
 # ─── Required content terms ───────────────────────────────────────────────────
 
