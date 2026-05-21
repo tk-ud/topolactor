@@ -12,6 +12,12 @@ SQL Attention is topolactor’s DB-native way to observe **topology continuity**
 
 In this model, SQL aggregates are operational attention weights over topology history, not a detached analytics dashboard. SQL Attention does not reproduce Transformer QK inner product over all elements.
 
+## Runtime intuition
+
+The public intuition is simple: observe logs, keep a compact current basis, and only explore registry/composition neighbors when the pressure level changes.
+
+For example, table change pressure, column candidate pressure, and UI operation pressure can be treated as a small pressure vector. A simple L2 norm can act as a level signal, but the formula is not the main point. The important boundary is that aggregation only prepares the attention query; the attention observation is completed when neighbor evidence is recorded.
+
 ## Decomposition
 
 - **Theta / neighborhood:** narrows candidates via registry_id references, relation bindings, topology continuity, and indexed DB structure.
@@ -30,6 +36,16 @@ These tables are the implemented DB-side observation and materialized-signal lay
 - `context_hub_recommendation_current`: rebuildable hub-attention materialized current with cosine, relation weight, statistical weight, EMA/trend, feedback adjustment, attention score, and evidence JSON.
 - `context_hub_feedback_event`: append-only feedback event log for selected / ignored / missing-candidate weight updates.
 
+## Logs model boundary
+
+Newer SQL Attention logs design separates three roles:
+
+- signal sources observe physical-side pressure,
+- current keeps the calculation basis,
+- attention evidence records registry-neighbor results.
+
+This keeps the public concept simple while leaving exact schema and runtime policy to the design SSOT files.
+
 ## Implementation boundary
 
 The DB schema above is an implemented SQL Attention observation surface. It is not the runtime authority by itself:
@@ -46,7 +62,8 @@ The DB schema above is an implemented SQL Attention observation surface. It is n
 - not manual token vector SoT or vector DB-style ownership,
 - not `context_token_registry.value` as sparse-vector weight,
 - not only a recommendation UI,
-- not merely a ranking table.
+- not merely a ranking table,
+- not completed by aggregate counts alone.
 
 ## Status
 
