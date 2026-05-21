@@ -173,3 +173,4 @@ Completion Summary Template Gate scope reminder:
 - writing completion summary trigger includes initial final summary and existing PR follow-up comment
 - initial PR body is out of scope and remains thin PR body policy
 - final summary omission from template scope is a completion reporting gap
+- unresolved completion reporting gap is blocking for completion eligibility
