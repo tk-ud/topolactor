@@ -64,6 +64,31 @@ public class RuntimeTimelineScheduler : BackgroundService
         return _manifestDispatcher.DispatchAsync(aligned, ct);
     }
 
+
+    /// <summary>
+    /// Accepts legacy change intake and enqueues as hook trigger.
+    /// table_name is preserved as registry resolution key candidate (Target).
+    /// </summary>
+    public LegacyChangeIntakeResponseDto EnqueueLegacyChangeTrigger(LegacyChangeIntakeRequestDto intake)
+    {
+        ArgumentNullException.ThrowIfNull(intake);
+
+        var (request, errors) = _manifestDispatcher.BuildLegacyHookRequest(intake);
+        if (errors.Count > 0 || request is null)
+        {
+            return new LegacyChangeIntakeResponseDto(
+                Accepted: false,
+                QueueStatus: null,
+                Errors: errors);
+        }
+
+        EnqueueHookTrigger(request);
+        return new LegacyChangeIntakeResponseDto(
+            Accepted: true,
+            QueueStatus: "hook_trigger_enqueued",
+            Errors: []);
+    }
+
     /// <summary>
     /// Enqueues a cron trigger for background processing (fire-and-forget).
     /// </summary>

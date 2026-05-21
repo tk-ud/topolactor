@@ -691,6 +691,30 @@ system_roadmap_ssot:
       known_gap_ref:
         - Notion intake runtime not implemented
 
+
+
+    legacy_island_embedding_intake:
+      status: partial
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: Legacy mirror SQL surface and change-event intake endpoint are introduced for island embedding; registry-depth wiring and promotion policy remain incomplete.
+      files:
+        - db/legacy_mirror_tables.sql
+        - db/init.sql
+        - backend/schema/Contracts.cs
+        - backend/endpoint/LegacyChangeIntakeEndpoint.cs
+        - backend/scheduler/RuntimeTimelineScheduler.cs
+        - backend/runtime/ManifestDispatcher.cs
+      completion_condition:
+        - legacy_physical_table_state_can_be_stored_as_jsonb_mirror_observation_layer
+        - api_change_intake_accepts_table_name_row_id_operation_and_change_payload
+        - table_name_is_used_as_registry_resolution_key_candidate
+        - intake_dispatches_as_hook_trigger_through_scheduler_to_manifest_dispatcher
+        - unresolved_registry_or_manifest_routes_are_explicit_errors_without_silent_fallback
+      known_gap_ref:
+        - Issue #134 registry-backed mirror repository and event/hook production hardening
+        - Issue #134 runtime destination mapping policy for legacy operations
+
     external_snapshot_store:
       status: not_started
       production_ready: false

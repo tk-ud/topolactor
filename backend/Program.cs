@@ -118,6 +118,7 @@ builder.Services.AddSingleton<SseEndpoint>(sp =>
         sp.GetRequiredService<ILogger<SseEndpoint>>(),
         sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<AuthEndpoint>();
+builder.Services.AddSingleton<LegacyChangeIntakeEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
@@ -169,6 +170,23 @@ app.MapPost("/dispatch", async (
 
     var result = await dispatch.HandleAsync(request, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
+});
+
+
+// POST /intake/legacy-change — existing-system change-event intake boundary.
+app.MapPost("/intake/legacy-change", (
+    HttpContext ctx,
+    LegacyChangeIntakeRequestDto request,
+    LegacyChangeIntakeEndpoint intake,
+    JwtGuard jwtGuard) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new LegacyChangeIntakeResponseDto(false, null, authErrors), statusCode: 401);
+
+    var result = intake.Handle(request);
+    return Results.Json(result, statusCode: result.Accepted ? 202 : 422);
 });
 
 // POST /auth/login — demo login scaffold
