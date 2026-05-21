@@ -36,6 +36,9 @@ check_term ".agent/skills/agent-workflow.md" "completion summary must include re
 check_term ".agent/skills/agent-workflow.md" "follow-up PR comment"
 check_term ".agent/skills/agent-workflow.md" "PR_COMMENT_NOT_POSTED"
 check_term ".agent/skills/agent-workflow.md" "chat/final summary alone is not a substitute"
+check_term ".agent/skills/agent-workflow.md" "fixed external-state order"
+check_term ".agent/skills/agent-workflow.md" "identify target PR number/URL and head commit"
+check_term ".agent/skills/agent-workflow.md" "verify posted comment exists in PR conversation"
 check_term ".agent/protocols/reports-and-todos.md" "Existing PR updates require a follow-up PR comment after push"
 check_term ".agent/protocols/reports-and-todos.md" "PR_COMMENT_NOT_POSTED"
 

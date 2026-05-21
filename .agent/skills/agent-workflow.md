@@ -79,11 +79,18 @@ READ_ENTRY
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
-  - for an existing PR update, push first, then post a follow-up PR comment (changed summary, checks, remaining TODO, PR-body-thin note) per `.agent/protocols/reports-and-todos.md`
-  - for an existing PR update, completion is blocked until either follow-up PR comment is actually posted after push, or posting is impossible and fallback reporting is emitted
-  - if a PR comment cannot be posted, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste
-  - chat/final summary alone is not a substitute for existing-PR follow-up comment
-  - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting state
+  - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
+    1. determine whether this work is an existing-PR update
+    2. confirm push or remote PR update actually occurred
+    3. identify target PR number/URL and head commit
+    4. apply follow-up comment requirement from `.agent/protocols/reports-and-todos.md`
+    5. confirm whether PR comment posting capability is available
+    6. when posting is available, post follow-up PR comment after push
+    7. verify posted comment exists in PR conversation
+    8. if posting is unavailable or post-verification is unavailable, emit `PR_COMMENT_NOT_POSTED` with exact paste-ready comment body in final summary
+    9. only then emit final summary
+  - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
+  - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 
 ## Scope Discipline
 
