@@ -1,0 +1,237 @@
+version: 1
+id: sql_attention_logs_ssot
+title: SQL Attention Logs SSOT
+status: design_ssot
+public_article: false
+canonical_markdown: docs/design/sql-attention-logs-ssot.md
+
+purpose:
+  summary: >-
+    Define SQL Attention logs, current calculation basis, norm-level trigger,
+    registry-neighbor exploration, and attention evidence persistence.
+  non_goal:
+    - public_marketing_copy
+    - sql_side_transformer_qk_reproduction
+    - every_log_append_registry_search
+    - direct_registry_mutation_from_trigger
+
+core_definition:
+  one_sentence: >-
+    SQL Attention converts physical-side logs.* signals into a logs.current
+    calculation basis, watches l2 norm-level changes, and only when the level
+    changes explores registry composition neighbors and records hit/evidence
+    into logs.attention.
+  flow:
+    - logs_signal_sources
+    - logs_current_calculation_basis
+    - l2_norm_level_watch
+    - scheduler_runtime_registry_neighbor_exploration
+    - logs_attention_evidence
+
+layers:
+  logs_signal_sources:
+    role: aggregation_sources
+    description: >-
+      logs.* tables are signal sources. They observe physical-side usage,
+      mutation, candidates, or other runtime signals. They are not final
+      attention results and are not registry grammar tables.
+    initial_sources:
+      logs.diff:
+        pressure: physical_table_change_pressure
+        retention: archive_required
+        delete_policy: no_destructive_delete
+        tableid_semantics: physical_table_identity
+      logs.candidate:
+        pressure: column_jsonb_path_axis_candidate_pressure
+        retention: archive_required
+        delete_policy: no_destructive_delete
+        tableid_semantics: physical_table_identity
+        required_state_semantics:
+          - pending
+          - adopted
+          - rejected
+      logs.ui_operation:
+        pressure: operation_component_usage_pressure
+        retention: manifest_or_policy_driven
+        tableid_semantics: physical_table_identity
+        note: >-
+          Retention policy must be decided by manifest/policy. Component usage
+          matters; package-level usage alone is insufficient.
+    extensibility: >-
+      The initial sources are examples. Other logs source combinations may use
+      the same structure when source semantics are explicit.
+    required_fields:
+      - source_name
+      - source_kind
+      - physical_table_id
+      - source_axis_ref
+      - count_source
+      - recordcount_source
+      - created_at
+      - archive_policy
+      - retention_policy
+
+  logs_current:
+    role: calculation_basis_memo
+    description: >-
+      logs.current stores compressed current pressure state derived from logs.*
+      so runtime does not repeatedly scan raw logs. It is a calculation basis,
+      not the SQL Attention conclusion.
+    must_support:
+      - pressure_matrix_construction
+      - l2_norm_calculation
+      - top_norm_level_snapshot_comparison
+      - exploration_candidate_creation
+    suggested_fields:
+      - current_id
+      - source_set_id
+      - basis_window
+      - basis_rows
+      - basis_columns
+      - count
+      - recordcount
+      - weight
+      - l2_norm
+      - level_snapshot
+      - evaluated_at
+    matrix_semantics:
+      rows: physical_table_or_physical_table_combination
+      columns: signal_source_pressure_axes
+      cells: count_recordcount_weight_recency
+    probability_policy: >-
+      Pressure values are observations. They do not need to be rounded into
+      probabilities.
+
+  norm_trigger:
+    role: exploration_gate
+    description: >-
+      Monitoring may run every time current is updated, but registry-neighbor
+      exploration only starts when norm level changes.
+    initial_policy:
+      watch_top_n: 3
+      trigger_conditions:
+        - top_n_membership_changed
+        - top_n_order_changed
+        - norm_delta_exceeds_policy_threshold
+      no_change_action: return
+      change_action: mark_exploration_candidate
+    flow:
+      - logs_append
+      - current_basis_update
+      - l2_norm_update
+      - top3_norm_level_snapshot_compare
+      - no_level_change_return
+      - level_change_enqueue_or_expose_exploration_candidate
+
+  exploration:
+    role: scheduler_runtime_responsibility
+    description: >-
+      Registry-neighbor exploration is performed by scheduler/runtime, not by
+      an every-write DB trigger.
+    inputs:
+      - logs.current
+      - norm_trigger_candidate
+      - registry_composition_tables
+    behavior:
+      - explore_registry_composition_neighbors
+      - vary_vector_order_or_permutation
+      - keep_best_neighbor_hits
+    required_caps:
+      - current_top_level_watch_count
+      - norm_delta_threshold
+      - permutation_limit
+      - registry_neighbor_topK
+      - attention_evidence_save_limit
+      - archive_policy
+
+  logs_attention:
+    role: neighbor_hit_evidence_log
+    description: >-
+      logs.attention stores registry-neighbor exploration hit results. It must
+      link back to logs.current so every attention hit has evidence.
+    retention: archive_required
+    suggested_fields:
+      - attention_id
+      - current_id
+      - source_set_id
+      - query_vector
+      - permutation_key
+      - registry_table
+      - registry_id
+      - neighbor_score
+      - hit_rank
+      - evidence_json
+      - created_at
+      - archive_policy
+
+physical_table_pressure:
+  tableid_semantics: physical_table_identity
+  aggregation_target: physical_side
+  not_target: registry_table_popularity
+  observes:
+    - physical_table_mutation_pressure
+    - physical_column_candidate_pressure
+    - physical_operation_component_usage_pressure
+
+registry_semantics:
+  role: composition_grammar_tables
+  description: >-
+    Registry tables are composition tables. They are closer to grammar tables
+    than vocabulary rows.
+  core_examples:
+    - registrar_entries
+    - master_registry
+    - state_registry
+    - relation_registry
+    - package_registry
+    - schema_registry
+    - component_registry
+    - function_parameters
+    - structure_maps
+    - hub_relations
+  ui_examples:
+    - ui_component_bucket
+    - ui_component_registry
+    - ui_component_package
+    - ui_package_component_map
+    - ui_layout_registry
+    - ui_wiring_registry
+    - ui_topology_tensor
+    - components
+    - design
+    - packages
+
+completion_boundary:
+  aggregation_completed: attention_query_basis_ready
+  attention_observation_completed: registry_neighbor_hit_and_evidence_saved
+  topology_change_candidate_completed: quaternion_or_topology_expansion_candidate_created
+  dangerous_misunderstanding:
+    - logs_aggregation_completed_equals_sql_attention_completed
+
+existing_repository_mismatch_notes:
+  topology_edit_log:
+    caution: >-
+      Current description uses target_table as attractor_key/domain scope, not
+      physical tableid. It is not automatically logs.diff unless physical table
+      identity is added or clarified.
+  promotion_candidates:
+    can_align_with: logs.candidate
+    condition: >-
+      Adoption/rejection/pending state and column/axis pressure semantics must
+      be preserved.
+  context_event:
+    can_align_with: logs.ui_operation
+    condition: >-
+      Retention must be manifest/policy-driven and component usage must be
+      observed when relevant.
+  context_hub_recommendation_current:
+    caution: not_same_as_logs_current_pressure_basis
+
+implementation_order:
+  - create_markdown_and_yaml_ssot
+  - wire_ssot_into_repository_maps_required_paths_and_structure_checks
+  - align_internal_readme_and_design_docs_without_changing_public_article_intent
+  - define_schema_function_trigger_contracts
+  - implement_logs_current_basis_update_and_norm_level_monitoring
+  - implement_logs_attention_evidence_persistence
+  - implement_scheduler_runtime_registry_neighbor_exploration
