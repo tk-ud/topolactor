@@ -14,6 +14,8 @@ require_tool() {
 
 require_tool docker
 require_tool dotnet
+require_tool curl
+require_tool python3
 
 ENV_FILE="${REPO_ROOT}/infra/.env.example"
 
@@ -66,7 +68,7 @@ DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolac
   dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
   --nologo --verbosity minimal
 
-echo "=== [RUNTIME_ENV] Verify backend env + seed storage volume ==="
+echo "=== [RUNTIME_ENV] Verify backend env + seed storage volume + live API route E2E ==="
 docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d backend
 
 backend_status=""
@@ -103,5 +105,47 @@ if [ "${read_back}" != "${probe_value}" ]; then
 fi
 docker exec topolactor-demo-backend /bin/sh -lc "rm -f '${probe_file}'"
 echo "OK: seed storage volume read/write verified"
+
+
+
+echo "=== [RUNTIME_ENV] Verify live API route (auth/login -> dispatch) ==="
+login_payload='{"username":"demo_admin","password":"demo_admin_password"}'
+login_response="$(curl -sS -X POST http://127.0.0.1:5000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "${login_payload}")"
+
+token="$(python3 - <<'PY2' "${login_response}"
+import json,sys
+obj=json.loads(sys.argv[1])
+if not obj.get('success') or not obj.get('token'):
+    raise SystemExit(1)
+print(obj['token'])
+PY2
+)" || {
+  echo "ERROR: failed to obtain JWT token from /auth/login" >&2
+  echo "login response: ${login_response}" >&2
+  exit 1
+}
+
+dispatch_payload='{"operationType":"Search","target":"default","layer":"entity","action":"Search"}'
+dispatch_response="$(curl -sS -X POST http://127.0.0.1:5000/dispatch \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${token}" \
+  -d "${dispatch_payload}")"
+
+python3 - <<'PY3' "${dispatch_response}" || {
+import json,sys
+obj=json.loads(sys.argv[1])
+if not obj.get('success'):
+    raise SystemExit(1)
+emission=obj.get('emission') or {}
+if not emission.get('structureMapId'):
+    raise SystemExit(1)
+print('OK: live dispatch response verified')
+PY3
+  echo "ERROR: live dispatch E2E verification failed" >&2
+  echo "dispatch response: ${dispatch_response}" >&2
+  exit 1
+}
 
 echo "=== Runtime environment check passed ==="
