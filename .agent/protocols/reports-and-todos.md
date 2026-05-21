@@ -38,11 +38,6 @@ If a failed or unexecuted check reveals concrete follow-up work, copy only that 
 - Follow-up PR comments for existing PR updates must follow the `## Completion Summary Template` structure.
 - `## Completion Summary Template` scope is not limited to follow-up comments; initial Codex / Agent final completion summaries and completion reports also use this template.
 - Initial PR body is out of template scope and must remain a thin entry summary.
-- Follow-up PR comments must include:
-  - changed summary
-  - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED
-  - remaining TODOs
-  - whether the PR body is intentionally left thin or was updated because it was materially misleading
 - If the environment cannot post a PR comment, the final summary must include `PR_COMMENT_NOT_POSTED` and the exact comment body to paste.
 - Chat/final summary by itself is never a substitute for required existing-PR follow-up comment handling.
 - Passing local checks (including structure/completion checks) does not imply follow-up comment was posted.
@@ -65,6 +60,12 @@ No prompt router or workflow note may replace it with an alternate final summary
   - completion report
   - existing PR follow-up comment (required only for existing PR updates)
   - PR body is excluded from this template and stays under thin entry summary policy
+- existing PR follow-up comment mapping (inside template, no extra appendix format):
+  - changed summary → `### 作業内容`
+  - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED → `### test結果` (`#### Local` / `#### Remote CI` / `#### Required check scope`)
+  - remaining TODOs → `### 残タスク引き継ぎ指示`
+  - PR body thin 유지 or update reason when materially misleading → `### 作業内容` または `### 変更ファイル`
+  - `PR_COMMENT_NOT_POSTED` fallback (when posting unavailable) → same template body must be emitted as exact paste-ready comment content in final summary
 - excluded surfaces:
   - initial PR body
   - thin PR body
