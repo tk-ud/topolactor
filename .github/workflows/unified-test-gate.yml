@@ -31,8 +31,12 @@ on:
       - '.github/workflows/unified-test-gate.yml'
 
 jobs:
-  function-boundary:
-    name: "[FUNCTION_BOUNDARY] Runtime function unit tests"
+  test-gate:
+    # Runs all test layers via check-unified-test-gate.sh (SSOT for test details).
+    # Layers: FUNCTION_BOUNDARY, RUNTIME_INTEGRATION, FRONTEND_CONTRACT.
+    # NOT_COVERED: OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync.
+    # REMAINING_TODO: docker-compose / DB / migration / env / volume verification.
+    name: "Unified test gate (FUNCTION_BOUNDARY / RUNTIME_INTEGRATION / FRONTEND_CONTRACT)"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,60 +46,19 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-
-      - name: Run runtime function unit tests
-        run: |
-          echo "Scope: RuntimeExecutor.ExecuteAsync, ManifestDispatcher.DispatchAsync,"
-          echo "       ManifestDispatcher.BuildLegacyHookRequest,"
-          echo "       TargetDispatchOverride.ValidateRequest, TargetDispatchOverride.TryHandleAsync,"
-          echo "       OperationVectorResolver.Resolve, RuntimeGuard.Validate,"
-          echo "       ContextRouteRecommendationResolver.ResolveAsync"
-          dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj \
-            --nologo --verbosity minimal
-
-  runtime-integration:
-    name: "[RUNTIME_INTEGRATION] Integration boundary tests"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Run integration boundary tests
-        run: |
-          echo "Scope: DefaultEntitySearchIntegrationTests"
-          echo "       full dispatch path: dispatcher / executor / override / output-lane"
-          dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
-            --nologo --verbosity minimal
-
-  frontend-contract:
-    name: "[FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
           deno-version: v1.x
 
-      - name: Run frontend contract tests
-        run: |
-          echo "Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts"
-          deno test \
-            frontend/tests/adminApi.test.ts \
-            frontend/tests/defaultEntitySearch.test.ts \
-            frontend/tests/pipelineContinuity.test.ts \
-            --allow-read
+      - name: Run unified test gate
+        run: bash .agent/tests/check-unified-test-gate.sh
 
   structure-gate:
+    # STRUCTURE_GATE — must run after all test layers complete.
     name: "[STRUCTURE_GATE] Structure check (must run last)"
-    needs: [function-boundary, runtime-integration, frontend-contract]
+    needs: [test-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

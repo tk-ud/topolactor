@@ -8,7 +8,7 @@
 #                         OperationVectorResolver.Resolve, RuntimeGuard.Validate,
 #                         ContextRouteRecommendationResolver.ResolveAsync
 #   RUNTIME_INTEGRATION — DefaultEntitySearchIntegrationTests (full dispatch path via
-#                         dispatcher / executor / override / output-lane)
+#                         dispatcher / executor / override)
 #   FRONTEND_CONTRACT   — adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts
 #
 # NOT_COVERED (remaining todo):
@@ -65,7 +65,8 @@ fi
 echo ""
 echo "=== [RUNTIME_INTEGRATION] Integration boundary tests ==="
 echo "    Scope: DefaultEntitySearchIntegrationTests"
-echo "           full dispatch path: dispatcher / executor / override / output-lane"
+echo "           full dispatch path: dispatcher / executor / override"
+echo "           NOT_COVERED (direct): OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync"
 
 if dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
     --nologo --verbosity minimal; then
