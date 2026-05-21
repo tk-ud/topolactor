@@ -75,7 +75,7 @@ SSOT参照必読:
 
 - [ ] [Claude] Runtime Environment Test Gate の env / volume / live API-route E2E を完全化する
       → PR #149 で `check-runtime-environment.sh` を追加し、GitHub Actions 上の runtime-environment-gate として docker compose PostgreSQL 起動、healthcheck 待機、DB接続確認、required schema relations (`public.manifest`, `public.topology_edit_log`) 検証、live DB 向け integration test 実行、down -v 後始末までは追加済み。
-      → 残: env 検証、volume / seed storage read-write 検証、backend コンテナ起動を含む live API-route E2E、dispatch/auth/sse 経路、db_notify / output lane / scheduler routing の実環境検証。
+      → 残: env 検証、volume / seed storage read-write 検証、backend コンテナ起動を含む live API-route E2E、dispatch/auth/sse のAPI経由検証、db_notify / output lane / scheduler routing の実環境検証。
       → `OutputLaneRouter.RouteAsync` と `AdminRuntime.ExecuteDataAsync` は `check-unified-test-gate.sh` 上で NOT_COVERED として残っているため、直接またはAPI経由のカバー強化が必要。
       → 対象: `.agent/tests/check-runtime-environment.sh`, `.github/workflows/unified-test-gate.yml`, `infra/docker-compose.yml`, `backend/tests/Topolactor.Integration.Tests/*.cs`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/scheduler/DbNotifyListener.cs`
       → 完了条件: env / volume / live API-route E2E の実検証が追加される / `OutputLaneRouter.RouteAsync` または `AdminRuntime.ExecuteDataAsync` の未カバー状態が改善される / missing tool・skipped test・起動失敗が pass にならない / 失敗時に docker logs / DB logs 等の原因調査ログが残る / `unified-test-gate` と `check-structure.sh` が green になる
