@@ -25,7 +25,6 @@ public class RuntimeExecutor
     private readonly DiffLogRepository _diffLogRepository;
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
-    private readonly TargetDispatchOverride? _targetDispatchOverride;
     private readonly OutputLaneRouter? _outputLaneRouter;
 
     public RuntimeExecutor(
@@ -40,7 +39,6 @@ public class RuntimeExecutor
         DiffLogRepository diffLogRepository,
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
-        TargetDispatchOverride? targetDispatchOverride = null,
         OutputLaneRouter? outputLaneRouter = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -54,7 +52,6 @@ public class RuntimeExecutor
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
-        _targetDispatchOverride = targetDispatchOverride;
         _outputLaneRouter = outputLaneRouter;
     }
 
@@ -81,13 +78,6 @@ public class RuntimeExecutor
                 Success: false,
                 Emission: null,
                 Errors: guardErrors);
-        }
-
-        // TargetDispatchOverride provides early validation for isolated target overrides (Gap-1).
-        var overrideValidationError = _targetDispatchOverride?.ValidateRequest(vector);
-        if (overrideValidationError is not null)
-        {
-            return ErrorResponse(overrideValidationError.Code, overrideValidationError.Message);
         }
 
         // Step 3: Resolve attractor — no silent fallback
@@ -182,21 +172,7 @@ public class RuntimeExecutor
 
         workingShape = workingShape with { ContextRouteRecommendation = recommendation };
 
-        // Step 10: Target override data injection (TargetDispatchOverride — isolated non-canonical path).
-        if (_targetDispatchOverride is not null)
-        {
-            var (handled, overrideData, overrideError) =
-                await _targetDispatchOverride.TryHandleAsync(vector, ct);
-            if (handled)
-            {
-                if (overrideError is not null)
-                    return ErrorResponse(overrideError.Code, overrideError.Message);
-                if (overrideData.HasValue)
-                    workingShape = workingShape with { ResolvedData = overrideData };
-            }
-        }
-
-        // Step 11: Build emission from resolved working shape
+        // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
 
         var response = new EndpointResponseDto(

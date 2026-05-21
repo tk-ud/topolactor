@@ -12,9 +12,8 @@ namespace Topolactor.Runtime.Tests;
 
 public class RuntimeExecutorTests
 {
-    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
+    internal static TargetDispatchOverride CreateTargetDispatchOverride(TopologyRepository topologyRepository)
     {
-        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
         var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
@@ -26,10 +25,14 @@ public class RuntimeExecutorTests
             new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
             new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
 
-        var targetDispatchOverride = new TargetDispatchOverride(
-            NullLogger<TargetDispatchOverride>.Instance,
-            topologyRepository,
-            adminRuntime);
+        return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, topologyRepository, adminRuntime);
+    }
+
+    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
+    {
+        var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
+        var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
 
         return new RuntimeExecutor(
             logger: NullLogger<RuntimeExecutor>.Instance,
@@ -49,8 +52,7 @@ public class RuntimeExecutorTests
                 new ContextNeighborSearch(),
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
-            targetDispatchOverride: targetDispatchOverride);
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
     }
 
     [Fact]
@@ -204,7 +206,11 @@ public class SchedulerDispatcherChainTests
         // Verifies wiring: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
         // Scheduler and dispatcher are pass-through skeletons; emission must be identical.
         var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
 
@@ -223,7 +229,11 @@ public class SchedulerDispatcherChainTests
     {
         // Broken refs must propagate through the full chain — no silent fallback.
         var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(NullLogger<ManifestDispatcher>.Instance, executor);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
 
