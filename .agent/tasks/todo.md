@@ -18,6 +18,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
+- [x] schema namespace migration (hubs/topologys/logs) を完了
+      → DB table を意味層 namespace に再分類し、SQL Attention の logs.* 境界を固定した。
+
 - [ ] refresh logs.current / l2 norm watch function implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 

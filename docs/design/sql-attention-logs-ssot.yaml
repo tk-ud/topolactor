@@ -2,6 +2,7 @@ version: 1
 id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
+postgresql_namespace: logs
 physical_schema_status:
   physical_tables:
     - logs.current

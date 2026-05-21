@@ -61,6 +61,11 @@ Exploration budget policy keys (policy-resolved):
 
 Policy values above are contracts and must be resolved from manifest/function_parameters/policy table, not hardcoded literals in SQL/runtime implementation.
 
+PostgreSQL namespace alignment:
+
+- SQL Attention logs are implemented under PostgreSQL `logs` schema (`logs.current`, `logs.registry_current`, `logs.attention`).
+- This namespace boundary separates statistics/observation evidence from `hubs` and `topologys` meaning layers.
+
 This document does not define public marketing copy. Public articles may describe SQL Attention at a higher level, but implementation and audit decisions must follow this SSOT.
 
 ## Core definition

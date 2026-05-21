@@ -19,6 +19,37 @@ db_schema:
     - ui_topology
     - manifest
 
+
+  postgresql_schema_namespaces:
+    hubs:
+      role: attractor_collapse_convergence_boundary
+      tables:
+        - hubs.hubs
+        - hubs.hub_relations
+    topologys:
+      role: meaning_space_with_payload_definition_jsonb
+      tables:
+        - topologys.master_registry
+        - topologys.state_registry
+        - topologys.package_registry
+        - topologys.schema_registry
+        - topologys.component_registry
+        - topologys.structure_maps
+        - topologys.entities
+        - topologys.topology_edit_log
+        - topologys.demo_state_transitions
+    logs:
+      role: statistics_observation_current_attention_evidence
+      tables:
+        - logs.usage_metrics
+        - logs.promotion_candidates
+        - logs.current
+        - logs.registry_current
+        - logs.attention
+    registry_schema_policy:
+      has_dedicated_schema: false
+      rule: registry_is_tensor_map_reference_concept_not_schema_namespace
+
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication
