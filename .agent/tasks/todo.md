@@ -75,8 +75,8 @@ SSOT参照必読:
 
 - [ ] [Claude] GitHub Actionsで実行される詳細Runtime/環境テストを追加する
       → 現状: `.github/workflows/unified-test-gate.yml` で `runtime-environment-gate` が稼働し、`.agent/tests/check-runtime-environment.sh` で docker-compose 起動/停止・DB readiness・migration・失敗時 postgres logs 取得まで実装済み。
-      → 残: env / volume / seed storage の実検証、実行中 backend への API 経由 E2E (`ManifestDispatcher → RuntimeExecutor`)。
+      → 実装済み: env / volume / seed storage 実検証、および実行中 backend への API 経由 E2E (`/auth/login → /dispatch`)。
       → 残: `OutputLaneRouter.RouteAsync` と `AdminRuntime.ExecuteDataAsync` の NOT_COVERED 状態改善（direct test または環境E2Eでの根拠化）。
       → 対象: `.github/workflows/unified-test-gate.yml`, `.agent/tests/check-unified-test-gate.sh`, `.agent/tests/check-runtime-environment.sh`, `backend/tests/Topolactor.Runtime.Tests/*.cs`, `backend/tests/Topolactor.Integration.Tests/*.cs`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
-      → 追加todo: backend 実環境起動 + API 経由検証、db_notify / output lane 実行確認、seed storage / volume 書き込み読み込み検証、失敗時の backend logs 収集追加、解消済み NOT_COVERED 行の削除または根拠リンク化。
+      → 追加todo: db_notify / output lane 実行確認、`OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` の direct test 追加または根拠リンク化、解消済み NOT_COVERED 行の更新。
       → 完了条件: `OutputLaneRouter.RouteAsync` または `AdminRuntime.ExecuteDataAsync` の未カバー状態が改善され、missing tool・skipped test・起動失敗が pass にならず、`unified-test-gate` と `check-structure.sh` が green。

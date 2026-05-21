@@ -17,7 +17,7 @@ require_tool dotnet
 require_tool curl
 require_tool python3
 
-ENV_FILE="${REPO_ROOT}/infra/.env.example"
+RUNTIME_ENV_FILE="${REPO_ROOT}/.agent/tmp/runtime-env-gate.env"
 
 assert_relation_exists() {
   local relation="$1"
@@ -33,13 +33,22 @@ assert_relation_exists() {
 
 cleanup() {
   docker compose -f "${COMPOSE_FILE}" down -v --remove-orphans || true
+  rm -f "${RUNTIME_ENV_FILE}" || true
 }
 trap cleanup EXIT
 
 cd "${REPO_ROOT}"
 
+mkdir -p "${REPO_ROOT}/.agent/tmp"
+cat > "${RUNTIME_ENV_FILE}" <<'EOF'
+DATABASE_URL=Host=postgres;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo
+DEMO_JWT_SECRET=runtime-env-gate-secret
+DEMO_JWT_EXPIRY_HOURS=12
+DEMO_JWT_ISSUER=topolactor-demo
+EOF
+
 echo "=== [RUNTIME_ENV] Start postgres via docker compose ==="
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d postgres
+docker compose --env-file "${RUNTIME_ENV_FILE}" -f "${COMPOSE_FILE}" up -d postgres
 
 echo "=== [RUNTIME_ENV] Wait for postgres health ==="
 for _ in $(seq 1 30); do
@@ -54,7 +63,7 @@ done
 status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-postgres 2>/dev/null || true)"
 if [ "${status}" != "healthy" ]; then
   echo "ERROR: postgres health check failed (status=${status})" >&2
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs postgres || true
+  docker compose --env-file "${RUNTIME_ENV_FILE}" -f "${COMPOSE_FILE}" logs postgres || true
   exit 1
 fi
 
@@ -69,7 +78,7 @@ DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolac
   --nologo --verbosity minimal
 
 echo "=== [RUNTIME_ENV] Verify backend env + seed storage volume + live API route E2E ==="
-docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" up -d backend
+docker compose --env-file "${RUNTIME_ENV_FILE}" -f "${COMPOSE_FILE}" up -d backend
 
 backend_status=""
 for _ in $(seq 1 45); do
@@ -83,8 +92,8 @@ done
 
 if [ "${backend_status}" != "healthy" ]; then
   echo "ERROR: backend health check failed (status=${backend_status})" >&2
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs backend || true
-  docker compose --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" logs postgres || true
+  docker compose --env-file "${RUNTIME_ENV_FILE}" -f "${COMPOSE_FILE}" logs backend || true
+  docker compose --env-file "${RUNTIME_ENV_FILE}" -f "${COMPOSE_FILE}" logs postgres || true
   exit 1
 fi
 
@@ -110,9 +119,7 @@ echo "OK: seed storage volume read/write verified"
 
 echo "=== [RUNTIME_ENV] Verify live API route (auth/login -> dispatch) ==="
 login_payload='{"username":"demo_admin","password":"demo_admin_password"}'
-login_response="$(curl -sS -X POST http://127.0.0.1:5000/auth/login \
-  -H 'Content-Type: application/json' \
-  -d "${login_payload}")"
+login_response="$(docker exec topolactor-demo-backend /bin/sh -lc \"curl -fsS -X POST http://localhost:5000/auth/login -H 'Content-Type: application/json' -d '${login_payload}'\")"
 
 token="$(python3 - <<'PY2' "${login_response}"
 import json,sys
@@ -128,10 +135,7 @@ PY2
 }
 
 dispatch_payload='{"operationType":"Search","target":"default","layer":"entity","action":"Search"}'
-dispatch_response="$(curl -sS -X POST http://127.0.0.1:5000/dispatch \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer ${token}" \
-  -d "${dispatch_payload}")"
+dispatch_response="$(docker exec topolactor-demo-backend /bin/sh -lc \"curl -fsS -X POST http://localhost:5000/dispatch -H 'Content-Type: application/json' -H 'Authorization: Bearer ${token}' -d '${dispatch_payload}'\")"
 
 python3 - <<'PY3' "${dispatch_response}" || {
 import json,sys
@@ -139,7 +143,7 @@ obj=json.loads(sys.argv[1])
 if not obj.get('success'):
     raise SystemExit(1)
 emission=obj.get('emission') or {}
-if not emission.get('structureMapId'):
+if emission.get('structureMapId') != '00000000-0000-0000-0000-000000000004':
     raise SystemExit(1)
 print('OK: live dispatch response verified')
 PY3

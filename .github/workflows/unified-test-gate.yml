@@ -43,7 +43,7 @@ jobs:
     # Runs all test layers via check-unified-test-gate.sh (SSOT for test details).
     # Layers: FUNCTION_BOUNDARY, RUNTIME_INTEGRATION, FRONTEND_CONTRACT.
     # NOT_COVERED: OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync.
-    # REMAINING_TODO: env / volume / live API-route E2E verification.
+    # REMAINING_TODO: OutputLaneRouter.RouteAsync / AdminRuntime.ExecuteDataAsync direct coverage, db_notify/output lane verification.
     name: "Unified test gate (FUNCTION_BOUNDARY / RUNTIME_INTEGRATION / FRONTEND_CONTRACT)"
     runs-on: ubuntu-latest
     steps:
