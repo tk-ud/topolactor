@@ -1,0 +1,68 @@
+name: unified-test-gate
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-unified-test-gate.sh'
+      - '.github/workflows/unified-test-gate.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**/*.cs'
+      - 'backend/**/*.csproj'
+      - 'backend/**/*.sln'
+      - 'frontend/**/*.ts'
+      - 'frontend/**/*.tsx'
+      - 'deno.json'
+      - 'frontend/import_map.json'
+      - 'docs/design/runtime-orchestration-ssot.yaml'
+      - 'docs/design/pipeline-continuity-ssot.yaml'
+      - '.agent/tests/check-unified-test-gate.sh'
+      - '.github/workflows/unified-test-gate.yml'
+
+jobs:
+  test-gate:
+    # Runs all test layers via check-unified-test-gate.sh (SSOT for test details).
+    # Layers: FUNCTION_BOUNDARY, RUNTIME_INTEGRATION, FRONTEND_CONTRACT.
+    # NOT_COVERED: OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync.
+    # REMAINING_TODO: docker-compose / DB / migration / env / volume verification.
+    name: "Unified test gate (FUNCTION_BOUNDARY / RUNTIME_INTEGRATION / FRONTEND_CONTRACT)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run unified test gate
+        run: bash .agent/tests/check-unified-test-gate.sh
+
+  structure-gate:
+    # STRUCTURE_GATE — must run after all test layers complete.
+    name: "[STRUCTURE_GATE] Structure check (must run last)"
+    needs: [test-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run structure check
+        run: bash .agent/tests/check-structure.sh
