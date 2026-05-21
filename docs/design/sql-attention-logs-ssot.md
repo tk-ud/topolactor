@@ -34,6 +34,33 @@ Initial registry_kind candidates:
 
 Each registry kind defines its i/j/k basis by registry grammar.
 
+
+
+Neighbor exploration policy range (initial policy contract):
+
+- neighbor_score_min: 0.85
+- neighbor_score_max: 1.00
+- strong_hit_threshold: 0.95
+- normal_hit_threshold: 0.90
+- exploratory_hit_threshold: 0.85
+
+Score band contract:
+
+- 1.00〜0.95 = strong / near-isomorphic hit
+- 0.95〜0.90 = normal neighbor hit
+- 0.90〜0.85 = exploratory / phase candidate hit
+- below 0.85 = initial reject or evidence-only
+
+Exploration budget policy keys (policy-resolved):
+
+- max_registry_kinds_per_current
+- max_registry_tables_per_kind
+- topK_per_registry_kind
+- phase_expansion_limit
+- max_attention_rows_saved
+
+Policy values above are contracts and must be resolved from manifest/function_parameters/policy table, not hardcoded literals in SQL/runtime implementation.
+
 This document does not define public marketing copy. Public articles may describe SQL Attention at a higher level, but implementation and audit decisions must follow this SSOT.
 
 ## Core definition
@@ -172,6 +199,8 @@ It is a projection/cache current and is not an adopted topology state, and it do
 ### logs.attention — neighbor hit / phase evidence log
 
 `logs.attention` stores the result of registry-neighbor exploration and its phase-shifted candidate vector.
+
+`logs.attention` must carry both `current_id` (physical current reference) and `registry_current_id` (registry plane reference).
 
 If `logs.current` exists, `logs.attention` must be linked to it so that every attention hit has evidence back to the current basis that produced it.
 

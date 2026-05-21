@@ -18,7 +18,7 @@ CREATE SCHEMA IF NOT EXISTS logs;
 
 -- ---------------------------------------------------------------------------
 -- logs.current
--- Physical log-pressure current (regenerable projection/cache).
+-- Physical log-pressure current (regenerable projection/cache). topN physical items × signal axes basis (initial axes: table/column/ui).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.current (
     current_id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -49,7 +49,7 @@ COMMENT ON TABLE logs.current IS
 
 -- ---------------------------------------------------------------------------
 -- logs.registry_current
--- Registry-side population/phase-basis current for z-score and phase distance.
+-- Registry-side population/phase-basis current for z-score and phase distance (N×N exploration plane).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.registry_current (
     registry_current_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS logs.registry_current (
     registry_table         TEXT        NOT NULL,
     registry_id            TEXT        NOT NULL,
     basis_window           TEXT        NOT NULL,
+    matrix_shape           TEXT,
+    registry_matrix_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
     population_count       BIGINT      NOT NULL DEFAULT 0,
     population_recordcount BIGINT      NOT NULL DEFAULT 0,
     axis_population_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
@@ -78,6 +80,7 @@ COMMENT ON TABLE logs.registry_current IS
 CREATE TABLE IF NOT EXISTS logs.attention (
     attention_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     current_id            UUID        NOT NULL REFERENCES logs.current(current_id) ON DELETE RESTRICT,
+    registry_current_id   UUID        NOT NULL REFERENCES logs.registry_current(registry_current_id) ON DELETE RESTRICT,
     source_set_id         TEXT        NOT NULL,
     statistics_json       JSONB       NOT NULL DEFAULT '{}'::jsonb,
     ema_score             DOUBLE PRECISION,
@@ -90,6 +93,7 @@ CREATE TABLE IF NOT EXISTS logs.attention (
     registry_id           TEXT        NOT NULL,
     neighbor_score        DOUBLE PRECISION NOT NULL DEFAULT 0,
     hit_rank              INTEGER,
+    score_band            TEXT        NOT NULL DEFAULT 'evidence_only',
     evidence_json         JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     archive_policy        TEXT        NOT NULL DEFAULT 'required'
@@ -125,3 +129,10 @@ CREATE INDEX IF NOT EXISTS idx_logs_registry_current_registry_ref
   ON logs.registry_current (registry_kind, registry_id);
 CREATE INDEX IF NOT EXISTS idx_logs_registry_current_registry_table_window
   ON logs.registry_current (registry_kind, registry_table, basis_window);
+
+CREATE INDEX IF NOT EXISTS idx_logs_registry_current_updated_at
+  ON logs.registry_current (updated_at);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_registry_current_id
+  ON logs.attention (registry_current_id);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_score_band
+  ON logs.attention (score_band);

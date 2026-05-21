@@ -26,6 +26,23 @@ physical_schema_status:
     j: column_jsonb_path_axis
     k: ui_component_operation
   registry_kind_phase_basis_rule: define_i_j_k_by_registry_grammar
+  neighbor_score_policy_range:
+    min: 0.85
+    max: 1.00
+    strong_hit_threshold: 0.95
+    normal_hit_threshold: 0.90
+    exploratory_hit_threshold: 0.85
+  score_band_contract:
+    strong: "1.00-0.95"
+    normal: "0.95-0.90"
+    exploratory: "0.90-0.85"
+    evidence_only_below: 0.85
+  exploration_budget_policy_keys:
+    - max_registry_kinds_per_current
+    - max_registry_tables_per_kind
+    - topK_per_registry_kind
+    - phase_expansion_limit
+    - max_attention_rows_saved
   out_of_scope_not_implemented:
     - refresh_function_bodies
     - norm_watch_function_bodies
@@ -293,6 +310,7 @@ layers:
       suggested_fields:
         - attention_id
         - current_id
+        - registry_current_id
         - source_set_id
         - statistics_json
         - ema_score
