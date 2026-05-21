@@ -286,6 +286,8 @@ check_content "docs/design/sql-attention-logs-ssot.md" "relation registry"
 check_content "docs/design/sql-attention-logs-ssot.md" "zero padding"
 check_content "docs/design/sql-attention-logs-ssot.md" "calculation-local"
 check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not topology search"
+check_content "docs/design/sql-attention-logs-ssot.md" "hub-attractor exploration"
+check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not registry search"
 check_content "docs/design/sql-attention-logs-ssot.md" "projection"
 check_content "docs/design/sql-attention-logs-ssot.md" "Tensor"
 check_content "docs/design/sql-attention-logs-ssot.md" "attractor_key"
@@ -584,6 +586,17 @@ if rg -n "registry-neighbor exploration" "$REPO_ROOT/docs/design/sql-attention-l
   fail "registry-neighbor exploration should not remain as SQL Attention target"
 else
   echo "OK  [ssot] registry-neighbor exploration removed from SQL Attention target docs"
+fi
+
+if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "Initial registry_kind candidates should not remain"
+else
+  echo "OK  [ssot] Initial registry_kind candidates removed"
+fi
+if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_table/registry_id should not remain in SQL Attention attention contract"
+else
+  echo "OK  [ssot] registry_table/registry_id removed from SQL Attention attention contract"
 fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────

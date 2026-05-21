@@ -623,3 +623,16 @@ sql_attention_target_boundary:
     - topologys
     - registry
   projection_path: hit_hub_to_topologys_meaning_space
+
+
+sql_attention_target_note:
+  target: hubs_tensor_attractor
+  not_target:
+    - topologys_direct_search
+    - registry_direct_search
+  projection: topologys_is_projected_from_hit_hub
+  topology_recommendation_basis:
+    - statistics
+    - ema
+    - usage_history
+    - usage_frequency

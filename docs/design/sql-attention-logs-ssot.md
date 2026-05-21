@@ -7,7 +7,7 @@ This document is the design SSOT for SQL Attention logs, pressure-current calcul
 Physical schema implementation status:
 
 - Abstract contract names: `logs.current` and `logs.attention` (contract-level names).
-- Implemented physical tables (registry-aware): `logs.current`, `logs.hub_current`, and `logs.attention` (schema/index/constraint surface).
+- Implemented physical tables (hub-attractor boundary): `logs.current`, `logs.hub_current`, and `logs.attention` (schema/index/constraint surface).
 - Not implemented: refresh function bodies, norm watch function bodies, DB triggers, scheduler/runtime hub-attractor exploration, phase_vector generation runtime logic.
 
 
@@ -20,19 +20,6 @@ Registry-aware naming boundary:
 - `logs.attention` is the registry exploration evidence plane linked to physical current.
 - table-specific names `logs.table_current` / `logs.table_attention` are not adopted.
 
-Initial registry_kind candidates:
-
-- `table`
-- `relation`
-- `component`
-- `state`
-- `schema`
-- `package`
-- `function`
-- `hub`
-- `ui`
-
-Each registry kind defines its i/j/k basis by registry grammar.
 
 
 
@@ -53,9 +40,9 @@ Score band contract:
 
 Exploration budget policy keys (policy-resolved):
 
-- max_registry_kinds_per_current
-- max_registry_tables_per_kind
-- topK_per_registry_kind
+- max_hub_kinds_per_current
+- max_hub_tables_per_kind
+- topK_per_hub_kind
 - phase_expansion_limit
 - max_attention_rows_saved
 
@@ -86,7 +73,7 @@ logs.* signal sources
 → logs.attention evidence
 ```
 
-The essential idea is to convert physical-table operation pressure into a bounded attention query and then search registry composition tables for nearby topology grammar.
+The essential idea is to convert physical-table operation pressure into a bounded attention query and then search hubs.* Tensor/attractor neighbors for projection-ready hub hits.
 
 ## Philosophy and structure
 
@@ -233,7 +220,7 @@ phase_vector
 Meaning:
 
 ```text
-vector       = registry-neighbor hit vector
+vector       = hub-attractor neighbor hit vector
 phase_vector = vector distorted by Phase Attention across i/table, j/column, k/ui axes
 ```
 
@@ -454,7 +441,7 @@ Correct boundary:
 
 ```text
 logs aggregation completed = attention-query basis is ready
-registry-neighbor hit and evidence saved = attention observation completed
+hub-attractor hit and evidence saved = attention observation completed
 phase_vector generated on logs.attention = phase candidate visible for later review/aggregation
 adoption/migration = separate implementation path
 ```
@@ -615,8 +602,10 @@ l2_norm
 vector_json
 phase_vector_json
 permutation_key
-registry_table
-registry_id
+hub_id
+attractor_key
+hub_relation_id
+relation_registry_id
 neighbor_score
 hit_rank
 evidence_json
@@ -888,3 +877,8 @@ SQL Attention converts physical-side `logs.*` signals into a `logs.current` calc
 - SQL Attention explores hubs.* Tensor/attractor from logs pressure.
 - topologys.* is not SQL Attention direct search target; it is projected meaning space attached to hit hub/attractor.
 - topology-side recommendation is based on statistics/EMA/history/usage trend only.
+
+
+## Support-surface note
+
+Registry/topology references are projection/support surfaces, not SQL Attention target surfaces.

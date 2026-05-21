@@ -23,7 +23,7 @@ projection_boundary:
 deprecated_or_rejected:
   - logs.hub_current
   - registry_neighbor exploration as SQL Attention target (deprecated wording)
-  - registry_kind as attention target axis
+  - registry_kind as attention target axis (rejected)
 physical_schema_status:
   physical_tables:
     - logs.current
@@ -33,16 +33,6 @@ physical_schema_status:
     - logs.table_current
     - logs.table_attention
   initial_implementation: hub_attractor_target_aware_generic_schema
-  initial_registry_kinds:
-    - table
-    - relation
-    - component
-    - state
-    - schema
-    - package
-    - function
-    - hub
-    - ui
   table_registry_phase_basis:
     i: table
     j: column_jsonb_path_axis
@@ -60,9 +50,9 @@ physical_schema_status:
     exploratory: "0.90-0.85"
     evidence_only_below: 0.85
   exploration_budget_policy_keys:
-    - max_registry_kinds_per_current
-    - max_registry_tables_per_kind
-    - topK_per_registry_kind
+    - max_hub_kinds_per_current
+    - max_hub_tables_per_kind
+    - topK_per_hub_kind
     - phase_expansion_limit
     - max_attention_rows_saved
   relation_registry_calculation_contract:
@@ -271,7 +261,7 @@ layers:
   norm_trigger:
     role: exploration_gate
     description: >-
-      Monitoring may run every time current is updated, but registry-neighbor
+      Monitoring may run every time current is updated, but hub-attractor
       exploration only starts when norm level changes.
     initial_policy:
       watch_top_n: 3
@@ -336,8 +326,10 @@ layers:
       - vector_json
       - phase_vector_json
       - permutation_key
-      - registry_table
-      - registry_id
+      - hub_id
+      - attractor_key
+      - hub_relation_id
+      - relation_registry_id
       - neighbor_score
       - hit_rank
       - evidence_json
@@ -356,8 +348,10 @@ layers:
         - vector_json
         - phase_vector_json
         - permutation_key
-        - registry_table
-        - registry_id
+        - hub_id
+        - attractor_key
+        - hub_relation_id
+        - relation_registry_id
         - neighbor_score
         - hit_rank
         - evidence_json

@@ -3,14 +3,14 @@
 -- SQL Attention physical tables (design contract implementation surface)
 --
 -- Scope of this file:
---   - Implement registry-aware physical schema: logs.current / logs.hub_current / logs.attention.
+--   - Implement hub-attractor physical schema: logs.current / logs.hub_current / logs.attention.
 --   - Implement indexes/constraints for query and linkage contracts.
 --
 -- Out of scope:
 --   - refresh_logs_current implementation
 --   - l2 norm watch implementation
 --   - DB trigger implementation
---   - scheduler/runtime registry-neighbor exploration implementation
+--   - scheduler/runtime hub-attractor exploration implementation
 --   - phase_vector generation implementation
 -- =============================================================================
 
