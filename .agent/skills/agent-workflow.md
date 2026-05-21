@@ -39,6 +39,8 @@ READ_ENTRY
 - READ_TARGET_SURFACES
   - read target files / target functions / target directories
   - use the matched `.agent/prompt/<work-type>.md` to decide required SSOT and triggered protocols when applicable
+  - after a protocol target is selected by trigger/prompt/ssot-map, use `.agent/protocols/index.yaml` to locate section markers before reading protocol body sections
+  - grep hits from protocol index are route selection aids only and must not be used as PASS/FAIL judgment
   - read `.agent/docs/ssot-map.yaml` only when the target surface needs SSOT mapping or the prompt/task explicitly requires it
   - read corresponding `.agent/docs/` resume/index only when ssot-map or task materials require it
   - read mapped `docs/` SSOT required_docs before implementation/audit only after mapping confirms they are relevant
@@ -55,6 +57,7 @@ READ_ENTRY
   - preserve canonical route / explicit failure / no silent fallback
 - FILL_CHECKLISTS
   - after implementation, fill only triggered checklists
+  - protocol index routing does not allow skipping checklist/protocol workflow steps
   - policy changes: policy-judgment
   - boundary changes: runtime-boundary-matrix / boundary-identity
   - checklist is viewpoint recording, not final pass judgment

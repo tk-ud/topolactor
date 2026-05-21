@@ -25,7 +25,7 @@ It separates always-read guidance from condition-triggered references, and separ
 - `.agent/prompt/`:
   Work-type router surface for selecting required SSOT and triggered governance gates. Prompt files are not protocols and not an always-read bundle.
 - `.agent/protocols/`:
-  Condition-triggered governance reference points. Protocols are not an always-read bundle and not a single always-on workflow.
+  Condition-triggered governance reference points. Protocols are not an always-read bundle and not a single always-on workflow. `index.yaml` is a lightweight grep route for finding protocol sections and is not protocol body.
 - `.agent/reports/`:
   Storage for inspection results and audit/maintenance report outputs.
 - `.agent/tasks/`:

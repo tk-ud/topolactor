@@ -1,0 +1,125 @@
+version: 1
+purpose: "Lightweight grep route for condition-triggered protocol sections. This is not a judgment SSOT."
+usage:
+  - "Use only to locate protocol files and section markers after a trigger or work-type route selects a protocol."
+  - "Do not use grep hit as PASS/FAIL judgment."
+  - "Protocol body remains the judgment source."
+  - "Do not read the whole protocol bundle by default."
+
+protocols:
+  - id: completion-governance
+    file: .agent/protocols/completion.md
+    stage:
+      - JUDGMENT
+    grep_keys:
+      - "completion eligibility"
+      - "TODO `[x]`"
+      - "NOT_EXECUTED"
+      - "REMOTE_REQUIRED"
+      - "Remote CI Equivalence Gate"
+      - "Required Check Scope"
+      - "Auditor TODO"
+      - "Roadmap Status Gate"
+    section_markers:
+      - "## Trigger condition"
+      - "## Scope"
+      - "## Execution procedure"
+      - "## Completion / failure decision"
+    related_surfaces:
+      - .agent/protocols/reports-and-todos.md
+      - .agent/tests/check-completion-judgment.sh
+
+  - id: reports-and-todo-surfaces
+    file: .agent/protocols/reports-and-todos.md
+    stage:
+      - JUDGMENT
+      - PUSH_OR_PR
+    grep_keys:
+      - "PR body"
+      - "follow-up comment"
+      - "remaining TODO"
+      - ".agent/tasks/todo.md"
+      - "Auditor TODO"
+      - "Roadmap Status vs TODO Responsibility"
+    section_markers:
+      - "## Surface rules"
+      - "## PR body and follow-up comment policy"
+      - "## TODO carry-over rules"
+      - "## Roadmap Status vs TODO Responsibility"
+    related_surfaces:
+      - .agent/protocols/completion.md
+
+  - id: scenario-contract
+    file: .agent/protocols/scenario-contract.md
+    stage:
+      - SCENARIO_CONTRACT
+      - VERIFY_SCENARIO_DIFF
+    grep_keys:
+      - "runtime claim"
+      - "canonical route"
+      - "persistence behavior"
+      - "projection behavior"
+      - "docs/ SSOT reload"
+      - "Boundary Extension Scenario"
+    section_markers:
+      - "## Trigger scope"
+      - "## Precondition: Workflow Order Invariant Gate"
+      - "## Position in completion sequence"
+      - "## Boundary Extension Scenario"
+
+  - id: boundary-identity
+    file: .agent/protocols/runtime-boundary-matrix.md
+    stage:
+      - FILL_CHECKLISTS
+      - JUDGMENT
+    grep_keys:
+      - "endpoint wiring"
+      - "frontend API proxy wiring"
+      - "repository write"
+      - "persistence mutation"
+      - "DB-backed registry operation"
+      - "End-to-End Boundary Identity"
+      - "Frontend projection identity"
+      - "UI action identity"
+    section_markers:
+      - "## Workflow Guard"
+      - "## Trigger scope"
+
+  - id: policy-judgment
+    file: .agent/protocols/policy-judgment.md
+    stage:
+      - FILL_CHECKLISTS
+      - JUDGMENT
+    grep_keys:
+      - "runtime/policy-affecting value"
+      - "scoring"
+      - "threshold"
+      - "routing"
+      - "validation"
+      - "projection behavior"
+      - "Policy Judgment Gate"
+      - "Violation table"
+    section_markers:
+      - "## Workflow Guard"
+      - "## Trigger scope"
+      - "Violation table"
+
+  - id: registry-topology-semantics
+    file: .agent/protocols/registry-tensor-policy.md
+    stage:
+      - READ_TARGET_SURFACES
+      - DEFINE_SCOPE
+      - JUDGMENT
+    grep_keys:
+      - "registry tensor semantics"
+      - "semantic matrix"
+      - "SQL Attention"
+      - "Projection surface map"
+      - "Drift / GAP classification"
+    section_markers:
+      - "## Trigger scope"
+      - "## Purpose"
+      - "## Mandatory interpretation"
+      - "## Projection surface map"
+      - "## SQL Attention interpretation"
+      - "## Drift / GAP classification"
