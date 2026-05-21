@@ -21,14 +21,17 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] norm-level watch policy implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
-- [ ] scheduler/runtime registry-neighbor exploration を実装する
+- [ ] scheduler/runtime table-registry neighbor exploration を実装する
       → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
 
-- [ ] phase_vector generation implementation を行う
-      → scheduler/runtime 側で registry-neighbor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
+- [ ] table_attention phase_vector generation implementation を行う
+      → scheduler/runtime 側で table-registry neighbor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.table_attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
 
 - [ ] statistics / EMA integration を実装する
       → statistics_json / ema_score を安定性レイヤとして計算・保存し、Attention(l2_norm/vector/neighbor_score) と分離した evidence 層を runtime/DB write contract に反映する。
+
+- [ ] relation/component/state registry attention schema expansion を実装する
+      → logs.relation_current/logs.relation_attention、logs.component_current/logs.component_attention、logs.state_current/logs.state_attention の物理schemaを registry grammar ごとに追加する。
 
 - [ ] physical tableid 対応の実装判断を行う
       → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する。現状は domain scope identifier であり canonical logs.diff ではない。

@@ -3,8 +3,23 @@ id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
 physical_schema_status:
-  logs_current: implemented
-  logs_attention: implemented
+  abstract_contract:
+    - logs_current
+    - logs_attention
+  initial_physical_tables:
+    - logs.table_current
+    - logs.table_attention
+  future_registry_tables:
+    - logs.relation_current
+    - logs.relation_attention
+    - logs.component_current
+    - logs.component_attention
+    - logs.state_current
+    - logs.state_attention
+  table_registry_phase_basis:
+    i: table
+    j: column_jsonb_path_axis
+    k: ui_component_operation
   out_of_scope_not_implemented:
     - refresh_function_bodies
     - norm_watch_function_bodies
