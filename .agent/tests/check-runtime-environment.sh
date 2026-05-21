@@ -15,6 +15,7 @@ require_tool() {
 require_tool docker
 require_tool jq
 require_tool curl
+require_tool dotnet
 
 assert_relation_exists() {
   local relation="$1"
@@ -80,6 +81,11 @@ docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo 
 assert_relation_exists "public.manifest"
 assert_relation_exists "public.topology_edit_log"
 
+echo "=== [RUNTIME_ENV] Run integration tests against live DB ==="
+DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo' \
+  dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
+  --nologo --verbosity minimal
+
 echo "=== [RUNTIME_ENV] Wait for backend health ==="
 for _ in $(seq 1 40); do
   status="$(docker inspect --format='{{.State.Health.Status}}' topolactor-demo-backend 2>/dev/null || true)"
@@ -128,18 +134,89 @@ if [ -z "${token}" ] || [ "${token}" = "null" ]; then
   exit 1
 fi
 
-dispatch_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
+mapping_json="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "
+WITH active_manifests AS (
+  SELECT manifest_id, topology
+  FROM manifest
+  WHERE status = 'active'
+),
+dispatcher AS (
+  SELECT
+    am.manifest_id,
+    e->>'role' AS role,
+    e->>'target' AS target,
+    e->>'layer' AS layer,
+    e->>'action' AS action
+  FROM active_manifests am
+  CROSS JOIN LATERAL jsonb_array_elements(am.topology) e
+  WHERE e->>'type' = 'dispatcher_mapping'
+),
+runtime_map AS (
+  SELECT
+    am.manifest_id,
+    e->>'structure_map_id' AS structure_map_id
+  FROM active_manifests am
+  CROSS JOIN LATERAL jsonb_array_elements(am.topology) e
+  WHERE e->>'type' = 'runtime_mapping'
+)
+SELECT json_build_object(
+  'role', d.role,
+  'target', d.target,
+  'layer', d.layer,
+  'action', d.action,
+  'structureMapId', r.structure_map_id
+)::text
+FROM dispatcher d
+LEFT JOIN runtime_map r ON r.manifest_id = d.manifest_id
+ORDER BY d.manifest_id
+LIMIT 1;
+")"
+
+if [ -z "${mapping_json}" ]; then
+  echo "ERROR: no active manifest dispatcher_mapping found for live /dispatch E2E" >&2
+  dump_logs
+  exit 1
+fi
+
+dispatch_target="$(printf '%s' "${mapping_json}" | jq -r '.target // empty')"
+dispatch_layer="$(printf '%s' "${mapping_json}" | jq -r '.layer // empty')"
+dispatch_action="$(printf '%s' "${mapping_json}" | jq -r '.action // empty')"
+dispatch_role="$(printf '%s' "${mapping_json}" | jq -r '.role // empty')"
+expected_structure_map_id="$(printf '%s' "${mapping_json}" | jq -r '.structureMapId // empty')"
+
+if [ -z "${dispatch_target}" ] || [ -z "${dispatch_layer}" ] || [ -z "${dispatch_action}" ]; then
+  echo "ERROR: active manifest dispatcher_mapping is incomplete: ${mapping_json}" >&2
+  dump_logs
+  exit 1
+fi
+
+dispatch_response="$(jq -n \
+  --arg target "${dispatch_target}" \
+  --arg layer "${dispatch_layer}" \
+  --arg action "${dispatch_action}" \
+  --arg role "${dispatch_role}" \
+  '{operationType:"Search",target:$target,layer:$layer,action:$action,idOrHubId:null,payload:null,context:null,role:(if $role=="" then null else $role end)}' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
   -H "Authorization: Bearer ${token}" \
   -H "Content-Type: application/json" \
-  --data-binary @-
-{"operationType":"Search","target":"default","layer":"entity","action":"Search","idOrHubId":null,"payload":null,"context":null}
-JSON
-)"
+  --data-binary @-)"
 
 dispatch_success="$(printf '%s' "${dispatch_response}" | jq -r '.success // false')"
 dispatch_structure_map_id="$(printf '%s' "${dispatch_response}" | jq -r '.emission.structureMapId // empty')"
-if [ "${dispatch_success}" != "true" ] || [ "${dispatch_structure_map_id}" != "entity_default" ]; then
-  echo "ERROR: dispatch verification failed; response body:" >&2
+if [ "${dispatch_success}" != "true" ]; then
+  echo "ERROR: dispatch returned non-success; response body:" >&2
+  echo "${dispatch_response}" >&2
+  dump_logs
+  exit 1
+fi
+
+if [ -n "${expected_structure_map_id}" ] && [ "${dispatch_structure_map_id}" != "${expected_structure_map_id}" ]; then
+  echo "ERROR: dispatch structureMapId mismatch (expected=${expected_structure_map_id}, actual=${dispatch_structure_map_id}); response body:" >&2
+  echo "${dispatch_response}" >&2
+  dump_logs
+  exit 1
+fi
+if [ -z "${dispatch_structure_map_id}" ]; then
+  echo "ERROR: dispatch emitted empty structureMapId; response body:" >&2
   echo "${dispatch_response}" >&2
   dump_logs
   exit 1
