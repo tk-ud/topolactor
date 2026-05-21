@@ -7,6 +7,7 @@ Every task starts by reading:
 1. `AGENTS.md`
 2. `.agent/rules/rule.md`
 3. `.agent/README.md`
+4. `.agent/skills/agent-workflow.md`
 
 These are always-on governance sources. Prompt bundle, protocol bundle, docs bundle, skills bundle, and rule core bundle are not always-read; open them only when their trigger or task scope applies.
 
@@ -113,7 +114,7 @@ Protocol agenda map (condition-triggered):
 Protocols are not always-on reading. Use each protocol only when its trigger condition applies.
 
 Protocol body routing:
-- After Protocol Agenda Map / Protocol Trigger Map / prompt router / ssot-map selects protocol targets, use `.agent/protocols/index.yaml` as a lightweight section-level grep route for targeted section markers.
+- After Protocol Agenda Map / Protocol Trigger Map / prompt router / ssot-map selects protocol targets, use `.agent/protocols/index.yaml` as a lightweight section-level grep route for targeted section markers, except for protocols listed in ## Small Protocol Direct-Read, which are read directly without index.yaml.
 - `.agent/protocols/index.yaml` is not protocol body and not a judgment gate SSOT.
 - grep hits are read-route hints only; PASS/FAIL judgment remains in each protocol body.
 
@@ -130,6 +131,24 @@ Protocol body routing:
   - `.agent/protocols/policy-judgment.md`
 - Registry tensor / topology semantics changes:
   - `.agent/protocols/registry-tensor-policy.md`
+
+## Small Protocol Direct-Read
+
+The following protocols are shorter than index.yaml.
+Reading index.yaml before these files costs more than reading them directly.
+When these are the triggered protocols, read them directly without opening index.yaml:
+
+- `.agent/protocols/policy-judgment.md`
+- `.agent/protocols/runtime-boundary-matrix.md`
+- `.agent/protocols/scenario-contract.md`
+
+When a task triggers one of these alongside a large protocol
+(completion.md, reports-and-todos.md, registry-tensor-policy.md),
+open index.yaml once for the large protocol; small protocols are still direct-read.
+
+This exception applies only to named files above.
+Protocol bundle full-read remains prohibited.
+Protocol body remains the judgment SSOT.
 
 ## Gate Naming (Reference Only)
 
