@@ -45,6 +45,10 @@ services:
       DEMO_JWT_EXPIRY_HOURS: "${DEMO_JWT_EXPIRY_HOURS}"
       # Optional — defaults to "topolactor-demo" if not set
       DEMO_JWT_ISSUER: "${DEMO_JWT_ISSUER:-topolactor-demo}"
+      # Seed Runtime storage path — Issue #84. Defaults to /storage (volume-mounted below).
+      SEED_STORAGE_PATH: "/storage"
+    volumes:
+      - topolactor_seed_storage:/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,3 +85,4 @@ services:
 
 volumes:
   topolactor_demo_pgdata:
+  topolactor_seed_storage:

@@ -572,10 +572,27 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     seed_import_export_runtime:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: UI-managed /storage/seed.json runtime is not implemented.
+      public_summary: >
+        Seed Runtime boundary defined in docs/registrar-admin-ui-specification.md §8.5.
+        SeedJsonRepository handles /storage/seed.json save/load.
+        SeedRuntime implements validate/preview/import pipeline.
+        AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
+        docker-compose mounts topolactor_seed_storage volume at /storage.
+        Admin UI at /admin/seed provides all 5 operations.
+        Import is a skeleton: validates structure and counts runtimes.
+        Full canonical import through manifest-driven routing requires Gap-1 resolution.
+        Import failure is explicit (fail-close). No silent fallback.
+      files:
+        - backend/repository/SeedJsonRepository.cs
+        - backend/runtime/SeedRuntime.cs
+        - backend/schema/SeedContracts.cs
+        - backend/runtime/AdminRuntime.cs
+        - infra/docker-compose.yml
+        - frontend/routes/admin/seed.tsx
+        - docs/registrar-admin-ui-specification.md
       completion_condition:
         - seed_runtime_boundary_is_defined_in_SSOT
         - save_load_validate_preview_import_are_separated
@@ -583,33 +600,56 @@ system_roadmap_ssot:
         - import_failure_is_explicit_and_fail_close
         - docker_compose_mounts_storage_volume
       known_gap_ref:
-        - Issue #84
+        - Issue #84 partial (import canonical route requires Gap-1 resolution)
 
     frontend_ui_component_system:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Primitive and packaged UI component system with UI topology DB registration is not implemented.
+      public_summary: >
+        Primitive components (Button, Input, Table, Card) defined in frontend/components/.
+        Components noted as code-only (drift) in /admin/ui-builder catalog.
+        Component bucket → package generator pipeline wired in AdminRuntime and /admin/ui-builder.
+        UI topology DB tables and NpgsqlUiTopologyRepository already implement full promotion.
+        Code-only components are explicitly labeled as drift/GAP.
+        Frontend does not own topology or runtime judgment.
+        Remaining: components are not yet DB-registered (bucket + generate needed per component).
+      files:
+        - frontend/components/Button.tsx
+        - frontend/components/Input.tsx
+        - frontend/components/Table.tsx
+        - frontend/components/Card.tsx
+        - frontend/routes/admin/ui-builder.tsx
+        - db/ui_topology_tables.sql
       completion_condition:
         - primitive_and_packaged_component_boundary_is_defined
         - componentId_packageId_layoutId_wiringId_are_registered_in_UI_topology_DB
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
       known_gap_ref:
-        - Issue #86
+        - Issue #86 partial (primitive components defined; DB registration requires bucket/generate flow)
 
     admin_visual_layout_builder:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Admin visual layout builder and layout tensor management are not implemented.
+      public_summary: >
+        /admin/ui-builder enhanced with primitive catalog, bucket listing, and package generator.
+        layoutId is issued per PromoteBucketItemAsync (ui_layout_registry row created automatically).
+        ui_layout_registry table exists in db/ui_topology_tables.sql.
+        Frontend adapter is a stable projection surface (spec changes via registry tensor).
+        Full mouse-driven layout editor and style token management are not yet implemented.
+      files:
+        - frontend/routes/admin/ui-builder.tsx
+        - db/ui_topology_tables.sql
+        - backend/repository/NpgsqlUiTopologyRepository.cs
       completion_condition:
         - layout_tensor_and_variable_css_boundaries_are_defined
         - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
       known_gap_ref:
-        - Issue #89
+        - Issue #89 partial (layoutId issued via package generator; mouse-driven builder pending)
 
     backend.context_route_repository:
       status: partial

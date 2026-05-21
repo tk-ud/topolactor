@@ -70,7 +70,14 @@ builder.Services.AddSingleton<SystemOperationCiRuntime>();
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
-builder.Services.AddSingleton<AdminRuntime>();
+builder.Services.AddSingleton<AdminRuntime>(sp =>
+    new AdminRuntime(
+        sp.GetRequiredService<ILogger<AdminRuntime>>(),
+        sp.GetRequiredService<ContextRouteRepository>(),
+        sp.GetRequiredService<RegistrarValidationService>(),
+        sp.GetRequiredService<PackageGeneratorRuntime>(),
+        sp.GetRequiredService<UiTopologyRepository>(),
+        sp.GetRequiredService<SeedRuntime>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(
@@ -103,6 +110,16 @@ builder.Services.AddSingleton<ManifestDispatcher>(sp =>
         sp.GetRequiredService<ManifestRepository>()));
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();
+
+// Seed Runtime — Issue #84.
+// SEED_STORAGE_PATH defaults to /storage (docker-compose volume mount).
+// If not set, SeedRuntime is still registered but AdminRuntime logs SEED_RUNTIME_NOT_AVAILABLE.
+var seedStoragePath = Environment.GetEnvironmentVariable("SEED_STORAGE_PATH") ?? "/storage";
+builder.Services.AddSingleton<SeedJsonRepository>(sp =>
+    new SeedJsonRepository(
+        sp.GetRequiredService<ILogger<SeedJsonRepository>>(),
+        seedStoragePath));
+builder.Services.AddSingleton<SeedRuntime>();
 
 // ---------------------------------------------------------------------------
 // SSE broadcaster — fan-out projection events to all connected SSE clients

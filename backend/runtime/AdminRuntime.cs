@@ -18,19 +18,22 @@ public class AdminRuntime
     private readonly RegistrarValidationService _registrarValidationService;
     private readonly PackageGeneratorRuntime _packageGeneratorRuntime;
     private readonly UiTopologyRepository _uiTopologyRepository;
+    private readonly SeedRuntime? _seedRuntime;
 
     public AdminRuntime(
         ILogger<AdminRuntime> logger,
         ContextRouteRepository contextRouteRepository,
         RegistrarValidationService registrarValidationService,
         PackageGeneratorRuntime packageGeneratorRuntime,
-        UiTopologyRepository uiTopologyRepository)
+        UiTopologyRepository uiTopologyRepository,
+        SeedRuntime? seedRuntime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
         _registrarValidationService = registrarValidationService ?? throw new ArgumentNullException(nameof(registrarValidationService));
         _packageGeneratorRuntime = packageGeneratorRuntime ?? throw new ArgumentNullException(nameof(packageGeneratorRuntime));
         _uiTopologyRepository = uiTopologyRepository ?? throw new ArgumentNullException(nameof(uiTopologyRepository));
+        _seedRuntime = seedRuntime;
     }
 
     // ---------------------------------------------------------------------------
@@ -175,6 +178,11 @@ public class AdminRuntime
             "registry_vector:validate"         => await DataValidateRegistryVectorAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
+            "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
+            "seed_runtime:load"                => await DataSeedLoadAsync(ct),
+            "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
+            "seed_runtime:preview"             => await DataSeedPreviewAsync(ct),
+            "seed_runtime:import"              => await DataSeedImportAsync(ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
@@ -361,5 +369,118 @@ public class AdminRuntime
             "Package generated successfully.");
 
         return (JsonSerializer.SerializeToElement(responseDto), null);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Seed Runtime operations — Issue #84
+    // ---------------------------------------------------------------------------
+
+    private ValidationError SeedRuntimeNotAvailable() =>
+        new("SEED_RUNTIME_NOT_AVAILABLE",
+            "SeedRuntime is not configured. Ensure SEED_STORAGE_PATH is set and /storage is mounted.");
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSeedSaveAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_seedRuntime is null) return (null, SeedRuntimeNotAvailable());
+
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload with content field is required for seed_runtime:save"));
+
+        string? content;
+        try
+        {
+            if (!vector.Payload.Value.TryGetProperty("content", out var contentEl) ||
+                contentEl.ValueKind != JsonValueKind.String)
+                return (null, new ValidationError("CONTENT_REQUIRED",
+                    "payload.content (string) is required"));
+            content = contentEl.GetString();
+        }
+        catch (Exception ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+            return (null, new ValidationError("CONTENT_EMPTY", "payload.content must not be empty"));
+
+        var result = await _seedRuntime.SaveAsync(content, ct);
+        if (!result.Success)
+            return (null, new ValidationError(result.ErrorCode!, result.ErrorMessage!));
+
+        return (JsonSerializer.SerializeToElement(
+            new SeedSaveResponseDto(true)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSeedLoadAsync(
+        CancellationToken ct)
+    {
+        if (_seedRuntime is null) return (null, SeedRuntimeNotAvailable());
+
+        var result = await _seedRuntime.LoadAsync(ct);
+        if (!result.Success)
+            return (null, new ValidationError(result.ErrorCode!, result.ErrorMessage!));
+
+        return (JsonSerializer.SerializeToElement(
+            new SeedLoadResponseDto(true, result.Json)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSeedValidateAsync(
+        CancellationToken ct)
+    {
+        if (_seedRuntime is null) return (null, SeedRuntimeNotAvailable());
+
+        var result = await _seedRuntime.ValidateAsync(ct);
+        var errorDtos = result.Errors
+            .Select(e => new SeedValidationErrorDto(e.Code, e.Message))
+            .ToList();
+
+        return (JsonSerializer.SerializeToElement(
+            new SeedValidationResponseDto(true, result.IsValid, errorDtos)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSeedPreviewAsync(
+        CancellationToken ct)
+    {
+        if (_seedRuntime is null) return (null, SeedRuntimeNotAvailable());
+
+        var result = await _seedRuntime.PreviewAsync(ct);
+        if (!result.Success)
+        {
+            var errDtos = result.Errors
+                .Select(e => new SeedValidationErrorDto(e.Code, e.Message))
+                .ToList();
+            return (null, new ValidationError(errDtos[0].Code, errDtos[0].Message));
+        }
+
+        var runtimeDtos = result.Data!.Runtimes
+            .Select(r => new SeedRuntimePreviewDto(r.Name, r.Target, r.Layer, r.Action))
+            .ToList();
+
+        return (JsonSerializer.SerializeToElement(
+            new SeedPreviewResponseDto(true, result.Data.RuntimeCount, runtimeDtos, [])), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSeedImportAsync(
+        CancellationToken ct)
+    {
+        if (_seedRuntime is null) return (null, SeedRuntimeNotAvailable());
+
+        var result = await _seedRuntime.ImportAsync(ct);
+        if (!result.Success)
+        {
+            var errDtos = result.Errors
+                .Select(e => new SeedValidationErrorDto(e.Code, e.Message))
+                .ToList();
+            return (null, new ValidationError(errDtos[0].Code, errDtos[0].Message));
+        }
+
+        return (JsonSerializer.SerializeToElement(
+            new SeedImportResponseDto(
+                true,
+                result.ValidatedRuntimeCount,
+                "Seed validated. Full canonical import requires Gap-1 manifest-driven routing resolution.",
+                [])), null);
     }
 }
