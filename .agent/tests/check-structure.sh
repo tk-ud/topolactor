@@ -583,6 +583,16 @@ if rg -n "registry-neighbor exploration" "$REPO_ROOT/docs/design/sql-attention-l
 else
   echo "OK  [ssot] registry-neighbor exploration removed from SQL Attention target docs"
 fi
+if rg -n "registry_composition_neighbors|registry_composition_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_composition_neighbors/tables should not remain"
+else
+  echo "OK  [ssot] registry_composition_neighbors/tables should not remain"
+fi
+if rg -n "scheduler_runtime_registry_neighbor_exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "scheduler_runtime_registry_neighbor_exploration should not remain"
+else
+  echo "OK  [ssot] scheduler_runtime_registry_neighbor_exploration should not remain"
+fi
 
 if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "Initial registry_kind candidates should not remain"
@@ -593,6 +603,11 @@ if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/desi
   fail "logs.hub_current must not be in deprecated_or_rejected"
 else
   echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
+fi
+if ! rg -nUP "physical_tables:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "physical_tables must include logs.hub_current"
+else
+  echo "OK  [ssot] physical_tables includes logs.hub_current"
 fi
 if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
   fail "registry_table/registry_id should not remain in SQL Attention attention contract"

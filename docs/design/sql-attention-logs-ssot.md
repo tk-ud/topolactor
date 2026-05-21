@@ -137,7 +137,7 @@ phase_vector_json = divergent/exploratory candidate direction
 
 `logs.*` tables are aggregation sources.
 
-They are not the final attention result and are not themselves registry grammar. They observe physical-side usage, mutation, candidates, or other runtime signals.
+They are not the final attention result and are not themselves topology meaning payloads. They observe physical-side usage, mutation, candidates, or other runtime signals.
 
 Initial source set:
 
@@ -338,16 +338,6 @@ i = table direction
 j = column / jsonb_path / axis direction
 k = UI / component operation direction
 ```
-
-For table registry phase basis (initial physical implementation):
-
-```text
-i = table
-j = column / jsonb_path / axis
-k = UI / component operation
-```
-
-For other registry kinds (relation/component/state), i/j/k basis must be defined according to each registry grammar before physical implementation.
 
 ## Completion boundary
 
@@ -790,7 +780,7 @@ Guardrails:
 
 ## One-sentence definition
 
-SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records statistics, `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention` without collapsing statistics, Attention, and Phase Attention into one score.
+SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores hubs.* hub/attractor candidates and records statistics, `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention` without collapsing statistics, Attention, and Phase Attention into one score.
 
 ## Target boundary clarification
 
