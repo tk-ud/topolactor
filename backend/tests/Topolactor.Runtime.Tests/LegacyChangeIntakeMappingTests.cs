@@ -57,4 +57,24 @@ public class LegacyChangeIntakeMappingTests
         Assert.Contains(errors, e => e.Code == "LEGACY_OPERATION_REQUIRED");
         Assert.Contains(errors, e => e.Code == "LEGACY_CHANGE_PAYLOAD_REQUIRED");
     }
+
+    [Fact]
+    public void BuildLegacyHookRequest_ReturnsExplicitValidationError_WhenOperationUnsupported()
+    {
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            RuntimeExecutorTests.CreateExecutor());
+
+        var intake = new LegacyChangeIntakeRequestDto(
+            TableName: "orders",
+            RowId: "42",
+            Operation: "upsert",
+            ChangedDataJsonb: System.Text.Json.JsonDocument.Parse("{\"status\":\"done\"}").RootElement,
+            DiffJsonb: null);
+
+        var (request, errors) = dispatcher.BuildLegacyHookRequest(intake);
+
+        Assert.Null(request);
+        Assert.Contains(errors, e => e.Code == "LEGACY_OPERATION_UNSUPPORTED");
+    }
 }

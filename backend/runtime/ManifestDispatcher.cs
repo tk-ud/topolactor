@@ -119,6 +119,8 @@ public class ManifestDispatcher
             errors.Add(new ValidationError("LEGACY_ROW_ID_REQUIRED", "row_id is required."));
         if (string.IsNullOrWhiteSpace(intake.Operation))
             errors.Add(new ValidationError("LEGACY_OPERATION_REQUIRED", "operation is required."));
+        else if (!AllowedLegacyOperations.Contains(intake.Operation))
+            errors.Add(new ValidationError("LEGACY_OPERATION_UNSUPPORTED", "operation must be one of: create, update, delete, transition."));
         if (intake.ChangedDataJsonb is null && intake.DiffJsonb is null)
             errors.Add(new ValidationError("LEGACY_CHANGE_PAYLOAD_REQUIRED", "changed_data_jsonb or diff_jsonb is required."));
 
@@ -150,7 +152,10 @@ public class ManifestDispatcher
         ), []);
     }
 
-private static readonly HashSet<string> KnownRuntimeDestinations =
+private static readonly HashSet<string> AllowedLegacyOperations =
+        new(StringComparer.OrdinalIgnoreCase) { "create", "update", "delete", "transition" };
+
+    private static readonly HashSet<string> KnownRuntimeDestinations =
         new(StringComparer.OrdinalIgnoreCase) { "topology_transform_runtime", "registry_attractor_runtime" };
 
     /// <summary>

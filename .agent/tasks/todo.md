@@ -85,10 +85,18 @@ SSOT参照必読:
 
 ## Issue #134 Legacy table mirror / change-event intake
 
-- [ ] [User] legacy change intake の repository 境界を追加し、`legacy_change_event` 永続化と dispatch 相関ID追跡を実装する
-      → 現在は endpoint→scheduler→dispatcher 連携のみで、intake archive 永続化と replay 導線は未実装。
-      → 対象: `backend/repository/`, `backend/endpoint/LegacyChangeIntakeEndpoint.cs`, `backend/scheduler/RuntimeTimelineScheduler.cs`
+- [ ] [User] `legacy_change_event` / `legacy_table_snapshot` の repository 永続化を実装する
+      → 現在は SQL schema と intake routing のみで、endpoint 経由イベントの永続化は未実装。
+      → 対象: `backend/repository/`, `backend/endpoint/LegacyChangeIntakeEndpoint.cs`, `backend/schema/Contracts.cs`
 
-- [ ] [User] table_name registry 解決を manifest/registry の明示ポリシーへ昇格し、legacy_mirror layer の runtime_destination 解決規約を定義する
-      → 現在は `Target=table_name` を渡す最小導線のみ。manifest topology 側に legacy 用 mapping 規約が未定義。
+- [ ] [User] background hook dispatch の相関追跡（correlation ID）と結果可視化を実装する
+      → 現在は `202 Accepted` 後の `MANIFEST_NOT_FOUND` 等が intake caller へ戻らず、dispatch結果保存もない。
+      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`, `backend/runtime/ManifestDispatcher.cs`, `backend/repository/`
+
+- [ ] [User] replay path（archive -> re-dispatch）を実装する
+      → intake archive / replay 導線は未実装。
+      → 対象: `backend/repository/`, `backend/scheduler/RuntimeTimelineScheduler.cs`
+
+- [ ] [User] `table_name` registry 解決を manifest/registry の明示ポリシーへ昇格し、legacy_mirror layer の runtime_destination 解決規約を定義する
+      → 現在は `Target=table_name` へ写像する最小導線のみで、manifest topology 側の legacy mapping 規約は partial。
       → 対象: `backend/runtime/ManifestDispatcher.cs`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-policy.yaml`
