@@ -70,3 +70,15 @@ SSOT参照必読:
       → 前提: Issue #86 component DB 登録完了後。
       → 完了条件: admin_visual_layout_builder status=implemented (docs/system-roadmap.yaml)
       → 対象: `db/ui_topology_tables.sql` (layout token schema)、`frontend/islands/` (drag/drop UI island)、`docs/registrar-admin-ui-specification.md`
+
+## Runtime Environment Test Gate
+
+- [ ] [Claude] GitHub Actionsで実行される詳細Runtime/環境テストを追加する
+      → 現在の `unified-test-gate` は function / runtime / integration / frontend contract の骨格CIとして成立しているが、実環境寄りの詳細テストは不足している。
+      → 残: docker-compose起動、DB接続、migration適用、db_notify / output lane、env / volume / seed storage、実行中アプリへのAPI経由E2E。
+      → `OutputLaneRouter.RouteAsync` と `AdminRuntime.ExecuteDataAsync` は `check-unified-test-gate.sh` 上で NOT_COVERED として明記済み。
+      → 単なる `echo` や存在確認だけで pass するテストは禁止。起動・接続・実行・検証・後始末まで行う。
+      → 対象: `.github/workflows/unified-test-gate.yml`, `.github/workflows/*environment*.yml` または新規 workflow, `.agent/tests/check-unified-test-gate.sh`, `.agent/tests/check-runtime-environment.sh` 新規候補, `docker-compose.yml`, `backend/tests/Topolactor.Runtime.Tests/*.cs`, `backend/tests/Topolactor.Integration.Tests/*.cs`, `db/**/*.sql`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`, `backend/repository/*Npgsql*.cs`
+      → 対象関数: `OutputLaneRouter.RouteAsync`, `AdminRuntime.ExecuteDataAsync`, `ManifestDispatcher.DispatchAsync`, `RuntimeExecutor.ExecuteAsync`, `TargetDispatchOverride.TryHandleAsync`, `DbNotifyRepository` の notify 実行関数, migration / seed / bootstrap 関連関数
+      → todo: 詳細テスト用 script 追加、GitHub Actions workflow から script 実行、docker-compose起動、DB healthcheck/readiness wait、migration適用、seed/env/volume準備、backend実環境起動、API経由で `ManifestDispatcher → RuntimeExecutor` を検証、`AdminRuntime.ExecuteDataAsync` の直接またはAPI経由テスト追加、`OutputLaneRouter.RouteAsync` / db_notify 実行確認、DB通知・ログ・副作用検証、seed storage / volume 書き込み読み込み検証、失敗時の docker logs / DB logs 出力、終了時の docker compose down、解消済み NOT_COVERED の削除、未実装環境依存項目の REMAINING_TODO 明記、最後に `bash .agent/tests/check-structure.sh` 実行
+      → 完了条件: GitHub Actions上で詳細Runtime/環境テストが実行される / docker-compose・DB・migration・env・volume の少なくとも一部が実検証される / `OutputLaneRouter.RouteAsync` または `AdminRuntime.ExecuteDataAsync` の未カバー状態が改善される / missing tool・skipped test・起動失敗が pass にならない / 失敗時に原因調査できるログが残る / `unified-test-gate` と `check-structure.sh` が green になる
