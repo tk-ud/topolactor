@@ -375,6 +375,137 @@ existing_repository_mismatch_notes:
   context_hub_recommendation_current:
     caution: not_same_as_logs_current_pressure_basis
 
+
+function_contract:
+  note: concrete_function_names_may_change_but_responsibility_boundary_is_fixed
+  functions:
+    refresh_logs_current:
+      signature: refresh_logs_current(source_set_id, basis_window)
+      role:
+        - aggregate_logs_sources_into_logs_current_basis
+        - refresh_basis_vector_and_pressure_matrix
+        - update_count_total_and_recordcount_total
+      prohibited_side_effects:
+        - registry_neighbor_exploration_execution
+        - phase_vector_distortion_execution
+    calculate_l2_norm:
+      signature: calculate_l2_norm(current_id_or_basis_vector)
+      role:
+        - compute_l2_norm_from_basis_vector
+        - expose_norm_for_watch_comparison
+      prohibited_side_effects:
+        - registry_neighbor_exploration_execution
+    compare_norm_level_snapshot:
+      signature: compare_norm_level_snapshot(top_n)
+      role:
+        - compare_top_n_membership_order_level_and_norm_delta
+      no_change_action: return
+      change_action: emit_level_changed_signal
+    mark_attention_exploration_candidate:
+      signature: mark_attention_exploration_candidate(current_id)
+      role:
+        - mark_scheduler_runtime_exploration_candidate
+      prohibited_side_effects:
+        - exploration_execution
+    write_logs_attention:
+      signature: write_logs_attention(...)
+      role:
+        - append_attention_evidence_row
+        - require_current_id_linkage
+        - persist_statistics_attention_phase_evidence_fields
+      required_fields:
+        - statistics_json
+        - ema_score
+        - l2_norm
+        - vector_json
+        - phase_vector_json
+        - neighbor_score
+        - evidence_json
+    generate_phase_vector:
+      signature: generate_phase_vector(...)
+      ownership: scheduler_runtime
+      role:
+        - generate_phase_vector_candidate_evidence
+      prohibited_side_effects:
+        - direct_registry_mutation
+        - automatic_migration_execution
+        - automatic_column_promotion
+
+trigger_contract:
+  source_append_monitoring: allowed_every_append
+  flow:
+    - source_append_or_aggregation_event
+    - refresh_logs_current
+    - calculate_l2_norm
+    - compare_norm_level_snapshot
+  no_change_action: return
+  change_action:
+    - mark_attention_exploration_candidate
+  prohibited_on_trigger:
+    - registry_neighbor_exploration_execution
+    - phase_vector_distortion_execution
+    - direct_registry_mutation
+    - automatic_migration_execution
+    - automatic_column_promotion
+
+db_trigger_boundary:
+  allowed:
+    - logs_current_lightweight_refresh
+    - dirty_flag_marking
+    - norm_level_change_detection
+    - exploration_candidate_marking
+    - no_change_early_return
+  prohibited:
+    - registry_neighbor_exploration_execution
+    - phase_vector_generation
+    - registry_mutation
+    - migration_execution
+    - column_promotion_execution
+
+scheduler_runtime_boundary:
+  owns:
+    - registry_neighbor_exploration
+    - bounded_permutation_search
+    - phase_vector_generation
+    - write_logs_attention_evidence
+  notes:
+    - exploration_runs_only_after_candidate_marking_or_equivalent_runtime_gate
+    - phase_vector_is_candidate_evidence_not_adoption_state
+
+phase_attention_function_contract:
+  input:
+    - logs_attention_vector_json
+    - logs_attention_l2_norm
+    - table_registry_i_j_k_population
+    - z_score_normalized_values
+    - policy_caps
+  output:
+    - logs_attention_phase_vector_json
+  invariants:
+    - phase_vector_is_candidate_evidence
+    - phase_vector_does_not_auto_mutate_registry
+    - phase_vector_does_not_auto_execute_migration
+    - phase_vector_does_not_auto_execute_column_promotion
+
+evidence_layer_separation:
+  statistics_layer:
+    fields: [statistics_json, ema_score]
+    meaning: convergence_confidence_stability_continuity
+  attention_layer:
+    fields: [l2_norm, vector_json, neighbor_score]
+    meaning: current_excitation_neighbor_hit
+  phase_attention_layer:
+    fields: [phase_vector_json]
+    meaning: exploratory_variance_candidate_direction
+  invariant: no_single_score_collapse
+
+policy_sources:
+  allowed:
+    - manifest
+    - function_parameters
+    - policy_table
+  rule: policy_values_are_resolved_from_data_defined_sources_no_hidden_magic_numbers
+
 implementation_order:
   - create_markdown_and_yaml_ssot
   - wire_ssot_into_repository_maps_required_paths_and_structure_checks

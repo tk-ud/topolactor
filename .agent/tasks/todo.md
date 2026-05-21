@@ -18,9 +18,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] function / trigger contract を設計契約として固定する
-      → schema contract は docs/design/sql-attention-logs-ssot.md / .yaml に定義済み。次は logs.* source append、logs.current basis update、l2 norm level watch、変動なし return、変動あり exploration candidate 化、logs.attention evidence write の責務境界を契約化する。function / trigger 本実装はこの契約後に行う。
-
 - [ ] norm-level watch policy implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
@@ -29,6 +26,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] scheduler/runtime registry-neighbor exploration を実装する
       → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
+
+- [ ] phase_vector generation implementation を行う
+      → scheduler/runtime 側で registry-neighbor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
+
+- [ ] statistics / EMA integration を実装する
+      → statistics_json / ema_score を安定性レイヤとして計算・保存し、Attention(l2_norm/vector/neighbor_score) と分離した evidence 層を runtime/DB write contract に反映する。
 
 - [ ] physical tableid 対応の実装判断を行う
       → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する。現状は domain scope identifier であり canonical logs.diff ではない。
