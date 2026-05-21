@@ -13,6 +13,7 @@ on:
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
       - '.agent/tests/check-unified-test-gate.sh'
+      - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
   push:
     branches:
@@ -28,6 +29,7 @@ on:
       - 'docs/design/runtime-orchestration-ssot.yaml'
       - 'docs/design/pipeline-continuity-ssot.yaml'
       - '.agent/tests/check-unified-test-gate.sh'
+      - '.agent/tests/check-runtime-environment.sh'
       - '.github/workflows/unified-test-gate.yml'
 
 jobs:
@@ -55,10 +57,26 @@ jobs:
       - name: Run unified test gate
         run: bash .agent/tests/check-unified-test-gate.sh
 
+  runtime-environment-gate:
+    name: "[RUNTIME_ENV] Docker compose / DB / migration gate"
+    needs: [test-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Run runtime environment gate
+        run: bash .agent/tests/check-runtime-environment.sh
+
   structure-gate:
     # STRUCTURE_GATE — must run after all test layers complete.
     name: "[STRUCTURE_GATE] Structure check (must run last)"
-    needs: [test-gate]
+    needs: [test-gate, runtime-environment-gate]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

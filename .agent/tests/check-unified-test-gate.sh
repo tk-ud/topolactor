@@ -15,7 +15,7 @@
 #   OutputLaneRouter.RouteAsync    — no unit test; requires SSE route integration fixture
 #   AdminRuntime.ExecuteDataAsync  — no unit test; covered only indirectly via Integration.Tests fixture
 #
-# docker-compose / DB / migration / env / volume verification: remaining TODO.
+# docker-compose / DB / migration verification is covered in check-runtime-environment.sh.
 # Missing tool is an explicit failure, not a pass.
 
 set -euo pipefail
@@ -97,7 +97,7 @@ echo ""
 echo "=== [NOT_COVERED] Functions without direct test coverage (remaining todo) ==="
 echo "NOT_COVERED  OutputLaneRouter.RouteAsync — no unit test; requires SSE route integration fixture"
 echo "NOT_COVERED  AdminRuntime.ExecuteDataAsync — no unit test; covered only indirectly via Integration.Tests fixture"
-echo "REMAINING_TODO  docker-compose / DB / migration / env / volume verification not included in this gate"
+echo "REMAINING_TODO  env / volume / live API-route E2E verification is not included in this gate"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 
