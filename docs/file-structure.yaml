@@ -63,6 +63,25 @@ data_driven_topology_runtime_file_structure:
         - unvalidated_schema_mutation
         - silent_fallback
 
+
+
+    infra:
+      role: local_demo_bootstrap_hosting_boundary
+      description: >
+        Infra is the local/demo/bootstrap hosting boundary.
+        It composes DB/backend/frontend/nginx/adminer wiring for local runtime hosting
+        and validation, but does not redefine runtime policy or topology semantics.
+      owns:
+        - local_demo_service_orchestration
+        - compose_service_wiring
+        - local_reverse_proxy_route_boundary
+        - local_compose_env_template
+      must_not_own:
+        - runtime_policy_authority
+        - topology_meaning_judgment
+        - database_schema_authority
+        - frontend_projection_judgment
+
     database:
       role: semantic_topology_space
       description: >
@@ -185,6 +204,30 @@ data_driven_topology_runtime_file_structure:
         role: data_topology_to_package_schema_component_map
       layout.tsx:
         role: global_physical_shell
+
+
+  infra:
+    root: infra/
+    principle:
+      - local_demo_bootstrap_hosting_boundary_only
+      - compose_bootstrap_is_not_runtime_policy_authority
+      - keep_backend_frontend_database_agent_subjects_unchanged
+    files:
+      docker-compose.yml:
+        role: local_demo_service_orchestration_ssot
+        includes:
+          - database_init_mount
+          - backend_frontend_nginx_adminer_composition
+          - docker_compose_runtime_bootstrap
+      nginx.conf:
+        role: local_reverse_proxy_route_boundary
+      .env.example:
+        role: local_compose_env_template
+    must_not_own:
+      - runtime_policy_authority
+      - topology_meaning_judgment
+      - database_schema_authority
+      - frontend_projection_judgment
 
   backend:
     root: backend/

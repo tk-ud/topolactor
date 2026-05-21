@@ -57,6 +57,19 @@ layers:
       runtime:    frontend/runtime/     # frontend runtime executor
       api:        frontend/api/         # backend contract clients
 
+  infra:
+    role: local_demo_runtime_hosting_boundary
+    path: infra/
+    description: >
+      Local/demo/bootstrap hosting boundary for compose-based service wiring.
+      Defines PostgreSQL, backend, frontend, nginx, and adminer bootstrap composition
+      for local validation flows. This layer is not runtime policy authority and does
+      not own topology semantics.
+    files:
+      - infra/docker-compose.yml  # compose runtime bootstrap / local demo hosting / service wiring SSOT
+      - infra/nginx.conf          # frontend/backend routing boundary for local reverse proxy
+      - infra/.env.example        # local compose env template
+
   agent:
     role: local_structure_guard
     path: .agent/
