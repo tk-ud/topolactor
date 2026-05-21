@@ -148,7 +148,7 @@ dispatcher AS (
     e->>'layer' AS layer,
     e->>'action' AS action
   FROM active_manifests am
-  CROSS JOIN LATERAL jsonb_array_elements(am.topology) e
+  CROSS JOIN LATERAL unnest(am.topology) AS e
   WHERE e->>'type' = 'dispatcher_mapping'
 ),
 runtime_map AS (
@@ -156,7 +156,7 @@ runtime_map AS (
     am.manifest_id,
     e->>'structure_map_id' AS structure_map_id
   FROM active_manifests am
-  CROSS JOIN LATERAL jsonb_array_elements(am.topology) e
+  CROSS JOIN LATERAL unnest(am.topology) AS e
   WHERE e->>'type' = 'runtime_mapping'
 )
 SELECT json_build_object(
