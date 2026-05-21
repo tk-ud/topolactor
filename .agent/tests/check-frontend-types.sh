@@ -9,6 +9,7 @@ cd "$REPO_ROOT"
 
 if ! command -v deno >/dev/null 2>&1; then
   echo "ERROR: Deno is required for frontend type check. Install Deno and retry." >&2
+  echo "This check was NOT executed — missing tool is not a pass." >&2
   exit 1
 fi
 

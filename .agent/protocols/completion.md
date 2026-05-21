@@ -90,6 +90,23 @@ This protocol owns:
 9. Push
    - Push only after all triggered gates pass and no blocking condition remains.
 
+
+
+## Local/Remote required check mapping (dotnet/deno)
+
+When a required local check cannot run because a required tool is absent, classify it as `REQUIRED_NOT_EXECUTED` (not PASS), then reconcile it only via equivalent remote CI success evidence.
+
+| Local scope | Local command | Missing tool behavior | Local status | Remote workflow | Remote job/check | Remote evidence rule |
+|---|---|---|---|---|---|---|
+| backend test scope | `bash .agent/tests/check-backend-tests.sh` | `dotnet` missing returns non-zero and states not executed / not pass | `REQUIRED_NOT_EXECUTED` | `backend-tests` | `backend-tests` | `REMOTE_REQUIRED` is satisfied only when PR check is `success` for the matching scope. |
+| frontend type-check scope | `bash .agent/tests/check-frontend-types.sh` | `deno` missing returns non-zero and states not executed / not pass | `REQUIRED_NOT_EXECUTED` | `frontend-types` | `check-frontend-types` | `REMOTE_REQUIRED` is satisfied only when PR check is `success` for the matching scope. |
+
+Remote states `queued`, `in_progress`, `failure`, `cancelled`, and unjustified `skipped` are not PASS and do not satisfy Remote CI Equivalence Gate.
+
+Completion summary must keep these as separate facts:
+- local execution fact (`PASS` vs `REQUIRED_NOT_EXECUTED`)
+- remote evidence fact (`REMOTE_REQUIRED` pending vs remote `success`)
+
 ## Completion / failure decision
 
 Blocking (completion prohibited):
