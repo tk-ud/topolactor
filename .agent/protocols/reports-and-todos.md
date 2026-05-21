@@ -64,7 +64,7 @@ No prompt router or workflow note may replace it with an alternate final summary
   - changed summary → `### 作業内容`
   - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED → `### test結果` (`#### Local` / `#### Remote CI` / `#### Required check scope`)
   - remaining TODOs → `### 残タスク引き継ぎ指示`
-  - PR body thin 유지 or update reason when materially misleading → `### 作業内容` または `### 変更ファイル`
+  - PR body thin state or update reason when materially misleading → `### 作業内容` または `### 変更ファイル`
   - `PR_COMMENT_NOT_POSTED` fallback (when posting unavailable) → same template body must be emitted as exact paste-ready comment content in final summary
 - excluded surfaces:
   - initial PR body
