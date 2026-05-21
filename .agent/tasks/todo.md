@@ -15,6 +15,30 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
+
+## SQL Attention Logs SSOT 配線後の次フェーズ
+
+- [ ] logs.* / logs.current / logs.attention schema contract を確定する
+      → docs/design/sql-attention-logs-ssot.md / .yaml は追加済み。次は backend/schema・DB schema・runtime projection の contract を整合させる。
+
+- [ ] function / trigger contract を実装可能な粒度で固定する
+      → l2 norm trigger と attention evidence の入力・算出・保持境界を runtime-orchestration と整合させる。
+
+- [ ] norm-level watch policy を定義する
+      → norm-level の監視条件、閾値運用、明示失敗時の扱いを policy surface として確定する。
+
+- [ ] scheduler/runtime registry-neighbor exploration contract を確定する
+      → registry-neighbor exploration と table registry vector search の実行責務 (scheduler vs runtime) を整理する。
+
+- [ ] topology_edit_log と physical tableid の意味ズレを解消する
+      → logs.attention の evidence と topology_edit_log の参照整合を確立する。
+
+- [ ] promotion_candidates を logs.candidate として扱う条件を整理する
+      → candidate pressure と昇格条件の接続ルールを SSOT に反映する。
+
+- [ ] context_event を logs.ui_operation として扱う保持方針/Manifest policy を整理する
+      → ui operation pressure の保持期間、manifest authority、破棄条件を明文化する。
+
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
 SSOT参照必読:

@@ -58,6 +58,8 @@ required_files:
     - docs/design/context-route-recommendation.yaml
     - docs/design/runtime-orchestration-ssot.yaml
     - docs/design/db-schema.yaml
+    - docs/design/sql-attention-logs-ssot.yaml
+    - docs/design/sql-attention-logs-ssot.md
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml

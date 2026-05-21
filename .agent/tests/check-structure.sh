@@ -127,6 +127,8 @@ check_file "docs/file-structure.yaml"
 check_file "docs/registrar-admin-ui-specification.md"
 check_file "docs/design/runtime-orchestration-ssot.yaml"
 check_file "docs/design/db-schema.yaml"
+check_file "docs/design/sql-attention-logs-ssot.md"
+check_file "docs/design/sql-attention-logs-ssot.yaml"
 
 check_file ".agent/README.md"
 check_file ".agent/docs/structure-map.yaml"
@@ -258,6 +260,13 @@ check_content "AGENTS.md" ".agent/tests/check-structure.sh"
 
 check_content "AGENTS.md" "Agent Contract"
 check_content "AGENTS.md" "Runtime Boundary Failure Matrix"
+
+check_content "docs/design/sql-attention-logs-ssot.md" "logs.current"
+check_content "docs/design/sql-attention-logs-ssot.md" "logs.attention"
+check_content "docs/design/sql-attention-logs-ssot.md" "l2 norm"
+check_content "docs/design/sql-attention-logs-ssot.md" "physical table"
+check_content "docs/design/sql-attention-logs-ssot.md" "norm-level"
+
 check_content ".agent/rules/rule.md" "Runtime Boundary Failure Matrix"
 check_content ".agent/protocols/runtime-boundary-matrix.md" "Runtime Boundary Failure Matrix"
 check_content ".agent/protocols/index.yaml" "grep route"
