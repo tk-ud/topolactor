@@ -34,7 +34,7 @@
 
 CREATE TABLE IF NOT EXISTS manifest (
     manifest_id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    relation_registry_id  UUID        REFERENCES relation_registry (relation_registry_id) ON DELETE RESTRICT,
+    relation_registry_id  UUID        REFERENCES topologys.relation_registry (relation_registry_id) ON DELETE RESTRICT,
     topology              JSONB[]     NOT NULL DEFAULT '{}',
     status                TEXT        NOT NULL DEFAULT 'draft',
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),

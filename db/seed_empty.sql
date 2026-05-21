@@ -29,7 +29,7 @@
 -- ---------------------------------------------------------------------------
 -- state_registry defaults
 -- ---------------------------------------------------------------------------
-INSERT INTO state_registry (state_id, name, owner)
+INSERT INTO topologys.state_registry (state_id, name, owner)
 VALUES
     (gen_random_uuid(), 'active',    'system'),
     (gen_random_uuid(), 'operating', 'business'),
@@ -40,7 +40,7 @@ ON CONFLICT DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- relation_registry defaults
 -- ---------------------------------------------------------------------------
-INSERT INTO relation_registry (
+INSERT INTO topologys.relation_registry (
     relation_registry_id,
     name, master_ids, category, type, "order", weight, manifest_candidate, active
 )
@@ -54,7 +54,7 @@ ON CONFLICT DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- package_registry — deterministic ID so structure_maps can reference it
 -- ---------------------------------------------------------------------------
-INSERT INTO package_registry (package_id, name, type, package_def, active)
+INSERT INTO topologys.package_registry (package_id, name, type, package_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000001',
     'default_package', 'core', '{}', true
@@ -65,7 +65,7 @@ ON CONFLICT (package_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- schema_registry — deterministic ID so structure_maps can reference it
 -- ---------------------------------------------------------------------------
-INSERT INTO schema_registry (schema_id, name, schema_def, active)
+INSERT INTO topologys.schema_registry (schema_id, name, schema_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000002',
     'default_schema', '{"fields":[{"key":"label","type":"text","label":"Label"}]}', true
@@ -76,7 +76,7 @@ ON CONFLICT (schema_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- component_registry — deterministic ID so structure_maps can reference it
 -- ---------------------------------------------------------------------------
-INSERT INTO component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000003',
     'default_projection_component', 'renderer',
@@ -91,7 +91,7 @@ ON CONFLICT (component_id) DO NOTHING;
 -- attractor_key is stored lowercase to match backend normalization
 -- (OperationVectorResolver lowercases Target:Layer:Action).
 -- ---------------------------------------------------------------------------
-INSERT INTO structure_maps (
+INSERT INTO topologys.structure_maps (
     structure_map_id,
     name,
     attractor_key,
@@ -142,21 +142,21 @@ ON CONFLICT (manifest_id) DO NOTHING;
 --   admin_schema:    00000000-0000-0000-0000-000000000021
 --   admin_component: 00000000-0000-0000-0000-000000000022
 -- ---------------------------------------------------------------------------
-INSERT INTO package_registry (package_id, name, type, package_def, active)
+INSERT INTO topologys.package_registry (package_id, name, type, package_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000020',
     'admin_package', 'admin', '{}', true
 )
 ON CONFLICT (package_id) DO NOTHING;
 
-INSERT INTO schema_registry (schema_id, name, schema_def, active)
+INSERT INTO topologys.schema_registry (schema_id, name, schema_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000021',
     'admin_schema', '{}', true
 )
 ON CONFLICT (schema_id) DO NOTHING;
 
-INSERT INTO component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000022',
     'admin_component', 'admin',
@@ -166,7 +166,7 @@ ON CONFLICT (component_id) DO NOTHING;
 
 -- structure_maps for admin attractor keys.
 -- attractor_key format: "{target}:{layer}:{action}" (lowercase, matches OperationVectorResolver output).
-INSERT INTO structure_maps (
+INSERT INTO topologys.structure_maps (
     structure_map_id, name, attractor_key,
     package_id, schema_id, component_ids, active
 )
@@ -233,7 +233,7 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 -- attractor_key format: "admin:seed_runtime:{action}" (lowercase)
 -- All operations share the admin package / schema / component topology nodes.
 -- ---------------------------------------------------------------------------
-INSERT INTO structure_maps (
+INSERT INTO topologys.structure_maps (
     structure_map_id, name, attractor_key,
     package_id, schema_id, component_ids, active
 )
