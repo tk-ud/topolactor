@@ -64,6 +64,40 @@ Workflow Order Invariant is defined in `.agent/rules/rule.md` and must be preser
 - Use `.agent/tmp/` only for temporary in-task notes/contracts and remove/clear temporary artifacts by process rules.
 - Do not treat `.agent/tmp/` as a long-term report or completion-summary location.
 
+## Estimated Token Consumption
+
+Agent execution consumes:
+
+```text
+total_input_tokens ~= normal_prompt_tokens + repository_system_read_tokens
+```
+
+Where:
+
+- `normal_prompt_tokens`: the user/task prompt, issue text, PR summary, explicit task materials.
+- `repository_system_read_tokens`: `.agent` governance files read before or during the task.
+- Hidden model/provider system prompts are not measurable from this repository, so this estimate covers repository-side agent governance overhead only.
+
+Current `.agent` read overhead estimate:
+
+| Route | Estimated tokens |
+|---|---:|
+| Always-read baseline: `AGENTS.md` + `.agent/rules/rule.md` + `.agent/README.md` + `.agent/skills/agent-workflow.md` | ~3,200-4,000 |
+| Baseline + `.agent/protocols/index.yaml` | ~5,200-6,300 |
+| Baseline + index + 1 targeted protocol section | ~5,500-7,000 |
+| Baseline + index + completion/report judgment sections | ~6,200-8,500 |
+| Heavy route with prompt router + ssot-map + mapped docs/SSOT + multiple protocol sections | ~10,000-20,000+ |
+
+Practical formula:
+
+```text
+light_task_tokens ~= normal_prompt_tokens + 3.5k
+protocol_task_tokens ~= normal_prompt_tokens + 6k-8k
+ssot_heavy_task_tokens ~= normal_prompt_tokens + 10k-20k+
+```
+
+These are provisional estimates, not exact tokenizer measurements. Update them when token accounting or file size changes materially.
+
 ## Non-Goals
 
 - This file does not redefine runtime/application behavior.
