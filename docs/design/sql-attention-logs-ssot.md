@@ -22,6 +22,62 @@ logs.* signal sources
 
 The essential idea is to convert physical-table operation pressure into a bounded attention query and then search registry composition tables for nearby topology grammar.
 
+## Philosophy and structure
+
+SQL Attention keeps three meanings separate.
+
+```text
+statistics      = convergence confidence / stability / continuity
+Attention       = current excitation / neighbor hit strength
+Phase Attention = exploratory variance / shifted candidate vector
+```
+
+These must not be collapsed into one score at the evidence layer.
+
+```text
+statistics
+- count
+- recordcount
+- EMA
+- trend
+- feedback
+
+Attention
+- l2_norm
+- neighbor_score
+- vector_json
+
+Phase Attention
+- phase_vector_json
+```
+
+Meaning:
+
+```text
+statistics      = whether the candidate is stable or trustworthy over time
+Attention       = what is strongly excited now
+Phase Attention = which shifted direction may produce useful unexplored candidates
+```
+
+EMA and other statistical values are retained as the stable-confidence layer. They can be used later by policy/adoption logic, but they should not overwrite `vector_json` or `phase_vector_json`.
+
+The evidence shape should allow later visualization such as:
+
+```text
+statistics trend
+vs
+attention norm trend
+vs
+phase vector trend
+```
+
+This keeps the duality visible:
+
+```text
+vector_json       = convergent neighbor hit
+phase_vector_json = divergent/exploratory candidate direction
+```
+
 ## Three-layer logs model
 
 ### logs.* — signal sources
@@ -451,6 +507,8 @@ Suggested schema fields:
 attention_id
 current_id
 source_set_id
+statistics_json
+ema_score
 l2_norm
 vector_json
 phase_vector_json
@@ -469,8 +527,9 @@ Persistence semantics:
 ```text
 logs.attention is append-only and archive-required evidence.
 each attention row must reference logs.current.current_id.
-vector_json stores the neighbor hit vector.
-phase_vector_json stores the phase-shifted candidate vector.
+statistics_json / ema_score store the stable-confidence layer.
+vector_json stores the convergent neighbor hit vector.
+phase_vector_json stores the exploratory phase-shifted candidate vector.
 ```
 
 ### existing table alignment contract
@@ -505,6 +564,7 @@ context_hub_recommendation_current
 - no large-scale SQL replacement
 - no automatic registry mutation from phase_vector
 - no automatic migration or column promotion from phase_vector
+- no evidence-layer collapse into a single score
 
 ## Implementation order
 
@@ -513,10 +573,10 @@ context_hub_recommendation_current
 3. Align README/internal design docs with this SSOT without changing public article intent.
 4. Define schema/function/trigger contracts.
 5. Implement logs.current basis update and norm-level monitoring.
-6. Implement logs.attention evidence persistence with vector and phase_vector.
+6. Implement logs.attention evidence persistence with statistics, vector, and phase_vector.
 7. Implement scheduler/runtime registry-neighbor exploration.
 8. Implement Phase Attention vector distortion only after policy caps and evidence linkage are fixed.
 
 ## One-sentence definition
 
-SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention`.
+SQL Attention converts physical-side `logs.*` signals into a `logs.current` calculation basis, watches l2 norm-level changes, and only when the level changes explores registry composition neighbors and records statistics, `l2_norm`, `vector`, `phase_vector`, and hit evidence into `logs.attention` without collapsing statistics, Attention, and Phase Attention into one score.
