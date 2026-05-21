@@ -172,7 +172,9 @@ required_content_terms:
   .agent/protocols/index.yaml:
     - "grep route"
     - "not a judgment SSOT"
-    - "section_markers"
+    - "version: 2"
+    - "sections:"
+    - "read_when"
     - "completion-governance"
     - "reports-and-todo-surfaces"
   .agent/protocols/completion.md:
