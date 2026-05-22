@@ -126,8 +126,8 @@ public class SeedRuntime
     }
 
     /// <summary>
-    /// Import skeleton: validates seed.json and counts runtime declarations.
-    /// Full import through manifest-driven canonical route requires Gap-1 resolution.
+    /// Import: validates seed.json and counts runtime declarations.
+    /// Manifest-driven routing is resolved (Gap-1b complete). Canonical DB write not yet implemented.
     /// Failure is explicit (fail-close). No silent fallback.
     /// </summary>
     public async Task<SeedImportResult> ImportAsync(CancellationToken ct = default)
@@ -145,17 +145,16 @@ public class SeedRuntime
             : 0;
 
         _logger.LogInformation(
-            "SeedRuntime.ImportAsync: seed validated — {Count} runtime(s) declared. " +
-            "Import blocked pending Gap-1 resolution (manifest-driven routing).",
+            "SeedRuntime.ImportAsync: seed validated — {Count} runtime(s) declared. Canonical DB write not yet implemented.",
             runtimeCount);
 
         return new SeedImportResult(
             false,
             runtimeCount,
             [new SeedValidationError(
-                "SEED_IMPORT_PENDING_GAP1",
-                $"Import blocked pending Gap-1 resolution. " +
+                "SEED_IMPORT_NOT_IMPLEMENTED",
+                $"Seed import not yet implemented. " +
                 $"{runtimeCount} runtime(s) declared and validated. " +
-                "Full canonical import requires manifest-driven routing (ManifestDispatcher migration).")]);
+                "Canonical DB write is not implemented.")]);
     }
 }

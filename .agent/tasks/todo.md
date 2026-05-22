@@ -57,13 +57,16 @@ SSOT参照必読:
       → TargetDispatchOverride は manifest repository が null の場合 (dev/demo bypass) にのみ使用される。
       → 完了条件 target_layer_action_destination_selection_is_moved_to_manifest_dispatcher を満たすテスト (ManifestDispatcherManifestDrivenTests) を追加済み。
       → seed_empty.sql に admin 系 manifest 11件 (IDs 50-5a) を追加済み (admin routes の MANIFEST_NOT_FOUND を解消)。
-      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = partial (Gap-1b pending)
 
-- [ ] [Claude] Gap-1b 残: `runtime_destination` による実行先選択の実装
-      → ManifestDispatcher は runtime_destination を ValidateRuntimeDestination で検証するが、実行先選択には使っていない。現状は常に RuntimeExecutor.ExecuteAsync を呼ぶ (selection ではなく validation に留まる)。
-      → runtime_destination の値 (topology_transform_runtime / registry_attractor_runtime 等) を使って実際に実行先 executor を選択する仕組みを実装する。
-      → 完了条件: runtime_destination_is_used_for_actual_execution_selection_not_validation_only を満たす。
-      → 対象: `backend/runtime/ManifestDispatcher.cs`, `docs/system-roadmap.yaml` (backend.manifest_dispatcher, backend.runtime_executor = implemented へ昇格条件)
+- [x] [Claude] Gap-1b 完了: `runtime_destination` による実行先選択の実装
+      → ManifestDispatcher は IReadOnlyDictionary<string, IDispatchableRuntime> ハンドラ辞書を使い runtime_destination から実行先を選択する。
+      → topology_transform_runtime → RuntimeExecutor (canonical topology pipeline)。
+      → admin_runtime → AdminRuntimeDispatchAdapter → AdminRuntime.ExecuteDataAsync (実 production ハンドラ、stub 不使用)。
+      → seed_empty.sql admin manifests (IDs 50-5a) の runtime_destination を admin_runtime に変更。
+      → FakeDispatchableRuntime は test fixture のみ (Program.cs に出現しない)。
+      → selection boundary は ManifestDispatcherManifestDrivenTests の sentinel assert で検証。
+      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = implemented。
+      → docs/design/runtime-orchestration-ssot.yaml: test_runtime_fixture_policy 追記、admin_runtime を backend_dispatchable_kinds に追加。
 
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。

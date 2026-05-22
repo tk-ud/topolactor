@@ -211,6 +211,7 @@ runtime_orchestration_ssot:
     backend_dispatchable_kinds:
       - topology_transform_runtime
       - registry_attractor_runtime
+      - admin_runtime
     backend_to_frontend_bridge:
       lanes:
         - response
@@ -489,6 +490,32 @@ runtime_orchestration_ssot:
       - manifest_id
       - runtime_id
       - trace_id
+
+  test_runtime_fixture_policy:
+    summary: >
+      Production runtime path must not contain dummy, stub, or skeleton execution handlers.
+      Pipeline boundary verification is performed by test-only stub handlers (test fixtures)
+      injected at ManifestDispatcher construction time in tests. Test stubs prove selection
+      boundary, not production behavior. Production handler implementations must not carry
+      skeleton or fallback placeholders — move them to test fixtures or remove them.
+    rules:
+      - production_runtime_path_must_not_contain_dummy_stub_or_skeleton_handlers
+      - pipeline_verification_stubs_are_test_fixture_only
+      - runtime_destination_selection_boundary_is_proven_by_test_fixture_sentinel
+      - test_stub_is_not_a_substitute_for_production_handler_behavior
+      - skeleton_or_fallback_in_production_handler_must_be_removed_not_preserved
+    handler_registry:
+      topology_transform_runtime: RuntimeExecutor
+      admin_runtime: AdminRuntimeDispatchAdapter
+      registry_attractor_runtime: not_yet_implemented
+    test_stub_scope:
+      allowed:
+        - FakeDispatchableRuntime injected in test handler dictionary
+        - test-only IDispatchableRuntime implementations in test project
+      prohibited:
+        - FakeDispatchableRuntime in Program.cs or production DI
+        - skeleton handler registered in production handler dictionary
+        - test-only destinations added to backend_dispatchable_kinds
 
   canonical_flow_summary:
     frontend_client_command:

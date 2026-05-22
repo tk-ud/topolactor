@@ -7,16 +7,22 @@ namespace Topolactor.Runtime;
 
 /// <summary>
 /// Manifest-driven dispatcher. Resolves runtime_destination from manifest axes
-/// (role, target, layer, action) and forwards to the appropriate runtime.
+/// (role, target, layer, action) and forwards to the registered IDispatchableRuntime handler.
 ///
 /// Per SSOT dispatcher_contract:
 ///   - Reads active manifest from DB by [role, target, layer, action] axes.
 ///   - No silent fallback: missing manifest -> MANIFEST_NOT_FOUND error.
 ///   - Ambiguous manifests (multiple active for same axes) -> MANIFEST_AMBIGUOUS error.
+///   - runtime_destination not in handler registry -> RUNTIME_DESTINATION_UNKNOWN error.
 ///   - Does not own topology transform logic.
 ///
+/// Production handler registry (injected):
+///   topology_transform_runtime -> RuntimeExecutor (canonical topology pipeline)
+///   admin_runtime              -> AdminRuntimeDispatchAdapter -> AdminRuntime
+///
 /// Dev/demo bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
-/// handles demo/entity and admin targets; unhandled requests go to RuntimeExecutor.
+/// handles demo/entity and admin targets; unhandled requests fall through to the
+/// topology_transform_runtime handler from the registry.
 /// This explicit bypass is isolated inside the null-repository branch only and is not
 /// the production destination selection path.
 ///
@@ -26,34 +32,37 @@ namespace Topolactor.Runtime;
 public class ManifestDispatcher
 {
     private readonly ILogger<ManifestDispatcher> _logger;
-    private readonly RuntimeExecutor _runtimeExecutor;
+    private readonly IReadOnlyDictionary<string, IDispatchableRuntime> _runtimeHandlers;
     private readonly ManifestRepository? _manifestRepository;
     private readonly OperationVectorResolver _operationVectorResolver;
     private readonly TargetDispatchOverride _targetDispatchOverride;
 
     public ManifestDispatcher(
         ILogger<ManifestDispatcher> logger,
-        RuntimeExecutor runtimeExecutor,
+        IReadOnlyDictionary<string, IDispatchableRuntime> runtimeHandlers,
         OperationVectorResolver operationVectorResolver,
         TargetDispatchOverride targetDispatchOverride,
         ManifestRepository? manifestRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _runtimeExecutor = runtimeExecutor ?? throw new ArgumentNullException(nameof(runtimeExecutor));
+        _runtimeHandlers = runtimeHandlers ?? throw new ArgumentNullException(nameof(runtimeHandlers));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
         _targetDispatchOverride = targetDispatchOverride ?? throw new ArgumentNullException(nameof(targetDispatchOverride));
         _manifestRepository = manifestRepository;
     }
 
     /// <summary>
-    /// Resolves the runtime destination from manifest axes and dispatches the request.
+    /// Resolves the runtime destination from manifest axes and dispatches the request
+    /// to the registered handler.
     ///
     /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
-    /// demo/entity and admin targets; unhandled requests go directly to RuntimeExecutor.
+    /// demo/entity and admin targets; unhandled requests fall through to the
+    /// topology_transform_runtime handler in the registry.
     ///
     /// When _manifestRepository is configured (production): manifest resolution is the sole
     /// authority. TargetDispatchOverride is not consulted. Missing manifest returns
-    /// MANIFEST_NOT_FOUND — no implicit fallthrough.
+    /// MANIFEST_NOT_FOUND. No runtime_mapping or unregistered destination returns
+    /// RUNTIME_DESTINATION_UNKNOWN — no implicit fallthrough.
     /// </summary>
     public async Task<EndpointResponseDto> DispatchAsync(
         EndpointRequestDto request,
@@ -100,12 +109,13 @@ public class ManifestDispatcher
                     SchemaId: null,
                     ComponentIds: [],
                     Data: overrideData,
-                    Errors: [],
-                    ContextRouteRecommendation: null);
+                    ContextRouteRecommendation: null,
+                    Errors: []);
                 return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
             }
 
-            return await _runtimeExecutor.ExecuteAsync(request, manifestId: null, ct);
+            // Bypass fallthrough: unhandled target goes to topology_transform_runtime handler.
+            return await DispatchToHandlerAsync("topology_transform_runtime", request, manifestId: null, ct);
         }
 
         // Production: manifest-driven destination selection.
@@ -137,11 +147,19 @@ public class ManifestDispatcher
                 "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
                 manifest.ManifestId);
 
-            var runtimeDestinationError = ValidateRuntimeDestination(manifest.Topology);
-            if (runtimeDestinationError is not null)
-                return new EndpointResponseDto(Success: false, Emission: null, Errors: [runtimeDestinationError]);
+            var destination = ExtractRuntimeDestination(manifest.Topology);
+            if (destination is null)
+            {
+                _logger.LogError("ManifestDispatcher: no runtime_mapping entry in manifest {ManifestId}.", manifest.ManifestId);
+                return new EndpointResponseDto(
+                    Success: false,
+                    Emission: null,
+                    Errors: [new ValidationError(
+                        "RUNTIME_DESTINATION_UNKNOWN",
+                        $"Manifest {manifest.ManifestId} has no runtime_mapping entry.")]);
+            }
 
-            return await _runtimeExecutor.ExecuteAsync(request, manifest.ManifestId, ct);
+            return await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
         {
@@ -153,7 +171,32 @@ public class ManifestDispatcher
         }
     }
 
-    
+    private Task<EndpointResponseDto> DispatchToHandlerAsync(
+        string destination,
+        EndpointRequestDto request,
+        Guid? manifestId,
+        CancellationToken ct)
+    {
+        if (!_runtimeHandlers.TryGetValue(destination, out var handler))
+        {
+            _logger.LogError(
+                "ManifestDispatcher: no handler registered for runtime_destination '{Destination}'.",
+                destination);
+            return Task.FromResult(new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError(
+                    "RUNTIME_DESTINATION_UNKNOWN",
+                    $"runtime_destination '{destination}' is not a registered handler. Known: {string.Join(", ", _runtimeHandlers.Keys)}")]));
+        }
+
+        _logger.LogDebug(
+            "ManifestDispatcher: dispatching to handler for runtime_destination={Destination}.",
+            destination);
+
+        return handler.ExecuteAsync(request, manifestId, ct);
+    }
+
     /// <summary>
     /// Maps legacy change intake shape to canonical dispatch request.
     /// table_name is preserved as Target for registry resolution.
@@ -203,18 +246,14 @@ public class ManifestDispatcher
         ), []);
     }
 
-private static readonly HashSet<string> AllowedLegacyOperations =
+    private static readonly HashSet<string> AllowedLegacyOperations =
         new(StringComparer.OrdinalIgnoreCase) { "create", "update", "delete", "transition" };
 
-    private static readonly HashSet<string> KnownRuntimeDestinations =
-        new(StringComparer.OrdinalIgnoreCase) { "topology_transform_runtime", "registry_attractor_runtime" };
-
     /// <summary>
-    /// Extracts the runtime_destination from a runtime_mapping topology entry.
-    /// Returns null when no runtime_mapping entry is present (not an error — manifest may omit it).
-    /// Returns a ValidationError when runtime_destination is present but not a known kind.
+    /// Extracts runtime_destination from the runtime_mapping topology entry.
+    /// Returns null when no runtime_mapping entry is present.
     /// </summary>
-    private ValidationError? ValidateRuntimeDestination(IReadOnlyList<JsonElement> topology)
+    private static string? ExtractRuntimeDestination(IReadOnlyList<JsonElement> topology)
     {
         foreach (var entry in topology)
         {
@@ -229,27 +268,10 @@ private static readonly HashSet<string> AllowedLegacyOperations =
                 continue;
 
             var destination = destEl.GetString();
-            if (string.IsNullOrWhiteSpace(destination))
-                continue;
-
-            if (!KnownRuntimeDestinations.Contains(destination))
-            {
-                _logger.LogError(
-                    "ManifestDispatcher: unknown runtime_destination '{Destination}' in runtime_mapping entry.",
-                    destination);
-                return new ValidationError(
-                    "RUNTIME_DESTINATION_UNKNOWN",
-                    $"runtime_destination '{destination}' is not a known kind. Known: topology_transform_runtime, registry_attractor_runtime.");
-            }
-
-            _logger.LogDebug(
-                "ManifestDispatcher: runtime_mapping resolved runtime_destination={Destination}.",
-                destination);
-            return null;
+            if (!string.IsNullOrWhiteSpace(destination))
+                return destination;
         }
 
-        // No runtime_mapping entry — log and continue (not an error).
-        _logger.LogDebug("ManifestDispatcher: no runtime_mapping entry in manifest topology; using default path.");
         return null;
     }
 }

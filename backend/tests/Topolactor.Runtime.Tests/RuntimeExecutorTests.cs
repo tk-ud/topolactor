@@ -55,6 +55,32 @@ public class RuntimeExecutorTests
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
     }
 
+    /// <summary>
+    /// Creates a ManifestDispatcher with a standard handler dict:
+    ///   topology_transform_runtime → executor built from topologyRepository
+    /// Extra handlers are merged in (and can override the default).
+    /// </summary>
+    internal static ManifestDispatcher CreateDispatcher(
+        TopologyRepository topologyRepository,
+        ManifestRepository? manifestRepository = null,
+        IReadOnlyDictionary<string, IDispatchableRuntime>? extraHandlers = null)
+    {
+        var executor = CreateExecutor(topologyRepository);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = executor,
+        };
+        if (extraHandlers is not null)
+            foreach (var (k, v) in extraHandlers) handlers[k] = v;
+
+        return new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            handlers,
+            new OperationVectorResolver(),
+            CreateTargetDispatchOverride(topologyRepository),
+            manifestRepository);
+    }
+
     [Fact]
     public async Task ExecuteAsync_InMemoryDefaultRoute_ReturnsSuccessfulEmission()
     {
@@ -153,12 +179,8 @@ public class SchedulerDispatcherChainTests
     {
         // Verifies wiring: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
         // Scheduler and dispatcher are pass-through skeletons; emission must be identical.
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -185,12 +207,8 @@ public class SchedulerDispatcherChainTests
     public async Task SchedulerDispatcherChain_BrokenAttractor_PropagatesExplicitError()
     {
         // Broken refs must propagate through the full chain — no silent fallback.
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -270,28 +288,24 @@ public class ManifestDispatcherOverrideTests
     }
 
     private static ManifestDispatcher CreateDispatcher(TopologyRepository topologyRepository)
-    {
-        var executor = RuntimeExecutorTests.CreateExecutor(topologyRepository);
-        return new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepository));
-    }
+        => RuntimeExecutorTests.CreateDispatcher(topologyRepository);
 }
 
 /// <summary>
-/// Tests that verify Gap-1 completion condition:
-/// target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
+/// Tests that verify Gap-1 completion conditions:
+/// - Gap-1a: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
+/// - Gap-1b: runtime_destination drives actual handler selection (not validation-only).
 ///
 /// When ManifestRepository is configured, ManifestDispatcher resolves destination
-/// from the manifest only. TargetDispatchOverride is not consulted.
+/// from the manifest and dispatches to the registered IDispatchableRuntime handler.
+/// TargetDispatchOverride is not consulted.
 /// </summary>
 public class ManifestDispatcherManifestDrivenTests
 {
     [Fact]
     public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestFound_RoutesToRuntimeExecutor()
     {
+        // Gap-1a: TargetDispatchOverride must NOT be called when manifest repo is configured.
         var manifestId = Guid.NewGuid();
         var manifestRepo = new StubManifestRepository(
             new ManifestRecord(
@@ -300,13 +314,7 @@ public class ManifestDispatcherManifestDrivenTests
                 Topology: BuildTopology("topology_transform_runtime"),
                 Status: "active"));
         var topologyRepo = new DemoEntityValidRouteTopologyRepository();
-        var executor = RuntimeExecutorTests.CreateExecutor(topologyRepo);
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo),
-            manifestRepo);
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo, manifestRepo);
 
         var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
         var response = await dispatcher.DispatchAsync(request);
@@ -322,12 +330,8 @@ public class ManifestDispatcherManifestDrivenTests
     public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestNotFound_ReturnsManifestNotFound()
     {
         var manifestRepo = new StubManifestRepository(manifest: null);
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
             manifestRepo);
 
         var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
@@ -342,12 +346,8 @@ public class ManifestDispatcherManifestDrivenTests
     public async Task DispatchAsync_ManifestRepositoryConfigured_AmbiguousManifest_ReturnsManifestAmbiguous()
     {
         var manifestRepo = new AmbiguousStubManifestRepository();
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
             manifestRepo);
 
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
@@ -368,12 +368,8 @@ public class ManifestDispatcherManifestDrivenTests
                 RelationRegistryId: null,
                 Topology: BuildTopology("topology_transform_runtime"),
                 Status: "active"));
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
             manifestRepo);
 
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
@@ -393,12 +389,8 @@ public class ManifestDispatcherManifestDrivenTests
                 RelationRegistryId: null,
                 Topology: BuildTopology("unknown_runtime_xyz"),
                 Status: "active"));
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
             manifestRepo);
 
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
@@ -423,12 +415,8 @@ public class ManifestDispatcherManifestDrivenTests
                 RelationRegistryId: null,
                 Topology: BuildTopology("topology_transform_runtime"),
                 Status: "active"));
-        var executor = RuntimeExecutorTests.CreateExecutor();
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            executor,
-            new OperationVectorResolver(),
-            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
             manifestRepo);
 
         var request = new EndpointRequestDto("Search", "admin", "seed_runtime", "save", null, null, null);
@@ -439,6 +427,63 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.Contains(response.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
     }
 
+    /// <summary>
+    /// Gap-1b verification: runtime_destination selects the registered handler.
+    /// FakeDispatchableRuntime is test-only (not in production DI).
+    /// Sentinel in Emission.Data proves the correct handler was invoked, not just that
+    /// the request succeeded via the default topology pipeline.
+    /// </summary>
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_AdminRuntime_SelectsRegisteredHandler_WithSentinel()
+    {
+        var sentinel = JsonSerializer.SerializeToElement(new { handledBy = "admin_runtime", action = "save" });
+        var fakeAdminHandler = new FakeDispatchableRuntime(sentinel);
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: BuildTopology("admin_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
+
+        var request = new EndpointRequestDto("X", "admin", "seed_runtime", "save", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(fakeAdminHandler.WasCalled,
+            "admin_runtime handler must be called when manifest runtime_destination=admin_runtime.");
+        Assert.Equal("admin_runtime",
+            response.Emission!.Data!.Value.GetProperty("handledBy").GetString(),
+            "Emission.Data must contain the sentinel returned by the admin_runtime handler stub.");
+        Assert.False(response.Errors.Any());
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_TopologyTransformRuntime_DoesNotCallAdminHandler()
+    {
+        var fakeAdminHandler = new FakeDispatchableRuntime(null);
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: BuildTopology("topology_transform_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
+
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.False(fakeAdminHandler.WasCalled,
+            "admin_runtime handler must NOT be called when manifest runtime_destination=topology_transform_runtime.");
+    }
+
     private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)
     {
         var entry = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -447,6 +492,36 @@ public class ManifestDispatcherManifestDrivenTests
             runtime_destination = runtimeDestination
         });
         return [entry];
+    }
+}
+
+/// <summary>
+/// Test-only stub handler. Records whether it was called and returns sentinel data.
+/// Must NOT appear in production DI (Program.cs).
+/// Per test_runtime_fixture_policy in docs/design/runtime-orchestration-ssot.yaml.
+/// </summary>
+internal sealed class FakeDispatchableRuntime : IDispatchableRuntime
+{
+    private readonly JsonElement? _sentinelData;
+    public bool WasCalled { get; private set; }
+    public EndpointRequestDto? LastRequest { get; private set; }
+
+    public FakeDispatchableRuntime(JsonElement? sentinelData) => _sentinelData = sentinelData;
+
+    public Task<EndpointResponseDto> ExecuteAsync(
+        EndpointRequestDto request, Guid? manifestId, CancellationToken ct = default)
+    {
+        WasCalled = true;
+        LastRequest = request;
+        var emission = new Emission(
+            StructureMapId: null,
+            PackageId: null,
+            SchemaId: null,
+            ComponentIds: [],
+            Data: _sentinelData,
+            Errors: [],
+            ContextRouteRecommendation: null);
+        return Task.FromResult(new EndpointResponseDto(Success: true, Emission: emission, Errors: []));
     }
 }
 

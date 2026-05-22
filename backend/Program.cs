@@ -102,13 +102,24 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
         sp.GetRequiredService<OutputLaneRouter>()));
+builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
+    new AdminRuntimeDispatchAdapter(
+        sp.GetRequiredService<AdminRuntime>(),
+        sp.GetRequiredService<OperationVectorResolver>()));
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
-    new ManifestDispatcher(
+{
+    var handlers = new Dictionary<string, IDispatchableRuntime>
+    {
+        ["topology_transform_runtime"] = sp.GetRequiredService<RuntimeExecutor>(),
+        ["admin_runtime"]              = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
+    };
+    return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
-        sp.GetRequiredService<RuntimeExecutor>(),
+        handlers,
         sp.GetRequiredService<OperationVectorResolver>(),
         sp.GetRequiredService<TargetDispatchOverride>(),
-        sp.GetRequiredService<ManifestRepository>()));
+        sp.GetRequiredService<ManifestRepository>());
+});
 builder.Services.AddSingleton<LogRetentionRuntime>();
 builder.Services.AddSingleton<PackageGeneratorRuntime>();
 
