@@ -354,6 +354,8 @@ When hub-attractor exploration produces a hit, Phase Attention may distort the h
 neighbor hit vector
 → attention strength
 → attention strength / hub-side record count = movement percentage
+→ z-score normalized movement amount
+→ clamped movement amount
 → xi/table, yj/column, zk/ui quaternion-axis movement
 → phase_vector stored on logs.attention
 ```
@@ -792,7 +794,9 @@ Calculation contract:
 
 ```text
 movement_percentage = attention_strength / hub_side_record_count
-phase_vector_json = vector_json shifted along xi / yj / zk by movement_percentage
+z_score_normalized_movement = z_score(movement_percentage)
+clamped_movement = clamp(z_score_normalized_movement)
+phase_vector_json = vector_json shifted along xi / yj / zk by clamped_movement
 ```
 
 Output contract:
@@ -805,7 +809,7 @@ Guardrails:
 
 ```text
 - phase_vector is candidate/evidence, not adopted state
-- phase movement is derived from attention strength and hub-side record count, not Manifest / policy caps
+- phase movement is derived from attention strength, hub-side record count, z-score normalization, and clamp, not Manifest / policy caps
 - phase_vector does not auto-trigger registry mutation
 - phase_vector does not auto-trigger migration
 - phase_vector does not auto-trigger column promotion
@@ -820,7 +824,7 @@ Guardrails:
 5. Implement logs.current basis update and norm-level monitoring.
 6. Implement logs.attention evidence persistence with statistics, vector, and phase_vector.
 7. Implement scheduler/runtime hub-attractor exploration.
-8. Implement Phase Attention vector distortion only after attention-strength / hub-record-count movement semantics and evidence linkage are fixed.
+8. Implement Phase Attention vector distortion only after attention-strength / hub-record-count / z-score-clamp movement semantics and evidence linkage are fixed.
 
 ## One-sentence definition
 
