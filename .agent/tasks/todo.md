@@ -39,8 +39,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] refresh logs.hub_current / attractor current function implementation を実装する
       → hub-side attractor current と axis z-score を算出・更新する function contract を実装し、phase_vector 移動距離計算に必要な母数を提供する。
 
-- [ ] physical tableid 対応の実装判断を行う
-      → topology_edit_log を logs.diff として流用する場合の physical table identity 追加/写像方式を決定する。現状は domain scope identifier であり canonical logs.diff ではない。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
