@@ -31,6 +31,7 @@ READ_ENTRY
   - `.agent/README.md`
   - `.agent/skills/agent-workflow.md`
   - open matching `.agent/prompt/<work-type>.md` only when the work type trigger applies
+  - for existing PR follow-up updates, route via `.agent/prompt/existing-pr-update.md`
 - READ_TASK_MATERIALS
   - read issue / prompt explicit対応資料 and必読リスト
   - explicit materials and required-read lists are task-required input and must be read
@@ -89,6 +90,7 @@ READ_ENTRY
   - initial Codex / Agent final completion summary is in template scope even on first PR creation
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
   - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
+    - work-type route source: `.agent/prompt/existing-pr-update.md`
     1. determine whether this work is an existing-PR update
     2. confirm push or remote PR update actually occurred
     3. identify target PR number/URL and head commit

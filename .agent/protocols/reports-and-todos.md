@@ -61,14 +61,28 @@ Switch invariant:
 - `## Completion Summary Template` decides body shape only.
 - External actions (for example PR comment posting) are decided by this switch and must be executed/verified separately.
 
+## WorkEvent Output Sink Contract
+
+WorkEvent type defines required/optional output sinks.
+
+| WorkEvent.type | required_sink | optional_sink | non-substitution rule |
+|---|---|---|---|
+| `new_pr` | thin PR body | none | final summary does not replace thin PR body creation/update |
+| `existing_pr_update` | PR follow-up comment | PR body update only if materially misleading | PR body update never replaces required PR follow-up comment |
+| `local_only` | final summary | none | no remote sink is required when no remote PR update exists |
+
+Structural completion rule for `existing_pr_update`:
+- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body.
+- final summary is required evidence output, not a substitute for PR comment posting.
+- if follow-up PR comment is missing in PR conversation after existing PR update, completion is blocking.
 
 
 ## Completion Summary Template scope mapping
 
-Completion Summary Template is the terminal reporting endpoint for completion-governance output surfaces.
-No prompt router or workflow note may replace it with an alternate final summary shape.
-Completion Summary Template defines body shape.
-It does not satisfy required external actions by itself.
+Completion Summary Template is the single terminal reporting endpoint for completion-governance output surfaces.
+No prompt router, workflow note, or ad-hoc summary block may replace it with an alternate final summary shape.
+Summary / Testing / Output Sink State / remaining TODO must be emitted inside this template only.
+Completion Summary Template defines body shape; required external actions are decided/executed separately.
 
 - summary source:
   - `.agent/protocols/reports-and-todos.md` / `## Completion Summary Template`
@@ -80,6 +94,7 @@ It does not satisfy required external actions by itself.
 - existing PR follow-up comment mapping (inside template, no extra appendix format):
   - changed summary → `### 作業内容`
   - checks as PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED → `### test結果` (`#### Local` / `#### Remote CI` / `#### Required check scope`)
+  - WorkEvent required/optional sink state and posting verification/fallback evidence → `### output sink state`
   - remaining TODOs → `### 残タスク引き継ぎ指示`
   - PR body thin state or update reason when materially misleading → `### 作業内容` または `### 変更ファイル`
   - `PR_COMMENT_NOT_POSTED` fallback (when posting unavailable) → same template body must be emitted as exact paste-ready comment content in final summary
@@ -90,6 +105,13 @@ It does not satisfy required external actions by itself.
 
 For existing PR updates, final summary without either `POSTED + VERIFIED` evidence or `PR_COMMENT_NOT_POSTED` paste-ready body is incomplete.
 
+## Completion Summary generation rules (not emitted section)
+
+- `Summary`, `Testing`, `Output Sink State`, `残TODO` をテンプレート外の自由形式セクションで追加してはいけない。
+- `Testing` は必ず `### test結果` に統合する。
+- PR follow-up comment posting state は `### test結果` ではなく `### output sink state` に記録する。
+- dotnet / deno などのローカル必須チェック未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` として記録する。
+- 残課題・未完了作業は必ず `### 残タスク引き継ぎ指示` に入れる。
 
 ## Completion Summary Template
 
@@ -123,6 +145,21 @@ Implementation agent must write completion / follow-up summaries using this shap
 #### Required check scope
 - `command`: REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE
   - remote CI 代替が必要か:
+
+### output sink state
+
+- `WorkEvent.type`: new_pr / existing_pr_update / local_only
+- `required_sink`:
+  - new_pr: thin PR body
+  - existing_pr_update: PR follow-up comment
+  - local_only: final summary
+- `state`:
+  - new_pr: POSTED + VERIFIED / NOT_POSTED
+  - existing_pr_update: POSTED + VERIFIED / PR_COMMENT_NOT_POSTED
+  - local_only: EMITTED
+- 理由:
+- posted 先 (PR URL or NOT_REQUIRED):
+- paste-ready comment body (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
 
 ### 残タスク引き継ぎ指示
 
