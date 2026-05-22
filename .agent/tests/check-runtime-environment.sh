@@ -79,7 +79,7 @@ fi
 echo "=== [RUNTIME_ENV] Verify DB connectivity and required schema relations ==="
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT 1;"
 assert_relation_exists "public.manifest"
-assert_relation_exists "public.topology_edit_log"
+assert_relation_exists "topologys.topology_edit_log"
 
 echo "=== [RUNTIME_ENV] Run integration tests against live DB ==="
 DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo' \
