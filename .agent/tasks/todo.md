@@ -32,7 +32,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 対象: future `write_logs_attention` 相当 responsibility, `logs.attention` schema/write path, scheduler/runtime exploration save boundary
 
 - [ ] phase_vector generation implementation を行う
-      → scheduler/runtime 側で hub-attractor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
+      → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
+      → `w = l2_norm`、`x/y/z = hub-side record-count bases`、`i/j/k = axis movement amounts` の意味境界を維持し、phase movement は manifest / policy cap 由来ではないことを明示する。
+      → phase_vector から自動 mutation/migration/promotion は行わない。
 
 - [ ] statistics / EMA integration for topology projection recommendation を実装する
       → hit hub から投影される topologys 意味空間の提示順/候補強度を統計・EMA・履歴・利用頻度で扱う recommendation basis を実装する。

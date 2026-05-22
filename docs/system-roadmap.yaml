@@ -37,6 +37,8 @@ system_roadmap_ssot:
     detailed_design_ssot:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
       - docs/framework-core.yaml
       - docs/framework-policy.yaml
     task_queue:
@@ -247,7 +249,91 @@ system_roadmap_ssot:
         conventional admin tool. Notion and similar tools are the human editing surface;
         topolactor remains the semantic runtime and validation authority.
 
+    M7_sql_attention_observation_runtime:
+      title: SQL Attention observation runtime
+      status: not_started
+      goal: >
+        Implement SQL Attention as a DB-native hub-attractor observation runtime with
+        explicit separation of logs.current, logs.hub_current, and logs.attention planes.
+        Completion is defined by logs.attention evidence-row persistence (not exploration
+        execution alone). Topology/context-route recommendation remains a child projection
+        and consumer surface, not the SQL Attention parent observation body.
+      blocking_gaps:
+        - SQLA-1 logs.current refresh and l2 norm watch not implemented
+        - SQLA-2 logs.hub_current attractor current not implemented
+        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+        - SQLA-4 logs.attention evidence persistence not implemented
+        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+        - SQLA-6 topology projection recommendation basis not implemented
+        - SQLA-7 physical table identity mapping for logs.diff not decided
+
   implementation_registry:
+    backend.sql_attention_logs_current:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: logs.current refresh and l2 norm watch runtime lane is not yet implemented.
+      known_gap_ref:
+        - SQLA-1 logs.current refresh and l2 norm watch not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_hub_current:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: logs.hub_current attractor current runtime lane is not yet implemented.
+      known_gap_ref:
+        - SQLA-2 logs.hub_current attractor current not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_scheduler_exploration:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: scheduler/runtime hub-attractor exploration lane is not yet implemented.
+      known_gap_ref:
+        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_logs_attention_persistence:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: logs.attention evidence persistence lane is not yet implemented.
+      known_gap_ref:
+        - SQLA-4 logs.attention evidence persistence not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_phase_vector:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: phase_vector auxiliary evidence transform lane is not yet implemented.
+      known_gap_ref:
+        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_topology_projection:
+      status: not_started
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: topology recommendation projection basis from SQL Attention evidence is not yet implemented.
+      known_gap_ref:
+        - SQLA-6 topology projection recommendation basis not implemented
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
     frontend.ui_action:
       status: implemented
       production_ready: false
