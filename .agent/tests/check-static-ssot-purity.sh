@@ -58,6 +58,7 @@ PATTERNS=(
   "Current boundary"
   "Full canonical import requires"
   "対応実装予定"
+  "対応実装"
   "Production-ready"
   "future work"
   "実装予定"
