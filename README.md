@@ -14,7 +14,7 @@ Topolactor has three main subjects:
 
 1. **Data-Driven OS** — application behavior is resolved from stored topology data, registry coordinates, structure maps, packages, schemas, and runtime policies.
 2. **AI-Driven Development OS** — agents modify the repository through explicit contracts, protocols, checklists, TODO surfaces, and CI gates instead of ad-hoc edits.
-3. **SQL Attention** — PostgreSQL observes topology continuity and attention-equivalent weight from relations, transitions, recency, frequency, aggregates, diffs, and logs. It is not SQL-side QK dot-product reproduction.
+3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not a state/enum recommendation table.
 
 Registry tensor shorthand:
 
@@ -37,9 +37,14 @@ DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are treated 
 
 ### SQL Attention
 
-SQL Attention observes what the runtime should attend to in DB topology space. It combines candidate narrowing from registry IDs and relations with attention-weight evidence from aggregation, transition, recency, frequency, diff, and log signals.
+SQL Attention observes what the runtime should attend to by comparing two DB-native current planes:
 
-The DB-side SQL Attention observation surface already exists in `db/context_route_tables.sql`: append-only `context_event`, rebuildable `context_event_vector_cache` / `context_prefix_vector_cache`, `context_transition_stats`, hub-attention `context_hub_recommendation_current`, and append-only `context_hub_feedback_event`. These are implemented SQL observation and materialized-signal tables; they are not the runtime authority by themselves, and roadmap entries may still be `partial` while runtime wiring, production hardening, or CI coverage remains incomplete.
+- **physical current** — table, column / JSON path, candidate, operation, component, diff, and log pressure.
+- **hub current** — hub / attractor continuity represented as a bounded square-matrix field.
+
+The attention result is not the aggregate itself. Attention is completed when a hub-attractor hit is recorded as evidence with separate statistics, excitation, vector, phase-vector, and supporting evidence fields. Physical pressure and hub continuity are parallel observation planes; neither one is merely a derived view of the other.
+
+The implemented context-route tables in `db/context_route_tables.sql` are projection and signal surfaces used by the topology runtime. `context_event`, rebuildable vector caches, transition statistics, and append-only feedback events provide observable signals and rebuildable projections. `context_hub_recommendation_current` is a state / enum / token / operation recommendation current for context-route and topology-vector use; it is not the SQL Attention target and not the meaning authority.
 
 `context_token_registry.value` is an ordering/display/audit reference, not a sparse-vector computation weight. Token presence is observed as multi-hot `token_id -> 1.0`; `vector_sparse` and `l2_norm` remain rebuildable projection caches, not meaning SoT.
 
