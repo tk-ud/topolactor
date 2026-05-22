@@ -131,7 +131,6 @@ system_roadmap_ssot:
         - SSE endpoint and frontend receiver/dispatcher skeletons
       remaining_scope:
         - manifest-driven active routing
-        - unified cron/hook/client queue semantics
         - real SSE projection event flow
         - explicit trigger_kind and role request identity
       detail_ssot:
@@ -154,7 +153,7 @@ system_roadmap_ssot:
 
     M3_unified_timeline_and_output_lanes:
       title: Unified trigger timeline and output lanes
-      status: not_started
+      status: partial
       goal: >
         Align cron, hook, and client triggers on the same backend runtime timeline,
         then route effects into response, db_notify, and registry_attractor output lanes.
@@ -163,7 +162,8 @@ system_roadmap_ssot:
         - backend.output_lane_router: partial
         - backend.db_notify_listener: partial
       blocking_gaps:
-        - Gap-2 unified runtime_timeline_scheduler
+        - Gap-14 runtime_timeline_scheduler durability and boundary hardening
+        - Gap-15 output lane full connection and live verification
 
     M4_projection_runtime:
       title: SSE and projection runtime
@@ -300,23 +300,29 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
-        BackgroundService with Channel-based queue for cron/hook triggers (fire-and-forget).
-        Client trigger dispatches synchronously to ManifestDispatcher (explicit exception: preserves HTTP response contract).
-        Unified single-queue alignment for all three trigger kinds is a known gap.
-        Queue persistence not implemented.
+        RuntimeTimelineScheduler aligns cron/hook/client triggers through one Channel-based
+        queue and routes them to ManifestDispatcher before runtime execution.
+        Queue durability and full/overflow/cancellation boundary hardening are not yet completed.
       files:
         - backend/scheduler/RuntimeTimelineScheduler.cs
       evidence:
         tests:
           - SchedulerDispatcherChainTests
+          - RuntimeExecutorTests
+          - DefaultEntitySearchIntegrationTests
         ci:
           - backend-tests
+          - runtime-semantics
+          - default-entity-search
+          - unified-test-gate
+          - Structure Check
       completion_condition:
         - cron_hook_client_triggers_are_aligned_in_one_runtime_queue
         - scheduler_owns_ordering_collision_control_and_execution_boundary
         - runtime_executor_does_not_own_trigger_alignment
       known_gap_ref:
-        - Gap-2 runtime_timeline_scheduler full implementation
+        - Gap-14 queue_persistence_and_overflow_or_cancellation_boundary_not_finalized
+        - Gap-15 output_lane_full_connection_and_live_verification_not_completed
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -341,8 +347,14 @@ system_roadmap_ssot:
       evidence:
         tests:
           - SchedulerDispatcherChainTests
+          - RuntimeExecutorTests
+          - DefaultEntitySearchIntegrationTests
         ci:
           - backend-tests
+          - runtime-semantics
+          - default-entity-search
+          - unified-test-gate
+          - Structure Check
           - pipeline-continuity
       completion_condition:
         - active_manifest_is_resolved_from_db_by_role_target_layer_action

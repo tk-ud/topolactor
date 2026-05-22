@@ -59,13 +59,6 @@ SSOT参照必読:
       → 対象: `backend/runtime/TargetDispatchOverride.cs`, `backend/runtime/ManifestDispatcher.cs`
       → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = partial
 
-- [ ] [Claude] Gap-2 partial: `runtime_timeline_scheduler` の client trigger を統一キューに整列させる
-      → 現在 client trigger は ManifestDispatcher に直接同期呼び出し (HTTP response contract 保持のための意図的例外)。
-      → cron/hook/client の 3 トリガ全てを同一 Channel で整列する完全実装は未達。
-      → 判断点: HTTP response contract を壊さずに統一整列を実現できるか設計が必要。
-      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`
-      → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler = partial
-
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
       → 残: DbNotifyListener → pg_notify → broadcaster の live DB 経路テスト (live DB 必要)。
