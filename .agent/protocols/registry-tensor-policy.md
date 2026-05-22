@@ -18,10 +18,27 @@ Define mandatory audit interpretation for registry/topology/attention/UI/runtime
 When SQL Attention logs semantics are in scope, `docs/design/sql-attention-logs-ssot.md` and `docs/design/sql-attention-logs-ssot.yaml` are the canonical parent definition.
 This protocol is an audit interpretation layer, not a replacement SSOT.
 
-Registry is topology vocabulary basis (tensor basis / vector basis), not a mere dictionary/config table.
+Registry is a topology definition/configuration basis (tensor/vector axis definitions; tensor basis / vector basis), not a mere dictionary/config table and not a hub/attractor/Attention entity itself.
 
 ## Mandatory interpretation
 
+- registry/registrar defines axes, settings, and vocabulary for target surfaces (hub/topology/UI/schema/state/relation).
+- registry must not be treated as disconnected config only.
+- registry must not be treated as hub/attractor/Attention entity itself.
+- hub is a relation node.
+- relation-bearing hub can be treated as tensor/vector coordinates.
+- vectorized hub relations support neighborhood search.
+- attractor is a vector convergence point.
+- Attention is an observation point/operation, not the attractor.
+- SQL Attention is an observation layer over logs pressure and hub/vector-indicated attractor evidence; it is not an attractor generator.
+- topology is semantic definition space.
+- hubs are relation maps over already-defined ids/references.
+- topology semantic definitions must not be mixed into hubs relation-map payload/body.
+- equal relation shape uses: id, related_ids[].
+- parent-child relation shape uses: id, parent_id, child_ids[].
+- UI relation shape uses: id, parent_id(physical_table_id_or_data_type_id), child_ids[](package_ids[]).
+- package is UI payload bundle.
+- relation-map columns can be normalized column-wise for neighborhood search.
 - registry table must be explained as semantic matrix.
 - row = `registryId` / topology vocabulary basis.
 - column = semantic axis / projection axis / wiring axis.
@@ -58,8 +75,11 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 
 ## SQL Attention interpretation
 
-- SQL Attention is tensor continuity / attention weight observation.
-- Hub is treated as linear space.
+- current namespace split roadmap (future task): keep logs.* for time-axis/evidence and move rebuildable current projections to current.* naming without changing runtime/DDL in this task.
+
+- SQL Attention is logs-time-axis pressure + hub/vector continuity observation.
+- Attention operation observes attractor evidence; it does not create attractors.
+- Hub relation surfaces are vectorizable for neighborhood reads.
 - Aggregated statistics are attention weights.
 - registryId is used as semantic loop/collapse control unit.
 - Dynamic variable link logs are vocabulary expansion inputs.
@@ -78,7 +98,7 @@ Treat the following as drift/GAP during audit when trigger scope applies:
 
 1. registry table is not treated as semantic matrix
 2. registry row/column/value matrix interpretation is missing
-3. registry is explained as dictionary/config/metadata only
+3. registry is explained as dictionary/config/metadata only (disconnected config-only misread)
 4. tensor projection is decomposed into disconnected CRUD implementation units
 5. abstract function(tensor) projection/expansion explanation is missing
 6. UI topology is closed into component catalog or frontend-local wiring/state authority
@@ -111,3 +131,14 @@ Treat the following as drift/GAP during audit when trigger scope applies:
 - Keep rule.md lightweight and use this protocol for detailed audit semantics.
 - Apply this policy in completion-facing summaries and PR descriptions without copying governance source body.
 - Classify drift/GAP using this protocol when trigger scope applies.
+
+
+Additional required drift checks:
+
+29. registry is treated as hub/attractor/Attention itself
+30. Attention is treated as attractor
+31. attractor is treated as SQL Attention result artifact
+
+32. topology semantic definitions are mixed inside hubs relation-map payloads
+33. UI relation is described as one-to-one physical_table-to-package binding
+34. role/state/route/context axes are mixed into UI relation matrix body

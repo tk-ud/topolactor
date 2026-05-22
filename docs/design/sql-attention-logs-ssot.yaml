@@ -27,6 +27,16 @@ projection_boundary:
 deprecated_or_rejected:
   - legacy registry exploration wording as SQL Attention target
 physical_schema_status:
+  namespace_roadmap:
+    status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+    split_direction:
+      logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
+      current_namespace: rebuildable_current_relation_projection_surfaces
+    candidate_mapping:
+      logs.current: current.table_relation_or_current.physical_relation
+      logs.hub_current: current.hub_relation
+      optional_future: current.ui_relation
+      logs.attention: keep_under_logs_or_rename_to_logs.attention_evidence_in_future
   physical_tables:
     - logs.current
     - logs.hub_current
@@ -75,11 +85,12 @@ purpose:
 
 core_definition:
   one_sentence: >-
-    SQL Attention converts physical-side logs.* signals into a logs.current
+    SQL Attention converts physical-side logs.* signals into a current-basis surface (currently named logs.current)
     calculation basis, watches l2 norm-level changes, and only when the level
-    changes explores hubs.* hub/attractor candidates and records statistics,
-    l2_norm, vector, phase_vector, and hit evidence into logs.attention without
-    collapsing statistics, Attention, and Phase Attention into one score.
+    changes observes hub/vector-indicated attractor evidence from hubs.* and
+    records statistics, l2_norm, vector, phase_vector, and hit evidence into
+    logs.attention without collapsing statistics, Attention, and Phase Attention
+    into one score.
   flow:
     - logs_signal_sources
     - logs_current_calculation_basis
@@ -129,12 +140,39 @@ layers:
       attention results and are not registry grammar tables.
     initial_sources:
       logs.diff:
-        pressure: physical_table_change_pressure
+        pressure: physical_table_record_lifecycle_mutation_pressure_source
+        lifecycle_operations:
+          - create
+          - update
+          - logical_delete
+          - restore
+          - physical_delete
         retention: archive_required
         delete_policy: no_destructive_delete
         tableid_semantics: physical_table_identity
+        required_identity_fields:
+          - physical_table_id
+          - physical_table_name
+          - record_id
+          - operation_kind
+          - before_state_or_diff_json
+          - after_state_or_diff_json
+          - observed_at
+          - actor_or_source
+          - archive_policy
+        boundary:
+          - not_hub_tensor_topology_edit_audit_log
+          - not_direct_reuse_of_topology_edit_log
       logs.candidate:
-        pressure: column_jsonb_path_axis_candidate_pressure
+        pressure: columnization_candidate_pressure_on_physical_time_axis_space
+        canonical_alignment:
+          - logs.usage_metrics_as_observed_access_usage_pressure
+          - logs.promotion_candidates_as_columnization_index_registry_or_physical_table_promotion_candidates
+        candidate_lifecycle:
+          - pending
+          - approved
+          - rejected
+        approval_projection_note: approved_candidates_can_be_extracted_as_adopted_state
         retention: archive_required
         delete_policy: no_destructive_delete
         tableid_semantics: physical_table_identity
@@ -143,7 +181,9 @@ layers:
           - adopted
           - rejected
       logs.ui_operation:
-        pressure: operation_component_usage_pressure
+        pressure: ui_operation_component_usage_pressure_on_physical_time_axis_space
+        canonical_source_table: context_event
+        sequence_semantics: append_only_session_sequence_event_log
         retention: manifest_or_policy_driven
         tableid_semantics: physical_table_identity
         note: >-
@@ -152,6 +192,8 @@ layers:
     extensibility: >-
       The initial sources are examples. Other logs source combinations may use
       the same structure when source semantics are explicit.
+    logical_source_name_contract:
+      note: logs.diff_logs.candidate_logs.ui_operation_are_logical_signal_source_names_not_immediate_physical_table_names
     required_fields:
       - source_name
       - source_kind
@@ -187,7 +229,7 @@ layers:
   logs_current:
     role: calculation_basis_memo
     description: >-
-      logs.current stores compressed current pressure state derived from logs.*
+      current basis surface (currently logs.current) stores compressed pressure state derived from logs.*
       so runtime does not repeatedly scan raw logs. It is a calculation basis,
       not the SQL Attention conclusion.
     must_support:
@@ -295,7 +337,7 @@ layers:
   logs_attention:
     role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores hub-attractor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub-attractor exploration planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
+      logs.attention stores hub/vector-observed attractor evidence, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub relation planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
     retention: archive_required
     suggested_fields:
       - attention_id
@@ -317,7 +359,7 @@ layers:
       - created_at
       - archive_policy
     schema_contract:
-      role: hub_attractor_hit_and_phase_vector_evidence_log
+      role: hub_vector_indicated_attractor_observation_and_phase_vector_evidence_log
       suggested_fields:
         - attention_id
         - current_id
@@ -358,7 +400,9 @@ layers:
       - logs.attention.phase_vector_json
     quaternion_semantics:
       equation: q_equals_w_plus_xi_plus_yj_plus_zk
-      attractor_identity: q_is_attractor
+      q_role: phase_rotation_or_projection_state_operator
+      attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
+      boundary: q_is_not_attention_and_not_the_attractor_itself
       w: real_scalar_from_l2_norm
       x_y_z: hub_side_record_count_bases
       i_j_k: movement_amounts_per_axis
@@ -419,19 +463,30 @@ completion_boundary:
 existing_repository_mismatch_notes:
   topology_edit_log:
     caution: >-
-      Current description uses target_table as attractor_key/domain scope, not
-      physical tableid. It is not automatically logs.diff unless physical table
-      identity is added or clarified.
+      topology_edit_log is an abstract-space definition edit audit log and
+      is not a physical table/record lifecycle diff source.
+    direct_reuse_as_logs_diff: prohibited
+    adapter_mapping_requirement: explicit_physical_table_identity_contract
   promotion_candidates:
     can_align_with: logs.candidate
     condition: >-
-      Adoption/rejection/pending state and column/axis pressure semantics must
-      be preserved.
+      Candidate lifecycle and column/axis pressure semantics must be preserved.
+    lifecycle_expected:
+      - pending
+      - approved
+      - rejected
+    future_expansion_todo:
+      - record_count_at_candidate
+      - record_count_at_approval
+      - threshold_snapshot_for_candidate_and_approval
   context_event:
     can_align_with: logs.ui_operation
     condition: >-
-      Retention must be manifest/policy-driven and component usage must be
-      observed when relevant.
+      context_event is a canonical UI/operation/component usage pressure source
+      with append-only session sequence semantics.
+    boundary:
+      - context_event_is_not_logs_current
+      - context_event_is_not_logs_attention
   context_hub_recommendation_current:
     caution: not_same_as_logs_current_pressure_basis
 
@@ -540,7 +595,9 @@ phase_attention_function_contract:
     - axis_movement_amounts_i_j_k
   calculation:
     quaternion_equation: q_equals_w_plus_xi_plus_yj_plus_zk
-    attractor_identity: q_is_attractor
+    q_role: phase_rotation_or_projection_state_operator
+    attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
+    boundary: q_is_not_attention_and_not_the_attractor_itself
     w: real_scalar_from_l2_norm
     x_y_z: hub_side_record_count_bases
     i_j_k: movement_amounts_on_each_axis
@@ -591,8 +648,9 @@ initial_minimal_basis:
 existing_table_alignment:
   topology_edit_log:
     classification: mismatch
-    reason: target_table_scope_identifier_not_guaranteed_physical_tableid
-    alignment_requirement: explicit_physical_table_identity_contract
+    reason: hub_tensor_or_topology_definition_edit_audit_log_not_physical_table_record_lifecycle_diff
+    direct_reuse: prohibited
+    alignment_requirement: explicit_physical_table_identity_contract_via_adapter_mapping
   promotion_candidates:
     classification: conditional_logs_candidate
     condition:

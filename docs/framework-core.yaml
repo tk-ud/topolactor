@@ -58,6 +58,69 @@ data_driven_topology_runtime_framework:
     frontend_ui: Preact
     batch: cron_or_background_service
 
+
+  topolactor_space_model:
+    registry:
+      role: definition_and_configuration
+      note: registry_defines_hub_topology_or_ui_axes_depending_on_target
+      logical_namespaces:
+        - hub_registry
+        - topology_registry
+        - ui_registry
+    topology:
+      role: semantic_space
+      note: concept_name_is_topology_physical_namespace_names_are_separate
+    hub:
+      role: relation_node
+      definition: relation_established_node
+      tensor_vector_property: relation_composition_can_be_treated_as_tensor_and_vector
+      neighborhood_rule: vectorized_hub_relations_enable_neighborhood_search
+    attractor:
+      role: vector_convergence_point
+      boundary: not_attention
+    attention:
+      role: observation_point_or_operation
+      boundary: not_attractor
+    logs:
+      role: physical_time_axis_observation_space
+      definition: physical_pressure_diff_candidate_usage_observation_in_time_series
+    sql_attention:
+      role: observation_layer_over_logs_pressure_and_hub_vector_indicated_attractors
+      formula: observe_logs_pressure_then_read_hub_vector_indicated_attractor_evidence
+      not:
+        - registry_search
+        - topology_search
+        - attractor_generator
+    ui_relation_surfaces:
+      role: ui_usage_relation_map
+      relation_shape:
+        equal_relation:
+          fields:
+            - id
+            - related_ids[]
+        parent_child_relation:
+          fields:
+            - id
+            - parent_id
+            - child_ids[]
+          example:
+            parent_id: physical_table_id_or_data_type_id
+            child_ids: package_ids
+      meaning: which_ui_package_payloads_are_used_by_which_data_type
+      vectorization_rule: normalize_columns_for_neighborhood_search
+      boundary:
+        - package_is_ui_payload_bundle
+        - physical_table_to_package_is_not_one_to_one
+        - do_not_mix_topology_semantic_definitions_into_hubs_relation_map
+    weight_observation_rule:
+      weights:
+        - count
+        - transition
+        - recency
+        - ema
+        - feedback
+      rule: weights_are_attention_observation_not_semantic_sot
+
   actions:
     - Search
     - Create
@@ -125,3 +188,10 @@ data_driven_topology_runtime_framework:
         - stores_variable_payload_in_jsonb
         - has_local_context_through_relation_ids
         - connects_to_abstract_space_through_hub
+
+
+current_projection_namespace_split:
+  status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+  direction:
+    logs: physical_time_axis_and_evidence
+    current: rebuildable_current_relation_projections

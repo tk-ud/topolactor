@@ -1,6 +1,6 @@
 # topolactor
 
-Topolactor is a **data-driven topology runtime** and **Data-Driven OS** for building runtime-defined applications from a registry tensor, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
+Topolactor is a **data-driven topology runtime** and **Data-Driven OS** for building runtime-defined applications from registry-defined topology coordinates, and an **AI-Driven Development OS** for evolving that runtime safely with agent-readable governance.
 
 Topolactor provides a data-driven topology runtime with explicit runtime-route and policy governance boundaries.
 
@@ -16,20 +16,20 @@ Topolactor has three main subjects:
 2. **AI-Driven Development OS** — agents modify the repository through explicit contracts, protocols, checklists, TODO surfaces, and CI gates instead of ad-hoc edits.
 3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not the topology-side recommendation current.
 
-Registry tensor shorthand:
+Registry / hub / tensor shorthand:
 
-- **registry table = semantic matrix**
-- **row = registryId / basis vocabulary**
-- **column = semantic axis / projection axis / wiring axis**
-- **value = weight / state / relation / coordinate / connection**
-- **registryId combinations = sparse vector / tensor coordinate**
+- **registry = definitions and configuration** (target-dependent: hub registry / topology registry / ui registry)
+- **hub = relation node** formed by resolved relations
+- **hub relation composition = tensor/vector** representation
+- **vector convergence = attractor**
+- **Attention = observation point/operation, not the attractor itself**
 - **abstract function(tensor) = runtime/projection surface expander**
 
 ## Architecture Overview
 
 ### Registry Tensor / Semantic Matrix
 
-The registry is not a plain dictionary, config table, or metadata catalog. It supplies the topology vocabulary and wiring axes used to resolve runtime behavior across surfaces.
+The registry is not a plain dictionary, config table, or metadata catalog. It stores definitions/configuration that resolve topology vocabulary and wiring axes. Hubs are relation nodes built from those definitions, and those relations are what become tensor/vector-readable.
 
 ### Projection / Expansion Surfaces
 
@@ -42,7 +42,7 @@ SQL Attention observes what the runtime should attend to by comparing two DB-nat
 - **physical current** — table, column / JSON path, candidate, operation, component, diff, and log pressure.
 - **hub current** — hub / attractor continuity represented as a bounded square-matrix field.
 
-The attention result is not the aggregate itself. Attention is completed when a hub-attractor hit is recorded as evidence with separate statistics, excitation, vector, phase-vector, and supporting evidence fields. Physical pressure and hub continuity are parallel observation planes; neither one is merely a derived view of the other.
+The attention result is not the aggregate itself. SQL Attention observes logs-side physical time-axis pressure and reads hub/vector-indicated attractor evidence. Attractor is a vector convergence point, while Attention is the observation operation. Physical pressure and hub continuity are parallel observation planes; neither one is merely a derived view of the other.
 
 The implemented context-route tables in `db/context_route_tables.sql` are projection and signal surfaces used by the topology runtime. `context_event`, rebuildable vector caches, transition statistics, and append-only feedback events provide observable signals and rebuildable projections. `context_hub_recommendation_current` is the topology-side recommendation current for context-route and topology-vector use; it is not the SQL Attention target and not the meaning authority.
 
