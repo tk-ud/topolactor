@@ -24,12 +24,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] [Claude] logs.attention evidence persistence / write_logs_attention boundary を実装する
-      → SQL Attention 完了境界は hub-attractor exploration の実行ではなく、`logs.attention` に evidence row が保存されることとする。
-      → `current_id` linkage を必須にし、`statistics_json` / `ema_score`、`l2_norm` / `vector_json` / `neighbor_score`、`phase_vector_json`、`evidence_json` を evidence meaning 別に保持する。
-      → statistics / Attention / Phase Attention を単一scoreへ collapse しない。
-      → append-only / archive-required とし、phase_vector から registry mutation / migration / column promotion は実行しない。
-      → 対象: future `write_logs_attention` 相当 responsibility, `logs.attention` schema/write path, scheduler/runtime exploration save boundary
+- [ ] logs.attention production evidence persistence を実装する
+      → 現在は `LogsAttentionWriteRequest` 主体の append-only write boundary のみ接続済み。
+      → `l2_norm=0.0` / `vector_json={}` / `statistics_json={}` / `evidence_json={}` は placeholder であり production evidence ではない。
+      → 完了条件: `logs.current.basis_vector_json / l2_norm` と `logs.hub_current.attractor_vector_json` 由来の production 値を `logs.attention.l2_norm / vector_json / evidence_json` に保存する。
+      → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/scheduler/SqlAttentionScheduler.cs`, `backend/repository/*SqlAttentionLogsRepository.cs`, `db/sql_attention_logs_tables.sql`
+
 
 - [ ] phase_vector generation implementation を行う
       → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。

@@ -14,13 +14,16 @@ namespace Topolactor.Scheduler;
 ///   It calls logs.refresh_logs_current_watch via SqlAttentionLogsRepository,
 ///   and when change candidates exist, invokes HubAttractorExplorationRuntime.
 ///   All policy and exploration logic live in HubAttractorExplorationRuntime.
+///   SQL Attention write boundary is WriteLogsAttentionAsync — request-based
+///   append persistence, not exploration execution.
+///   Production evidence filling is tracked as a separate TODO.
 ///
 /// Route:
 ///   cron trigger
 ///   → SqlAttentionLogsRepository.LoadWatchCandidatesAsync
 ///   → if no change candidates: skip
 ///   → else: HubAttractorExplorationRuntime.ExploreAsync
-///   → TODO: write_logs_attention boundary (separate TODO)
+///   → if Ok AND hits > 0: SqlAttentionLogsRepository.WriteLogsAttentionAsync
 ///
 /// This scheduler does NOT route through the user-facing dispatch canonical route
 /// (stored_topology_data → user_operation → … → emission_or_projection) because
@@ -152,10 +155,57 @@ public class SqlAttentionScheduler : BackgroundService
         switch (result.Status)
         {
             case HubAttractorExplorationStatus.Ok:
+                var explorationResult = result.Result!;
+                if (explorationResult.Hits.Count == 0)
+                {
+                    _logger.LogDebug(
+                        "SqlAttentionScheduler: exploration Ok — no hits produced (no-change). sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                        sourceSetId, basisWindow);
+                    break;
+                }
+
+                int rowsWritten;
+                try
+                {
+                    var requests = explorationResult.Hits
+                        .Select(hit => new LogsAttentionWriteRequest(
+                            CurrentId: hit.CurrentId,
+                            HubCurrentId: hit.HubCurrentId,
+                            SourceSetId: hit.SourceSetId,
+                            HubId: hit.HubId,
+                            AttractorKey: hit.AttractorKey,
+                            HubRelationId: hit.HubRelationId,
+                            RelationRegistryId: hit.RelationRegistryId,
+                            NeighborScore: hit.NeighborScore,
+                            HitRank: hit.HitRank,
+                            ScoreBand: hit.ScoreBand,
+                            PermutationKey: hit.PermutationKey,
+                            L2Norm: 0.0,
+                            VectorJson: "{}",
+                            PhaseVectorJson: "{}",
+                            StatisticsJson: "{}",
+                            EmaScore: null,
+                            EvidenceJson: "{}",
+                            ArchivePolicy: "required"))
+                        .ToList();
+                    rowsWritten = await _sqlAttentionLogsRepository.WriteLogsAttentionAsync(
+                        requests, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "SqlAttentionScheduler: WriteLogsAttentionAsync failed for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                        sourceSetId, basisWindow);
+                    return;
+                }
+
                 _logger.LogInformation(
-                    "SqlAttentionScheduler: exploration Ok — {HitCount} hit(s) produced. sourceSetId={SourceSetId} basisWindow={BasisWindow}. TODO: write_logs_attention boundary not yet implemented.",
-                    result.Result?.Hits.Count ?? 0, sourceSetId, basisWindow);
-                // TODO: pass result.Result to write_logs_attention boundary (separate TODO)
+                    "SqlAttentionScheduler: {RowsWritten} attention row(s) written for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                    rowsWritten, sourceSetId, basisWindow);
                 break;
 
             case HubAttractorExplorationStatus.NoChange:

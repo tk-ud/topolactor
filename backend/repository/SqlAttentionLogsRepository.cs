@@ -62,4 +62,52 @@ public class SqlAttentionLogsRepository
             sourceSetId, basisWindow);
         return Task.FromResult<IReadOnlyList<HubCurrentCandidate>>([]);
     }
+
+    /// <summary>
+    /// Appends evidence rows to logs.attention for each hit in the exploration result.
+    /// This is the write_logs_attention boundary — completion of one SQL Attention run.
+    ///
+    /// Invariants:
+    ///   - current_id must be non-empty (hard error if absent).
+    ///   - hub_current_id must be non-empty (hard error if absent).
+    ///   - Empty hits → returns 0 without INSERT (no-change early return).
+    ///   - append-only: INSERT only, no UPDATE or DELETE.
+    ///   - archive_policy is always 'required'.
+    ///   - phase_vector_json is stored as provided; generation is a separate TODO.
+    ///   - statistics_json / ema_score are stored as provided; EMA integration is a separate TODO.
+    ///   - No registry mutation / migration / column promotion.
+    ///
+    /// In-memory test double: validates invariants and returns hit count without writing.
+    /// Production: override in NpgsqlSqlAttentionLogsRepository.
+    /// </summary>
+    public virtual Task<int> WriteLogsAttentionAsync(
+        IReadOnlyList<LogsAttentionWriteRequest> requests,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+
+        foreach (var request in requests)
+        {
+            if (request.CurrentId == Guid.Empty)
+                throw new ArgumentException(
+                    $"write_logs_attention: CurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
+
+            if (request.HubCurrentId == Guid.Empty)
+                throw new ArgumentException(
+                    $"write_logs_attention: HubCurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
+
+            if (!string.Equals(request.ArchivePolicy, "required", StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"write_logs_attention: ArchivePolicy must be 'required' (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
+        }
+
+        var count = requests.Count;
+        _logger.LogDebug(
+            "SqlAttentionLogsRepository.WriteLogsAttentionAsync: no DB connection (test double) — {Count} hit(s) validated, no write performed.",
+            count);
+        return Task.FromResult(count);
+    }
 }
