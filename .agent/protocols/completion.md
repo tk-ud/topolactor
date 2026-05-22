@@ -177,3 +177,6 @@ Completion Summary Template Gate scope reminder:
 - final summary omission from template scope is a completion reporting gap
 - for existing PR updates, final summary without either `POSTED + VERIFIED` evidence or `PR_COMMENT_NOT_POSTED` paste-ready body is an external-action evidence gap
 - unresolved completion reporting gap is blocking for completion eligibility
+- WorkEvent output sink gap is blocking for completion eligibility:
+  - `existing_pr_update` without required PR follow-up comment state evidence (`POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + paste-ready body) is incomplete
+  - PR body update presence is not evidence-equivalent to required PR follow-up comment sink

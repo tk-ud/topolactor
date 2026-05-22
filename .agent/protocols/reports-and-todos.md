@@ -61,6 +61,20 @@ Switch invariant:
 - `## Completion Summary Template` decides body shape only.
 - External actions (for example PR comment posting) are decided by this switch and must be executed/verified separately.
 
+## WorkEvent Output Sink Contract
+
+WorkEvent type defines required/optional output sinks.
+
+| WorkEvent.type | required_sink | optional_sink | non-substitution rule |
+|---|---|---|---|
+| `new_pr` | thin PR body | none | final summary does not replace thin PR body creation/update |
+| `existing_pr_update` | PR follow-up comment | PR body update only if materially misleading | PR body update never replaces required PR follow-up comment |
+| `local_only` | final summary | none | no remote sink is required when no remote PR update exists |
+
+Structural completion rule for `existing_pr_update`:
+- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body.
+- final summary is required evidence output, not a substitute for PR comment posting.
+- if follow-up PR comment is missing in PR conversation after existing PR update, completion is blocking.
 
 
 ## Completion Summary Template scope mapping
