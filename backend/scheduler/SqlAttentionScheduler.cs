@@ -166,8 +166,29 @@ public class SqlAttentionScheduler : BackgroundService
                 int rowsWritten;
                 try
                 {
+                    var requests = explorationResult.Hits
+                        .Select(hit => new LogsAttentionWriteRequest(
+                            CurrentId: hit.CurrentId,
+                            HubCurrentId: hit.HubCurrentId,
+                            SourceSetId: hit.SourceSetId,
+                            HubId: hit.HubId,
+                            AttractorKey: hit.AttractorKey,
+                            HubRelationId: hit.HubRelationId,
+                            RelationRegistryId: hit.RelationRegistryId,
+                            NeighborScore: hit.NeighborScore,
+                            HitRank: hit.HitRank,
+                            ScoreBand: hit.ScoreBand,
+                            PermutationKey: hit.PermutationKey,
+                            L2Norm: 0.0,
+                            VectorJson: "{}",
+                            PhaseVectorJson: "{}",
+                            StatisticsJson: "{}",
+                            EmaScore: null,
+                            EvidenceJson: "{}",
+                            ArchivePolicy: "required"))
+                        .ToList();
                     rowsWritten = await _sqlAttentionLogsRepository.WriteLogsAttentionAsync(
-                        explorationResult, ct);
+                        requests, ct);
                 }
                 catch (OperationCanceledException)
                 {

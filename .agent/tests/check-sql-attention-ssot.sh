@@ -91,7 +91,24 @@ for f in "$SSOT_MD" "$TODO_FILE"; do
   [ -f "$f" ] || { echo "FAIL: missing file $f" >&2; exit 1; }
 done
 
-grep -qF "logs.attention evidence persistence / write_logs_attention boundary" "$TODO_FILE" || { echo "FAIL: TODO missing logs.attention evidence persistence item" >&2; exit 1; }
+if grep -qF "logs.attention evidence persistence / write_logs_attention boundary" "$TODO_FILE"; then
+  echo "OK: TODO keeps logs.attention write boundary item (unimplemented state)"
+else
+  grep -qF "public virtual Task<int> WriteLogsAttentionAsync(" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: missing SqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
+  grep -qF "public override async Task<int> WriteLogsAttentionAsync(" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: missing NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
+  grep -qF "explorationResult.Hits.Count == 0" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing empty-hits guard before write" >&2; exit 1; }
+  grep -qF "_sqlAttentionLogsRepository.WriteLogsAttentionAsync(" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing write_logs_attention call" >&2; exit 1; }
+  grep -qF "INSERT INTO logs.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: logs.attention INSERT boundary missing" >&2; exit 1; }
+  if rg -n "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
+    echo "FAIL: logs.attention append-only violated by UPDATE/DELETE" >&2
+    exit 1
+  fi
+  grep -qF "ArchivePolicy must be 'required'" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: archive_policy required enforcement missing" >&2; exit 1; }
+  grep -qF "ArchivePolicy must be 'required'" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: archive_policy required enforcement missing in Npgsql repo" >&2; exit 1; }
+  grep -qF "CurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: current_id required boundary missing" >&2; exit 1; }
+  grep -qF "HubCurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: hub_current_id required boundary missing" >&2; exit 1; }
+  echo "OK: implemented write_logs_attention boundary detected (without TODO)"
+fi
 grep -qF "phase_vector generation implementation" "$TODO_FILE" || { echo "FAIL: TODO missing phase_vector generation item" >&2; exit 1; }
 
 if grep -qF "policy caps を用いた phase_vector" "$TODO_FILE"; then

@@ -81,25 +81,30 @@ public class SqlAttentionLogsRepository
     /// Production: override in NpgsqlSqlAttentionLogsRepository.
     /// </summary>
     public virtual Task<int> WriteLogsAttentionAsync(
-        HubAttractorExplorationResult explorationResult,
+        IReadOnlyList<LogsAttentionWriteRequest> requests,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(explorationResult);
+        ArgumentNullException.ThrowIfNull(requests);
 
-        foreach (var hit in explorationResult.Hits)
+        foreach (var request in requests)
         {
-            if (hit.CurrentId == Guid.Empty)
+            if (request.CurrentId == Guid.Empty)
                 throw new ArgumentException(
-                    $"write_logs_attention: CurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
-                    nameof(explorationResult));
+                    $"write_logs_attention: CurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
 
-            if (hit.HubCurrentId == Guid.Empty)
+            if (request.HubCurrentId == Guid.Empty)
                 throw new ArgumentException(
-                    $"write_logs_attention: HubCurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
-                    nameof(explorationResult));
+                    $"write_logs_attention: HubCurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
+
+            if (!string.Equals(request.ArchivePolicy, "required", StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"write_logs_attention: ArchivePolicy must be 'required' (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
         }
 
-        var count = explorationResult.Hits.Count;
+        var count = requests.Count;
         _logger.LogDebug(
             "SqlAttentionLogsRepository.WriteLogsAttentionAsync: no DB connection (test double) — {Count} hit(s) validated, no write performed.",
             count);
