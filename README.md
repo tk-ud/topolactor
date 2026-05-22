@@ -132,10 +132,11 @@ For DB bootstrap only:
 bash .agent/scripts/bootstrap-local-postgres.sh
 ```
 
-After bootstrap, load tool PATH in your current shell, then run checks (check scripts still fail explicitly when prerequisites are missing):
+After bootstrap, load tool PATH in your current shell, then run the unified local CI entrypoint (check scripts still fail explicitly when prerequisites are missing):
 
 ```bash
 source ~/.topolactor-tools/env.sh
-bash .agent/tests/check-backend-tests.sh
-bash .agent/tests/check-frontend-types.sh
+bash .agent/tests/check-local-ci.sh
 ```
+
+`check-local-ci.sh` executes checks in fixed order: unified test gate → runtime environment → structure check (always last).
