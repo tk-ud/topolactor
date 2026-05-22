@@ -92,29 +92,23 @@ for f in "$SSOT_MD" "$TODO_FILE"; do
 done
 
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "FAIL: required command 'rg' not found (install ripgrep)" >&2
-  exit 1
-fi
+
+find_pattern_matches() {
+  local pattern="$1"
+  local target="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -e "$pattern" "$target"
+  else
+    grep -n -i -E "$pattern" "$target"
+  fi
+}
 
 for ssot_file in "$SSOT_YAML" "$SSOT_MD"; do
-  if rg -n -i \
-    -e "out_of_scope_not_implemented" \
-    -e "future_migration_task" \
-    -e "this[ _-]?pr|this PR" \
-    -e "not implemented|already implemented|current implementation" \
-    -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
-    -e "\\bTODO\\b|known_gap|roadmap" \
-    "$ssot_file" >/dev/null; then
+  pattern='out_of_scope_not_implemented|future_migration_task|this[ _-]?pr|this PR|not implemented|already implemented|current implementation|\bimplemented\b|\bpartial\b|\bskeleton\b|\bTODO\b|known_gap|roadmap'
+  if find_pattern_matches "$pattern" "$ssot_file" >/dev/null; then
     echo "FAIL: progress/status vocabulary detected in SSOT file: $ssot_file" >&2
-    rg -n -i \
-      -e "out_of_scope_not_implemented" \
-      -e "future_migration_task" \
-      -e "this[ _-]?pr|this PR" \
-      -e "not implemented|already implemented|current implementation" \
-      -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
-      -e "\\bTODO\\b|known_gap|roadmap" \
-      "$ssot_file" >&2
+    find_pattern_matches "$pattern" "$ssot_file" >&2
     exit 1
   fi
 done
@@ -136,7 +130,7 @@ grep -qF "public override async Task<int> WriteLogsAttentionAsync(" backend/repo
 grep -qF "explorationResult.Hits.Count == 0" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing empty-hits guard before write" >&2; exit 1; }
 grep -qF "_sqlAttentionLogsRepository.WriteLogsAttentionAsync(" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing write_logs_attention call" >&2; exit 1; }
 grep -qF "INSERT INTO logs.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: logs.attention INSERT boundary missing" >&2; exit 1; }
-if rg -n "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
+if find_pattern_matches "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
   echo "FAIL: logs.attention append-only violated by UPDATE/DELETE" >&2
   exit 1
 fi
