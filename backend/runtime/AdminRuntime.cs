@@ -479,7 +479,7 @@ public class AdminRuntime
             new SeedImportResponseDto(
                 true,
                 result.ValidatedRuntimeCount,
-                "Seed validated. Full canonical import requires Gap-1 manifest-driven routing resolution.",
+                "Seed validated. Canonical DB write not yet implemented.",
                 [])), null);
     }
 }

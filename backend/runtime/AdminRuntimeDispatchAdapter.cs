@@ -5,7 +5,7 @@ namespace Topolactor.Runtime;
 /// <summary>
 /// Production adapter that routes admin_runtime manifest destinations to AdminRuntime.
 /// ManifestDispatcher registers this as the handler for runtime_destination=admin_runtime.
-/// Not a stub: wraps real AdminRuntime.ExecuteDataAsync with no skeleton logic.
+/// Resolves OperationVector from request, delegates to AdminRuntime.ExecuteDataAsync, maps result to EndpointResponseDto.
 /// </summary>
 public sealed class AdminRuntimeDispatchAdapter : IDispatchableRuntime
 {

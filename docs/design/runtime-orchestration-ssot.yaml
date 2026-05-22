@@ -297,29 +297,30 @@ runtime_orchestration_ssot:
         - db_listen
         - webhook_endpoint_if_applicable
     flows:
+      dispatch_note: >
+        manifest_dispatcher resolves runtime_destination from the manifest topology entry and selects
+        the registered dispatchable_runtime handler. topology_transform_runtime is one dispatchable kind;
+        see runtime_contract.backend_dispatchable_kinds for the full list.
       client:
         path:
           - endpoint
           - backend_scheduler
           - manifest_dispatcher
-          - topology_transform_runtime
-          - topology_function_binder
+          - dispatchable_runtime
           - topology_output_lanes
       cron:
         path:
           - cron_trigger
           - backend_scheduler
           - manifest_dispatcher
-          - topology_transform_runtime
-          - topology_function_binder
+          - dispatchable_runtime
           - topology_output_lanes
       hook:
         path:
           - hook_event
           - backend_scheduler
           - manifest_dispatcher
-          - topology_transform_runtime
-          - topology_function_binder
+          - dispatchable_runtime
           - topology_output_lanes
     topology_transform_runtime:
       input:
