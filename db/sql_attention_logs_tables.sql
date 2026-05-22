@@ -219,7 +219,7 @@ RETURNS TABLE (
     norm_rank INTEGER,
     previous_norm_level TEXT,
     norm_level TEXT,
-    level_changed BOOLEAN,
+    change_detected BOOLEAN,
     change_reason TEXT
 )
 LANGUAGE plpgsql
@@ -234,12 +234,28 @@ BEGIN
         p_policy_parameter_key
       );
 
+    CREATE TEMP TABLE IF NOT EXISTS tmp_logs_current_before_topn (
+        current_id UUID PRIMARY KEY,
+        norm_rank INTEGER,
+        norm_level TEXT,
+        l2_norm DOUBLE PRECISION
+    ) ON COMMIT DROP;
+    TRUNCATE tmp_logs_current_before_topn;
+
+    INSERT INTO tmp_logs_current_before_topn(current_id, norm_rank, norm_level, l2_norm)
+    SELECT c.current_id, c.norm_rank, c.norm_level, c.l2_norm
+      FROM logs.current c
+     WHERE c.source_set_id = p_source_set_id
+       AND c.basis_window = p_basis_window
+       AND c.norm_rank IS NOT NULL
+       AND c.norm_rank <= v_policy.top_n;
+
     WITH aggregated AS (
       SELECT
         d.source_set_id,
         d.basis_window,
-        d.table_id::TEXT AS physical_table_id,
-        d.table_name::TEXT AS physical_table_name,
+        d.physical_table_id::TEXT AS physical_table_id,
+        d.physical_table_name::TEXT AS physical_table_name,
         jsonb_build_object(
           'diff_count', COUNT(*)::BIGINT,
           'operation_kind_count',
@@ -249,42 +265,39 @@ BEGIN
           'diff', jsonb_build_object(
             'count_total', COUNT(*)::BIGINT,
             'recordcount_total',
-            COUNT(DISTINCT COALESCE(d.record_id, d.primary_key))
+            COUNT(DISTINCT d.record_id)
           )
         ) AS pressure_matrix_json,
         COUNT(*)::BIGINT AS count_total,
-        COUNT(DISTINCT COALESCE(d.record_id, d.primary_key))::BIGINT AS recordcount_total
-      FROM (
-        SELECT
-          source_set_id,
-          basis_window,
-          table_id,
-          table_name,
-          operation_kind,
-          record_id,
-          primary_key,
-          COUNT(*) OVER (
-            PARTITION BY source_set_id, basis_window, table_id, operation_kind
-          ) AS op_count
-        FROM logs.diff
-        WHERE source_set_id = p_source_set_id
-          AND basis_window = p_basis_window
-      ) d
-      GROUP BY d.source_set_id, d.basis_window, d.table_id, d.table_name
-    ), upserted AS (
-      INSERT INTO logs.current (
+        COUNT(DISTINCT d.record_id)::BIGINT AS recordcount_total
+      FROM logs.diff d
+      JOIN (
+        SELECT source_set_id, basis_window, physical_table_id, operation_kind, COUNT(*) AS op_count
+          FROM logs.diff
+         WHERE source_set_id = p_source_set_id
+           AND basis_window = p_basis_window
+         GROUP BY source_set_id, basis_window, physical_table_id, operation_kind
+      ) op ON op.source_set_id = d.source_set_id
+          AND op.basis_window = d.basis_window
+          AND op.physical_table_id = d.physical_table_id
+          AND op.operation_kind = d.operation_kind
+      WHERE d.source_set_id = p_source_set_id
+        AND d.basis_window = p_basis_window
+      GROUP BY d.source_set_id, d.basis_window, d.physical_table_id, d.physical_table_name
+    )
+    INSERT INTO logs.current (
         source_set_id, basis_window, physical_table_id, physical_table_name,
         basis_vector_json, pressure_matrix_json, count_total, recordcount_total,
         l2_norm, dirty, evaluated_at, updated_at
-      )
-      SELECT
+    )
+    SELECT
         a.source_set_id, a.basis_window, a.physical_table_id, a.physical_table_name,
         a.basis_vector_json, a.pressure_matrix_json, a.count_total, a.recordcount_total,
         sqrt(power(a.count_total::DOUBLE PRECISION, 2.0) + power(a.recordcount_total::DOUBLE PRECISION, 2.0)) AS l2_norm,
         true, now(), now()
-      FROM aggregated a
-      ON CONFLICT (source_set_id, basis_window, physical_table_id)
-      DO UPDATE SET
+    FROM aggregated a
+    ON CONFLICT (source_set_id, basis_window, physical_table_id)
+    DO UPDATE SET
         physical_table_name = EXCLUDED.physical_table_name,
         basis_vector_json = EXCLUDED.basis_vector_json,
         pressure_matrix_json = EXCLUDED.pressure_matrix_json,
@@ -293,9 +306,9 @@ BEGIN
         l2_norm = EXCLUDED.l2_norm,
         dirty = true,
         evaluated_at = now(),
-        updated_at = now()
-      RETURNING logs.current.current_id
-    ), ranked AS (
+        updated_at = now();
+
+    WITH ranked AS (
       SELECT
         c.current_id,
         DENSE_RANK() OVER (ORDER BY c.l2_norm DESC, c.updated_at DESC, c.current_id ASC) AS new_rank,
@@ -307,65 +320,68 @@ BEGIN
       FROM logs.current c
       WHERE c.source_set_id = p_source_set_id
         AND c.basis_window = p_basis_window
-    ), before_top AS (
-      SELECT c.current_id, c.norm_rank, c.norm_level, c.l2_norm
+    )
+    UPDATE logs.current c
+       SET previous_norm_level = c.norm_level,
+           norm_rank = r.new_rank,
+           norm_level = r.new_level,
+           evaluated_at = now(),
+           updated_at = now()
+    FROM ranked r
+    WHERE c.current_id = r.current_id;
+
+    CREATE TEMP TABLE IF NOT EXISTS tmp_logs_current_after_topn (
+        current_id UUID PRIMARY KEY,
+        norm_rank INTEGER,
+        norm_level TEXT,
+        l2_norm DOUBLE PRECISION
+    ) ON COMMIT DROP;
+    TRUNCATE tmp_logs_current_after_topn;
+    INSERT INTO tmp_logs_current_after_topn(current_id, norm_rank, norm_level, l2_norm)
+    SELECT c.current_id, c.norm_rank, c.norm_level, c.l2_norm
       FROM logs.current c
-      WHERE c.source_set_id = p_source_set_id
-        AND c.basis_window = p_basis_window
-        AND c.norm_rank IS NOT NULL
-        AND c.norm_rank <= v_policy.top_n
-    ), applied AS (
+     WHERE c.source_set_id = p_source_set_id
+       AND c.basis_window = p_basis_window
+       AND c.norm_rank IS NOT NULL
+       AND c.norm_rank <= v_policy.top_n;
+
+    CREATE TEMP TABLE IF NOT EXISTS tmp_logs_current_watch_reasons (
+        current_id UUID PRIMARY KEY,
+        reason TEXT
+    ) ON COMMIT DROP;
+    TRUNCATE tmp_logs_current_watch_reasons;
+
+    INSERT INTO tmp_logs_current_watch_reasons(current_id, reason)
+    SELECT
+      COALESCE(a.current_id, b.current_id) AS current_id,
+      CASE
+        WHEN b.current_id IS NULL THEN 'membership_entered_topn'
+        WHEN a.current_id IS NULL THEN 'membership_left_topn'
+        WHEN b.norm_rank <> a.norm_rank THEN 'order_changed'
+        WHEN COALESCE(b.norm_level, '') <> COALESCE(a.norm_level, '') THEN 'level_changed'
+        WHEN abs(COALESCE(a.l2_norm, 0) - COALESCE(b.l2_norm, 0)) > v_policy.delta_threshold THEN 'delta_threshold_exceeded'
+        ELSE 'no_change'
+      END AS reason
+    FROM tmp_logs_current_before_topn b
+    FULL OUTER JOIN tmp_logs_current_after_topn a ON a.current_id = b.current_id;
+
+    RETURN QUERY
+    WITH applied AS (
       UPDATE logs.current c
-         SET previous_norm_level = c.norm_level,
-             norm_rank = r.new_rank,
-             norm_level = r.new_level,
-             level_changed = (
-               COALESCE(c.norm_level, '') <> COALESCE(r.new_level, '')
-               OR (
-                 c.norm_rank IS DISTINCT FROM r.new_rank
-                 AND (COALESCE(c.norm_rank, 2147483647) <= v_policy.top_n
-                   OR r.new_rank <= v_policy.top_n)
-               )
-             ),
-             dirty = (
-               COALESCE(c.norm_level, '') <> COALESCE(r.new_level, '')
-               OR (
-                 c.norm_rank IS DISTINCT FROM r.new_rank
-                 AND (COALESCE(c.norm_rank, 2147483647) <= v_policy.top_n
-                   OR r.new_rank <= v_policy.top_n)
-               )
-             ),
+         SET level_changed = (r.reason IS NOT NULL AND r.reason <> 'no_change'),
+             dirty = (r.reason IS NOT NULL AND r.reason <> 'no_change'),
              evaluated_at = now(),
              updated_at = now()
-      FROM ranked r
+      FROM tmp_logs_current_watch_reasons r
       WHERE c.current_id = r.current_id
-      RETURNING c.current_id, c.physical_table_id, c.previous_norm_level, c.norm_level, c.norm_rank, c.level_changed, c.l2_norm
-    ), after_top AS (
-      SELECT c.current_id, c.norm_rank, c.norm_level, c.l2_norm
-      FROM logs.current c
-      WHERE c.source_set_id = p_source_set_id
-        AND c.basis_window = p_basis_window
-        AND c.norm_rank IS NOT NULL
-        AND c.norm_rank <= v_policy.top_n
-    ), reasons AS (
-      SELECT
-        a.current_id,
-        CASE
-          WHEN b.current_id IS NULL THEN 'membership_entered_topn'
-          WHEN a.current_id IS NULL THEN 'membership_left_topn'
-          WHEN b.norm_rank <> a.norm_rank THEN 'order_changed'
-          WHEN COALESCE(b.norm_level, '') <> COALESCE(a.norm_level, '') THEN 'level_changed'
-          WHEN abs(COALESCE(a.l2_norm, 0) - COALESCE(b.l2_norm, 0)) > v_policy.delta_threshold THEN 'delta_threshold_exceeded'
-          ELSE 'no_change'
-        END AS reason
-      FROM before_top b
-      FULL OUTER JOIN after_top a ON a.current_id = b.current_id
+      RETURNING c.current_id, c.physical_table_id, c.norm_rank, c.previous_norm_level, c.norm_level
     )
     SELECT ap.current_id, ap.physical_table_id, ap.norm_rank, ap.previous_norm_level, ap.norm_level,
-           (rs.reason <> 'no_change') AS level_changed,
+           true AS change_detected,
            rs.reason AS change_reason
       FROM applied ap
-      LEFT JOIN reasons rs ON rs.current_id = ap.current_id
-     WHERE rs.reason IS DISTINCT FROM 'no_change';
+      JOIN tmp_logs_current_watch_reasons rs ON rs.current_id = ap.current_id
+     WHERE rs.reason IS NOT NULL
+       AND rs.reason <> 'no_change';
 END;
 $$;

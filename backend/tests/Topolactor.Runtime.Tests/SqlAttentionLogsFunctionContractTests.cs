@@ -5,7 +5,24 @@ public class SqlAttentionLogsFunctionContractTests
 {
     private static string LoadSql()
     {
-        var path = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "../../../db/sql_attention_logs_tables.sql"));
+        var cwd = Directory.GetCurrentDirectory();
+        var candidate = new DirectoryInfo(cwd);
+        string? repoRoot = null;
+        while (candidate != null)
+        {
+            var hasGit = Directory.Exists(Path.Combine(candidate.FullName, ".git"));
+            var hasDb = File.Exists(Path.Combine(candidate.FullName, "db", "sql_attention_logs_tables.sql"));
+            if (hasGit && hasDb)
+            {
+                repoRoot = candidate.FullName;
+                break;
+            }
+
+            candidate = candidate.Parent;
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(repoRoot), $"Repository root not found from cwd={cwd}");
+        var path = Path.Combine(repoRoot!, "db", "sql_attention_logs_tables.sql");
         return File.ReadAllText(path);
     }
 
@@ -20,7 +37,9 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.Contains("order_changed", sql);
         Assert.Contains("level_changed", sql);
         Assert.Contains("delta_threshold_exceeded", sql);
-        Assert.Contains("WHERE rs.reason IS DISTINCT FROM 'no_change'", sql);
+        Assert.Contains("COALESCE(a.current_id, b.current_id)", sql);
+        Assert.Contains("rs.reason IS NOT NULL", sql);
+        Assert.Contains("rs.reason <> 'no_change'", sql);
     }
 
     [Fact]
@@ -30,7 +49,7 @@ public class SqlAttentionLogsFunctionContractTests
 
         Assert.Contains("sqrt(power(a.count_total::DOUBLE PRECISION, 2.0) + power(a.recordcount_total::DOUBLE PRECISION, 2.0))", sql);
         Assert.DoesNotContain("INSERT INTO logs.attention", sql);
-        Assert.DoesNotContain("phase_vector", sql);
+        Assert.DoesNotContain("generate_phase_vector", sql);
     }
 
     [Fact]
@@ -42,5 +61,20 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.Contains("SQL Attention watch policy missing", sql);
         Assert.Contains("SQL Attention watch policy keys missing", sql);
         Assert.DoesNotContain("COALESCE(v_policy", sql);
+    }
+
+    [Fact]
+    public void RefreshFunction_UsesSsotPhysicalIdentityColumns_AndNoSiblingDoubleWriteCte()
+    {
+        var sql = LoadSql();
+        Assert.Contains("physical_table_id", sql);
+        Assert.Contains("physical_table_name", sql);
+        Assert.DoesNotContain("d.table_id", sql);
+        Assert.DoesNotContain("d.primary_key", sql);
+
+        Assert.Contains("WITH aggregated AS", sql);
+        Assert.Contains("INSERT INTO logs.current", sql);
+        Assert.Contains("WITH ranked AS", sql);
+        Assert.Contains("UPDATE logs.current c", sql);
     }
 }
