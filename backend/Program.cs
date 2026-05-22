@@ -48,6 +48,11 @@ builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
         connectionString));
+builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
+    new NpgsqlSqlAttentionLogsRepository(
+        sp.GetRequiredService<ILogger<NpgsqlSqlAttentionLogsRepository>>(),
+        connectionString));
+builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 
 // ---------------------------------------------------------------------------
 // Runtime layer
@@ -163,6 +168,7 @@ builder.Services.AddSingleton<RuntimeTimelineScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RuntimeTimelineScheduler>());
 builder.Services.AddHostedService<RetentionScheduler>();
 builder.Services.AddHostedService<SystemOperationCiScheduler>();
+builder.Services.AddHostedService<SqlAttentionScheduler>();
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,
