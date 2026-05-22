@@ -622,6 +622,7 @@ public class HubAttractorExplorationRuntime_ScoreBandTests
 // Tests — SqlAttentionScheduler: no exploration on no-change
 // ---------------------------------------------------------------------------
 
+[Collection("SqlAttentionSchedulerEnvVarTests")]
 public class SqlAttentionScheduler_RunOnceTests
 {
     private static SqlAttentionScheduler CreateScheduler(
@@ -815,6 +816,7 @@ public class WriteLogsAttention_BaseRepository_Tests
 // Tests — write_logs_attention scheduler integration
 // ---------------------------------------------------------------------------
 
+[Collection("SqlAttentionSchedulerEnvVarTests")]
 public class SqlAttentionScheduler_WriteLogsAttention_Tests
 {
     private static SqlAttentionScheduler CreateScheduler(StubSqlAttentionLogsRepository logsRepo) =>
