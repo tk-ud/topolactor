@@ -15,6 +15,14 @@ framework_policy:
       - sql_attention_is_observation_layer_not_attractor_generator
       - aggregates_are_attention_weight_observation_not_meaning_sot
       - ui_package_layout_wiring_relations_with_physical_table_record_route_can_be_treated_as_hub_vector_surfaces
+      - topology_is_semantic_definition_space
+      - hubs_are_relation_maps_over_already_defined_ids_and_references
+      - do_not_mix_topology_semantic_definitions_into_hubs_relation_maps
+      - equal_relation_shape_uses_id_and_related_ids
+      - parent_child_relation_shape_uses_id_parent_id_child_ids
+      - ui_relation_parent_is_physical_table_id_or_data_type_id
+      - ui_relation_children_are_package_ids_as_ui_payload_bundles
+      - ui_relation_matrix_body_must_not_mix_role_state_route_context_axes
 
   registry_tensor_principle:
     role: ssot_mandatory_principle

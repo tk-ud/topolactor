@@ -58,7 +58,8 @@ db_schema:
       hub_registry: hub_or_relation_composition_definitions
       topology_registry: topology_semantic_space_definitions
       ui_registry: ui_package_layout_wiring_definitions
-      hubs: relation_nodes_and_vector_surfaces
+      hubs: relation_maps_over_defined_ids_fk_and_reference_arrays
+      ui_relation: parent_child_relation_map_parent_data_type_or_physical_table_to_child_package_payload_bundles
       logs: physical_time_axis_observations
     future_todo: consider_physical_schema_split_or_rename_without_changing_current_runtime_contract
 
@@ -637,7 +638,7 @@ sql_attention_target_boundary:
   not_search_target:
     - topologys
     - registry
-  projection_path: hit_hub_to_topologys_meaning_space
+  interpretation_path: hubs_relation_map_is_interpreted_under_topology_definition
 
 
 sql_attention_target_note:
@@ -645,7 +646,7 @@ sql_attention_target_note:
   not_target:
     - topologys_direct_search
     - registry_direct_search
-  projection: topologys_is_projected_from_hit_hub
+  interpretation: topology_is_semantic_definition_space_not_hubs_payload
   topology_recommendation_basis:
     - statistics
     - ema

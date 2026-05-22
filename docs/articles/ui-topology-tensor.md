@@ -29,11 +29,20 @@ Frontend adapters are stable projection surfaces. New specifications should prim
 
 ## Relation-first interpretation
 
-UI package/layout/wiring definitions are not automatically topology meaning bodies by themselves.
-They become hub/vector-treatable relation surfaces when relations are established, for example:
+UI relation is a parent-child relation map.
 
-- `physical_table × ui_package`
-- `record/entity × component`
-- `route × layout/wiring`
+`hubs.ui_relation` shape:
+- `id`
+- `parent_id` (physical_table_id or data_type_id)
+- `child_ids[]` (package_ids[])
 
-So the tensor/vector interpretation is relation-first, not UI-definition-only.
+`package` means one UI payload bundle.
+`physical_table : package` is not one-to-one.
+
+This relation map shows which UI package payload groups are used by which data type/physical table.
+If `parent_id` and `child_ids[]` columns are normalized column-wise, neighborhood search can compare UI usage patterns.
+
+Boundary:
+- Do not mix topology semantic definitions into the hubs relation-map body.
+- Do not mix role/state/route/context axes into the UI relation matrix body itself.
+

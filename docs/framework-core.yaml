@@ -92,11 +92,26 @@ data_driven_topology_runtime_framework:
         - topology_search
         - attractor_generator
     ui_relation_surfaces:
-      role: ui_package_layout_wiring_relations_can_form_hub_vector_surfaces_when_relations_are_established
-      examples:
-        - physical_table_x_ui_package
-        - record_or_entity_x_component
-        - route_x_layout_or_wiring
+      role: ui_usage_relation_map
+      relation_shape:
+        equal_relation:
+          fields:
+            - id
+            - related_ids[]
+        parent_child_relation:
+          fields:
+            - id
+            - parent_id
+            - child_ids[]
+          example:
+            parent_id: physical_table_id_or_data_type_id
+            child_ids: package_ids
+      meaning: which_ui_package_payloads_are_used_by_which_data_type
+      vectorization_rule: normalize_columns_for_neighborhood_search
+      boundary:
+        - package_is_ui_payload_bundle
+        - physical_table_to_package_is_not_one_to_one
+        - do_not_mix_topology_semantic_definitions_into_hubs_relation_map
     weight_observation_rule:
       weights:
         - count

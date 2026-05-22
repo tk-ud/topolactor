@@ -31,3 +31,11 @@ A typical config table toggles static branches in code. In contrast, this archit
 - A **relation-bearing hub** can be treated as tensor/vector coordinates.
 - As vectors, hub relations support neighborhood search.
 - Attractor is a vector convergence point; Attention is observation/observation-operation.
+
+
+## Relation map shapes
+
+- Equal relation: `id`, `related_ids[]`.
+- Parent-child relation: `id`, `parent_id`, `child_ids[]`.
+
+These relation-map ID columns can be normalized column-wise for neighborhood search.

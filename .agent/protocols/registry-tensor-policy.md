@@ -31,6 +31,14 @@ Registry is a topology definition/configuration basis (tensor/vector axis defini
 - attractor is a vector convergence point.
 - Attention is an observation point/operation, not the attractor.
 - SQL Attention is an observation layer over logs pressure and hub/vector-indicated attractor evidence; it is not an attractor generator.
+- topology is semantic definition space.
+- hubs are relation maps over already-defined ids/references.
+- topology semantic definitions must not be mixed into hubs relation-map payload/body.
+- equal relation shape uses: id, related_ids[].
+- parent-child relation shape uses: id, parent_id, child_ids[].
+- UI relation shape uses: id, parent_id(physical_table_id_or_data_type_id), child_ids[](package_ids[]).
+- package is UI payload bundle.
+- relation-map columns can be normalized column-wise for neighborhood search.
 - registry table must be explained as semantic matrix.
 - row = `registryId` / topology vocabulary basis.
 - column = semantic axis / projection axis / wiring axis.
@@ -128,3 +136,7 @@ Additional required drift checks:
 29. registry is treated as hub/attractor/Attention itself
 30. Attention is treated as attractor
 31. attractor is treated as SQL Attention result artifact
+
+32. topology semantic definitions are mixed inside hubs relation-map payloads
+33. UI relation is described as one-to-one physical_table-to-package binding
+34. role/state/route/context axes are mixed into UI relation matrix body

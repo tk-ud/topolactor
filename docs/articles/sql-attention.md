@@ -9,9 +9,9 @@ SQL Attention is topolactor’s DB-native way to observe **logs-side physical pr
 SQL Attention observes two current planes separately:
 
 - **physical current:** table, column / JSON path, candidate, operation, component, diff, and log pressure.
-- **hub current:** hub / attractor continuity represented as a bounded square-matrix semantic field.
+- **hub current:** hubs relation-map continuity represented as a bounded square-matrix field.
 
-The SQL Attention target is hub/vector-side continuity and attractor evidence observation. Registry and context surfaces provide vocabulary, bindings, and loop / collapse control boundaries, but registry rows are not the direct target of SQL Attention.
+The SQL Attention target is hubs relation-map continuity and attractor evidence observation under topology definitions. Registry and context surfaces provide definitions and bindings, but topology semantic definitions are not mixed into hubs relation-map payloads.
 
 In this model, SQL aggregates are operational evidence for attention, not detached analytics and not the meaning authority. SQL Attention does not reproduce Transformer QK inner product over all elements.
 
