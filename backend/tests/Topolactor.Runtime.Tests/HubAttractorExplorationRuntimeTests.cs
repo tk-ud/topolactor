@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
@@ -72,7 +73,9 @@ internal static class ExplorationTestFactory
         Guid? currentId = null,
         string? physicalTableId = null,
         bool changeDetected = true,
-        string changeReason = "level_changed") =>
+        string changeReason = "level_changed",
+        double l2Norm = 10.0,
+        string basisVectorJson = """{"diff_count": 10}""") =>
         new(
             CurrentId: currentId ?? Guid.NewGuid(),
             PhysicalTableId: physicalTableId ?? "table_a",
@@ -80,7 +83,9 @@ internal static class ExplorationTestFactory
             PreviousNormLevel: "medium",
             NormLevel: "high",
             ChangeDetected: changeDetected,
-            ChangeReason: changeReason);
+            ChangeReason: changeReason,
+            L2Norm: l2Norm,
+            BasisVectorJson: basisVectorJson);
 
     public static WatchChangeCandidate NoChangeCandidate() =>
         new(
@@ -90,12 +95,15 @@ internal static class ExplorationTestFactory
             PreviousNormLevel: "high",
             NormLevel: "high",
             ChangeDetected: false,
-            ChangeReason: "no_change");
+            ChangeReason: "no_change",
+            L2Norm: 0.0,
+            BasisVectorJson: "{}");
 
     public static HubCurrentCandidate HubCurrent(
         string attractorKey = "attractor_a",
         long populationCount = 100,
-        long populationRecordcount = 50) =>
+        long populationRecordcount = 50,
+        string attractorVectorJson = "{}") =>
         new(
             HubCurrentId: Guid.NewGuid(),
             SourceSetId: "test_source",
@@ -104,7 +112,7 @@ internal static class ExplorationTestFactory
             HubRelationId: Guid.NewGuid(),
             RelationRegistryId: Guid.NewGuid(),
             BasisWindow: "7d",
-            AttractorVectorJson: "{}",
+            AttractorVectorJson: attractorVectorJson,
             PopulationCount: populationCount,
             PopulationRecordcount: populationRecordcount);
 
@@ -593,6 +601,193 @@ public class HubAttractorExplorationRuntime_BoundaryTests
         Assert.NotNull(hitType.GetProperty("HitRank"));
         Assert.NotNull(hitType.GetProperty("ScoreBand"));
         Assert.NotNull(hitType.GetProperty("PermutationKey"));
+        // Production evidence fields (per SSOT attention layer)
+        Assert.NotNull(hitType.GetProperty("L2Norm"));
+        Assert.NotNull(hitType.GetProperty("VectorJson"));
+        Assert.NotNull(hitType.GetProperty("EvidenceJson"));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — production evidence: vector scoring and evidence_json provenance
+// ---------------------------------------------------------------------------
+
+public class HubAttractorExplorationRuntime_VectorScoringTests
+{
+    [Fact]
+    public async Task ExploreAsync_Hit_EvidenceJsonContainsScoringProvenance()
+    {
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [ExplorationTestFactory.HubCurrent()]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate()],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
+        Assert.Equal(JsonValueKind.Object, evidence.ValueKind);
+        Assert.True(evidence.TryGetProperty("cosine_score", out _),
+            "evidence_json must contain cosine_score");
+        Assert.True(evidence.TryGetProperty("overlap_score", out _),
+            "evidence_json must contain overlap_score");
+        Assert.True(evidence.TryGetProperty("current_l2_norm", out _),
+            "evidence_json must contain current_l2_norm");
+        Assert.True(evidence.TryGetProperty("basis_key_count", out _),
+            "evidence_json must contain basis_key_count");
+        Assert.True(evidence.TryGetProperty("attractor_key_count", out _),
+            "evidence_json must contain attractor_key_count");
+        Assert.True(evidence.TryGetProperty("shared_key_count", out _),
+            "evidence_json must contain shared_key_count");
+    }
+
+    [Fact]
+    public async Task ExploreAsync_Hit_L2NormFromCandidate()
+    {
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [ExplorationTestFactory.HubCurrent()]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(l2Norm: 42.5)],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        Assert.Equal(42.5, hit.L2Norm);
+    }
+
+    [Fact]
+    public async Task ExploreAsync_WithEmptyAttractorVector_NeighborScoreIsZero()
+    {
+        // attractor_vector_json is {} (hub refresh not yet done) → cosine = 0
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        Assert.Equal(0.0, hit.NeighborScore);
+    }
+
+    [Fact]
+    public async Task ExploreAsync_WithMatchingVectors_ProducesNonZeroNeighborScore()
+    {
+        // Matching attractor_vector_json and basis_vector_json → cosine = 1.0
+        var hub = ExplorationTestFactory.HubCurrent(
+            attractorVectorJson: """{"diff_count": 10}""");
+
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [hub]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        Assert.True(hit.NeighborScore > 0.0,
+            $"Expected non-zero neighbor score with matching vectors, got {hit.NeighborScore}");
+        Assert.NotEqual("{}", hit.VectorJson);
+    }
+
+    [Fact]
+    public async Task ExploreAsync_WithMatchingVectors_EvidenceJsonRecordsCurrentL2Norm()
+    {
+        var hub = ExplorationTestFactory.HubCurrent(
+            attractorVectorJson: """{"diff_count": 5}""");
+
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [hub]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(
+                l2Norm: 99.0,
+                basisVectorJson: """{"diff_count": 5}""")],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
+        Assert.True(evidence.TryGetProperty("current_l2_norm", out var l2NormProp));
+        Assert.Equal(99.0, l2NormProp.GetDouble(), precision: 5);
+    }
+
+    [Fact]
+    public void FlattenVectorJson_EmptyObject_ReturnsEmptyDict()
+    {
+        var result = HubAttractorExplorationRuntime.FlattenVectorJson("{}");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void FlattenVectorJson_SimpleNumeric_ReturnsKey()
+    {
+        var result = HubAttractorExplorationRuntime.FlattenVectorJson("""{"diff_count": 10}""");
+        Assert.True(result.ContainsKey("diff_count"));
+        Assert.Equal(10.0, result["diff_count"]);
+    }
+
+    [Fact]
+    public void FlattenVectorJson_NestedObject_FlattensDotNotation()
+    {
+        var result = HubAttractorExplorationRuntime.FlattenVectorJson(
+            """{"operation_kind_count": {"INSERT": 5, "UPDATE": 3}}""");
+        Assert.True(result.ContainsKey("operation_kind_count.INSERT"));
+        Assert.True(result.ContainsKey("operation_kind_count.UPDATE"));
+        Assert.Equal(5.0, result["operation_kind_count.INSERT"]);
+        Assert.Equal(3.0, result["operation_kind_count.UPDATE"]);
+    }
+
+    [Fact]
+    public void FlattenVectorJson_MalformedJson_ReturnsEmptyDict()
+    {
+        var result = HubAttractorExplorationRuntime.FlattenVectorJson("not-json");
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void CosineSimilarity_IdenticalVectors_ReturnsOne()
+    {
+        var v = new Dictionary<string, double> { ["a"] = 3.0, ["b"] = 4.0 };
+        var score = HubAttractorExplorationRuntime.CosineSimilarity(v, v);
+        Assert.Equal(1.0, score, precision: 10);
+    }
+
+    [Fact]
+    public void CosineSimilarity_EmptyVector_ReturnsZero()
+    {
+        var a = new Dictionary<string, double> { ["a"] = 1.0 };
+        var empty = new Dictionary<string, double>();
+        Assert.Equal(0.0, HubAttractorExplorationRuntime.CosineSimilarity(a, empty));
+        Assert.Equal(0.0, HubAttractorExplorationRuntime.CosineSimilarity(empty, a));
+    }
+
+    [Fact]
+    public void CosineSimilarity_NoSharedKeys_ReturnsZero()
+    {
+        var a = new Dictionary<string, double> { ["x"] = 1.0 };
+        var b = new Dictionary<string, double> { ["y"] = 1.0 };
+        Assert.Equal(0.0, HubAttractorExplorationRuntime.CosineSimilarity(a, b));
+    }
+
+    [Fact]
+    public void OverlapScore_IdenticalKeys_ReturnsOne()
+    {
+        var a = new Dictionary<string, double> { ["a"] = 1.0, ["b"] = 2.0 };
+        var b = new Dictionary<string, double> { ["a"] = 3.0, ["b"] = 4.0 };
+        Assert.Equal(1.0, HubAttractorExplorationRuntime.OverlapScore(a, b), precision: 10);
+    }
+
+    [Fact]
+    public void OverlapScore_NoSharedKeys_ReturnsZero()
+    {
+        var a = new Dictionary<string, double> { ["x"] = 1.0 };
+        var b = new Dictionary<string, double> { ["y"] = 1.0 };
+        Assert.Equal(0.0, HubAttractorExplorationRuntime.OverlapScore(a, b));
     }
 }
 
@@ -846,11 +1041,14 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.NotNull(logsRepo.LastWriteRequests);
             var request = Assert.Single(logsRepo.LastWriteRequests!);
             Assert.Equal("required", request.ArchivePolicy);
+            // VectorJson: {} when attractor_vector_json is {} (no shared components until hub refresh)
             Assert.Equal("{}", request.VectorJson);
+            // PhaseVectorJson and StatisticsJson remain {} (separate TODOs)
             Assert.Equal("{}", request.PhaseVectorJson);
             Assert.Equal("{}", request.StatisticsJson);
             Assert.Null(request.EmaScore);
-            Assert.Equal("{}", request.EvidenceJson);
+            // EvidenceJson now contains scoring provenance (not placeholder {})
+            Assert.NotEqual("{}", request.EvidenceJson);
         }
         finally
         {
@@ -938,7 +1136,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         try
         {
             var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate()],
+                [ExplorationTestFactory.ChangeCandidate(l2Norm: 10.0)],
                 [ExplorationTestFactory.HubCurrent()]);
 
             var scheduler = CreateScheduler(logsRepo);
@@ -950,12 +1148,15 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
                 Assert.NotEqual(Guid.Empty, request.CurrentId);
                 Assert.NotEqual(Guid.Empty, request.HubCurrentId);
                 Assert.Equal("required", request.ArchivePolicy);
-                Assert.Equal(0.0, request.L2Norm);
+                // L2Norm is now from candidate.L2Norm (production value, not placeholder 0.0)
+                Assert.Equal(10.0, request.L2Norm);
+                // VectorJson is {} when attractor_vector_json is {} (no shared components)
                 Assert.Equal("{}", request.VectorJson);
                 Assert.Equal("{}", request.PhaseVectorJson);
                 Assert.Equal("{}", request.StatisticsJson);
                 Assert.Null(request.EmaScore);
-                Assert.Equal("{}", request.EvidenceJson);
+                // EvidenceJson contains scoring provenance
+                Assert.NotEqual("{}", request.EvidenceJson);
             }
         }
         finally

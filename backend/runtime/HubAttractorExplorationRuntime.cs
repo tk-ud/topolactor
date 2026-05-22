@@ -191,8 +191,8 @@ public class HubAttractorExplorationRuntime
                         .ToList();
 
                     var scoredHubs = tablesForKind
-                        .Select(h => (Hub: h, Score: ComputeNeighborScore(candidate, h)))
-                        .OrderByDescending(x => x.Score)
+                        .Select(h => (Hub: h, Scoring: ComputeNeighborScore(candidate, h)))
+                        .OrderByDescending(x => x.Scoring.Score)
                         .Take(policy.TopKPerHubKind)
                         .ToList();
 
@@ -201,7 +201,7 @@ public class HubAttractorExplorationRuntime
                         if (hits.Count >= policy.MaxAttentionRowsSaved)
                             break;
 
-                        var (hub, score) = scoredHubs[rank];
+                        var (hub, scoring) = scoredHubs[rank];
                         hits.Add(new HubAttractorExplorationHit(
                             CurrentId: candidate.CurrentId,
                             HubCurrentId: hub.HubCurrentId,
@@ -210,10 +210,13 @@ public class HubAttractorExplorationRuntime
                             AttractorKey: hub.AttractorKey,
                             HubRelationId: hub.HubRelationId,
                             RelationRegistryId: hub.RelationRegistryId,
-                            NeighborScore: score,
+                            NeighborScore: scoring.Score,
                             HitRank: rank + 1,
-                            ScoreBand: ClassifyScoreBand(score),
-                            PermutationKey: permutationKey
+                            ScoreBand: ClassifyScoreBand(scoring.Score),
+                            PermutationKey: permutationKey,
+                            L2Norm: candidate.L2Norm,
+                            VectorJson: scoring.VectorJson,
+                            EvidenceJson: scoring.EvidenceJson
                         ));
                     }
                 }
@@ -226,32 +229,122 @@ public class HubAttractorExplorationRuntime
     }
 
     /// <summary>
-    /// Computes a neighbor score between a watch candidate and a hub current candidate.
-    /// Score is derived from population-normalized L2 pressure ratio.
-    /// Range: [0.0, 1.0]. Higher = stronger attractor hit.
+    /// Computes neighbor score using vector cosine similarity between
+    /// candidate.BasisVectorJson (logs.current) and hub.AttractorVectorJson (logs.hub_current).
     ///
-    /// Note: This is a structural approximation. Full vector cosine similarity requires
-    /// logs.hub_current refresh implementation (separate TODO).
+    /// Returns:
+    ///   Score       — cosine similarity clamped [0, 1]. 0 when either vector is empty/unpopulated.
+    ///   VectorJson  — convergent neighbor hit vector: dot product component terms (per SSOT).
+    ///   EvidenceJson — scoring provenance with cosine_score, overlap_score, key counts, l2_norm.
+    ///
+    /// When attractor_vector_json is {} (hub refresh not yet implemented), score=0 and
+    /// evidence_json documents this fact — no silent fallback, no magic number override.
     /// </summary>
-    private static double ComputeNeighborScore(
+    private static (double Score, string VectorJson, string EvidenceJson) ComputeNeighborScore(
         WatchChangeCandidate candidate,
         HubCurrentCandidate hub)
     {
-        if (hub.PopulationCount <= 0)
-            return 0.0;
+        var basisVec = FlattenVectorJson(candidate.BasisVectorJson);
+        var attractorVec = FlattenVectorJson(hub.AttractorVectorJson);
 
-        var normBase = Math.Sqrt(hub.PopulationCount * hub.PopulationCount +
-                                  hub.PopulationRecordcount * hub.PopulationRecordcount);
-        if (normBase <= 0.0)
-            return 0.0;
+        var cosineScore = CosineSimilarity(basisVec, attractorVec);
+        var overlapScore = OverlapScore(basisVec, attractorVec);
+        var neighborScore = Math.Clamp(cosineScore, 0.0, 1.0);
 
-        // Score based on attractor key string match with candidate physical table id.
-        // This is a structural stub — production scoring requires attractor_vector_json × basis_vector_json.
-        var keyMatchBonus = hub.AttractorKey.Contains(candidate.PhysicalTableId,
-            StringComparison.OrdinalIgnoreCase) ? 0.1 : 0.0;
+        var sharedKeys = basisVec.Keys.Intersect(attractorVec.Keys).ToList();
 
-        var normScore = Math.Min(normBase / (normBase + 1.0), 1.0);
-        return Math.Min(normScore + keyMatchBonus, 1.0);
+        var vectorComponents = sharedKeys
+            .ToDictionary(k => k, k => basisVec[k] * attractorVec[k]);
+
+        var vectorJson = JsonSerializer.Serialize(vectorComponents);
+
+        var evidenceJson = JsonSerializer.Serialize(new
+        {
+            cosine_score = cosineScore,
+            overlap_score = overlapScore,
+            neighbor_score = neighborScore,
+            current_l2_norm = candidate.L2Norm,
+            basis_key_count = basisVec.Count,
+            attractor_key_count = attractorVec.Count,
+            shared_key_count = sharedKeys.Count
+        });
+
+        return (neighborScore, vectorJson, evidenceJson);
+    }
+
+    /// <summary>
+    /// Flattens a JSONB vector string to a key→double map.
+    /// Nested objects are flattened with dot-notation keys.
+    /// Non-numeric values are ignored. Malformed JSON returns empty map.
+    /// </summary>
+    internal static Dictionary<string, double> FlattenVectorJson(string json)
+    {
+        var result = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (string.IsNullOrWhiteSpace(json) || json.Trim() == "{}") return result;
+
+        try
+        {
+            var element = JsonSerializer.Deserialize<JsonElement>(json);
+            FlattenElement(element, string.Empty, result);
+        }
+        catch (JsonException)
+        {
+            // Malformed vector JSON: treat as empty (score = 0, documented in evidence_json)
+        }
+        return result;
+    }
+
+    private static void FlattenElement(JsonElement element, string prefix, Dictionary<string, double> result)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in element.EnumerateObject())
+            {
+                var key = prefix.Length > 0 ? $"{prefix}.{prop.Name}" : prop.Name;
+                FlattenElement(prop.Value, key, result);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Number
+                 && prefix.Length > 0
+                 && element.TryGetDouble(out var value))
+        {
+            result[prefix] = value;
+        }
+    }
+
+    /// <summary>
+    /// Cosine similarity between two flat numeric vectors. Returns 0 when either is empty.
+    /// Result clamped [0, 1] (negative cosine from anti-correlated vectors treated as 0).
+    /// </summary>
+    internal static double CosineSimilarity(Dictionary<string, double> a, Dictionary<string, double> b)
+    {
+        if (a.Count == 0 || b.Count == 0) return 0.0;
+
+        var dot = 0.0;
+        foreach (var (key, aVal) in a)
+            if (b.TryGetValue(key, out var bVal))
+                dot += aVal * bVal;
+
+        var normA = Math.Sqrt(a.Values.Sum(v => v * v));
+        var normB = Math.Sqrt(b.Values.Sum(v => v * v));
+
+        if (normA <= 0.0 || normB <= 0.0) return 0.0;
+
+        return Math.Clamp(dot / (normA * normB), 0.0, 1.0);
+    }
+
+    /// <summary>
+    /// Overlap score: Jaccard-like ratio of shared keys to union keys across both vectors.
+    /// Returns 0 when either vector is empty.
+    /// </summary>
+    internal static double OverlapScore(Dictionary<string, double> a, Dictionary<string, double> b)
+    {
+        if (a.Count == 0 || b.Count == 0) return 0.0;
+
+        var sharedCount = a.Keys.Count(b.ContainsKey);
+        var unionCount = a.Keys.Union(b.Keys).Count();
+
+        return unionCount == 0 ? 0.0 : (double)sharedCount / unionCount;
     }
 
     /// <summary>
