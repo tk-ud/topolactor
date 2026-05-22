@@ -15,6 +15,9 @@ Run this policy when changes touch registry tensor semantics, topology semantics
 
 Define mandatory audit interpretation for registry/topology/attention/UI/runtime surfaces.
 
+When SQL Attention logs semantics are in scope, `docs/design/sql-attention-logs-ssot.md` and `docs/design/sql-attention-logs-ssot.yaml` are the canonical parent definition.
+This protocol is an audit interpretation layer, not a replacement SSOT.
+
 Registry is topology vocabulary basis (tensor basis / vector basis), not a mere dictionary/config table.
 
 ## Mandatory interpretation
@@ -36,7 +39,7 @@ Registry is topology vocabulary basis (tensor basis / vector basis), not a mere 
 - logs.diffs is append-only diff surface with basic shape id/tableId/jsonb/created; it is audit/rebuild history and must not replace current-state SoT.
 - vector_sparse/l2_norm caches are rebuildable materialized projections, never SoT and never direct authoring targets.
 - SQL Attention is not SQL-based dot-product attention and must not be explained as SQL reproduction of Transformer QK inner product over all elements.
-- SQL Attention decomposes attention-equivalent observation into neighborhood narrowing and excitation-strength observation.
+- SQL Attention parent decomposition semantics must be read from SQL Attention Logs SSOT; this protocol uses that meaning as an audit lens.
 - Theta/cosine may be used for neighborhood filtering only; semantic SoT remains registry tensor continuity.
 - norm/l2_norm is projection cache for strength/impedance/weight observation and must not be treated as manually-authored semantic value.
 - a record that references registry IDs is treated as a tensor state.

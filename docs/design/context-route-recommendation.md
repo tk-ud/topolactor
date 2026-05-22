@@ -18,33 +18,28 @@
 ## Registry Tensor Principle（SSOT）
 
 registry table は単なる辞書/設定/metadata ではなく、topology vocabulary の semantic matrix（tensor basis / vector basis）として扱う。
-row は registryId（basis vocabulary）、column は semantic axis / projection axis / wiring axis、value は weight / state / relation / coordinate / connection の観測値である。
-registryId row・axis column・value cell の組み合わせは sparse vector / tensor coordinate を構成する。
-
-DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic は個別主語ではなく、
-abstract function に registry tensor（semantic matrix 由来の coordinate set）を入力し、各 surface へ projection / expansion する実行面として扱う。
-
-- DB = tensor persistence
-- UI = tensor projection
-- endpoint = tensor projection
-- runtime = tensor expansion
-- scheduler = tensor expansion
-- function = tensor expansion
-- CI / diagnostic = tensor projection
-
-JSONB は潜在/半構造特徴保持層、column 化は観測可能意味軸、runtime 展開は tensor expansion として扱う。
+registry table は topology vocabulary の semantic matrix（tensor basis / vector basis）として扱う。
+row は registryId、column は semantic axis / projection axis / wiring axis、value は weight / state / relation / coordinate / connection の観測値である。
 
 同一テーブル内の count/sum/average/recency/frequency/transition 集計値は、意味本体ではなく attention weight の観測値として扱う。
 
-SQL Attention は QK 内積を SQL で総当たり再現する設計ではない。
-Transformer の全要素 QK 内積を RDB 上で再現することは対象外であり、GPU 的内積計算の代替実装もしない。
-SQL Attention は DB topology 上の観測で attention 相当スコアを構成する。
-- Θ / neighborhood: registry_id 参照、relation binding、topology continuity、indexed DB structure により候補空間を縮約
-- norm / impedance / weight: aggregation / transition / recency / frequency / diff / logs により励起強度を観測
-- projection cache: `vector_sparse` / `l2_norm` は再生成可能な補助値であり意味 SoT ではない
+## SQL Attention Logs SSOT との境界
+
+この文書は context route recommendation の SSOT であり、SQL Attention Logs SSOT 本体ではない。
+SQL Attention logs の canonical 親定義は以下を参照する。
+
+- `docs/design/sql-attention-logs-ssot.md`
+- `docs/design/sql-attention-logs-ssot.yaml`
+
+境界ルール:
+- `context_event` は SQL Attention の `logs.ui_operation` 相当になり得る **conditional signal source**
+- `context_hub_recommendation_current` は topology-internal discrete recommendation の child current
+- `context_hub_recommendation_current` は SQL Attention の `logs.current` ではない
+- `context_hub_recommendation_current` は SQL Attention 本体探索ではない
+- context route recommendation は Main Attention Route ではない
+- context route recommendation は SQL Attention evidence / statistics / EMA / feedback を使い得る child projection / consumer
 
 ---
-
 
 ## Real/Sys Table Principle and logs.diffs
 
@@ -60,19 +55,6 @@ jsonb key は観測頻度・意味重要度・監査要件に応じて column �
 これは監査・再構築・履歴面であり、現在状態 SoT の代替ではない。
 
 
-
-## SQL Attention Logs SSOT との境界
-
-この文書は context route recommendation の SSOT であり、SQL Attention Logs SSOT 本体ではない。
-SQL Attention logs の canonical 意味定義は以下を参照する。
-
-- `docs/design/sql-attention-logs-ssot.md`
-- `docs/design/sql-attention-logs-ssot.yaml`
-
-境界ルール:
-- `context_event` は SQL Attention の `logs.ui_operation` 相当になり得る **signal source**（条件付き）
-- `context_hub_recommendation_current` は hub recommendation current であり、SQL Attention の `logs.current` calculation basis ではない
-- context route recommendation と SQL Attention logs は別導線で扱う
 
 ## Vector Cache Clarification
 
@@ -275,314 +257,17 @@ cron 側に retention 期間や対象 log 種別を直書きしない。
 
 ---
 
-## Topology Vector Runtime
+## Topology Vector Runtime との関係
 
-### 概念
+Context route recommendation は lightweight topology observation / recommendation 導線であり、
+`context_event` / `context_prefix_vector_cache` / `context_transition_stats` /
+`context_hub_recommendation_current` / `context_hub_feedback_event` を使って離散推薦を返す。
 
-registry / hub / relation / entity が保持する ID 配列を sparse vector として扱い、
-SQL cosine 近傍検索を runtime / validation / recommendation に統合する拡張。
+この導線は SQL Attention 親定義を再定義しない。SQL Attention 親意味は
+`docs/design/sql-attention-logs-ssot.md` / `docs/design/sql-attention-logs-ssot.yaml` を参照する。
 
-外部 embedding / pgvector を必要としない。
-PostgreSQL の `UUID[]`, `JSONB`, GIN index, relation weight, transition stats を利用する
-data-defined topology runtime 拡張。
-
-### SQL Attention
-
-SQL Attention は Topology Vector Runtime の説明ラベルであり、別 Runtime 名ではない。
-ここでの中核は「提案エンジン」ではなく、**トポロジ連続性シナリオを監査可能な Attention として表現すること**である。
-PostgreSQL 上の `UUID[]` / `JSONB` / GIN index / relation weight / transition stats / EMA trend を使い、
-source of truth の業務データではなく recommendation current / projection 用の materialized signal として扱う。
-外部 embedding / pgvector / learned neural weights / neural attention 実装は必須ではない。
-レコメンドや UI 遷移はこの Attention 表現の一部ユースケースであり、本質そのものではない。
-集計値は attention weight であり、registryId は意味単位の loop / collapse 制御に利用される。
-hub は線形空間として扱い、連続性シナリオを DB 上で観測・監査可能にする。
-
-```text
-Query  = current hub / operation / runtime context
-         （hub を線形空間上の現在位置として扱う連続性シナリオ文脈）
-Key    = registry sparse vector / relation / hub / entity / token
-         （連続性を説明する観測軸。jsonb特徴とカラム特徴の双方を含む）
-Value  = candidate hub / registry / operation / token
-         （次の連結候補。推薦専用ではなく、監査対象となる遷移候補集合）
-Score  = cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback
-         （集計値を attention weight として統合）
-Output = ranked recommendation current / projection input + continuity evidence
-         （UI表示だけでなく、後続CI監査に回せる説明可能結果）
-```
-
-- `JSONB` は潜在的・半構造な特徴保持層として使う。
-- カラム化は観測可能な意味軸の増設として扱い、Attention 対象を再帰的/フラクタルに増やせるようにする。
-- 動的可変シナリオの連結ログ（例: `context_hub_feedback_event`）は、後続の統計重み更新・hub語彙・Topology Context Vocabulary 拡張源として扱う。
-- System Operation CI 実装済み: event-driven 検査 (`InspectEvidenceIntegrity` / `InspectHubAttentionAfterUpdate` / `InspectFeedbackEvents`) は `RunTopologyVectorRuntimeExtensionAsync` 内で呼び出し、Blocking → `TVR_EXTENSION_FAILED`。cron 検査 (`SystemOperationCiScheduler`) は BackgroundService として登録済み。詳細は `docs/design/topology-recommendation-ci-runtime.md` の System Operation CI セクションを参照。
-
-### Anti-collapse Candidate Policy（optional / future extension）
-
-SQL Attention の中核定義（連続性を監査可能な Attention として表現すること）とは分離した、
-候補空間の collapse と単一アトラクタ固定化を抑えるための **候補多様性ポリシー**。
-実装済み前提にはせず、optional policy / future extension として扱う。
-
-候補レイヤー例（優先順）:
-
-1. 第一候補: `global aggregate`
-   - 全期間または十分長い履歴で安定した連結導線を表す基準候補。
-2. 第二候補: `short EMA`
-   - 直近トレンドを反映する短期候補。
-3. 第三候補: `mid EMA`
-   - 中期文脈を反映し、短期ノイズ単独への過剰追従を緩和する候補。
-
-cross event の扱い:
-- `short EMA` と `mid EMA` の `cross_up` / `cross_down` を trend shift 信号として抽出できる。
-- hot 表示や転換点フラグは projection の実装選択であり、SQL Attention の本体定義ではない。
-
-trend window の解決:
-- trend 判定期間、EMA alpha、比較窓、候補数、重み配分は Runtime 直書きしない。
-- `function_parameters.default_policy.topology_vector_runtime` 側の policy / function_parameters から解決する。
-
-exploration slot（optional）:
-- 完全ランダム探索ではなく、同一トポロジ境界内で低頻度・弱関連の候補を探索枠として扱う。
-- 「もしかしたら？」候補として固定導線からの脱出可能性を作るが、本流候補の置換は目的にしない。
-- 探索比率・抽出上限・許容境界は policy 解決とし、未実装なら TODO のまま明示する。
-
-### 設計定義
-
-```text
-Topology Attention:
-  遷移に効いている重要 Key を抽出する
-
-Transition Key Evidence:
-  どの table / relation / state / entity がトポロジ連続性の Key になっているかを説明する
-  推薦理由の説明だけでなく、シナリオ連続性監査の証跡として保持する
-
-Topology MLP:
-  抽出された Key 群を組み合わせ、次状態 / 次候補 score へ変換する
-  初期実装は feature crossing + weighted score transform
-  neural network 実装ではない
-
-Feedback Weight Update:
-  推薦結果と実際の選択差分から、統計重みを補正する
-  selected → 重み強化
-  ignored  → 重み弱化
-  missing candidate → 欠落特徴を補正
-  動的可変な連結ログを語彙拡張の入力として保持する
-```
-
-「BP」という名称は初期実装では使わない。
-explainable statistical feedback として成立させ、将来の gradient / backprop 相当の拡張余地だけ残す。
-
-### Registry Sparse Vector 定義
-
-```text
-UUID[] = multi-hot sparse vector
-UUID + weight = weighted sparse vector
-```
-
-対象:
-- `relation_registry.master_ids`
-- `entities.relation_ids`
-- `structure_maps.component_ids`
-- `hub_relations.relation_registry_id + weight`
-
-注意:
-- registry table 自体は semantic matrix（row=registryId, column=axis, value=weight/state/relation/coordinate）
-- ID 配列を保持する row が vector を持つ topology node
-- 文字列 label / name は検索補助であり、意味近傍の主軸ではない
-- 既存の GIN index は候補集合の粗探索に利用する
-
-UI topology 接続:
-- packageId / layoutId / wiringId は UI tensor axis として扱う
-- UI topology table は UI 部品カタログではなく registry tensor の UI projection
-- CRUD wiring / CanDI wiring は UI topology tensor の wiring axis
-- frontend は判定主体ではなく projection surface
-
-### SQL Cosine Neighbor Search
-
-multi-hot UUID 配列に対する SQL cosine:
-
-```text
-cosine = intersection_count / sqrt(cardinality(a) * cardinality(b))
-```
-
-weighted vector の場合:
-
-```text
-cosine = dot(a, b) / sqrt(norm(a) * norm(b))
-```
-
-要件:
-- 空 vector / zero norm は explicit result として扱う（silent fallback 禁止）
-- candidate search は GIN overlap で粗探索してから cosine score を計算する
-- threshold / top_k / blocking 条件は function_parameters から読む
-- Runtime コードへ magic number を直書きしない
-
-### Registry Vector Validation
-
-Registrar の Draft → Validate → Promote flow に vector neighbor validation を追加する。
-既存の duplicate key check は維持する。
-
-追加する validation class:
-
-| class | cosine 範囲 | 扱い |
-|---|---|---|
-| `duplicate_vector` | >= duplicate_threshold | blocking |
-| `near_duplicate_vector` | >= near_duplicate_threshold | blocking or confirm-required |
-| `related_existing_registry` | >= related_threshold | warning |
-| `pass` | < related_threshold | 通過 |
-| `zero_vector` | zero norm | explicit validation result |
-| `explicit_error` | DB unavailable / infrastructure error | **blocking（fail-closed）** |
-
-threshold は function_parameters (topology_vector_runtime.registry_validation) から読む。
-
-DB unavailable は fail-closed: `ValidationClass.ExplicitError` + `IsBlocking:true` を返す。
-`Pass` + `IsBlocking:false` （fail-open）は禁止。
-
-要件:
-- UI が独自判定しない（backend structured validation result を projection するだけ）
-- Backend が structured validation result を返す
-- broken refs / malformed ids / DB unavailable は silent fallback しない → ExplicitError + blocking
-
-### Hub Attention Recommendation
-
-hub 同士を static relation と統計 recommendation 両方で attention できるようにする。
-
-hub identity 要件:
-- `context_hub_recommendation_current` への書き込みは、dispatch に `IdOrHubId` が提供されている場合のみ実行する。
-- `IdOrHubId` なしの dispatch（null）は hub attention current write をスキップする。sessionId を hubId の代替に使わない。
-- hub attention は hub-entity-scoped であり、session-scoped ではない。
-
-```text
-current hub = Query
-candidate hub / relation / entity vector = Key
-hub attention weight = static_relation_weight
-                     + cosine_similarity
-                     + statistical_weight
-                     + mlp_feature_score
-                     + feedback_adjustment
-attended hub = Value
-```
-
-信号:
-- 静的接続: `hub_relations.weight`
-- 意味近傍: registry sparse vector cosine
-- 統計接続: co-occurrence / transition stats / recommendation current
-- 短期 trend: EMA fast (alpha from policy)
-- 長期基準: EMA slow (alpha from policy)
-- 転換点: cross_up / cross_down / none
-
-current は正本ではなく rebuildable materialized current として扱う。
-
-`why this hub?` に対して `evidence_json` に relation/cosine/stat/EMA/cross の根拠を返す。
-
-### Topology MLP
-
-```text
-feature crossing 例:
-  relation_id × state_id
-  table_id × operation
-  hub_id × recent_trend
-  cosine_similarity × EMA cross
-  relation_id × table_id × selected_operation
-```
-
-max_feature_cross_order は function_parameters (topology_vector_runtime.topology_mlp) から読む。
-feature crossing の根拠は `mlp_feature_json` に保存する。
-
-### Feedback Weight Update
-
-```text
-推薦した → ユーザーが選んだ   → positive_delta 加算
-推薦した → 無視された         → negative_delta 加算
-推薦しなかった → 選ばれた     → missing_candidate_delta 加算
-```
-
-delta 値は function_parameters (topology_vector_runtime.feedback_weight_update) から読む。
-feedback は context_hub_feedback_event (append-only) にも記録する。
-aggregate current は再構築可能にする。
-
-feedback の適用粒度は `(hub_id, target_table, candidate_kind, candidate_id, scope_limit)` — context_hub_recommendation_current の PK 全体と一致する。
-
-`target_table` を含めない場合、同一 candidate_id が複数の target_table に存在すると feedback が誤って複数の target_table に適用される。HubFeedbackEvent と context_hub_feedback_event の両方が `target_table` を持つことで、この誤適用を防ぐ。
-
-### Policy ストレージ
-
-topology_vector_runtime の policy は独立した設定テーブルではなく、
-既存の `function_parameters` に統合する:
-
-```
-function_name = 'context_route_recommendation_resolve'
-parameter_key = 'default_policy'
-```
-
-JSON 内の `topology_vector_runtime` サブオブジェクトとして格納する。
-
-```json
-{
-  "topology_vector_runtime": {
-    "enabled": true,
-    "registry_validation": {
-      "enabled": true,
-      "duplicate_threshold": 1.0,
-      "near_duplicate_threshold": 0.85,
-      "related_threshold": 0.60,
-      "top_k": 10
-    },
-    "hub_attention": {
-      "enabled": true,
-      "scope_limits": [1000, 3000, 10000],
-      "ema_fast_alpha": 0.30,
-      "ema_slow_alpha": 0.10,
-      "max_update_candidates_per_event": 10000
-    },
-    "transition_key_evidence": {
-      "enabled": true,
-      "operation_contribution": 1.0,
-      "relation_contribution": 0.8,
-      "state_contribution": 0.7,
-      "table_contribution": 0.6,
-      "neighbor_top_k": 3
-    },
-    "topology_mlp": {
-      "enabled": true,
-      "max_feature_cross_order": 3
-    },
-    "feedback_weight_update": {
-      "enabled": true,
-      "positive_delta": 0.05,
-      "negative_delta": -0.02,
-      "missing_candidate_delta": 0.03
-    }
-  }
-}
-```
-
-policy missing → ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_NOT_FOUND")
-enabled=false → explicit disabled result（silent fallback 禁止）
-policy invalid → ExplicitError("TOPOLOGY_VECTOR_RUNTIME_POLICY_INVALID")
-
-### 意味境界
-
-Frontend:
-- cosine 判定しない
-- topology 判定しない
-- MLP feature crossing 判定しない
-- feedback weight update 判定しない
-- backend structured result / evidence を projection するだけ
-
-Backend:
-- structured validation result / recommendation evidence を返す
-
-DB:
-- topology definition / current / append-only event を保持する
-- `context_hub_recommendation_current` = rebuildable materialized current
-- `context_hub_feedback_event` = append-only event
-
-### やってはいけないこと
-
-- Runtime コードに threshold / alpha / delta / limit の magic number を直書きする
-- topology_vector_runtime 専用の独立した設定テーブルを作る
-- enabled=false を silent に skip する
-- policy missing / invalid で production fallback する
-- Frontend に cosine / topology / MLP 判定を持たせる
-- `context_hub_recommendation_current` を正本として扱う
+no silent fallback を維持し、policy は `function_parameters` から解決し、
+失敗は `ExplicitError` として返す。
 
 ---
 

@@ -2,9 +2,11 @@ system:
   name: context-route-recommendation
   version: "6.4"
   concept: >
-    Lightweight, offline-capable topology observation engine using registry tensor
-    continuity + append-only logs. SQL Attention observes attention-equivalent
-    score from DB topology and is not SQL-based dot-product attention.
+    Lightweight, offline-capable topology observation and recommendation engine using
+    registry tensor continuity + append-only logs.
+
+    Context Route Recommendation may consume SQL Attention-style evidence, but
+    SQL Attention parent semantics are defined by sql-attention-logs-ssot.md/yaml.
 
     Operational context is represented as tensor state derived from registry_id
     references/relation bindings/jsonb features/log observations. Prediction uses
@@ -38,27 +40,24 @@ registry_tensor_principle:
   same_table_aggregation_attention_weight: count_sum_average_recency_frequency_transition_are_attention_weights
   sql_attention_not_dot_product: true
   sql_attention_not_qk_all_element_inner_product: true
-  sql_attention_decomposition:
-    neighborhood_theta:
-      role: candidate_narrowing
-      inputs:
-        - registry_id_references
-        - relation_bindings
-        - topology_continuity
-        - indexed_db_structure
-      note: theta_cosine_is_filter_not_meaning_sot
-    norm_impedance_weight:
-      role: excitation_strength_observation
-      inputs:
-        - aggregation
-        - transition
-        - recency
-        - frequency
-        - diff
-        - logs
-    projection_cache:
-      fields: [vector_sparse, l2_norm]
-      rule: rebuildable_helper_not_meaning_sot
+  sql_attention_relation:
+    role: child_projection_consumer
+    canonical_reference:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    boundaries:
+      - sql_attention_parent_definition_is_not_redefined_here
+      - context_event_can_be_conditional_logs_ui_operation_signal_source
+      - context_hub_recommendation_current_is_child_projection_current
+      - context_hub_recommendation_current_is_not_logs_current
+      - context_route_recommendation_is_not_main_attention_route
+    may_consume:
+      - statistics
+      - ema
+      - usage_history
+      - trend
+      - feedback
+      - attention_evidence
 
 real_sys_table_principle:
   basic_shape: id_state_jsonb
