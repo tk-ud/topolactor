@@ -23,6 +23,15 @@ namespace Topolactor.Scheduler;
 ///
 /// All three trigger kinds share the same ManifestDispatcher path.
 /// ManifestDispatcher and RuntimeExecutor must not know about trigger alignment.
+///
+/// Queue persistence boundary: in-memory only (no DB persistence).
+/// Cron items lost on restart are re-triggered at the next cron tick by design.
+/// Hook items lost on restart are caller responsibility.
+/// Queue overflow: client triggers return SCHEDULER_QUEUE_FULL (explicit error).
+///                 Cron/hook triggers return false to the caller (explicit signal, not silent drop).
+/// Cancellation: client triggers return CLIENT_TRIGGER_CANCELED.
+///               Non-client (cron/hook) cancellation during dispatch is logged and swallowed;
+///               the item response is fire-and-forget and not observed by any caller.
 /// </summary>
 public class RuntimeTimelineScheduler : BackgroundService
 {
@@ -33,10 +42,18 @@ public class RuntimeTimelineScheduler : BackgroundService
     public RuntimeTimelineScheduler(
         ILogger<RuntimeTimelineScheduler> logger,
         ManifestDispatcher manifestDispatcher)
+        : this(logger, manifestDispatcher, queueCapacity: 256)
+    {
+    }
+
+    internal RuntimeTimelineScheduler(
+        ILogger<RuntimeTimelineScheduler> logger,
+        ManifestDispatcher manifestDispatcher,
+        int queueCapacity)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _manifestDispatcher = manifestDispatcher ?? throw new ArgumentNullException(nameof(manifestDispatcher));
-        _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(256)
+        _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(queueCapacity)
         {
             FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
@@ -92,7 +109,14 @@ public class RuntimeTimelineScheduler : BackgroundService
                 Errors: errors);
         }
 
-        EnqueueHookTrigger(request);
+        if (!EnqueueHookTrigger(request))
+        {
+            return new LegacyChangeIntakeResponseDto(
+                Accepted: false,
+                QueueStatus: "hook_trigger_queue_full",
+                Errors: [new ValidationError("SCHEDULER_QUEUE_FULL", "runtime queue is full; hook trigger rejected.")]);
+        }
+
         return new LegacyChangeIntakeResponseDto(
             Accepted: true,
             QueueStatus: "hook_trigger_enqueued",
@@ -101,8 +125,10 @@ public class RuntimeTimelineScheduler : BackgroundService
 
     /// <summary>
     /// Enqueues a cron trigger for background processing (fire-and-forget).
+    /// Returns true if enqueued; false if the queue is full (explicit overflow signal, not silent drop).
+    /// Caller should log or handle the false result as appropriate.
     /// </summary>
-    public void EnqueueCronTrigger(EndpointRequestDto request)
+    public bool EnqueueCronTrigger(EndpointRequestDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -110,14 +136,21 @@ public class RuntimeTimelineScheduler : BackgroundService
 
         if (!_bgQueue.Writer.TryWrite(item))
         {
-            _logger.LogWarning("RuntimeTimelineScheduler: background queue full; dropping cron trigger.");
+            _logger.LogWarning(
+                "RuntimeTimelineScheduler: background queue full; cron trigger rejected Target={Target}.",
+                request.Target);
+            return false;
         }
+
+        return true;
     }
 
     /// <summary>
     /// Enqueues a hook trigger for background processing (fire-and-forget).
+    /// Returns true if enqueued; false if the queue is full (explicit overflow signal, not silent drop).
+    /// Caller should log or handle the false result as appropriate.
     /// </summary>
-    public void EnqueueHookTrigger(EndpointRequestDto request)
+    public bool EnqueueHookTrigger(EndpointRequestDto request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
@@ -125,8 +158,13 @@ public class RuntimeTimelineScheduler : BackgroundService
 
         if (!_bgQueue.Writer.TryWrite(item))
         {
-            _logger.LogWarning("RuntimeTimelineScheduler: background queue full; dropping hook trigger.");
+            _logger.LogWarning(
+                "RuntimeTimelineScheduler: background queue full; hook trigger rejected Target={Target}.",
+                request.Target);
+            return false;
         }
+
+        return true;
     }
 
     /// <summary>
@@ -150,7 +188,7 @@ public class RuntimeTimelineScheduler : BackgroundService
                 var response = await _manifestDispatcher.DispatchAsync(item.Request, dispatchToken);
                 item.Response.TrySetResult(response);
             }
-            catch (OperationCanceledException oce)
+            catch (OperationCanceledException)
             {
                 if (item.IsClient)
                 {
@@ -158,7 +196,11 @@ public class RuntimeTimelineScheduler : BackgroundService
                     continue;
                 }
 
-                item.Response.TrySetException(oce);
+                // Non-client (cron/hook) dispatch was canceled (service stopping).
+                // Response is fire-and-forget; log and swallow — no caller awaits it.
+                _logger.LogWarning(
+                    "RuntimeTimelineScheduler: dispatch canceled for TriggerKind={TriggerKind} Target={Target} (service stopping).",
+                    item.Request.TriggerKind, item.Request.Target);
             }
             catch (Exception ex)
             {

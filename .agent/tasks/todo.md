@@ -54,12 +54,13 @@ SSOT参照必読:
       → 対象: `backend/scheduler/DbNotifyListener.cs`, `backend/tests/`
       → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Gap-7)
 
-- [ ] [Claude] Gap-14 残: `runtime_timeline_scheduler` の queue durability / overflow / cancellation boundary hardening
-      → cron/hook/client の unified queue alignment は実装済み (Gap-2 完了扱い)。
-      → 残: queue persistence 未実装、queue full (overflow/backpressure) 時の明示境界、cancellation 時の再実行・中断境界の仕様/実装を確定する。
-      → 完了条件: queue_persistence_and_overflow_or_cancellation_boundary_not_finalized を解消し `backend.runtime_timeline_scheduler` を implemented へ昇格可能な状態にする。
+- [x] [Claude] Gap-14 完了: `runtime_timeline_scheduler` の queue durability / overflow / cancellation boundary hardening
+      → cron/hook overflow: explicit bool false (was: silent drop). client overflow: SCHEDULER_QUEUE_FULL (unchanged).
+      → legacy change intake queue full: Accepted:false, QueueStatus:hook_trigger_queue_full.
+      → non-client cancellation during dispatch: log+swallow (was: TrySetException on unobserved TCS).
+      → queue persistence boundary: in-memory declared (no DB persistence; cron re-triggers at next tick).
+      → backend.runtime_timeline_scheduler promoted to implemented in docs/system-roadmap.yaml.
       → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`, `docs/system-roadmap.yaml`
-      → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-14
 
 - [ ] [Claude] Gap-15 残: output lane full connection / live verification の実装とゲート接続
       → 残: `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` / db_notify output lane の live 実行検証を Runtime Environment Test Gate と接続する。

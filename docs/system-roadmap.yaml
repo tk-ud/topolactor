@@ -159,11 +159,10 @@ system_roadmap_ssot:
         Align cron, hook, and client triggers on the same backend runtime timeline,
         then route effects into response, db_notify, and registry_attractor output lanes.
       unlocks:
-        - backend.runtime_timeline_scheduler: partial (unified_queue_alignment_implemented)
+        - backend.runtime_timeline_scheduler: implemented (queue_boundary_hardening_complete)
         - backend.output_lane_router: partial
         - backend.db_notify_listener: partial
       blocking_gaps:
-        - Gap-14 runtime_timeline_scheduler durability and boundary hardening
         - Gap-15 output lane full connection and live verification
 
     M4_projection_runtime:
@@ -426,13 +425,17 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     backend.runtime_timeline_scheduler:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
         RuntimeTimelineScheduler aligns cron/hook/client triggers through one Channel-based
         queue and routes them to ManifestDispatcher before runtime execution.
-        Queue durability and full/overflow/cancellation boundary hardening are not yet completed.
+        Queue persistence boundary is declared in-memory (no DB persistence).
+        Overflow: client triggers return SCHEDULER_QUEUE_FULL; cron/hook return explicit bool false.
+        Cancellation: client triggers return CLIENT_TRIGGER_CANCELED; non-client dispatch
+        cancellation is logged and swallowed (fire-and-forget, service stopping).
+        Gap-14 resolved. Gap-15 (output lane full connection) remains and prevents production_ready.
       files:
         - backend/scheduler/RuntimeTimelineScheduler.cs
       evidence:
@@ -450,8 +453,10 @@ system_roadmap_ssot:
         - cron_hook_client_triggers_are_aligned_in_one_runtime_queue
         - scheduler_owns_ordering_collision_control_and_execution_boundary
         - runtime_executor_does_not_own_trigger_alignment
+        - queue_overflow_returns_explicit_signal_for_all_trigger_kinds
+        - cancellation_boundary_is_explicit_for_client_and_non_client_triggers
+        - queue_persistence_boundary_is_declared_in_memory_no_db_persistence
       known_gap_ref:
-        - Gap-14 queue_persistence_and_overflow_or_cancellation_boundary_not_finalized
         - Gap-15 output_lane_full_connection_and_live_verification_not_completed
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
