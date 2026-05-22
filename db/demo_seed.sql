@@ -402,7 +402,7 @@ ON CONFLICT (session_id, prefix_index) DO UPDATE
 -- JWT config (not stored here): DEMO_JWT_SECRET / DEMO_JWT_ISSUER / DEMO_JWT_EXPIRY_HOURS
 -- env vars consumed by AuthEndpoint and JwtGuard.
 -- ---------------------------------------------------------------------------
-INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'demo_auth',
     'demo_users',
@@ -419,7 +419,7 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING;
 -- Changing aggregation_limit or prefer_recent here changes the windowed
 -- transition stats scope used when resolving demo route recommendations.
 -- ---------------------------------------------------------------------------
-INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'context_route_recommendation_resolve',
     'demo_policy',
