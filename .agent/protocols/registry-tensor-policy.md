@@ -75,6 +75,8 @@ Registry is a topology definition/configuration basis (tensor/vector axis defini
 
 ## SQL Attention interpretation
 
+- current namespace split roadmap (future task): keep logs.* for time-axis/evidence and move rebuildable current projections to current.* naming without changing runtime/DDL in this task.
+
 - SQL Attention is logs-time-axis pressure + hub/vector continuity observation.
 - Attention operation observes attractor evidence; it does not create attractors.
 - Hub relation surfaces are vectorizable for neighborhood reads.

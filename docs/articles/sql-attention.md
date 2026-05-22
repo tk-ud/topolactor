@@ -90,3 +90,14 @@ The DB schema above is an implemented projection / signal surface. It is not the
 - **Design-guarded:** SQL Attention interpretation as physical-current and hub-current observation with hub-attractor evidence persistence.
 - **Partial outside SQL:** runtime completion, production hardening, hub-current / attention-evidence wiring, and CI coverage follow the roadmap / implementation registry.
 - **Future:** planned expansions explicitly marked in SSOT docs.
+
+
+## Namespace roadmap (no DDL rename in this PR)
+
+- `logs.*` remains the physical time-axis/log pressure/evidence namespace.
+- Current projection surfaces are planned to move conceptually to `current.*` in a future migration task.
+- Candidate mapping:
+  - `logs.current` -> `current.table_relation` (or `current.physical_relation`)
+  - `logs.hub_current` -> `current.hub_relation`
+  - optional future: `current.ui_relation` (`id, parent_id, child_ids[]`)
+- `logs.attention` remains under `logs.*` as append-only evidence (optional future rename: `logs.attention_evidence`).

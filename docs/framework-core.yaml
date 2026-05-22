@@ -188,3 +188,10 @@ data_driven_topology_runtime_framework:
         - stores_variable_payload_in_jsonb
         - has_local_context_through_relation_ids
         - connects_to_abstract_space_through_hub
+
+
+current_projection_namespace_split:
+  status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+  direction:
+    logs: physical_time_axis_and_evidence
+    current: rebuildable_current_relation_projections

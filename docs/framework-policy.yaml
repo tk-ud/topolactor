@@ -510,3 +510,10 @@ framework_policy:
     - define_promotion_manifest_schema
     - define_admin_promotion_ui
     - define_schema_evolution_approval_flow
+
+
+current_projection_namespace_split:
+  status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+  direction:
+    logs: physical_time_axis_and_evidence
+    current: rebuildable_current_relation_projections

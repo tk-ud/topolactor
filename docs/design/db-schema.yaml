@@ -63,6 +63,18 @@ db_schema:
       logs: physical_time_axis_observations
     future_todo: consider_physical_schema_split_or_rename_without_changing_current_runtime_contract
 
+
+  current_projection_namespace_roadmap:
+    status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+    intent:
+      logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
+      current_namespace: rebuildable_current_relation_projections
+    candidate_mapping:
+      logs.current: current.table_relation_or_current.physical_relation
+      logs.hub_current: current.hub_relation
+      optional_future: current.ui_relation
+      logs.attention: keep_in_logs_as_append_only_evidence_or_rename_to_logs.attention_evidence_later
+
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication

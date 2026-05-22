@@ -27,6 +27,16 @@ projection_boundary:
 deprecated_or_rejected:
   - legacy registry exploration wording as SQL Attention target
 physical_schema_status:
+  namespace_roadmap:
+    status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+    split_direction:
+      logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
+      current_namespace: rebuildable_current_relation_projection_surfaces
+    candidate_mapping:
+      logs.current: current.table_relation_or_current.physical_relation
+      logs.hub_current: current.hub_relation
+      optional_future: current.ui_relation
+      logs.attention: keep_under_logs_or_rename_to_logs.attention_evidence_in_future
   physical_tables:
     - logs.current
     - logs.hub_current
@@ -75,7 +85,7 @@ purpose:
 
 core_definition:
   one_sentence: >-
-    SQL Attention converts physical-side logs.* signals into a logs.current
+    SQL Attention converts physical-side logs.* signals into a current-basis surface (currently named logs.current)
     calculation basis, watches l2 norm-level changes, and only when the level
     changes observes hub/vector-indicated attractor evidence from hubs.* and
     records statistics, l2_norm, vector, phase_vector, and hit evidence into
@@ -219,7 +229,7 @@ layers:
   logs_current:
     role: calculation_basis_memo
     description: >-
-      logs.current stores compressed current pressure state derived from logs.*
+      current basis surface (currently logs.current) stores compressed pressure state derived from logs.*
       so runtime does not repeatedly scan raw logs. It is a calculation basis,
       not the SQL Attention conclusion.
     must_support:
