@@ -1,12 +1,8 @@
 version: 1
 id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
-status: structural_ssot
+status: design_ssot
 postgresql_namespace: logs
-semantic_markdown: docs/design/sql-attention-logs-ssot.md
-ssot_roles:
-  markdown: semantic_formula_and_route_ssot
-  yaml: structural_policy_schema_runtime_contract_ssot
 sql_attention_target:
   target_schema: hubs
   target_semantics:
@@ -63,12 +59,11 @@ canonical_markdown: docs/design/sql-attention-logs-ssot.md
 
 purpose:
   summary: >-
-    Define SQL Attention structural contracts, policy keys, schema surfaces,
-    runtime boundaries, and implementation contract surfaces. Calculation meaning
-    and observation route are defined in the canonical Markdown semantic SSOT.
+    Define SQL Attention logs, current calculation basis, norm-level trigger,
+    hub-attractor exploration, phase vector evidence, and attention evidence
+    persistence.
   non_goal:
     - public_marketing_copy
-    - replacing_markdown_semantic_formula_ssot
     - sql_side_transformer_qk_reproduction
     - every_log_append_registry_search
     - direct_registry_mutation_from_trigger
@@ -351,33 +346,21 @@ layers:
     role: evidence_embedded_exploratory_vector
     description: >-
       Phase Attention is stored as phase_vector_json on logs.attention by
-      default, not as a separate candidate table. It uses q = w + xi + yj + zk,
-      where q is the attractor, w is the real scalar from l2_norm, x/y/z are
-      hub-side record-count bases, and i/j/k are axis movement amounts.
+      default, not as a separate candidate table. It distorts the neighbor hit
+      vector across xi/table, yj/column, and zk/ui quaternion axes using
+      attention strength divided by hub-side record count, z-score normalized,
+      then clamped before movement.
     basis:
-      q: attractor
-      w: real_scalar_from_l2_norm
-      x: table_axis_hub_side_record_count_base
-      y: column_jsonb_path_axis_hub_side_record_count_base
-      z: ui_component_operation_hub_side_record_count_base
-      i: movement_amount_on_x_axis
-      j: movement_amount_on_y_axis
-      k: movement_amount_on_z_axis
+      xi: table_direction
+      yj: column_jsonb_path_axis_direction
+      zk: ui_component_operation_direction
     calculation_shape:
-      notation: q_equals_w_plus_xi_plus_yj_plus_zk
-      attractor: q
-      real_scalar: w_from_l2_norm
-      record_count_bases:
-        - x
-        - y
-        - z
-      axis_movements:
-        - i
-        - j
-        - k
-      normalization:
-        - z_score
-        - clamp
+      base_vector: logs.attention.vector_json
+      attention_strength: attention_strength
+      hub_side_record_count: hub_side_record_count
+      movement_percentage: attention_strength_divided_by_hub_side_record_count
+      z_score_normalized_movement: z_score_movement_percentage
+      clamped_movement: clamp_z_score_normalized_movement
       result: logs.attention.phase_vector_json
     guardrails:
       - phase_vector_is_evidence_candidate_data_not_adopted_topology_state
@@ -467,7 +450,7 @@ function_contract:
     calculate_l2_norm:
       signature: calculate_l2_norm(current_id_or_basis_vector)
       role:
-        - compute_l2_norm_from_current_basis_vector
+        - compute_l2_norm_from_basis_vector
         - expose_norm_for_watch_comparison
       prohibited_side_effects:
         - hub_attractor_exploration_execution
@@ -551,16 +534,14 @@ scheduler_runtime_boundary:
 phase_attention_function_contract:
   input:
     - logs_attention_vector_json
-    - logs_attention_l2_norm_as_w_real_scalar
-    - hub_side_record_count_bases_x_y_z
-    - quaternion_axis_movements_i_j_k
+    - attention_strength
+    - hub_side_record_count
+    - quaternion_axis_basis_xi_yj_zk
   calculation:
-    notation: q_equals_w_plus_xi_plus_yj_plus_zk
-    attractor: q
-    real_scalar: w_from_l2_norm
-    record_count_bases: [x, y, z]
-    axis_movements: [i, j, k]
-    normalization: [z_score, clamp]
+    movement_percentage: attention_strength_divided_by_hub_side_record_count
+    z_score_normalized_movement: z_score_movement_percentage
+    clamped_movement: clamp_z_score_normalized_movement
+    movement_basis: hub_space_relative_percentage
   output:
     - logs_attention_phase_vector_json
   invariants:
@@ -597,7 +578,7 @@ implementation_order:
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
   - implement_scheduler_runtime_hub_attractor_exploration
-  - implement_phase_attention_vector_distortion_after_quaternion_attractor_semantics_are_fixed
+  - implement_phase_attention_vector_distortion_after_attention_strength_hub_record_count_z_score_clamp_semantics_are_fixed
 
 initial_minimal_basis:
   table_pressure: logs.diff
