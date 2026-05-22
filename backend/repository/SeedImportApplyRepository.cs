@@ -25,6 +25,10 @@ public class SeedImportApplyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
+        var normalizedTarget = target.Trim().ToLowerInvariant();
+        var normalizedLayer = layer.Trim().ToLowerInvariant();
+        var normalizedAction = action.Trim().ToLowerInvariant();
+
         const string existingSql = """
 SELECT rt.runtime_destination
 FROM manifest m
@@ -41,16 +45,16 @@ CROSS JOIN LATERAL (
     LIMIT 1
 ) rt
 WHERE m.status = 'active'
-  AND dm.target = @target
-  AND dm.layer = @layer
-  AND dm.action = @action
+  AND lower(dm.target) = @target
+  AND lower(dm.layer) = @layer
+  AND lower(dm.action) = @action
 LIMIT 1;
 """;
 
         await using var existingCmd = new NpgsqlCommand(existingSql, conn);
-        existingCmd.Parameters.AddWithValue("target", target);
-        existingCmd.Parameters.AddWithValue("layer", layer);
-        existingCmd.Parameters.AddWithValue("action", action);
+        existingCmd.Parameters.AddWithValue("target", normalizedTarget);
+        existingCmd.Parameters.AddWithValue("layer", normalizedLayer);
+        existingCmd.Parameters.AddWithValue("action", normalizedAction);
         var existing = await existingCmd.ExecuteScalarAsync(ct);
 
         if (existing is string existingDestination)
@@ -60,7 +64,7 @@ LIMIT 1;
 
             return new SeedImportApplyResult(
                 SeedImportApplyStatus.Conflict,
-                $"Existing active mapping target={target} layer={layer} action={action} has runtime_destination={existingDestination}, requested={runtimeDestination}.");
+                $"Existing active mapping target={normalizedTarget} layer={normalizedLayer} action={normalizedAction} has runtime_destination={existingDestination}, requested={runtimeDestination}.");
         }
 
         const string insertSql = """
@@ -77,9 +81,9 @@ VALUES (
 """;
 
         await using var cmd = new NpgsqlCommand(insertSql, conn);
-        cmd.Parameters.AddWithValue("target", target);
-        cmd.Parameters.AddWithValue("layer", layer);
-        cmd.Parameters.AddWithValue("action", action);
+        cmd.Parameters.AddWithValue("target", normalizedTarget);
+        cmd.Parameters.AddWithValue("layer", normalizedLayer);
+        cmd.Parameters.AddWithValue("action", normalizedAction);
         cmd.Parameters.AddWithValue("runtime_destination", runtimeDestination);
 
         try
