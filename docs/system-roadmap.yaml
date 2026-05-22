@@ -291,12 +291,25 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_scheduler_exploration:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: scheduler/runtime hub-attractor exploration lane is not yet implemented.
+      public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
       known_gap_ref:
         - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+        - SQLA-4 logs.attention evidence persistence not implemented
+        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+      files:
+        - backend/repository/SqlAttentionLogsRepository.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/runtime/HubAttractorExplorationRuntime.cs
+        - backend/scheduler/SqlAttentionScheduler.cs
+        - backend/Program.cs
+      completion_condition:
+        - scheduler is wired as hosted service in production runtime
+        - watch candidates are loaded from logs.refresh_logs_current_watch
+        - hub candidates are loaded from logs.hub_current
+        - exploration policy caps are enforced without hardcoded clamp
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml

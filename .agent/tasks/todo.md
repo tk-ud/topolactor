@@ -16,10 +16,17 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ```
 
 
-## SQL Attention Logs schema contract 後の次フェーズ
+## SQL Attention scheduler/runtime exploration follow-up
 
-- [ ] scheduler/runtime hub-attractor exploration を実装する
-      → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、hub-attractor topK を実装し、evidence 保存は独立 TODO（write_logs_attention 境界）を参照する。
+- [ ] scheduler/runtime exploration の vector scoring を実装する
+      → 現在の `HubAttractorExplorationRuntime.ComputeNeighborScore` は attractor vector の本格類似度計算が未完了。`attractor_vector_json` と current 側 basis/vector を用いた cosine/overlap scoring へ置換する。
+      → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/schema/SqlAttentionContracts.cs`, `db/sql_attention_logs_tables.sql`
+
+- [ ] write_logs_attention 境界との接続前提を維持して scheduler/runtime 側完了条件を再判定する
+      → scheduler/DI/Npgsql consume は接続済みだが、`logs.attention` persistence と phase_vector generation は別 TODO のため完了扱いにしない。
+      → 対象: `docs/system-roadmap.yaml`, `.agent/tasks/todo.md`
+
+## SQL Attention Logs schema contract 後の次フェーズ
 
 - [ ] [Claude] logs.attention evidence persistence / write_logs_attention boundary を実装する
       → SQL Attention 完了境界は hub-attractor exploration の実行ではなく、`logs.attention` に evidence row が保存されることとする。
