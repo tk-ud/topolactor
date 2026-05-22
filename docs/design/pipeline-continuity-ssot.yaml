@@ -46,7 +46,7 @@ pipeline_continuity_ssot:
           implementation_note: >
             Lane boundary: synchronous pass-through. Wraps resolveOperationVector +
             dispatchOperation via queueClientCommand. Ordering, batching, and
-            rollback boundaries are separate roadmap scope.
+            rollback boundaries are separate runtime boundary contracts.
 
         - node: frontend.api_client
           files:
@@ -63,22 +63,22 @@ pipeline_continuity_ssot:
           implementation_note: >
             Lane boundary: synchronous delegate to ManifestDispatcher. Client requests now
             enter via RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
-            Ordering and collision control are separate roadmap scope.
+            Ordering and collision control are separate runtime boundary contracts.
 
         - node: backend.manifest_dispatcher
           files:
             - backend/runtime/ManifestDispatcher.cs
           implementation_note: >
             Lane boundary: synchronous delegate to RuntimeExecutor. Manifest-driven routing
-            by axes (role, target, layer, action) is separate roadmap scope.
+            by axes (role, target, layer, action) is a canonical runtime boundary contract.
 
         - node: backend.topology_transform_runtime
           files:
             - backend/runtime/RuntimeExecutor.cs
           implementation_note: >
-            RuntimeExecutor currently covers the roles of backend_scheduler,
-            manifest_dispatcher, and topology_transform_runtime as a consolidated boundary runtime.
-            When scheduler and dispatcher are connected, RuntimeExecutor scope narrows.
+            RuntimeExecutor boundary may cover backend_scheduler,
+            manifest_dispatcher, and topology_transform_runtime roles only when
+            scheduler → dispatcher → runtime identity is preserved.
 
         - node: backend.entity_and_emission
           files:
@@ -130,8 +130,9 @@ pipeline_continuity_ssot:
               - admin_path_in_TargetDispatchOverride
               - demo_validation_in_TargetDispatchOverride
             note: >
-              0 is preferred — branches have been isolated to TargetDispatchOverride (Gap-1).
-              Allowed up to 3 for legacy/isolated branches pending manifest-driven migration.
+              0 is preferred — branches are isolated to TargetDispatchOverride boundary.
+              Allowed up to 3 for isolated compatibility boundaries where
+              manifest_dispatcher_routing_is_canonical_preferred_route.
               Count above 3 indicates a new hardcoded dispatch target being added to RuntimeExecutor;
               new targets must be routed through manifest_dispatcher, not hardcoded.
 
@@ -160,14 +161,14 @@ pipeline_continuity_ssot:
           implementation_note: >
             Lane boundary: keep-alive ping only (event: ping / data: connected,
             then event: ping / data: keep-alive every 30s).
-            Real event streaming is separate roadmap scope.
+            Real event streaming follows a separate runtime boundary contract.
 
         - node: frontend.sse_receiver
           files:
             - frontend/runtime/sseReceiver.ts
           implementation_note: >
             Lane boundary: EventSource-based receiver with connect/disconnect interface.
-            Wiring to dispatcher and scheduler is separate roadmap scope.
+            Wiring to dispatcher and scheduler follows a separate runtime boundary contract.
 
         - node: frontend.sse_dispatcher
           files:
@@ -198,4 +199,3 @@ pipeline_continuity_ssot:
       contract_guard: >
         Node contract must be validated by listed files and pipeline body tests.
         Route changes require explicit SSOT contract updates.
-

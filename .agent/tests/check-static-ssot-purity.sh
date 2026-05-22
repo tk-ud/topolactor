@@ -35,14 +35,24 @@ PATTERNS=(
   "known_gap"
   "gap_tracking"
   "future scope"
+  "\\bimplemented\\b"
+  "\\bpartial\\b"
+  "\\bskeleton\\b"
+  "\\bTODO\\b"
+  "\\bremaining\\b"
+  "\\broadmap\\b"
+  "\\bcurrently\\b"
+  "\\bpending\\b"
+  "\\bGap-"
+  "\\bgap-"
 )
 
 for file in "${TARGETS[@]}"; do
   [ -f "$file" ] || { echo "FAIL: missing target $file" >&2; exit 1; }
   for p in "${PATTERNS[@]}"; do
-    if rg -n -F "$p" "$file" >/dev/null; then
+    if rg -n -i -e "$p" "$file" >/dev/null; then
       echo "FAIL: forbidden progress vocabulary '$p' in $file" >&2
-      rg -n -F "$p" "$file" >&2
+      rg -n -i -e "$p" "$file" >&2
       exit 1
     fi
   done

@@ -304,7 +304,7 @@ and the canonical topolactor DB runtime.
 ```text
 /storage/seed.json (UI-managed topology payload candidate)
 → load → validate → preview → explicit import
-→ canonical runtime route (requires Gap-1 manifest-driven routing resolution)
+→ canonical runtime route (requires manifest-driven routing contract resolution)
 → topolactor DB (canonical runtime authority)
 ```
 

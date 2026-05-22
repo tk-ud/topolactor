@@ -18,6 +18,9 @@ jobs:
       - name: Run system roadmap check
         run: bash .agent/tests/check-system-roadmap.sh
 
+      - name: Run static SSOT purity check
+        run: bash .agent/tests/check-static-ssot-purity.sh
+
       - name: Run SQL Attention SSOT check
         run: bash .agent/tests/check-sql-attention-ssot.sh
 

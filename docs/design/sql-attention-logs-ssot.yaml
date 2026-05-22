@@ -116,7 +116,7 @@ purpose:
 
 core_definition:
   one_sentence: >-
-    SQL Attention converts physical-side logs.* signals into a current-basis surface (currently named logs.current)
+    SQL Attention converts physical-side logs.* signals into a current-basis surface (physical name: logs.current)
     calculation basis, watches l2 norm-level changes, and only when the level
     changes observes hub/vector-indicated attractor evidence from hubs.* and
     records statistics, l2_norm, vector, phase_vector, and hit evidence into
@@ -200,7 +200,7 @@ layers:
           - logs.usage_metrics_as_observed_access_usage_pressure
           - logs.promotion_candidates_as_columnization_index_registry_or_physical_table_promotion_candidates
         candidate_lifecycle:
-          - pending
+          - candidate_open
           - approved
           - rejected
         approval_projection_note: approved_candidates_can_be_extracted_as_adopted_state
@@ -208,7 +208,7 @@ layers:
         delete_policy: no_destructive_delete
         tableid_semantics: physical_table_identity
         required_state_semantics:
-          - pending
+          - candidate_open
           - adopted
           - rejected
       logs.ui_operation:
@@ -260,7 +260,7 @@ layers:
   logs_current:
     role: calculation_basis_memo
     description: >-
-      current basis surface (currently logs.current) stores compressed pressure state derived from logs.*
+      current basis surface (physical name: logs.current) stores compressed pressure state derived from logs.*
       so runtime does not repeatedly scan raw logs. It is a calculation basis,
       not the SQL Attention conclusion.
     must_support:
@@ -503,7 +503,7 @@ existing_repository_mismatch_notes:
     condition: >-
       Candidate lifecycle and column/axis pressure semantics must be preserved.
     lifecycle_expected:
-      - pending
+      - candidate_open
       - approved
       - rejected
     future_expansion_todo:
