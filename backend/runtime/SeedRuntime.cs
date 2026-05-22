@@ -22,6 +22,13 @@ public class SeedRuntime
     private readonly SeedJsonRepository _seedRepository;
     private readonly SeedImportApplyRepository _seedImportApplyRepository;
 
+    private static readonly HashSet<string> AllowedRuntimeDestinations =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "topology_transform_runtime",
+            "admin_runtime"
+        };
+
     public SeedRuntime(
         ILogger<SeedRuntime> logger,
         SeedJsonRepository seedRepository,
@@ -84,18 +91,48 @@ public class SeedRuntime
             var idx = 0;
             foreach (var rt in runtimesEl.EnumerateArray())
             {
-                if (!rt.TryGetProperty("name", out _))
-                    errors.Add(new SeedValidationError("SEED_RUNTIME_MISSING_NAME",
-                        $"runtimes[{idx}].name is required"));
-                if (!rt.TryGetProperty("target", out _))
-                    errors.Add(new SeedValidationError("SEED_RUNTIME_MISSING_TARGET",
-                        $"runtimes[{idx}].target is required"));
-                if (!rt.TryGetProperty("layer", out _))
-                    errors.Add(new SeedValidationError("SEED_RUNTIME_MISSING_LAYER",
-                        $"runtimes[{idx}].layer is required"));
-                if (!rt.TryGetProperty("action", out _))
-                    errors.Add(new SeedValidationError("SEED_RUNTIME_MISSING_ACTION",
-                        $"runtimes[{idx}].action is required"));
+                if (rt.ValueKind != JsonValueKind.Object)
+                {
+                    errors.Add(new SeedValidationError("SEED_RUNTIME_NOT_OBJECT",
+                        $"runtimes[{idx}] must be a JSON object"));
+                    idx++;
+                    continue;
+                }
+
+                var name = ReadRequiredString(rt, "name", idx, errors, "SEED_RUNTIME_NAME_INVALID");
+                var target = ReadRequiredString(rt, "target", idx, errors, "SEED_RUNTIME_TARGET_INVALID");
+                var layer = ReadRequiredString(rt, "layer", idx, errors, "SEED_RUNTIME_LAYER_INVALID");
+                var action = ReadRequiredString(rt, "action", idx, errors, "SEED_RUNTIME_ACTION_INVALID");
+
+                string runtimeDestination = "topology_transform_runtime";
+                if (rt.TryGetProperty("runtimeDestination", out var rd))
+                {
+                    if (rd.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(rd.GetString()))
+                    {
+                        errors.Add(new SeedValidationError("SEED_RUNTIME_DESTINATION_INVALID",
+                            $"runtimes[{idx}].runtimeDestination must be a non-empty string when specified"));
+                    }
+                    else
+                    {
+                        runtimeDestination = rd.GetString()!;
+                    }
+                }
+
+                if (!AllowedRuntimeDestinations.Contains(runtimeDestination))
+                {
+                    errors.Add(new SeedValidationError("SEED_RUNTIME_DESTINATION_UNKNOWN",
+                        $"runtimes[{idx}].runtimeDestination '{runtimeDestination}' is not allowed. Allowed: {string.Join(", ", AllowedRuntimeDestinations)}"));
+                }
+
+                if (!string.IsNullOrWhiteSpace(target) && !string.IsNullOrWhiteSpace(layer) && !string.IsNullOrWhiteSpace(action) &&
+                    string.Equals(target, "admin", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(layer, "seed_runtime", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(action, "import", StringComparison.OrdinalIgnoreCase))
+                {
+                    errors.Add(new SeedValidationError("SEED_IMPORT_RECURSIVE_ROUTE_FORBIDDEN",
+                        $"runtimes[{idx}] maps to admin:seed_runtime:import and is explicitly forbidden"));
+                }
+
                 idx++;
             }
         }
@@ -158,41 +195,32 @@ public class SeedRuntime
             var layer = runtime.GetProperty("layer").GetString() ?? string.Empty;
             var action = runtime.GetProperty("action").GetString() ?? string.Empty;
 
-            if (string.Equals(target, "admin", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(layer, "seed_runtime", StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(action, "import", StringComparison.OrdinalIgnoreCase))
-            {
-                importErrors.Add(new SeedValidationError(
-                    "SEED_IMPORT_RECURSIVE_ROUTE_FORBIDDEN",
-                    $"runtimes[{runtimeCount - 1}] ({name}) maps to admin:seed_runtime:import and is explicitly forbidden."));
-                continue;
-            }
-
             var runtimeDestination = runtime.TryGetProperty("runtimeDestination", out var destEl)
                 ? destEl.GetString() ?? "topology_transform_runtime"
                 : "topology_transform_runtime";
 
-            try
-            {
-                var canonicalWriteApplied = await _seedImportApplyRepository.ApplyRuntimeDeclarationAsync(
-                    target,
-                    layer,
-                    action,
-                    runtimeDestination,
-                    ct);
+            var apply = await _seedImportApplyRepository.ApplyRuntimeDeclarationAsync(
+                target,
+                layer,
+                action,
+                runtimeDestination,
+                ct);
 
-                if (!canonicalWriteApplied)
-                {
-                    importErrors.Add(new SeedValidationError(
-                        "SEED_IMPORT_CANONICAL_DB_WRITE_NOT_CONFIRMED",
-                        $"runtimes[{runtimeCount - 1}] ({name}) was not applied because active mapping already exists or canonical write was not performed."));
-                }
-            }
-            catch (Exception ex)
+            switch (apply.Status)
             {
-                importErrors.Add(new SeedValidationError(
-                    "SEED_IMPORT_RUNTIME_DISPATCH_FAILED",
-                    $"runtimes[{runtimeCount - 1}] ({name}) failed: {ex.Message}"));
+                case SeedImportApplyStatus.Inserted:
+                case SeedImportApplyStatus.AlreadyApplied:
+                    continue;
+                case SeedImportApplyStatus.Conflict:
+                    importErrors.Add(new SeedValidationError(
+                        "SEED_IMPORT_CONFLICTING_ACTIVE_MAPPING",
+                        $"runtimes[{runtimeCount - 1}] ({name}) conflict: {apply.Message}"));
+                    break;
+                default:
+                    importErrors.Add(new SeedValidationError(
+                        "SEED_IMPORT_RUNTIME_DISPATCH_FAILED",
+                        $"runtimes[{runtimeCount - 1}] ({name}) failed: {apply.Message ?? "unknown failure"}"));
+                    break;
             }
         }
 
@@ -205,4 +233,23 @@ public class SeedRuntime
 
         return new SeedImportResult(true, runtimeCount, []);
     }
+    private static string? ReadRequiredString(
+        JsonElement obj,
+        string property,
+        int idx,
+        List<SeedValidationError> errors,
+        string code)
+    {
+        if (!obj.TryGetProperty(property, out var el) ||
+            el.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(el.GetString()))
+        {
+            errors.Add(new SeedValidationError(code,
+                $"runtimes[{idx}].{property} must be a non-empty string"));
+            return null;
+        }
+
+        return el.GetString();
+    }
+
 }

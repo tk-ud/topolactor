@@ -15,7 +15,7 @@ public class SeedImportApplyRepository
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
-    public async Task<bool> ApplyRuntimeDeclarationAsync(
+    public async Task<SeedImportApplyResult> ApplyRuntimeDeclarationAsync(
         string target,
         string layer,
         string action,
@@ -25,35 +25,84 @@ public class SeedImportApplyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        const string sql = """
+        const string existingSql = """
+SELECT rt.runtime_destination
+FROM manifest m
+CROSS JOIN LATERAL (
+    SELECT t->>'target' AS target, t->>'layer' AS layer, t->>'action' AS action
+    FROM unnest(m.topology) t
+    WHERE t->>'type' = 'dispatcher_mapping'
+    LIMIT 1
+) dm
+CROSS JOIN LATERAL (
+    SELECT t->>'runtime_destination' AS runtime_destination
+    FROM unnest(m.topology) t
+    WHERE t->>'type' = 'runtime_mapping'
+    LIMIT 1
+) rt
+WHERE m.status = 'active'
+  AND dm.target = @target
+  AND dm.layer = @layer
+  AND dm.action = @action
+LIMIT 1;
+""";
+
+        await using var existingCmd = new NpgsqlCommand(existingSql, conn);
+        existingCmd.Parameters.AddWithValue("target", target);
+        existingCmd.Parameters.AddWithValue("layer", layer);
+        existingCmd.Parameters.AddWithValue("action", action);
+        var existing = await existingCmd.ExecuteScalarAsync(ct);
+
+        if (existing is string existingDestination)
+        {
+            if (string.Equals(existingDestination, runtimeDestination, StringComparison.OrdinalIgnoreCase))
+                return new SeedImportApplyResult(SeedImportApplyStatus.AlreadyApplied, null);
+
+            return new SeedImportApplyResult(
+                SeedImportApplyStatus.Conflict,
+                $"Existing active mapping target={target} layer={layer} action={action} has runtime_destination={existingDestination}, requested={runtimeDestination}.");
+        }
+
+        const string insertSql = """
 INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
-SELECT gen_random_uuid(), NULL,
-       ARRAY[
-         jsonb_build_object('type','dispatcher_mapping','target',@target,'layer',@layer,'action',@action),
-         jsonb_build_object('type','runtime_mapping','runtime_destination',@runtime_destination)
-       ]::jsonb[],
-       'active'
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM manifest m
-  WHERE m.status = 'active'
-    AND EXISTS (
-      SELECT 1 FROM unnest(m.topology) t
-      WHERE t->>'type' = 'dispatcher_mapping'
-        AND t->>'target' = @target
-        AND t->>'layer' = @layer
-        AND t->>'action' = @action
-    )
+VALUES (
+    gen_random_uuid(),
+    NULL,
+    ARRAY[
+      jsonb_build_object('type','dispatcher_mapping','target',@target,'layer',@layer,'action',@action),
+      jsonb_build_object('type','runtime_mapping','runtime_destination',@runtime_destination)
+    ]::jsonb[],
+    'active'
 );
 """;
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(insertSql, conn);
         cmd.Parameters.AddWithValue("target", target);
         cmd.Parameters.AddWithValue("layer", layer);
         cmd.Parameters.AddWithValue("action", action);
         cmd.Parameters.AddWithValue("runtime_destination", runtimeDestination);
 
-        var affected = await cmd.ExecuteNonQueryAsync(ct);
-        return affected > 0;
+        try
+        {
+            var affected = await cmd.ExecuteNonQueryAsync(ct);
+            if (affected > 0)
+                return new SeedImportApplyResult(SeedImportApplyStatus.Inserted, null);
+
+            return new SeedImportApplyResult(SeedImportApplyStatus.Failed, "Insert did not affect any row.");
+        }
+        catch (Exception ex)
+        {
+            return new SeedImportApplyResult(SeedImportApplyStatus.Failed, ex.Message);
+        }
     }
 }
+
+public enum SeedImportApplyStatus
+{
+    Inserted,
+    AlreadyApplied,
+    Conflict,
+    Failed
+}
+
+public record SeedImportApplyResult(SeedImportApplyStatus Status, string? Message);
