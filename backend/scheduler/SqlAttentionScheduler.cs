@@ -180,12 +180,12 @@ public class SqlAttentionScheduler : BackgroundService
                             HitRank: hit.HitRank,
                             ScoreBand: hit.ScoreBand,
                             PermutationKey: hit.PermutationKey,
-                            L2Norm: 0.0,
-                            VectorJson: "{}",
+                            L2Norm: hit.L2Norm,
+                            VectorJson: hit.VectorJson,
                             PhaseVectorJson: "{}",
                             StatisticsJson: "{}",
                             EmaScore: null,
-                            EvidenceJson: "{}",
+                            EvidenceJson: hit.EvidenceJson,
                             ArchivePolicy: "required"))
                         .ToList();
                     rowsWritten = await _sqlAttentionLogsRepository.WriteLogsAttentionAsync(

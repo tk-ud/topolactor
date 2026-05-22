@@ -1,8 +1,9 @@
 namespace Topolactor.Schema;
 
 /// <summary>
-/// Watch change candidate returned by logs.refresh_logs_current_watch.
+/// Watch change candidate returned by logs.refresh_logs_current_watch JOIN logs.current.
 /// Only candidates with ChangeDetected=true are eligible for hub-attractor exploration.
+/// L2Norm and BasisVectorJson are loaded from logs.current at watch time for scoring.
 /// </summary>
 public record WatchChangeCandidate(
     Guid CurrentId,
@@ -11,7 +12,9 @@ public record WatchChangeCandidate(
     string? PreviousNormLevel,
     string? NormLevel,
     bool ChangeDetected,
-    string? ChangeReason
+    string? ChangeReason,
+    double L2Norm,
+    string BasisVectorJson
 );
 
 /// <summary>
@@ -47,6 +50,9 @@ public record HubAttractorExplorationPolicy(
 /// <summary>
 /// A single hub-attractor exploration hit produced by the exploration runtime.
 /// Carries all fields needed for downstream write_logs_attention boundary.
+/// L2Norm = logs.current.l2_norm at scoring time.
+/// VectorJson = convergent neighbor hit vector (dot product component terms, per SSOT).
+/// EvidenceJson = scoring provenance (cosine_score, overlap_score, current_l2_norm, key counts).
 /// Phase vector is excluded — phase_vector generation is a separate post-main step.
 /// </summary>
 public record HubAttractorExplorationHit(
@@ -60,7 +66,10 @@ public record HubAttractorExplorationHit(
     double NeighborScore,
     int HitRank,
     string ScoreBand,
-    string PermutationKey
+    string PermutationKey,
+    double L2Norm,
+    string VectorJson,
+    string EvidenceJson
 );
 
 /// <summary>

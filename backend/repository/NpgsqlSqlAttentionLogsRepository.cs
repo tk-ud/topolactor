@@ -28,8 +28,14 @@ public class NpgsqlSqlAttentionLogsRepository : SqlAttentionLogsRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        await using var cmd = new NpgsqlCommand(
-            "select * from logs.refresh_logs_current_watch(@p_source_set_id, @p_basis_window)", conn);
+        const string watchSql = @"
+SELECT w.current_id, w.physical_table_id, w.norm_rank,
+       w.previous_norm_level, w.norm_level,
+       w.change_detected, w.change_reason,
+       c.l2_norm, c.basis_vector_json::text AS basis_vector_json
+  FROM logs.refresh_logs_current_watch(@p_source_set_id, @p_basis_window) w
+  JOIN logs.current c ON c.current_id = w.current_id";
+        await using var cmd = new NpgsqlCommand(watchSql, conn);
         cmd.Parameters.AddWithValue("p_source_set_id", sourceSetId);
         cmd.Parameters.AddWithValue("p_basis_window", basisWindow);
 
@@ -43,7 +49,9 @@ public class NpgsqlSqlAttentionLogsRepository : SqlAttentionLogsRepository
                 PreviousNormLevel: reader.IsDBNull(reader.GetOrdinal("previous_norm_level")) ? null : reader.GetString(reader.GetOrdinal("previous_norm_level")),
                 NormLevel: reader.IsDBNull(reader.GetOrdinal("norm_level")) ? null : reader.GetString(reader.GetOrdinal("norm_level")),
                 ChangeDetected: reader.GetBoolean(reader.GetOrdinal("change_detected")),
-                ChangeReason: reader.IsDBNull(reader.GetOrdinal("change_reason")) ? null : reader.GetString(reader.GetOrdinal("change_reason"))));
+                ChangeReason: reader.IsDBNull(reader.GetOrdinal("change_reason")) ? null : reader.GetString(reader.GetOrdinal("change_reason")),
+                L2Norm: reader.GetDouble(reader.GetOrdinal("l2_norm")),
+                BasisVectorJson: reader.GetString(reader.GetOrdinal("basis_vector_json"))));
         }
 
         return rows;

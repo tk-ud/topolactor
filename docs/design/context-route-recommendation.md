@@ -1,8 +1,8 @@
 # Context Route Recommendation — 設計思想と取り扱い方針
 
 対応 YAML: `context-route-recommendation.yaml`
-対応実装: `db/context_route_tables.sql`,
-         `backend/runtime/ContextRouteRecommendationResolver.cs`
+関連 runtime/sql surface: `db/context_route_tables.sql`,
+                      `backend/runtime/ContextRouteRecommendationResolver.cs`
 
 ---
 

@@ -332,15 +332,21 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_logs_attention_persistence:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: request-based append-only write boundary is connected; production l2_norm/vector_json/evidence_json filling remains incomplete.
+      public_summary: >-
+        Production evidence filling implemented: l2_norm from logs.current, cosine similarity
+        scoring (basis_vector_json × attractor_vector_json), vector_json (convergent hit components),
+        and evidence_json (scoring provenance) are now persisted to logs.attention.
+        Scores are 0 until logs.hub_current.attractor_vector_json is populated by hub_current refresh
+        (SQLA-3, separate TODO). phase_vector_json and statistics_json remain {} pending SQLA-5/SQLA-6.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
         - backend/scheduler/SqlAttentionScheduler.cs
+        - backend/runtime/HubAttractorExplorationRuntime.cs
       evidence:
         ci:
           - backend-tests
@@ -351,7 +357,7 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-4 logs.attention production evidence filling not completed
+        - SQLA-3 logs.hub_current refresh (attractor_vector_json) not yet implemented — scores are 0 until complete
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml

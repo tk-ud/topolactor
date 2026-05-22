@@ -18,12 +18,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention observation runtime follow-up
 
-- [ ] logs.attention production evidence persistence を実装する
-      → 現在は `LogsAttentionWriteRequest` 主体の append-only write boundary のみ接続済み。
-      → `l2_norm=0.0` / `vector_json={}` / `statistics_json={}` / `evidence_json={}` は placeholder であり production evidence ではない。
-      → scheduler/runtime exploration で必要な vector scoring（`attractor_vector_json` と current 側 basis/vector を用いた cosine/overlap scoring）を内包し、算出値を evidence として永続化する。
-      → 完了条件: `logs.current.basis_vector_json / l2_norm` と `logs.hub_current.attractor_vector_json` 由来の production 値を `logs.attention.neighbor_score / l2_norm / vector_json / evidence_json` に保存する。
-      → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/scheduler/SqlAttentionScheduler.cs`, `backend/repository/*SqlAttentionLogsRepository.cs`, `db/sql_attention_logs_tables.sql`
+- [x] logs.attention production evidence persistence を実装する
+      → 実装済み: cosine similarity(basis_vector_json × attractor_vector_json), l2_norm, vector_json(convergent components), evidence_json(scoring provenance) を logs.attention に永続化。
+      → LoadWatchCandidatesAsync SQL を refresh_logs_current_watch JOIN logs.current に更新し basis_vector_json/l2_norm を取得。
+      → HubAttractorExplorationHit に L2Norm/VectorJson/EvidenceJson フィールドを追加、RunExploration で production 値を設定。
+      → SqlAttentionScheduler は hit 値を使用 (placeholder 0.0/{} を廃止)。
+      → attractor_vector_json が {} の間はスコア 0 (honest); 意味あるスコアは SQLA-3 hub_current refresh 完了後。
+      → 残 TODO: phase_vector_json (SQLA-5), statistics/EMA (SQLA-6), hub_current refresh (SQLA-3)
 
 
 - [ ] phase_vector generation implementation を行う
