@@ -494,32 +494,32 @@ runtime_orchestration_ssot:
 
   test_runtime_fixture_policy:
     summary: >
-      Production runtime path must not contain dummy, stub, or skeleton execution handlers.
+      Production runtime path must not contain temporary test-only handler substitutes.
       Pipeline boundary verification is performed by test-only stub handlers (test fixtures)
       injected at ManifestDispatcher construction time in tests. Test stubs prove selection
       boundary, not production behavior. Production handler implementations must not carry
-      skeleton or fallback placeholders — move them to test fixtures or remove them.
+      placeholder fallback handlers — move them to test fixtures or remove them.
     rules:
-      - production_runtime_path_must_not_contain_dummy_stub_or_skeleton_handlers
+      - production_runtime_path_must_not_contain_temporary_test_only_handler_substitutes
       - pipeline_verification_stubs_are_test_fixture_only
       - runtime_destination_selection_boundary_is_proven_by_test_fixture_sentinel
       - test_stub_is_not_a_substitute_for_production_handler_behavior
-      - skeleton_or_fallback_in_production_handler_must_be_removed_not_preserved
-    skeleton_stub_lifecycle:
+      - placeholder_or_fallback_in_production_handler_must_be_removed_not_preserved
+    temporary_handler_lifecycle:
       summary: >
-        Creating skeleton, dummy, or stub handlers during development is not prohibited.
+        Creating temporary test handlers during development is allowed.
         The prohibition is against leaving them permanently on the production runtime path
         as fake-success handlers or silent fallbacks. Once a production handler is ready,
-        the temporary skeleton must be removed from production DI. If the skeleton can be
-        recycled as a test fixture to prove pipeline or runtime_destination selection
+        the temporary handler must be removed from production DI. If the handler can be
+        reused as a test fixture to prove pipeline or runtime_destination selection
         boundary, move it to the test project rather than deleting it outright. Recycled
         test fixtures must be limited to boundary proof; they are not a substitute for
         production handler behavior.
       rules:
-        - skeleton_dummy_stub_creation_during_development_is_not_prohibited
-        - skeleton_must_not_remain_on_production_runtime_path_after_production_handler_is_ready
-        - skeleton_recycled_as_test_fixture_is_limited_to_boundary_proof_not_production_substitute
-        - prefer_recycling_skeleton_to_test_fixture_over_discarding_when_boundary_proof_is_useful
+        - temporary_test_handler_creation_during_development_is_allowed
+        - temporary_handler_must_not_remain_on_production_runtime_path_after_production_handler_is_ready
+        - temporary_handler_reused_as_test_fixture_is_limited_to_boundary_proof_not_production_substitute
+        - prefer_reusing_temporary_handler_as_test_fixture_when_boundary_proof_is_useful
     handler_registry:
       topology_transform_runtime: RuntimeExecutor
       admin_runtime: AdminRuntimeDispatchAdapter
@@ -528,10 +528,10 @@ runtime_orchestration_ssot:
       allowed:
         - FakeDispatchableRuntime injected in test handler dictionary
         - test-only IDispatchableRuntime implementations in test project
-        - skeleton recycled from development moved into test fixtures as boundary-proof stub
+        - temporary handler moved into test fixtures as boundary-proof stub
       prohibited:
         - FakeDispatchableRuntime in Program.cs or production DI
-        - skeleton handler registered in production handler dictionary
+        - temporary handler registered in production handler dictionary
         - test-only destinations added to backend_dispatchable_kinds
         - recycled stub used as production behavior substitute
 

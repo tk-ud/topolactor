@@ -513,7 +513,10 @@ framework_policy:
 
 
 current_projection_namespace_split:
-  status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+  role: namespace_design_boundary
+  migration_policy:
+    - namespace_change_requires_explicit_schema_contract
+    - runtime_semantics_must_not_depend_on_pr_context
   direction:
     logs: physical_time_axis_and_evidence
     current: rebuildable_current_relation_projections

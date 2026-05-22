@@ -70,6 +70,26 @@ backend の topology payload 変換・json linking・topology_function_binder・
 
 ---
 
+### 4. SQL Attention Logs SSOT
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/sql-attention-logs-ssot.yaml` |
+| 意味・取り扱い | `docs/design/sql-attention-logs-ssot.md` |
+
+**概要**: SQL Attention の logs/current/hub_current/attention evidence を定義する静的 SSOT。  
+primary target は `hubs.*`。`topologys.*` / registry は projection/support layer。  
+`logs.current` / `logs.hub_current` は current-side projection の現行物理名。  
+`logs.attention` は append-only evidence 境界。
+
+**参照すべき場面**:
+- SQL Attention logs schema / repository / scheduler / runtime を変更するとき
+- `logs.current` / `logs.hub_current` / `logs.attention` の意味境界を確認するとき
+- registry / hub / topology / attention の混同を避けるとき
+- phase_vector / production evidence filling / topology projection recommendation の境界を確認するとき
+
+---
+
 ## SSOT 原則のまとめ
 
 | 対象 | SSOT の場所 |

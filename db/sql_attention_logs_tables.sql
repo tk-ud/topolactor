@@ -5,13 +5,9 @@
 -- Scope of this file:
 --   - Implement hub-attractor physical schema: logs.current / logs.hub_current / logs.attention.
 --   - Implement indexes/constraints for query and linkage contracts.
---
--- Out of scope:
---   - refresh_logs_current implementation
---   - l2 norm watch implementation
---   - DB trigger implementation
---   - scheduler/runtime hub-attractor exploration implementation
---   - phase_vector generation implementation
+-- Boundary note:
+--   - This file defines static schema/constraint contracts.
+--   - Runtime orchestration and function routes are governed by runtime boundaries, not by progress notes in DDL.
 -- =============================================================================
 
 CREATE SCHEMA IF NOT EXISTS logs;

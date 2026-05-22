@@ -26,17 +26,17 @@ projection_boundary:
     - trend
 deprecated_or_rejected:
   - legacy registry exploration wording as SQL Attention target
-physical_schema_status:
-  namespace_roadmap:
-    status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
-    split_direction:
-      logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
-      current_namespace: rebuildable_current_relation_projection_surfaces
-    candidate_mapping:
-      logs.current: current.table_relation_or_current.physical_relation
-      logs.hub_current: current.hub_relation
-      optional_future: current.ui_relation
-      logs.attention: keep_under_logs_or_rename_to_logs.attention_evidence_in_future
+physical_schema_contract:
+  namespace_boundary:
+    logs_namespace_role:
+      - physical_time_axis_logs_pressure
+      - append_only_evidence
+    current_namespace_role:
+      - rebuildable_current_relation_projection_surfaces
+    canonical_mapping:
+      logs.current: current_basis_projection_relation
+      logs.hub_current: hub_attractor_projection_relation
+      logs.attention: append_only_attention_evidence_relation
   physical_tables:
     - logs.current
     - logs.hub_current
@@ -44,7 +44,7 @@ physical_schema_status:
   non_adopted_table_names:
     - logs.table_current
     - logs.table_attention
-  initial_implementation: hub_attractor_target_aware_generic_schema
+  schema_profile: hub_attractor_target_aware_generic_schema
   neighbor_score_policy_range:
     min: 0.85
     max: 1.00
@@ -62,12 +62,43 @@ physical_schema_status:
     - topK_per_hub_kind
     - phase_expansion_limit
     - max_attention_rows_saved
-  out_of_scope_not_implemented:
-    - refresh_function_bodies
-    - norm_watch_function_bodies
-    - db_triggers
-    - scheduler_runtime_hub_attractor_exploration
-    - phase_vector_generation_runtime_logic
+  runtime_boundary:
+    refresh_current:
+      role: current_basis_recalculation
+      side_effect_scope:
+        - updates_logs_current
+        - returns_change_candidates
+      prohibited:
+        - writes_logs_attention
+        - generates_phase_vector
+        - mutates_registry
+    norm_watch:
+      role: l2_norm_level_change_detection
+      side_effect_scope:
+        - reads_logs_current
+        - emits_level_change_signal
+      prohibited:
+        - writes_logs_attention
+        - mutates_hubs
+        - mutates_topologys
+    exploration_runtime:
+      role: hub_attractor_neighbor_observation
+      side_effect_scope:
+        - reads_logs_current
+        - reads_logs_hub_current
+        - appends_logs_attention_evidence
+      prohibited:
+        - mutates_registry
+        - mutates_topologys
+    phase_vector_transform:
+      role: auxiliary_evidence_transform
+      side_effect_scope:
+        - reads_logs_attention_main_vector
+        - updates_logs_attention_phase_vector_field
+      prohibited:
+        - auto_migration
+        - auto_promotion
+        - registry_or_topology_mutation
 public_article: false
 canonical_markdown: docs/design/sql-attention-logs-ssot.md
 
@@ -85,7 +116,7 @@ purpose:
 
 core_definition:
   one_sentence: >-
-    SQL Attention converts physical-side logs.* signals into a current-basis surface (currently named logs.current)
+    SQL Attention converts physical-side logs.* signals into a current-basis surface (physical name: logs.current)
     calculation basis, watches l2 norm-level changes, and only when the level
     changes observes hub/vector-indicated attractor evidence from hubs.* and
     records statistics, l2_norm, vector, phase_vector, and hit evidence into
@@ -169,7 +200,7 @@ layers:
           - logs.usage_metrics_as_observed_access_usage_pressure
           - logs.promotion_candidates_as_columnization_index_registry_or_physical_table_promotion_candidates
         candidate_lifecycle:
-          - pending
+          - candidate_open
           - approved
           - rejected
         approval_projection_note: approved_candidates_can_be_extracted_as_adopted_state
@@ -177,7 +208,7 @@ layers:
         delete_policy: no_destructive_delete
         tableid_semantics: physical_table_identity
         required_state_semantics:
-          - pending
+          - candidate_open
           - adopted
           - rejected
       logs.ui_operation:
@@ -229,7 +260,7 @@ layers:
   logs_current:
     role: calculation_basis_memo
     description: >-
-      current basis surface (currently logs.current) stores compressed pressure state derived from logs.*
+      current basis surface (physical name: logs.current) stores compressed pressure state derived from logs.*
       so runtime does not repeatedly scan raw logs. It is a calculation basis,
       not the SQL Attention conclusion.
     must_support:
@@ -472,7 +503,7 @@ existing_repository_mismatch_notes:
     condition: >-
       Candidate lifecycle and column/axis pressure semantics must be preserved.
     lifecycle_expected:
-      - pending
+      - candidate_open
       - approved
       - rejected
     future_expansion_todo:

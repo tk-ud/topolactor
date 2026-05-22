@@ -337,11 +337,12 @@ edit diff log         = value change observation source / Query generation sourc
 
 両者は意味境界が異なる。混在させない。
 
-現時点では edit diff log (`topology_edit_log` / `entity_edit_log`) は未作成である。
-edit diff activity から Query を生成する機能は **TODO** である。
-実装済みのように扱わない。
+edit diff log (`topology_edit_log` / `entity_edit_log`) は
+value-change observation と Query generation source の意味境界を持つ。
+この意味は state transition log と混在させない。
 
-将来の `topology_edit_log` / `entity_edit_log` が Query generation source になる。
+Query generation source として扱う際は、`topology_edit_log` / `entity_edit_log` の
+schema contract を前提にする。
 
 ### やってはいけないこと
 

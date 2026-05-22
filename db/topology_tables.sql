@@ -212,7 +212,7 @@ COMMENT ON COLUMN topologys.topology_edit_log.target_table IS
 
 COMMENT ON COLUMN topologys.topology_edit_log.diff_json IS
     'JSON diff between before_json and after_json. Null when not computed '
-    '(e.g. on first-version logging before before-state capture is implemented).';
+    '(e.g. on first-version logging before before-state capture is available under runtime contract).';
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_target
     ON topologys.topology_edit_log (target_table, target_id);

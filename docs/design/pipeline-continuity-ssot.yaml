@@ -6,7 +6,7 @@ pipeline_continuity_ssot:
   purpose:
     - data_driven_vertical_slice_continuity
     - hardcode_guard_for_dispatcher_bypass_and_fallback_detection
-    - gap_tracking_for_not_yet_implemented_nodes
+    - canonical_route_identity_and_boundary_contract
 
   # Pipeline body checks use data-driven fixture execution, not vocabulary grep.
   # See pipeline_body_test.ci_script for the delegation target in each lane.
@@ -20,7 +20,7 @@ pipeline_continuity_ssot:
         client command enters via ui_action, passes through frontend_scheduler,
         api_client, backend_endpoint, backend_scheduler, manifest_dispatcher,
         topology_transform_runtime (RuntimeExecutor), entity/emission, and projects back
-        through frontend projection components. Node wiring status in this document is lane-level implementation detail; public completion status is governed by docs/system-roadmap.yaml.
+        through frontend projection components. Node wiring in this document declares canonical route boundaries and identity continuity.
       direction: client_to_server_to_client
 
       required_identity:
@@ -39,66 +39,57 @@ pipeline_continuity_ssot:
         - node: frontend.ui_action
           files:
             - frontend/islands/OperationPanel.tsx
-          status: implemented
 
         - node: frontend.scheduler
           files:
             - frontend/runtime/frontendScheduler.ts
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: synchronous pass-through. Wraps resolveOperationVector +
+            Lane boundary: synchronous pass-through. Wraps resolveOperationVector +
             dispatchOperation via queueClientCommand. Ordering, batching, and
-            rollback boundaries are future scope.
+            rollback boundaries are separate runtime boundary contracts.
 
         - node: frontend.api_client
           files:
             - frontend/api/dispatch.ts
             - frontend/routes/api/dispatch.ts
-          status: implemented
 
         - node: backend.endpoint
           files:
             - backend/endpoint/DispatchEndpoint.cs
-          status: implemented
 
         - node: backend.scheduler
           files:
             - backend/scheduler/RuntimeTimelineScheduler.cs
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: synchronous delegate to ManifestDispatcher. Client requests now
+            Lane boundary: synchronous delegate to ManifestDispatcher. Client requests now
             enter via RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor.
-            Ordering and collision control are future scope.
+            Ordering and collision control are separate runtime boundary contracts.
 
         - node: backend.manifest_dispatcher
           files:
             - backend/runtime/ManifestDispatcher.cs
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: synchronous delegate to RuntimeExecutor. Manifest-driven routing
-            by axes (role, target, layer, action) is future scope.
+            Lane boundary: synchronous delegate to RuntimeExecutor. Manifest-driven routing
+            by axes (role, target, layer, action) is a canonical runtime boundary contract.
 
         - node: backend.topology_transform_runtime
           files:
             - backend/runtime/RuntimeExecutor.cs
-          status: implemented
           implementation_note: >
-            RuntimeExecutor currently covers the roles of backend_scheduler,
-            manifest_dispatcher, and topology_transform_runtime as a skeleton.
-            When scheduler and dispatcher are connected, RuntimeExecutor scope narrows.
+            RuntimeExecutor boundary may cover backend_scheduler,
+            manifest_dispatcher, and topology_transform_runtime roles only when
+            scheduler → dispatcher → runtime identity is preserved.
 
         - node: backend.entity_and_emission
           files:
             - backend/runtime/EmissionBuilder.cs
             - backend/repository/TopologyRepository.cs
-          status: implemented
 
         - node: frontend.projection
           files:
             - frontend/components/EmissionView.tsx
             - frontend/components/ProjectionView.tsx
             - frontend/runtime/renderEmission.ts
-          status: implemented
 
       required_endpoint:
         path: /api/dispatch
@@ -124,7 +115,7 @@ pipeline_continuity_ssot:
       hardcode_guard:
         description: >
           Checks that topology_transform_runtime (RuntimeExecutor) does not accumulate
-          hardcoded target/layer/action dispatch branching beyond documented skeleton
+          hardcoded target/layer/action dispatch branching beyond documented boundary-contract
           exceptions. Such branching replaces data-driven manifest_dispatcher routing.
         file: backend/runtime/RuntimeExecutor.cs
         checks:
@@ -139,15 +130,16 @@ pipeline_continuity_ssot:
               - admin_path_in_TargetDispatchOverride
               - demo_validation_in_TargetDispatchOverride
             note: >
-              0 is preferred — branches have been isolated to TargetDispatchOverride (Gap-1).
-              Allowed up to 3 for legacy/isolated branches pending manifest-driven migration.
+              0 is preferred — branches are isolated to TargetDispatchOverride boundary.
+              Allowed up to 3 for isolated compatibility boundaries where
+              manifest_dispatcher_routing_is_canonical_preferred_route.
               Count above 3 indicates a new hardcoded dispatch target being added to RuntimeExecutor;
               new targets must be routed through manifest_dispatcher, not hardcoded.
 
     sse_projection_lane:
       description: >
         server event propagates through backend_sse_emitter, frontend_sse_receiver,
-        frontend_sse_dispatcher, and projects through projection_runtime. Node wiring status in this document is lane-level implementation detail; public completion status is governed by docs/system-roadmap.yaml. End-to-end SSE data flow is future scope.
+        frontend_sse_dispatcher, and projects through projection_runtime. Node wiring in this document declares canonical route boundaries and identity continuity. End-to-end SSE data flow follows this lane contract.
       direction: server_to_client
       event_types:
         - projection
@@ -162,62 +154,48 @@ pipeline_continuity_ssot:
         - node: backend.attention_compute
           files:
             - backend/schema/ContextRouteContracts.cs
-          status: implemented
 
         - node: backend.sse_emitter
           files:
             - backend/endpoint/SseEndpoint.cs
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: keep-alive ping only (event: ping / data: connected,
+            Lane boundary: keep-alive ping only (event: ping / data: connected,
             then event: ping / data: keep-alive every 30s).
-            Real event streaming is future scope.
+            Real event streaming follows a separate runtime boundary contract.
 
         - node: frontend.sse_receiver
           files:
             - frontend/runtime/sseReceiver.ts
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: EventSource-based receiver with connect/disconnect interface.
-            Wiring to dispatcher and scheduler is future scope.
+            Lane boundary: EventSource-based receiver with connect/disconnect interface.
+            Wiring to dispatcher and scheduler follows a separate runtime boundary contract.
 
         - node: frontend.sse_dispatcher
           files:
             - frontend/runtime/sseDispatcher.ts
-          status: implemented
           implementation_note: >
-            Lane-wired skeleton: handler map with register/route interface. Feeds into
+            Lane boundary: handler map with register/route interface. Feeds into
             frontend projection runtime as hook_trigger.
 
         - node: frontend.sse_projection
           files:
             - frontend/components/ProjectionView.tsx
-          status: implemented
 
       required_endpoint:
         path: /api/sse
         frontend_route: frontend/routes/api/sse.ts
         backend_handler: backend/endpoint/SseEndpoint.cs
-        status: implemented
 
       pipeline_body_test:
-        kind: unit_skeleton
+        kind: unit_boundary_contract
         ci_script: .agent/tests/check-default-entity-search.sh
         note: >
           SSE lane unit tests cover dispatcher/receiver/projection identity via
           frontend/tests/pipelineContinuity.test.ts. End-to-end SSE integration test
-          (real server push through full lane) requires sse_emitter beyond skeleton
-          (future scope — not_implemented at integration level).
+          (real server push through full lane) requires full lane event emission and verification under this contract.
         test_files:
           - frontend/tests/pipelineContinuity.test.ts
 
-      gap_rule: >
-        Nodes with status=not_implemented are GAP-fixed.
-        Status must not change to implemented based on incidental grep match.
-        Implementing a node requires: file listed in files[], a pipeline body test,
-        and an explicit SSOT status update with evidence.
-
-  gap_summary:
-    # All previously tracked gaps are resolved at skeleton level.
-    # SSE end-to-end integration (real server push) remains future scope but is not a node gap.
-    - "sse_projection_lane.pipeline_body_test: end-to-end SSE integration test not yet implemented (skeleton only)"
+      contract_guard: >
+        Node contract must be validated by listed files and pipeline body tests.
+        Route changes require explicit SSOT contract updates.

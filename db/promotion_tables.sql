@@ -8,7 +8,7 @@
 -- structural changes (indexes, generated columns, registry promotions, or
 -- physical table promotions).
 --
--- NOTE: Actual migration execution is out of scope for this skeleton.
+-- NOTE: Actual migration execution is outside this schema contract boundary.
 --       promotion_candidates records are advisory suggestions only.
 --       A separate migration/approval workflow is responsible for acting on
 --       approved candidates.
@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_metrics_recorded_at
 -- suggested structural action plus a snapshot of the manifest at the time
 -- of suggestion.
 --
--- NOTE: Actual migration execution is out of scope for this skeleton.
+-- NOTE: Actual migration execution is outside this schema contract boundary.
 --       Approved candidates must be acted on by a separate migration workflow.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.promotion_candidates (
@@ -93,7 +93,7 @@ COMMENT ON TABLE logs.promotion_candidates IS
     'Advisory promotion suggestions produced by the promotion engine. '
     'References a usage_metrics observation and carries a structural action '
     'suggestion and topology manifest snapshot. '
-    'IMPORTANT: Actual migration execution is out of scope for this skeleton. '
+    'IMPORTANT: Actual migration execution is outside this schema contract boundary. '
     'Approved candidates must be acted on by a separate migration/approval workflow. '
     'SQL Attention logs alignment: conditional logs.candidate source when status lifecycle '
     '(pending/approved/rejected) and pressure-axis traceability are preserved for audit/archive.';

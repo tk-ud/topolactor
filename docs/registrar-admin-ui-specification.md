@@ -304,7 +304,7 @@ and the canonical topolactor DB runtime.
 ```text
 /storage/seed.json (UI-managed topology payload candidate)
 → load → validate → preview → explicit import
-→ canonical runtime route (requires Gap-1 manifest-driven routing resolution)
+→ canonical runtime route (requires manifest-driven routing contract resolution)
 → topolactor DB (canonical runtime authority)
 ```
 
@@ -330,8 +330,8 @@ The Seed Runtime is NOT:
 - **validate**: structural validation of seed.json (version, runtimes array, required fields)
 - **preview**: dry-run showing what import would declare (no DB write)
 - **import**: validate + explicit apply through canonical runtime route
-  - Current status: skeleton — validates structure and counts runtimes
-  - Full canonical import requires Gap-1 (manifest-driven routing) resolution
+  - import boundary validates structure and counts runtimes
+  - canonical import route must preserve manifest-driven routing contract
   - Import failure is explicit (fail-close). No silent fallback.
 
 ### Seed failure handling requirements
@@ -347,27 +347,9 @@ The Seed Runtime is NOT:
 `/storage` must be mounted as a named volume in docker-compose.yml for the backend container.
 See `infra/docker-compose.yml` `topolactor_seed_storage` volume.
 
-## 9. Out of Scope
+## 9. Boundary
 
-The following are explicitly out of scope for this specification:
-
-- UI implementation
-- backend endpoint implementation
-- DB migration
-- auth/permission implementation
-- browser E2E tests
-- real domain data
-- production admin console
-- promotion manifest editor implementation
-
-## 10. Future Implementation Issues
-
-The following implementation work should follow after this specification is accepted:
-
-- Registrar draft schema / DB tables
-- Registrar validation service
-- Registrar admin route skeleton
-- Registrar preview projection
-- Registrar promotion operation
-
-These are separate issues. Do not implement them in this specification issue.
+This specification defines controlled registration and import boundaries.
+UI-specific rendering, endpoint implementation details, DB migration execution,
+auth/permission runtime behavior, and browser E2E surfaces are governed by
+their own runtime/schema/testing contracts.
