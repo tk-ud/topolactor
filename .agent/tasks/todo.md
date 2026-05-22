@@ -24,6 +24,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
+- [ ] logs.attention production evidence persistence を実装する
+      → 現在は `LogsAttentionWriteRequest` 主体の append-only write boundary のみ接続済み。
+      → `l2_norm=0.0` / `vector_json={}` / `statistics_json={}` / `evidence_json={}` は placeholder であり production evidence ではない。
+      → 完了条件: `logs.current.basis_vector_json / l2_norm` と `logs.hub_current.attractor_vector_json` 由来の production 値を `logs.attention.l2_norm / vector_json / evidence_json` に保存する。
+      → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/scheduler/SqlAttentionScheduler.cs`, `backend/repository/*SqlAttentionLogsRepository.cs`, `db/sql_attention_logs_tables.sql`
+
 
 - [ ] phase_vector generation implementation を行う
       → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。

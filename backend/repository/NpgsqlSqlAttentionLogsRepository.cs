@@ -93,25 +93,30 @@ select hub_current_id, source_set_id, hub_id, attractor_key, hub_relation_id,
     }
 
     public override async Task<int> WriteLogsAttentionAsync(
-        HubAttractorExplorationResult explorationResult,
+        IReadOnlyList<LogsAttentionWriteRequest> requests,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(explorationResult);
+        ArgumentNullException.ThrowIfNull(requests);
 
-        if (explorationResult.Hits.Count == 0)
+        if (requests.Count == 0)
             return 0;
 
-        foreach (var hit in explorationResult.Hits)
+        foreach (var request in requests)
         {
-            if (hit.CurrentId == Guid.Empty)
+            if (request.CurrentId == Guid.Empty)
                 throw new ArgumentException(
-                    $"write_logs_attention: CurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
-                    nameof(explorationResult));
+                    $"write_logs_attention: CurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
 
-            if (hit.HubCurrentId == Guid.Empty)
+            if (request.HubCurrentId == Guid.Empty)
                 throw new ArgumentException(
-                    $"write_logs_attention: HubCurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
-                    nameof(explorationResult));
+                    $"write_logs_attention: HubCurrentId must not be empty (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
+
+            if (!string.Equals(request.ArchivePolicy, "required", StringComparison.Ordinal))
+                throw new ArgumentException(
+                    $"write_logs_attention: ArchivePolicy must be 'required' (request AttractorKey={request.AttractorKey}).",
+                    nameof(requests));
         }
 
         const string sql = @"
@@ -128,33 +133,34 @@ INSERT INTO logs.attention (
     @neighbor_score, @hit_rank, @score_band, @permutation_key,
     @l2_norm, @vector_json::jsonb, @phase_vector_json::jsonb,
     @statistics_json::jsonb, @ema_score, @evidence_json::jsonb,
-    'required'
+    @archive_policy
 )";
 
         var rowsWritten = 0;
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        foreach (var hit in explorationResult.Hits)
+        foreach (var request in requests)
         {
             await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("current_id", hit.CurrentId);
-            cmd.Parameters.AddWithValue("hub_current_id", hit.HubCurrentId);
-            cmd.Parameters.AddWithValue("source_set_id", hit.SourceSetId);
-            cmd.Parameters.AddWithValue("hub_id", hit.HubId.HasValue ? hit.HubId.Value : DBNull.Value);
-            cmd.Parameters.AddWithValue("attractor_key", hit.AttractorKey);
-            cmd.Parameters.AddWithValue("hub_relation_id", hit.HubRelationId.HasValue ? hit.HubRelationId.Value : DBNull.Value);
-            cmd.Parameters.AddWithValue("relation_registry_id", hit.RelationRegistryId.HasValue ? hit.RelationRegistryId.Value : DBNull.Value);
-            cmd.Parameters.AddWithValue("neighbor_score", hit.NeighborScore);
-            cmd.Parameters.AddWithValue("hit_rank", hit.HitRank);
-            cmd.Parameters.AddWithValue("score_band", hit.ScoreBand);
-            cmd.Parameters.AddWithValue("permutation_key", hit.PermutationKey);
-            cmd.Parameters.AddWithValue("l2_norm", 0.0);
-            cmd.Parameters.AddWithValue("vector_json", "{}");
-            cmd.Parameters.AddWithValue("phase_vector_json", "{}");
-            cmd.Parameters.AddWithValue("statistics_json", "{}");
-            cmd.Parameters.AddWithValue("ema_score", DBNull.Value);
-            cmd.Parameters.AddWithValue("evidence_json", "{}");
+            cmd.Parameters.AddWithValue("current_id", request.CurrentId);
+            cmd.Parameters.AddWithValue("hub_current_id", request.HubCurrentId);
+            cmd.Parameters.AddWithValue("source_set_id", request.SourceSetId);
+            cmd.Parameters.AddWithValue("hub_id", request.HubId.HasValue ? request.HubId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("attractor_key", request.AttractorKey);
+            cmd.Parameters.AddWithValue("hub_relation_id", request.HubRelationId.HasValue ? request.HubRelationId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("relation_registry_id", request.RelationRegistryId.HasValue ? request.RelationRegistryId.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("neighbor_score", request.NeighborScore);
+            cmd.Parameters.AddWithValue("hit_rank", request.HitRank);
+            cmd.Parameters.AddWithValue("score_band", request.ScoreBand);
+            cmd.Parameters.AddWithValue("permutation_key", request.PermutationKey);
+            cmd.Parameters.AddWithValue("l2_norm", request.L2Norm);
+            cmd.Parameters.AddWithValue("vector_json", request.VectorJson);
+            cmd.Parameters.AddWithValue("phase_vector_json", request.PhaseVectorJson);
+            cmd.Parameters.AddWithValue("statistics_json", request.StatisticsJson);
+            cmd.Parameters.AddWithValue("ema_score", request.EmaScore.HasValue ? request.EmaScore.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("evidence_json", request.EvidenceJson);
+            cmd.Parameters.AddWithValue("archive_policy", request.ArchivePolicy);
 
             await cmd.ExecuteNonQueryAsync(ct);
             rowsWritten++;
@@ -162,7 +168,7 @@ INSERT INTO logs.attention (
 
         _npgsqlLogger.LogInformation(
             "WriteLogsAttentionAsync: wrote {RowsWritten} attention row(s) for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
-            rowsWritten, explorationResult.SourceSetId, explorationResult.BasisWindow);
+            rowsWritten, requests[0].SourceSetId, "n/a");
 
         return rowsWritten;
     }

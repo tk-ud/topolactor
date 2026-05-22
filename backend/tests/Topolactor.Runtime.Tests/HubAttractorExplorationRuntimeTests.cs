@@ -35,7 +35,7 @@ internal sealed class StubSqlAttentionLogsRepository(
 {
     public int HubCurrentCallCount { get; private set; }
     public int WriteLogsAttentionCallCount { get; private set; }
-    public HubAttractorExplorationResult? LastWriteResult { get; private set; }
+    public IReadOnlyList<LogsAttentionWriteRequest>? LastWriteRequests { get; private set; }
 
     public override Task<IReadOnlyList<WatchChangeCandidate>> LoadWatchCandidatesAsync(
         string sourceSetId,
@@ -53,12 +53,12 @@ internal sealed class StubSqlAttentionLogsRepository(
     }
 
     public override Task<int> WriteLogsAttentionAsync(
-        HubAttractorExplorationResult explorationResult,
+        IReadOnlyList<LogsAttentionWriteRequest> requests,
         CancellationToken ct = default)
     {
         WriteLogsAttentionCallCount++;
-        LastWriteResult = explorationResult;
-        return base.WriteLogsAttentionAsync(explorationResult, ct);
+        LastWriteRequests = requests;
+        return base.WriteLogsAttentionAsync(requests, ct);
     }
 }
 
@@ -622,6 +622,7 @@ public class HubAttractorExplorationRuntime_ScoreBandTests
 // Tests — SqlAttentionScheduler: no exploration on no-change
 // ---------------------------------------------------------------------------
 
+[Collection("SqlAttentionSchedulerEnvVarTests")]
 public class SqlAttentionScheduler_RunOnceTests
 {
     private static SqlAttentionScheduler CreateScheduler(
@@ -752,8 +753,7 @@ public class WriteLogsAttention_BaseRepository_Tests
     public async Task WriteLogsAttentionAsync_EmptyHits_ReturnsZero()
     {
         var repo = CreateBaseRepo();
-        var result = new HubAttractorExplorationResult("src", "7d", []);
-        var count = await repo.WriteLogsAttentionAsync(result);
+        var count = await repo.WriteLogsAttentionAsync([]);
         Assert.Equal(0, count);
     }
 
@@ -763,20 +763,10 @@ public class WriteLogsAttention_BaseRepository_Tests
         var repo = CreateBaseRepo();
         var currentId = Guid.NewGuid();
         var hubCurrentId = Guid.NewGuid();
-        var hit = new HubAttractorExplorationHit(
-            CurrentId: currentId,
-            HubCurrentId: hubCurrentId,
-            SourceSetId: "src",
-            HubId: Guid.NewGuid(),
-            AttractorKey: "att_a",
-            HubRelationId: null,
-            RelationRegistryId: null,
-            NeighborScore: 0.5,
-            HitRank: 1,
-            ScoreBand: "evidence_only",
-            PermutationKey: "default");
-        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
-        var count = await repo.WriteLogsAttentionAsync(result);
+        var count = await repo.WriteLogsAttentionAsync(
+            [
+                new LogsAttentionWriteRequest(currentId, hubCurrentId, "src", Guid.NewGuid(), "att_a", null, null, 0.5, 1, "evidence_only", "default", 0.0, "{}", "{}", "{}", null, "{}", "required")
+            ]);
         Assert.Equal(1, count);
     }
 
@@ -784,40 +774,16 @@ public class WriteLogsAttention_BaseRepository_Tests
     public async Task WriteLogsAttentionAsync_CurrentIdEmpty_Throws()
     {
         var repo = CreateBaseRepo();
-        var hit = new HubAttractorExplorationHit(
-            CurrentId: Guid.Empty,
-            HubCurrentId: Guid.NewGuid(),
-            SourceSetId: "src",
-            HubId: null,
-            AttractorKey: "att_a",
-            HubRelationId: null,
-            RelationRegistryId: null,
-            NeighborScore: 0.5,
-            HitRank: 1,
-            ScoreBand: "evidence_only",
-            PermutationKey: "default");
-        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
-        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(result));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(
+            [new LogsAttentionWriteRequest(Guid.Empty, Guid.NewGuid(), "src", null, "att_a", null, null, 0.5, 1, "evidence_only", "default", 0.0, "{}", "{}", "{}", null, "{}", "required")]));
     }
 
     [Fact]
     public async Task WriteLogsAttentionAsync_HubCurrentIdEmpty_Throws()
     {
         var repo = CreateBaseRepo();
-        var hit = new HubAttractorExplorationHit(
-            CurrentId: Guid.NewGuid(),
-            HubCurrentId: Guid.Empty,
-            SourceSetId: "src",
-            HubId: null,
-            AttractorKey: "att_a",
-            HubRelationId: null,
-            RelationRegistryId: null,
-            NeighborScore: 0.5,
-            HitRank: 1,
-            ScoreBand: "evidence_only",
-            PermutationKey: "default");
-        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
-        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(result));
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(
+            [new LogsAttentionWriteRequest(Guid.NewGuid(), Guid.Empty, "src", null, "att_a", null, null, 0.5, 1, "evidence_only", "default", 0.0, "{}", "{}", "{}", null, "{}", "required")]));
     }
 
     [Fact]
@@ -850,6 +816,7 @@ public class WriteLogsAttention_BaseRepository_Tests
 // Tests — write_logs_attention scheduler integration
 // ---------------------------------------------------------------------------
 
+[Collection("SqlAttentionSchedulerEnvVarTests")]
 public class SqlAttentionScheduler_WriteLogsAttention_Tests
 {
     private static SqlAttentionScheduler CreateScheduler(StubSqlAttentionLogsRepository logsRepo) =>
@@ -876,6 +843,14 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             await scheduler.RunOnceAsync(CancellationToken.None);
 
             Assert.Equal(1, logsRepo.WriteLogsAttentionCallCount);
+            Assert.NotNull(logsRepo.LastWriteRequests);
+            var request = Assert.Single(logsRepo.LastWriteRequests!);
+            Assert.Equal("required", request.ArchivePolicy);
+            Assert.Equal("{}", request.VectorJson);
+            Assert.Equal("{}", request.PhaseVectorJson);
+            Assert.Equal("{}", request.StatisticsJson);
+            Assert.Null(request.EmaScore);
+            Assert.Equal("{}", request.EvidenceJson);
         }
         finally
         {
@@ -932,7 +907,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_WriteResultCarriesHits()
+    public async Task RunOnceAsync_OkWithHits_WriteRequestsAreBuilt()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -945,8 +920,8 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
-            Assert.NotNull(logsRepo.LastWriteResult);
-            Assert.NotEmpty(logsRepo.LastWriteResult!.Hits);
+            Assert.NotNull(logsRepo.LastWriteRequests);
+            Assert.NotEmpty(logsRepo.LastWriteRequests!);
         }
         finally
         {
@@ -956,7 +931,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_HitHasNonEmptyCurrentId()
+    public async Task RunOnceAsync_OkWithHits_RequestHasRequiredIdentityFields()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -969,8 +944,19 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
-            foreach (var hit in logsRepo.LastWriteResult!.Hits)
-                Assert.NotEqual(Guid.Empty, hit.CurrentId);
+            Assert.NotNull(logsRepo.LastWriteRequests);
+            foreach (var request in logsRepo.LastWriteRequests!)
+            {
+                Assert.NotEqual(Guid.Empty, request.CurrentId);
+                Assert.NotEqual(Guid.Empty, request.HubCurrentId);
+                Assert.Equal("required", request.ArchivePolicy);
+                Assert.Equal(0.0, request.L2Norm);
+                Assert.Equal("{}", request.VectorJson);
+                Assert.Equal("{}", request.PhaseVectorJson);
+                Assert.Equal("{}", request.StatisticsJson);
+                Assert.Null(request.EmaScore);
+                Assert.Equal("{}", request.EvidenceJson);
+            }
         }
         finally
         {
