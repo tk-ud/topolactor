@@ -321,18 +321,7 @@ system_roadmap_ssot:
       public_summary: logs.attention evidence persistence lane is not yet implemented.
       known_gap_ref:
         - SQLA-4 logs.attention evidence persistence not implemented
-      files:
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/scheduler/SqlAttentionScheduler.cs
-        - backend/Program.cs
-      completion_condition:
-        - scheduler is wired as hosted service in production runtime
-        - watch candidates are loaded from logs.refresh_logs_current_watch
-        - hub candidates are loaded from logs.hub_current
-        - exploration policy caps are enforced without hardcoded clamp
-            detail_ssot:
+      detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
@@ -343,18 +332,7 @@ system_roadmap_ssot:
       public_summary: phase_vector auxiliary evidence transform lane is not yet implemented.
       known_gap_ref:
         - SQLA-5 phase_vector auxiliary evidence transform not implemented
-      files:
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/scheduler/SqlAttentionScheduler.cs
-        - backend/Program.cs
-      completion_condition:
-        - scheduler is wired as hosted service in production runtime
-        - watch candidates are loaded from logs.refresh_logs_current_watch
-        - hub candidates are loaded from logs.hub_current
-        - exploration policy caps are enforced without hardcoded clamp
-            detail_ssot:
+      detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
@@ -365,18 +343,7 @@ system_roadmap_ssot:
       public_summary: topology recommendation projection basis from SQL Attention evidence is not yet implemented.
       known_gap_ref:
         - SQLA-6 topology projection recommendation basis not implemented
-      files:
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/scheduler/SqlAttentionScheduler.cs
-        - backend/Program.cs
-      completion_condition:
-        - scheduler is wired as hosted service in production runtime
-        - watch candidates are loaded from logs.refresh_logs_current_watch
-        - hub candidates are loaded from logs.hub_current
-        - exploration policy caps are enforced without hardcoded clamp
-            detail_ssot:
+      detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
