@@ -161,15 +161,24 @@ public class SchedulerDispatcherChainTests
             RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await scheduler.AlignAndDispatchAsync(request);
+        try
+        {
+            var response = await scheduler.AlignAndDispatchAsync(request, cts.Token);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Emission);
-        Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission!.StructureMapId);
-        Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission.PackageId);
-        Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission.SchemaId);
-        Assert.Contains(TopologyRepository.DefaultComponentId, response.Emission.ComponentIds ?? []);
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission!.StructureMapId);
+            Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission.PackageId);
+            Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission.SchemaId);
+            Assert.Contains(TopologyRepository.DefaultComponentId, response.Emission.ComponentIds ?? []);
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
@@ -184,12 +193,21 @@ public class SchedulerDispatcherChainTests
             RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")));
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await scheduler.AlignAndDispatchAsync(request);
+        try
+        {
+            var response = await scheduler.AlignAndDispatchAsync(request, cts.Token);
 
-        Assert.False(response.Success);
-        Assert.Null(response.Emission);
-        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+            Assert.False(response.Success);
+            Assert.Null(response.Emission);
+            Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 }
 

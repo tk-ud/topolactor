@@ -15,8 +15,8 @@ namespace Topolactor.Scheduler;
 ///   - input: cron_trigger | hook_trigger | client_trigger
 ///   - output: scheduler_aligned_runtime_event → ManifestDispatcher
 ///
-/// Client triggers (AlignAndDispatchAsync) execute synchronously through ManifestDispatcher
-/// and return results directly. This preserves testability and response contract.
+/// Client triggers (AlignAndDispatchAsync) are also aligned through the same queue and
+/// await dispatch completion to preserve HTTP response contract while unifying trigger order.
 ///
 /// Cron/hook triggers (EnqueueCronTrigger / EnqueueHookTrigger) are queued in the
 /// in-memory Channel and processed by the BackgroundService consumer loop.
@@ -38,7 +38,7 @@ public class RuntimeTimelineScheduler : BackgroundService
         _manifestDispatcher = manifestDispatcher ?? throw new ArgumentNullException(nameof(manifestDispatcher));
         _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(256)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
         });
     }
@@ -50,7 +50,7 @@ public class RuntimeTimelineScheduler : BackgroundService
     /// Client triggers execute synchronously to preserve the HTTP response contract.
     /// Ordering, batching, and collision control can be applied here without changing callers.
     /// </summary>
-    public Task<EndpointResponseDto> AlignAndDispatchAsync(
+    public async Task<EndpointResponseDto> AlignAndDispatchAsync(
         EndpointRequestDto request,
         CancellationToken ct = default)
     {
@@ -60,8 +60,18 @@ public class RuntimeTimelineScheduler : BackgroundService
             "RuntimeTimelineScheduler: aligning client trigger Target={Target} Layer={Layer} Action={Action}",
             request.Target, request.Layer, request.Action);
 
+        var completion = new TaskCompletionSource<EndpointResponseDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         var aligned = request with { TriggerKind = request.TriggerKind ?? "client" };
-        return _manifestDispatcher.DispatchAsync(aligned, ct);
+        var item = SchedulerItem.CreateClient(aligned, completion, ct);
+
+        if (!_bgQueue.Writer.TryWrite(item))
+        {
+            _logger.LogWarning("RuntimeTimelineScheduler: background queue full; rejecting client trigger.");
+            return QueueFullResponse();
+        }
+
+        using var _ = ct.Register(() => completion.TrySetResult(ClientCanceledResponse()));
+        return await completion.Task.ConfigureAwait(false);
     }
 
 
@@ -130,21 +140,72 @@ public class RuntimeTimelineScheduler : BackgroundService
         {
             try
             {
-                await _manifestDispatcher.DispatchAsync(item.Request, stoppingToken);
+                if (item.IsClient && item.CancellationToken.IsCancellationRequested)
+                {
+                    item.Response.TrySetResult(ClientCanceledResponse());
+                    continue;
+                }
+
+                var dispatchToken = item.IsClient ? item.CancellationToken : stoppingToken;
+                var response = await _manifestDispatcher.DispatchAsync(item.Request, dispatchToken);
+                item.Response.TrySetResult(response);
+            }
+            catch (OperationCanceledException oce)
+            {
+                if (item.IsClient)
+                {
+                    item.Response.TrySetResult(ClientCanceledResponse());
+                    continue;
+                }
+
+                item.Response.TrySetException(oce);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex,
                     "RuntimeTimelineScheduler: background dispatch failed for TriggerKind={TriggerKind} Target={Target}",
                     item.Request.TriggerKind, item.Request.Target);
+                item.Response.TrySetException(ex);
             }
         }
 
         _logger.LogInformation("RuntimeTimelineScheduler: background queue consumer stopped.");
     }
+
+    private static EndpointResponseDto QueueFullResponse() =>
+        new(
+            Success: false,
+            Emission: null,
+            Errors: [new ValidationError("SCHEDULER_QUEUE_FULL", "runtime queue is full. retry later.")]);
+
+    private static EndpointResponseDto ClientCanceledResponse() =>
+        new(
+            Success: false,
+            Emission: null,
+            Errors: [new ValidationError("CLIENT_TRIGGER_CANCELED", "client trigger was canceled before runtime execution completed.")]);
 }
 
 /// <summary>
 /// An item in the background runtime queue (cron/hook triggers only).
 /// </summary>
-internal record SchedulerItem(EndpointRequestDto Request);
+internal record SchedulerItem(
+    EndpointRequestDto Request,
+    TaskCompletionSource<EndpointResponseDto> Response,
+    bool IsClient,
+    CancellationToken CancellationToken)
+{
+    public SchedulerItem(EndpointRequestDto request)
+        : this(
+            request,
+            new TaskCompletionSource<EndpointResponseDto>(TaskCreationOptions.RunContinuationsAsynchronously),
+            IsClient: false,
+            CancellationToken: CancellationToken.None)
+    {
+    }
+
+    public static SchedulerItem CreateClient(
+        EndpointRequestDto request,
+        TaskCompletionSource<EndpointResponseDto> response,
+        CancellationToken cancellationToken) =>
+        new(request, response, IsClient: true, CancellationToken: cancellationToken);
+}
