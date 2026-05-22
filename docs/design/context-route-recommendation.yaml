@@ -799,7 +799,15 @@ topology_vector_runtime:
     - "using sessionId as hubId substitute in hub attention current writes"
 
 registrar_wide_topology_attention:
-  role: topology_attention_scope
+  role: child_future_projection_scope
+  canonical_parent_reference:
+    - docs/design/sql-attention-logs-ssot.md
+    - docs/design/sql-attention-logs-ssot.yaml
+  boundaries:
+    - not_sql_attention_parent_definition
+    - not_main_attention_route
+    - not_phase_attention_or_quaternion_semantics
+    - topology_recommendation_and_registrar_projection_scope_only
   concept: >
     Topology Attention is not limited to screen transition or sequential enum recommendation.
     The entire registrar is treated as a topology-wide Key-Value Memory.
