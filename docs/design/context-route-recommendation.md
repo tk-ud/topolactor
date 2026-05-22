@@ -273,6 +273,10 @@ no silent fallback を維持し、policy は `function_parameters` から解決�
 
 ## Registrar-wide Topology Attention
 
+This section describes registrar-side topology attention as a child/future projection route.
+It does not define SQL Attention parent semantics, Main Attention Route, or Phase Attention quaternion semantics.
+SQL Attention parent semantics are owned by `docs/design/sql-attention-logs-ssot.md` / `docs/design/sql-attention-logs-ssot.yaml`.
+
 ### スコープ定義
 
 Topology Attention は screen transition や operation recommendation に限定されない。

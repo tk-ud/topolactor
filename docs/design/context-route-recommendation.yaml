@@ -568,126 +568,16 @@ topology_vector_runtime:
     Uses existing PostgreSQL UUID[], JSONB, GIN indexes, relation weight, and
     transition stats.
 
-  sql_attention:
-    role: "descriptive label for Topology Vector Runtime; not a separate runtime"
-    definition: >
-      SQL Attention is an auditable Attention representation for topology continuity
-      scenarios, not merely a proposal engine. Uses PostgreSQL UUID[], JSONB,
-      GIN indexes, relation weight, transition stats, EMA trends, and feedback to
-      integrate topology-vector evidence into an attention_score for recommendation
-      current and projection input.
-      It does not require external embeddings, pgvector, learned neural weights,
-      or a neural attention implementation. Recommendation current is a rebuildable
-      materialized signal, not source-of-truth business data. Recommendation/UI
-      transition is a model case only and not the semantic core.
-    mapping:
-      query: >
-        current hub / operation / runtime context as a continuity scenario position;
-        hub is treated as a linear space coordinate.
-      key: >
-        registry sparse vector / relation / hub / entity / token as continuity
-        evidence axes; includes jsonb latent features and columnized observable axes.
-      value: >
-        candidate hub / registry / operation / token as possible next links for
-        continuity auditing, not recommendation-only targets.
-      score: >
-        cosine + relation weight + transition/co-occurrence + EMA trend/cross + feedback;
-        aggregated statistics are treated as attention weights.
-      output: >
-        ranked recommendation current / projection input + continuity evidence that
-        can be audited in dynamic-variable scenario CI pipelines. Strong attention
-        must not be interpreted as "stronger same-candidate collapse"; strong
-        attention is converted to a policy-bounded phase-escape rotation on
-        projection/route state (quaternion side), while registry tables remain fixed SSOT basis.
-    continuity_observability:
-      hub_space: linear_space
-      aggregate_values: attention_weight_observation
-      registry_id_role: semantic_loop_and_collapse_control_unit
-      dynamic_link_logs: topology_vocabulary_expansion_input
-    feature_axes:
-      jsonb_role: "latent/semi-structured feature retention layer"
-      columnar_role: "observable semantic axes for explicit monitoring and audits"
-      fractal_attention: >
-        As jsonb features are columnized, attention targets recursively increase and
-        can be handled as fractal context expansions.
-    ci_auditability:
-      status: implemented
-      implementation: >
-        System Operation CI is implemented. Event-driven inspection
-        (InspectEvidenceIntegrity / InspectHubAttentionAfterUpdate / InspectFeedbackEvents)
-        is wired inside RunTopologyVectorRuntimeExtensionAsync; Blocking results propagate as
-        TVR_EXTENSION_FAILED. Cron-triggered inspection (InspectHubAttentionContinuityAsync /
-        InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync) runs via
-        SystemOperationCiScheduler BackgroundService. See
-        docs/design/topology-recommendation-ci-runtime.md System Operation CI section.
-
-    optional_extensions:
-      anti_collapse_candidate_policy:
-        status: future_extension
-        positioning: >
-          Candidate-diversity policy to mitigate single-attractor fixation and
-          candidate-space collapse. This is not the semantic core of SQL Attention.
-        quaternion_dual_projection:
-          role: attention_dual_phase_operator_for_statistical_anti_collapse
-          purpose: >
-            Protect projection/route state from over-convergence when statistical
-            attractor weights become too strong.
-          equation:
-            canonical: "q = w + x*i + y*j + z*k"
-            rotation: "q(theta,u) = cos(theta/2) + (u_x*i + u_y*j + u_z*k) * sin(theta/2)"
-            phase_escape: "theta = policy_bounded_phase_escape(abs(w), collapse_risk)"
-          meaning:
-            i_j_k: fixed_registry_basis_axes
-            x_y_z: observed_projection_components_on_registry_axes
-            w: attentioned_key_excitation_scalar_and_rotation_amount
-            q: projection_and_route_state_phase_operator
-          duality:
-            attention_side: aggregation_statistics_attractor_weight_observation
-            quaternion_side: phase_rotation_projection_operator
-            rule: stronger_attention_increases_policy_bounded_phase_escape_not_registry_mutation
-          anti_collapse_rule:
-            risk: statistics_only_ranking_over_converges_to_high_weight_attractor_field
-            behavior: quaternion_projection_rotates_route_phase_when_attention_is_strong
-            invariant: strong_attention_must_not_mean_stronger_same_candidate_collapse
-          invariants:
-            - registry_tables_remain_ssot_basis
-            - quaternion_is_projection_state_operator_not_meaning_sot
-            - observed_matrix_projection_route_state_is_rotated_not_registry_basis
-          prohibition:
-            - generate_raw_db_command_strings_from_quaternion
-            - mutate_registry_basis_from_quaternion
-            - use_quaternion_as_direct_persistence_mutation_command
-          separation_from_time_trend:
-            ema_trend_cross_state: time_series_trend_signal_only
-            phase_and_quaternion: projection_posture_and_route_state_orientation
-            rule: do_not_relabel_ema_or_trend_as_phase
-        candidate_layers:
-          first_candidate_global_aggregate:
-            role: "stable baseline from full-history or sufficiently long-history aggregate"
-          second_candidate_short_ema:
-            role: "short-horizon candidate reflecting recent trend"
-          third_candidate_mid_ema:
-            role: "mid-horizon candidate reflecting medium context and damping short-only lock-in"
-        cross_event:
-          signal_source: "short EMA vs mid EMA"
-          states: [cross_up, cross_down, none]
-          usage: "optional hot/trend-shift marker for projection; not SQL Attention core semantics"
-        trend_window_resolution:
-          source: "function_parameters.default_policy.topology_vector_runtime"
-          note: >
-            trend windows, EMA alphas, candidate limits, and blend ratios must be
-            policy-resolved. Runtime constants are prohibited.
-        exploration_slot:
-          status: optional
-          strategy: >
-            not fully random; sample low-frequency / weak-related candidates within
-            the same topology boundary as a bounded exploration lane.
-          purpose: "escape route from over-convergence to the same guidance path"
-          constraints:
-            source: "function_parameters.default_policy.topology_vector_runtime"
-            note: >
-              exploration ratio/cap/boundary are policy-resolved; if unimplemented,
-              keep as TODO/future extension and do not claim completion.
+  sql_attention_relation:
+    role: child_projection_consumer
+    canonical_reference:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    boundaries:
+      - sql_attention_parent_definition_is_not_redefined_here
+      - topology_vector_runtime_may_consume_attention_evidence
+      - topology_vector_runtime_is_not_main_attention_route
+      - quaternion_semantics_are_owned_by_sql_attention_logs_ssot
 
   design_definitions:
     topology_attention:
