@@ -178,7 +178,7 @@ public class HubAttractorExplorationRuntime
                 if (hits.Count >= policy.MaxAttentionRowsSaved)
                     break;
 
-                var permutations = Math.Min(policy.PhaseExpansionLimit, 1);
+                var permutations = policy.PhaseExpansionLimit;
                 for (var permIdx = 0; permIdx < permutations; permIdx++)
                 {
                     if (hits.Count >= policy.MaxAttentionRowsSaved)
