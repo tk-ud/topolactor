@@ -80,6 +80,7 @@ required_files:
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
     - .agent/tests/check-completion-judgment.sh
+    - .agent/tests/check-local-ci.sh
     - .agent/scripts/create-tmp.sh
     - .agent/scripts/delete-tmp.sh
     - .agent/tmp/.gitkeep
