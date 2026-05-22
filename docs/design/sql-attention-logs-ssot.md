@@ -75,6 +75,30 @@ logs.* signal sources
 
 The essential idea is to convert physical-table operation pressure into a bounded attention query and then search hubs.* Tensor/attractor neighbors for projection-ready hub hits.
 
+## Parent / child boundary
+
+SQL Attention and topology-side recommendation are related by parent/child semantics, not by identity.
+
+```text
+SQL Attention
+= parent observation model
+= topology gravity / hub-field distortion / expansion pressure / phase-candidate / collapse tendency
+= observes how the hub Tensor/attractor field wants to move or expand
+
+context_hub_recommendation_current
+= child projection current
+= topology-internal discrete recommendation
+= ranks enum / token / state / operation-like candidates inside the existing topology
+```
+
+Design boundary:
+
+- SQL Attention may generate evidence that suggests hub/attractor expansion, phase movement, or collapse-point candidates.
+- `context_hub_recommendation_current` may use attention-like evidence, EMA, feature crossing, statistics, and feedback to rank discrete candidates.
+- `context_hub_recommendation_current` must not be treated as SQL Attention itself.
+- `context_hub_recommendation_current` must not be treated as the hub/attractor expansion mechanism.
+- Topology-internal discrete recommendation is a projection/use surface under the SQL Attention parent concept.
+
 ## Philosophy and structure
 
 SQL Attention keeps three meanings separate.
@@ -252,6 +276,8 @@ physical operation/component usage pressure
 
 Registry/topology references can exist as support/projection surfaces, but SQL Attention target is hubs.* Tensor/attractor.
 
+`context_hub_recommendation_current` is a support/projection surface for topology-internal discrete recommendation. It can surface enum / token / state / operation-like candidates already inside the topology, but it is not `logs.current`, not `logs.hub_current`, not `logs.attention`, and not a replacement for hub-attractor exploration evidence.
+
 ## Pressure matrix
 
 `logs.current` stores a pressure matrix basis.
@@ -356,6 +382,14 @@ phase_vector generated on logs.attention = phase candidate visible for later rev
 adoption/migration = separate implementation path
 ```
 
+Topology-internal discrete recommendation boundary:
+
+```text
+context_hub_recommendation_current updated = topology-internal recommendation current updated
+context_hub_recommendation_current updated != SQL Attention observation completed
+context_hub_recommendation_current updated != hub/attractor expansion completed
+```
+
 ## Existing repository mismatch notes
 
 Existing tables are not automatically canonical logs.* unless their meaning is aligned with this SSOT.
@@ -375,6 +409,8 @@ context_event
 
 context_hub_recommendation_current
 - not the same as logs.current pressure basis
+- topology-internal discrete recommendation current, not SQL Attention parent observation model
+- child projection surface that may use attention-like evidence/statistics/EMA/feedback
 ```
 
 
@@ -552,8 +588,8 @@ context_event
 - requirement: operation/component usage semantics + policy-driven retention
 
 context_hub_recommendation_current
-- classification: mismatch
-- reason: recommendation projection current != logs.current calculation basis
+- classification: support/projection surface
+- reason: topology-internal discrete recommendation current != logs.current calculation basis != SQL Attention parent observation model
 ```
 
 ### non-goals
@@ -787,6 +823,7 @@ SQL Attention converts physical-side `logs.*` signals into a `logs.current` calc
 - SQL Attention explores hubs.* Tensor/attractor from logs pressure.
 - topologys.* is not SQL Attention direct search target; it is projected meaning space attached to hit hub/attractor.
 - topology-side recommendation is based on statistics/EMA/history/usage trend only.
+- `context_hub_recommendation_current` is a topology-internal discrete recommendation current under the SQL Attention parent concept, not the parent observation model itself.
 
 
 ## Support-surface note
