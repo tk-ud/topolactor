@@ -1,7 +1,6 @@
 # Topology Recommendation CI Runtime — 設計思想と取り扱い方針
 
 対応 YAML: `topology-recommendation-ci-runtime.yaml`
-対応実装予定: `backend/runtime/TopologyRecommendationCIRunner.cs` (未実装)
 
 ---
 

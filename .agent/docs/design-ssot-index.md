@@ -36,7 +36,7 @@
 「次の操作」と「次の参考情報」を推薦するエンジン。
 ニューラル訓練不要、オフラインファースト、CPU のみ。
 
-**対応実装**:
+**関連実装surface**:
 - `db/context_route_tables.sql` — コアテーブル
 - `db/seed_empty.sql` — `function_parameters` に policy シード値
 - `backend/runtime/ContextRouteRecommendationResolver.cs` — 推薦解決 Resolver

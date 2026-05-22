@@ -18,6 +18,10 @@ TARGETS=(
   "docs/design/context-route-recommendation.md"
   "docs/design/context-route-recommendation.yaml"
   "docs/design/relation-registry-fk-audit-and-abstract-migration.md"
+  "docs/design/commit-inference-engine.yaml"
+  "docs/design/commit-inference-engine.md"
+  "docs/design/topology-recommendation-ci-runtime.yaml"
+  "docs/design/topology-recommendation-ci-runtime.md"
 )
 
 PATTERNS=(
@@ -42,7 +46,6 @@ PATTERNS=(
   "\\bremaining\\b"
   "\\broadmap\\b"
   "\\bcurrently\\b"
-  "\\bpending\\b"
   "\\bGap-"
   "\\bgap-"
   "Implementation Work Items"
@@ -54,6 +57,11 @@ PATTERNS=(
   "Out of Scope"
   "Current boundary"
   "Full canonical import requires"
+  "対応実装予定"
+  "Production-ready"
+  "future work"
+  "実装予定"
+  "未実装"
 )
 
 for file in "${TARGETS[@]}"; do
