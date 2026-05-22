@@ -18,15 +18,11 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention observation runtime follow-up
 
-- [ ] logs.current refresh / l2 norm watch runtime を実装する
-      → `logs.current` の refresh lane と `l2_norm` watch runtime を実装し、scheduler/runtime 側で観測可能な current basis を供給する。
-      → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/scheduler/SqlAttentionScheduler.cs`, `backend/schema/SqlAttentionContracts.cs`, `db/sql_attention_logs_tables.sql`
-
 - [ ] logs.attention production evidence persistence を実装する
       → 現在は `LogsAttentionWriteRequest` 主体の append-only write boundary のみ接続済み。
       → `l2_norm=0.0` / `vector_json={}` / `statistics_json={}` / `evidence_json={}` は placeholder であり production evidence ではない。
       → scheduler/runtime exploration で必要な vector scoring（`attractor_vector_json` と current 側 basis/vector を用いた cosine/overlap scoring）を内包し、算出値を evidence として永続化する。
-      → 完了条件: `logs.current.basis_vector_json / l2_norm` と `logs.hub_current.attractor_vector_json` 由来の production 値を `logs.attention.l2_norm / vector_json / evidence_json` に保存する。
+      → 完了条件: `logs.current.basis_vector_json / l2_norm` と `logs.hub_current.attractor_vector_json` 由来の production 値を `logs.attention.neighbor_score / l2_norm / vector_json / evidence_json` に保存する。
       → 対象: `backend/runtime/HubAttractorExplorationRuntime.cs`, `backend/scheduler/SqlAttentionScheduler.cs`, `backend/repository/*SqlAttentionLogsRepository.cs`, `db/sql_attention_logs_tables.sql`
 
 
