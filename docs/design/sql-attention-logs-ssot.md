@@ -352,20 +352,25 @@ When hub-attractor exploration produces a hit, Phase Attention may distort the h
 
 ```text
 neighbor hit vector
-→ attention strength
-→ attention strength / hub-side record count = movement percentage
-→ z-score normalized movement amount
-→ clamped movement amount
-→ xi/table, yj/column, zk/ui quaternion-axis movement
+→ q = w + xi + yj + zk
+→ q = attractor
+→ w = real scalar from l2_norm
+→ x / y / z = hub-side record-count bases for table / column-axis / UI-operation axes
+→ i / j / k = movement amounts on each axis, derived from w against x / y / z and then z-score normalized and clamped
 → phase_vector stored on logs.attention
 ```
 
 Draft basis:
 
 ```text
-xi = table direction
-yj = column / jsonb_path / axis direction
-zk = UI / component operation direction
+q = attractor
+w = real scalar from l2_norm
+x = table-axis hub-side record-count base
+y = column / jsonb_path / axis hub-side record-count base
+z = UI / component operation hub-side record-count base
+i = movement amount on x/table axis
+j = movement amount on y/column-axis axis
+k = movement amount on z/UI-operation axis
 ```
 
 ## Completion boundary
@@ -785,18 +790,20 @@ Input contract:
 
 ```text
 - logs.attention.vector_json
-- attention_strength
-- hub_side_record_count
-- quaternion_axis_basis (xi / yj / zk)
+- logs.attention.l2_norm as w real scalar
+- hub_side_record_count_bases (x / y / z)
+- quaternion_axis_movements (i / j / k)
 ```
 
 Calculation contract:
 
 ```text
-movement_percentage = attention_strength / hub_side_record_count
-z_score_normalized_movement = z_score(movement_percentage)
-clamped_movement = clamp(z_score_normalized_movement)
-phase_vector_json = vector_json shifted along xi / yj / zk by clamped_movement
+q = w + xi + yj + zk
+q is the attractor
+w is the real scalar from l2_norm
+x / y / z are hub-side record-count bases for each axis
+i / j / k are movement amounts produced from w against x / y / z, then z-score normalized and clamped
+phase_vector_json = vector_json shifted by attractor q
 ```
 
 Output contract:
@@ -809,7 +816,10 @@ Guardrails:
 
 ```text
 - phase_vector is candidate/evidence, not adopted state
-- phase movement is derived from attention strength, hub-side record count, z-score normalization, and clamp, not Manifest / policy caps
+- phase movement uses the normal quaternion notation q = w + xi + yj + zk
+- q is the attractor, w is the real scalar, and i/j/k are axis movement amounts
+- x/y/z are hub-side record-count bases, not the movement amounts themselves
+- phase movement is not derived from Manifest / policy caps
 - phase_vector does not auto-trigger registry mutation
 - phase_vector does not auto-trigger migration
 - phase_vector does not auto-trigger column promotion
@@ -824,7 +834,7 @@ Guardrails:
 5. Implement logs.current basis update and norm-level monitoring.
 6. Implement logs.attention evidence persistence with statistics, vector, and phase_vector.
 7. Implement scheduler/runtime hub-attractor exploration.
-8. Implement Phase Attention vector distortion only after attention-strength / hub-record-count / z-score-clamp movement semantics and evidence linkage are fixed.
+8. Implement Phase Attention vector distortion only after quaternion-attractor / L2-real-scalar / axis-movement semantics and evidence linkage are fixed.
 
 ## One-sentence definition
 
