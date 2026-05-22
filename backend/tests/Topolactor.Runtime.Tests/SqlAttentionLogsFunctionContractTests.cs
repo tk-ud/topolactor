@@ -67,8 +67,11 @@ public class SqlAttentionLogsFunctionContractTests
     public void RefreshFunction_UsesSsotPhysicalIdentityColumns_AndNoSiblingDoubleWriteCte()
     {
         var sql = LoadSql();
+        Assert.Contains("CREATE TABLE IF NOT EXISTS logs.diff", sql);
         Assert.Contains("physical_table_id", sql);
         Assert.Contains("physical_table_name", sql);
+        Assert.Contains("record_id", sql);
+        Assert.Contains("operation_kind", sql);
         Assert.DoesNotContain("d.table_id", sql);
         Assert.DoesNotContain("d.primary_key", sql);
 

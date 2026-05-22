@@ -17,6 +17,35 @@
 CREATE SCHEMA IF NOT EXISTS logs;
 
 -- ---------------------------------------------------------------------------
+-- logs.diff
+-- Physical table lifecycle mutation pressure source for logs.current refresh.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS logs.diff (
+    diff_id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    source_set_id              TEXT        NOT NULL,
+    basis_window               TEXT        NOT NULL,
+    physical_table_id          TEXT        NOT NULL,
+    physical_table_name        TEXT        NOT NULL,
+    record_id                  TEXT        NOT NULL,
+    operation_kind             TEXT        NOT NULL,
+    before_state_or_diff_json  JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    after_state_or_diff_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    observed_at                TIMESTAMPTZ NOT NULL DEFAULT now(),
+    actor_or_source            TEXT,
+    archive_policy             TEXT        NOT NULL DEFAULT 'required'
+);
+
+COMMENT ON TABLE logs.diff IS
+  'Physical table lifecycle mutation pressure source. Canonical input for logs.current refresh/watch.';
+
+CREATE INDEX IF NOT EXISTS idx_logs_diff_source_window
+  ON logs.diff (source_set_id, basis_window);
+CREATE INDEX IF NOT EXISTS idx_logs_diff_table
+  ON logs.diff (physical_table_id, physical_table_name);
+CREATE INDEX IF NOT EXISTS idx_logs_diff_operation_kind
+  ON logs.diff (operation_kind);
+
+-- ---------------------------------------------------------------------------
 -- logs.current
 -- Physical log-pressure current (regenerable projection/cache). topN physical items × signal axes basis (initial axes: table/column/ui).
 -- ---------------------------------------------------------------------------
