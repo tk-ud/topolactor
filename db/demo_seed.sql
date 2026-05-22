@@ -203,7 +203,7 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 -- state_id references state_registry by name to avoid hard-coding gen_random_uuid().
 -- If 'active' state does not exist (seed_empty.sql not applied), this insert is skipped.
 -- ---------------------------------------------------------------------------
-INSERT INTO hubs (hub_id, relation_registry_id, state_id)
+INSERT INTO hubs.hubs (hub_id, relation_registry_id, state_id)
 VALUES (
     '00000000-0000-0000-0000-000000000010',
     '00000000-0000-0000-0000-000000000011',
