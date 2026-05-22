@@ -163,6 +163,7 @@ public class SeedRuntime
             var payload = JsonSerializer.SerializeToElement(new
             {
                 source = "seed_runtime_import",
+                canonical_db_write_boundary = "runtime_handler_owned",
                 runtime_name = name,
                 runtime_definition = runtime
             });
@@ -176,11 +177,24 @@ public class SeedRuntime
                 Payload: payload,
                 Context: null,
                 TriggerKind: "client",
-                Role: "seed_import");
+                Role: null);
 
             var response = await dispatcher.DispatchAsync(request, ct);
             if (response.Success)
+            {
+                var hasCanonicalWrite = response.Emission?.Data is JsonElement dataEl &&
+                                       dataEl.ValueKind == JsonValueKind.Object &&
+                                       dataEl.TryGetProperty("canonical_db_write_applied", out var writeEl) &&
+                                       writeEl.ValueKind == JsonValueKind.True;
+
+                if (hasCanonicalWrite)
+                    continue;
+
+                importErrors.Add(new SeedValidationError(
+                    "SEED_IMPORT_CANONICAL_DB_WRITE_NOT_CONFIRMED",
+                    $"runtimes[{runtimeCount - 1}] ({name}) dispatched but canonical_db_write_applied was not confirmed by runtime output."));
                 continue;
+            }
 
             var errorMessage = response.Errors.Count > 0
                 ? string.Join("; ", response.Errors.Select(e => $"{e.Code}: {e.Message}"))

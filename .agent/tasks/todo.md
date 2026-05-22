@@ -82,6 +82,11 @@ SSOT参照必読:
       → 完了条件: seed_import_export_runtime status=implemented (docs/system-roadmap.yaml)
       → 対象: `backend/runtime/SeedRuntime.cs` (ImportAsync の skeleton 部分)、`backend/runtime/ManifestDispatcher.cs`
 
+- [ ] [Codex] SeedRuntime.ImportAsync canonical DB write confirmation contract を実装する
+      → 現在 import は canonical route dispatch までは実施するが、runtime handler から `canonical_db_write_applied=true` が返る契約が未整備なため fail-close になる。
+      → seed import declaration ごとに canonical write 完了を machine-check できる runtime output contract と test fixture を追加する。
+      → 対象: `backend/runtime/SeedRuntime.cs`, `backend/runtime/AdminRuntime.cs`, `backend/tests/Topolactor.Runtime.Tests/*`
+
 ## Frontend UI Component System (Issue #86)
 
 - [ ] [Claude] primitive component を UI topology tensor に DB 登録し drift を解消する
