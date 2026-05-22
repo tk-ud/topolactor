@@ -49,7 +49,7 @@ SSOT参照必読:
 ### Backend
 
 - [ ] [Claude] Gap-7 残: SSE E2E live DB 経路テスト (Issue #123)
-      → 実装済み: DbNotifyListener が RuntimeTimelineScheduler.EnqueueHookTrigger 経由で hook trigger を投入し、ManifestDispatcher は db_notify を manifest_id 起点で解決して sse_projection_runtime へ接続。client/request 由来の db_notify は拒否。DbNotifyListenerPayloadTests / SseProjectionRuntimeTests / ManifestDispatcher db_notify boundary tests 追加。
+      → 実装済み: DbNotifyListener が RuntimeTimelineScheduler.EnqueueHookTrigger 経由で hook trigger を投入し、ManifestDispatcher は db_notify を manifest_id を source manifest identity として保持しつつ、source manifest の db_notify_projection_mapping で sse_projection_runtime へ接続（runtime_mapping への誤復帰を防止）。client/request 由来の db_notify は拒否。DbNotifyListenerPayloadTests / SseProjectionRuntimeTests / ManifestDispatcher db_notify boundary tests 追加。
       → 残: DbNotifyListener → pg_notify → scheduler → SseProjectionRuntime → SSE の live DB E2E テスト (live DB 必要, Issue #123)。
       → 対象: `.agent/tests/check-runtime-environment.sh` 拡張 (live pg_notify listen は live DB 必要)
       → docs/system-roadmap.yaml: backend.sse_emitter = partial (scheduler routing implemented; live pg_notify E2E remains)

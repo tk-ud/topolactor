@@ -57,7 +57,7 @@ public class ManifestDispatcher
     ///
     /// Special routing: target="db_notify" is allowed only for hook triggers and requires
     /// manifest_id from payload. The manifest_id is loaded and validated, then dispatches to
-    /// the runtime_destination resolved from that manifest topology.
+    /// the runtime_destination resolved from db_notify projection mapping in that manifest topology.
     /// Per SSOT notify_listen_contract.db_listen: listen_event_enters_scheduler_before_projection_runtime.
     ///
     /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
@@ -189,16 +189,24 @@ public class ManifestDispatcher
                 "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
                 manifest.ManifestId);
 
-            var destination = ExtractRuntimeDestination(manifest.Topology);
+            var destination = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                ? ExtractDbNotifyProjectionDestination(manifest.Topology)
+                : ExtractRuntimeDestination(manifest.Topology);
             if (destination is null)
             {
-                _logger.LogError("ManifestDispatcher: no runtime_mapping entry in manifest {ManifestId}.", manifest.ManifestId);
+                var errorCode = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                    ? "DB_NOTIFY_PROJECTION_MAPPING_MISSING"
+                    : "RUNTIME_DESTINATION_UNKNOWN";
+                var errorMessage = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                    ? $"Manifest {manifest.ManifestId} has no db_notify projection mapping entry."
+                    : $"Manifest {manifest.ManifestId} has no runtime_mapping entry.";
+                _logger.LogError("ManifestDispatcher: destination mapping missing in manifest {ManifestId}. code={Code}", manifest.ManifestId, errorCode);
                 return new EndpointResponseDto(
                     Success: false,
                     Emission: null,
                     Errors: [new ValidationError(
-                        "RUNTIME_DESTINATION_UNKNOWN",
-                        $"Manifest {manifest.ManifestId} has no runtime_mapping entry.")]);
+                        errorCode,
+                        errorMessage)]);
             }
 
             return await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
@@ -251,6 +259,22 @@ public class ManifestDispatcher
             destination);
 
         return handler.ExecuteAsync(request, manifestId, ct);
+    }
+
+    private static string? ExtractDbNotifyProjectionDestination(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            if (!string.Equals(typeEl.GetString(), "db_notify_projection_mapping", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!entry.TryGetProperty("runtime_destination", out var destinationEl) || destinationEl.ValueKind != JsonValueKind.String) continue;
+
+            var destination = destinationEl.GetString();
+            if (!string.IsNullOrWhiteSpace(destination))
+                return destination;
+        }
+        return null;
     }
 
     /// <summary>

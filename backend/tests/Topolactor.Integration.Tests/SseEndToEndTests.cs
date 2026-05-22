@@ -238,7 +238,11 @@ public class DbNotifyListenerPayloadTests
             new ManifestRecord(
                 manifestId,
                 RelationRegistryId: null,
-                Topology: [JsonSerializer.SerializeToElement(new { type = "runtime_mapping", runtime_destination = "sse_projection_runtime" })],
+                Topology:
+                [
+                    JsonSerializer.SerializeToElement(new { type = "runtime_mapping", runtime_destination = "topology_transform_runtime" }),
+                    JsonSerializer.SerializeToElement(new { type = "db_notify_projection_mapping", runtime_destination = "sse_projection_runtime" })
+                ],
                 Status: "active"));
         var dispatcher = new Topolactor.Runtime.ManifestDispatcher(
             NullLogger<Topolactor.Runtime.ManifestDispatcher>.Instance,

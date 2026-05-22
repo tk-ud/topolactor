@@ -472,7 +472,7 @@ runtime_orchestration_ssot:
     invariants:
       - notify_payload_preserves_runtime_identity
       - listen_event_enters_scheduler_before_projection_runtime
-      - db_notify_dispatch_requires_manifest_id_resolution_and_runtime_mapping
+      - db_notify_dispatch_requires_manifest_id_resolution_and_db_notify_projection_mapping
       - client_or_request_trigger_cannot_directly_enter_db_notify_projection_runtime
 
   minimal_event_shape:
