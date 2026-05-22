@@ -141,7 +141,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
     /// <summary>
     /// Loads a function_parameter value from the topology store.
     /// Returns null when no active row is found — caller must treat as policy-missing.
-    /// SQL: SELECT parameter_value FROM function_parameters
+    /// SQL: SELECT parameter_value FROM topologys.function_parameters
     ///   WHERE function_name = @fn AND parameter_key = @key AND active = true LIMIT 1
     /// </summary>
     public override async Task<string?> LoadFunctionParameterAsync(
@@ -154,7 +154,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT parameter_value::text FROM function_parameters " +
+            "SELECT parameter_value::text FROM topologys.function_parameters " +
             "WHERE function_name = @fn AND parameter_key = @key AND active = true " +
             "LIMIT 1";
         cmd.Parameters.AddWithValue("fn", functionName);
