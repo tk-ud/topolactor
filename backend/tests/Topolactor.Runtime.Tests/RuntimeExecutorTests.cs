@@ -280,6 +280,176 @@ public class ManifestDispatcherOverrideTests
     }
 }
 
+/// <summary>
+/// Tests that verify Gap-1 completion condition:
+/// target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
+///
+/// When ManifestRepository is configured, ManifestDispatcher resolves destination
+/// from the manifest only. TargetDispatchOverride is not consulted.
+/// </summary>
+public class ManifestDispatcherManifestDrivenTests
+{
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestFound_RoutesToRuntimeExecutor()
+    {
+        var manifestId = Guid.NewGuid();
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildTopology("topology_transform_runtime"),
+                Status: "active"));
+        var topologyRepo = new DemoEntityValidRouteTopologyRepository();
+        var executor = RuntimeExecutorTests.CreateExecutor(topologyRepo);
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(topologyRepo),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+        Assert.False(topologyRepo.DemoEntityListCalled,
+            "TargetDispatchOverride must not be called when manifest repository is configured.");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_ManifestNotFound_ReturnsManifestNotFound()
+    {
+        var manifestRepo = new StubManifestRepository(manifest: null);
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "demo", "entity", "list", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_AmbiguousManifest_ReturnsManifestAmbiguous()
+    {
+        var manifestRepo = new AmbiguousStubManifestRepository();
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "MANIFEST_AMBIGUOUS");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_DefaultEntitySearch_ManifestFound_RoutesToRuntimeExecutor()
+    {
+        var manifestId = Guid.NewGuid();
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildTopology("topology_transform_runtime"),
+                Status: "active"));
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_UnknownRuntimeDestination_ReturnsRuntimeDestinationUnknown()
+    {
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: BuildTopology("unknown_runtime_xyz"),
+                Status: "active"));
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "RUNTIME_DESTINATION_UNKNOWN");
+    }
+
+    private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)
+    {
+        var entry = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            type = "runtime_mapping",
+            runtime_destination = runtimeDestination
+        });
+        return [entry];
+    }
+}
+
+internal sealed class StubManifestRepository : ManifestRepository
+{
+    private readonly ManifestRecord? _manifest;
+
+    public StubManifestRepository(ManifestRecord? manifest)
+        : base(NullLogger<ManifestRepository>.Instance) =>
+        _manifest = manifest;
+
+    public override Task<ManifestRecord?> ResolveActiveManifestAsync(
+        string? role, string? target, string? layer, string? action,
+        CancellationToken ct = default) =>
+        Task.FromResult(_manifest);
+
+    public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        Task.FromResult(_manifest?.ManifestId == manifestId ? _manifest : null);
+}
+
+internal sealed class AmbiguousStubManifestRepository : ManifestRepository
+{
+    public AmbiguousStubManifestRepository() : base(NullLogger<ManifestRepository>.Instance) { }
+
+    public override Task<ManifestRecord?> ResolveActiveManifestAsync(
+        string? role, string? target, string? layer, string? action,
+        CancellationToken ct = default) =>
+        throw new InvalidOperationException("MANIFEST_AMBIGUOUS: multiple active manifests match axes.");
+
+    public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        Task.FromResult<ManifestRecord?>(null);
+}
+
 internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository
 {
     public bool DemoEntityListCalled { get; private set; }

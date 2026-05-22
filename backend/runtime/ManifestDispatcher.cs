@@ -15,10 +15,13 @@ namespace Topolactor.Runtime;
 ///   - Ambiguous manifests (multiple active for same axes) -> MANIFEST_AMBIGUOUS error.
 ///   - Does not own topology transform logic.
 ///
-/// Dev/demo bypass: when _manifestRepository is null (not injected), the dispatcher
-/// delegates directly to RuntimeExecutor without manifest resolution. This is an
-/// explicit bypass for dev/demo environments without a manifest DB. It is not a
-/// silent fallback — it is documented and isolated here.
+/// Dev/demo bypass: when _manifestRepository is null (not injected), TargetDispatchOverride
+/// handles demo/entity and admin targets; unhandled requests go to RuntimeExecutor.
+/// This explicit bypass is isolated inside the null-repository branch only and is not
+/// the production destination selection path.
+///
+/// Production path: when _manifestRepository is configured, manifest resolution is the
+/// sole authority for destination selection. TargetDispatchOverride is not consulted.
 /// </summary>
 public class ManifestDispatcher
 {
@@ -44,9 +47,13 @@ public class ManifestDispatcher
 
     /// <summary>
     /// Resolves the runtime destination from manifest axes and dispatches the request.
-    /// When _manifestRepository is null, delegates directly (dev/demo bypass).
-    /// When a manifest repository is configured and no active manifest matches the axes,
-    /// returns MANIFEST_NOT_FOUND — no implicit fallthrough to RuntimeExecutor.
+    ///
+    /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
+    /// demo/entity and admin targets; unhandled requests go directly to RuntimeExecutor.
+    ///
+    /// When _manifestRepository is configured (production): manifest resolution is the sole
+    /// authority. TargetDispatchOverride is not consulted. Missing manifest returns
+    /// MANIFEST_NOT_FOUND — no implicit fallthrough.
     /// </summary>
     public async Task<EndpointResponseDto> DispatchAsync(
         EndpointRequestDto request,
@@ -57,46 +64,52 @@ public class ManifestDispatcher
         _logger.LogDebug(
             "ManifestDispatcher: resolving destination for Role={Role} Target={Target} Layer={Layer} Action={Action} TriggerKind={TriggerKind}",
             request.Role, request.Target, request.Layer, request.Action, request.TriggerKind);
-        
+
         var vector = _operationVectorResolver.Resolve(request);
-        var overrideValidationError = _targetDispatchOverride.ValidateRequest(vector);
-        if (overrideValidationError is not null)
-        {
-            return new EndpointResponseDto(
-                Success: false,
-                Emission: null,
-                Errors: [overrideValidationError]);
-        }
-
-        var (handled, overrideData, overrideError) = await _targetDispatchOverride.TryHandleAsync(vector, ct);
-        if (handled)
-        {
-            if (overrideError is not null)
-            {
-                return new EndpointResponseDto(
-                    Success: false,
-                    Emission: null,
-                    Errors: [overrideError]);
-            }
-
-            var emission = new Emission(
-                StructureMapId: null,
-                PackageId: null,
-                SchemaId: null,
-                ComponentIds: [],
-                Data: overrideData,
-                Errors: [],
-                ContextRouteRecommendation: null);
-            return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
-        }
 
         if (_manifestRepository is null)
         {
             // Dev/demo bypass: no manifest repository configured.
-            _logger.LogDebug("ManifestDispatcher: no manifest repository configured; delegating to RuntimeExecutor (dev/demo bypass).");
+            // TargetDispatchOverride handles demo/entity and admin targets.
+            // This branch is isolated here and is not the production destination selection path.
+            _logger.LogDebug("ManifestDispatcher: no manifest repository configured (dev/demo bypass).");
+
+            var overrideValidationError = _targetDispatchOverride.ValidateRequest(vector);
+            if (overrideValidationError is not null)
+            {
+                return new EndpointResponseDto(
+                    Success: false,
+                    Emission: null,
+                    Errors: [overrideValidationError]);
+            }
+
+            var (handled, overrideData, overrideError) = await _targetDispatchOverride.TryHandleAsync(vector, ct);
+            if (handled)
+            {
+                if (overrideError is not null)
+                {
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [overrideError]);
+                }
+
+                var emission = new Emission(
+                    StructureMapId: null,
+                    PackageId: null,
+                    SchemaId: null,
+                    ComponentIds: [],
+                    Data: overrideData,
+                    Errors: [],
+                    ContextRouteRecommendation: null);
+                return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
+            }
+
             return await _runtimeExecutor.ExecuteAsync(request, manifestId: null, ct);
         }
 
+        // Production: manifest-driven destination selection.
+        // TargetDispatchOverride is not consulted here.
         try
         {
             var manifest = await _manifestRepository.ResolveActiveManifestAsync(
@@ -106,29 +119,29 @@ public class ManifestDispatcher
                 action: request.Action,
                 ct: ct);
 
-            if (manifest is not null)
+            if (manifest is null)
             {
-                _logger.LogDebug(
-                    "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
-                    manifest.ManifestId);
+                _logger.LogWarning(
+                    "ManifestDispatcher: no active manifest for Role={Role} Target={Target} Layer={Layer} Action={Action}.",
+                    request.Role, request.Target, request.Layer, request.Action);
 
-                var runtimeDestinationError = ValidateRuntimeDestination(manifest.Topology);
-                if (runtimeDestinationError is not null)
-                    return new EndpointResponseDto(Success: false, Emission: null, Errors: [runtimeDestinationError]);
-
-                return await _runtimeExecutor.ExecuteAsync(request, manifest.ManifestId, ct);
+                return new EndpointResponseDto(
+                    Success: false,
+                    Emission: null,
+                    Errors: [new ValidationError(
+                        "MANIFEST_NOT_FOUND",
+                        $"No active manifest for Role={request.Role} Target={request.Target} Layer={request.Layer} Action={request.Action}.")]);
             }
 
-            _logger.LogWarning(
-                "ManifestDispatcher: no active manifest for Role={Role} Target={Target} Layer={Layer} Action={Action}.",
-                request.Role, request.Target, request.Layer, request.Action);
+            _logger.LogDebug(
+                "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
+                manifest.ManifestId);
 
-            return new EndpointResponseDto(
-                Success: false,
-                Emission: null,
-                Errors: [new ValidationError(
-                    "MANIFEST_NOT_FOUND",
-                    $"No active manifest for Role={request.Role} Target={request.Target} Layer={request.Layer} Action={request.Action}.")]);
+            var runtimeDestinationError = ValidateRuntimeDestination(manifest.Topology);
+            if (runtimeDestinationError is not null)
+                return new EndpointResponseDto(Success: false, Emission: null, Errors: [runtimeDestinationError]);
+
+            return await _runtimeExecutor.ExecuteAsync(request, manifest.ManifestId, ct);
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
         {

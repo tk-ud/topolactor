@@ -6,17 +6,16 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
-/// Explicitly isolated non-canonical target dispatch bridge.
+/// Dev/demo bypass target dispatch handler.
 ///
-/// Holds the demo/entity and admin dispatch logic that previously lived inline in
-/// RuntimeExecutor.ExecuteAsync. This class is the isolation boundary for Gap-1.
+/// Holds the demo/entity and admin dispatch logic used when ManifestDispatcher
+/// has no ManifestRepository configured (dev/demo environments only).
 ///
-/// RuntimeExecutor calls this via ValidateRequest (early validation) and
-/// TryHandleAsync (Step 10 data override). The canonical pipeline steps 1-9 still
-/// run before TryHandleAsync is reached.
+/// ManifestDispatcher calls this only inside the null-repository branch.
+/// When a ManifestRepository is configured (production), this class is not consulted —
+/// manifest-driven destination selection is the sole authority.
 ///
-/// Known gap: pending full migration to manifest-driven ManifestDispatcher routing.
-/// Per Gap-1: RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated.
+/// Per Gap-1 completion: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
 /// </summary>
 public class TargetDispatchOverride
 {

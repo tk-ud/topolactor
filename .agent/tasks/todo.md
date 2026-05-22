@@ -52,12 +52,11 @@ SSOT参照必読:
 
 ### Backend
 
-- [ ] [Claude] Gap-1 残: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管
-      → RuntimeExecutor 内の demo/admin target dispatch 分岐を TargetDispatchOverride クラスに隔離済み (RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated 充足)。
-      → 残: TargetDispatchOverride → ManifestDispatcher への完全移管 (manifest-driven routing)。これには ManifestDispatcher への依存注入変更が必要。設計判断が先決。
-      → 完了条件: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
-      → 対象: `backend/runtime/TargetDispatchOverride.cs`, `backend/runtime/ManifestDispatcher.cs`
-      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = partial
+- [x] [Claude] Gap-1 完了: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管
+      → ManifestDispatcher に manifest repository が設定されている場合、TargetDispatchOverride は呼ばれず、manifest-driven routing が唯一の destination 決定経路になった。
+      → TargetDispatchOverride は manifest repository が null の場合 (dev/demo bypass) にのみ使用される。
+      → 完了条件 target_layer_action_destination_selection_is_moved_to_manifest_dispatcher を満たすテスト (ManifestDispatcherManifestDrivenTests) を追加済み。
+      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = implemented
 
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
@@ -81,9 +80,9 @@ SSOT参照必読:
 
 ## Seed Import/Export Runtime (Issue #84)
 
-- [ ] [Claude] Seed import の Gap-1 依存部分を完全実装する (manifest-driven routing 確立後)
-      → save / load / validate / preview は実装済み。import は skeleton (Gap-1 依存)。
-      → Gap-1 (target_layer_action_destination_selection → ManifestDispatcher 移管) 解消後に ImportAsync を完全実装する。
+- [ ] [Claude] Seed import を完全実装する (Gap-1 解消済み)
+      → save / load / validate / preview は実装済み。import は skeleton (Gap-1 依存だったが解消済み)。
+      → ImportAsync を manifest-driven route 経由で完全実装する。
       → 完了条件: seed_import_export_runtime status=implemented (docs/system-roadmap.yaml)
       → 対象: `backend/runtime/SeedRuntime.cs` (ImportAsync の skeleton 部分)、`backend/runtime/ManifestDispatcher.cs`
 

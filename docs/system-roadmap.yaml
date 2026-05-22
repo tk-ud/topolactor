@@ -139,7 +139,7 @@ system_roadmap_ssot:
 
     M2_manifest_runtime:
       title: Manifest-driven runtime routing
-      status: not_started
+      status: partial
       goal: >
         Move runtime destination selection from hardcoded RuntimeExecutor branches into
         active manifest resolution by role, target, layer, and action.
@@ -148,7 +148,6 @@ system_roadmap_ssot:
         - backend.runtime_timeline_scheduler: partial
         - backend.runtime_executor_dispatch_scope: narrowed
       blocking_gaps:
-        - Gap-1 manifest_dispatcher full implementation
         - Gap-5 minimal_event_shape trigger_kind and role
 
     M3_unified_timeline_and_output_lanes:
@@ -327,20 +326,20 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.manifest_dispatcher:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
         ManifestDispatcher resolves active manifest from DB by role+target+layer+action axes
-        via NpgsqlManifestRepository. runtime_mapping topology entry is read and validated
-        against known kinds (topology_transform_runtime, registry_attractor_runtime);
-        unknown destination returns RUNTIME_DESTINATION_UNKNOWN. manifestId forwarded to
-        RuntimeExecutor for output lane routing. Fallthrough to RuntimeExecutor when no
-        manifest registered (dev/demo bypass). Ambiguity returns explicit MANIFEST_AMBIGUOUS
-        error. RuntimeExecutor demo/admin target dispatch branches are now explicitly isolated
-        in TargetDispatchOverride (Gap-1 completion condition satisfied).
-        Remaining gap: target_layer_action_destination_selection not yet fully migrated to
-        manifest-driven ManifestDispatcher routing.
+        via NpgsqlManifestRepository. When manifest repository is configured (production),
+        manifest resolution is the sole authority for destination selection; TargetDispatchOverride
+        is not consulted. Missing manifest returns MANIFEST_NOT_FOUND; ambiguity returns
+        MANIFEST_AMBIGUOUS; unknown runtime_destination returns RUNTIME_DESTINATION_UNKNOWN.
+        manifestId forwarded to RuntimeExecutor for output lane routing.
+        When manifest repository is null (dev/demo bypass), TargetDispatchOverride handles
+        demo/entity and admin targets; unhandled requests go to RuntimeExecutor. This bypass
+        is explicitly isolated inside the null-repository branch only.
+        Gap-1 complete: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
       files:
         - backend/runtime/ManifestDispatcher.cs
         - backend/runtime/TargetDispatchOverride.cs
@@ -349,6 +348,7 @@ system_roadmap_ssot:
           - SchedulerDispatcherChainTests
           - RuntimeExecutorTests
           - DefaultEntitySearchIntegrationTests
+          - ManifestDispatcherManifestDrivenTests
         ci:
           - backend-tests
           - runtime-semantics
@@ -361,22 +361,21 @@ system_roadmap_ssot:
         - dispatcher_mapping_and_runtime_mapping_are_used_for_runtime_destination
         - RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
         - broken_manifest_or_mapping_reference_returns_explicit_error
-      known_gap_ref:
-        - Gap-1 target_layer_action_selection pending manifest-driven migration
+        - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.runtime_executor:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
         RuntimeExecutor executes the canonical pipeline (vector → attractor → structure map →
-        package → schema → emission). Target-specific dispatch branches (demo/entity, admin)
-        are now explicitly isolated in TargetDispatchOverride (Gap-1). RuntimeExecutor has no
-        hardcoded target/layer/action string comparisons in its main pipeline.
-        Remaining gap: target_layer_action_destination_selection not yet fully migrated to
-        manifest-driven ManifestDispatcher routing (migration requires further design).
+        package → schema → emission). No target/layer/action dispatch branches.
+        RuntimeExecutor only executes the runtime destination resolved by ManifestDispatcher.
+        Gap-1 complete: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
+        TargetDispatchOverride remains for dev/demo bypass only (isolated in ManifestDispatcher
+        null-repository branch; not consulted in production path).
       files:
         - backend/runtime/RuntimeExecutor.cs
         - backend/runtime/TargetDispatchOverride.cs
@@ -384,6 +383,7 @@ system_roadmap_ssot:
         tests:
           - RuntimeExecutorTests
           - DefaultEntitySearchIntegrationTests
+          - ManifestDispatcherManifestDrivenTests
         ci:
           - backend-tests
           - default-entity-search
@@ -392,8 +392,6 @@ system_roadmap_ssot:
         - runtime_executor_only_executes_resolved_runtime_destination
         - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
         - no_new_hardcoded_dispatch_branch_is_added
-      known_gap_ref:
-        - Gap-1 target_layer_action_selection pending manifest-driven migration
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
