@@ -135,6 +135,120 @@ ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
+-- Admin manifests — active runtime routes for admin target routes.
+--
+-- dispatcher_mapping has no role field: requests with role=null (wildcard)
+-- match these manifests. runtime_destination=topology_transform_runtime routes
+-- through the topology pipeline (Gap-1b: runtime_destination execution selection
+-- is not yet implemented — this resolves MANIFEST_NOT_FOUND for production admin routes).
+--
+-- IDs 50-5a (hex) avoid conflict with structure_map IDs (0x01-0x40).
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000050',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"save"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000051',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"load"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000052',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"validate"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000053',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"preview"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000054',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"import"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000055',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"list"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000056',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"create"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000057',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"deprecate"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000058',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"registry_vector","action":"validate"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000059',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"ui_component_bucket","action":"list"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-00000000005a',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"package_generator","action":"generate"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
 -- Admin topology nodes — deterministic IDs for admin attractor resolution.
 --
 -- Admin attractor keys (6) all reference these three nodes:

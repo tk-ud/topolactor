@@ -409,6 +409,36 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.Contains(response.Errors, e => e.Code == "RUNTIME_DESTINATION_UNKNOWN");
     }
 
+    [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_AxesMismatch_ReturnsManifestNotFound()
+    {
+        // AxesFilteredStubManifestRepository returns manifest only for default/entity/Search.
+        // A request with non-matching axes (admin/seed_runtime/save) must return MANIFEST_NOT_FOUND.
+        var manifestRepo = new AxesFilteredStubManifestRepository(
+            matchTarget: "default",
+            matchLayer: "entity",
+            matchAction: "Search",
+            manifest: new ManifestRecord(
+                Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: BuildTopology("topology_transform_runtime"),
+                Status: "active"));
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            executor,
+            new OperationVectorResolver(),
+            RuntimeExecutorTests.CreateTargetDispatchOverride(new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")),
+            manifestRepo);
+
+        var request = new EndpointRequestDto("Search", "admin", "seed_runtime", "save", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Null(response.Emission);
+        Assert.Contains(response.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
+    }
+
     private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)
     {
         var entry = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -445,6 +475,35 @@ internal sealed class AmbiguousStubManifestRepository : ManifestRepository
         string? role, string? target, string? layer, string? action,
         CancellationToken ct = default) =>
         throw new InvalidOperationException("MANIFEST_AMBIGUOUS: multiple active manifests match axes.");
+
+    public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        Task.FromResult<ManifestRecord?>(null);
+}
+
+internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
+{
+    private readonly string? _matchTarget;
+    private readonly string? _matchLayer;
+    private readonly string? _matchAction;
+    private readonly ManifestRecord _manifest;
+
+    public AxesFilteredStubManifestRepository(string? matchTarget, string? matchLayer, string? matchAction, ManifestRecord manifest)
+        : base(NullLogger<ManifestRepository>.Instance)
+    {
+        _matchTarget = matchTarget;
+        _matchLayer = matchLayer;
+        _matchAction = matchAction;
+        _manifest = manifest;
+    }
+
+    public override Task<ManifestRecord?> ResolveActiveManifestAsync(
+        string? role, string? target, string? layer, string? action,
+        CancellationToken ct = default)
+    {
+        if (target == _matchTarget && layer == _matchLayer && action == _matchAction)
+            return Task.FromResult<ManifestRecord?>(_manifest);
+        return Task.FromResult<ManifestRecord?>(null);
+    }
 
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult<ManifestRecord?>(null);

@@ -326,20 +326,23 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.manifest_dispatcher:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
-        ManifestDispatcher resolves active manifest from DB by role+target+layer+action axes
-        via NpgsqlManifestRepository. When manifest repository is configured (production),
-        manifest resolution is the sole authority for destination selection; TargetDispatchOverride
-        is not consulted. Missing manifest returns MANIFEST_NOT_FOUND; ambiguity returns
-        MANIFEST_AMBIGUOUS; unknown runtime_destination returns RUNTIME_DESTINATION_UNKNOWN.
-        manifestId forwarded to RuntimeExecutor for output lane routing.
-        When manifest repository is null (dev/demo bypass), TargetDispatchOverride handles
-        demo/entity and admin targets; unhandled requests go to RuntimeExecutor. This bypass
-        is explicitly isolated inside the null-repository branch only.
-        Gap-1 complete: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
+        Gap-1a complete: ManifestDispatcher resolves active manifest from DB by
+        role+target+layer+action axes via NpgsqlManifestRepository. When manifest repository
+        is configured (production), manifest resolution is the sole authority for destination
+        selection; TargetDispatchOverride is not consulted. Missing manifest returns
+        MANIFEST_NOT_FOUND; ambiguity returns MANIFEST_AMBIGUOUS; unknown runtime_destination
+        returns RUNTIME_DESTINATION_UNKNOWN. manifestId forwarded to RuntimeExecutor for
+        output lane routing. When manifest repository is null (dev/demo bypass),
+        TargetDispatchOverride handles demo/entity and admin targets. Admin route manifests
+        added to seed_empty.sql (IDs 50-5a) so production admin routes no longer return
+        MANIFEST_NOT_FOUND.
+        Gap-1b remaining: runtime_destination is validation-only; ManifestDispatcher always
+        calls RuntimeExecutor regardless of runtime_destination value. Actual execution
+        selection by runtime_destination is not yet implemented.
       files:
         - backend/runtime/ManifestDispatcher.cs
         - backend/runtime/TargetDispatchOverride.cs
@@ -362,20 +365,24 @@ system_roadmap_ssot:
         - RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
         - broken_manifest_or_mapping_reference_returns_explicit_error
         - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
+        - runtime_destination_is_used_for_actual_execution_selection_not_validation_only
+      known_gap_ref:
+        - Gap-1b runtime_destination_execution_selection_not_implemented
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.runtime_executor:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M1_runtime_skeleton
       public_summary: >
         RuntimeExecutor executes the canonical pipeline (vector → attractor → structure map →
         package → schema → emission). No target/layer/action dispatch branches.
-        RuntimeExecutor only executes the runtime destination resolved by ManifestDispatcher.
-        Gap-1 complete: target_layer_action_destination_selection_is_moved_to_manifest_dispatcher.
-        TargetDispatchOverride remains for dev/demo bypass only (isolated in ManifestDispatcher
-        null-repository branch; not consulted in production path).
+        Gap-1a complete: target_layer_action_destination_selection is moved to ManifestDispatcher.
+        TargetDispatchOverride is isolated in the null-repository branch; not consulted in production.
+        Gap-1b remaining: RuntimeExecutor is always called regardless of runtime_destination;
+        actual execution selection by runtime_destination (e.g., routing to admin_runtime vs
+        topology_transform_runtime) is not yet implemented.
       files:
         - backend/runtime/RuntimeExecutor.cs
         - backend/runtime/TargetDispatchOverride.cs
@@ -392,6 +399,9 @@ system_roadmap_ssot:
         - runtime_executor_only_executes_resolved_runtime_destination
         - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
         - no_new_hardcoded_dispatch_branch_is_added
+        - runtime_destination_drives_actual_executor_selection
+      known_gap_ref:
+        - Gap-1b runtime_destination_execution_selection_not_implemented
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 

@@ -52,11 +52,18 @@ SSOT参照必読:
 
 ### Backend
 
-- [x] [Claude] Gap-1 完了: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管
+- [x] [Claude] Gap-1a 完了: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管 (routing boundary)
       → ManifestDispatcher に manifest repository が設定されている場合、TargetDispatchOverride は呼ばれず、manifest-driven routing が唯一の destination 決定経路になった。
       → TargetDispatchOverride は manifest repository が null の場合 (dev/demo bypass) にのみ使用される。
       → 完了条件 target_layer_action_destination_selection_is_moved_to_manifest_dispatcher を満たすテスト (ManifestDispatcherManifestDrivenTests) を追加済み。
-      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = implemented
+      → seed_empty.sql に admin 系 manifest 11件 (IDs 50-5a) を追加済み (admin routes の MANIFEST_NOT_FOUND を解消)。
+      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = partial (Gap-1b pending)
+
+- [ ] [Claude] Gap-1b 残: `runtime_destination` による実行先選択の実装
+      → ManifestDispatcher は runtime_destination を ValidateRuntimeDestination で検証するが、実行先選択には使っていない。現状は常に RuntimeExecutor.ExecuteAsync を呼ぶ (selection ではなく validation に留まる)。
+      → runtime_destination の値 (topology_transform_runtime / registry_attractor_runtime 等) を使って実際に実行先 executor を選択する仕組みを実装する。
+      → 完了条件: runtime_destination_is_used_for_actual_execution_selection_not_validation_only を満たす。
+      → 対象: `backend/runtime/ManifestDispatcher.cs`, `docs/system-roadmap.yaml` (backend.manifest_dispatcher, backend.runtime_executor = implemented へ昇格条件)
 
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
