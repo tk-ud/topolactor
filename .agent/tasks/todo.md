@@ -76,11 +76,10 @@ SSOT参照必読:
 
 ## Seed Import/Export Runtime (Issue #84)
 
-- [ ] [Claude] SeedRuntime.ImportAsync の canonical DB write 実装を完了する
-      → save / load / validate / preview は実装済み。残は import の skeleton 解消。
-      → SeedRuntime.ImportAsync を canonical route で DB write まで到達する実装にする。
-      → 完了条件: seed_import_export_runtime status=implemented (docs/system-roadmap.yaml)
-      → 対象: `backend/runtime/SeedRuntime.cs` (ImportAsync の skeleton 部分)、`backend/runtime/ManifestDispatcher.cs`
+- [ ] [Codex] SeedRuntime.ImportAsync canonical DB write confirmation contract を実装する
+      → 現在 import は apply boundary を通すが、result contract と backend test fixture の拡充（Inserted/AlreadyApplied/Conflict/Failed の網羅検証）が未完了。
+      → seed import apply boundary の canonical write success semantics と test fixture を整備する。
+      → 対象: `backend/runtime/SeedRuntime.cs`, `backend/runtime/AdminRuntime.cs`, `backend/tests/Topolactor.Runtime.Tests/*`
 
 ## Frontend UI Component System (Issue #86)
 

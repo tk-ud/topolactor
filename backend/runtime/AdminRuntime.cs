@@ -472,14 +472,15 @@ public class AdminRuntime
             var errDtos = result.Errors
                 .Select(e => new SeedValidationErrorDto(e.Code, e.Message))
                 .ToList();
-            return (null, new ValidationError(errDtos[0].Code, errDtos[0].Message));
+            var joined = string.Join(" | ", errDtos.Select(e => $"{e.Code}:{e.Message}"));
+            return (null, new ValidationError("SEED_IMPORT_FAILED", joined));
         }
 
         return (JsonSerializer.SerializeToElement(
             new SeedImportResponseDto(
                 true,
                 result.ValidatedRuntimeCount,
-                "Seed validated. Canonical DB write not yet implemented.",
+                "Seed import completed via canonical runtime route.",
                 [])), null);
     }
 }
