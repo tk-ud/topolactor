@@ -45,6 +45,15 @@ PATTERNS=(
   "\\bpending\\b"
   "\\bGap-"
   "\\bgap-"
+  "Implementation Work Items"
+  "Runtime Contract Work Items"
+  "Implement C#"
+  "Implement "
+  "After this specification is accepted"
+  "No implementation files are added"
+  "Out of Scope"
+  "Current boundary"
+  "Full canonical import requires"
 )
 
 for file in "${TARGETS[@]}"; do

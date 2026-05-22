@@ -177,8 +177,7 @@ Required meaning:
 Disclosure is a structural requirement of the manifest, not a compliance detail added later.
 Manifests without explicit disclosure metadata cannot be promoted.
 
-This specification does not implement legal or compliance logic.
-That is a future implementation concern outside this boundary.
+This specification defines boundary contracts only and does not define legal/compliance runtime logic.
 
 ## 9. Frontend Projection Policy
 
@@ -198,7 +197,7 @@ Local edit state is transient — it is not persisted without a backend round-tr
 
 ## 10. Backend Boundary Policy
 
-Backend responsibility:
+Backend responsibility boundary:
 
 - accept manifest editing intent
 - validate topology refs and disclosure requirements
@@ -207,7 +206,7 @@ Backend responsibility:
 
 The backend does not execute runtime in response to manifest edits.
 It does not serve ads or inject promotion data into emission directly.
-Endpoint design is a future implementation issue.
+Endpoint design belongs to a separate runtime/schema contract surface.
 
 ## 11. Runtime Boundary Policy
 
@@ -230,32 +229,9 @@ stored_topology_data → user_operation → operation_vector → attractor_resol
 Promotion manifest metadata enters only at the stored_topology_data layer,
 via the backend persistence boundary, after validation and explicit promotion.
 
-## 12. Out of Scope
+## 12. Boundary
 
-The following are explicitly out of scope for this specification:
-
-- editor UI implementation
-- backend endpoint implementation
-- DB migration
-- auth/permission implementation
-- browser E2E tests
-- real domain data
-- production campaign manager
-- ad serving implementation
-- payment/reward implementation
-- registrar admin UI implementation
-
-No implementation files are added by this specification.
-
-## 13. Implementation Work Items
-
-After this specification is accepted, the following implementation issues may follow:
-
-- Promotion manifest draft schema / DB tables
-- Promotion manifest validation service
-- Promotion manifest editor route boundary
-- Promotion preview projection
-- Promotion activation operation
-- Disclosure preview component
-
-These are implementation work items tracked outside this static specification.
+This specification defines the controlled manifest editing boundary.
+It does not execute runtime promotion, payment/reward behavior, ad serving behavior,
+or domain campaign management behavior. Those surfaces are governed by their own
+runtime/schema contracts.

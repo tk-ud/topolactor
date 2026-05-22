@@ -3,7 +3,7 @@
 ## Purpose
 
 This document defines the SSOT policy for relation_registry-driven FK audit and abstract migration.
-The design scope is policy and wiring only; runtime implementation is future work.
+The design scope is policy and wiring contracts.
 
 ## Authority and Policy Surfaces
 
@@ -34,12 +34,7 @@ The following references are the minimum required audit scope:
 - `structure_maps.relation_registry_id`
 - `relation_registry.master_ids`
 
-## Periodic Audit Policy (Future C# Runtime)
-
-Future runtime components (name-level placeholders):
-
-- `RelationRegistryFkAuditRuntime`
-- repository SELECT surface for relation registry and referencing records
+## Periodic Audit Policy
 
 Periodic audit flow:
 
@@ -64,12 +59,7 @@ Required explicit statuses include:
 
 Silent fallback is prohibited.
 
-## Abstract Migration Policy on Registry Addition (Future Runtime)
-
-Future runtime components (name-level placeholders):
-
-- `AbstractMigrationRuntime`
-- `RelationRegistryFkAuditRuntime`
+## Abstract Migration Policy on Registry Addition
 
 Flow when relation registry is added or changed:
 
@@ -102,22 +92,9 @@ The runtime/audit/migration contract must keep explicit error statuses and must 
 
 No silent fallback is allowed for relation reference integrity or migration decisioning.
 
-## Non-Goals (This Change)
+## Runtime Boundary Contract
 
-- No C# runtime implementation.
-- No DB schema alteration.
-- No FK auto-application logic.
-
-## Runtime Contract Work Items
-
-- Implement C# relation_registry FK CI runtime:
-  - `RelationRegistryFkAuditRuntime`
-  - relation_registry SELECT repository boundary
-  - audit target SELECT repository boundary
-  - explicit status contract tests
-  - CI gate integration as C# package runtime validation runner
-- Implement C# AbstractMigrationRuntime:
-  - Manifest + `function_parameters.parameter_value` JSONB resolution
-  - FK / index / relation binding / structure_map candidate generation
-  - candidate validation before admin approval
-  - no executable DB command strings in DB policy payload
+- relation_registry FK audit runtime must validate relation reference integrity.
+- abstract migration runtime must generate candidate changes only through validated manifest/function-parameter policy.
+- executable DB command strings must not be stored as runtime policy payload.
+- all missing/malformed/failed validation states must return explicit statuses.
