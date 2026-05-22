@@ -929,7 +929,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_HitHasNonEmptyCurrentId()
+    public async Task RunOnceAsync_OkWithHits_RequestHasRequiredIdentityFields()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -942,8 +942,19 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
-            foreach (var hit in logsRepo.LastWriteResult!.Hits)
-                Assert.NotEqual(Guid.Empty, hit.CurrentId);
+            Assert.NotNull(logsRepo.LastWriteRequests);
+            foreach (var request in logsRepo.LastWriteRequests!)
+            {
+                Assert.NotEqual(Guid.Empty, request.CurrentId);
+                Assert.NotEqual(Guid.Empty, request.HubCurrentId);
+                Assert.Equal("required", request.ArchivePolicy);
+                Assert.Equal(0.0, request.L2Norm);
+                Assert.Equal("{}", request.VectorJson);
+                Assert.Equal("{}", request.PhaseVectorJson);
+                Assert.Equal("{}", request.StatisticsJson);
+                Assert.Null(request.EmaScore);
+                Assert.Equal("{}", request.EvidenceJson);
+            }
         }
         finally
         {

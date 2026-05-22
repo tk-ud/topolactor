@@ -14,8 +14,9 @@ namespace Topolactor.Scheduler;
 ///   It calls logs.refresh_logs_current_watch via SqlAttentionLogsRepository,
 ///   and when change candidates exist, invokes HubAttractorExplorationRuntime.
 ///   All policy and exploration logic live in HubAttractorExplorationRuntime.
-///   SQL Attention completion boundary is WriteLogsAttentionAsync — evidence
-///   row persistence, not exploration execution.
+///   SQL Attention write boundary is WriteLogsAttentionAsync — request-based
+///   append persistence, not exploration execution.
+///   Production evidence filling is tracked as a separate TODO.
 ///
 /// Route:
 ///   cron trigger
