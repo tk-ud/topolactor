@@ -586,6 +586,106 @@ public class ManifestDispatcherManifestDrivenTests
             "admin_runtime handler must NOT be called when manifest runtime_destination=topology_transform_runtime.");
     }
 
+    [Fact]
+    public async Task DispatchAsync_DbNotifyFromClientTrigger_IsRejected()
+    {
+        var manifestId = Guid.NewGuid();
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildDbNotifyProjectionTopology(sourceRuntimeDestination: "topology_transform_runtime", projectionRuntimeDestination: "sse_projection_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["sse_projection_runtime"] = new FakeDispatchableRuntime(null) });
+
+        var payload = JsonSerializer.SerializeToElement(new { manifest_id = manifestId.ToString() });
+        var request = new EndpointRequestDto("X", "db_notify", "projection", "broadcast", null, payload, null, "client");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "DB_NOTIFY_TRIGGER_KIND_INVALID");
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DbNotifyHook_PreservesManifestIdentityToHandler()
+    {
+        var manifestId = Guid.NewGuid();
+        var fakeSseHandler = new FakeDispatchableRuntime(null);
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildDbNotifyProjectionTopology(sourceRuntimeDestination: "topology_transform_runtime", projectionRuntimeDestination: "sse_projection_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["sse_projection_runtime"] = fakeSseHandler });
+
+        var payload = JsonSerializer.SerializeToElement(new { manifest_id = manifestId.ToString() });
+        var request = new EndpointRequestDto("DbNotifyProjection", "db_notify", "projection", "broadcast", null, payload, null, "hook");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(fakeSseHandler.WasCalled);
+        Assert.Equal(manifestId, fakeSseHandler.LastManifestId);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DbNotifyHook_DoesNotRerouteToSourceRuntimeMapping()
+    {
+        var manifestId = Guid.NewGuid();
+        var fakeSseHandler = new FakeDispatchableRuntime(null);
+        var fakeSourceHandler = new FakeDispatchableRuntime(null);
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildDbNotifyProjectionTopology(sourceRuntimeDestination: "topology_transform_runtime", projectionRuntimeDestination: "sse_projection_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime>
+            {
+                ["sse_projection_runtime"] = fakeSseHandler,
+                ["topology_transform_runtime"] = fakeSourceHandler
+            });
+
+        var payload = JsonSerializer.SerializeToElement(new { manifest_id = manifestId.ToString() });
+        var request = new EndpointRequestDto("DbNotifyProjection", "db_notify", "projection", "broadcast", null, payload, null, "hook");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(fakeSseHandler.WasCalled);
+        Assert.False(fakeSourceHandler.WasCalled);
+    }
+
+    [Fact]
+    public async Task DispatchAsync_DbNotifyHook_WithoutProjectionMapping_ReturnsExplicitError()
+    {
+        var manifestId = Guid.NewGuid();
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology: BuildTopology("topology_transform_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo);
+
+        var payload = JsonSerializer.SerializeToElement(new { manifest_id = manifestId.ToString() });
+        var request = new EndpointRequestDto("DbNotifyProjection", "db_notify", "projection", "broadcast", null, payload, null, "hook");
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "DB_NOTIFY_PROJECTION_MAPPING_MISSING");
+    }
+
     private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)
     {
         var entry = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -594,6 +694,23 @@ public class ManifestDispatcherManifestDrivenTests
             runtime_destination = runtimeDestination
         });
         return [entry];
+    }
+
+    private static IReadOnlyList<System.Text.Json.JsonElement> BuildDbNotifyProjectionTopology(
+        string sourceRuntimeDestination,
+        string projectionRuntimeDestination)
+    {
+        var runtimeMapping = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            type = "runtime_mapping",
+            runtime_destination = sourceRuntimeDestination
+        });
+        var projectionMapping = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            type = "db_notify_projection_mapping",
+            runtime_destination = projectionRuntimeDestination
+        });
+        return [runtimeMapping, projectionMapping];
     }
 }
 
@@ -607,6 +724,7 @@ internal sealed class FakeDispatchableRuntime : IDispatchableRuntime
     private readonly JsonElement? _sentinelData;
     public bool WasCalled { get; private set; }
     public EndpointRequestDto? LastRequest { get; private set; }
+    public Guid? LastManifestId { get; private set; }
 
     public FakeDispatchableRuntime(JsonElement? sentinelData) => _sentinelData = sentinelData;
 
@@ -615,6 +733,7 @@ internal sealed class FakeDispatchableRuntime : IDispatchableRuntime
     {
         WasCalled = true;
         LastRequest = request;
+        LastManifestId = manifestId;
         var emission = new Emission(
             StructureMapId: null,
             PackageId: null,

@@ -55,6 +55,11 @@ public class ManifestDispatcher
     /// Resolves the runtime destination from manifest axes and dispatches the request
     /// to the registered handler.
     ///
+    /// Special routing: target="db_notify" is allowed only for hook triggers and requires
+    /// manifest_id from payload. The manifest_id is loaded and validated, then dispatches to
+    /// the runtime_destination resolved from db_notify projection mapping in that manifest topology.
+    /// Per SSOT notify_listen_contract.db_listen: listen_event_enters_scheduler_before_projection_runtime.
+    ///
     /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
     /// demo/entity and admin targets; unhandled requests fall through to the
     /// topology_transform_runtime handler in the registry.
@@ -122,12 +127,49 @@ public class ManifestDispatcher
         // TargetDispatchOverride is not consulted here.
         try
         {
-            var manifest = await _manifestRepository.ResolveActiveManifestAsync(
+            ManifestRecord? manifest;
+            if (string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(request.TriggerKind, "hook", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "DB_NOTIFY_TRIGGER_KIND_INVALID",
+                            "db_notify target is only allowed for hook triggers.")]);
+                }
+
+                if (!TryExtractManifestId(request, out var dbNotifyManifestId))
+                {
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "DB_NOTIFY_MANIFEST_ID_MISSING",
+                            "db_notify payload must include a valid manifest_id.")]);
+                }
+
+                manifest = await _manifestRepository.LoadByIdAsync(dbNotifyManifestId, ct);
+                if (manifest is null)
+                {
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "MANIFEST_NOT_FOUND",
+                            $"No manifest found for db_notify manifest_id={dbNotifyManifestId}.")]);
+                }
+            }
+            else
+            {
+                manifest = await _manifestRepository.ResolveActiveManifestAsync(
                 role: request.Role,
                 target: request.Target,
                 layer: request.Layer,
                 action: request.Action,
                 ct: ct);
+            }
 
             if (manifest is null)
             {
@@ -147,16 +189,24 @@ public class ManifestDispatcher
                 "ManifestDispatcher: resolved manifest {ManifestId} for axes.",
                 manifest.ManifestId);
 
-            var destination = ExtractRuntimeDestination(manifest.Topology);
+            var destination = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                ? ExtractDbNotifyProjectionDestination(manifest.Topology)
+                : ExtractRuntimeDestination(manifest.Topology);
             if (destination is null)
             {
-                _logger.LogError("ManifestDispatcher: no runtime_mapping entry in manifest {ManifestId}.", manifest.ManifestId);
+                var errorCode = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                    ? "DB_NOTIFY_PROJECTION_MAPPING_MISSING"
+                    : "RUNTIME_DESTINATION_UNKNOWN";
+                var errorMessage = string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase)
+                    ? $"Manifest {manifest.ManifestId} has no db_notify projection mapping entry."
+                    : $"Manifest {manifest.ManifestId} has no runtime_mapping entry.";
+                _logger.LogError("ManifestDispatcher: destination mapping missing in manifest {ManifestId}. code={Code}", manifest.ManifestId, errorCode);
                 return new EndpointResponseDto(
                     Success: false,
                     Emission: null,
                     Errors: [new ValidationError(
-                        "RUNTIME_DESTINATION_UNKNOWN",
-                        $"Manifest {manifest.ManifestId} has no runtime_mapping entry.")]);
+                        errorCode,
+                        errorMessage)]);
             }
 
             return await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
@@ -169,6 +219,20 @@ public class ManifestDispatcher
                 Emission: null,
                 Errors: [new ValidationError("MANIFEST_AMBIGUOUS", ex.Message)]);
         }
+    }
+
+    private static bool TryExtractManifestId(EndpointRequestDto request, out Guid manifestId)
+    {
+        manifestId = Guid.Empty;
+        if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var payload = request.Payload.Value;
+        if (!payload.TryGetProperty("manifest_id", out var manifestIdEl) ||
+            manifestIdEl.ValueKind != JsonValueKind.String)
+            return false;
+
+        return Guid.TryParse(manifestIdEl.GetString(), out manifestId);
     }
 
     private Task<EndpointResponseDto> DispatchToHandlerAsync(
@@ -195,6 +259,22 @@ public class ManifestDispatcher
             destination);
 
         return handler.ExecuteAsync(request, manifestId, ct);
+    }
+
+    private static string? ExtractDbNotifyProjectionDestination(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            if (!string.Equals(typeEl.GetString(), "db_notify_projection_mapping", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!entry.TryGetProperty("runtime_destination", out var destinationEl) || destinationEl.ValueKind != JsonValueKind.String) continue;
+
+            var destination = destinationEl.GetString();
+            if (!string.IsNullOrWhiteSpace(destination))
+                return destination;
+        }
+        return null;
     }
 
     /// <summary>

@@ -161,9 +161,9 @@ system_roadmap_ssot:
       unlocks:
         - backend.runtime_timeline_scheduler: implemented (queue_boundary_hardening_complete)
         - backend.output_lane_router: partial
-        - backend.db_notify_listener: partial
+        - backend.db_notify_listener: partial (scheduler routing implemented; live pg_notify E2E remains)
       blocking_gaps:
-        - Gap-15 output lane full connection and live verification
+        - Gap-15 output lane live verification remains incomplete; check-runtime-environment.sh no longer treats dispatch_success as evidence for db_notify/SSE propagation
 
     M4_projection_runtime:
       title: SSE and projection runtime
@@ -588,20 +588,30 @@ system_roadmap_ssot:
         AttractorRebuildSignal to RebuildSignalChannel (bounded Channel, Gap-6 skeleton
         replaced with real in-process signal queue). SystemOperationCiScheduler now consumes
         this signal channel and triggers rebuildability inspection.
+        SseProjectionRuntime added as sse_projection_runtime handler: db_notify hook triggers
+        are routed through ManifestDispatcher to SseProjectionRuntime → SseEventBroadcaster.
+        AdminRuntime live verification is in check-runtime-environment.sh. db_notify dispatch now resolves source manifest identity via manifest_id and uses db_notify_projection_mapping (not runtime_mapping) to reach sse_projection_runtime. OutputLaneRouter full db_notify/SSE live verification remains TODO.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/runtime/RuntimeExecutor.cs
+        - backend/runtime/SseProjectionRuntime.cs
         - backend/repository/DbNotifyRepository.cs
+        - .agent/tests/check-runtime-environment.sh
       evidence:
         tests:
           - SseEventBroadcasterTests
           - SseEndpointStreamFormatTests
+          - SseProjectionRuntimeTests
+          - DbNotifyListenerPayloadTests
         ci:
           - backend-tests
       completion_condition:
         - response_emission_db_notify_emission_and_registry_attractor_update_are_explicit_output_lanes
         - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
         - registry_attractor_update_is_not_hidden_in_response_flow
+        - sse_projection_runtime_registered_as_handler_for_db_notify_hook_triggers
+      known_gap_ref:
+        - Gap-15 live DB SSE E2E test (db_notify → pg_notify → DbNotifyListener → scheduler → SseProjectionRuntime) requires live DB
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -610,24 +620,25 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >
-        SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener holds
-        pg LISTEN and broadcasts to subscribers. Projection events stream to connected
-        clients. SseEventBroadcaster fan-out and SSE wire format covered by integration
-        tests. DbNotifyListener.HandleNotificationPayload now has unit tests via
-        TestableDbNotifyListener (Gap-7 partial). Full E2E pipeline (DbNotifyListener ->
-        pg_notify) not yet tested (requires live DB). hook_or_db_notify_event_enters_scheduler
-        completion condition not satisfied: DbNotifyListener broadcasts directly without
-        entering the scheduler queue first (architectural gap, design decision needed).
+        SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener now
+        routes pg_notify events through RuntimeTimelineScheduler as hook triggers, through
+        ManifestDispatcher to SseProjectionRuntime, which broadcasts to SseEventBroadcaster
+        (Gap-7 scheduler routing implemented). Direct broadcast from DbNotifyListener is
+        removed; canonical route invariant satisfied. Full pg_notify E2E path (live DB)
+        not yet covered by automated test (requires live DB, Issue #123).
+        Remaining: SSE projection lane dispatcher/receiver/projection_runtime wiring (M4).
       files:
         - backend/endpoint/SseEndpoint.cs
         - backend/Program.cs
         - backend/scheduler/DbNotifyListener.cs
+        - backend/runtime/SseProjectionRuntime.cs
         - backend/tests/Topolactor.Integration.Tests/SseEndToEndTests.cs
       evidence:
         tests:
           - SseEventBroadcasterTests
           - SseEndpointStreamFormatTests
           - DbNotifyListenerPayloadTests
+          - SseProjectionRuntimeTests
         ci:
           - default-entity-search
           - pipeline-continuity
@@ -637,7 +648,7 @@ system_roadmap_ssot:
         - event_payload_preserves_manifest_id_component_ids_attention_score_or_documented_identity
         - hook_or_db_notify_event_enters_scheduler_before_sse_emission
       known_gap_ref:
-        - Gap-7 hook_or_db_notify_event_enters_scheduler_before_sse_emission (design needed)
+        - Gap-7 hook_or_db_notify_event_enters_scheduler_before_sse_emission — scheduler routing implemented; live pg_notify E2E (live DB) remains
         - Issue #123 SSE end-to-end integration test (live DB required)
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml

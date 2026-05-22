@@ -7,20 +7,21 @@ using Npgsql;
 namespace Topolactor.Scheduler;
 
 /// <summary>
-/// BackgroundService that holds a pg LISTEN connection and broadcasts incoming
-/// db_notify payloads as hook_triggers to the SseEventBroadcaster.
+/// BackgroundService that holds a pg LISTEN connection and feeds incoming
+/// db_notify payloads into RuntimeTimelineScheduler as hook triggers.
 ///
 /// Per SSOT notify_listen_contract.db_listen:
 ///   trigger_kind: hook
 ///   backend.holder: background_service
 ///   backend.feeds: backend_scheduler_queue_as_hook_trigger
 ///
-/// Events are broadcast to all connected SSE clients via SseEventBroadcaster.
-/// Connection is re-established on disconnect; errors are logged and retried.
+/// Per SSOT notify_listen_contract.invariants:
+///   listen_event_enters_scheduler_before_projection_runtime
 ///
-/// Known gap (Gap-7): direct broadcast bypasses the scheduler queue.
-/// Per SSOT, db_notify events should enter the scheduler as hook_triggers before
-/// SSE emission. Full scheduler routing requires architectural wiring (live DB needed).
+/// Payload shape: { "table_id": "...", "table_registry_id": "...", "manifest_id": "<guid>" }
+/// manifest_id is required; malformed or missing payload yields explicit LogError (no silent fallback).
+///
+/// Connection is re-established on disconnect; errors are logged and retried.
 /// </summary>
 public class DbNotifyListener : BackgroundService
 {
@@ -29,16 +30,16 @@ public class DbNotifyListener : BackgroundService
 
     private readonly ILogger<DbNotifyListener> _logger;
     private readonly string _connectionString;
-    private readonly SseEventBroadcaster _broadcaster;
+    private readonly RuntimeTimelineScheduler _scheduler;
 
     public DbNotifyListener(
         ILogger<DbNotifyListener> logger,
         string connectionString,
-        SseEventBroadcaster broadcaster)
+        RuntimeTimelineScheduler scheduler)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-        _broadcaster = broadcaster ?? throw new ArgumentNullException(nameof(broadcaster));
+        _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -85,22 +86,64 @@ public class DbNotifyListener : BackgroundService
     private void OnNotification(object sender, NpgsqlNotificationEventArgs e)
     {
         _logger.LogDebug(
-            "DbNotifyListener: received notification channel={Channel} subscribers={Count}.",
-            e.Channel, _broadcaster.SubscriberCount);
+            "DbNotifyListener: received notification channel={Channel}.",
+            e.Channel);
 
         HandleNotificationPayload(e.Payload ?? "{}");
     }
 
     /// <summary>
-    /// Handles a db_notify payload by broadcasting it to SSE subscribers.
-    /// Extracted for testability — callers can invoke this directly without a live DB connection.
+    /// Handles a db_notify payload by enqueuing it into RuntimeTimelineScheduler as a hook trigger.
+    /// Per SSOT: listen_event_enters_scheduler_before_projection_runtime.
     ///
-    /// Known gap (Gap-7): this broadcasts directly, bypassing the scheduler queue.
-    /// Per SSOT the hook event should enter the scheduler before SSE emission.
+    /// Explicit failures (no silent fallback):
+    ///   - Malformed JSON payload → LogError DB_NOTIFY_PAYLOAD_INVALID
+    ///   - Missing or invalid manifest_id → LogError DB_NOTIFY_PAYLOAD_MANIFEST_ID_MISSING
+    ///   - Scheduler queue full → LogError DB_NOTIFY_HOOK_TRIGGER_QUEUE_FULL
+    ///
+    /// Extracted for testability — callers can invoke this directly without a live DB connection.
     /// </summary>
     internal protected virtual void HandleNotificationPayload(string payload)
     {
-        _broadcaster.Broadcast(new SseEvent(EventType: "projection", Data: payload));
+        JsonElement parsedPayload;
+        try
+        {
+            parsedPayload = JsonDocument.Parse(payload).RootElement.Clone();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex,
+                "DbNotifyListener: DB_NOTIFY_PAYLOAD_INVALID — failed to parse payload as JSON. payload={Payload}",
+                payload);
+            return;
+        }
+
+        if (!parsedPayload.TryGetProperty("manifest_id", out var manifestIdEl) ||
+            manifestIdEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(manifestIdEl.GetString(), out _))
+        {
+            _logger.LogError(
+                "DbNotifyListener: DB_NOTIFY_PAYLOAD_MANIFEST_ID_MISSING — payload missing or invalid manifest_id. payload={Payload}",
+                payload);
+            return;
+        }
+
+        var request = new Schema.EndpointRequestDto(
+            OperationType: "DbNotifyProjection",
+            Target: "db_notify",
+            Layer: "projection",
+            Action: "broadcast",
+            IdOrHubId: null,
+            Payload: parsedPayload,
+            Context: null,
+            TriggerKind: "hook",
+            Role: null);
+
+        if (!_scheduler.EnqueueHookTrigger(request))
+        {
+            _logger.LogError(
+                "DbNotifyListener: DB_NOTIFY_HOOK_TRIGGER_QUEUE_FULL — scheduler queue full; db_notify hook trigger dropped.");
+        }
     }
 }
 

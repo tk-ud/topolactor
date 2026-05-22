@@ -211,4 +211,25 @@ if [ "${dispatch_structure_map_id}" != "${expected_structure_map_id}" ]; then
   exit 1
 fi
 
+echo "=== [RUNTIME_ENV] Live verification: AdminRuntime.ExecuteDataAsync (admin route) ==="
+admin_response="$(jq -n \
+  '{operationType:"List",target:"admin",layer:"context_token_registry",action:"list",idOrHubId:null,payload:null,context:null}' | curl -sS -X POST "${BACKEND_URL}/dispatch" \
+  -H "Authorization: Bearer ${token}" \
+  -H "Content-Type: application/json" \
+  --data-binary @-)"
+
+admin_success="$(printf '%s' "${admin_response}" | jq -r '.success // false')"
+if [ "${admin_success}" != "true" ]; then
+  echo "ERROR: AdminRuntime.ExecuteDataAsync live verification failed; response body:" >&2
+  echo "${admin_response}" >&2
+  dump_logs
+  exit 1
+fi
+echo "OK: AdminRuntime.ExecuteDataAsync returned success"
+
+echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter db_notify -> pg_notify -> LISTEN -> scheduler -> SSE ==="
+echo "WARN: full live SSE E2E probe is not yet implemented in this script."
+echo "WARN: dispatch_success alone must not be treated as OutputLaneRouter live verification."
+echo "WARN: remaining TODO: add observed pg_notify/SSE propagation assertion and fail if not observed."
+
 echo "=== Runtime environment check passed ==="

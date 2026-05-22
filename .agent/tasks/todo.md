@@ -48,18 +48,17 @@ SSOT参照必読:
 
 ### Backend
 
-- [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
-      → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
-      → 残: DbNotifyListener → pg_notify → broadcaster の live DB 経路テスト (live DB 必要)。
-      → 残: hook_or_db_notify_event_enters_scheduler_before_sse_emission 完了条件。現在 DbNotifyListener が broadcaster に直接 Broadcast しており scheduler を経由していない。scheduler routing 変更は設計判断が先決。
-      → 対象: `backend/scheduler/DbNotifyListener.cs`, `backend/tests/`
-      → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Gap-7)
+- [ ] [Claude] Gap-7 残: SSE E2E live DB 経路テスト (Issue #123)
+      → 実装済み: DbNotifyListener が RuntimeTimelineScheduler.EnqueueHookTrigger 経由で hook trigger を投入し、ManifestDispatcher は db_notify を manifest_id を source manifest identity として保持しつつ、source manifest の db_notify_projection_mapping で sse_projection_runtime へ接続（runtime_mapping への誤復帰を防止）。client/request 由来の db_notify は拒否。DbNotifyListenerPayloadTests / SseProjectionRuntimeTests / ManifestDispatcher db_notify boundary tests 追加。
+      → 残: DbNotifyListener → pg_notify → scheduler → SseProjectionRuntime → SSE の live DB E2E テスト (live DB 必要, Issue #123)。
+      → 対象: `.agent/tests/check-runtime-environment.sh` 拡張 (live pg_notify listen は live DB 必要)
+      → docs/system-roadmap.yaml: backend.sse_emitter = partial (scheduler routing implemented; live pg_notify E2E remains)
 
-- [ ] [Claude] Gap-15 残: output lane full connection / live verification の実装とゲート接続
-      → 残: `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` / db_notify output lane の live 実行検証を Runtime Environment Test Gate と接続する。
-      → Gap-14 と分離し、timeline alignment 完了後の output lane 接続・検証ギャップとして追跡する唯一の管理ポイントとする。
-      → 対象: `.agent/tests/check-runtime-environment.sh`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
-      → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-15, milestones.M3_unified_timeline_and_output_lanes.blocking_gaps: Gap-15
+- [ ] [Claude] Gap-15 残: db_notify output lane live DB E2E
+      → 実装済み: AdminRuntime.ExecuteDataAsync live verification を check-runtime-environment.sh に追加済み。OutputLaneRouter については dispatch_success を根拠にしない方針へ修正し、live SSE E2E 観測は未実装 TODO として保持。
+      → 残: db_notify → pg_notify → DbNotifyListener → scheduler → SseProjectionRuntime → SSE broadcaster の live DB E2E テスト (live DB 必要)。
+      → 対象: `.agent/tests/check-runtime-environment.sh` (live pg_listen E2E は live DB 必要)
+      → docs/system-roadmap.yaml: backend.output_lanes known_gap_ref: Gap-15 (live DB SSE E2E remains)
 
 
 ## Frontend UI Component System (Issue #86)
