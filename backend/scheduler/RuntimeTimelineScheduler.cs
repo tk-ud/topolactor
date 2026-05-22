@@ -38,7 +38,7 @@ public class RuntimeTimelineScheduler : BackgroundService
         _manifestDispatcher = manifestDispatcher ?? throw new ArgumentNullException(nameof(manifestDispatcher));
         _bgQueue = Channel.CreateBounded<SchedulerItem>(new BoundedChannelOptions(256)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
         });
     }
@@ -62,18 +62,15 @@ public class RuntimeTimelineScheduler : BackgroundService
 
         var completion = new TaskCompletionSource<EndpointResponseDto>(TaskCreationOptions.RunContinuationsAsynchronously);
         var aligned = request with { TriggerKind = request.TriggerKind ?? "client" };
-        var item = new SchedulerItem(aligned, completion);
+        var item = SchedulerItem.CreateClient(aligned, completion, ct);
 
         if (!_bgQueue.Writer.TryWrite(item))
         {
             _logger.LogWarning("RuntimeTimelineScheduler: background queue full; rejecting client trigger.");
-            return new EndpointResponseDto(
-                Success: false,
-                Emission: null,
-                Errors: [new ValidationError("SCHEDULER_QUEUE_FULL", "runtime queue is full. retry later.")]);
+            return QueueFullResponse();
         }
 
-        using var _ = ct.Register(() => completion.TrySetCanceled(ct));
+        using var _ = ct.Register(() => completion.TrySetResult(ClientCanceledResponse()));
         return await completion.Task.ConfigureAwait(false);
     }
 
@@ -143,11 +140,24 @@ public class RuntimeTimelineScheduler : BackgroundService
         {
             try
             {
-                var response = await _manifestDispatcher.DispatchAsync(item.Request, stoppingToken);
+                if (item.IsClient && item.CancellationToken.IsCancellationRequested)
+                {
+                    item.Response.TrySetResult(ClientCanceledResponse());
+                    continue;
+                }
+
+                var dispatchToken = item.IsClient ? item.CancellationToken : stoppingToken;
+                var response = await _manifestDispatcher.DispatchAsync(item.Request, dispatchToken);
                 item.Response.TrySetResult(response);
             }
             catch (OperationCanceledException oce)
             {
+                if (item.IsClient)
+                {
+                    item.Response.TrySetResult(ClientCanceledResponse());
+                    continue;
+                }
+
                 item.Response.TrySetException(oce);
             }
             catch (Exception ex)
@@ -161,6 +171,18 @@ public class RuntimeTimelineScheduler : BackgroundService
 
         _logger.LogInformation("RuntimeTimelineScheduler: background queue consumer stopped.");
     }
+
+    private static EndpointResponseDto QueueFullResponse() =>
+        new(
+            Success: false,
+            Emission: null,
+            Errors: [new ValidationError("SCHEDULER_QUEUE_FULL", "runtime queue is full. retry later.")]);
+
+    private static EndpointResponseDto ClientCanceledResponse() =>
+        new(
+            Success: false,
+            Emission: null,
+            Errors: [new ValidationError("CLIENT_TRIGGER_CANCELED", "client trigger was canceled before runtime execution completed.")]);
 }
 
 /// <summary>
@@ -168,10 +190,22 @@ public class RuntimeTimelineScheduler : BackgroundService
 /// </summary>
 internal record SchedulerItem(
     EndpointRequestDto Request,
-    TaskCompletionSource<EndpointResponseDto> Response)
+    TaskCompletionSource<EndpointResponseDto> Response,
+    bool IsClient,
+    CancellationToken CancellationToken)
 {
     public SchedulerItem(EndpointRequestDto request)
-        : this(request, new TaskCompletionSource<EndpointResponseDto>(TaskCreationOptions.RunContinuationsAsynchronously))
+        : this(
+            request,
+            new TaskCompletionSource<EndpointResponseDto>(TaskCreationOptions.RunContinuationsAsynchronously),
+            IsClient: false,
+            CancellationToken: CancellationToken.None)
     {
     }
+
+    public static SchedulerItem CreateClient(
+        EndpointRequestDto request,
+        TaskCompletionSource<EndpointResponseDto> response,
+        CancellationToken cancellationToken) =>
+        new(request, response, IsClient: true, CancellationToken: cancellationToken);
 }
