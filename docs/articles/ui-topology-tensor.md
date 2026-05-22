@@ -2,7 +2,7 @@
 
 ## Summary
 
-Topolactor’s admin UI is positioned as a **semantic matrix / tensor coordinate editor** for UI topology persistence, not as a component catalog alone.
+Topolactor’s admin UI is positioned as a **definition/relationship editor** for UI topology persistence, not as a component catalog alone.
 
 ## Core model
 
@@ -12,7 +12,7 @@ Topolactor’s admin UI is positioned as a **semantic matrix / tensor coordinate
   - `packageId`
   - `layoutId`
   - `wiringId`
-- after persistence, these become UI topology tensor entities.
+- after persistence, these become relation targets that can participate in hub/vector surfaces when linked with physical table/record/route relations.
 
 Code-only components are not automatically treated as runtime topology entities.
 
@@ -25,3 +25,15 @@ Frontend adapters are stable projection surfaces. New specifications should prim
 - **Implemented now:** UI topology persistence tables and admin boundary specifications.
 - **Design-guarded:** tensor projection interpretation and package/persistence semantics.
 - **Future:** additional admin flows where explicitly documented as planned.
+
+
+## Relation-first interpretation
+
+UI package/layout/wiring definitions are not automatically topology meaning bodies by themselves.
+They become hub/vector-treatable relation surfaces when relations are established, for example:
+
+- `physical_table × ui_package`
+- `record/entity × component`
+- `route × layout/wiring`
+
+So the tensor/vector interpretation is relation-first, not UI-definition-only.

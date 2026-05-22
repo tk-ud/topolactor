@@ -2,7 +2,7 @@
 
 ## Summary
 
-In topolactor, the registry table is not described as a plain config table. It is treated as a **semantic matrix** that defines topology vocabulary and tensor coordinates used by runtime and projection surfaces.
+In topolactor, the registry table is not described as a plain config table. It is treated as a **semantic matrix** of definitions/configuration that defines topology vocabulary and axes used by runtime and projection surfaces. Registry defines targets (hub/topology/UI/state/relation), but registry itself is not a hub, attractor, or Attention entity.
 
 ## Matrix interpretation
 
@@ -22,3 +22,12 @@ A typical config table toggles static branches in code. In contrast, this archit
 - **Implemented now:** registry-driven topology surfaces and policy docs.
 - **Design discipline:** projection/expansion interpretation across surfaces.
 - **Future:** additional topology analyses described as planned in design docs.
+
+
+## Registry and hub boundary
+
+- **registry/registrar** stores definitions and configuration for target surfaces (hub/topology/UI/schema/state/relation).
+- **hub** is a relation node where relations are established.
+- A **relation-bearing hub** can be treated as tensor/vector coordinates.
+- As vectors, hub relations support neighborhood search.
+- Attractor is a vector convergence point; Attention is observation/observation-operation.

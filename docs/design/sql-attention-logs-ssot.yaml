@@ -390,7 +390,9 @@ layers:
       - logs.attention.phase_vector_json
     quaternion_semantics:
       equation: q_equals_w_plus_xi_plus_yj_plus_zk
-      attractor_identity: vector_convergence_point_q_is_attractor
+      q_role: phase_rotation_or_projection_state_operator
+      attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
+      boundary: q_is_not_attention_and_not_the_attractor_itself
       w: real_scalar_from_l2_norm
       x_y_z: hub_side_record_count_bases
       i_j_k: movement_amounts_per_axis
@@ -583,7 +585,9 @@ phase_attention_function_contract:
     - axis_movement_amounts_i_j_k
   calculation:
     quaternion_equation: q_equals_w_plus_xi_plus_yj_plus_zk
-    attractor_identity: q_is_attractor
+    q_role: phase_rotation_or_projection_state_operator
+    attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
+    boundary: q_is_not_attention_and_not_the_attractor_itself
     w: real_scalar_from_l2_norm
     x_y_z: hub_side_record_count_bases
     i_j_k: movement_amounts_on_each_axis
