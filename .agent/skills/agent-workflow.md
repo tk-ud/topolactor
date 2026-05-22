@@ -101,6 +101,8 @@ READ_ENTRY
   - for existing-PR updates, follow-up PR comment is required and uses the same template structure
   - follow-up PR comment requirement applies only to existing-PR updates
   - check/report sequence in PUSH_OR_PR order: (1) run required local checks in triggered scope with NOT_EXECUTED kept separate from PASS, (2) run `bash .agent/tests/check-structure.sh` last, (3) push / remote PR update, (4) for existing PR update post follow-up PR comment and verify posted state (or emit `PR_COMMENT_NOT_POSTED` evidence), (5) emit final completion summary in template scope
+  - follow Prompt Type / Work Type Output Switch in `.agent/protocols/reports-and-todos.md` for required output surfaces and required external actions
+  - Completion Summary Template defines body shape only and must not be used as an action substitute
   - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
   - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state
 

@@ -172,5 +172,8 @@ Completion report entries include failure triage result and required check scope
 Completion Summary Template Gate scope reminder:
 - writing completion summary trigger includes initial final summary and existing PR follow-up comment
 - initial PR body is out of scope and remains thin PR body policy
+- Completion Summary Template is body shape only; it is not an external-action substitute
+- existing PR update requires independent PR follow-up comment action handling per output switch
 - final summary omission from template scope is a completion reporting gap
+- for existing PR updates, final summary without either `POSTED + VERIFIED` evidence or `PR_COMMENT_NOT_POSTED` paste-ready body is an external-action evidence gap
 - unresolved completion reporting gap is blocking for completion eligibility
