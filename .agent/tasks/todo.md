@@ -29,7 +29,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
 - [ ] scheduler/runtime hub-attractor exploration を実装する
-      → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、registry neighbor topK、logs.attention evidence persistence 連携を実装する。
+      → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、hub-attractor topK、logs.attention evidence persistence 連携を実装する。
 
 - [ ] phase_vector generation implementation を行う
       → scheduler/runtime 側で hub-attractor exploration 結果と policy caps を用いた phase_vector 生成を実装し、logs.attention.phase_vector_json に evidence として保存する。phase_vector から自動 mutation/migration/promotion は行わない。
