@@ -348,7 +348,8 @@ layers:
       Phase Attention is stored as phase_vector_json on logs.attention by
       default, not as a separate candidate table. It distorts the neighbor hit
       vector across xi/table, yj/column, and zk/ui quaternion axes using
-      attention strength normalized by hub-side record count.
+      attention strength divided by hub-side record count, z-score normalized,
+      then clamped before movement.
     basis:
       xi: table_direction
       yj: column_jsonb_path_axis_direction
@@ -358,6 +359,8 @@ layers:
       attention_strength: attention_strength
       hub_side_record_count: hub_side_record_count
       movement_percentage: attention_strength_divided_by_hub_side_record_count
+      z_score_normalized_movement: z_score_movement_percentage
+      clamped_movement: clamp_z_score_normalized_movement
       result: logs.attention.phase_vector_json
     guardrails:
       - phase_vector_is_evidence_candidate_data_not_adopted_topology_state
@@ -536,6 +539,8 @@ phase_attention_function_contract:
     - quaternion_axis_basis_xi_yj_zk
   calculation:
     movement_percentage: attention_strength_divided_by_hub_side_record_count
+    z_score_normalized_movement: z_score_movement_percentage
+    clamped_movement: clamp_z_score_normalized_movement
     movement_basis: hub_space_relative_percentage
   output:
     - logs_attention_phase_vector_json
@@ -573,7 +578,7 @@ implementation_order:
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
   - implement_scheduler_runtime_hub_attractor_exploration
-  - implement_phase_attention_vector_distortion_after_attention_strength_and_hub_record_count_semantics_are_fixed
+  - implement_phase_attention_vector_distortion_after_attention_strength_hub_record_count_z_score_clamp_semantics_are_fixed
 
 initial_minimal_basis:
   table_pressure: logs.diff
