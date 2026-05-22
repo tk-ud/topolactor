@@ -15,6 +15,15 @@ The SQL Attention target is the hub-attractor side: tensor, attractor, and colla
 
 In this model, SQL aggregates are operational evidence for attention, not detached analytics and not the meaning authority. SQL Attention does not reproduce Transformer QK inner product over all elements.
 
+## Parent / child boundary
+
+SQL Attention and the topology recommendation current are related, but they are not the same layer.
+
+- **SQL Attention is the parent observation model.** It visualizes topology gravity, hub-field distortion, expansion pressure, phase candidates, and collapse-point tendency. Its role is to observe how the hub / attractor field wants to expand or move.
+- **`context_hub_recommendation_current` is a child projection.** It is a topology-internal discrete recommendation current for enum / token / state / operation-like candidates inside the existing topology. Its role is to rank currently selectable discrete candidates, not to define SQL Attention itself.
+
+The child recommendation current may use SQL Attention-style evidence, EMA, feature crossing, and feedback signals. It remains a projection current inside the topology, while SQL Attention remains the parent observation model for hub-attractor movement and expansion pressure.
+
 ## Runtime intuition
 
 The public intuition is simple: observe two current planes, keep compact current bases, and run bounded hub-attractor exploration only when the level signal changes.
@@ -40,7 +49,7 @@ The important boundary is that aggregation only prepares an attention basis. Att
 - `context_event_vector_cache`: rebuildable multi-hot event vector cache. `vector_sparse` maps `token_id` to `1.0`; `context_token_registry.value` is not a computation weight.
 - `context_prefix_vector_cache`: rebuildable prefix vector cache for nearest-prefix neighborhood filtering.
 - `context_transition_stats`: transition aggregate for `prev_operation -> next_operation` probabilities.
-- `context_hub_recommendation_current`: rebuildable topology-side recommendation current for context-route and topology-vector use. It is not the SQL Attention target and not the meaning authority.
+- `context_hub_recommendation_current`: rebuildable topology-internal discrete recommendation current for context-route and topology-vector use. It ranks enum / token / state / operation-like candidates inside the existing topology. It is not the SQL Attention target and not the meaning authority.
 - `context_hub_feedback_event`: append-only feedback event log for selected / ignored / missing-candidate weight updates.
 
 ## Logs model boundary
@@ -60,7 +69,7 @@ The DB schema above is an implemented projection / signal surface. It is not the
 
 - topology meaning remains in registry tensor continuity, hub-attractor continuity, relation bindings, jsonb/promoted-column observations, and logs,
 - caches and recommendation-current rows are rebuildable projections,
-- `context_hub_recommendation_current` is the topology-side recommendation current, not SQL Attention itself,
+- `context_hub_recommendation_current` is the topology-internal discrete recommendation current, not SQL Attention itself,
 - runtime policy values must be read from `function_parameters`, not hardcoded,
 - roadmap entries may still be `partial` when runtime wiring, production hardening, or CI coverage remains incomplete.
 
@@ -73,11 +82,11 @@ The DB schema above is an implemented projection / signal surface. It is not the
 - not only a recommendation UI,
 - not merely a ranking table,
 - not completed by aggregate counts alone,
-- not completed by topology-side recommendation current alone.
+- not completed by topology-internal discrete recommendation current alone.
 
 ## Status
 
-- **Implemented now:** SQL-backed context-route recommendation tables, topology-side recommendation current, append-only feedback events, and policy-driven weighting surfaces.
+- **Implemented now:** SQL-backed context-route recommendation tables, topology-internal discrete recommendation current, append-only feedback events, and policy-driven weighting surfaces.
 - **Design-guarded:** SQL Attention interpretation as physical-current and hub-current observation with hub-attractor evidence persistence.
 - **Partial outside SQL:** runtime completion, production hardening, hub-current / attention-evidence wiring, and CI coverage follow the roadmap / implementation registry.
 - **Future:** planned expansions explicitly marked in SSOT docs.
