@@ -217,7 +217,7 @@ ON CONFLICT (hub_id) DO NOTHING;
 -- entity_jsonb shape matches demo_entity_schema fields.
 -- Changing a field value here changes what the schema_resolve step surfaces.
 -- ---------------------------------------------------------------------------
-INSERT INTO entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id)
+INSERT INTO topologys.entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id)
 VALUES
     (
         '00000000-0000-0000-0000-000000000041',
