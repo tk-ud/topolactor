@@ -315,12 +315,26 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_logs_attention_persistence:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.attention evidence persistence lane is not yet implemented.
+      public_summary: request-based append-only write boundary is connected; production l2_norm/vector_json/evidence_json filling remains incomplete.
+      files:
+        - backend/repository/SqlAttentionLogsRepository.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/schema/SqlAttentionContracts.cs
+        - backend/scheduler/SqlAttentionScheduler.cs
+      evidence:
+        ci:
+          - backend-tests
+          - runtime-semantics
+          - unified-test-gate
+          - Structure Check
+      completion_condition:
+        - logs_attention_persists_production_l2_norm_vector_json_evidence_json
+        - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-4 logs.attention evidence persistence not implemented
+        - SQLA-4 logs.attention production evidence filling not completed
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
