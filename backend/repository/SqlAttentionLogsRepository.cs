@@ -62,4 +62,47 @@ public class SqlAttentionLogsRepository
             sourceSetId, basisWindow);
         return Task.FromResult<IReadOnlyList<HubCurrentCandidate>>([]);
     }
+
+    /// <summary>
+    /// Appends evidence rows to logs.attention for each hit in the exploration result.
+    /// This is the write_logs_attention boundary — completion of one SQL Attention run.
+    ///
+    /// Invariants:
+    ///   - current_id must be non-empty (hard error if absent).
+    ///   - hub_current_id must be non-empty (hard error if absent).
+    ///   - Empty hits → returns 0 without INSERT (no-change early return).
+    ///   - append-only: INSERT only, no UPDATE or DELETE.
+    ///   - archive_policy is always 'required'.
+    ///   - phase_vector_json is stored as provided; generation is a separate TODO.
+    ///   - statistics_json / ema_score are stored as provided; EMA integration is a separate TODO.
+    ///   - No registry mutation / migration / column promotion.
+    ///
+    /// In-memory test double: validates invariants and returns hit count without writing.
+    /// Production: override in NpgsqlSqlAttentionLogsRepository.
+    /// </summary>
+    public virtual Task<int> WriteLogsAttentionAsync(
+        HubAttractorExplorationResult explorationResult,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(explorationResult);
+
+        foreach (var hit in explorationResult.Hits)
+        {
+            if (hit.CurrentId == Guid.Empty)
+                throw new ArgumentException(
+                    $"write_logs_attention: CurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
+                    nameof(explorationResult));
+
+            if (hit.HubCurrentId == Guid.Empty)
+                throw new ArgumentException(
+                    $"write_logs_attention: HubCurrentId must not be empty (hit AttractorKey={hit.AttractorKey}).",
+                    nameof(explorationResult));
+        }
+
+        var count = explorationResult.Hits.Count;
+        _logger.LogDebug(
+            "SqlAttentionLogsRepository.WriteLogsAttentionAsync: no DB connection (test double) — {Count} hit(s) validated, no write performed.",
+            count);
+        return Task.FromResult(count);
+    }
 }

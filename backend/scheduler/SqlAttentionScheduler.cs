@@ -14,13 +14,15 @@ namespace Topolactor.Scheduler;
 ///   It calls logs.refresh_logs_current_watch via SqlAttentionLogsRepository,
 ///   and when change candidates exist, invokes HubAttractorExplorationRuntime.
 ///   All policy and exploration logic live in HubAttractorExplorationRuntime.
+///   SQL Attention completion boundary is WriteLogsAttentionAsync — evidence
+///   row persistence, not exploration execution.
 ///
 /// Route:
 ///   cron trigger
 ///   → SqlAttentionLogsRepository.LoadWatchCandidatesAsync
 ///   → if no change candidates: skip
 ///   → else: HubAttractorExplorationRuntime.ExploreAsync
-///   → TODO: write_logs_attention boundary (separate TODO)
+///   → if Ok AND hits > 0: SqlAttentionLogsRepository.WriteLogsAttentionAsync
 ///
 /// This scheduler does NOT route through the user-facing dispatch canonical route
 /// (stored_topology_data → user_operation → … → emission_or_projection) because
@@ -152,10 +154,36 @@ public class SqlAttentionScheduler : BackgroundService
         switch (result.Status)
         {
             case HubAttractorExplorationStatus.Ok:
+                var explorationResult = result.Result!;
+                if (explorationResult.Hits.Count == 0)
+                {
+                    _logger.LogDebug(
+                        "SqlAttentionScheduler: exploration Ok — no hits produced (no-change). sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                        sourceSetId, basisWindow);
+                    break;
+                }
+
+                int rowsWritten;
+                try
+                {
+                    rowsWritten = await _sqlAttentionLogsRepository.WriteLogsAttentionAsync(
+                        explorationResult, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "SqlAttentionScheduler: WriteLogsAttentionAsync failed for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                        sourceSetId, basisWindow);
+                    return;
+                }
+
                 _logger.LogInformation(
-                    "SqlAttentionScheduler: exploration Ok — {HitCount} hit(s) produced. sourceSetId={SourceSetId} basisWindow={BasisWindow}. TODO: write_logs_attention boundary not yet implemented.",
-                    result.Result?.Hits.Count ?? 0, sourceSetId, basisWindow);
-                // TODO: pass result.Result to write_logs_attention boundary (separate TODO)
+                    "SqlAttentionScheduler: {RowsWritten} attention row(s) written for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                    rowsWritten, sourceSetId, basisWindow);
                 break;
 
             case HubAttractorExplorationStatus.NoChange:

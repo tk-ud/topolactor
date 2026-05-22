@@ -98,3 +98,34 @@ public record HubAttractorExplorationRunResult(
     HubAttractorExplorationResult? Result,
     DateTimeOffset ExecutedAt
 );
+
+/// <summary>
+/// Input to the write_logs_attention boundary.
+/// Carries all evidence fields for one logs.attention INSERT.
+/// current_id and hub_current_id are required — absence is a hard error.
+///
+/// Evidence layer separation (SSOT):
+///   statistics layer  : statistics_json, ema_score
+///   attention layer   : l2_norm, vector_json, neighbor_score
+///   phase-attention   : phase_vector_json (stored; generation is a separate TODO)
+/// </summary>
+public record LogsAttentionWriteRequest(
+    Guid CurrentId,
+    Guid HubCurrentId,
+    string SourceSetId,
+    Guid? HubId,
+    string AttractorKey,
+    Guid? HubRelationId,
+    Guid? RelationRegistryId,
+    double NeighborScore,
+    int HitRank,
+    string ScoreBand,
+    string PermutationKey,
+    double L2Norm,
+    string VectorJson,
+    string PhaseVectorJson,
+    string StatisticsJson,
+    double? EmaScore,
+    string EvidenceJson,
+    string ArchivePolicy
+);

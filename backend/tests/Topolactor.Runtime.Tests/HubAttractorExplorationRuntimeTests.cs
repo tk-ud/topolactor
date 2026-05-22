@@ -34,6 +34,8 @@ internal sealed class StubSqlAttentionLogsRepository(
     : SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "dummy")
 {
     public int HubCurrentCallCount { get; private set; }
+    public int WriteLogsAttentionCallCount { get; private set; }
+    public HubAttractorExplorationResult? LastWriteResult { get; private set; }
 
     public override Task<IReadOnlyList<WatchChangeCandidate>> LoadWatchCandidatesAsync(
         string sourceSetId,
@@ -48,6 +50,15 @@ internal sealed class StubSqlAttentionLogsRepository(
     {
         HubCurrentCallCount++;
         return Task.FromResult(hubCurrentCandidates);
+    }
+
+    public override Task<int> WriteLogsAttentionAsync(
+        HubAttractorExplorationResult explorationResult,
+        CancellationToken ct = default)
+    {
+        WriteLogsAttentionCallCount++;
+        LastWriteResult = explorationResult;
+        return base.WriteLogsAttentionAsync(explorationResult, ct);
     }
 }
 
@@ -724,6 +735,278 @@ public class SqlAttentionScheduler_RunOnceTests
         finally
         {
             Environment.SetEnvironmentVariable(envKey, null);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — write_logs_attention boundary (SqlAttentionLogsRepository base)
+// ---------------------------------------------------------------------------
+
+public class WriteLogsAttention_BaseRepository_Tests
+{
+    private static SqlAttentionLogsRepository CreateBaseRepo() =>
+        new StubSqlAttentionLogsRepository([], []);
+
+    [Fact]
+    public async Task WriteLogsAttentionAsync_EmptyHits_ReturnsZero()
+    {
+        var repo = CreateBaseRepo();
+        var result = new HubAttractorExplorationResult("src", "7d", []);
+        var count = await repo.WriteLogsAttentionAsync(result);
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task WriteLogsAttentionAsync_WithHits_ReturnsHitCount()
+    {
+        var repo = CreateBaseRepo();
+        var currentId = Guid.NewGuid();
+        var hubCurrentId = Guid.NewGuid();
+        var hit = new HubAttractorExplorationHit(
+            CurrentId: currentId,
+            HubCurrentId: hubCurrentId,
+            SourceSetId: "src",
+            HubId: Guid.NewGuid(),
+            AttractorKey: "att_a",
+            HubRelationId: null,
+            RelationRegistryId: null,
+            NeighborScore: 0.5,
+            HitRank: 1,
+            ScoreBand: "evidence_only",
+            PermutationKey: "default");
+        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
+        var count = await repo.WriteLogsAttentionAsync(result);
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    public async Task WriteLogsAttentionAsync_CurrentIdEmpty_Throws()
+    {
+        var repo = CreateBaseRepo();
+        var hit = new HubAttractorExplorationHit(
+            CurrentId: Guid.Empty,
+            HubCurrentId: Guid.NewGuid(),
+            SourceSetId: "src",
+            HubId: null,
+            AttractorKey: "att_a",
+            HubRelationId: null,
+            RelationRegistryId: null,
+            NeighborScore: 0.5,
+            HitRank: 1,
+            ScoreBand: "evidence_only",
+            PermutationKey: "default");
+        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(result));
+    }
+
+    [Fact]
+    public async Task WriteLogsAttentionAsync_HubCurrentIdEmpty_Throws()
+    {
+        var repo = CreateBaseRepo();
+        var hit = new HubAttractorExplorationHit(
+            CurrentId: Guid.NewGuid(),
+            HubCurrentId: Guid.Empty,
+            SourceSetId: "src",
+            HubId: null,
+            AttractorKey: "att_a",
+            HubRelationId: null,
+            RelationRegistryId: null,
+            NeighborScore: 0.5,
+            HitRank: 1,
+            ScoreBand: "evidence_only",
+            PermutationKey: "default");
+        var result = new HubAttractorExplorationResult("src", "7d", [hit]);
+        await Assert.ThrowsAsync<ArgumentException>(() => repo.WriteLogsAttentionAsync(result));
+    }
+
+    [Fact]
+    public void WriteLogsAttentionAsync_RepositoryHasWriteMethod()
+    {
+        // Structural check: SqlAttentionLogsRepository exposes WriteLogsAttentionAsync.
+        var method = typeof(SqlAttentionLogsRepository).GetMethod("WriteLogsAttentionAsync");
+        Assert.NotNull(method);
+    }
+
+    [Fact]
+    public void LogsAttentionWriteRequest_HasAllEvidenceLayerFields()
+    {
+        // Structural check: LogsAttentionWriteRequest carries all SSOT evidence fields.
+        var t = typeof(LogsAttentionWriteRequest);
+        Assert.NotNull(t.GetProperty("CurrentId"));
+        Assert.NotNull(t.GetProperty("HubCurrentId"));
+        Assert.NotNull(t.GetProperty("StatisticsJson"));
+        Assert.NotNull(t.GetProperty("EmaScore"));
+        Assert.NotNull(t.GetProperty("L2Norm"));
+        Assert.NotNull(t.GetProperty("VectorJson"));
+        Assert.NotNull(t.GetProperty("NeighborScore"));
+        Assert.NotNull(t.GetProperty("PhaseVectorJson"));
+        Assert.NotNull(t.GetProperty("EvidenceJson"));
+        Assert.NotNull(t.GetProperty("ArchivePolicy"));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — write_logs_attention scheduler integration
+// ---------------------------------------------------------------------------
+
+public class SqlAttentionScheduler_WriteLogsAttention_Tests
+{
+    private static SqlAttentionScheduler CreateScheduler(StubSqlAttentionLogsRepository logsRepo) =>
+        new(
+            NullLogger<SqlAttentionScheduler>.Instance,
+            logsRepo,
+            new HubAttractorExplorationRuntime(
+                NullLogger<HubAttractorExplorationRuntime>.Instance,
+                new StubExplorationPolicyTopologyRepository(ExplorationTestFactory.ValidPolicyJson()),
+                logsRepo));
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_CallsWriteLogsAttention()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate()],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            Assert.Equal(1, logsRepo.WriteLogsAttentionCallCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithNoHits_DoesNotCallWriteLogsAttention()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            // No hub current candidates → exploration Ok but empty hits
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate()],
+                []);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_NoChange_DoesNotCallWriteLogsAttention()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.NoChangeCandidate()],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_WriteResultCarriesHits()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate()],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            Assert.NotNull(logsRepo.LastWriteResult);
+            Assert.NotEmpty(logsRepo.LastWriteResult!.Hits);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_HitHasNonEmptyCurrentId()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate()],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            foreach (var hit in logsRepo.LastWriteResult!.Hits)
+                Assert.NotEqual(Guid.Empty, hit.CurrentId);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_EvidenceMeaningsNotCollapsed()
+    {
+        // Structural check: hit does not carry a single collapsed score field.
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate()],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            var hitType = typeof(HubAttractorExplorationHit);
+            // No collapsed single score field — evidence layers stay separate
+            Assert.Null(hitType.GetProperty("CollapsedScore"));
+            Assert.Null(hitType.GetProperty("SingleScore"));
+            // Phase vector excluded from exploration hit (generation is separate TODO)
+            Assert.Null(hitType.GetProperty("PhaseVectorJson"));
+            // Statistics excluded from exploration hit (integration is separate TODO)
+            Assert.Null(hitType.GetProperty("StatisticsJson"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
         }
     }
 }

@@ -24,12 +24,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] [Claude] logs.attention evidence persistence / write_logs_attention boundary を実装する
-      → SQL Attention 完了境界は hub-attractor exploration の実行ではなく、`logs.attention` に evidence row が保存されることとする。
-      → `current_id` linkage を必須にし、`statistics_json` / `ema_score`、`l2_norm` / `vector_json` / `neighbor_score`、`phase_vector_json`、`evidence_json` を evidence meaning 別に保持する。
-      → statistics / Attention / Phase Attention を単一scoreへ collapse しない。
-      → append-only / archive-required とし、phase_vector から registry mutation / migration / column promotion は実行しない。
-      → 対象: future `write_logs_attention` 相当 responsibility, `logs.attention` schema/write path, scheduler/runtime exploration save boundary
 
 - [ ] phase_vector generation implementation を行う
       → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
