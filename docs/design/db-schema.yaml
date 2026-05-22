@@ -53,7 +53,7 @@ db_schema:
 
 
   conceptual_namespace_reading:
-    note: physical_schema_names_remain_as_is_for_now_no_ddl_rename_in_this_change
+    note: physical_schema_names_follow_canonical_contract_until_explicit_schema_contract_update
     logical_namespaces:
       hub_registry: hub_or_relation_composition_definitions
       topology_registry: topology_semantic_space_definitions
@@ -61,19 +61,18 @@ db_schema:
       hubs: relation_maps_over_defined_ids_fk_and_reference_arrays
       ui_relation: parent_child_relation_map_parent_data_type_or_physical_table_to_child_package_payload_bundles
       logs: physical_time_axis_observations
-    future_todo: consider_physical_schema_split_or_rename_without_changing_current_runtime_contract
 
 
-  current_projection_namespace_roadmap:
-    status: future_migration_task_no_runtime_or_ddl_change_in_this_pr
+  current_projection_namespace_contract:
+    role: namespace_design_boundary
     intent:
       logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
       current_namespace: rebuildable_current_relation_projections
-    candidate_mapping:
+    canonical_mapping:
       logs.current: current.table_relation_or_current.physical_relation
       logs.hub_current: current.hub_relation
-      optional_future: current.ui_relation
-      logs.attention: keep_in_logs_as_append_only_evidence_or_rename_to_logs.attention_evidence_later
+      optional_ui_projection: current.ui_relation
+      logs.attention: append_only_evidence_relation
 
   principles:
     - sql_files_are_implementation_not_ssot

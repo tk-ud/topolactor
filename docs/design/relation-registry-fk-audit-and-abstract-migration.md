@@ -108,7 +108,7 @@ No silent fallback is allowed for relation reference integrity or migration deci
 - No DB schema alteration.
 - No FK auto-application logic.
 
-## Remaining TODOs
+## Runtime Contract Work Items
 
 - Implement C# relation_registry FK CI runtime:
   - `RelationRegistryFkAuditRuntime`

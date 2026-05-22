@@ -9,14 +9,14 @@
 --
 -- DETERMINISTIC IDs:
 --   The four topology nodes below use fixed UUIDs so the backend in-memory
---   skeleton and the DB seed reference the same IDs without coordination:
+--   runtime and the DB seed reference the same IDs without coordination:
 --
 --     default_package:             00000000-0000-0000-0000-000000000001
 --     default_schema:              00000000-0000-0000-0000-000000000002
 --     default_projection_component:00000000-0000-0000-0000-000000000003
 --     structure_map (default):     00000000-0000-0000-0000-000000000004
 --
---   These IDs are skeleton-only. They are not meaningful outside this seed.
+--   These IDs are seed-contract identifiers. They are not meaningful outside this seed.
 --
 -- HOW TO RUN (in order):
 --   psql -d <database> -f db/schema.sql

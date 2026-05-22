@@ -888,15 +888,14 @@ registrar_wide_topology_attention:
         Must not be mixed with edit diff log.
     edit_diff_log:
       role: value_change_observation_and_query_source
-      status: not_yet_implemented
-      planned_tables:
+      required_tables:
         - topology_edit_log
         - entity_edit_log
       note: >
-        Records value-level edit diffs (before/after). Will become a Query generation
-        source for Topology Attention when implemented.
+        Records value-level edit diffs (before/after). Is a Query generation
+        source for Topology Attention when topology_edit_log/entity_edit_log are present
+        under the declared schema contract.
         Must not be mixed with state transition log.
-        Do not treat as implemented until topology_edit_log / entity_edit_log exist.
   boundary:
     not_limited_to:
       - screen_transition
@@ -908,5 +907,5 @@ registrar_wide_topology_attention:
   prohibited:
     - "defining Topology Attention scope as screen_transition or operation_recommendation only"
     - "mixing state_transition_log and edit_diff_log in the same table"
-    - "describing edit diff as a query source before topology_edit_log is implemented"
+    - "describing edit diff as a query source without topology_edit_log/entity_edit_log schema contract"
     - "treating Registrar as a static lookup table instead of Key-Value Memory"

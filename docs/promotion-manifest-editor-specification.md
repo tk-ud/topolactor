@@ -247,15 +247,15 @@ The following are explicitly out of scope for this specification:
 
 No implementation files are added by this specification.
 
-## 13. Future Implementation Issues
+## 13. Implementation Work Items
 
 After this specification is accepted, the following implementation issues may follow:
 
 - Promotion manifest draft schema / DB tables
 - Promotion manifest validation service
-- Promotion manifest editor route skeleton
+- Promotion manifest editor route boundary
 - Promotion preview projection
 - Promotion activation operation
 - Disclosure preview component
 
-These are future issues. They are not implemented here.
+These are implementation work items tracked outside this static specification.

@@ -91,6 +91,29 @@ for f in "$SSOT_MD" "$TODO_FILE"; do
   [ -f "$f" ] || { echo "FAIL: missing file $f" >&2; exit 1; }
 done
 
+for ssot_file in "$SSOT_YAML" "$SSOT_MD"; do
+  if rg -n -i \
+    -e "out_of_scope_not_implemented" \
+    -e "future_migration_task" \
+    -e "this[ _-]?pr|this PR" \
+    -e "not implemented|already implemented|current implementation" \
+    -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
+    -e "\\bTODO\\b|known_gap|roadmap" \
+    "$ssot_file" >/dev/null; then
+    echo "FAIL: progress/status vocabulary detected in SSOT file: $ssot_file" >&2
+    rg -n -i \
+      -e "out_of_scope_not_implemented" \
+      -e "future_migration_task" \
+      -e "this[ _-]?pr|this PR" \
+      -e "not implemented|already implemented|current implementation" \
+      -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
+      -e "\\bTODO\\b|known_gap|roadmap" \
+      "$ssot_file" >&2
+    exit 1
+  fi
+done
+echo "OK: SQL Attention SSOT files contain no progress/status vocabulary"
+
 grep -qF "logs.attention production evidence persistence を実装する" "$TODO_FILE" || { echo "FAIL: TODO missing logs.attention production evidence persistence item" >&2; exit 1; }
 grep -qF "placeholder であり production evidence ではない" "$TODO_FILE" || { echo "FAIL: TODO must explicitly state placeholder boundary is not production evidence" >&2; exit 1; }
 

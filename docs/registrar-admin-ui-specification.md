@@ -330,8 +330,8 @@ The Seed Runtime is NOT:
 - **validate**: structural validation of seed.json (version, runtimes array, required fields)
 - **preview**: dry-run showing what import would declare (no DB write)
 - **import**: validate + explicit apply through canonical runtime route
-  - Current status: skeleton — validates structure and counts runtimes
-  - Full canonical import requires Gap-1 (manifest-driven routing) resolution
+  - Current boundary: validates structure and counts runtimes
+  - Full canonical import requires manifest-driven routing contract resolution
   - Import failure is explicit (fail-close). No silent fallback.
 
 ### Seed failure handling requirements
@@ -360,13 +360,13 @@ The following are explicitly out of scope for this specification:
 - production admin console
 - promotion manifest editor implementation
 
-## 10. Future Implementation Issues
+## 10. Implementation Work Items
 
 The following implementation work should follow after this specification is accepted:
 
 - Registrar draft schema / DB tables
 - Registrar validation service
-- Registrar admin route skeleton
+- Registrar admin route boundary
 - Registrar preview projection
 - Registrar promotion operation
 

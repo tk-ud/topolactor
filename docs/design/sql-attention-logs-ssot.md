@@ -1,6 +1,6 @@
 # SQL Attention Logs SSOT
 
-## 1. Status
+## 1. Role
 
 This markdown is the semantic SSOT for SQL Attention logs, including l2 norm observation meaning, norm-level route meaning, and physical table pressure meaning.
 
@@ -87,23 +87,41 @@ Phase semantics follow:
 
 `phase_vector` is evidence/candidate data and is not automatic mutation.
 
-## 9. Completion Boundary
+## 9. Glossary
 
-SQL Attention completion means attention evidence has been produced and stored.
+- `logs.diff`:
+  - physical mutation pressure source on time axis.
+- `logs.current`:
+  - current basis / recalculable pressure projection.
+  - not the SQL Attention conclusion itself.
+- `logs.hub_current`:
+  - hub-side attractor current / exploration target cache.
+  - not topology mutation surface.
+- `logs.attention`:
+  - append-only evidence row surface.
+  - statistics / attention / phase-attention are not collapsed.
+- `write boundary`:
+  - boundary that appends evidence rows to `logs.attention`.
+- `production evidence filling`:
+  - writes measured values such as `l2_norm`, `vector_json`, `evidence_json`, `neighbor_score`.
+- `phase_vector`:
+  - auxiliary evidence transform derived from main vector evidence.
+- `topology projection recommendation`:
+  - consumer projection surface derived from evidence; not SQL Attention body.
 
-- Aggregation/current refresh alone is not full SQL Attention completion.
-- Phase vector generation does not mean adopted topology state.
-- Adoption/migration is a separate implementation path.
+## 10. Write/Mutation Boundary
 
-## 10. Target Boundary
+- `logs.attention` is append-only evidence storage.
+- Refresh and watch boundaries are current-basis and level-detection semantics.
+- Topology/registry mutation is outside SQL Attention evidence writing route.
 
-Target boundary:
+## 11. Target Boundary
 
 - Primary target: `hubs.*` Tensor / attractor semantics.
 - Not primary target: direct `topologys.*` / registry search as SQL Attention body.
 - `topologys.*` and registry are projection/support layers consuming evidence.
 
-## 11. Non-goals
+## 12. Non-goals
 
 - Reproducing Transformer QK Attention in SQL.
 - Treating Phase Attention as primary exploration.
