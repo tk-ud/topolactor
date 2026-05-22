@@ -479,7 +479,7 @@ public class AdminRuntime
             new SeedImportResponseDto(
                 true,
                 result.ValidatedRuntimeCount,
-                "Seed validated. Canonical DB write not yet implemented.",
+                "Seed import completed via canonical runtime route.",
                 [])), null);
     }
 }
