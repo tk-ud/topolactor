@@ -404,7 +404,7 @@ system_roadmap_ssot:
       status: skeleton
       production_ready: false
       milestone: M2_manifest_runtime
-      public_summary: Manifest table exists, but contract completeness for active routing is not yet proven.
+      public_summary: Manifest table exists, but manifest contract completeness and repository/runtime test coverage for active routing are not yet proven.
       files:
         - db/manifest_tables.sql
         - db/init.sql
@@ -415,8 +415,6 @@ system_roadmap_ssot:
         - manifest_storage_supports_role_definition_route_definition_dispatcher_mapping_runtime_mapping
         - active_manifest_resolution_can_be_executed_by_manifest_dispatcher
         - manifest_contract_is_covered_by_repository_or_runtime_tests
-      known_gap_ref:
-        - Gap-1 manifest_dispatcher full implementation
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -598,7 +596,7 @@ system_roadmap_ssot:
         docker-compose mounts topolactor_seed_storage volume at /storage.
         Admin UI at /admin/seed provides all 5 operations.
         Import is a skeleton: validates structure and counts runtimes.
-        Full canonical import through manifest-driven routing requires Gap-1 resolution.
+        Full canonical import requires SeedRuntime.ImportAsync canonical DB write implementation.
         Import failure is explicit (fail-close). No silent fallback.
       files:
         - backend/repository/SeedJsonRepository.cs
@@ -615,7 +613,7 @@ system_roadmap_ssot:
         - import_failure_is_explicit_and_fail_close
         - docker_compose_mounts_storage_volume
       known_gap_ref:
-        - Issue #84 partial (import canonical route requires Gap-1 resolution)
+        - Issue #84 partial (import canonical DB write not completed)
 
     frontend_ui_component_system:
       status: partial

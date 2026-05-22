@@ -18,13 +18,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [x] schema namespace migration (hubs/topologys/logs) を完了
-      → DB table を意味層 namespace に再分類し、SQL Attention の logs.* 境界を固定した。
-- [x] SQL Attention target boundary correction を完了
-      → SQL Attention target を hubs Tensor/attractor に固定し、topologys/registry 直接探索主語を除去した。
-- [x] registry_current 誤主語の除去を完了
-      → logs.registry_current を logs.hub_current に置換し、attention証跡を current_id + hub_current_id 接続へ統一した。
-
 - [ ] refresh logs.current / l2 norm watch function implementation を実装する
       → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
 
@@ -52,22 +45,6 @@ SSOT参照必読:
 
 ### Backend
 
-- [x] [Claude] Gap-1a 完了: `target_layer_action_destination_selection` の ManifestDispatcher への完全移管 (routing boundary)
-      → ManifestDispatcher に manifest repository が設定されている場合、TargetDispatchOverride は呼ばれず、manifest-driven routing が唯一の destination 決定経路になった。
-      → TargetDispatchOverride は manifest repository が null の場合 (dev/demo bypass) にのみ使用される。
-      → 完了条件 target_layer_action_destination_selection_is_moved_to_manifest_dispatcher を満たすテスト (ManifestDispatcherManifestDrivenTests) を追加済み。
-      → seed_empty.sql に admin 系 manifest 11件 (IDs 50-5a) を追加済み (admin routes の MANIFEST_NOT_FOUND を解消)。
-
-- [x] [Claude] Gap-1b 完了: `runtime_destination` による実行先選択の実装
-      → ManifestDispatcher は IReadOnlyDictionary<string, IDispatchableRuntime> ハンドラ辞書を使い runtime_destination から実行先を選択する。
-      → topology_transform_runtime → RuntimeExecutor (canonical topology pipeline)。
-      → admin_runtime → AdminRuntimeDispatchAdapter → AdminRuntime.ExecuteDataAsync (実 production ハンドラ、stub 不使用)。
-      → seed_empty.sql admin manifests (IDs 50-5a) の runtime_destination を admin_runtime に変更。
-      → FakeDispatchableRuntime は test fixture のみ (Program.cs に出現しない)。
-      → selection boundary は ManifestDispatcherManifestDrivenTests の sentinel assert で検証。
-      → docs/system-roadmap.yaml: backend.manifest_dispatcher, backend.runtime_executor = implemented。
-      → docs/design/runtime-orchestration-ssot.yaml: test_runtime_fixture_policy 追記、admin_runtime を backend_dispatchable_kinds に追加。
-
 - [ ] [Claude] Gap-7 残: SSE E2E test の live DB 経路と scheduler routing を実装する (Issue #123)
       → DbNotifyListener.HandleNotificationPayload の unit test 追加済み (live DB 不要, DbNotifyListenerPayloadTests)。
       → 残: DbNotifyListener → pg_notify → broadcaster の live DB 経路テスト (live DB 必要)。
@@ -84,15 +61,15 @@ SSOT参照必読:
 
 - [ ] [Claude] Gap-15 残: output lane full connection / live verification の実装とゲート接続
       → 残: `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` / db_notify output lane の live 実行検証を Runtime Environment Test Gate と接続する。
-      → Gap-14 と分離し、timeline alignment 完了後の output lane 接続・検証ギャップとして追跡する。
+      → Gap-14 と分離し、timeline alignment 完了後の output lane 接続・検証ギャップとして追跡する唯一の管理ポイントとする。
       → 対象: `.agent/tests/check-runtime-environment.sh`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-15, milestones.M3_unified_timeline_and_output_lanes.blocking_gaps: Gap-15
 
 ## Seed Import/Export Runtime (Issue #84)
 
-- [ ] [Claude] Seed import を完全実装する (Gap-1 解消済み)
-      → save / load / validate / preview は実装済み。import は skeleton (Gap-1 依存だったが解消済み)。
-      → ImportAsync を manifest-driven route 経由で完全実装する。
+- [ ] [Claude] SeedRuntime.ImportAsync の canonical DB write 実装を完了する
+      → save / load / validate / preview は実装済み。残は import の skeleton 解消。
+      → SeedRuntime.ImportAsync を canonical route で DB write まで到達する実装にする。
       → 完了条件: seed_import_export_runtime status=implemented (docs/system-roadmap.yaml)
       → 対象: `backend/runtime/SeedRuntime.cs` (ImportAsync の skeleton 部分)、`backend/runtime/ManifestDispatcher.cs`
 
@@ -113,10 +90,3 @@ SSOT参照必読:
       → 前提: Issue #86 component DB 登録完了後。
       → 完了条件: admin_visual_layout_builder status=implemented (docs/system-roadmap.yaml)
       → 対象: `db/ui_topology_tables.sql` (layout token schema)、`frontend/islands/` (drag/drop UI island)、`docs/registrar-admin-ui-specification.md`
-
-## Runtime Environment Test Gate
-
-- [ ] [Claude] Runtime Environment Test Gate の未カバー残タスクを実装する
-      → 現在の gate で `/auth/login → /dispatch` を含む live API E2E、env生成、backend healthcheck、seed storage volume 検証は実装済み。
-      → 残タスクは対象外として分離: `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` / db_notify output lane の live 実行検証。
-      → 対象: `.agent/tests/check-runtime-environment.sh`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
