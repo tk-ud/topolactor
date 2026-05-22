@@ -18,9 +18,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] refresh logs.current / l2 norm watch function implementation を実装する
-      → top3 norm-level watch、membership/order/level/delta 変動検知、threshold 解決（Manifest / function_parameters / policy table）と return/exploration-candidate 分岐を実装する。policy値の magic number 化は禁止。
-
 - [ ] scheduler/runtime hub-attractor exploration を実装する
       → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、hub-attractor topK を実装し、evidence 保存は独立 TODO（write_logs_attention 境界）を参照する。
 
