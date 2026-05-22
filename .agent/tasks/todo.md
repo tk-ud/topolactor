@@ -74,12 +74,6 @@ SSOT参照必読:
       → 対象: `.agent/tests/check-runtime-environment.sh`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
       → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-15, milestones.M3_unified_timeline_and_output_lanes.blocking_gaps: Gap-15
 
-## Seed Import/Export Runtime (Issue #84)
-
-- [ ] [Codex] SeedRuntime.ImportAsync canonical DB write confirmation contract を実装する
-      → 現在 import は apply boundary を通すが、result contract と backend test fixture の拡充（Inserted/AlreadyApplied/Conflict/Failed の網羅検証）が未完了。
-      → seed import apply boundary の canonical write success semantics と test fixture を整備する。
-      → 対象: `backend/runtime/SeedRuntime.cs`, `backend/runtime/AdminRuntime.cs`, `backend/tests/Topolactor.Runtime.Tests/*`
 
 ## Frontend UI Component System (Issue #86)
 
