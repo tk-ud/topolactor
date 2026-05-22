@@ -23,7 +23,7 @@
 -- anchored to a relation_registry entry and carries a state reference.
 -- Hubs are populated by the attractor_resolve step in the canonical flow.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS hubs (
+CREATE TABLE IF NOT EXISTS hubs.hubs (
     hub_id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     relation_registry_id  UUID,                          -- which relation definition this hub belongs to
     state_id              UUID,                          -- current state from state_registry
@@ -31,15 +31,15 @@ CREATE TABLE IF NOT EXISTS hubs (
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE hubs IS
-    'Converged entity data. Hubs are resolved grouping points in the topology '
+COMMENT ON TABLE hubs.hubs IS
+    'Converged entity data. Hubs are Tensor/attractor/collapse points resolved in the topology '
     'space, populated during attractor_resolve. Not source-of-truth business data.';
 
-COMMENT ON COLUMN hubs.relation_registry_id IS
+COMMENT ON COLUMN hubs.hubs.relation_registry_id IS
     'References relation_registry.relation_registry_id — the relation definition '
     'this hub is anchored to. FK not enforced here; registry is the authority.';
 
-COMMENT ON COLUMN hubs.state_id IS
+COMMENT ON COLUMN hubs.hubs.state_id IS
     'References state_registry.state_id — the current operational state of this hub.';
 
 
@@ -50,9 +50,9 @@ COMMENT ON COLUMN hubs.state_id IS
 -- converged payload produced by schema_resolve + component_expand.
 -- relation_ids tracks which relation_registry entries this entity participates in.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS entities (
+CREATE TABLE IF NOT EXISTS topologys.entities (
     entity_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    hub_id        UUID        NOT NULL REFERENCES hubs (hub_id) ON DELETE CASCADE,
+    hub_id        UUID        NOT NULL REFERENCES hubs.hubs (hub_id) ON DELETE CASCADE,
     entity_jsonb  JSONB       NOT NULL DEFAULT '{}',     -- converged payload
     relation_ids  UUID[]      NOT NULL DEFAULT '{}',     -- participating relation_registry ids
     state_id      UUID,                                  -- current state from state_registry
@@ -60,30 +60,30 @@ CREATE TABLE IF NOT EXISTS entities (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE entities IS
-    'Converged entity data. Each entity is a resolved data node within a hub, '
+COMMENT ON TABLE topologys.entities IS
+    'Converged entity data. Each entity is a resolved data node within a hub and meaning/projection payload surface, '
     'populated by schema_resolve + component_expand in the canonical flow. '
     'entity_jsonb is the converged projection — not raw business input.';
 
-COMMENT ON COLUMN entities.entity_jsonb IS
+COMMENT ON COLUMN topologys.entities.entity_jsonb IS
     'Converged payload produced by schema_resolve and component_expand steps. '
     'Structure is governed by the schema_registry entry resolved for this entity.';
 
-COMMENT ON COLUMN entities.relation_ids IS
+COMMENT ON COLUMN topologys.entities.relation_ids IS
     'Array of relation_registry_ids this entity participates in. Maintained by '
     'the attractor_resolve step; used for hub linkage and manifest resolution.';
 
 CREATE INDEX IF NOT EXISTS idx_entities_hub_id
-    ON entities (hub_id);
+    ON topologys.entities (hub_id);
 
 CREATE INDEX IF NOT EXISTS idx_entities_state_id
-    ON entities (state_id);
+    ON topologys.entities (state_id);
 
 CREATE INDEX IF NOT EXISTS idx_entities_entity_jsonb
-    ON entities USING GIN (entity_jsonb);
+    ON topologys.entities USING GIN (entity_jsonb);
 
 CREATE INDEX IF NOT EXISTS idx_entities_relation_ids
-    ON entities USING GIN (relation_ids);
+    ON topologys.entities USING GIN (relation_ids);
 
 
 -- ---------------------------------------------------------------------------
@@ -93,28 +93,28 @@ CREATE INDEX IF NOT EXISTS idx_entities_relation_ids
 -- This is part of the topology definition — it configures how hubs connect
 -- through the relation graph, not the converged data itself.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS hub_relations (
+CREATE TABLE IF NOT EXISTS hubs.hub_relations (
     hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    hub_id                UUID        NOT NULL REFERENCES hubs (hub_id) ON DELETE CASCADE,
+    hub_id                UUID        NOT NULL REFERENCES hubs.hubs (hub_id) ON DELETE CASCADE,
     relation_registry_id  UUID,                          -- which relation definition applies
     weight                NUMERIC     NOT NULL DEFAULT 1.0,  -- traversal weight for attractor resolution
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE hub_relations IS
-    'Topology definition table. Configures weighted relation bindings between '
+COMMENT ON TABLE hubs.hub_relations IS
+    'Topology definition table. Configures weighted hub Tensor relation bindings between '
     'hubs and relation_registry entries. Governs attractor resolution traversal '
-    'weights. Distinct from converged entity data.';
+    'weights. Distinct from converged entity data. Not a direct SQL Attention registry-search target.';
 
-COMMENT ON COLUMN hub_relations.weight IS
+COMMENT ON COLUMN hubs.hub_relations.weight IS
     'Traversal weight used during attractor_resolve. Higher weight increases '
     'priority of this relation binding when resolving structure_maps.';
 
 CREATE INDEX IF NOT EXISTS idx_hub_relations_hub_id
-    ON hub_relations (hub_id);
+    ON hubs.hub_relations (hub_id);
 
 CREATE INDEX IF NOT EXISTS idx_hub_relations_relation_registry_id
-    ON hub_relations (relation_registry_id);
+    ON hubs.hub_relations (relation_registry_id);
 
 
 -- ---------------------------------------------------------------------------
@@ -127,7 +127,7 @@ CREATE INDEX IF NOT EXISTS idx_hub_relations_relation_registry_id
 -- resolved into an emission or projection.
 -- state_policy is a jsonb policy blob that governs state-dependent behavior.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS structure_maps (
+CREATE TABLE IF NOT EXISTS topologys.structure_maps (
     structure_map_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name                  TEXT        NOT NULL,
     attractor_key         TEXT        NOT NULL,           -- key matched during attractor_resolve
@@ -141,42 +141,42 @@ CREATE TABLE IF NOT EXISTS structure_maps (
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE structure_maps IS
+COMMENT ON TABLE topologys.structure_maps IS
     'Topology definition table. Binds attractor_keys to resolution chains '
     '(package → schema → components). The canonical flow traverses structure_maps '
     'to convert operation vectors into emissions or projections. '
     'This is topology definition, not converged entity data.';
 
-COMMENT ON COLUMN structure_maps.attractor_key IS
+COMMENT ON COLUMN topologys.structure_maps.attractor_key IS
     'The key matched during the attractor_resolve step. Should correspond to '
     'entries in the relation_registry or a domain-defined attractor namespace.';
 
-COMMENT ON COLUMN structure_maps.state_policy IS
+COMMENT ON COLUMN topologys.structure_maps.state_policy IS
     'JSONB policy blob. Encodes state-conditional resolution rules, e.g. '
     'which schema_id applies under a given state_id, or component overrides.';
 
-COMMENT ON COLUMN structure_maps.component_ids IS
+COMMENT ON COLUMN topologys.structure_maps.component_ids IS
     'Ordered array of component_registry ids to expand during component_expand. '
     'Order determines expansion sequence in the canonical flow.';
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_attractor_key
-    ON structure_maps (attractor_key);
+    ON topologys.structure_maps (attractor_key);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_package_id
-    ON structure_maps (package_id);
+    ON topologys.structure_maps (package_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_schema_id
-    ON structure_maps (schema_id);
+    ON topologys.structure_maps (schema_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_relation_registry_id
-    ON structure_maps (relation_registry_id);
+    ON topologys.structure_maps (relation_registry_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_active
-    ON structure_maps (active)
+    ON topologys.structure_maps (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
-    ON structure_maps USING GIN (component_ids);
+    ON topologys.structure_maps USING GIN (component_ids);
 
 -- ---------------------------------------------------------------------------
 -- topology_edit_log
@@ -185,7 +185,7 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
 -- Distinct from demo_state_transitions (which records state machine transitions).
 -- Used for runtime audit, recommendation feedback, and persistence tracing.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS topology_edit_log (
+CREATE TABLE IF NOT EXISTS topologys.topology_edit_log (
     log_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     target_table TEXT        NOT NULL,   -- attractor_key or domain scope identifier
     target_id    TEXT,                   -- record primary key being edited (nullable for creates/lists)
@@ -197,7 +197,7 @@ CREATE TABLE IF NOT EXISTS topology_edit_log (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE topology_edit_log IS
+COMMENT ON TABLE topologys.topology_edit_log IS
     'Append-only audit log for topology mutations. Distinct from demo_state_transitions '
     'which records state machine transitions. Each row is immutable once inserted. '
     'Used for runtime audit, recommendation feedback, and persistence tracing. '
@@ -205,25 +205,25 @@ COMMENT ON TABLE topology_edit_log IS
     'is currently an attractor/domain scope identifier, not a physical table identity (tableid). '
     'logs.diff reuse requires explicit physical table identity mapping/column.';
 
-COMMENT ON COLUMN topology_edit_log.target_table IS
+COMMENT ON COLUMN topologys.topology_edit_log.target_table IS
     'Attractor key or domain scope identifier (e.g. default:entity:create). '
     'Not a literal DB table name; identifies the topology operation scope. '
     'Therefore this column does not satisfy logs.diff.tableid (physical table identity) semantics by itself.';
 
-COMMENT ON COLUMN topology_edit_log.diff_json IS
+COMMENT ON COLUMN topologys.topology_edit_log.diff_json IS
     'JSON diff between before_json and after_json. Null when not computed '
     '(e.g. on first-version logging before before-state capture is implemented).';
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_target
-    ON topology_edit_log (target_table, target_id);
+    ON topologys.topology_edit_log (target_table, target_id);
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_created_at
-    ON topology_edit_log (created_at DESC);
+    ON topologys.topology_edit_log (created_at DESC);
 
 
-CREATE TABLE IF NOT EXISTS demo_state_transitions (
+CREATE TABLE IF NOT EXISTS topologys.demo_state_transitions (
     transition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_id UUID NOT NULL REFERENCES entities(entity_id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES topologys.entities(entity_id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     before_state TEXT,
     after_state TEXT,
@@ -233,4 +233,4 @@ CREATE TABLE IF NOT EXISTS demo_state_transitions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
-    ON demo_state_transitions (entity_id, created_at DESC);
+    ON topologys.demo_state_transitions (entity_id, created_at DESC);

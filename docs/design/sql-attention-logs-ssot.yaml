@@ -2,13 +2,65 @@ version: 1
 id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: design_ssot
+postgresql_namespace: logs
+sql_attention_target:
+  target_schema: hubs
+  target_semantics:
+    - tensor
+    - attractor
+    - collapse_point
+  not_target:
+    - topologys
+    - registry
+projection_boundary:
+  attention_hit: hubs
+  projected_meaning_space: topologys
+  topology_recommendation_basis:
+    - statistics
+    - ema
+    - usage_history
+    - trend
+deprecated_or_rejected:
+  - legacy registry exploration wording as SQL Attention target
+physical_schema_status:
+  physical_tables:
+    - logs.current
+    - logs.hub_current
+    - logs.attention
+  non_adopted_table_names:
+    - logs.table_current
+    - logs.table_attention
+  initial_implementation: hub_attractor_target_aware_generic_schema
+  neighbor_score_policy_range:
+    min: 0.85
+    max: 1.00
+    strong_hit_threshold: 0.95
+    normal_hit_threshold: 0.90
+    exploratory_hit_threshold: 0.85
+  score_band_contract:
+    strong: "1.00-0.95"
+    normal: "0.95-0.90"
+    exploratory: "0.90-0.85"
+    evidence_only_below: 0.85
+  exploration_budget_policy_keys:
+    - max_hub_kinds_per_current
+    - max_hub_tables_per_kind
+    - topK_per_hub_kind
+    - phase_expansion_limit
+    - max_attention_rows_saved
+  out_of_scope_not_implemented:
+    - refresh_function_bodies
+    - norm_watch_function_bodies
+    - db_triggers
+    - scheduler_runtime_hub_attractor_exploration
+    - phase_vector_generation_runtime_logic
 public_article: false
 canonical_markdown: docs/design/sql-attention-logs-ssot.md
 
 purpose:
   summary: >-
     Define SQL Attention logs, current calculation basis, norm-level trigger,
-    registry-neighbor exploration, phase vector evidence, and attention evidence
+    hub-attractor exploration, phase vector evidence, and attention evidence
     persistence.
   non_goal:
     - public_marketing_copy
@@ -21,14 +73,14 @@ core_definition:
   one_sentence: >-
     SQL Attention converts physical-side logs.* signals into a logs.current
     calculation basis, watches l2 norm-level changes, and only when the level
-    changes explores registry composition neighbors and records statistics,
+    changes explores hubs.* hub/attractor candidates and records statistics,
     l2_norm, vector, phase_vector, and hit evidence into logs.attention without
     collapsing statistics, Attention, and Phase Attention into one score.
   flow:
     - logs_signal_sources
     - logs_current_calculation_basis
     - l2_norm_level_watch
-    - scheduler_runtime_registry_neighbor_exploration
+    - scheduler_runtime_hub_attractor_exploration
     - logs_attention_evidence
 
 philosophy_and_structure:
@@ -186,7 +238,7 @@ layers:
   norm_trigger:
     role: exploration_gate
     description: >-
-      Monitoring may run every time current is updated, but registry-neighbor
+      Monitoring may run every time current is updated, but hub-attractor
       exploration only starts when norm level changes.
     initial_policy:
       watch_top_n: 3
@@ -223,25 +275,23 @@ layers:
     inputs:
       - logs.current
       - norm_trigger_candidate
-      - registry_composition_tables
+      - logs_hub_current_and_hubs
     behavior:
-      - explore_registry_composition_neighbors
+      - explore_hub_attractor_neighbors
       - vary_vector_order_or_permutation
       - keep_best_neighbor_hits
     required_caps:
       - current_top_level_watch_count
       - norm_delta_threshold
       - permutation_limit
-      - registry_neighbor_topK
+      - hub_attractor_topK
       - attention_evidence_save_limit
       - archive_policy
 
   logs_attention:
     role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores registry-neighbor exploration hit results, stable
-      statistics, and phase-shifted candidate vectors. It must link back to
-      logs.current so every attention hit has evidence.
+      logs.attention stores hub-attractor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub-attractor exploration planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
     retention: archive_required
     suggested_fields:
       - attention_id
@@ -253,18 +303,21 @@ layers:
       - vector_json
       - phase_vector_json
       - permutation_key
-      - registry_table
-      - registry_id
+      - hub_id
+      - attractor_key
+      - hub_relation_id
+      - relation_registry_id
       - neighbor_score
       - hit_rank
       - evidence_json
       - created_at
       - archive_policy
     schema_contract:
-      role: registry_neighbor_hit_and_phase_vector_evidence_log
+      role: hub_attractor_hit_and_phase_vector_evidence_log
       suggested_fields:
         - attention_id
         - current_id
+        - hub_current_id
         - source_set_id
         - statistics_json
         - ema_score
@@ -272,8 +325,10 @@ layers:
         - vector_json
         - phase_vector_json
         - permutation_key
-        - registry_table
-        - registry_id
+        - hub_id
+        - attractor_key
+        - hub_relation_id
+        - relation_registry_id
         - neighbor_score
         - hit_rank
         - evidence_json
@@ -313,7 +368,7 @@ layers:
 physical_table_pressure:
   tableid_semantics: physical_table_identity
   aggregation_target: physical_side
-  not_target: registry_table_popularity
+  not_target: topologys_or_registry_direct_search
   observes:
     - physical_table_mutation_pressure
     - physical_column_candidate_pressure
@@ -349,7 +404,7 @@ registry_semantics:
 
 completion_boundary:
   aggregation_completed: attention_query_basis_ready
-  attention_observation_completed: registry_neighbor_hit_and_evidence_saved
+  attention_observation_completed: hub_attractor_hit_and_evidence_saved
   phase_candidate_visible: phase_vector_generated_on_logs_attention
   adoption_or_migration: separate_implementation_path
   dangerous_misunderstanding:
@@ -386,7 +441,7 @@ function_contract:
         - refresh_basis_vector_and_pressure_matrix
         - update_count_total_and_recordcount_total
       prohibited_side_effects:
-        - registry_neighbor_exploration_execution
+        - hub_attractor_exploration_execution
         - phase_vector_distortion_execution
     calculate_l2_norm:
       signature: calculate_l2_norm(current_id_or_basis_vector)
@@ -394,7 +449,7 @@ function_contract:
         - compute_l2_norm_from_basis_vector
         - expose_norm_for_watch_comparison
       prohibited_side_effects:
-        - registry_neighbor_exploration_execution
+        - hub_attractor_exploration_execution
     compare_norm_level_snapshot:
       signature: compare_norm_level_snapshot(top_n)
       role:
@@ -442,7 +497,7 @@ trigger_contract:
   change_action:
     - mark_attention_exploration_candidate
   prohibited_on_trigger:
-    - registry_neighbor_exploration_execution
+    - hub_attractor_exploration_execution
     - phase_vector_distortion_execution
     - direct_registry_mutation
     - automatic_migration_execution
@@ -456,7 +511,7 @@ db_trigger_boundary:
     - exploration_candidate_marking
     - no_change_early_return
   prohibited:
-    - registry_neighbor_exploration_execution
+    - hub_attractor_exploration_execution
     - phase_vector_generation
     - registry_mutation
     - migration_execution
@@ -513,7 +568,7 @@ implementation_order:
   - define_schema_function_trigger_contracts
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
-  - implement_scheduler_runtime_registry_neighbor_exploration
+  - implement_scheduler_runtime_hub_attractor_exploration
   - implement_phase_attention_vector_distortion_after_policy_caps_and_evidence_linkage_are_fixed
 
 initial_minimal_basis:
@@ -544,7 +599,7 @@ existing_table_alignment:
 non_goals:
   - function_implementation
   - db_trigger_implementation
-  - scheduler_runtime_registry_neighbor_exploration_implementation
+  - scheduler_runtime_hub_attractor_exploration_implementation
   - destructive_existing_table_change
   - large_scale_existing_sql_replacement
   - automatic_registry_mutation_from_phase_vector

@@ -9,6 +9,25 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
 
+
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    local opts=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -n|-q|-s|-i|-v) opts+=("$1"); shift ;;
+        -P|-U) shift ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+      esac
+    done
+    local pattern="${1:-}"
+    [ $# -gt 0 ] && shift
+    grep -E "${opts[@]}" -- "$pattern" "$@"
+  }
+fi
+
 fail() {
   echo "FAIL: $1" >&2
   FAILURES=$((FAILURES + 1))
@@ -186,11 +205,23 @@ check_file ".agent/scripts/delete-tmp.sh"
 check_file ".agent/tmp/.gitkeep"
 
 check_file "db/schema.sql"
+check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS logs"
+check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS topologys"
+check_content "db/schema.sql" "CREATE SCHEMA IF NOT EXISTS hubs"
 check_file "db/topology_tables.sql"
 check_file "db/ui_topology_tables.sql"
 check_file "db/promotion_tables.sql"
+check_file "db/sql_attention_logs_tables.sql"
 check_file "db/seed_empty.sql"
 check_file "db/README.md"
+check_content "db/sql_attention_logs_tables.sql" "statistics_json"
+check_content "db/sql_attention_logs_tables.sql" "phase_vector_json"
+check_content "db/sql_attention_logs_tables.sql" "logs.attention"
+check_content "db/sql_attention_logs_tables.sql" "logs.current"
+check_content "db/sql_attention_logs_tables.sql" "logs.hub_current"
+check_content "db/sql_attention_logs_tables.sql" "score_band"
+check_content "db/sql_attention_logs_tables.sql" "neighbor_score"
+check_content "db/sql_attention_logs_tables.sql" "hub_current_id"
 
 check_file "backend/endpoint/DispatchEndpoint.cs"
 check_file "backend/endpoint/SseEndpoint.cs"
@@ -266,6 +297,15 @@ check_content "docs/design/sql-attention-logs-ssot.md" "logs.attention"
 check_content "docs/design/sql-attention-logs-ssot.md" "l2 norm"
 check_content "docs/design/sql-attention-logs-ssot.md" "physical table"
 check_content "docs/design/sql-attention-logs-ssot.md" "norm-level"
+check_content "docs/design/sql-attention-logs-ssot.md" "phase_expansion_limit"
+check_content "docs/design/sql-attention-logs-ssot.md" "neighbor_score_min"
+check_content "docs/design/sql-attention-logs-ssot.md" "phase_vector_json"
+check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not topology search"
+check_content "docs/design/sql-attention-logs-ssot.md" "hub-attractor exploration"
+check_content "docs/design/sql-attention-logs-ssot.md" "SQL Attention is not registry search"
+check_content "docs/design/sql-attention-logs-ssot.md" "projection"
+check_content "docs/design/sql-attention-logs-ssot.md" "Tensor"
+check_content "docs/design/sql-attention-logs-ssot.md" "attractor_key"
 
 check_content ".agent/rules/rule.md" "Runtime Boundary Failure Matrix"
 check_content ".agent/protocols/runtime-boundary-matrix.md" "Runtime Boundary Failure Matrix"
@@ -550,6 +590,50 @@ else
   echo "OK  [compact] rule.md gate details remain in protocols"
 fi
 
+
+# SQL Attention target-boundary negative checks
+if rg -n "logs\.registry_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_current should not remain in SQL Attention SSOT"
+else
+  echo "OK  [ssot] registry_current removed from SQL Attention target docs"
+fi
+if rg -n "registry-neighbor exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry-neighbor exploration should not remain as SQL Attention target"
+else
+  echo "OK  [ssot] registry-neighbor exploration removed from SQL Attention target docs"
+fi
+if rg -n "registry_composition_neighbors|registry_composition_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_composition_neighbors/tables should not remain"
+else
+  echo "OK  [ssot] registry_composition_neighbors/tables should not remain"
+fi
+if rg -n "scheduler_runtime_registry_neighbor_exploration" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "scheduler_runtime_registry_neighbor_exploration should not remain"
+else
+  echo "OK  [ssot] scheduler_runtime_registry_neighbor_exploration should not remain"
+fi
+
+if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "Initial registry_kind candidates should not remain"
+else
+  echo "OK  [ssot] Initial registry_kind candidates removed"
+fi
+if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "logs.hub_current must not be in deprecated_or_rejected"
+else
+  echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
+fi
+if ! rg -n "physical_tables" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null || ! rg -n "logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "physical_tables must include logs.hub_current"
+else
+  echo "OK  [ssot] physical_tables includes logs.hub_current"
+fi
+if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "registry_table/registry_id should not remain in SQL Attention attention contract"
+else
+  echo "OK  [ssot] registry_table/registry_id removed from SQL Attention attention contract"
+fi
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
@@ -560,3 +644,4 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
+

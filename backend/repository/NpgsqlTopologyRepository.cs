@@ -30,7 +30,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
     /// <summary>
     /// Loads a structure map by attractor_key or structure_map_id (UUID string).
     /// Returns null when not found — caller must treat as broken reference.
-    /// SQL: SELECT ... FROM structure_maps WHERE (attractor_key = @key OR structure_map_id::text = @key) AND active = true LIMIT 1
+    /// SQL: SELECT ... FROM topologys.structure_maps WHERE (attractor_key = @key OR structure_map_id::text = @key) AND active = true LIMIT 1
     /// </summary>
     public override async Task<StructureMapRecord?> LoadStructureMapAsync(
         string key, CancellationToken ct = default)
@@ -42,7 +42,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         cmd.CommandText =
             "SELECT structure_map_id::text, attractor_key, package_id, schema_id, " +
             "       component_ids, state_policy::text " +
-            "FROM structure_maps " +
+            "FROM topologys.structure_maps " +
             "WHERE (attractor_key = @key OR structure_map_id::text = @key) " +
             "  AND active = true " +
             "LIMIT 1";
@@ -83,7 +83,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT package_id, name, package_def::text " +
-            "FROM package_registry " +
+            "FROM topologys.package_registry " +
             "WHERE package_id = @id AND active = true " +
             "LIMIT 1";
         cmd.Parameters.AddWithValue("id", packageId);
@@ -117,7 +117,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT schema_id, name, schema_def::text " +
-            "FROM schema_registry " +
+            "FROM topologys.schema_registry " +
             "WHERE schema_id = @id AND active = true " +
             "LIMIT 1";
         cmd.Parameters.AddWithValue("id", schemaId);
@@ -141,7 +141,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
     /// <summary>
     /// Loads a function_parameter value from the topology store.
     /// Returns null when no active row is found — caller must treat as policy-missing.
-    /// SQL: SELECT parameter_value FROM function_parameters
+    /// SQL: SELECT parameter_value FROM topologys.function_parameters
     ///   WHERE function_name = @fn AND parameter_key = @key AND active = true LIMIT 1
     /// </summary>
     public override async Task<string?> LoadFunctionParameterAsync(
@@ -154,7 +154,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT parameter_value::text FROM function_parameters " +
+            "SELECT parameter_value::text FROM topologys.function_parameters " +
             "WHERE function_name = @fn AND parameter_key = @key AND active = true " +
             "LIMIT 1";
         cmd.Parameters.AddWithValue("fn", functionName);
@@ -177,7 +177,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM entities WHERE hub_id='00000000-0000-0000-0000-000000000010' ORDER BY created_at";
+        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM topologys.entities WHERE hub_id='00000000-0000-0000-0000-000000000010' ORDER BY created_at";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var list = new List<DemoEntityProjection>();
         while (await reader.ReadAsync(ct)) list.Add(new DemoEntityProjection(reader.GetGuid(0), reader.GetString(1), reader.GetString(2)));
@@ -189,7 +189,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM entities WHERE entity_id=@id LIMIT 1";
+        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM topologys.entities WHERE entity_id=@id LIMIT 1";
         cmd.Parameters.AddWithValue("id", entityId);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
@@ -206,7 +206,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
             if (action == "create")
             {
                 var activeStateIdCmd = conn.CreateCommand(); activeStateIdCmd.Transaction = tx;
-                activeStateIdCmd.CommandText = "SELECT state_id FROM state_registry WHERE name='active' LIMIT 1";
+                activeStateIdCmd.CommandText = "SELECT state_id FROM topologys.state_registry WHERE name='active' LIMIT 1";
                 var activeStateIdObj = await activeStateIdCmd.ExecuteScalarAsync(ct);
                 if (activeStateIdObj is null)
                 {
@@ -214,7 +214,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     return new(false, "STATE_POLICY_NOT_FOUND", "state_registry.active is missing");
                 }
                 var cmd = conn.CreateCommand(); cmd.Transaction = tx;
-                cmd.CommandText = "INSERT INTO entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,'00000000-0000-0000-0000-000000000010',jsonb_build_object('label',@title,'state','active','hub_id','00000000-0000-0000-0000-000000000010'),ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],(SELECT state_id FROM state_registry WHERE name='active' LIMIT 1))";
+                cmd.CommandText = "INSERT INTO topologys.entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,'00000000-0000-0000-0000-000000000010',jsonb_build_object('label',@title,'state','active','hub_id','00000000-0000-0000-0000-000000000010'),ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],(SELECT state_id FROM topologys.state_registry WHERE name='active' LIMIT 1))";
                 cmd.Parameters.AddWithValue("id", entityId); cmd.Parameters.AddWithValue("title", title ?? "Untitled");
                 await cmd.ExecuteNonQueryAsync(ct);
                 var createHistoryCmd = conn.CreateCommand(); createHistoryCmd.Transaction = tx;
@@ -225,19 +225,19 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 await tx.CommitAsync(ct); return new(true, null, null);
             }
             var read = conn.CreateCommand(); read.Transaction = tx;
-            read.CommandText = "SELECT COALESCE(entity_jsonb->>'state','unknown') FROM entities WHERE entity_id=@id FOR UPDATE";
+            read.CommandText = "SELECT COALESCE(entity_jsonb->>'state','unknown') FROM topologys.entities WHERE entity_id=@id FOR UPDATE";
             read.Parameters.AddWithValue("id", entityId);
             var current = (string?)await read.ExecuteScalarAsync(ct);
             if (current is null) { await tx.RollbackAsync(ct); return new(false, "NOT_FOUND", "entity not found"); }
             var next = action == "advance" && current == "active" ? "operating" : action == "advance" && current == "operating" ? "archived" : null;
             if (next is null) { await tx.RollbackAsync(ct); return new(false, "INVALID_TRANSITION", "invalid transition"); }
             var stateIdCmd = conn.CreateCommand(); stateIdCmd.Transaction = tx;
-            stateIdCmd.CommandText = "SELECT state_id FROM state_registry WHERE name=@name LIMIT 1";
+            stateIdCmd.CommandText = "SELECT state_id FROM topologys.state_registry WHERE name=@name LIMIT 1";
             stateIdCmd.Parameters.AddWithValue("name", next);
             var nextStateIdObj = await stateIdCmd.ExecuteScalarAsync(ct);
             if (nextStateIdObj is null) { await tx.RollbackAsync(ct); return new(false, "STATE_POLICY_NOT_FOUND", $"state_registry.{next} is missing"); }
             var up = conn.CreateCommand(); up.Transaction = tx;
-            up.CommandText = "UPDATE entities SET entity_jsonb=jsonb_set(entity_jsonb,'{state}',to_jsonb(@next::text),true), state_id=@stateId, updated_at=now() WHERE entity_id=@id";
+            up.CommandText = "UPDATE topologys.entities SET entity_jsonb=jsonb_set(entity_jsonb,'{state}',to_jsonb(@next::text),true), state_id=@stateId, updated_at=now() WHERE entity_id=@id";
             up.Parameters.AddWithValue("id", entityId); up.Parameters.AddWithValue("next", next);
             up.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await up.ExecuteNonQueryAsync(ct);

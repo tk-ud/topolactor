@@ -12,6 +12,10 @@
 \echo '[init.sql] applying promotion_tables.sql'
 \i /db/promotion_tables.sql
 
+
+\echo '[init.sql] applying sql_attention_logs_tables.sql'
+\i /db/sql_attention_logs_tables.sql
+
 \echo '[init.sql] applying context_route_tables.sql'
 \i /db/context_route_tables.sql
 

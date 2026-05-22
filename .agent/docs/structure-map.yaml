@@ -22,6 +22,7 @@ layers:
       - db/schema.sql
       - db/topology_tables.sql
       - db/promotion_tables.sql
+      - db/sql_attention_logs_tables.sql
       - db/seed_empty.sql
       - docs/design/relation-registry-fk-audit-and-abstract-migration.md
 

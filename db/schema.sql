@@ -50,6 +50,10 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
+CREATE SCHEMA IF NOT EXISTS hubs;
+CREATE SCHEMA IF NOT EXISTS topologys;
+CREATE SCHEMA IF NOT EXISTS logs;
+
 
 -- ---------------------------------------------------------------------------
 -- registrar_entries
@@ -59,7 +63,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- the backend runtime to discover topology tables dynamically without
 -- hard-coding table references.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS registrar_entries (
+CREATE TABLE IF NOT EXISTS topologys.registrar_entries (
     registrar_entry_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name                TEXT        NOT NULL UNIQUE,      -- canonical name for this entry
     table_ref           TEXT,                             -- physical table name, if applicable
@@ -68,17 +72,17 @@ CREATE TABLE IF NOT EXISTS registrar_entries (
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE registrar_entries IS
+COMMENT ON TABLE topologys.registrar_entries IS
     'Topology definition table. Meta-registry recording all topology tables, '
     'their categories, and active status. Enables the backend runtime to '
     'discover topology structure dynamically.';
 
-COMMENT ON COLUMN registrar_entries.table_ref IS
+COMMENT ON COLUMN topologys.registrar_entries.table_ref IS
     'Physical PostgreSQL table name this entry refers to. May be NULL for '
     'logical/virtual registrar entries that do not map to a single table.';
 
 CREATE INDEX IF NOT EXISTS idx_registrar_entries_active
-    ON registrar_entries (active)
+    ON topologys.registrar_entries (active)
     WHERE active = true;
 
 
@@ -88,7 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_registrar_entries_active
 -- Top-level registry for master domain concepts. Categories here serve as
 -- the anchoring taxonomy for relation_registry entries and structure_maps.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS master_registry (
+CREATE TABLE IF NOT EXISTS topologys.master_registry (
     master_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT        NOT NULL,
     category    TEXT,                                     -- domain category label
@@ -96,13 +100,13 @@ CREATE TABLE IF NOT EXISTS master_registry (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE master_registry IS
+COMMENT ON TABLE topologys.master_registry IS
     'Topology definition table. Top-level registry for master domain concepts '
     'and categories. Anchors the taxonomy used by relation_registry and '
     'structure_maps during attractor resolution.';
 
 CREATE INDEX IF NOT EXISTS idx_master_registry_active
-    ON master_registry (active)
+    ON topologys.master_registry (active)
     WHERE active = true;
 
 
@@ -113,19 +117,19 @@ CREATE INDEX IF NOT EXISTS idx_master_registry_active
 -- entities, and structure_map state_policy blobs. The owner field identifies
 -- whether a state is managed by the system, business logic, or is unowned.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS state_registry (
+CREATE TABLE IF NOT EXISTS topologys.state_registry (
     state_id    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT        NOT NULL,
     owner       TEXT        CHECK (owner IN ('system', 'business', 'none')),
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE state_registry IS
+COMMENT ON TABLE topologys.state_registry IS
     'Topology definition table. Defines named operational states referenced '
     'by hubs, entities, and structure_map state_policy. '
     'owner distinguishes system-managed, business-managed, and unowned states.';
 
-COMMENT ON COLUMN state_registry.owner IS
+COMMENT ON COLUMN topologys.state_registry.owner IS
     'Ownership tier: '
     '  system   — managed by the abstract runtime (backend) '
     '  business — managed by business/product layer '
@@ -141,7 +145,7 @@ COMMENT ON COLUMN state_registry.owner IS
 -- master_registry concepts. manifest_candidate flags relations eligible
 -- for inclusion in topology manifests during promotion analysis.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS relation_registry (
+CREATE TABLE IF NOT EXISTS topologys.relation_registry (
     relation_registry_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name                  TEXT        NOT NULL,
     master_ids            UUID[]      NOT NULL DEFAULT '{}',  -- linked master_registry ids
@@ -155,32 +159,32 @@ CREATE TABLE IF NOT EXISTS relation_registry (
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE relation_registry IS
+COMMENT ON TABLE topologys.relation_registry IS
     'Topology definition table. Defines all named relations in the topology '
     'space. Relations structure hubs, entities, and structure_map resolution. '
     'manifest_candidate marks relations for inclusion in promotion manifests.';
 
-COMMENT ON COLUMN relation_registry.master_ids IS
+COMMENT ON COLUMN topologys.relation_registry.master_ids IS
     'Array of master_registry ids this relation is associated with. '
     'Used during attractor_resolve to scope relation lookups.';
 
-COMMENT ON COLUMN relation_registry."order" IS
+COMMENT ON COLUMN topologys.relation_registry."order" IS
     'Integer ordering hint used when multiple relations are resolved in sequence. '
     'Lower values are resolved first.';
 
-COMMENT ON COLUMN relation_registry.manifest_candidate IS
+COMMENT ON COLUMN topologys.relation_registry.manifest_candidate IS
     'When true, this relation is eligible for inclusion in topology manifests '
     'generated during the promotion_candidates analysis cycle.';
 
 CREATE INDEX IF NOT EXISTS idx_relation_registry_active
-    ON relation_registry (active)
+    ON topologys.relation_registry (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_relation_registry_master_ids
-    ON relation_registry USING GIN (master_ids);
+    ON topologys.relation_registry USING GIN (master_ids);
 
 CREATE INDEX IF NOT EXISTS idx_relation_registry_manifest_candidate
-    ON relation_registry (manifest_candidate)
+    ON topologys.relation_registry (manifest_candidate)
     WHERE manifest_candidate = true;
 
 
@@ -191,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_relation_registry_manifest_candidate
 -- flow. A package groups related schema and component definitions under a
 -- versioned/typed bundle. package_def is a free-form JSONB definition blob.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS package_registry (
+CREATE TABLE IF NOT EXISTS topologys.package_registry (
     package_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name         TEXT        NOT NULL,
     type         TEXT,                                    -- e.g. 'core', 'extension', 'external'
@@ -201,21 +205,21 @@ CREATE TABLE IF NOT EXISTS package_registry (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE package_registry IS
+COMMENT ON TABLE topologys.package_registry IS
     'Topology definition table. Packages are resolved during package_resolve. '
     'Each package groups schema and component definitions. package_def holds '
     'the authoritative package definition consumed by the backend runtime.';
 
-COMMENT ON COLUMN package_registry.package_def IS
+COMMENT ON COLUMN topologys.package_registry.package_def IS
     'Free-form JSONB definition blob. Structure is defined by the backend '
     'runtime package resolver and may include version, dependencies, overrides.';
 
 CREATE INDEX IF NOT EXISTS idx_package_registry_active
-    ON package_registry (active)
+    ON topologys.package_registry (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_package_registry_package_def
-    ON package_registry USING GIN (package_def);
+    ON topologys.package_registry USING GIN (package_def);
 
 
 -- ---------------------------------------------------------------------------
@@ -225,7 +229,7 @@ CREATE INDEX IF NOT EXISTS idx_package_registry_package_def
 -- the structure of converged entity payloads. schema_def is the authoritative
 -- definition blob consumed by the component_expand step.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS schema_registry (
+CREATE TABLE IF NOT EXISTS topologys.schema_registry (
     schema_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name        TEXT        NOT NULL,
     schema_def  JSONB       NOT NULL DEFAULT '{}',       -- schema definition blob
@@ -234,21 +238,21 @@ CREATE TABLE IF NOT EXISTS schema_registry (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE schema_registry IS
+COMMENT ON TABLE topologys.schema_registry IS
     'Topology definition table. Schemas define the structure of converged '
     'entity payloads. Resolved during schema_resolve; consumed by '
     'component_expand to validate and shape entity_jsonb output.';
 
-COMMENT ON COLUMN schema_registry.schema_def IS
+COMMENT ON COLUMN topologys.schema_registry.schema_def IS
     'Authoritative schema definition blob. Structure is determined by the '
     'backend schema resolver and governs entity_jsonb shape in entities table.';
 
 CREATE INDEX IF NOT EXISTS idx_schema_registry_active
-    ON schema_registry (active)
+    ON topologys.schema_registry (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_schema_registry_schema_def
-    ON schema_registry USING GIN (schema_def);
+    ON topologys.schema_registry USING GIN (schema_def);
 
 
 -- ---------------------------------------------------------------------------
@@ -258,7 +262,7 @@ CREATE INDEX IF NOT EXISTS idx_schema_registry_schema_def
 -- is a discrete unit of topology behaviour — a reusable building block
 -- referenced by structure_maps via component_ids.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS component_registry (
+CREATE TABLE IF NOT EXISTS topologys.component_registry (
     component_id    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name            TEXT        NOT NULL,
     component_type  TEXT,                                -- e.g. 'renderer', 'validator', 'transformer'
@@ -268,24 +272,24 @@ CREATE TABLE IF NOT EXISTS component_registry (
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE component_registry IS
+COMMENT ON TABLE topologys.component_registry IS
     'Topology definition table. Components are discrete reusable units of '
     'topology behaviour expanded during component_expand. Referenced from '
     'structure_maps.component_ids in resolution order.';
 
-COMMENT ON COLUMN component_registry.component_def IS
+COMMENT ON COLUMN topologys.component_registry.component_def IS
     'Component definition blob. Interpreted by the backend component expander; '
     'may contain renderer configs, validation rules, transformation specs, etc.';
 
 CREATE INDEX IF NOT EXISTS idx_component_registry_active
-    ON component_registry (active)
+    ON topologys.component_registry (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_component_registry_component_type
-    ON component_registry (component_type);
+    ON topologys.component_registry (component_type);
 
 CREATE INDEX IF NOT EXISTS idx_component_registry_component_def
-    ON component_registry USING GIN (component_def);
+    ON topologys.component_registry USING GIN (component_def);
 
 
 -- ---------------------------------------------------------------------------
@@ -310,7 +314,7 @@ CREATE INDEX IF NOT EXISTS idx_component_registry_component_def
 -- functions. Enables data-driven parameterisation of the canonical flow steps
 -- (attractor_resolve, structure_map_resolve, etc.) without code changes.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS function_parameters (
+CREATE TABLE IF NOT EXISTS topologys.function_parameters (
     function_parameter_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     function_name          TEXT        NOT NULL,          -- e.g. 'attractor_resolve', 'component_expand'
     parameter_key          TEXT        NOT NULL,          -- parameter name within that function
@@ -321,23 +325,23 @@ CREATE TABLE IF NOT EXISTS function_parameters (
         UNIQUE (function_name, parameter_key)             -- one policy row per (function, key)
 );
 
-COMMENT ON TABLE function_parameters IS
+COMMENT ON TABLE topologys.function_parameters IS
     'Topology definition table. Stores named key/value configuration parameters '
     'for backend runtime functions in the canonical flow. Enables data-driven '
     'parameterisation of attractor_resolve, structure_map_resolve, package_resolve, '
     'schema_resolve, and component_expand without requiring code deployments.';
 
-COMMENT ON COLUMN function_parameters.function_name IS
+COMMENT ON COLUMN topologys.function_parameters.function_name IS
     'Identifies the canonical flow function this parameter applies to. '
     'Matches the function name used by the backend abstract runtime.';
 
-COMMENT ON COLUMN function_parameters.parameter_value IS
+COMMENT ON COLUMN topologys.function_parameters.parameter_value IS
     'JSONB value for this parameter. May be a scalar (string, number, bool), '
     'an array, or an object depending on what the target function expects.';
 
 CREATE INDEX IF NOT EXISTS idx_function_parameters_function_name
-    ON function_parameters (function_name);
+    ON topologys.function_parameters (function_name);
 
 CREATE INDEX IF NOT EXISTS idx_function_parameters_active
-    ON function_parameters (active)
+    ON topologys.function_parameters (active)
     WHERE active = true;

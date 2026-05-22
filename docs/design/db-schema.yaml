@@ -6,6 +6,7 @@ db_schema:
     - db/schema.sql
     - db/topology_tables.sql
     - db/promotion_tables.sql
+    - db/sql_attention_logs_tables.sql
     - db/context_route_tables.sql
     - db/ui_topology_tables.sql
     - db/manifest_tables.sql
@@ -17,6 +18,37 @@ db_schema:
     - context_route
     - ui_topology
     - manifest
+
+
+  postgresql_schema_namespaces:
+    hubs:
+      role: attractor_collapse_convergence_boundary
+      tables:
+        - hubs.hubs
+        - hubs.hub_relations
+    topologys:
+      role: meaning_space_with_payload_definition_jsonb
+      tables:
+        - topologys.master_registry
+        - topologys.state_registry
+        - topologys.package_registry
+        - topologys.schema_registry
+        - topologys.component_registry
+        - topologys.structure_maps
+        - topologys.entities
+        - topologys.topology_edit_log
+        - topologys.demo_state_transitions
+    logs:
+      role: statistics_observation_current_attention_evidence
+      tables:
+        - logs.usage_metrics
+        - logs.promotion_candidates
+        - logs.current
+        - logs.hub_current
+        - logs.attention
+    registry_schema_policy:
+      has_dedicated_schema: false
+      rule: registry_is_tensor_map_reference_concept_not_schema_namespace
 
   principles:
     - sql_files_are_implementation_not_ssot
@@ -395,6 +427,42 @@ db_schema:
       category: context_route
       file: db/context_route_tables.sql
       role: recommendation_feedback_log
+    logs_current:
+      category: context_route
+      file: db/sql_attention_logs_tables.sql
+      role: sql_attention_physical_pressure_current_top_n_physical_items_by_signal_axes
+      physical_table: logs.current
+      persistence: regenerable_projection_cache
+
+    logs_hub_current:
+      category: context_route
+      file: db/sql_attention_logs_tables.sql
+      role: sql_attention_hub_tensor_attractor_current
+      physical_table: logs.hub_current
+      persistence: regenerable_projection_cache
+      note: sql_attention_target_is_hubs_tensor_attractor_not_topology_registry_search
+
+    logs_attention:
+      category: context_route
+      file: db/sql_attention_logs_tables.sql
+      role: sql_attention_registry_exploration_evidence_log
+      physical_table: logs.attention
+      persistence: append_only_archive_required
+      sql_attention_logs_mapping:
+        classification: canonical_physical
+        holds_hub_plane_identity:
+          - hub_id
+          - attractor_key
+          - hub_relation_id
+          - relation_registry_id
+          - hub_current_id
+        references:
+          - current_id_to_logs_current
+          - hub_current_id_to_logs_hub_current
+        evidence_layers:
+          - statistics_json_ema_score
+          - l2_norm_vector_neighbor_score
+          - phase_vector_json
 
     # -------------------------------------------------------------------------
     # ui_topology — UI コンポーネントのトポロジテンソル
@@ -547,3 +615,24 @@ db_schema:
         - ui_projection
         - projection_constructor_mapping
         - sse_projection
+
+
+sql_attention_target_boundary:
+  search_target: hubs
+  not_search_target:
+    - topologys
+    - registry
+  projection_path: hit_hub_to_topologys_meaning_space
+
+
+sql_attention_target_note:
+  target: hubs_tensor_attractor
+  not_target:
+    - topologys_direct_search
+    - registry_direct_search
+  projection: topologys_is_projected_from_hit_hub
+  topology_recommendation_basis:
+    - statistics
+    - ema
+    - usage_history
+    - usage_frequency
