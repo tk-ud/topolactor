@@ -8,8 +8,8 @@ namespace Topolactor.Runtime;
 /// <summary>
 /// Canonical admin runtime. Owns all admin business logic.
 /// AdminEndpoint delegates to the typed methods here.
-/// RuntimeExecutor calls ExecuteDataAsync at Step 10 of the canonical pipeline
-/// for admin attractor targets — the same pattern used by demo:entity:*.
+/// In manifest-driven production path, AdminRuntimeDispatchAdapter calls ExecuteDataAsync
+/// when runtime_destination=admin_runtime is resolved from the active manifest.
 /// </summary>
 public class AdminRuntime
 {
@@ -154,15 +154,14 @@ public class AdminRuntime
     }
 
     // ---------------------------------------------------------------------------
-    // Target override dispatch — called by TargetDispatchOverride.TryHandleAsync
-    // at Step 10 of the canonical pipeline, after attractor_resolve and
-    // structure_map_resolve have validated the admin attractor key.
+    // Manifest-driven dispatch entry — called by AdminRuntimeDispatchAdapter
+    // when runtime_destination=admin_runtime is resolved from the active manifest.
+    // In dev/demo bypass (null manifest repo), also called via TargetDispatchOverride.
     // Returns (data, null) on success or (null, error) on failure.
     // ---------------------------------------------------------------------------
 
     /// <summary>
-    /// Executes the admin operation data step. Called via TargetDispatchOverride
-    /// at Step 10, after canonical pipeline validation steps 1-9.
+    /// Executes the admin operation data step for the given vector's layer+action.
     /// </summary>
     public async Task<(JsonElement? data, ValidationError? error)> ExecuteDataAsync(
         OperationVector vector, CancellationToken ct = default)
@@ -480,7 +479,7 @@ public class AdminRuntime
             new SeedImportResponseDto(
                 true,
                 result.ValidatedRuntimeCount,
-                "Seed validated. Full canonical import requires Gap-1 manifest-driven routing resolution.",
+                "Seed validated. Canonical DB write not yet implemented.",
                 [])), null);
     }
 }

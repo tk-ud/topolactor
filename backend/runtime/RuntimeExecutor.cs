@@ -12,7 +12,7 @@ namespace Topolactor.Runtime;
 /// Orchestrates the full pipeline: vector → attractor → structure map → package → schema → emission.
 /// There are no fallback paths. Any broken reference returns a validation error response.
 /// </summary>
-public class RuntimeExecutor
+public class RuntimeExecutor : IDispatchableRuntime
 {
     private readonly ILogger<RuntimeExecutor> _logger;
     private readonly OperationVectorResolver _operationVectorResolver;

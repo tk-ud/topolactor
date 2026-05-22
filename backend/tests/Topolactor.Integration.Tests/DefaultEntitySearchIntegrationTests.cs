@@ -54,9 +54,13 @@ public class DefaultEntitySearchIntegrationTests
                 new SystemOperationCiRuntime(
                     NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
             outputLaneRouter: null);
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = executor,
+        };
         var dispatcher = new ManifestDispatcher(
             NullLogger<ManifestDispatcher>.Instance,
-            executor,
+            handlers,
             new OperationVectorResolver(),
             targetDispatchOverride);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);

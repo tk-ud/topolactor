@@ -13,7 +13,7 @@ import { JSX } from "preact";
  *   { "version": "1", "runtimes": [{ "name", "target", "layer", "action" }] }
  *
  * Operations: save, load, validate, preview, import.
- * import is a skeleton — full canonical import requires Gap-1 resolution.
+ * import is in progress — routing resolved (Gap-1b), canonical DB write not yet implemented.
  * Import failure is explicit (fail-close). No silent fallback.
  */
 
@@ -151,11 +151,11 @@ export default function SeedAdmin(): JSX.Element {
     try {
       const body = await dispatchSeedOp("seed_runtime", "import");
       const pendingError = body?.errors?.find(
-        (e: SeedValidationError) => e.code === "SEED_IMPORT_PENDING_GAP1",
+        (e: SeedValidationError) => e.code === "SEED_IMPORT_NOT_IMPLEMENTED",
       );
       if (pendingError) {
         setPendingMessage(
-          `Import blocked — pending Gap-1 canonical routing. ${pendingError.message}`,
+          `Import not yet implemented — DB write pending. ${pendingError.message}`,
         );
       } else if (body?.errors?.length) {
         setErrors(body.errors);
@@ -181,8 +181,7 @@ export default function SeedAdmin(): JSX.Element {
         <code>/storage/seed.json</code>.<br />
         Seed file is a UI-managed topology payload candidate. The canonical runtime authority is
         topolactor DB.<br />
-        Import is a skeleton — full canonical import requires Gap-1 (manifest-driven routing)
-        resolution.
+        Import routing is resolved (Gap-1b complete). Canonical DB write not yet implemented.
       </p>
 
       <hr style={{ margin: "16px 0" }} />
@@ -214,7 +213,7 @@ export default function SeedAdmin(): JSX.Element {
             disabled={loading}
             style={{ padding: "6px 14px", background: "#0070f3", color: "#fff", border: "none" }}
           >
-            Import (skeleton)
+            Import
           </button>
         </div>
       </section>
