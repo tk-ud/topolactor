@@ -197,6 +197,7 @@ check_file ".agent/tests/check-default-entity-search.sh"
 check_file ".agent/tests/check-bootstrap-validation.sh"
 check_file ".agent/tests/check-pipeline-continuity.sh"
 check_file ".agent/tests/check-unified-test-gate.sh"
+check_file ".agent/tests/check-sql-attention-ssot.sh"
 check_file "docs/design/pipeline-continuity-ssot.yaml"
 check_file ".github/workflows/unified-test-gate.yml"
 
@@ -536,6 +537,7 @@ check_content ".agent/scripts/create-tmp.sh" "Frontend projection identity"
 check_content ".agent/scripts/create-tmp.sh" "UI action identity"
 check_content ".agent/checklists/policy-judgment.md" "scenario contract"
 check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
+check_content ".github/workflows/structure-check.yml" "check-sql-attention-ssot.sh"
 
 echo ""
 echo "=== Template checklist pollution guard ==="
@@ -644,4 +646,3 @@ else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
 fi
-
