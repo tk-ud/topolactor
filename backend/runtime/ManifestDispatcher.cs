@@ -55,6 +55,10 @@ public class ManifestDispatcher
     /// Resolves the runtime destination from manifest axes and dispatches the request
     /// to the registered handler.
     ///
+    /// Special routing: target="db_notify" (hook triggers from DbNotifyListener) is always
+    /// dispatched directly to "sse_projection_runtime" without manifest DB resolution.
+    /// Per SSOT notify_listen_contract.db_listen: listen_event_enters_scheduler_before_projection_runtime.
+    ///
     /// When _manifestRepository is null (dev/demo bypass): TargetDispatchOverride handles
     /// demo/entity and admin targets; unhandled requests fall through to the
     /// topology_transform_runtime handler in the registry.
@@ -75,6 +79,15 @@ public class ManifestDispatcher
             request.Role, request.Target, request.Layer, request.Action, request.TriggerKind);
 
         var vector = _operationVectorResolver.Resolve(request);
+
+        // db_notify hook trigger: fixed routing to sse_projection_runtime.
+        // No manifest DB lookup: the projection target is canonical, not manifest-driven at this stage.
+        // Per SSOT notify_listen_contract invariants: listen_event_enters_scheduler_before_projection_runtime.
+        if (string.Equals(request.Target, "db_notify", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("ManifestDispatcher: db_notify hook trigger — dispatching directly to sse_projection_runtime.");
+            return await DispatchToHandlerAsync("sse_projection_runtime", request, manifestId: null, ct);
+        }
 
         if (_manifestRepository is null)
         {

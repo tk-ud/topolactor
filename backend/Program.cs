@@ -111,12 +111,14 @@ builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
     new AdminRuntimeDispatchAdapter(
         sp.GetRequiredService<AdminRuntime>(),
         sp.GetRequiredService<OperationVectorResolver>()));
+builder.Services.AddSingleton<SseProjectionRuntime>();
 builder.Services.AddSingleton<ManifestDispatcher>(sp =>
 {
     var handlers = new Dictionary<string, IDispatchableRuntime>
     {
         ["topology_transform_runtime"] = sp.GetRequiredService<RuntimeExecutor>(),
         ["admin_runtime"]              = sp.GetRequiredService<AdminRuntimeDispatchAdapter>(),
+        ["sse_projection_runtime"]     = sp.GetRequiredService<SseProjectionRuntime>(),
     };
     return new ManifestDispatcher(
         sp.GetRequiredService<ILogger<ManifestDispatcher>>(),
@@ -172,7 +174,7 @@ builder.Services.AddHostedService<SqlAttentionScheduler>();
 builder.Services.AddHostedService(sp => new DbNotifyListener(
     sp.GetRequiredService<ILogger<DbNotifyListener>>(),
     connectionString,
-    sp.GetRequiredService<SseEventBroadcaster>()));
+    sp.GetRequiredService<RuntimeTimelineScheduler>()));
 
 // ---------------------------------------------------------------------------
 // HTTP layer
