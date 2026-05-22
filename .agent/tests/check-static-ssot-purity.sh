@@ -65,12 +65,24 @@ PATTERNS=(
   "未実装"
 )
 
+
+search_pattern() {
+  local pattern="$1"
+  local target="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -e "$pattern" "$target"
+  else
+    grep -n -i -E "$pattern" "$target"
+  fi
+}
+
 for file in "${TARGETS[@]}"; do
   [ -f "$file" ] || { echo "FAIL: missing target $file" >&2; exit 1; }
   for p in "${PATTERNS[@]}"; do
-    if rg -n -i -e "$p" "$file" >/dev/null; then
+    if search_pattern "$p" "$file" >/dev/null; then
       echo "FAIL: forbidden progress vocabulary '$p' in $file" >&2
-      rg -n -i -e "$p" "$file" >&2
+      search_pattern "$p" "$file" >&2
       exit 1
     fi
   done

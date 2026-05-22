@@ -91,38 +91,46 @@ for f in "$SSOT_MD" "$TODO_FILE"; do
   [ -f "$f" ] || { echo "FAIL: missing file $f" >&2; exit 1; }
 done
 
+
+
+find_pattern_matches() {
+  local pattern="$1"
+  local target="$2"
+
+  if command -v rg >/dev/null 2>&1; then
+    rg -n -i -e "$pattern" "$target"
+  else
+    grep -n -i -E "$pattern" "$target"
+  fi
+}
+
 for ssot_file in "$SSOT_YAML" "$SSOT_MD"; do
-  if rg -n -i \
-    -e "out_of_scope_not_implemented" \
-    -e "future_migration_task" \
-    -e "this[ _-]?pr|this PR" \
-    -e "not implemented|already implemented|current implementation" \
-    -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
-    -e "\\bTODO\\b|known_gap|roadmap" \
-    "$ssot_file" >/dev/null; then
+  pattern='out_of_scope_not_implemented|future_migration_task|this[ _-]?pr|this PR|not implemented|already implemented|current implementation|\bimplemented\b|\bpartial\b|\bskeleton\b|\bTODO\b|known_gap|roadmap'
+  if find_pattern_matches "$pattern" "$ssot_file" >/dev/null; then
     echo "FAIL: progress/status vocabulary detected in SSOT file: $ssot_file" >&2
-    rg -n -i \
-      -e "out_of_scope_not_implemented" \
-      -e "future_migration_task" \
-      -e "this[ _-]?pr|this PR" \
-      -e "not implemented|already implemented|current implementation" \
-      -e "\\bimplemented\\b|\\bpartial\\b|\\bskeleton\\b" \
-      -e "\\bTODO\\b|known_gap|roadmap" \
-      "$ssot_file" >&2
+    find_pattern_matches "$pattern" "$ssot_file" >&2
     exit 1
   fi
 done
 echo "OK: SQL Attention SSOT files contain no progress/status vocabulary"
 
 grep -qF "logs.attention production evidence persistence を実装する" "$TODO_FILE" || { echo "FAIL: TODO missing logs.attention production evidence persistence item" >&2; exit 1; }
-grep -qF "placeholder であり production evidence ではない" "$TODO_FILE" || { echo "FAIL: TODO must explicitly state placeholder boundary is not production evidence" >&2; exit 1; }
+
+if grep -qE '^- \[ \] logs\.attention production evidence persistence を実装する' "$TODO_FILE"; then
+  grep -qF "placeholder であり production evidence ではない" "$TODO_FILE" || { echo "FAIL: TODO must explicitly state placeholder boundary is not production evidence while SQLA-4 is unfinished" >&2; exit 1; }
+elif grep -qE '^- \[x\] logs\.attention production evidence persistence を実装する' "$TODO_FILE"; then
+  :
+else
+  echo "FAIL: TODO SQLA-4 item must be either [ ] or [x]" >&2
+  exit 1
+fi
 
 grep -qF "public virtual Task<int> WriteLogsAttentionAsync(" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: missing SqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 grep -qF "public override async Task<int> WriteLogsAttentionAsync(" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: missing NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 grep -qF "explorationResult.Hits.Count == 0" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing empty-hits guard before write" >&2; exit 1; }
 grep -qF "_sqlAttentionLogsRepository.WriteLogsAttentionAsync(" backend/scheduler/SqlAttentionScheduler.cs || { echo "FAIL: scheduler missing write_logs_attention call" >&2; exit 1; }
 grep -qF "INSERT INTO logs.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: logs.attention INSERT boundary missing" >&2; exit 1; }
-if rg -n "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
+if find_pattern_matches "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
   echo "FAIL: logs.attention append-only violated by UPDATE/DELETE" >&2
   exit 1
 fi
@@ -130,7 +138,7 @@ grep -qF "ArchivePolicy must be 'required'" backend/repository/SqlAttentionLogsR
 grep -qF "ArchivePolicy must be 'required'" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: archive_policy required enforcement missing in Npgsql repo" >&2; exit 1; }
 grep -qF "CurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: current_id required boundary missing" >&2; exit 1; }
 grep -qF "HubCurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: hub_current_id required boundary missing" >&2; exit 1; }
-echo "OK: write_logs_attention request boundary exists; production evidence persistence remains TODO"
+echo "OK: write_logs_attention request boundary exists; SQLA-4 TODO alignment check passed"
 grep -qF "phase_vector generation implementation" "$TODO_FILE" || { echo "FAIL: TODO missing phase_vector generation item" >&2; exit 1; }
 
 if grep -qF "policy caps を用いた phase_vector" "$TODO_FILE"; then
