@@ -8,30 +8,11 @@ namespace Topolactor.Runtime.Tests;
 
 public class LegacyChangeIntakeMappingTests
 {
-    private static TargetDispatchOverride CreateTargetDispatchOverride()
-    {
-        var topologyRepository = new Topolactor.Repository.TopologyRepository(NullLogger<Topolactor.Repository.TopologyRepository>.Instance, "test-double");
-        var contextRouteRepository = new Topolactor.Repository.ContextRouteRepository(NullLogger<Topolactor.Repository.ContextRouteRepository>.Instance, "test-double");
-        var topologyVectorRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepository);
-        var adminRuntime = new AdminRuntime(
-            NullLogger<AdminRuntime>.Instance,
-            contextRouteRepository,
-            new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topologyRepository, topologyVectorRuntime),
-            new PackageGeneratorRuntime(
-                NullLogger<PackageGeneratorRuntime>.Instance,
-                new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double")),
-            new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double"));
-        return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, topologyRepository, adminRuntime);
-    }
-
     [Fact]
     public void BuildLegacyHookRequest_MapsTableNameAsTargetAndHookTrigger()
     {
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            RuntimeExecutorTests.CreateExecutor(),
-            new OperationVectorResolver(),
-            CreateTargetDispatchOverride());
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
         var intake = new LegacyChangeIntakeRequestDto(
             TableName: "orders",
@@ -57,11 +38,8 @@ public class LegacyChangeIntakeMappingTests
     [Fact]
     public void BuildLegacyHookRequest_ReturnsExplicitValidationErrors_WhenIdentityMissing()
     {
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            RuntimeExecutorTests.CreateExecutor(),
-            new OperationVectorResolver(),
-            CreateTargetDispatchOverride());
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
         var intake = new LegacyChangeIntakeRequestDto(
             TableName: null,
@@ -82,11 +60,8 @@ public class LegacyChangeIntakeMappingTests
     [Fact]
     public void BuildLegacyHookRequest_ReturnsExplicitValidationError_WhenOperationUnsupported()
     {
-        var dispatcher = new ManifestDispatcher(
-            NullLogger<ManifestDispatcher>.Instance,
-            RuntimeExecutorTests.CreateExecutor(),
-            new OperationVectorResolver(),
-            CreateTargetDispatchOverride());
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
         var intake = new LegacyChangeIntakeRequestDto(
             TableName: "orders",

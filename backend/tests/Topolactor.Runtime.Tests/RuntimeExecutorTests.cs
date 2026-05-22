@@ -456,8 +456,7 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.True(fakeAdminHandler.WasCalled,
             "admin_runtime handler must be called when manifest runtime_destination=admin_runtime.");
         Assert.Equal("admin_runtime",
-            response.Emission!.Data!.Value.GetProperty("handledBy").GetString(),
-            "Emission.Data must contain the sentinel returned by the admin_runtime handler stub.");
+            response.Emission!.Data!.Value.GetProperty("handledBy").GetString());
         Assert.False(response.Errors.Any());
     }
 
