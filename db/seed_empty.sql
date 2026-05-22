@@ -127,6 +127,7 @@ VALUES (
     NULL,
     ARRAY[
       '{"type":"dispatcher_mapping","role":"admin","target":"default","layer":"entity","action":"Search"}'::jsonb,
+      '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
       '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
     ]::jsonb[],
     'active'
@@ -150,6 +151,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"save"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -159,6 +161,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"load"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -168,6 +171,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"validate"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -177,6 +181,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"preview"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -186,6 +191,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"seed_runtime","action":"import"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -195,6 +201,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"list"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -204,6 +211,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"create"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -213,6 +221,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"context_token_registry","action":"deprecate"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -222,6 +231,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"registry_vector","action":"validate"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -231,6 +241,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"ui_component_bucket","action":"list"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
@@ -240,6 +251,7 @@ VALUES
         NULL,
         ARRAY[
             '{"type":"dispatcher_mapping","target":"admin","layer":"package_generator","action":"generate"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'

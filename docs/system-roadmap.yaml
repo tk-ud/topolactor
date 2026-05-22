@@ -163,7 +163,7 @@ system_roadmap_ssot:
         - backend.output_lane_router: partial
         - backend.db_notify_listener: partial (scheduler routing implemented; live pg_notify E2E remains)
       blocking_gaps:
-        - Gap-15 output lane live verification connected to check-runtime-environment.sh (AdminRuntime and OutputLaneRouter partial; SSE E2E live DB remains)
+        - Gap-15 output lane live verification remains incomplete; check-runtime-environment.sh no longer treats dispatch_success as evidence for db_notify/SSE propagation
 
     M4_projection_runtime:
       title: SSE and projection runtime
@@ -590,7 +590,7 @@ system_roadmap_ssot:
         this signal channel and triggers rebuildability inspection.
         SseProjectionRuntime added as sse_projection_runtime handler: db_notify hook triggers
         are routed through ManifestDispatcher to SseProjectionRuntime → SseEventBroadcaster.
-        AdminRuntime and OutputLaneRouter live verification added to check-runtime-environment.sh.
+        AdminRuntime live verification is in check-runtime-environment.sh. db_notify dispatch now resolves source manifest identity via manifest_id and uses db_notify_projection_mapping (not runtime_mapping) to reach sse_projection_runtime. OutputLaneRouter full db_notify/SSE live verification remains TODO.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/runtime/RuntimeExecutor.cs

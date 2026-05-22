@@ -1,6 +1,8 @@
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
+using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Scheduler;
 using Xunit;
@@ -206,7 +208,7 @@ public class DbNotifyListenerPayloadTests
             NullLogger<SseProjectionRuntime>.Instance, broadcaster);
 
         // Minimal ManifestDispatcher: only sse_projection_runtime handler is needed.
-        // TargetDispatchOverride is required by constructor but never called for target="db_notify".
+        // db_notify path is manifest-id driven; provide a manifest repository stub keyed by payload manifest_id.
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["sse_projection_runtime"] = sseRuntime,
@@ -231,12 +233,23 @@ public class DbNotifyListenerPayloadTests
         var targetOverride = new Topolactor.Runtime.TargetDispatchOverride(
             NullLogger<Topolactor.Runtime.TargetDispatchOverride>.Instance, topologyRepo, adminRuntime);
 
+        var manifestId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var manifestRepo = new StubManifestRepository(
+            new ManifestRecord(
+                manifestId,
+                RelationRegistryId: null,
+                Topology:
+                [
+                    JsonSerializer.SerializeToElement(new { type = "runtime_mapping", runtime_destination = "topology_transform_runtime" }),
+                    JsonSerializer.SerializeToElement(new { type = "db_notify_projection_mapping", runtime_destination = "sse_projection_runtime" })
+                ],
+                Status: "active"));
         var dispatcher = new Topolactor.Runtime.ManifestDispatcher(
             NullLogger<Topolactor.Runtime.ManifestDispatcher>.Instance,
             handlers,
             new Topolactor.Runtime.OperationVectorResolver(),
             targetOverride,
-            manifestRepository: null);
+            manifestRepository: manifestRepo);
 
         scheduler = new RuntimeTimelineScheduler(
             NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
@@ -281,7 +294,7 @@ public class DbNotifyListenerPayloadTests
         try
         {
             listener.SimulateNotification(
-                """{"table_id":"t2","table_registry_id":"reg2","manifest_id":"00000000-0000-0000-0000-000000000002"}""");
+                """{"table_id":"t2","table_registry_id":"reg2","manifest_id":"00000000-0000-0000-0000-000000000001"}""");
 
             await WaitUntilChannelHasItem(ch1, TimeSpan.FromSeconds(2));
 
@@ -458,4 +471,19 @@ public class SseProjectionRuntimeTests
         Assert.True(response.Success);
         Assert.Empty(response.Errors);
     }
+}
+
+internal sealed class StubManifestRepository : Topolactor.Repository.ManifestRepository
+{
+    private readonly ManifestRecord? _manifest;
+
+    public StubManifestRepository(ManifestRecord? manifest)
+        : base(NullLogger<Topolactor.Repository.ManifestRepository>.Instance) => _manifest = manifest;
+
+    public override Task<ManifestRecord?> ResolveActiveManifestAsync(
+        string? role, string? target, string? layer, string? action, CancellationToken ct = default) =>
+        Task.FromResult(_manifest);
+
+    public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        Task.FromResult(_manifest?.ManifestId == manifestId ? _manifest : null);
 }
