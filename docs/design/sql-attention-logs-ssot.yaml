@@ -368,6 +368,7 @@ layers:
       - no_direct_registry_mutation
       - no_automatic_migration_execution
       - no_automatic_column_promotion
+      - phase_movement_is_not_manifest_or_policy_cap_derived
 
 physical_table_pressure:
   tableid_semantics: physical_table_identity
@@ -551,6 +552,7 @@ phase_attention_function_contract:
     - phase_vector_does_not_auto_mutate_registry
     - phase_vector_does_not_auto_execute_migration
     - phase_vector_does_not_auto_execute_column_promotion
+    - phase_movement_is_not_manifest_or_policy_cap_derived
 
 evidence_layer_separation:
   statistics_layer:
