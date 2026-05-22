@@ -66,6 +66,19 @@ SSOT参照必読:
       → 対象: `backend/scheduler/DbNotifyListener.cs`, `backend/tests/`
       → docs/system-roadmap.yaml: backend.sse_emitter = partial (known_gap_ref: Gap-7)
 
+- [ ] [Claude] Gap-14 残: `runtime_timeline_scheduler` の queue durability / overflow / cancellation boundary hardening
+      → cron/hook/client の unified queue alignment は実装済み (Gap-2 完了扱い)。
+      → 残: queue persistence 未実装、queue full (overflow/backpressure) 時の明示境界、cancellation 時の再実行・中断境界の仕様/実装を確定する。
+      → 完了条件: queue_persistence_and_overflow_or_cancellation_boundary_not_finalized を解消し `backend.runtime_timeline_scheduler` を implemented へ昇格可能な状態にする。
+      → 対象: `backend/scheduler/RuntimeTimelineScheduler.cs`, `docs/system-roadmap.yaml`
+      → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-14
+
+- [ ] [Claude] Gap-15 残: output lane full connection / live verification の実装とゲート接続
+      → 残: `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` / db_notify output lane の live 実行検証を Runtime Environment Test Gate と接続する。
+      → Gap-14 と分離し、timeline alignment 完了後の output lane 接続・検証ギャップとして追跡する。
+      → 対象: `.agent/tests/check-runtime-environment.sh`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`, `backend/repository/*Notify*.cs`
+      → docs/system-roadmap.yaml: backend.runtime_timeline_scheduler known_gap_ref: Gap-15, milestones.M3_unified_timeline_and_output_lanes.blocking_gaps: Gap-15
+
 ## Seed Import/Export Runtime (Issue #84)
 
 - [ ] [Claude] Seed import の Gap-1 依存部分を完全実装する (manifest-driven routing 確立後)

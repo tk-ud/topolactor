@@ -158,7 +158,7 @@ system_roadmap_ssot:
         Align cron, hook, and client triggers on the same backend runtime timeline,
         then route effects into response, db_notify, and registry_attractor output lanes.
       unlocks:
-        - backend.runtime_timeline_scheduler: implemented
+        - backend.runtime_timeline_scheduler: partial (unified_queue_alignment_implemented)
         - backend.output_lane_router: partial
         - backend.db_notify_listener: partial
       blocking_gaps:
