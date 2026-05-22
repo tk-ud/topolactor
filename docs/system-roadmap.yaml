@@ -161,9 +161,7 @@ system_roadmap_ssot:
       unlocks:
         - backend.runtime_timeline_scheduler: implemented (queue_boundary_hardening_complete)
         - backend.output_lane_router: partial
-        - backend.db_notify_listener: partial (scheduler routing implemented; live pg_notify E2E remains)
-      blocking_gaps:
-        - Gap-15 output lane live verification remains incomplete; check-runtime-environment.sh no longer treats dispatch_success as evidence for db_notify/SSE propagation
+        - backend.db_notify_listener: implemented (live pg_notify -> scheduler -> SSE gate in check-runtime-environment.sh)
 
     M4_projection_runtime:
       title: SSE and projection runtime
@@ -177,9 +175,7 @@ system_roadmap_ssot:
         - frontend.sse_dispatcher: partial
         - frontend.projection_runtime: partial
       blocking_gaps:
-        - Gap-7 SSE projection lane full implementation
         - Gap-8 projection_constructor
-        - pipeline continuity SSE end-to-end integration test
 
     M5_admin_and_ui_topology:
       title: Admin UI, component topology, and seed runtime
@@ -441,7 +437,7 @@ system_roadmap_ssot:
         Overflow: client triggers return SCHEDULER_QUEUE_FULL; cron/hook return explicit bool false.
         Cancellation: client triggers return CLIENT_TRIGGER_CANCELED; non-client dispatch
         cancellation is logged and swallowed (fire-and-forget, service stopping).
-        Gap-14 resolved. Gap-15 (output lane full connection) remains and prevents production_ready.
+        Gap-14 and Gap-15 runtime boundary verification route are resolved.
       files:
         - backend/scheduler/RuntimeTimelineScheduler.cs
       evidence:
@@ -462,8 +458,7 @@ system_roadmap_ssot:
         - queue_overflow_returns_explicit_signal_for_all_trigger_kinds
         - cancellation_boundary_is_explicit_for_client_and_non_client_triggers
         - queue_persistence_boundary_is_declared_in_memory_no_db_persistence
-      known_gap_ref:
-        - Gap-15 output_lane_full_connection_and_live_verification_not_completed
+      known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -610,8 +605,7 @@ system_roadmap_ssot:
         - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
         - registry_attractor_update_is_not_hidden_in_response_flow
         - sse_projection_runtime_registered_as_handler_for_db_notify_hook_triggers
-      known_gap_ref:
-        - Gap-15 live DB SSE E2E test (db_notify → pg_notify → DbNotifyListener → scheduler → SseProjectionRuntime) requires live DB
+      known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -624,8 +618,9 @@ system_roadmap_ssot:
         routes pg_notify events through RuntimeTimelineScheduler as hook triggers, through
         ManifestDispatcher to SseProjectionRuntime, which broadcasts to SseEventBroadcaster
         (Gap-7 scheduler routing implemented). Direct broadcast from DbNotifyListener is
-        removed; canonical route invariant satisfied. Full pg_notify E2E path (live DB)
-        not yet covered by automated test (requires live DB, Issue #123).
+        removed; canonical route invariant satisfied. check-runtime-environment.sh now
+        verifies live pg_notify -> DbNotifyListener -> scheduler -> ManifestDispatcher ->
+        SseProjectionRuntime -> SseEventBroadcaster -> /sse by observing probe_id on SSE.
         Remaining: SSE projection lane dispatcher/receiver/projection_runtime wiring (M4).
       files:
         - backend/endpoint/SseEndpoint.cs
@@ -647,9 +642,7 @@ system_roadmap_ssot:
         - backend_sse_emitter_streams_projection_events_not_only_ping
         - event_payload_preserves_manifest_id_component_ids_attention_score_or_documented_identity
         - hook_or_db_notify_event_enters_scheduler_before_sse_emission
-      known_gap_ref:
-        - Gap-7 hook_or_db_notify_event_enters_scheduler_before_sse_emission — scheduler routing implemented; live pg_notify E2E (live DB) remains
-        - Issue #123 SSE end-to-end integration test (live DB required)
+      known_gap_ref: []
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 

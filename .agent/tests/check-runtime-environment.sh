@@ -228,8 +228,75 @@ fi
 echo "OK: AdminRuntime.ExecuteDataAsync returned success"
 
 echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter db_notify -> pg_notify -> LISTEN -> scheduler -> SSE ==="
-echo "WARN: full live SSE E2E probe is not yet implemented in this script."
-echo "WARN: dispatch_success alone must not be treated as OutputLaneRouter live verification."
-echo "WARN: remaining TODO: add observed pg_notify/SSE propagation assertion and fail if not observed."
+seed_manifest_id="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "
+SELECT manifest_id::text
+FROM manifest
+WHERE status = 'active'
+  AND EXISTS (
+    SELECT 1
+    FROM unnest(topology) AS e
+    WHERE e->>'type' = 'db_notify_projection_mapping'
+      AND COALESCE(e->>'runtime_destination','') = 'sse_projection_runtime'
+  )
+ORDER BY manifest_id
+LIMIT 1;
+")"
+if [ -z "${seed_manifest_id}" ]; then
+  echo "ERROR: no active manifest with db_notify_projection_mapping -> sse_projection_runtime found" >&2
+  dump_logs
+  exit 1
+fi
+
+probe_id="runtime-env-live-e2e-$(date +%s)-$RANDOM"
+notify_payload="$(jq -nc \
+  --arg table_id "runtime-env-live-e2e" \
+  --arg table_registry_id "runtime-env-live-e2e" \
+  --arg manifest_id "${seed_manifest_id}" \
+  --arg probe_id "${probe_id}" \
+  '{table_id:$table_id,table_registry_id:$table_registry_id,manifest_id:$manifest_id,probe_id:$probe_id}')"
+
+sse_output_file="$(mktemp)"
+curl -sS -N "${BACKEND_URL}/sse" > "${sse_output_file}" &
+sse_pid=$!
+sleep 1
+
+if ! kill -0 "${sse_pid}" 2>/dev/null; then
+  echo "ERROR: failed to start SSE subscription client" >&2
+  dump_logs
+  exit 1
+fi
+
+cleanup_sse() {
+  if kill -0 "${sse_pid}" 2>/dev/null; then
+    kill "${sse_pid}" 2>/dev/null || true
+    wait "${sse_pid}" 2>/dev/null || true
+  fi
+  rm -f "${sse_output_file}" || true
+}
+trap cleanup_sse RETURN
+
+docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -v ON_ERROR_STOP=1 -c \
+  "NOTIFY db_notify, '$notify_payload';"
+
+event_observed="false"
+for _ in $(seq 1 40); do
+  if rg -q "${probe_id}" "${sse_output_file}"; then
+    event_observed="true"
+    break
+  fi
+  sleep 1
+done
+
+if [ "${event_observed}" != "true" ]; then
+  echo "ERROR: live SSE E2E probe timed out; probe_id=${probe_id} was not observed on SSE stream" >&2
+  echo "=== [RUNTIME_ENV] SSE output snapshot ===" >&2
+  tail -n 120 "${sse_output_file}" >&2 || true
+  dump_logs
+  exit 1
+fi
+
+echo "OK: observed live SSE projection event for probe_id=${probe_id}"
+cleanup_sse
+trap - RETURN
 
 echo "=== Runtime environment check passed ==="
