@@ -139,4 +139,4 @@ source ~/.topolactor-tools/env.sh
 bash .agent/tests/check-local-ci.sh
 ```
 
-`check-local-ci.sh` executes checks in fixed order: unified test gate → runtime environment → structure check (always last).
+`check-local-ci.sh` executes checks in fixed order: unified test gate → runtime environment → structure check (always last). Even when earlier checks fail or are not executed, it still runs the final structure check and then exits non-zero.
