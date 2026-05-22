@@ -294,7 +294,7 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 --   "context_route_recommendation_resolve", "default_policy").
 -- Policy-missing → ExplicitError("CONTEXT_ROUTE_POLICY_NOT_FOUND").
 -- ---------------------------------------------------------------------------
-INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'context_route_recommendation_resolve',
     'default_policy',
@@ -318,7 +318,7 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING;
 -- enabled: false disables cleanup; RetentionScheduler logs Disabled status instead of skipping silently.
 -- schedule_interval_hours: how often RetentionScheduler triggers the runtime.
 -- ---------------------------------------------------------------------------
-INSERT INTO function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'context_event_retention',
     'retention_policy',
