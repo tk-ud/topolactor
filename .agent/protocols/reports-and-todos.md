@@ -90,6 +90,12 @@ Completion Summary Template defines body shape; required external actions are de
 
 For existing PR updates, final summary without either `POSTED + VERIFIED` evidence or `PR_COMMENT_NOT_POSTED` paste-ready body is incomplete.
 
+## Completion Summary generation rules (not emitted section)
+
+- `Summary`, `Testing`, `残TODO`, `PR comment evidence` をテンプレート外の自由形式セクションで追加してはいけない。
+- `Testing` は必ず `### test結果` に統合する。
+- dotnet / deno などのローカル必須チェック未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` として記録する。
+- 残課題・未完了作業は必ず `### 残タスク引き継ぎ指示` に入れる。
 
 ## Completion Summary Template
 
@@ -125,7 +131,7 @@ Implementation agent must write completion / follow-up summaries using this shap
   - remote CI 代替が必要か:
 
 #### PR comment evidence
-- `state`: POSTED_AND_VERIFIED / PR_COMMENT_NOT_POSTED / NOT_REQUIRED
+- `state`: POSTED + VERIFIED / PR_COMMENT_NOT_POSTED / NOT_REQUIRED
   - 理由:
   - posted 先 (PR URL or NOT_REQUIRED):
   - paste-ready comment body (PR_COMMENT_NOT_POSTED の場合のみ必須):
@@ -157,12 +163,6 @@ This section is Auditor TODO input, not canonical TODO closure.
 - CI待ち:
 - local tool不足:
 - remote CI確認待ち:
-
-Template invariant:
-- `Summary`, `Testing`, `残TODO`, `PR comment evidence` をテンプレート外の自由形式セクションで追加してはいけない。
-- `Testing` は必ず `### test結果` に統合する。
-- dotnet / deno などのローカル必須チェック未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` として記録する。
-- 残課題・未完了作業は必ず `### 残タスク引き継ぎ指示` に入れる。
 
 ## TODO carry-over rules
 

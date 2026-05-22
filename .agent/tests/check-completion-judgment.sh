@@ -41,6 +41,7 @@ check_term ".agent/protocols/reports-and-todos.md" "Prompt Type / Work Type Outp
 check_term ".agent/protocols/reports-and-todos.md" "| existing PR update |"
 check_term ".agent/protocols/reports-and-todos.md" "single terminal reporting endpoint"
 check_term ".agent/protocols/reports-and-todos.md" "must be emitted inside this template only."
+check_term ".agent/protocols/reports-and-todos.md" "Completion Summary generation rules (not emitted section)"
 check_term ".agent/protocols/reports-and-todos.md" "#### PR comment evidence"
 check_term ".agent/protocols/reports-and-todos.md" "### test結果"
 check_term ".agent/protocols/reports-and-todos.md" "POSTED + VERIFIED"
