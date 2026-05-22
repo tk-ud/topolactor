@@ -8,3 +8,6 @@ deno.lock
 # Agent temporary planning memo (must not be committed)
 .agent/tmp/*
 !.agent/tmp/.gitkeep
+
+# Local environment secrets
+infra/.env
