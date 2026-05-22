@@ -30,6 +30,7 @@ READ_ENTRY
   - `.agent/rules/rule.md`
   - `.agent/README.md`
   - `.agent/skills/agent-workflow.md`
+  - if the executing agent is Claude (Claude Code on the web / remote execution environment), read `.agent/protocols/claude.md` for environment setup before any local tool execution
   - open matching `.agent/prompt/<work-type>.md` only when the work type trigger applies
   - for existing PR follow-up updates, route via `.agent/prompt/existing-pr-update.md`
 - READ_TASK_MATERIALS
