@@ -347,23 +347,24 @@ layers:
     description: >-
       Phase Attention is stored as phase_vector_json on logs.attention by
       default, not as a separate candidate table. It distorts the neighbor hit
-      vector across i/table, j/column, and k/ui axes using l2_norm strength and
-      normalized registry population.
+      vector across xi/table, yj/column, and zk/ui quaternion axes using
+      attention strength normalized by hub-side record count.
     basis:
-      i: table_direction
-      j: column_jsonb_path_axis_direction
-      k: ui_component_operation_direction
+      xi: table_direction
+      yj: column_jsonb_path_axis_direction
+      zk: ui_component_operation_direction
     calculation_shape:
       base_vector: logs.attention.vector_json
-      axis_z_score: z_score_table_registry_i_j_k_population
-      move_distance: f_l2_norm_axis_z_score_policy_caps
+      attention_strength: attention_strength
+      hub_side_record_count: hub_side_record_count
+      movement_percentage: attention_strength_divided_by_hub_side_record_count
       result: logs.attention.phase_vector_json
     guardrails:
       - phase_vector_is_evidence_candidate_data_not_adopted_topology_state
       - no_direct_registry_mutation
       - no_automatic_migration_execution
       - no_automatic_column_promotion
-      - no_unbounded_phase_movement
+      - phase_movement_is_not_manifest_or_policy_cap_derived
 
 physical_table_pressure:
   tableid_semantics: physical_table_identity
@@ -530,14 +531,17 @@ scheduler_runtime_boundary:
 phase_attention_function_contract:
   input:
     - logs_attention_vector_json
-    - logs_attention_l2_norm
-    - table_registry_i_j_k_population
-    - z_score_normalized_values
-    - policy_caps
+    - attention_strength
+    - hub_side_record_count
+    - quaternion_axis_basis_xi_yj_zk
+  calculation:
+    movement_percentage: attention_strength_divided_by_hub_side_record_count
+    movement_basis: hub_space_relative_percentage
   output:
     - logs_attention_phase_vector_json
   invariants:
     - phase_vector_is_candidate_evidence
+    - phase_movement_is_not_manifest_or_policy_cap_derived
     - phase_vector_does_not_auto_mutate_registry
     - phase_vector_does_not_auto_execute_migration
     - phase_vector_does_not_auto_execute_column_promotion
@@ -569,7 +573,7 @@ implementation_order:
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
   - implement_scheduler_runtime_hub_attractor_exploration
-  - implement_phase_attention_vector_distortion_after_policy_caps_and_evidence_linkage_are_fixed
+  - implement_phase_attention_vector_distortion_after_attention_strength_and_hub_record_count_semantics_are_fixed
 
 initial_minimal_basis:
   table_pressure: logs.diff
