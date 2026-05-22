@@ -912,9 +912,9 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
     private static readonly IReadOnlyDictionary<string, (string IdCol, string NameExpr, string ArrayCol)> _registryVectorTableMap =
         new Dictionary<string, (string, string, string)>
         {
-            ["relation_registry"] = ("relation_registry_id", "name",          "master_ids"),
-            ["entities"]          = ("entity_id",            "entity_id::text","relation_ids"),
-            ["structure_maps"]    = ("structure_map_id",      "name",          "component_ids"),
+            ["topologys.relation_registry"] = ("relation_registry_id", "name",          "master_ids"),
+            ["topologys.entities"]          = ("entity_id",            "entity_id::text","relation_ids"),
+            ["topologys.structure_maps"]    = ("structure_map_id",      "name",          "component_ids"),
         };
 
     /// <summary>
