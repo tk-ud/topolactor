@@ -65,10 +65,10 @@ Switch invariant:
 
 ## Completion Summary Template scope mapping
 
-Completion Summary Template is the terminal reporting endpoint for completion-governance output surfaces.
-No prompt router or workflow note may replace it with an alternate final summary shape.
-Completion Summary Template defines body shape.
-It does not satisfy required external actions by itself.
+Completion Summary Template is the single terminal reporting endpoint for completion-governance output surfaces.
+No prompt router, workflow note, or ad-hoc summary block may replace it with an alternate final summary shape.
+Summary / Testing / remaining TODO / PR comment evidence must be emitted inside this template only.
+Completion Summary Template defines body shape; required external actions are decided/executed separately.
 
 - summary source:
   - `.agent/protocols/reports-and-todos.md` / `## Completion Summary Template`
@@ -124,6 +124,12 @@ Implementation agent must write completion / follow-up summaries using this shap
 - `command`: REQUIRED_EXECUTED / REQUIRED_NOT_EXECUTED / NOT_REQUIRED / OUT_OF_SCOPE
   - remote CI 代替が必要か:
 
+#### PR comment evidence
+- `state`: POSTED_AND_VERIFIED / PR_COMMENT_NOT_POSTED / NOT_REQUIRED
+  - 理由:
+  - posted 先 (PR URL or NOT_REQUIRED):
+  - paste-ready comment body (PR_COMMENT_NOT_POSTED の場合のみ必須):
+
 ### 残タスク引き継ぎ指示
 
 This section is Auditor TODO input, not canonical TODO closure.
@@ -151,6 +157,12 @@ This section is Auditor TODO input, not canonical TODO closure.
 - CI待ち:
 - local tool不足:
 - remote CI確認待ち:
+
+Template invariant:
+- `Summary`, `Testing`, `残TODO`, `PR comment evidence` をテンプレート外の自由形式セクションで追加してはいけない。
+- `Testing` は必ず `### test結果` に統合する。
+- dotnet / deno などのローカル必須チェック未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` として記録する。
+- 残課題・未完了作業は必ず `### 残タスク引き継ぎ指示` に入れる。
 
 ## TODO carry-over rules
 
