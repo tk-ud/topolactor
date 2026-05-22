@@ -160,7 +160,7 @@ SELECT json_build_object(
   'structureMapId', sm.structure_map_id::text
 )::text
 FROM dispatcher d
-LEFT JOIN structure_maps sm
+LEFT JOIN topologys.structure_maps sm
   ON lower(sm.attractor_key) = lower(concat_ws(':', d.target, d.layer, d.action))
  AND sm.active = true
 ORDER BY d.manifest_id
