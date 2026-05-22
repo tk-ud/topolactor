@@ -306,7 +306,7 @@ db_schema:
     topology_edit_log:
       category: converged_entity
       file: db/topology_tables.sql
-      role: hub_tensor_attractor_relation_edit_audit_log
+      role: abstract_space_definition_edit_audit_log
       naming_note: topology_label_can_be_misread_as_physical_table_lifecycle_diff
       sql_attention_logs_mapping:
         classification: mismatch
@@ -321,9 +321,9 @@ db_schema:
     usage_metrics:
       category: promotion_policy
       file: db/promotion_tables.sql
-      role: operation_usage_pattern_tracking
+      role: observed_access_usage_pressure_on_physical_time_axis
       sql_attention_logs_mapping:
-        classification: conditional
+        classification: canonical
         candidate_for: logs.candidate
         condition:
           - preserve_table_column_jsonb_path_axis_pressure_trace
@@ -332,17 +332,18 @@ db_schema:
     promotion_candidates:
       category: promotion_policy
       file: db/promotion_tables.sql
-      role: advisory_structural_change_suggestions
+      role: columnization_index_registry_or_physical_table_promotion_candidate_log
       sql_attention_logs_mapping:
-        classification: conditional
+        classification: canonical
         candidate_for: logs.candidate
         condition:
           - status_lifecycle_pending_approved_or_rejected
+          - approval_state_extractable_as_adopted_candidate
           - column_jsonb_path_axis_candidate_pressure_traceable
           - archive_audit_possible
 
     # -------------------------------------------------------------------------
-    # context_route — 推薦エンジン child projection/registry surfaces
+    # context_route — 推薦エンジン child projection/registry surfaces (not SQL Attention parent observation plane)
     # -------------------------------------------------------------------------
 
     context_token_registry:
@@ -364,15 +365,15 @@ db_schema:
     context_event:
       category: context_route
       file: db/context_route_tables.sql
-      role: operation_event_log_hot_storage
+      role: append_only_ui_operation_component_usage_pressure_source
       note: retention_policy_via_function_parameters
       sql_attention_logs_mapping:
-        classification: conditional
+        classification: canonical
         candidate_for: logs.ui_operation
         condition:
-          - treat_as_component_or_operation_usage_signal_source
+          - canonical_source_for_logs_ui_operation
           - retention_manifest_or_policy_driven
-          - not_sql_attention_core_tables
+          - append_only_session_sequence_semantics_preserved
 
     context_event_cold:
       category: context_route
@@ -517,7 +518,7 @@ db_schema:
     ui_topology_tensor:
       category: ui_topology
       file: db/ui_topology_tables.sql
-      role: route_to_package_layout_wiring_tensor
+      role: ui_projection_composition_route_package_layout_wiring_surface
       key_columns:
         - name: tensor_id
           type: uuid

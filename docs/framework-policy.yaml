@@ -1,4 +1,15 @@
 framework_policy:
+
+  topolactor_space_boundary_policy:
+    logs: physical_time_axis_observation_space
+    topologys: semantic_space
+    hubs: phase_space_plane_set_for_relation_composition
+    projection_ui: post_collapse_projection_emission_surface
+    separation_rules:
+      - do_not_translate_space_definition_directly_into_fk_or_table_layout_rules
+      - projection_ui_package_layout_wiring_is_not_hub_phase_plane
+      - aggregates_are_attention_weight_observation_not_meaning_sot
+      - registry_state_relation_are_semantic_space_basis
   registry_tensor_principle:
     role: ssot_mandatory_principle
     registry: semantic_matrix_topology_vocabulary_basis
@@ -136,6 +147,10 @@ framework_policy:
         - record_manual_vector_ownership
         - record_direct_vector_sparse_authoring
       vector_cache: vector_sparse_l2_norm_are_rebuildable_projection_caches
+
+  ui_projection_composition_persistence:
+    naming_note: ui_topology_tensor_is_persistence_name_not_semantic_tensor_sot
+    semantic_boundary: ui_package_layout_wiring_is_projection_composition_surface
 
   ui_topology_tensor_persistence:
     components_bucket:
@@ -306,7 +321,7 @@ framework_policy:
     note: column_promotion_is_semantic_axis_manifestation_not_schema_drift
 
   logs_diffs_policy:
-    role: append_only_diff_surface
+    role: physical_time_axis_lifecycle_diff_observation_surface
     basic_shape:
       - id
       - table_id

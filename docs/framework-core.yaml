@@ -58,6 +58,48 @@ data_driven_topology_runtime_framework:
     frontend_ui: Preact
     batch: cron_or_background_service
 
+
+  topolactor_space_model:
+    logs:
+      role: physical_time_axis_observation_space
+      definition: when_where_which_physical_target_and_what_pressure_diff_usage_candidate_occurred
+      includes:
+        - physical_table_record_lifecycle_diff
+        - usage_pressure
+        - candidate_pressure
+    topologys:
+      role: semantic_space
+      definition: vocabulary_state_relation_schema_package_component_registry_definition_space
+      semantic_basis:
+        - registry
+        - state
+        - relation
+    hubs:
+      role: phase_space_plane_set
+      definition: relation_state_entity_weight_registry_reference_composition_surface
+      vector_property: relationship_composition_naturally_forms_vectors
+    sql_attention:
+      role: resonance_between_logs_pressure_and_hub_phase_planes
+      formula: physical_pressure_vector_cross_hub_phase_plane_vector_evidence
+      not:
+        - registry_search
+        - topology_search
+    ui_projection:
+      role: post_collapse_projection_emission_surface
+      includes:
+        - ui_package
+        - layout
+        - wiring
+      boundary: not_phase_space_itself
+    weight_observation_rule:
+      weights:
+        - count
+        - transition
+        - recency
+        - ema
+        - feedback
+      rule: weights_are_attention_observation_not_semantic_sot
+
   actions:
     - Search
     - Create
