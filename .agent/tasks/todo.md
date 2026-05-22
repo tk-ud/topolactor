@@ -18,9 +18,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention Logs schema contract 後の次フェーズ
 
-- [ ] scheduler/runtime hub-attractor exploration を実装する
-      → exploration 実行責務 (scheduler vs runtime)、vector permutation 上限、hub-attractor topK を実装し、evidence 保存は独立 TODO（write_logs_attention 境界）を参照する。
-
 - [ ] [Claude] logs.attention evidence persistence / write_logs_attention boundary を実装する
       → SQL Attention 完了境界は hub-attractor exploration の実行ではなく、`logs.attention` に evidence row が保存されることとする。
       → `current_id` linkage を必須にし、`statistics_json` / `ema_score`、`l2_norm` / `vector_json` / `neighbor_score`、`phase_vector_json`、`evidence_json` を evidence meaning 別に保持する。
