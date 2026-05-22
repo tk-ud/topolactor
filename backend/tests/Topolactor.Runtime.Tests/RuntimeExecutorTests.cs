@@ -227,6 +227,109 @@ public class SchedulerDispatcherChainTests
             await scheduler.StopAsync(CancellationToken.None);
         }
     }
+
+    // --- Queue overflow boundary tests (Gap-14) ---
+
+    [Fact]
+    public void EnqueueCronTrigger_QueueNotFull_ReturnsTrue()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 4);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var accepted = scheduler.EnqueueCronTrigger(request);
+
+        Assert.True(accepted);
+    }
+
+    [Fact]
+    public void EnqueueCronTrigger_QueueFull_ReturnsFalse()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        // capacity=1: fill then attempt to overflow (no consumer running)
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 1);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var first = scheduler.EnqueueCronTrigger(request);
+        var second = scheduler.EnqueueCronTrigger(request);
+
+        Assert.True(first);
+        Assert.False(second);
+    }
+
+    [Fact]
+    public void EnqueueHookTrigger_QueueNotFull_ReturnsTrue()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 4);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var accepted = scheduler.EnqueueHookTrigger(request);
+
+        Assert.True(accepted);
+    }
+
+    [Fact]
+    public void EnqueueHookTrigger_QueueFull_ReturnsFalse()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 1);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var first = scheduler.EnqueueHookTrigger(request);
+        var second = scheduler.EnqueueHookTrigger(request);
+
+        Assert.True(first);
+        Assert.False(second);
+    }
+
+    [Fact]
+    public async Task AlignAndDispatchAsync_ClientTrigger_QueueFull_ReturnsSchedulerQueueFullError()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 1);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        // Do not start the consumer — queue fills immediately with the first item.
+        var cronRequest = request with { TriggerKind = "cron" };
+        scheduler.EnqueueCronTrigger(cronRequest);
+
+        var response = await scheduler.AlignAndDispatchAsync(request);
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "SCHEDULER_QUEUE_FULL");
+    }
+
+    [Fact]
+    public async Task AlignAndDispatchAsync_ClientTriggerCanceled_ReturnsClientCanceledError()
+    {
+        var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
+        using var serviceCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(serviceCts.Token);
+
+        try
+        {
+            using var clientCts = new CancellationTokenSource();
+            clientCts.Cancel();
+
+            var response = await scheduler.AlignAndDispatchAsync(
+                new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null),
+                clientCts.Token);
+
+            Assert.False(response.Success);
+            Assert.Contains(response.Errors, e => e.Code == "CLIENT_TRIGGER_CANCELED");
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
+    }
 }
 
 public class ManifestDispatcherOverrideTests
