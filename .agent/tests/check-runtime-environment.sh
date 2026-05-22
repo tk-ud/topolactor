@@ -227,16 +227,9 @@ if [ "${admin_success}" != "true" ]; then
 fi
 echo "OK: AdminRuntime.ExecuteDataAsync returned success"
 
-echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter.RouteAsync db_notify lane ==="
-# Verify that after a successful dispatch, the OutputLaneRouter's db_notify lane ran.
-# The pg_notify is sent via notify_async in the DB. We verify no output lane error
-# by checking the dispatch succeeded (OutputLaneRouter failure is non-blocking but logged).
-# Full db_notify -> scheduler -> SSE E2E path requires live pg_listen and is tracked as Gap-7.
-if [ "${dispatch_success}" = "true" ]; then
-  echo "OK: OutputLaneRouter.RouteAsync ran as part of dispatch (verified via successful dispatch response)"
-else
-  echo "ERROR: dispatch_success was not true — OutputLaneRouter verification not reached" >&2
-  exit 1
-fi
+echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter db_notify -> pg_notify -> LISTEN -> scheduler -> SSE ==="
+echo "WARN: full live SSE E2E probe is not yet implemented in this script."
+echo "WARN: dispatch_success alone must not be treated as OutputLaneRouter live verification."
+echo "WARN: remaining TODO: add observed pg_notify/SSE propagation assertion and fail if not observed."
 
 echo "=== Runtime environment check passed ==="
