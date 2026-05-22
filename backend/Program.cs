@@ -131,6 +131,8 @@ builder.Services.AddSingleton<SeedJsonRepository>(sp =>
     new SeedJsonRepository(
         sp.GetRequiredService<ILogger<SeedJsonRepository>>(),
         seedStoragePath));
+builder.Services.AddSingleton<SeedImportApplyRepository>(sp =>
+    new SeedImportApplyRepository(connectionString));
 builder.Services.AddSingleton<SeedRuntime>();
 
 // ---------------------------------------------------------------------------

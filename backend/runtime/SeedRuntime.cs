@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Topolactor.Repository;
@@ -21,16 +20,16 @@ public class SeedRuntime
 {
     private readonly ILogger<SeedRuntime> _logger;
     private readonly SeedJsonRepository _seedRepository;
-    private readonly IServiceProvider _serviceProvider;
+    private readonly SeedImportApplyRepository _seedImportApplyRepository;
 
     public SeedRuntime(
         ILogger<SeedRuntime> logger,
         SeedJsonRepository seedRepository,
-        IServiceProvider serviceProvider)
+        SeedImportApplyRepository seedImportApplyRepository)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _seedRepository = seedRepository ?? throw new ArgumentNullException(nameof(seedRepository));
-        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+        _seedImportApplyRepository = seedImportApplyRepository ?? throw new ArgumentNullException(nameof(seedImportApplyRepository));
     }
 
     public async Task<SeedSaveResult> SaveAsync(string json, CancellationToken ct = default)
@@ -131,7 +130,7 @@ public class SeedRuntime
     }
 
     /// <summary>
-    /// Import: validates seed.json and applies each runtime declaration through canonical manifest dispatcher route.
+    /// Import: validates seed.json and applies each runtime declaration through canonical seed import apply boundary.
     /// Failure is explicit (fail-close). No silent fallback.
     /// </summary>
     public async Task<SeedImportResult> ImportAsync(CancellationToken ct = default)
@@ -148,7 +147,6 @@ public class SeedRuntime
             runtimesEl.ValueKind != JsonValueKind.Array)
             return new SeedImportResult(true, runtimeCount, []);
 
-        var dispatcher = _serviceProvider.GetRequiredService<ManifestDispatcher>();
         var importErrors = new List<SeedValidationError>();
 
         foreach (var runtime in runtimesEl.EnumerateArray())
@@ -156,60 +154,53 @@ public class SeedRuntime
             runtimeCount++;
 
             var name = runtime.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty;
-            var target = runtime.GetProperty("target").GetString();
-            var layer = runtime.GetProperty("layer").GetString();
-            var action = runtime.GetProperty("action").GetString();
+            var target = runtime.GetProperty("target").GetString() ?? string.Empty;
+            var layer = runtime.GetProperty("layer").GetString() ?? string.Empty;
+            var action = runtime.GetProperty("action").GetString() ?? string.Empty;
 
-            var payload = JsonSerializer.SerializeToElement(new
+            if (string.Equals(target, "admin", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(layer, "seed_runtime", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(action, "import", StringComparison.OrdinalIgnoreCase))
             {
-                source = "seed_runtime_import",
-                canonical_db_write_boundary = "runtime_handler_owned",
-                runtime_name = name,
-                runtime_definition = runtime
-            });
-
-            var request = new EndpointRequestDto(
-                OperationType: "SeedImport",
-                Target: target,
-                Layer: layer,
-                Action: action,
-                IdOrHubId: null,
-                Payload: payload,
-                Context: null,
-                TriggerKind: "client",
-                Role: null);
-
-            var response = await dispatcher.DispatchAsync(request, ct);
-            if (response.Success)
-            {
-                var hasCanonicalWrite = response.Emission?.Data is JsonElement dataEl &&
-                                       dataEl.ValueKind == JsonValueKind.Object &&
-                                       dataEl.TryGetProperty("canonical_db_write_applied", out var writeEl) &&
-                                       writeEl.ValueKind == JsonValueKind.True;
-
-                if (hasCanonicalWrite)
-                    continue;
-
                 importErrors.Add(new SeedValidationError(
-                    "SEED_IMPORT_CANONICAL_DB_WRITE_NOT_CONFIRMED",
-                    $"runtimes[{runtimeCount - 1}] ({name}) dispatched but canonical_db_write_applied was not confirmed by runtime output."));
+                    "SEED_IMPORT_RECURSIVE_ROUTE_FORBIDDEN",
+                    $"runtimes[{runtimeCount - 1}] ({name}) maps to admin:seed_runtime:import and is explicitly forbidden."));
                 continue;
             }
 
-            var errorMessage = response.Errors.Count > 0
-                ? string.Join("; ", response.Errors.Select(e => $"{e.Code}: {e.Message}"))
-                : "Unknown import failure.";
+            var runtimeDestination = runtime.TryGetProperty("runtimeDestination", out var destEl)
+                ? destEl.GetString() ?? "topology_transform_runtime"
+                : "topology_transform_runtime";
 
-            importErrors.Add(new SeedValidationError(
-                "SEED_IMPORT_RUNTIME_DISPATCH_FAILED",
-                $"runtimes[{runtimeCount - 1}] ({name}) failed: {errorMessage}"));
+            try
+            {
+                var canonicalWriteApplied = await _seedImportApplyRepository.ApplyRuntimeDeclarationAsync(
+                    target,
+                    layer,
+                    action,
+                    runtimeDestination,
+                    ct);
+
+                if (!canonicalWriteApplied)
+                {
+                    importErrors.Add(new SeedValidationError(
+                        "SEED_IMPORT_CANONICAL_DB_WRITE_NOT_CONFIRMED",
+                        $"runtimes[{runtimeCount - 1}] ({name}) was not applied because active mapping already exists or canonical write was not performed."));
+                }
+            }
+            catch (Exception ex)
+            {
+                importErrors.Add(new SeedValidationError(
+                    "SEED_IMPORT_RUNTIME_DISPATCH_FAILED",
+                    $"runtimes[{runtimeCount - 1}] ({name}) failed: {ex.Message}"));
+            }
         }
 
         if (importErrors.Count > 0)
             return new SeedImportResult(false, runtimeCount, importErrors);
 
         _logger.LogInformation(
-            "SeedRuntime.ImportAsync: imported {Count} runtime declaration(s) via canonical manifest dispatcher route.",
+            "SeedRuntime.ImportAsync: imported {Count} runtime declaration(s) via canonical seed import apply boundary.",
             runtimeCount);
 
         return new SeedImportResult(true, runtimeCount, []);
