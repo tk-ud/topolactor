@@ -34,7 +34,17 @@ docker pull public.ecr.aws/docker/library/nginx:1.27-alpine
 docker tag public.ecr.aws/docker/library/nginx:1.27-alpine nginx:1.27-alpine
 ```
 
-### 3. Run bootstrap
+### 3. Prepare local environment file
+
+`infra/.env` is a local runtime file and must not be committed. Create it from the tracked example when absent:
+
+```bash
+[ -f infra/.env ] || cp infra/.env.example infra/.env
+```
+
+`bash .agent/scripts/bootstrap-local-postgres.sh` also performs this copy automatically when `infra/.env` is missing.
+
+### 4. Run bootstrap
 
 ```bash
 bash .agent/scripts/bootstrap-local-tools.sh
@@ -42,7 +52,7 @@ bash .agent/scripts/bootstrap-local-tools.sh
 
 This installs dotnet SDK 8 and deno, then starts the Postgres container via docker compose.
 
-### 4. Verify
+### 5. Verify
 
 ```bash
 source ~/.topolactor-tools/env.sh
@@ -54,5 +64,5 @@ docker ps
 ## Notes
 
 - PATH changes from bootstrap do not persist across shell invocations. Source `~/.topolactor-tools/env.sh` before running dotnet or deno commands.
-- `infra/.env` must exist with a non-empty `DEMO_JWT_SECRET` before bootstrap. Copy from `infra/.env.example` if absent.
-- This is a public scaffold repository; `infra/.env` contains only demo values and may be committed.
+- `infra/.env` must exist with a non-empty `DEMO_JWT_SECRET` before bootstrap; create it from `infra/.env.example` when absent.
+- Keep `infra/.env` local-only. Commit only `infra/.env.example`.
