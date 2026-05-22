@@ -352,17 +352,18 @@ When hub-attractor exploration produces a hit, Phase Attention may distort the h
 
 ```text
 neighbor hit vector
-→ l2_norm strength
-→ i/table, j/column, k/ui phase distortion
+→ attention strength
+→ attention strength / hub-side record count = movement percentage
+→ xi/table, yj/column, zk/ui quaternion-axis movement
 → phase_vector stored on logs.attention
 ```
 
 Draft basis:
 
 ```text
-i = table direction
-j = column / jsonb_path / axis direction
-k = UI / component operation direction
+xi = table direction
+yj = column / jsonb_path / axis direction
+zk = UI / component operation direction
 ```
 
 ## Completion boundary
@@ -782,10 +783,16 @@ Input contract:
 
 ```text
 - logs.attention.vector_json
-- logs.attention.l2_norm
-- table registry i/j/k population
-- z-score normalized values
-- policy caps (manifest/function_parameters/policy table resolved)
+- attention_strength
+- hub_side_record_count
+- quaternion_axis_basis (xi / yj / zk)
+```
+
+Calculation contract:
+
+```text
+movement_percentage = attention_strength / hub_side_record_count
+phase_vector_json = vector_json shifted along xi / yj / zk by movement_percentage
 ```
 
 Output contract:
@@ -798,6 +805,7 @@ Guardrails:
 
 ```text
 - phase_vector is candidate/evidence, not adopted state
+- phase movement is derived from attention strength and hub-side record count, not Manifest / policy caps
 - phase_vector does not auto-trigger registry mutation
 - phase_vector does not auto-trigger migration
 - phase_vector does not auto-trigger column promotion
@@ -812,7 +820,7 @@ Guardrails:
 5. Implement logs.current basis update and norm-level monitoring.
 6. Implement logs.attention evidence persistence with statistics, vector, and phase_vector.
 7. Implement scheduler/runtime hub-attractor exploration.
-8. Implement Phase Attention vector distortion only after policy caps and evidence linkage are fixed.
+8. Implement Phase Attention vector distortion only after attention-strength / hub-record-count movement semantics and evidence linkage are fixed.
 
 ## One-sentence definition
 
