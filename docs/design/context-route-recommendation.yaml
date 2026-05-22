@@ -59,6 +59,26 @@ registry_tensor_principle:
       - feedback
       - attention_evidence
 
+recommendation_semantic_authority:
+  role: registry_defined_discrete_values_ssot
+  canonical_sources:
+    - state_registry
+    - relation_registry
+    - other_registry_defined_discrete_values
+  rules:
+    - enum_is_reference_type_not_separate_semantic_ssot
+    - context_token_registry_is_projection_ui_candidate_observation_helper_not_semantic_authority
+    - registry_defined_state_values_can_be_vectorized_as_equal_interval_discrete_coordinates
+  vectorization_example:
+    formula: value_index_div_dictionary_record_count
+  weight_semantics:
+    - count
+    - transition
+    - recency
+    - ema
+    - feedback
+  note: weights_are_importance_signals_not_semantic_meaning_itself
+
 real_sys_table_principle:
   basic_shape: id_state_jsonb
   id_role: identity
@@ -230,8 +250,9 @@ entities:
 
   context_token_registry:
     description: >
-      Discrete token dictionary.
+      Projection/UI token dictionary for candidate display and observation support.
       token_id is used in context_event.token_ids.
+      This table is not semantic SoT; semantic authority comes from registry-defined discrete values (for example state_registry).
       value is a human-assigned ordering/display/audit reference; it is not used in recommendation computation.
       Recommendation uses multi-hot token ID presence (1.0 per token) as the topology observation signal.
       group is UI grouping only — not used as meaning authority.
@@ -679,7 +700,7 @@ topology_vector_runtime:
         ema_slow_10:           { type: float, nullable: true, note: "EMA with slow alpha from policy" }
         trend:                 { type: float, nullable: true, note: "ema_fast - ema_slow" }
         cross_state:           { type: enum, values: [up, down, none], nullable: true }
-        attention_score:       { type: float, nullable: true, note: "composite score" }
+        attention_score:       { type: float, nullable: true, note: "child projection display/ranking score; must not back-propagate into SQL Attention parent evidence layer" }
         rank:                  { type: int, nullable: true }
         evidence_json:         { type: jsonb, note: "transition key evidence: relation/cosine/stat/EMA/cross" }
         mlp_feature_json:      { type: jsonb, note: "feature crossing contribution breakdown" }

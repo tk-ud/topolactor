@@ -129,10 +129,29 @@ layers:
       attention results and are not registry grammar tables.
     initial_sources:
       logs.diff:
-        pressure: physical_table_change_pressure
+        pressure: physical_table_record_lifecycle_mutation_pressure_source
+        lifecycle_operations:
+          - create
+          - update
+          - logical_delete
+          - restore
+          - physical_delete
         retention: archive_required
         delete_policy: no_destructive_delete
         tableid_semantics: physical_table_identity
+        required_identity_fields:
+          - physical_table_id
+          - physical_table_name
+          - record_id
+          - operation_kind
+          - before_state_or_diff_json
+          - after_state_or_diff_json
+          - observed_at
+          - actor_or_source
+          - archive_policy
+        boundary:
+          - not_hub_tensor_topology_edit_audit_log
+          - not_direct_reuse_of_topology_edit_log
       logs.candidate:
         pressure: column_jsonb_path_axis_candidate_pressure
         retention: archive_required
@@ -152,6 +171,8 @@ layers:
     extensibility: >-
       The initial sources are examples. Other logs source combinations may use
       the same structure when source semantics are explicit.
+    logical_source_name_contract:
+      note: logs.diff_logs.candidate_logs.ui_operation_are_logical_signal_source_names_not_immediate_physical_table_names
     required_fields:
       - source_name
       - source_kind
@@ -419,9 +440,10 @@ completion_boundary:
 existing_repository_mismatch_notes:
   topology_edit_log:
     caution: >-
-      Current description uses target_table as attractor_key/domain scope, not
-      physical tableid. It is not automatically logs.diff unless physical table
-      identity is added or clarified.
+      topology_edit_log is a hub/tensor/attractor/relation edit audit log and
+      is not a physical table/record lifecycle diff source.
+    direct_reuse_as_logs_diff: prohibited
+    adapter_mapping_requirement: explicit_physical_table_identity_contract
   promotion_candidates:
     can_align_with: logs.candidate
     condition: >-
@@ -591,8 +613,9 @@ initial_minimal_basis:
 existing_table_alignment:
   topology_edit_log:
     classification: mismatch
-    reason: target_table_scope_identifier_not_guaranteed_physical_tableid
-    alignment_requirement: explicit_physical_table_identity_contract
+    reason: hub_tensor_or_topology_definition_edit_audit_log_not_physical_table_record_lifecycle_diff
+    direct_reuse: prohibited
+    alignment_requirement: explicit_physical_table_identity_contract_via_adapter_mapping
   promotion_candidates:
     classification: conditional_logs_candidate
     condition:

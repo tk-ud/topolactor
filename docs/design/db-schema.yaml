@@ -15,6 +15,7 @@ db_schema:
     - topology_definition
     - converged_entity
     - promotion_policy
+    - sql_attention_observation
     - context_route
     - ui_topology
     - manifest
@@ -39,7 +40,7 @@ db_schema:
         - topologys.topology_edit_log
         - topologys.demo_state_transitions
     logs:
-      role: statistics_observation_current_attention_evidence
+      role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:
         - logs.usage_metrics
         - logs.promotion_candidates
@@ -305,11 +306,13 @@ db_schema:
     topology_edit_log:
       category: converged_entity
       file: db/topology_tables.sql
-      role: append_only_diff_log
+      role: hub_tensor_attractor_relation_edit_audit_log
+      naming_note: topology_label_can_be_misread_as_physical_table_lifecycle_diff
       sql_attention_logs_mapping:
         classification: mismatch
-        reason: target_table_is_domain_scope_identifier_not_physical_tableid
-        note: logs.diff_reuse_requires_explicit_physical_table_identity
+        reason: hub_tensor_or_topology_definition_edit_log_not_physical_table_lifecycle_diff
+        note: do_not_reuse_directly_as_logs_diff
+        adapter_requirement: explicit_physical_table_identity_contract_required_for_any_mapping
 
     # -------------------------------------------------------------------------
     # promotion_policy — 利用統計と昇格候補
@@ -339,7 +342,7 @@ db_schema:
           - archive_audit_possible
 
     # -------------------------------------------------------------------------
-    # context_route — 推薦エンジンの SQL Attention 層
+    # context_route — 推薦エンジン child projection/registry surfaces
     # -------------------------------------------------------------------------
 
     context_token_registry:
@@ -428,14 +431,14 @@ db_schema:
       file: db/context_route_tables.sql
       role: recommendation_feedback_log
     logs_current:
-      category: context_route
+      category: sql_attention_observation
       file: db/sql_attention_logs_tables.sql
       role: sql_attention_physical_pressure_current_top_n_physical_items_by_signal_axes
       physical_table: logs.current
       persistence: regenerable_projection_cache
 
     logs_hub_current:
-      category: context_route
+      category: sql_attention_observation
       file: db/sql_attention_logs_tables.sql
       role: sql_attention_hub_tensor_attractor_current
       physical_table: logs.hub_current
@@ -443,9 +446,9 @@ db_schema:
       note: sql_attention_target_is_hubs_tensor_attractor_not_topology_registry_search
 
     logs_attention:
-      category: context_route
+      category: sql_attention_observation
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_registry_exploration_evidence_log
+      role: sql_attention_hub_attractor_hit_and_phase_evidence_log
       physical_table: logs.attention
       persistence: append_only_archive_required
       sql_attention_logs_mapping:
