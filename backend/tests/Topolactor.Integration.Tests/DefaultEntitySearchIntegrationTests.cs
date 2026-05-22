@@ -18,7 +18,7 @@ namespace Topolactor.Integration.Tests;
 /// </summary>
 public class DefaultEntitySearchIntegrationTests
 {
-    private static DispatchEndpoint CreateEndpoint()
+    private static (DispatchEndpoint Endpoint, RuntimeTimelineScheduler Scheduler) CreateEndpoint()
     {
         var topologyRepository = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
         var contextRouteRepository = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
@@ -60,51 +60,78 @@ public class DefaultEntitySearchIntegrationTests
             new OperationVectorResolver(),
             targetDispatchOverride);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
-        return new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler);
+        return (new DispatchEndpoint(NullLogger<DispatchEndpoint>.Instance, scheduler), scheduler);
     }
 
     [Fact]
     public async Task DefaultEntitySearch_DispatchEndpoint_ReturnsSuccessfulEmission()
     {
         // Verifies the canonical default:entity:search integration path through the dispatch boundary.
-        var endpoint = CreateEndpoint();
+        var (endpoint, scheduler) = CreateEndpoint();
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await endpoint.HandleAsync(request);
+        try
+        {
+            var response = await endpoint.HandleAsync(request, cts.Token);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Emission);
-        Assert.Equal("00000000-0000-0000-0000-000000000004", response.Emission!.StructureMapId);
-        Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000001"), response.Emission.PackageId);
-        Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000002"), response.Emission.SchemaId);
-        Assert.Contains("00000000-0000-0000-0000-000000000003", response.Emission.ComponentIds ?? []);
-        Assert.Empty(response.Errors);
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Equal("00000000-0000-0000-0000-000000000004", response.Emission!.StructureMapId);
+            Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000001"), response.Emission.PackageId);
+            Assert.Equal(Guid.Parse("00000000-0000-0000-0000-000000000002"), response.Emission.SchemaId);
+            Assert.Contains("00000000-0000-0000-0000-000000000003", response.Emission.ComponentIds ?? []);
+            Assert.Empty(response.Errors);
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
     public async Task BrokenAttractor_DispatchEndpoint_ReturnsATTRACTOR_RESOLVE_FAILED()
     {
         // Broken refs are explicit errors — no silent fallback to default:entity:search.
-        var endpoint = CreateEndpoint();
+        var (endpoint, scheduler) = CreateEndpoint();
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await endpoint.HandleAsync(request);
+        try
+        {
+            var response = await endpoint.HandleAsync(request, cts.Token);
 
-        Assert.False(response.Success);
-        Assert.Null(response.Emission);
-        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+            Assert.False(response.Success);
+            Assert.Null(response.Emission);
+            Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
     public async Task NullRequest_DispatchEndpoint_ReturnsREQUEST_NULL()
     {
-        var endpoint = CreateEndpoint();
+        var (endpoint, scheduler) = CreateEndpoint();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await endpoint.HandleAsync(null!);
+        try
+        {
+            var response = await endpoint.HandleAsync(null!, cts.Token);
 
-        Assert.False(response.Success);
-        Assert.Null(response.Emission);
-        Assert.Contains(response.Errors, e => e.Code == "REQUEST_NULL");
+            Assert.False(response.Success);
+            Assert.Null(response.Emission);
+            Assert.Contains(response.Errors, e => e.Code == "REQUEST_NULL");
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 
     [Fact]
@@ -114,18 +141,27 @@ public class DefaultEntitySearchIntegrationTests
         // Verifies all required_identity fields from docs/design/pipeline-continuity-ssot.yaml
         // api_command_lane survive the full dispatch path:
         // EndpointRequestDto{target, layer, action} → DispatchEndpoint → RuntimeExecutor → Emission.
-        var endpoint = CreateEndpoint();
+        var (endpoint, scheduler) = CreateEndpoint();
         var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await scheduler.StartAsync(cts.Token);
 
-        var response = await endpoint.HandleAsync(request);
+        try
+        {
+            var response = await endpoint.HandleAsync(request, cts.Token);
 
-        Assert.True(response.Success);
-        Assert.NotNull(response.Emission);
-        Assert.Empty(response.Errors);
-        Assert.NotNull(response.Emission!.StructureMapId);   // required_identity: structure_map_id
-        Assert.NotNull(response.Emission.PackageId);         // required_identity: package_id
-        Assert.NotNull(response.Emission.SchemaId);          // required_identity: schema_id
-        Assert.NotNull(response.Emission.ComponentIds);      // required_identity: component_ids
-        Assert.NotEmpty(response.Emission.ComponentIds!);
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Empty(response.Errors);
+            Assert.NotNull(response.Emission!.StructureMapId);   // required_identity: structure_map_id
+            Assert.NotNull(response.Emission.PackageId);         // required_identity: package_id
+            Assert.NotNull(response.Emission.SchemaId);          // required_identity: schema_id
+            Assert.NotNull(response.Emission.ComponentIds);      // required_identity: component_ids
+            Assert.NotEmpty(response.Emission.ComponentIds!);
+        }
+        finally
+        {
+            await scheduler.StopAsync(CancellationToken.None);
+        }
     }
 }
