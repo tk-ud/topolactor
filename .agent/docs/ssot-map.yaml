@@ -122,6 +122,35 @@ mapping:
     protocols:
       - .agent/protocols/registry-tensor-policy.md
 
+
+  - work_type: topology_recommendation_ci_runtime_contract
+    change_surfaces:
+      - topology recommendation ci runtime
+      - topology_recommendation_candidate
+      - recommendation_check_result
+      - external_check_adapter_registry
+      - topology recommendation candidate status contract
+    required_docs:
+      - docs/design/topology-recommendation-ci-runtime.md
+      - docs/design/topology-recommendation-ci-runtime.yaml
+    supporting_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+    protocols: []
+
+  - work_type: commit_inference_engine_contract
+    change_surfaces:
+      - commit inference engine
+      - session_s1
+      - session_s2
+      - operation_log_item event typing
+      - lifecycle inference gate
+    required_docs:
+      - docs/design/commit-inference-engine.md
+      - docs/design/commit-inference-engine.yaml
+    supporting_docs: []
+    protocols: []
+
   - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
     change_surfaces:
       - runtime orchestration os

@@ -3,7 +3,7 @@ system:
   version: "1.3"
   concept: >
     A unified, offline-first statistical inference engine for operation logging.
-    Production-ready with normalized item facts and event typing.
+    Contract defines normalized item facts and event typing for downstream consistency.
 
     Three inference stages:
       S1 (Language): Token-based item recommendation via canonical signature cache.
