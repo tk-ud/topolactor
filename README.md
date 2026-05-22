@@ -14,7 +14,7 @@ Topolactor has three main subjects:
 
 1. **Data-Driven OS** — application behavior is resolved from stored topology data, registry coordinates, structure maps, packages, schemas, and runtime policies.
 2. **AI-Driven Development OS** — agents modify the repository through explicit contracts, protocols, checklists, TODO surfaces, and CI gates instead of ad-hoc edits.
-3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not a state/enum recommendation table.
+3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not the topology-side recommendation current.
 
 Registry tensor shorthand:
 
@@ -44,7 +44,7 @@ SQL Attention observes what the runtime should attend to by comparing two DB-nat
 
 The attention result is not the aggregate itself. Attention is completed when a hub-attractor hit is recorded as evidence with separate statistics, excitation, vector, phase-vector, and supporting evidence fields. Physical pressure and hub continuity are parallel observation planes; neither one is merely a derived view of the other.
 
-The implemented context-route tables in `db/context_route_tables.sql` are projection and signal surfaces used by the topology runtime. `context_event`, rebuildable vector caches, transition statistics, and append-only feedback events provide observable signals and rebuildable projections. `context_hub_recommendation_current` is a state / enum / token / operation recommendation current for context-route and topology-vector use; it is not the SQL Attention target and not the meaning authority.
+The implemented context-route tables in `db/context_route_tables.sql` are projection and signal surfaces used by the topology runtime. `context_event`, rebuildable vector caches, transition statistics, and append-only feedback events provide observable signals and rebuildable projections. `context_hub_recommendation_current` is the topology-side recommendation current for context-route and topology-vector use; it is not the SQL Attention target and not the meaning authority.
 
 `context_token_registry.value` is an ordering/display/audit reference, not a sparse-vector computation weight. Token presence is observed as multi-hot `token_id -> 1.0`; `vector_sparse` and `l2_norm` remain rebuildable projection caches, not meaning SoT.
 
