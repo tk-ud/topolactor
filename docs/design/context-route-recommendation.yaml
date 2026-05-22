@@ -66,7 +66,7 @@ recommendation_semantic_authority:
     - relation_registry
     - other_registry_defined_discrete_values
   rules:
-    - enum_is_reference_type_not_separate_semantic_ssot
+    - enum_is_typed_reference_for_registry_defined_discrete_values_not_separate_semantic_ssot
     - context_token_registry_is_projection_ui_candidate_observation_helper_not_semantic_authority
     - registry_defined_state_values_can_be_vectorized_as_equal_interval_discrete_coordinates
   vectorization_example:

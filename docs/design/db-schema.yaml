@@ -51,6 +51,17 @@ db_schema:
       has_dedicated_schema: false
       rule: registry_is_tensor_map_reference_concept_not_schema_namespace
 
+
+  conceptual_namespace_reading:
+    note: physical_schema_names_remain_as_is_for_now_no_ddl_rename_in_this_change
+    logical_namespaces:
+      hub_registry: hub_or_relation_composition_definitions
+      topology_registry: topology_semantic_space_definitions
+      ui_registry: ui_package_layout_wiring_definitions
+      hubs: relation_nodes_and_vector_surfaces
+      logs: physical_time_axis_observations
+    future_todo: consider_physical_schema_split_or_rename_without_changing_current_runtime_contract
+
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication

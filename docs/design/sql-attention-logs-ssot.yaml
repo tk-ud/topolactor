@@ -77,9 +77,10 @@ core_definition:
   one_sentence: >-
     SQL Attention converts physical-side logs.* signals into a logs.current
     calculation basis, watches l2 norm-level changes, and only when the level
-    changes explores hubs.* hub/attractor candidates and records statistics,
-    l2_norm, vector, phase_vector, and hit evidence into logs.attention without
-    collapsing statistics, Attention, and Phase Attention into one score.
+    changes observes hub/vector-indicated attractor evidence from hubs.* and
+    records statistics, l2_norm, vector, phase_vector, and hit evidence into
+    logs.attention without collapsing statistics, Attention, and Phase Attention
+    into one score.
   flow:
     - logs_signal_sources
     - logs_current_calculation_basis
@@ -326,7 +327,7 @@ layers:
   logs_attention:
     role: neighbor_hit_phase_evidence_log
     description: >-
-      logs.attention stores hub-attractor exploration hit results, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub-attractor exploration planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
+      logs.attention stores hub/vector-observed attractor evidence, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub relation planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
     retention: archive_required
     suggested_fields:
       - attention_id
@@ -348,7 +349,7 @@ layers:
       - created_at
       - archive_policy
     schema_contract:
-      role: hub_attractor_hit_and_phase_vector_evidence_log
+      role: hub_vector_indicated_attractor_observation_and_phase_vector_evidence_log
       suggested_fields:
         - attention_id
         - current_id
@@ -389,7 +390,7 @@ layers:
       - logs.attention.phase_vector_json
     quaternion_semantics:
       equation: q_equals_w_plus_xi_plus_yj_plus_zk
-      attractor_identity: q_is_attractor
+      attractor_identity: vector_convergence_point_q_is_attractor
       w: real_scalar_from_l2_norm
       x_y_z: hub_side_record_count_bases
       i_j_k: movement_amounts_per_axis

@@ -1,15 +1,21 @@
 framework_policy:
 
   topolactor_space_boundary_policy:
+    registry: definition_and_configuration
+    topology: semantic_space
+    hub: relation_node
+    attractor: vector_convergence_point
+    attention: observation_point_or_operation
     logs: physical_time_axis_observation_space
-    topologys: semantic_space
-    hubs: phase_space_plane_set_for_relation_composition
-    projection_ui: post_collapse_projection_emission_surface
     separation_rules:
-      - do_not_translate_space_definition_directly_into_fk_or_table_layout_rules
-      - projection_ui_package_layout_wiring_is_not_hub_phase_plane
+      - registry_is_not_hub_or_attractor_entity_itself
+      - hub_relations_can_be_treated_as_tensor_and_vector
+      - vectorized_hub_relations_enable_neighborhood_search
+      - attention_is_not_attractor
+      - sql_attention_is_observation_layer_not_attractor_generator
       - aggregates_are_attention_weight_observation_not_meaning_sot
-      - registry_state_relation_are_semantic_space_basis
+      - ui_package_layout_wiring_relations_with_physical_table_record_route_can_be_treated_as_hub_vector_surfaces
+
   registry_tensor_principle:
     role: ssot_mandatory_principle
     registry: semantic_matrix_topology_vocabulary_basis

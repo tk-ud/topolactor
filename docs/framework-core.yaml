@@ -60,37 +60,43 @@ data_driven_topology_runtime_framework:
 
 
   topolactor_space_model:
+    registry:
+      role: definition_and_configuration
+      note: registry_defines_hub_topology_or_ui_axes_depending_on_target
+      logical_namespaces:
+        - hub_registry
+        - topology_registry
+        - ui_registry
+    topology:
+      role: semantic_space
+      note: concept_name_is_topology_physical_namespace_names_are_separate
+    hub:
+      role: relation_node
+      definition: relation_established_node
+      tensor_vector_property: relation_composition_can_be_treated_as_tensor_and_vector
+      neighborhood_rule: vectorized_hub_relations_enable_neighborhood_search
+    attractor:
+      role: vector_convergence_point
+      boundary: not_attention
+    attention:
+      role: observation_point_or_operation
+      boundary: not_attractor
     logs:
       role: physical_time_axis_observation_space
-      definition: when_where_which_physical_target_and_what_pressure_diff_usage_candidate_occurred
-      includes:
-        - physical_table_record_lifecycle_diff
-        - usage_pressure
-        - candidate_pressure
-    topologys:
-      role: semantic_space
-      definition: vocabulary_state_relation_schema_package_component_registry_definition_space
-      semantic_basis:
-        - registry
-        - state
-        - relation
-    hubs:
-      role: phase_space_plane_set
-      definition: relation_state_entity_weight_registry_reference_composition_surface
-      vector_property: relationship_composition_naturally_forms_vectors
+      definition: physical_pressure_diff_candidate_usage_observation_in_time_series
     sql_attention:
-      role: resonance_between_logs_pressure_and_hub_phase_planes
-      formula: physical_pressure_vector_cross_hub_phase_plane_vector_evidence
+      role: observation_layer_over_logs_pressure_and_hub_vector_indicated_attractors
+      formula: observe_logs_pressure_then_read_hub_vector_indicated_attractor_evidence
       not:
         - registry_search
         - topology_search
-    ui_projection:
-      role: post_collapse_projection_emission_surface
-      includes:
-        - ui_package
-        - layout
-        - wiring
-      boundary: not_phase_space_itself
+        - attractor_generator
+    ui_relation_surfaces:
+      role: ui_package_layout_wiring_relations_can_form_hub_vector_surfaces_when_relations_are_established
+      examples:
+        - physical_table_x_ui_package
+        - record_or_entity_x_component
+        - route_x_layout_or_wiring
     weight_observation_rule:
       weights:
         - count
