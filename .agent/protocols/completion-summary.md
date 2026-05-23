@@ -27,8 +27,8 @@ Read this protocol when composing:
 | Work Type | PR body | PR comment | Final summary | Required action | Evidence |
 |---|---|---|---|---|---|
 | new PR | thin entry summary | NOT_REQUIRED | REQUIRED | create/update thin PR body | PR URL / head commit |
-| existing PR update | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready body |
-| todo-maintenance existing PR | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready body |
+| existing PR update | update only if materially misleading | REQUIRED | REQUIRED | post this full Completion Summary as the PR follow-up comment and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + full Completion Summary available in final output |
+| todo-maintenance existing PR | update only if materially misleading | REQUIRED | REQUIRED | post this full Completion Summary as the PR follow-up comment and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + full Completion Summary available in final output |
 | local-only draft (no remote PR update) | NOT_REQUIRED | NOT_REQUIRED | REQUIRED | no remote action | local-only reason + no remote PR update fact |
 
 ## WorkEvent Output Sink Contract
@@ -40,8 +40,8 @@ Read this protocol when composing:
 | `local_only` | final summary | none | no remote sink is required when no remote PR update exists |
 
 Structural completion rule for `existing_pr_update`:
-- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body.
-- final summary is required evidence output, not a substitute for PR comment posting.
+- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + the full Completion Summary remaining available for manual PR-comment paste.
+- final summary is required evidence output and, for manual posting workflows, is also the paste unit for the PR follow-up comment.
 
 ## Completion Summary generation rules (not emitted section)
 
@@ -50,6 +50,7 @@ Structural completion rule for `existing_pr_update`:
 - PR follow-up comment posting state は `### output sink state` に記録する。
 - local required check 未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` を記録する。
 - `### 残タスク引き継ぎ指示` は Auditor TODO input であり canonical TODO closure ではない。
+- Do not create a separate paste-ready body block; the full Completion Summary is the copy/paste unit.
 
 ## Completion Summary Template
 
@@ -95,10 +96,8 @@ Structural completion rule for `existing_pr_update`:
   - local_only: EMITTED
 - 理由:
 - posted 先 (PR URL or NOT_REQUIRED):
-- paste-ready comment body (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
-  START_PASTE_READY_COMMENT
-  <comment body>
-  END_PASTE_READY_COMMENT
+- manual paste unit:
+  - existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合、この Completion Summary 全文を PR follow-up comment として貼り付ける。
 
 ### 残タスク引き継ぎ指示
 
