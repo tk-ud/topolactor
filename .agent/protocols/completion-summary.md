@@ -96,10 +96,9 @@ Structural completion rule for `existing_pr_update`:
 - 理由:
 - posted 先 (PR URL or NOT_REQUIRED):
 - paste-ready comment body (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
-
-````
-<comment body>
-````
+  START_PASTE_READY_COMMENT
+  <comment body>
+  END_PASTE_READY_COMMENT
 
 ### 残タスク引き継ぎ指示
 
