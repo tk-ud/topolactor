@@ -13,7 +13,10 @@ protocols:
     stage: [JUDGMENT]
     sections:
       - marker: "## Trigger condition"
-        grep_keys: ["completion eligibility", "TODO `[x]`"]
+        grep_keys:
+          intent_keys: ["completion eligibility", "recursive verification gate", "required check scope"]
+          body_keys: ["required check scope declaration", "WorkEvent output sink gap", "NOT EXECUTED ≠ PASS"]
+          boundary_keys: ["not a substitute for protocol judgment", "structure check as semantic judgment"]
         read_when: ["completion eligibility decision"]
 
   - id: completion_summary
@@ -21,7 +24,10 @@ protocols:
     stage: [JUDGMENT, PUSH_OR_PR]
     sections:
       - marker: "## Completion Summary Template"
-        grep_keys: ["WorkEvent", "output sink", "PR_COMMENT_NOT_POSTED", "Required check scope"]
+        grep_keys:
+          intent_keys: ["PR follow-up comment", "manual paste unit", "Completion Summary全文", "existing_pr_update"]
+          body_keys: ["WorkEvent", "output sink", "PR_COMMENT_NOT_POSTED", "Required check scope"]
+          boundary_keys: ["final summary is required evidence output", "PR body update never replaces required PR follow-up comment"]
         read_when: ["terminal completion summary composition"]
 
   - id: todo_carry_over
@@ -29,7 +35,10 @@ protocols:
     stage: [PUSH_OR_PR]
     sections:
       - marker: "## TODO surface responsibility"
-        grep_keys: ["todo", "carry-over", "remaining TODO"]
+        grep_keys:
+          intent_keys: ["remaining TODO", "carry over", "unresolved work"]
+          body_keys: [".agent/tasks/todo.md", "Carry-over classification", "direct close conditions"]
+          boundary_keys: ["not canonical TODO closure", "CI waiting records are not TODO"]
         read_when: ["remaining work classification"]
 
   - id: report_surfaces
@@ -37,7 +46,10 @@ protocols:
     stage: [PUSH_OR_PR]
     sections:
       - marker: "## `.agent/reports/` usage"
-        grep_keys: ["reports", "routine inspection", "periodic audit"]
+        grep_keys:
+          intent_keys: ["inspection report", "periodic audit", "report placement"]
+          body_keys: [".agent/reports/", "routine inspection reports", "scheduled maintenance"]
+          boundary_keys: ["not default place for normal PR summaries", "do not store PR-specific filled checklists"]
         read_when: ["report placement routing"]
 
   - id: scenario_contract
@@ -45,10 +57,16 @@ protocols:
     stage: [SCENARIO_CONTRACT, VERIFY_SCENARIO_DIFF]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["runtime claim", "canonical route", "projection behavior"]
+        grep_keys:
+          intent_keys: ["scenario contract", "runtime boundary", "projection identity"]
+          body_keys: ["Boundary Extension Scenario", "Multi-instance leakage", "Frontend projection identity"]
+          boundary_keys: ["triggered protocol only", "do not silently skip boundary failures"]
         read_when: ["scenario-contract trigger check"]
       - marker: "## Precondition: Workflow Order Invariant Gate"
-        grep_keys: ["docs/ SSOT reload", "READ_TARGET_SURFACES", "DEFINE_SCOPE"]
+        grep_keys:
+          intent_keys: ["workflow order invariant", "pre-implementation checks"]
+          body_keys: ["docs/ SSOT reload", "READ_TARGET_SURFACES", "DEFINE_SCOPE"]
+          boundary_keys: ["do not implement before invariant is satisfied"]
         read_when: ["pre-implementation workflow validation"]
 
   - id: policy_judgment
@@ -56,7 +74,10 @@ protocols:
     stage: [FILL_CHECKLISTS, JUDGMENT]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["scoring", "threshold", "routing", "validation", "projection behavior"]
+        grep_keys:
+          intent_keys: ["policy judgment", "scoring threshold", "routing validation projection"]
+          body_keys: ["Policy Judgment Gate", "CI queued/in_progress is not PASS", "scope-irrelevant workflow-level skip is not blocking"]
+          boundary_keys: ["checklist is not final judgment", "queued CI is not PASS"]
         read_when: ["policy change trigger confirmation"]
 
   - id: runtime_boundary_matrix
@@ -64,7 +85,10 @@ protocols:
     stage: [FILL_CHECKLISTS, JUDGMENT]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["endpoint wiring", "repository write", "persistence mutation", "End-to-End Boundary Identity"]
+        grep_keys:
+          intent_keys: ["runtime boundary failure", "end-to-end boundary identity", "leakage"]
+          body_keys: ["Runtime Boundary Failure Matrix", "Repository mutation identity", "UI action identity"]
+          boundary_keys: ["broken refs are explicit errors", "no silent fallback"]
         read_when: ["boundary identity trigger confirmation"]
 
   - id: registry_tensor_policy
@@ -72,7 +96,10 @@ protocols:
     stage: [READ_TARGET_SURFACES, DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["registry tensor semantics", "semantic matrix"]
+        grep_keys:
+          intent_keys: ["registry tensor", "sql attention", "semantic matrix"]
+          body_keys: ["registry tensor semantics", "Registry Tensor Policy", "Drift / GAP classification"]
+          boundary_keys: ["registry table must be explained as semantic matrix", "not dictionary-only interpretation"]
         read_when: ["registry-topology protocol trigger check"]
 
   - id: ssot_change_impact
@@ -80,7 +107,10 @@ protocols:
     stage: [READ_TARGET_SURFACES, DEFINE_SCOPE, VERIFY_SCENARIO_DIFF]
     sections:
       - marker: "## Trigger"
-        grep_keys: ["docs/design", "externally observable contracts", "projection", "persistence"]
+        grep_keys:
+          intent_keys: ["SSOT", "docs/design", "contract", "projection", "persistence", "stale expectation", "impact propagation"]
+          body_keys: ["externally observable contracts", "route / response / error / emission / projection / jump / persistence", "stale expectations"]
+          boundary_keys: ["updating only SSOT body text", "must propagate impacted expectations"]
         read_when: ["SSOT update trigger confirmation"]
 
   - id: audit
@@ -88,7 +118,10 @@ protocols:
     stage: [JUDGMENT]
     sections:
       - marker: "## judgment_scope"
-        grep_keys: ["semantic", "diff", "implementation meaning"]
+        grep_keys:
+          intent_keys: ["audit", "semantic review", "diff review"]
+          body_keys: ["semantic", "diff", "implementation meaning"]
+          boundary_keys: ["structure check is not semantic audit substitute", "do not post GitHub comment when prompt output requested"]
         read_when: ["audit worktype judgment"]
 
   - id: specific
@@ -96,7 +129,10 @@ protocols:
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## judgment_scope"
-        grep_keys: ["minimal target-surface", "scope expansion"]
+        grep_keys:
+          intent_keys: ["specific", "targeted inspection", "local scope"]
+          body_keys: ["minimal target-surface", "scope expansion"]
+          boundary_keys: ["do not read all docs by default", "do not expand beyond requested target"]
         read_when: ["specific worktype local-scope judgment"]
 
   - id: implementation_change
@@ -104,7 +140,10 @@ protocols:
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## blocking_conditions"
-        grep_keys: ["scenario-contract", "policy-judgment"]
+        grep_keys:
+          intent_keys: ["implementation change", "conditional protocols", "runtime persistence projection"]
+          body_keys: ["scenario-contract", "policy-judgment"]
+          boundary_keys: ["trigger only matching protocols", "protocol owns judgment semantics"]
         read_when: ["implementation_change conditional protocol gate"]
 
   - id: design_change
@@ -112,5 +151,8 @@ protocols:
     stage: [DEFINE_SCOPE, JUDGMENT]
     sections:
       - marker: "## blocking_conditions"
-        grep_keys: ["SSOT change", "impact propagation"]
+        grep_keys:
+          intent_keys: ["design change", "SSOT change", "impact propagation"]
+          body_keys: ["SSOT change", "impact propagation"]
+          boundary_keys: ["prompt routes worktype; protocol judges work", "do not mix directory map into protocol"]
         read_when: ["design_change impact gate"]
