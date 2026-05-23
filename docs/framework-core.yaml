@@ -197,6 +197,11 @@ data_driven_topology_runtime_framework:
       - attention_score_must_not_override_fixed_route
       - hubs.relation_route_is_fixed_business_route_between_hubs
       - topology.package_route_is_fixed_state_transition_within_same_topology
+      - route_jump_address_shape_is_pastAddress_currentAddress_plannedAddress
+      - pastAddress_missing_is_0
+      - currentAddress_missing_is_0
+      - plannedAddress_missing_is_0
+      - SQL_Attention_or_recommendation_must_not_overwrite_route_state_automatically
       - frontend_is_projection_surface_only
       - spa_is_runtime_authoritative_projection
       - runtime_route_resolver_owns_screen_transition_next_task_and_business_branching
@@ -224,8 +229,13 @@ data_driven_topology_runtime_framework:
     route_missing_policy:
       - runtime_must_emit_jump_event_not_error
       - attention_candidate_adoption_requires_user_action_jump
-      - jump_hub_to_zero
-      - jump_topology_to_zero
+      - jump_event_shape_is_past_current_planned
+      - past_address_missing_is_zero
+      - current_address_missing_is_zero
+      - planned_address_missing_is_zero
+      - jump_hub_to_zero_planned_only
+      - jump_topology_to_zero_planned_only
+      - sql_attention_recommendation_must_not_overwrite_route_state_automatically
 
 
 current_projection_namespace_split:

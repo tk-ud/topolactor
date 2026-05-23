@@ -97,8 +97,9 @@ public record Emission(
 
 public record RuntimeJumpEvent(
     string Scope,
-    int From,
-    int To,
+    int PastAddress,
+    int CurrentAddress,
+    int PlannedAddress,
     string Reason
 );
 

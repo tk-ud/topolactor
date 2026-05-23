@@ -191,6 +191,7 @@ framework_policy:
       hubs_relation_route: fixed_business_route_between_hubs
       topology_package_route: fixed_state_transition_within_topology
       attention_override: prohibited
+      sql_attention_or_recommendation_must_not_overwrite_route_state_automatically: true
     frontend_boundary:
       projection_surface_only: true
       spa_runtime_authoritative_projection: true
@@ -198,15 +199,29 @@ framework_policy:
     route_missing_jump_event:
       behavior: runtime_jump_event_not_error
       user_fields:
-        - currentHubAddress
-        - currentTopologyAddress
+        hub:
+          - pastHubAddress
+          - currentHubAddress
+          - plannedHubAddress
+        topology:
+          - pastTopologyAddress
+          - currentTopologyAddress
+          - plannedTopologyAddress
       jump_fields:
         - scope
-        - from
-        - to
+        - pastAddress
+        - currentAddress
+        - plannedAddress
         - reason
-      hub_route_missing_example: jump("hub", currentHubAddress, 0, reason: "route_missing")
-      topology_route_missing_example: jump("topology", currentTopologyAddress, 0, reason: "route_missing")
+      address_defaults:
+        pastAddress_missing: 0
+        currentAddress_missing: 0
+        plannedAddress_missing: 0
+      route_contract:
+        hubs_relation_route: fixed_business_route_between_hubs
+        topology_package_route: fixed_state_transition_within_same_topology
+      hub_route_missing_example: jump("hub", pastHubAddress_or_0, currentHubAddress_or_0, 0, reason: "route_missing")
+      topology_route_missing_example: jump("topology", pastTopologyAddress_or_0, currentTopologyAddress_or_0, 0, reason: "route_missing")
       recommendation_adoption_only: jump(reason: "user_action")
 
 

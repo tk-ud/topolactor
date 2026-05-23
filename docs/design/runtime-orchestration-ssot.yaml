@@ -221,6 +221,34 @@ runtime_orchestration_ssot:
       - runtime_executes_after_scheduler_alignment
       - backend_runtime_destination_is_resolved_by_manifest_dispatcher
       - runtime_policy_values_are_data_defined
+      - hubs.relation_route_is_fixed_business_route_between_hubs
+      - topology.package_route_is_fixed_state_transition_within_same_topology
+      - runtime_route_jump_address_shape_is_pastAddress_currentAddress_plannedAddress
+      - pastAddress_missing_is_0
+      - currentAddress_missing_is_0
+      - plannedAddress_missing_is_0
+      - sql_attention_or_recommendation_must_not_overwrite_route_state_automatically
+    route_missing_and_user_action_jump_contract:
+      route_missing:
+        behavior: explicit_runtime_jump_event_not_silent_fallback
+        address_shape:
+          - pastAddress
+          - currentAddress
+          - plannedAddress
+        defaults:
+          pastAddress_missing: 0
+          currentAddress_missing: 0
+          plannedAddress: 0
+      user_action_adoption:
+        behavior: explicit_runtime_jump_event
+        address_shape:
+          - pastAddress
+          - currentAddress
+          - plannedAddress
+        defaults:
+          pastAddress_missing: 0
+          currentAddress_missing: 0
+          plannedAddress_missing: 0
 
   frontend_contract:
     phase: projection
