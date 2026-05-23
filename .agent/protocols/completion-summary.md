@@ -22,14 +22,18 @@ Read this protocol when composing:
 - Existing PR updates require a follow-up PR comment after push unless no remote PR update exists.
 - Completion Summary Template is the single terminal reporting endpoint and must be emitted inside this template only.
 
-## Prompt Type / Work Type Output Switch
+## WorkEvent-based Output Sink Decision (authoritative)
 
-| Work Type | PR body | PR comment | Final summary | Required action | Evidence |
-|---|---|---|---|---|---|
-| new PR | thin entry summary | NOT_REQUIRED | REQUIRED | create/update thin PR body | PR URL / head commit |
-| existing PR update | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + Completion Summary全文 (manual paste unit) |
-| todo-maintenance existing PR | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + Completion Summary全文 (manual paste unit) |
-| local-only draft (no remote PR update) | NOT_REQUIRED | NOT_REQUIRED | REQUIRED | no remote action | local-only reason + no remote PR update fact |
+PR output sink requirements are determined by **WorkEvent.type / remote update state**, not by worktype name.
+
+| WorkEvent.type | PR body | PR follow-up comment | Final summary | Required action |
+|---|---|---|---|---|
+| `new_pr` | REQUIRED (thin entry summary) | NOT_REQUIRED | REQUIRED | create/update thin PR body |
+| `existing_pr_update` | update only if materially misleading | REQUIRED | REQUIRED | after push to existing PR, post follow-up PR comment and verify posted state |
+| `local_only` | NOT_REQUIRED | NOT_REQUIRED | REQUIRED | no remote action |
+
+- For existing-PR pushes, PR follow-up comment is required regardless of worktype (`design_change`, documentation update, `todo_maintenance`, etc.).
+- PR body update or `make_pr` output never replaces required PR follow-up comment.
 
 ## WorkEvent Output Sink Contract
 
@@ -96,11 +100,7 @@ Structural completion rule for `existing_pr_update`:
   - local_only: EMITTED
 - 理由:
 - posted 先 (PR URL or NOT_REQUIRED):
-- manual paste unit (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
-
-````
-<Completion Summary全文>
-````
+- manual paste unit (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須): Completion Summary全文
 
 ### 残タスク引き継ぎ指示
 

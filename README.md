@@ -8,6 +8,8 @@ The core architecture treats the registry table as a **semantic matrix**. DB, UI
 
 **Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
 
+Development started: 2026-05-17 (first repository commit: 79d71f1)
+
 ## 30-Second Overview
 
 Topolactor has three main subjects:
@@ -64,11 +66,30 @@ UI definitions become topology entities only after persistence and ID issuance. 
 
 Agent governance work usually consumes more context than one-shot code generation because the baseline route is contract-first (`AGENTS.md` → `.agent/rules/rule.md` → `.agent/README.md` → selected worktype prompt → triggered protocols) before implementation detail reads.
 
-Typical audit/update runs are still smaller than reading the full `.agent` bundle, because worktype routing is designed to avoid unconditional protocol/doc loading.
+### Measurement method (rough estimate)
+
+- Measured repository-local file text size (character count) on governance route files.
+- Token estimate uses `chars / 4` as the primary approximation and `chars / 3` as an upper-bound approximation.
+- This is a rough guide, not tokenizer-exact accounting.
+- Estimates below intentionally **exclude** target implementation files and PR diff payload size.
+
+### Route-based context estimate (governance read-set only)
+
+| Route | Typical read-set | Estimated tokens (chars/4 to chars/3) |
+|---|---|---:|
+| Baseline worktype route | `AGENTS.md` + `rule.md` + `.agent/README.md` + selected prompt | ~1,130–1,550 |
+| audit | baseline + `protocols/audit.md` (+ optional `ssot-map`) | ~1,500–1,950 (without `ssot-map`) / ~3,640–4,800 (with `ssot-map`) |
+| specific | baseline + `protocols/specific.md` | ~1,440–1,900 |
+| implementation_change | baseline + implementation protocol + `ssot-map` + selected SSOT (+ triggered protocol) | ~3,940–5,230 before selected SSOT docs |
+| design_change | baseline + design protocol + governance SSOT + `ssot-change-impact` | ~2,370–3,150 before additional impacted SSOT docs |
+| existing_pr_update | baseline + `completion-summary` (+ triggered protocol if needed) | ~2,340–3,080 |
+| todo_maintenance | baseline + `todo-carry-over` + `.agent/tasks/todo.md` | route-dependent (task backlog size dominates) |
+
+Reference measured sizes used in the estimate (chars): `AGENTS.md` 1,345; `.agent/rules/rule.md` 1,122; `.agent/README.md` 1,329; prompts: ~736–966 each; `completion-summary.md` 4,083; `ssot-map.yaml` 8,558; `required-paths.yaml` 14,068.
 
 - `.agent/docs/ssot-map.yaml` and `.agent/docs/required-paths.yaml` are **conditional indexes**, not always-read bundles.
-- Exact token usage varies by touched surface and triggered protocols/checks.
-- As a practical range, governance-context overhead is often **hundreds to a few thousand tokens** before target-code reads, and can be higher for multi-surface or protocol-heavy changes.
+- Full `.agent` governance bundle read is **avoid by default**; route-targeted reading is the intended policy.
+- If full bundle loading happens, context cost can reach roughly **15k–30k+ tokens** depending on included protocol/docs surfaces.
 
 ## AI-Driven Development OS Trade-off
 
