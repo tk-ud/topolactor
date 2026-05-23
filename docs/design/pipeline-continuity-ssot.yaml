@@ -1,6 +1,6 @@
 pipeline_continuity_ssot:
   name: topolactor_pipeline_continuity_ssot
-  version: 0.2.0
+  version: 0.2.1
   status: ssot_design_document
 
   purpose:
@@ -135,6 +135,109 @@ pipeline_continuity_ssot:
               manifest_dispatcher_routing_is_canonical_preferred_route.
               Count above 3 indicates a new hardcoded dispatch target being added to RuntimeExecutor;
               new targets must be routed through manifest_dispatcher, not hardcoded.
+
+    frontend_component_event_log_lane:
+      status: planned_contract
+      description: >
+        UI components emit operation events to a frontend runtime queue. The frontend runtime
+        scheduler batches those events and flushes them to the backend component-event-log
+        intake boundary on a short interval (target: about 10 seconds). Components do not own
+        DB persistence, backend API branching, topology judgment, or SQL Attention judgment.
+        This lane is the canonical boundary for UI operation observation and future learning,
+        recommendation, and audit usage.
+      direction: client_observation_to_server_log
+
+      required_identity:
+        - component_id
+        - package_id
+        - layout_id
+        - event_type
+        - payload
+        - actor_or_source
+        - occurred_at
+        - idempotency_key
+
+      nodes:
+        - node: frontend.component
+          files:
+            - frontend/components/
+          implementation_note: >
+            Components emit normalized operation events only. They must not call DB persistence
+            APIs directly and must not own topology/API dispatch branching.
+
+        - node: frontend.component_event_runtime
+          files:
+            - frontend/runtime/
+          implementation_note: >
+            Owns in-memory event queue, event normalization, ordering boundary, debounce/throttle,
+            batch_size, flush_interval_seconds, retry policy, explicit failure state, and lifecycle
+            flush handling. The default design target is periodic background flush around 10 seconds,
+            not per-event DB persistence.
+
+        - node: frontend.local_event_cache
+          files:
+            - frontend/runtime/
+          implementation_note: >
+            Fallback cache only. When scheduler/flush/offline/page lifecycle interruption prevents
+            delivery, unsent events may be stored in localStorage as a bounded cache. Successful ACK
+            releases cached events in order. Cache must define max_events, max_bytes, ttl,
+            schema_version, and sensitive-payload exclusion.
+
+        - node: frontend.component_event_api_client
+          files:
+            - frontend/routes/api/
+          implementation_note: >
+            Sends event batches produced by frontend.component_event_runtime. It does not receive
+            arbitrary component-local API calls.
+
+        - node: backend.component_event_log_intake
+          files:
+            - backend/endpoint/
+            - backend/repository/
+            - backend/schema/
+          implementation_note: >
+            Accepts component operation event batches, enforces idempotency_key duplicate handling,
+            returns explicit success/failure ACK, and appends accepted events to the canonical DB log.
+
+      event_types:
+        - click
+        - change
+        - select
+        - toggle
+        - expand
+        - collapse
+        - submit
+        - focus
+        - blur
+        - drag
+        - drop
+
+      persistence_policy:
+        primary_queue: in_memory_frontend_runtime_queue
+        fallback_cache: localStorage_bounded_cache
+        flush_interval_target_seconds: 10
+        ack_release: required
+        duplicate_boundary: idempotency_key
+        prohibited:
+          - component_direct_db_api_call
+          - silent_drop_on_flush_failure
+          - unbounded_localStorage_growth
+          - secret_or_large_payload_localStorage_cache
+          - frontend_topology_or_sql_attention_judgment
+
+      completion_condition:
+        - components_emit_operation_events_to_frontend_runtime_queue
+        - frontend_runtime_batches_and_flushes_events_on_interval
+        - failed_or_interrupted_flush_can_recover_from_bounded_localStorage_cache
+        - backend_event_log_intake_appends_events_with_idempotency_boundary
+        - components_do_not_directly_call_persistence_api
+
+      pipeline_body_test:
+        kind: planned_boundary_contract
+        note: >
+          Implementation must add tests proving event enqueue, interval/batch flush,
+          localStorage fallback/release, idempotent backend intake, and no direct component
+          persistence API branch.
 
     sse_projection_lane:
       description: >
