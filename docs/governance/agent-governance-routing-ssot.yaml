@@ -13,7 +13,8 @@ canonical_path: docs/governance/agent-governance-routing-ssot.yaml
 purpose:
   summary: >-
     Define the canonical route, worktype vocabulary, responsibility split,
-    grep-key policy, and duplication boundaries for agent governance files.
+    grep-key policy, validation order, and duplication boundaries for agent
+    governance files.
   non_goals:
     - application runtime behavior definition
     - product feature specification
@@ -35,6 +36,144 @@ canonical_route:
     directory roles. Prompt files route the selected worktype. Protocol files
     own judgment gates. Checklists record triggered viewpoint answers. Tests
     verify structure and executable invariants.
+
+directory_structure:
+  docs/governance:
+    role: governance_ssot_surface
+    files:
+      - docs/governance/agent-governance-routing-ssot.yaml
+      - docs/governance/agent-governance-routing-ssot.md
+  .agent:
+    role: agent_governance_runtime_surface
+    children:
+      README.md: agent_directory_map
+      rules: always_on_rules_and_worktype_branch
+      prompt: worktype_router_surface
+      protocols: judgment_gate_surface
+      checklists: viewpoint_signature_surface
+      tests: executable_governance_checks
+      tasks: unresolved_work_queue
+      reports: persistent_inspection_report_surface
+      tmp: temporary_work_artifact_surface
+      docs: agent_resume_and_index_surface
+      routes: worktype_route_map_surface
+      skills: task_procedure_surface
+      scripts: helper_script_surface
+
+semantic_closure:
+  entities:
+    - ssot
+    - directory_surface
+    - rule
+    - worktype
+    - prompt
+    - protocol
+    - checklist
+    - test
+    - report
+    - todo
+    - output_sink
+    - completion_state
+    - blocking_state
+  allowed_edges:
+    ssot:
+      defines:
+        - directory_surface
+        - worktype
+        - authority_boundary
+        - grep_key_policy
+        - ci_check_contract
+    rule:
+      decides:
+        - worktype
+      branches_to:
+        - prompt
+      must_not_define:
+        - protocol_body
+        - directory_map_body
+        - token_estimate_table
+    worktype:
+      routes_to:
+        - prompt
+      may_require:
+        - protocol
+        - checklist
+        - test
+    prompt:
+      routes_worktype_to:
+        - required_reads
+        - optional_reads
+        - protocol_triggers
+        - output_shape
+      must_not_judge:
+        - completion_state
+        - blocking_state
+    protocol:
+      judges:
+        - completion_state
+        - blocking_state
+      may_require:
+        - checklist
+        - test
+      must_not_select:
+        - worktype
+    checklist:
+      records:
+        - triggered_viewpoint_answers
+      must_not_own:
+        - final_judgment
+    test:
+      verifies:
+        - structure
+        - routing_reference
+        - required_vocabulary
+        - executable_check
+      must_not_judge:
+        - semantic_audit
+        - product_design_authority
+    report:
+      stores:
+        - routine_inspection
+        - scheduled_maintenance
+        - periodic_audit
+      must_not_store:
+        - normal_pr_summary
+        - pr_specific_filled_checklist
+    todo:
+      stores:
+        - unresolved_implementation_work
+        - unresolved_design_work
+        - unresolved_ssot_alignment_work
+        - unresolved_test_authoring_work
+      must_not_store:
+        - ci_waiting_record
+        - local_tool_absence_record
+        - remote_ci_pass_confirmation_record
+        - completed_pr_work_log
+
+closed_world_rules:
+  - Every worktype must have exactly one prompt route.
+  - Every protocol must be reached by worktype route or explicit trigger.
+  - Prompt files route work; protocol files judge work.
+  - Tests verify executable invariants; tests do not replace semantic judgment.
+  - .agent/README.md is a directory map only.
+  - Token estimate tables are prohibited inside .agent/README.md.
+  - Structure check must run last in local completion order.
+  - NOT_EXECUTED is never PASS.
+  - CI waiting, missing tools, and remote confirmation bookkeeping are not TODO items.
+
+authority_boundaries:
+  governance_route_authority: docs/governance/agent-governance-routing-ssot.yaml
+  worktype_vocabulary_authority: docs/governance/agent-governance-routing-ssot.yaml
+  grep_key_policy_authority: docs/governance/agent-governance-routing-ssot.yaml
+  agent_directory_map_authority: .agent/README.md
+  always_on_rule_authority: .agent/rules/rule.md
+  worktype_route_map_executable_reference: .agent/routes/worktype-required-protocols.yaml
+  protocol_judgment_authority: .agent/protocols/*
+  checklist_template_authority: .agent/checklists/*
+  executable_structure_authority: .agent/tests/check-structure.sh
+  report_surface_authority: .agent/protocols/report-surfaces.md
+  todo_carry_over_authority: .agent/protocols/todo-carry-over.md
 
 responsibility_split:
   AGENTS.md:
@@ -142,6 +281,7 @@ responsibility_split:
       - governance vocabulary
       - route responsibility model
       - migration target state
+      - CI checker meaning and ordering
 
 worktypes:
   audit:
@@ -253,6 +393,139 @@ test_contract:
     vocabulary, structure, and executable local checks. They do not replace
     semantic audit judgment.
 
+ci_check_contract:
+  order_rule: >-
+    Run routing and judgment vocabulary guards before scope-specific executable
+    checks. Run scope-specific executable checks before aggregate/local CI gates.
+    Run structure check last.
+  status_semantics:
+    PASS: check executed and succeeded
+    FAIL: check executed and failed
+    NOT_EXECUTED: check did not execute; not equivalent to PASS
+    REQUIRED_NOT_EXECUTED: required check did not execute and needs equivalent remote evidence
+    NOT_REQUIRED: check is outside current work scope
+    OUT_OF_SCOPE: gate does not apply to current worktype or touched surface
+  local_order:
+    - id: worktype_routing_check
+      command: bash .agent/tests/check-worktype-routing.sh
+      meaning: Validate worktype routing existence, reference integrity, and required vocabulary.
+      phase: route_guard
+      required_for:
+        - governance_route_change
+        - prompt_route_change
+        - protocol_route_change
+        - required_path_change
+    - id: completion_judgment_check
+      command: bash .agent/tests/check-completion-judgment.sh
+      meaning: Validate completion-governance vocabulary and workflow invariant references.
+      phase: judgment_vocabulary_guard
+      required_for:
+        - completion_protocol_change
+        - output_sink_change
+        - todo_closure_rule_change
+        - existing_pr_update_rule_change
+    - id: backend_tests
+      command: bash .agent/tests/check-backend-tests.sh
+      meaning: Execute backend dotnet test scope.
+      phase: scope_specific_executable_check
+      required_for:
+        - backend_runtime_change
+        - backend_endpoint_change
+        - backend_repository_change
+        - backend_schema_change
+    - id: frontend_type_check
+      command: bash .agent/tests/check-frontend-types.sh
+      meaning: Execute frontend Deno type-check scope.
+      phase: scope_specific_executable_check
+      required_for:
+        - frontend_route_change
+        - frontend_runtime_change
+        - frontend_component_change
+        - frontend_api_change
+    - id: default_entity_search_check
+      command: bash .agent/tests/check-default-entity-search.sh
+      meaning: Verify default entity search integration and frontend rendering regression path.
+      phase: scope_specific_executable_check
+      required_for:
+        - default_entity_search_change
+        - runtime_executor_change
+        - emission_projection_change
+    - id: pipeline_continuity_check
+      command: bash .agent/tests/check-pipeline-continuity.sh
+      meaning: Verify API command lane, SSE projection lane, and identity continuity contract.
+      phase: scope_specific_executable_check
+      required_for:
+        - pipeline_continuity_change
+        - frontend_api_lane_change
+        - sse_projection_lane_change
+        - dispatch_endpoint_change
+    - id: bootstrap_validation_check
+      command: bash .agent/tests/check-bootstrap-validation.sh
+      meaning: Validate compose/bootstrap/database initialization contract.
+      phase: scope_specific_executable_check
+      required_for:
+        - infra_compose_change
+        - db_init_change
+        - bootstrap_validation_change
+    - id: sql_attention_ssot_check
+      command: bash .agent/tests/check-sql-attention-ssot.sh
+      meaning: Verify SQL Attention SSOT vocabulary and table/function continuity.
+      phase: scope_specific_executable_check
+      required_for:
+        - sql_attention_change
+        - logs_schema_change
+        - context_route_recommendation_change
+    - id: unified_test_gate
+      command: bash .agent/tests/check-unified-test-gate.sh
+      meaning: Aggregate declared function boundary, runtime integration, frontend contract, and uncovered-scope states.
+      phase: aggregate_gate
+      required_for:
+        - batch_implementation_change
+        - multi_surface_runtime_change
+        - release_readiness_check
+    - id: local_ci_check
+      command: bash .agent/tests/check-local-ci.sh
+      meaning: Local orchestration wrapper for required local CI checks.
+      phase: local_ci_orchestration
+      required_for:
+        - full_local_validation
+        - pre_push_validation
+    - id: structure_check
+      command: bash .agent/tests/check-structure.sh
+      meaning: Executable structure SSOT; verifies required directories, files, and architecture-critical terms.
+      phase: final_structure_gate
+      order_constraint: must_run_last
+      required_for:
+        - all_completion_paths
+  remote_ci_mapping:
+    backend_tests:
+      workflow: .github/workflows/backend-tests.yml
+      local_equivalent: bash .agent/tests/check-backend-tests.sh
+    frontend_type_check:
+      workflow: .github/workflows/frontend-types.yml
+      local_equivalent: bash .agent/tests/check-frontend-types.sh
+    default_entity_search_check:
+      workflow: .github/workflows/default-entity-search.yml
+      local_equivalent: bash .agent/tests/check-default-entity-search.sh
+    pipeline_continuity_check:
+      workflow: .github/workflows/structure-check.yml
+      local_equivalent: bash .agent/tests/check-pipeline-continuity.sh
+    bootstrap_validation_check:
+      workflow: .github/workflows/bootstrap-validation.yml
+      local_equivalent: bash .agent/tests/check-bootstrap-validation.sh
+    unified_test_gate:
+      workflow: .github/workflows/unified-test-gate.yml
+      local_equivalent: bash .agent/tests/check-unified-test-gate.sh
+    structure_check:
+      workflow: .github/workflows/structure-check.yml
+      local_equivalent: bash .agent/tests/check-structure.sh
+  prohibited_interpretations:
+    - structure_check_as_semantic_judgment
+    - queued_remote_ci_as_pass
+    - missing_local_tool_as_pass
+    - unexecuted_required_check_as_completion
+    - verification_bookkeeping_as_todo
+
 grep_key_policy:
   id_language: english
   marker_language: english
@@ -293,6 +566,21 @@ token_estimate_policy:
     another repository-level overview. .agent/README.md must remain a directory
     purpose map only.
 
+validation_closure:
+  must_be_defined_for_every_worktype:
+    - prompt
+    - protocol_or_triggered_protocol
+    - output_shape
+    - required_check_scope
+  must_be_defined_for_every_check:
+    - command
+    - meaning
+    - phase
+    - required_for
+    - pass_fail_semantics
+  final_gate:
+    - bash .agent/tests/check-structure.sh
+
 prohibited_duplication:
   - duplicate_token_estimates_inside_agent_readme
   - duplicate_protocol_body_inside_rule_md
@@ -309,3 +597,4 @@ migration_target_state:
   - add_specific_worktype_prompt_and_protocol
   - unify_grep_keys_to_english_snake_case
   - update_required_paths_and_check_scripts_to_reference_new_worktypes
+  - update_check_scripts_to_reference_ci_check_contract
