@@ -664,6 +664,8 @@ fi
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== All checks passed ==="
+  echo "Use .agent/protocols/reports-and-todos.md / ## Completion Summary Template for the final completion summary."
+  echo "Do not replace the final completion summary with PR body or make_pr output."
   exit 0
 else
   echo "=== $FAILURES check(s) failed ===" >&2
