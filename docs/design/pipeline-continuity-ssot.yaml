@@ -1,6 +1,6 @@
 pipeline_continuity_ssot:
   name: topolactor_pipeline_continuity_ssot
-  version: 0.2.1
+  version: 0.2.2
   status: ssot_design_document
 
   purpose:
@@ -224,6 +224,33 @@ pipeline_continuity_ssot:
           - unbounded_localStorage_growth
           - secret_or_large_payload_localStorage_cache
           - frontend_topology_or_sql_attention_judgment
+
+      transport_selection_policy:
+        default_event_log_transport: interval_batch_flush_or_polling
+        default_event_log_transport_reason: >
+          Standard business UI operation logs prioritize non-lossy observation, retry, append-only
+          persistence, and auditability over sub-second bidirectional transport. Polling/interval
+          batch flush is sufficient by default because server-to-client projection already has the
+          SSE lane.
+        server_to_client_projection_transport: sse_projection_lane
+        websocket_default: not_required_for_standard_component_event_logs
+        websocket_allowed_when:
+          - high_frequency_pointer_stream
+          - drawing_canvas
+          - collaborative_editing
+          - realtime_cursor_or_presence
+          - continuous_drag_or_resize_preview
+          - bidirectional_low_latency_ui_state_required
+        websocket_requirements:
+          - explicit_lane_or_policy_extension
+          - event_identity_preservation
+          - reconnect_and_dedup_boundary
+          - backpressure_or_rate_limit_boundary
+          - fallback_or_replay_boundary
+        prohibited:
+          - websocket_as_default_for_all_component_events
+          - replacing_event_log_batch_flush_without_explicit_low_latency_requirement
+          - using_transport_choice_to_bypass_canonical_event_log_persistence
 
       completion_condition:
         - components_emit_operation_events_to_frontend_runtime_queue
