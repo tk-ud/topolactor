@@ -20,6 +20,8 @@ Do not bypass any step. Do not add silent fallbacks anywhere in this route.
 
 ## Explicit Failure
 
-Broken refs are explicit errors, not silent fallback. Any unresolved reference must return a validation error.
+Silent fallback is prohibited.
+Infrastructure / manifest / dispatcher / runtime destination / mapping / package / schema / storage unresolved references remain explicit validation errors.
+When docs/SSOT defines a runtime fallback event (for example route_missing jump), it must be emitted as an explicit observable emission/jump event, never as a silent default path.
 
 If policy storage, route mapping, manifest mapping, registry mapping, projection mapping, or parameter storage is not implemented yet, return an explicit missing-policy / missing-parameter / missing-mapping status rather than inventing a production fallback.
