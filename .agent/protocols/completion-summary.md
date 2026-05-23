@@ -27,8 +27,8 @@ Read this protocol when composing:
 | Work Type | PR body | PR comment | Final summary | Required action | Evidence |
 |---|---|---|---|---|---|
 | new PR | thin entry summary | NOT_REQUIRED | REQUIRED | create/update thin PR body | PR URL / head commit |
-| existing PR update | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready body |
-| todo-maintenance existing PR | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready body |
+| existing PR update | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + Completion Summary全文 (manual paste unit) |
+| todo-maintenance existing PR | update only if materially misleading | REQUIRED | REQUIRED | post follow-up PR comment after push and verify posted state | `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + Completion Summary全文 (manual paste unit) |
 | local-only draft (no remote PR update) | NOT_REQUIRED | NOT_REQUIRED | REQUIRED | no remote action | local-only reason + no remote PR update fact |
 
 ## WorkEvent Output Sink Contract
@@ -40,7 +40,7 @@ Read this protocol when composing:
 | `local_only` | final summary | none | no remote sink is required when no remote PR update exists |
 
 Structural completion rule for `existing_pr_update`:
-- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + exact paste-ready comment body.
+- completion requires either `POSTED + VERIFIED` or `PR_COMMENT_NOT_POSTED` + Completion Summary全文 (manual paste unit).
 - final summary is required evidence output, not a substitute for PR comment posting.
 
 ## Completion Summary generation rules (not emitted section)
@@ -95,10 +95,10 @@ Structural completion rule for `existing_pr_update`:
   - local_only: EMITTED
 - 理由:
 - posted 先 (PR URL or NOT_REQUIRED):
-- paste-ready comment body (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
+- manual paste unit (existing_pr_update かつ PR_COMMENT_NOT_POSTED の場合のみ必須):
 
 ````
-<comment body>
+<Completion Summary全文>
 ````
 
 ### 残タスク引き継ぎ指示
