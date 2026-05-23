@@ -12,7 +12,8 @@ Worktype is `audit`.
 - .agent/protocols/audit.md
 
 ## optional_reads
-- .agent/docs/ssot-map.yaml
+- .agent/docs/ssot-map.yaml when PR diff touches runtime/db/frontend/governance surfaces and SSOT selection is needed
+- .agent/docs/required-paths.yaml only when auditing `.agent` structure, required paths, required content terms, or check-structure expectations
 - touched-surface SSOT docs only
 
 ## protocol_triggers
@@ -24,4 +25,5 @@ problem, purpose, improvement_policy, reference_materials, target_files, target_
 
 ## out_of_scope
 - full-bundle reading by default
+- treating `.agent/docs` as always-read bundle
 - replacing semantic audit with structure check

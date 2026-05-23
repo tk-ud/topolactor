@@ -60,6 +60,16 @@ UI definitions become topology entities only after persistence and ID issuance. 
 - **Not** a framework that recreates endpoint/UI/scheduler/function per spec.
 - **Not** a recommendation-only or ranking-only subsystem.
 
+## Agent Governance Context Cost
+
+Agent governance work usually consumes more context than one-shot code generation because the baseline route is contract-first (`AGENTS.md` → `.agent/rules/rule.md` → `.agent/README.md` → selected worktype prompt → triggered protocols) before implementation detail reads.
+
+Typical audit/update runs are still smaller than reading the full `.agent` bundle, because worktype routing is designed to avoid unconditional protocol/doc loading.
+
+- `.agent/docs/ssot-map.yaml` and `.agent/docs/required-paths.yaml` are **conditional indexes**, not always-read bundles.
+- Exact token usage varies by touched surface and triggered protocols/checks.
+- As a practical range, governance-context overhead is often **hundreds to a few thousand tokens** before target-code reads, and can be higher for multi-surface or protocol-heavy changes.
+
 ## AI-Driven Development OS Trade-off
 
 The AI-Driven Development OS intentionally spends agent context on repository-local governance. This helps agents preserve design intent, follow SSOT documents, and avoid unsafe completion claims.
