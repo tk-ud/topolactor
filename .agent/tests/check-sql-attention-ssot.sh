@@ -150,6 +150,22 @@ grep -qF "ArchivePolicy must be 'required'" backend/repository/NpgsqlSqlAttentio
 grep -qF "CurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: current_id required boundary missing" >&2; exit 1; }
 grep -qF "HubCurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: hub_current_id required boundary missing" >&2; exit 1; }
 echo "OK: write_logs_attention implementation boundary checks passed"
+# phase_vector TODO requirement is conditional:
+# - if implementation boundary is missing -> TODO entry is required
+# - if implementation boundary exists -> TODO entry is not required and must not be forced back
+phase_vector_impl_ready=1
+grep -qF "phase_vector_json" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || phase_vector_impl_ready=0
+grep -qF "PhaseVectorJson" backend/repository/SqlAttentionLogsRepository.cs || phase_vector_impl_ready=0
+
+if [ "$phase_vector_impl_ready" -eq 0 ]; then
+  grep -qF "phase_vector generation implementation" "$TODO_FILE" || {
+    echo "FAIL: TODO missing phase_vector generation item while phase_vector implementation boundary is incomplete" >&2
+    exit 1
+  }
+  echo "OK: phase_vector implementation is incomplete; TODO carry-over requirement is satisfied"
+else
+  echo "OK: phase_vector implementation boundary is present; TODO carry-over is not required"
+fi
 
 if grep -qF "policy caps を用いた phase_vector" "$TODO_FILE"; then
   echo "FAIL: dangerous phrase remains: policy caps を用いた phase_vector" >&2
