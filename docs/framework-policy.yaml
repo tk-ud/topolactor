@@ -162,6 +162,37 @@ framework_policy:
         - record_direct_vector_sparse_authoring
       vector_cache: vector_sparse_l2_norm_are_rebuildable_projection_caches
 
+  runtime_route_resolver_policy:
+    definitions:
+      route: business_mandatory_fixed_path
+      attention: recommendation_and_neighborhood_exploration
+    resolver_priority:
+      - fixed_route
+      - topology_enum_or_package_recommend
+      - sql_attention_relation_recommend
+      - route_missing_fallback_jump
+    fixed_route_contract:
+      hubs_relation_route: fixed_business_route_between_hubs
+      topology_package_route: fixed_state_transition_within_topology
+      attention_override: prohibited
+    frontend_boundary:
+      projection_surface_only: true
+      spa_backend_driven: true
+      frontend_if_branching_for_business_route: prohibited
+    route_missing_jump_event:
+      behavior: runtime_jump_event_not_error
+      user_fields:
+        - currentHubAddress
+        - currentTopologyAddress
+      jump_fields:
+        - scope
+        - from
+        - to
+        - reason
+      hub_route_missing_example: jump("hub", currentHubAddress, 0, reason: "route_missing")
+      topology_route_missing_example: jump("topology", currentTopologyAddress, 0, reason: "route_missing")
+
+
   ui_projection_composition_persistence:
     naming_note: ui_topology_tensor_is_persistence_name_not_semantic_tensor_sot
     semantic_boundary: ui_package_layout_wiring_is_projection_composition_surface

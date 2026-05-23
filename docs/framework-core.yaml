@@ -190,6 +190,27 @@ data_driven_topology_runtime_framework:
         - connects_to_abstract_space_through_hub
 
 
+  runtime_route_attention_boundary:
+    route_definition: business_mandatory_fixed_path
+    attention_definition: recommendation_and_neighborhood_exploration
+    invariant:
+      - attention_score_must_not_override_fixed_route
+      - hubs.relation_route_is_fixed_business_route_between_hubs
+      - topology.package_route_is_fixed_state_transition_within_same_topology
+      - frontend_is_projection_surface_only
+      - spa_is_backend_driven
+      - runtime_route_resolver_owns_screen_transition_next_task_and_business_branching
+    resolver_priority:
+      - fixed_route
+      - topology_enum_or_package_recommend
+      - sql_attention_relation_recommend
+      - route_missing_fallback_jump
+    route_missing_policy:
+      - runtime_must_emit_jump_event_not_error
+      - jump_hub_to_zero
+      - jump_topology_to_zero
+
+
 current_projection_namespace_split:
   role: namespace_design_boundary
   migration_policy:
