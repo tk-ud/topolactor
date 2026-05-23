@@ -182,7 +182,7 @@ public class SqlAttentionScheduler : BackgroundService
                             PermutationKey: hit.PermutationKey,
                             L2Norm: hit.L2Norm,
                             VectorJson: hit.VectorJson,
-                            PhaseVectorJson: "{}",
+                            PhaseVectorJson: hit.PhaseVectorJson,
                             StatisticsJson: "{}",
                             EmaScore: null,
                             EvidenceJson: hit.EvidenceJson,

@@ -72,7 +72,8 @@ SELECT w.current_id, w.physical_table_id, w.norm_rank,
         const string sql = @"
 select hub_current_id, source_set_id, hub_id, attractor_key, hub_relation_id,
        relation_registry_id, basis_window, attractor_vector_json::text,
-       population_count, population_recordcount
+       population_count, population_recordcount,
+       axis_population_json::text, axis_z_score_json::text, phase_basis_json::text
   from logs.hub_current
  where source_set_id = @p_source_set_id
    and basis_window = @p_basis_window";
@@ -93,7 +94,10 @@ select hub_current_id, source_set_id, hub_id, attractor_key, hub_relation_id,
                 BasisWindow: reader.GetString(reader.GetOrdinal("basis_window")),
                 AttractorVectorJson: reader.GetString(reader.GetOrdinal("attractor_vector_json")),
                 PopulationCount: reader.GetInt64(reader.GetOrdinal("population_count")),
-                PopulationRecordcount: reader.GetInt64(reader.GetOrdinal("population_recordcount"))));
+                PopulationRecordcount: reader.GetInt64(reader.GetOrdinal("population_recordcount")),
+                AxisPopulationJson: reader.GetString(reader.GetOrdinal("axis_population_json")),
+                AxisZScoreJson: reader.GetString(reader.GetOrdinal("axis_z_score_json")),
+                PhaseBasisJson: reader.GetString(reader.GetOrdinal("phase_basis_json"))));
         }
 
         _npgsqlLogger.LogInformation("Loaded SQL attention candidates watch/hub for {SourceSetId}/{BasisWindow}: hubs={HubCount}.", sourceSetId, basisWindow, rows.Count);
