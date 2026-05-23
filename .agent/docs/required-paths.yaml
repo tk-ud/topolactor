@@ -72,6 +72,8 @@ required_files:
     - .agent/protocols/scenario-contract.md
     - .agent/protocols/runtime-boundary-matrix.md
     - .agent/protocols/completion-summary.md
+    - .agent/protocols/report-surfaces.md
+    - .agent/protocols/todo-carry-over.md
     - .agent/protocols/registry-tensor-policy.md
     - .agent/skills/structure-check.md
     - .agent/skills/agent-workflow.md
@@ -213,8 +215,14 @@ required_content_terms:
     - "Frontend projection identity"
     - "UI action identity"
   .agent/protocols/completion-summary.md:
+    - "Completion Summary Template"
+    - "output sink state"
+  .agent/protocols/report-surfaces.md:
     - "routine inspection reports"
+  .agent/protocols/completion.md:
     - "Recursive Verification Gate"
+  .agent/protocols/todo-carry-over.md:
+    - ".agent/tasks/todo.md"
   .agent/scripts/create-tmp.sh:
     - "Blocking failures found:"
     - "Runtime Boundary Failure Matrix"
