@@ -62,6 +62,13 @@ SSOT参照必読:
         - debounce / throttle / batch_size / flush_interval_seconds / retry_policy / explicit error を runtime policy または parameter として外部化できるようにする。
         - offline / API失敗時は silent drop せず、queue保持・明示エラー・retry境界を定義する。
         - backend側は受け取ったevent batchをDBへappendし、後続の学習・推薦・監査で使える形にする。
+      → local cache fallback:
+        - 通常は in-memory queue を正規一次queueとして扱う。
+        - scheduler停止 / flush失敗 / offline / page lifecycle interruption 時は、未送信event batchを localStorage fallback cache に退避できるようにする。
+        - localStorage cache は送信成功ACKを受けた event から順に解放する。
+        - idempotency_key で重複送信をDB側/endpoint側で排除できる前提にする。
+        - localStorage fallback は永久保存ではなく、max_events / max_bytes / ttl / schema_version を持つ bounded cache として扱う。
+        - 機密値・巨大payload・秘密情報は localStorage に保存しない。event payload はcomponent操作ログに必要な最小情報へ制限する。
       → 完了条件: component操作が frontend runtime queue に集約され、直接API分岐なしで定期batch永続化できる設計・実装・テストが揃うこと。
 
 ## Frontend UI Topology Tensor Registration (Issue #86)
