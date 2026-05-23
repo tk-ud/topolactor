@@ -24,8 +24,7 @@ namespace Topolactor.Runtime;
 ///   - No change candidates → NoChange (exploration skipped, not an error)
 ///
 /// Prohibited:
-///   - Writing to logs.attention (write_logs_attention boundary is a separate TODO)
-///   - phase_vector generation
+///   - Writing to logs.attention directly (persistence boundary is SqlAttentionScheduler -> WriteLogsAttentionAsync)
 ///   - registry mutation / migration / column promotion
 ///   - Magic number policy defaults in runtime code
 /// </summary>
@@ -57,7 +56,8 @@ public class HubAttractorExplorationRuntime
     ///   MalformedPolicy — policy JSON invalid or required key invalid; fail-close.
     ///   Ok         — exploration ran; Result contains hits (may be empty if no hub current records).
     ///
-    /// Never writes to logs.attention. Phase vector generation is not performed here.
+    /// Never writes to logs.attention. Runtime generates phase_vector_json evidence for logs.attention
+    /// without mutation / migration / promotion and without deriving phase movement from manifest / policy cap.
     /// </summary>
     public async Task<HubAttractorExplorationRunResult> ExploreAsync(
         IReadOnlyList<WatchChangeCandidate> candidates,

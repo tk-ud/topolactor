@@ -56,7 +56,7 @@ public record HubAttractorExplorationPolicy(
 /// L2Norm = logs.current.l2_norm at scoring time.
 /// VectorJson = convergent neighbor hit vector (dot product component terms, per SSOT).
 /// EvidenceJson = scoring provenance (cosine_score, overlap_score, current_l2_norm, key counts).
-/// Phase vector is excluded — phase_vector generation is a separate post-main step.
+/// PhaseVectorJson carries runtime-generated exploratory evidence for logs.attention persistence.
 /// </summary>
 public record HubAttractorExplorationHit(
     Guid CurrentId,
@@ -120,7 +120,7 @@ public record HubAttractorExplorationRunResult(
 /// Evidence layer separation (SSOT):
 ///   statistics layer  : statistics_json, ema_score
 ///   attention layer   : l2_norm, vector_json, neighbor_score
-///   phase-attention   : phase_vector_json (stored; generation is a separate TODO)
+///   phase-attention   : phase_vector_json (runtime-generated evidence; persisted only)
 /// </summary>
 public record LogsAttentionWriteRequest(
     Guid CurrentId,

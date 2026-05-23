@@ -126,15 +126,6 @@ grep -qF "explorationResult.Hits.Count == 0" backend/scheduler/SqlAttentionSched
 grep -qF "_sqlAttentionLogsRepository.WriteLogsAttentionAsync(" backend/scheduler/SqlAttentionScheduler.cs && scheduler_write_call_present=1
 grep -qF "INSERT INTO logs.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs && insert_boundary_present=1
 
-phase_vector_impl_ready=0
-if [[ "$logs_repo_boundary_present" -eq 1 && "$npgsql_boundary_present" -eq 1 && "$scheduler_empty_hits_guard_present" -eq 1 && "$scheduler_write_call_present" -eq 1 && "$insert_boundary_present" -eq 1 ]]; then
-  phase_vector_impl_ready=1
-fi
-
-if [[ "$phase_vector_impl_ready" -eq 0 ]]; then
-  grep -qF "phase_vector generation implementation" "$TODO_FILE" || { echo "FAIL: phase_vector implementation is incomplete and TODO is missing" >&2; exit 1; }
-fi
-
 [[ "$logs_repo_boundary_present" -eq 1 ]] || { echo "FAIL: missing SqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 [[ "$npgsql_boundary_present" -eq 1 ]] || { echo "FAIL: missing NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 [[ "$scheduler_empty_hits_guard_present" -eq 1 ]] || { echo "FAIL: scheduler missing empty-hits guard before write" >&2; exit 1; }
@@ -151,18 +142,22 @@ grep -qF "CurrentId must not be empty" backend/repository/SqlAttentionLogsReposi
 grep -qF "HubCurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: hub_current_id required boundary missing" >&2; exit 1; }
 echo "OK: write_logs_attention implementation boundary checks passed"
 # phase_vector TODO requirement is conditional:
-# - if implementation boundary is missing -> TODO entry is required
-# - if implementation boundary exists -> TODO entry is not required and must not be forced back
+# - implementation boundary complete -> TODO is not required
+# - implementation boundary incomplete -> TODO entry is required
 phase_vector_impl_ready=1
+grep -qF "CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(" db/sql_attention_logs_tables.sql || phase_vector_impl_ready=0
+grep -qF "CREATE OR REPLACE FUNCTION logs.refresh_hub_current(" db/sql_attention_logs_tables.sql || phase_vector_impl_ready=0
+grep -qF "private static string BuildPhaseVectorJson(" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
+grep -qF "PhaseVectorJson: phaseVectorJson" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
+grep -qF "string PhaseVectorJson" backend/schema/SqlAttentionContracts.cs || phase_vector_impl_ready=0
 grep -qF "phase_vector_json" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || phase_vector_impl_ready=0
-grep -qF "PhaseVectorJson" backend/repository/SqlAttentionLogsRepository.cs || phase_vector_impl_ready=0
 
 if [ "$phase_vector_impl_ready" -eq 0 ]; then
   grep -qF "phase_vector generation implementation" "$TODO_FILE" || {
     echo "FAIL: TODO missing phase_vector generation item while phase_vector implementation boundary is incomplete" >&2
     exit 1
   }
-  echo "OK: phase_vector implementation is incomplete; TODO carry-over requirement is satisfied"
+  echo "OK: phase_vector implementation boundary is incomplete; TODO carry-over requirement is satisfied"
 else
   echo "OK: phase_vector implementation boundary is present; TODO carry-over is not required"
 fi
