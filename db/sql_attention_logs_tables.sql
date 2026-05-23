@@ -232,6 +232,115 @@ BEGIN
 END;
 $$;
 
+-- ---------------------------------------------------------------------------
+-- phase_vector generation helper
+-- Boundary:
+--   w = l2_norm
+--   x/y/z = hub-side record-count bases
+--   i/j/k = axis movement amounts
+-- phase movement is not derived from manifest/policy cap.
+-- No mutation/migration/promotion is triggered from this function.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(
+    p_l2_norm DOUBLE PRECISION,
+    p_population_count BIGINT,
+    p_population_recordcount BIGINT,
+    p_axis_population_recordcount BIGINT,
+    p_axis_move_i DOUBLE PRECISION,
+    p_axis_move_j DOUBLE PRECISION,
+    p_axis_move_k DOUBLE PRECISION,
+    p_vector_basis_json JSONB DEFAULT '{}'::jsonb,
+    p_vector_keys_json JSONB DEFAULT '[]'::jsonb,
+    p_phase_basis_json JSONB DEFAULT '{}'::jsonb
+)
+RETURNS JSONB
+LANGUAGE sql
+AS $$
+    SELECT jsonb_build_object(
+        'basis_source', 'logs.hub_current',
+        'meaning_boundary', jsonb_build_object(
+            'w', 'l2_norm',
+            'xyz', 'hub-side record-count bases',
+            'ijk', 'axis movement amounts',
+            'phase_movement_source', 'not_manifest_or_policy_cap',
+            'no_automatic_topology_mutation', true
+        ),
+        'w', COALESCE(p_l2_norm, 0),
+        'x', COALESCE(p_population_count, 0),
+        'y', COALESCE(p_population_recordcount, 0),
+        'z', COALESCE(p_axis_population_recordcount, 0),
+        'i', COALESCE(p_axis_move_i, 0),
+        'j', COALESCE(p_axis_move_j, 0),
+        'k', COALESCE(p_axis_move_k, 0),
+        'generated_from', 'logs.attention.vector_json',
+        'vector_keys', COALESCE(p_vector_keys_json, '[]'::jsonb),
+        'vector_basis_json', COALESCE(p_vector_basis_json, '{}'::jsonb),
+        'phase_basis_json', COALESCE(p_phase_basis_json, '{}'::jsonb)
+    );
+$$;
+
+-- ---------------------------------------------------------------------------
+-- logs.hub_current refresh function
+-- Refreshes hub_current population/recordcount basis from logs.attention.
+-- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
+-- neighbor_score statistics are not written into i/j/k to avoid movement-semantic masquerade.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.refresh_hub_current(
+    p_source_set_id TEXT,
+    p_basis_window TEXT
+)
+RETURNS TABLE (
+    hub_current_id UUID,
+    attractor_key TEXT,
+    population_count BIGINT,
+    population_recordcount BIGINT,
+    axis_population_json JSONB,
+    axis_z_score_json JSONB,
+    refreshed_at TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH attention_axis AS (
+      SELECT
+        a.hub_current_id,
+        COUNT(*)::BIGINT AS population_count,
+        COUNT(DISTINCT a.current_id)::BIGINT AS population_recordcount,
+        COUNT(DISTINCT a.hub_relation_id)::BIGINT AS axis_population_recordcount
+      FROM logs.attention a
+      JOIN logs.hub_current h ON h.hub_current_id = a.hub_current_id
+      WHERE h.source_set_id = p_source_set_id
+        AND h.basis_window = p_basis_window
+      GROUP BY a.hub_current_id
+    ),
+    applied AS (
+      UPDATE logs.hub_current h
+         SET population_count = aa.population_count,
+             population_recordcount = aa.population_recordcount,
+             axis_population_json = jsonb_build_object(
+                'x', aa.population_count,
+                'y', aa.population_recordcount,
+                'z', aa.axis_population_recordcount
+             ),
+             axis_z_score_json = jsonb_build_object(
+                'i', 0,
+                'j', 0,
+                'k', 0
+             ),
+             evaluated_at = now(),
+             updated_at = now()
+      FROM attention_axis aa
+      WHERE h.hub_current_id = aa.hub_current_id
+      RETURNING h.hub_current_id, h.attractor_key, h.population_count, h.population_recordcount,
+                h.axis_population_json, h.axis_z_score_json, h.updated_at
+    )
+    SELECT ap.hub_current_id, ap.attractor_key, ap.population_count, ap.population_recordcount,
+           ap.axis_population_json, ap.axis_z_score_json, ap.updated_at
+    FROM applied ap;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION logs.refresh_logs_current_watch(
     p_source_set_id TEXT,
     p_basis_window TEXT,
