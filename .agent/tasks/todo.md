@@ -24,6 +24,22 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention observation runtime follow-up
 
+- [ ] Concept SSOT に Runtime / Frontend / DB relation / SQL Attention の責務境界を短文追加する設計TODOを整理する
+      → Runtime = 状態正本、Frontend = projection surface、DB relation / SQL Attention = 業務導線の decision / support surface を明記し、画面遷移・次タスク判断・業務フローを Frontend / 固定REST / if分岐 / 旧fallback に逃がさない設計境界を SSOT 追記候補として定義する。
+      → 対象候補: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml` (本文更新は本TODOでは実施しない)。
+
+- [ ] route と attention の責務境界を SSOT / schema contract として定義する
+      → `Attention = 推薦・近傍探索`, `Route = 固定導線・業務上必須遷移` を明示し、SQL Attention を固定 route の代替にしない。
+      → resolver 優先順候補を `fixed route → topology enum/package recommend → SQL Attention relation recommend → explicit gap/error` として残し、業務必須遷移は route 優先で判定する。
+
+- [ ] `hubs.relation_route` schema / SSOT contract を設計する
+      → hub / relation をまたぐ固定業務導線 (例: 受付 → task生成 → inventory変動 → 請求) を Attention score で上書き不可な route として扱う contract を整理する。
+      → 必須導線 / 任意導線 / 補助導線の区分、Attention が補助してよい範囲、Runtime resolver が route を優先する条件を未実装TODOとして明確化する。
+
+- [ ] `topology.package_route` schema / SSOT contract を設計する
+      → 同一 topology 内の状態遷移 (例: 受付済 → 作業中 → 完了 → 請求待ち) について、fixed package route と enum/package recommend の責務差分を定義する。
+      → 推薦可能遷移と必須遷移の分離、UI projection emission 反映方針、topology 内状態束 route の schema 保持方式を設計TODOとして整理する。
+
 - [ ] phase_vector generation implementation を行う
       → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
       → `w = l2_norm`、`x/y/z = hub-side record-count bases`、`i/j/k = axis movement amounts` の意味境界を維持し、phase movement は manifest / policy cap 由来ではないことを明示する。
