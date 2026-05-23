@@ -240,8 +240,8 @@ function LayoutBuilderSection(): JSX.Element {
       <h2>Visual Layout Builder (Issue #89 — skeleton)</h2>
       <p style={{ color: "#555", fontSize: "0.9rem" }}>
         Layout builder connects component packages to route-specific layout definitions.
-        <strong> Planned (not yet implemented):</strong> layoutId / styleTokenId / responsiveRuleId
-        persistent to <code>ui_layout_registry</code> (DB schema pending).
+        <strong> Planned (not yet implemented):</strong> mouse-driven layout editor and
+        style token / responsive rule management on top of <code>ui_layout_registry</code>.
         Frontend adapter is a stable projection surface; spec changes via registry tensor data.
       </p>
       <p style={{ color: "#888" }}>
@@ -251,8 +251,9 @@ function LayoutBuilderSection(): JSX.Element {
       <section style={{ background: "#f5f5f5", padding: "12px", borderRadius: "4px" }}>
         <h3 style={{ marginTop: 0 }}>Planned capabilities</h3>
         <ul>
-          <li>Mouse-driven layout construction (layoutId / styleTokenId / responsiveRuleId)</li>
-          <li>Layout token and style token DB management via <code>ui_layout_registry</code></li>
+          <li>Layout structure composition with explicit layoutId bindings</li>
+          <li>Mouse-driven layout editing UI (drag/drop and placement controls)</li>
+          <li>Style token and responsive rule authoring/management wired to <code>ui_layout_registry</code></li>
           <li>Component bucket → package generator → UI topology DB pipeline (wired above)</li>
           <li>Frontend adapter as fixed projection surface; spec changes via registry tensor</li>
         </ul>

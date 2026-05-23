@@ -179,7 +179,7 @@ system_roadmap_ssot:
 
     M5_admin_and_ui_topology:
       title: Admin UI, component topology, and seed runtime
-      status: not_started
+      status: partial
       goal: >
         Provide admin-facing registry, seed, component, layout, and projection management
         surfaces while keeping DB topology and backend runtime as the semantic authority.
@@ -246,7 +246,7 @@ system_roadmap_ssot:
 
     M7_sql_attention_observation_runtime:
       title: SQL Attention observation runtime
-      status: not_started
+      status: partial
       goal: >
         Implement SQL Attention as a DB-native hub-attractor observation runtime with
         explicit separation of logs.current, logs.hub_current, and logs.attention planes.
