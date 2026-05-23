@@ -1,5 +1,6 @@
 using Topolactor.Repository;
 using Topolactor.Schema;
+using System.Text.Json;
 
 namespace Topolactor.Runtime;
 
@@ -40,5 +41,47 @@ public class AttractorResolver
             PackageId: record.PackageId,
             SchemaId: record.SchemaId
         );
+    }
+
+    /// <summary>
+    /// Builds the phase_vector_json payload for logs.attention.
+    /// Boundary:
+    ///   - w = l2_norm
+    ///   - x/y/z = hub-side record-count bases
+    ///   - i/j/k = axis movement amounts
+    /// No automatic mutation/migration/promotion is derived from this vector.
+    /// </summary>
+    public static string BuildPhaseVectorJson(
+        double l2Norm,
+        long populationCount,
+        long populationRecordcount,
+        long axisPopulationRecordcount,
+        double axisMoveI,
+        double axisMoveJ,
+        double axisMoveK,
+        string? phaseBasisJson = null)
+    {
+        var payload = new
+        {
+            basis_source = "logs.hub_current",
+            meaning_boundary = new
+            {
+                w = "l2_norm",
+                xyz = "hub-side record-count bases",
+                ijk = "axis movement amounts",
+                phase_movement_source = "not_manifest_or_policy_cap",
+                no_automatic_topology_mutation = true
+            },
+            w = l2Norm,
+            x = populationCount,
+            y = populationRecordcount,
+            z = axisPopulationRecordcount,
+            i = axisMoveI,
+            j = axisMoveJ,
+            k = axisMoveK,
+            phase_basis_json = string.IsNullOrWhiteSpace(phaseBasisJson) ? "{}" : phaseBasisJson
+        };
+
+        return JsonSerializer.Serialize(payload);
     }
 }
