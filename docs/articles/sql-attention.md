@@ -11,7 +11,7 @@ SQL Attention observes two current planes separately:
 - **physical current:** table, column / JSON path, candidate, operation, component, diff, and log pressure.
 - **hub current:** hubs relation-map continuity represented as a bounded square-matrix field.
 
-The SQL Attention target is hubs relation-map continuity and attractor evidence observation under topology definitions. Registry and context surfaces provide definitions and bindings, but topology semantic definitions are not mixed into hubs relation-map payloads.
+The SQL Attention target is hubs relation-map continuity and attractor evidence observation under topology definitions. Registry and context surfaces provide definitions and bindings, but registry itself is not the SQL Attention target, and topology semantic definitions are not mixed into hubs relation-map payloads.
 
 In this model, SQL aggregates are operational evidence for attention, not detached analytics and not the meaning authority. SQL Attention does not reproduce Transformer QK inner product over all elements.
 
@@ -67,7 +67,7 @@ This keeps the public concept simple while leaving exact schema and runtime poli
 
 The DB schema above is an implemented projection / signal surface. It is not the runtime authority by itself:
 
-- topology meaning remains in registry tensor continuity, hub-attractor continuity, relation bindings, jsonb/promoted-column observations, and logs,
+- topology meaning remains in registry semantic matrix continuity, hub-attractor continuity, relation bindings, jsonb/promoted-column observations, and logs,
 - caches and recommendation-current rows are rebuildable projections,
 - `context_hub_recommendation_current` is the topology-internal discrete recommendation current, not SQL Attention itself,
 - runtime policy values must be read from `function_parameters`, not hardcoded,
