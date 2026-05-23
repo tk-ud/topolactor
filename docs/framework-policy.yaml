@@ -168,9 +168,25 @@ framework_policy:
       attention: recommendation_and_neighborhood_exploration
     resolver_priority:
       - fixed_route
-      - topology_enum_or_package_recommend
-      - sql_attention_relation_recommend
+      - topology_enum_or_package_recommend_candidate_only
+      - sql_attention_relation_recommend_candidate_only
       - route_missing_fallback_jump
+    projection_tabs:
+      canonical_route_tab:
+        owns:
+          - fixed_route
+          - current_hub_address
+          - current_topology_address
+          - route_missing_fallback_jump
+      attention_recommendation_tab:
+        owns:
+          - sql_attention_recommendation
+          - topology_package_recommendation_candidates
+          - nearby_relation_candidates
+        must_not:
+          - overwrite_current_address_automatically
+          - replace_fixed_route
+          - mutate_route_state_without_explicit_user_action
     fixed_route_contract:
       hubs_relation_route: fixed_business_route_between_hubs
       topology_package_route: fixed_state_transition_within_topology
@@ -191,6 +207,7 @@ framework_policy:
         - reason
       hub_route_missing_example: jump("hub", currentHubAddress, 0, reason: "route_missing")
       topology_route_missing_example: jump("topology", currentTopologyAddress, 0, reason: "route_missing")
+      recommendation_adoption_only: jump(reason: "user_action")
 
 
   ui_projection_composition_persistence:

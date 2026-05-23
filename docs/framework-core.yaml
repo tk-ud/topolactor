@@ -198,15 +198,32 @@ data_driven_topology_runtime_framework:
       - hubs.relation_route_is_fixed_business_route_between_hubs
       - topology.package_route_is_fixed_state_transition_within_same_topology
       - frontend_is_projection_surface_only
-      - spa_is_backend_driven
+      - spa_is_runtime_authoritative_projection
       - runtime_route_resolver_owns_screen_transition_next_task_and_business_branching
+    projection_tabs:
+      canonical_route_tab:
+        owns:
+          - fixed_route
+          - current_hub_address
+          - current_topology_address
+          - route_missing_fallback_jump
+      attention_recommendation_tab:
+        owns:
+          - sql_attention_recommendation
+          - topology_package_recommendation_candidates
+          - nearby_relation_candidates
+        must_not:
+          - overwrite_current_address_automatically
+          - replace_fixed_route
+          - mutate_route_state_without_explicit_user_action
     resolver_priority:
       - fixed_route
-      - topology_enum_or_package_recommend
-      - sql_attention_relation_recommend
+      - topology_enum_or_package_recommend_candidate_only
+      - sql_attention_relation_recommend_candidate_only
       - route_missing_fallback_jump
     route_missing_policy:
       - runtime_must_emit_jump_event_not_error
+      - attention_candidate_adoption_requires_user_action_jump
       - jump_hub_to_zero
       - jump_topology_to_zero
 

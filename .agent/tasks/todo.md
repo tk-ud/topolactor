@@ -25,15 +25,15 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ## SQL Attention observation runtime follow-up
 
 - [ ] phase_vector generation implementation を行う
-      → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
+      → 対象ファイル: `db/sql_attention_logs_tables.sql`, `backend/runtime/AttractorResolver.cs` / 対象関数: AttractorResolver の attention evidence 更新系。理由: phase_vector 保存と evidence transform 実装が未完。次の判断点: phase_vector_json 更新タイミングを runtime emission 前後どちらに固定するか。
       → `w = l2_norm`、`x/y/z = hub-side record-count bases`、`i/j/k = axis movement amounts` の意味境界を維持し、phase movement は manifest / policy cap 由来ではないことを明示する。
       → phase_vector から自動 mutation/migration/promotion は行わない。
 
 - [ ] statistics / EMA integration for topology projection recommendation を実装する
-      → hit hub から投影される topologys 意味空間の提示順/候補強度を統計・EMA・履歴・利用頻度で扱う recommendation basis を実装する。
+      → 対象ファイル: `backend/runtime/PackageResolver.cs`, `backend/runtime/EmissionBuilder.cs` / 対象関数: recommendation candidate 並び替え・投影生成。理由: EMA/履歴を候補提示に統合する実装が未完。次の判断点: EMA の window/persistence を function_parameters 由来でどこまで外部化するか。
 
 - [ ] refresh logs.hub_current / attractor current function implementation を実装する
-      → hub-side attractor current と axis z-score を算出・更新する function contract を実装し、phase_vector 移動距離計算に必要な母数を提供する。
+      → 対象ファイル: `db/sql_attention_logs_tables.sql`, `backend/runtime/AttractorResolver.cs` / 対象関数: hub_current refresh と z-score 算出更新。理由: logs.hub_current 更新関数が未完。次の判断点: batch/trigger/client のどの経路で refresh を必須化するか。
 
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
