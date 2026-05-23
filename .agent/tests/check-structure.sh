@@ -99,6 +99,20 @@ check_tmp_tracked_files() {
   fi
 }
 
+
+check_no_in_progress_todos() {
+  local todo_file="$REPO_ROOT/.agent/tasks/todo.md"
+  if [ ! -f "$todo_file" ]; then
+    fail "TODO marker check skipped (file missing): .agent/tasks/todo.md"
+    return
+  fi
+  if rg -n "^\s*<!--\s*agent:in-progress\s*-->\s*$" "$todo_file" >/dev/null; then
+    fail ".agent/tasks/todo.md contains unfinished in-progress marker: <!-- agent:in-progress -->"
+  else
+    echo "OK  [todo] no in-progress marker in .agent/tasks/todo.md"
+  fi
+}
+
 # ─── Required directories ────────────────────────────────────────────────────
 
 echo ""
@@ -566,6 +580,7 @@ fi
 
 check_tmp_runtime_artifacts
 check_tmp_tracked_files
+check_no_in_progress_todos
 
 # Protocol split guard
 if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
