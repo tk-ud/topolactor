@@ -663,6 +663,14 @@ fi
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""
+echo ""
+echo "=== Delegated routing checks ==="
+if bash "$REPO_ROOT/.agent/tests/check-worktype-routing.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-worktype-routing.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-worktype-routing.sh"
+fi
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== All checks passed ==="
   echo "AGENT_HINT: Final completion summary must use .agent/protocols/completion-summary.md."
@@ -672,13 +680,4 @@ if [ "$FAILURES" -eq 0 ]; then
 else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
-fi
-
-
-echo ""
-echo "=== Delegated routing checks ==="
-if bash "$REPO_ROOT/.agent/tests/check-worktype-routing.sh"; then
-  echo "OK  [subcheck] .agent/tests/check-worktype-routing.sh"
-else
-  fail "Subcheck failed: .agent/tests/check-worktype-routing.sh"
 fi

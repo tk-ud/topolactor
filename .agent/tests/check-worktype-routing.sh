@@ -43,6 +43,10 @@ if [ -f "$ROUTE_FILE" ]; then
   check_term "$ROUTE_FILE" ".agent/protocols/ssot-change-impact.md"
   check_term "$ROUTE_FILE" ".agent/protocols/completion.md"
   check_term "$ROUTE_FILE" ".agent/protocols/completion-summary.md"
+  check_term "$ROUTE_FILE" "runtime_persistence_projection_changes:"
+  check_term "$ROUTE_FILE" "policy_scoring_threshold_changes:"
+  check_term "$ROUTE_FILE" ".agent/protocols/scenario-contract.md"
+  check_term "$ROUTE_FILE" ".agent/protocols/policy-judgment.md"
 
   check_term "$ROUTE_FILE" "Do not duplicate SSOT body into protocol."
 

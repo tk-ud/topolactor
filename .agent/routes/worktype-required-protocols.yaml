@@ -36,8 +36,6 @@ worktypes:
     required_protocols:
       - .agent/protocols/completion.md
       - .agent/protocols/completion-summary.md
-      - .agent/protocols/scenario-contract.md
-      - .agent/protocols/policy-judgment.md
     conditional_protocols:
       runtime_persistence_projection_changes:
         - .agent/protocols/scenario-contract.md
