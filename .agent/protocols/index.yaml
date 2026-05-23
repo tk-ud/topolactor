@@ -49,94 +49,96 @@ protocols:
           - "final completion/failure determination"
           - "blocking condition confirmation"
     related_surfaces:
-      - .agent/protocols/reports-and-todos.md
+      - .agent/protocols/completion-summary.md
       - .agent/tests/check-completion-judgment.sh
 
-  - id: reports-and-todo-surfaces
-    file: .agent/protocols/reports-and-todos.md
+  - id: todo-carry-over
+    file: .agent/protocols/todo-carry-over.md
+    stage:
+      - JUDGMENT
+    sections:
+      - marker: "## Trigger condition"
+        grep_keys:
+          - "todo"
+          - "carry-over"
+          - "remaining TODO"
+          - "close candidate"
+          - "roadmap"
+          - "auditor finalizer"
+        read_when:
+          - "remaining work classification"
+          - "TODO carry-over routing"
+      - marker: "## Remaining TODO classification"
+        grep_keys:
+          - "残すべき TODO 候補"
+          - "削除 / close 候補"
+          - "roadmap 更新候補"
+        read_when:
+          - "todo candidate classification"
+      - marker: "## Auditor finalizer boundary"
+        grep_keys:
+          - "Auditor TODO input"
+          - "canonical TODO/roadmap closure"
+        read_when:
+          - "auditor boundary confirmation"
+      - marker: "## Implementation agent direct-close conditions"
+        grep_keys:
+          - "directly close canonical TODO/roadmap"
+        read_when:
+          - "implementation-agent direct close eligibility"
+    related_surfaces:
+      - .agent/protocols/completion-summary.md
+      - .agent/tasks/todo.md
+
+  - id: report-surfaces
+    file: .agent/protocols/report-surfaces.md
     stage:
       - JUDGMENT
       - PUSH_OR_PR
     sections:
-      - marker: "## Surface rules"
+      - marker: "## `.agent/reports/` usage"
         grep_keys:
-          - "routine inspection reports"
-          - "normal PR summaries"
+          - "reports"
+          - "routine inspection"
+          - "scheduled maintenance"
+          - "periodic audit"
+          - ".agent/reports"
         read_when:
           - "report storage/update routing"
-      - marker: "## PR body and follow-up comment policy"
+    related_surfaces:
+      - .agent/reports/
+
+  - id: completion-summary
+    file: .agent/protocols/completion-summary.md
+    stage:
+      - JUDGMENT
+      - PUSH_OR_PR
+    sections:
+      - marker: "## Scope boundary"
         grep_keys:
-          - "existing PR update"
-          - "follow-up comment"
-          - "follow-up PR comment"
-          - "PR_COMMENT_NOT_POSTED"
-          - "changed summary"
-          - "checks"
-          - "remaining TODOs"
-          - "PR body"
-          - "posted in PR conversation"
-          - "thin PR body"
-          - "initial PR body"
-          - "Completion Summary Template scope"
+          - "Completion Summary Template"
+          - "final completion summary"
+          - "PR body / `make_pr` output does not replace final completion summary"
         read_when:
-          - "existing PR update"
-          - "PR follow-up"
-          - "PR comment missing"
-          - "PR_COMMENT_NOT_POSTED fallback"
+          - "completion summary scope/boundary"
+      - marker: "## WorkEvent output sink contract"
+        grep_keys:
+          - "WorkEvent"
+          - "output sink"
+          - "PR_COMMENT_NOT_POSTED"
+          - "Required check scope"
+        read_when:
+          - "work event sink contract"
+          - "existing PR update follow-up comment requirement"
       - marker: "## Completion Summary Template"
         grep_keys:
-          - "completion summary"
-          - "follow-up summary"
-          - "作業内容"
-          - "変更ファイル"
-          - "test結果"
-          - "残タスク引き継ぎ指示"
-          - "Auditor TODO input"
-          - "Required check scope"
-          - "initial final summary"
-          - "first-run final summary"
-          - "Codex final summary"
-          - "Agent final summary"
-          - "completion report"
-          - "summary source"
-          - "summary sink"
-          - "summary sinks"
-          - "make_pr metadata"
-          - "Completion Summary Template scope"
+          - "Completion Summary Template"
+          - "### test結果"
+          - "#### Required check scope"
+          - "### output sink state"
+          - "### 残タスク引き継ぎ指示"
         read_when:
-          - "completion summary section composition"
-          - "follow-up summary composition"
-      - marker: "## TODO carry-over rules"
-        grep_keys:
-          - "todo"
-          - "remaining TODO"
-          - "TODO carry-over"
-          - ".agent/tasks/todo.md"
-          - "Auditor TODO"
-          - "canonical TODO"
-          - "remaining implementation"
-          - "CI waiting"
-          - "local tool absence"
-          - "remote CI confirmation"
-          - "roadmap update"
-        read_when:
-          - "remaining work classification"
-          - "TODO queue update"
-      - marker: "## Required reporting sections"
-        grep_keys:
-          - "Governance Gaps"
-          - "Proposed Governance Improvements"
-          - "Completion Eligibility"
-        read_when:
-          - "completion summary section composition"
-      - marker: "## Roadmap Status vs TODO Responsibility"
-        grep_keys:
-          - "roadmap"
-          - "implementation_registry"
-          - "known_gap_ref"
-        read_when:
-          - "roadmap status update"
-          - "TODO completion changes implementation status"
+          - "terminal completion summary composition"
     related_surfaces:
       - .agent/protocols/completion.md
 

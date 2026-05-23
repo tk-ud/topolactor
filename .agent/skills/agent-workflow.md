@@ -72,8 +72,8 @@ READ_ENTRY
   - compare full diff with scenario contract
   - verify consistency across contract, checklist, and actual diff
 - JUDGMENT
-  - open `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md` only for completion / TODO[x] / report judgment
-  - before reading triggered JUDGMENT protocol bodies (completion.md, reports-and-todos.md, registry-tensor-policy.md), use `.agent/protocols/index.yaml` section-level `sections[].grep_keys` / `sections[].marker` routes to read only the minimal protocol sections
+  - open `.agent/protocols/completion.md` for completion eligibility judgment; open `.agent/protocols/completion-summary.md` for terminal summary/output sink; open `.agent/protocols/todo-carry-over.md` only when remaining TODO classification is needed; open `.agent/protocols/report-surfaces.md` only when report placement routing is needed
+  - before reading triggered JUDGMENT protocol bodies (completion.md, completion-summary.md, todo-carry-over.md, report-surfaces.md, registry-tensor-policy.md), use `.agent/protocols/index.yaml` section-level `sections[].grep_keys` / `sections[].marker` routes to read only the minimal protocol sections
   - for small direct-read protocols (policy-judgment.md, runtime-boundary-matrix.md, scenario-contract.md) triggered at JUDGMENT, read them directly without index.yaml
   - `.agent/protocols/index.yaml` is not a judgment SSOT; protocol body remains the decision source
   - grep hits are read-route selection only and must not be used as PASS/FAIL judgment
@@ -87,15 +87,15 @@ READ_ENTRY
   - execute only after all triggered gates pass
   - completion summary must include remaining TODO
   - when needed, create/update PR body first as a thin entry summary only
-  - completion / follow-up summary composition must follow `## Completion Summary Template` in `.agent/protocols/reports-and-todos.md`
+  - completion / follow-up summary composition must follow `## Completion Summary Template` in `.agent/protocols/completion-summary.md`
   - initial Codex / Agent final completion summary is in template scope even on first PR creation
   - for a new PR, keep the PR body thin: purpose, high-level scope, and durable references only
-  - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/reports-and-todos.md`):
+  - for an existing PR update, execute this fixed external-state order (policy judgment remains in `.agent/protocols/completion-summary.md`):
     - work-type route source: `.agent/prompt/existing-pr-update.md`
     1. determine whether this work is an existing-PR update
     2. confirm push or remote PR update actually occurred
     3. identify target PR number/URL and head commit
-    4. apply follow-up comment requirement from `.agent/protocols/reports-and-todos.md`
+    4. apply follow-up comment requirement from `.agent/protocols/completion-summary.md`
     5. confirm whether PR comment posting capability is available
     6. when posting is available, post follow-up PR comment after push
     7. verify posted comment exists in PR conversation
@@ -104,7 +104,7 @@ READ_ENTRY
   - for existing-PR updates, follow-up PR comment is required and uses the same template structure
   - follow-up PR comment requirement applies only to existing-PR updates
   - check/report sequence in PUSH_OR_PR order: (1) run required local checks in triggered scope with NOT_EXECUTED kept separate from PASS, (2) run `bash .agent/tests/check-structure.sh` last, (3) push / remote PR update, (4) for existing PR update post follow-up PR comment and verify posted state (or emit `PR_COMMENT_NOT_POSTED` evidence), (5) emit final completion summary in template scope
-  - follow Prompt Type / Work Type Output Switch in `.agent/protocols/reports-and-todos.md` for required output surfaces and required external actions
+  - follow Prompt Type / Work Type Output Switch in `.agent/protocols/completion-summary.md` for required output surfaces and required external actions
   - Completion Summary Template defines body shape only and must not be used as an action substitute
   - for existing-PR updates, chat/final summary alone is not a substitute for PR follow-up comment handling
   - check success (including structure/completion checks) is not a substitute for PR follow-up comment posting/verification state

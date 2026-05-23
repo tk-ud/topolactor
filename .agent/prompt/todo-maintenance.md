@@ -12,7 +12,7 @@ This router absorbs vague task-material prompts such as:
 - reflect open issues into todo
 - remove completed TODO work logs
 
-This is a router, not a protocol. It selects required surfaces and triggered protocols; final judgment remains owned by `.agent/protocols/completion.md` and `.agent/protocols/reports-and-todos.md`.
+This is a router, not a protocol. It selects required surfaces and triggered protocols; final judgment remains owned by `.agent/protocols/completion.md` and `.agent/protocols/completion-summary.md`.
 
 ## Trigger condition
 
@@ -31,7 +31,7 @@ Do not open this router for ordinary feature implementation unless the task expl
 Minimum required surfaces:
 
 - `.agent/tasks/todo.md`
-- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion-summary.md`
 - `.agent/protocols/completion.md`
 - `docs/system-roadmap.yaml`
 
@@ -80,13 +80,13 @@ Out of scope unless explicitly requested:
 Before push / PR update:
 
 - run `bash .agent/tests/check-structure.sh` last
-- if this is an existing PR update, follow `.agent/protocols/reports-and-todos.md` and add a follow-up PR comment after push
+- if this is an existing PR update, follow `.agent/protocols/completion-summary.md` and add a follow-up PR comment after push
 - completion summary must include PASS / FAIL / NOT_EXECUTED / REMOTE_REQUIRED checks and remaining TODOs
 
 ## Expected output shape
 
 Do not define an independent terminal summary format in this router.
-This router must converge to `.agent/protocols/reports-and-todos.md` `## Completion Summary Template`.
+This router must converge to `.agent/protocols/completion-summary.md` `## Completion Summary Template`.
 For existing-PR updates, this template convergence does not replace required PR comment posting action; follow Output Switch required action/evidence.
 
 For TODO-maintenance specific reporting, map facts into that template:

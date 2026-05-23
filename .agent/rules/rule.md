@@ -107,8 +107,10 @@ Protocol agenda map (condition-triggered):
 3. boundary-identity: `.agent/protocols/runtime-boundary-matrix.md`
 4. policy-judgment: `.agent/protocols/policy-judgment.md`
 5. registry-topology-semantics: `.agent/protocols/registry-tensor-policy.md`
-6. reports-and-todo-surfaces: `.agent/protocols/reports-and-todos.md`
-7. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
+6. todo-carry-over: `.agent/protocols/todo-carry-over.md`
+7. report-surfaces: `.agent/protocols/report-surfaces.md`
+8. completion-summary: `.agent/protocols/completion-summary.md`
+9. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
 
 ## Protocol Trigger Map
 
@@ -119,9 +121,14 @@ Protocol body routing:
 - `.agent/protocols/index.yaml` is not protocol body and not a judgment gate SSOT.
 - grep hits are read-route hints only; PASS/FAIL judgment remains in each protocol body.
 
-- Completion report / TODO `[x]` update / completion eligibility decision:
+- Completion eligibility decision:
   - `.agent/protocols/completion.md`
-  - `.agent/protocols/reports-and-todos.md`
+- final completion summary / existing PR follow-up comment output:
+  - `.agent/protocols/completion-summary.md`
+- remaining TODO classification / close candidate / roadmap carry-over:
+  - `.agent/protocols/todo-carry-over.md`
+- inspection/maintenance/audit report placement:
+  - `.agent/protocols/report-surfaces.md`
 - Runtime claim / route / persistence / projection changes:
   - `.agent/protocols/scenario-contract.md` (Temporary Scenario Contract)
 - Endpoint / frontend API proxy / repository write / admin operation / persistence mutation / DB-backed registry operation:
@@ -159,7 +166,7 @@ Recursive Verification Gate, Required Check Scope Declaration Gate, Failure Tria
 
 Details:
 - `.agent/protocols/completion.md`
-- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion-summary.md`
 
 Skills are operation procedures and are not governance protocols. Read `.agent/skills/*.md` only when executing the corresponding task/check.
 

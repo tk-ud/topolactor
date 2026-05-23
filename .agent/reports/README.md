@@ -27,4 +27,4 @@ Use descriptive filenames with a date prefix for routine or scheduled reports:
 YYYY-MM-DD-<topic>.md
 ```
 
-See `.agent/protocols/reports-and-todos.md` for operating rules between reports and TODO surfaces.
+See `.agent/protocols/completion-summary.md` for operating rules between reports and TODO surfaces.

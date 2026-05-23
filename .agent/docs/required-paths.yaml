@@ -71,7 +71,7 @@ required_files:
     - .agent/protocols/policy-judgment.md
     - .agent/protocols/scenario-contract.md
     - .agent/protocols/runtime-boundary-matrix.md
-    - .agent/protocols/reports-and-todos.md
+    - .agent/protocols/completion-summary.md
     - .agent/protocols/registry-tensor-policy.md
     - .agent/skills/structure-check.md
     - .agent/skills/agent-workflow.md
@@ -186,7 +186,7 @@ required_content_terms:
     - "sections:"
     - "read_when"
     - "completion-governance"
-    - "reports-and-todo-surfaces"
+    - "protocol-split-surfaces"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
@@ -212,7 +212,7 @@ required_content_terms:
     - "Repository mutation identity"
     - "Frontend projection identity"
     - "UI action identity"
-  .agent/protocols/reports-and-todos.md:
+  .agent/protocols/completion-summary.md:
     - "routine inspection reports"
     - "Recursive Verification Gate"
   .agent/scripts/create-tmp.sh:

@@ -15,7 +15,7 @@ Run this protocol only when any of the following is attempted:
 
 - writing completion summary / completion report
   - includes initial final summary and existing PR follow-up comment
-  - excludes initial PR body (follow thin PR body policy in `.agent/protocols/reports-and-todos.md`)
+  - excludes initial PR body (follow thin PR body policy in `.agent/protocols/completion-summary.md`)
 - completion eligibility decision
 - updating `.agent/tasks/todo.md` item to `[x]`
 
