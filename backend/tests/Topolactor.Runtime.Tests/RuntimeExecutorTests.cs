@@ -130,7 +130,9 @@ public class RuntimeExecutorTests
             null,
             new Dictionary<string, string>
             {
+                ["pastHubAddress"] = "10",
                 ["currentHubAddress"] = "12",
+                ["pastTopologyAddress"] = "30",
                 ["currentTopologyAddress"] = "34"
             });
 
@@ -145,15 +147,59 @@ public class RuntimeExecutorTests
             e =>
             {
                 Assert.Equal("hub", e.Scope);
-                Assert.Equal(12, e.From);
-                Assert.Equal(0, e.To);
+                Assert.Equal(10, e.PastAddress);
+                Assert.Equal(12, e.CurrentAddress);
+                Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             },
             e =>
             {
                 Assert.Equal("topology", e.Scope);
-                Assert.Equal(34, e.From);
-                Assert.Equal(0, e.To);
+                Assert.Equal(30, e.PastAddress);
+                Assert.Equal(34, e.CurrentAddress);
+                Assert.Equal(0, e.PlannedAddress);
+                Assert.Equal("route_missing", e.Reason);
+            });
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_BrokenAttractor_MissingPastAddress_UsesZeroPastAddress()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search",
+            "missing",
+            "entity",
+            "Search",
+            null,
+            null,
+            new Dictionary<string, string>
+            {
+                ["currentHubAddress"] = "12",
+                ["currentTopologyAddress"] = "34"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.NotNull(response.Emission!.JumpEvents);
+        Assert.Collection(
+            response.Emission.JumpEvents!,
+            e =>
+            {
+                Assert.Equal("hub", e.Scope);
+                Assert.Equal(0, e.PastAddress);
+                Assert.Equal(12, e.CurrentAddress);
+                Assert.Equal(0, e.PlannedAddress);
+                Assert.Equal("route_missing", e.Reason);
+            },
+            e =>
+            {
+                Assert.Equal("topology", e.Scope);
+                Assert.Equal(0, e.PastAddress);
+                Assert.Equal(34, e.CurrentAddress);
+                Assert.Equal(0, e.PlannedAddress);
                 Assert.Equal("route_missing", e.Reason);
             });
     }
@@ -168,14 +214,19 @@ public class RuntimeExecutorTests
             {
                 ["jumpReason"] = "user_action",
                 ["jumpScope"] = "hub",
-                ["jumpFrom"] = "7",
-                ["jumpTo"] = "9"
+                ["pastHubAddress"] = "7",
+                ["currentHubAddress"] = "8",
+                ["plannedHubAddress"] = "9"
             });
 
         var resWithUserAction = await executor.ExecuteAsync(withUserAction);
         Assert.True(resWithUserAction.Success);
         Assert.Single(resWithUserAction.Emission!.JumpEvents!);
         Assert.Equal("user_action", resWithUserAction.Emission.JumpEvents![0].Reason);
+        Assert.Equal("hub", resWithUserAction.Emission.JumpEvents[0].Scope);
+        Assert.Equal(7, resWithUserAction.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(8, resWithUserAction.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(9, resWithUserAction.Emission.JumpEvents[0].PlannedAddress);
 
         var recommendationOnly = new EndpointRequestDto(
             "Search", "default", "entity", "Search", null, null,
@@ -199,7 +250,8 @@ public class RuntimeExecutorTests
             {
                 ["jumpReason"] = "user_action",
                 ["jumpScope"] = "hub",
-                ["jumpFrom"] = "7"
+                ["pastHubAddress"] = "7",
+                ["currentHubAddress"] = "8"
             });
 
         var response = await executor.ExecuteAsync(request);
@@ -218,8 +270,9 @@ public class RuntimeExecutorTests
             {
                 ["jumpReason"] = "user_action",
                 ["jumpScope"] = "hub",
-                ["jumpFrom"] = "x",
-                ["jumpTo"] = "9"
+                ["pastHubAddress"] = "x",
+                ["currentHubAddress"] = "8",
+                ["plannedHubAddress"] = "9"
             });
 
         var response = await executor.ExecuteAsync(request);
@@ -238,8 +291,9 @@ public class RuntimeExecutorTests
             {
                 ["jumpReason"] = "user_action",
                 ["jumpScope"] = "invalid",
-                ["jumpFrom"] = "7",
-                ["jumpTo"] = "9"
+                ["pastHubAddress"] = "7",
+                ["currentHubAddress"] = "8",
+                ["plannedHubAddress"] = "9"
             });
 
         var response = await executor.ExecuteAsync(request);
@@ -258,8 +312,9 @@ public class RuntimeExecutorTests
             {
                 ["jumpReason"] = "user_action",
                 ["jumpScope"] = "topology",
-                ["jumpFrom"] = "11",
-                ["jumpTo"] = "13"
+                ["pastTopologyAddress"] = "11",
+                ["currentTopologyAddress"] = "12",
+                ["plannedTopologyAddress"] = "13"
             });
 
         var response = await executor.ExecuteAsync(request);
@@ -268,8 +323,30 @@ public class RuntimeExecutorTests
         Assert.Single(response.Emission!.JumpEvents!);
         Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
         Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
-        Assert.Equal(11, response.Emission.JumpEvents[0].From);
-        Assert.Equal(13, response.Emission.JumpEvents[0].To);
+        Assert.Equal(11, response.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(12, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(13, response.Emission.JumpEvents[0].PlannedAddress);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_NonUserActionReason_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "recommendation",
+                ["jumpScope"] = "hub",
+                ["pastHubAddress"] = "7",
+                ["currentHubAddress"] = "8",
+                ["plannedHubAddress"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
     }
 
     [Fact]

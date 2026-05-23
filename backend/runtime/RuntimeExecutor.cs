@@ -221,12 +221,14 @@ public class RuntimeExecutor : IDispatchableRuntime
 
     private static IReadOnlyList<RuntimeJumpEvent> BuildRouteMissingJumpEvents(Dictionary<string, string>? context)
     {
+        var pastHubAddress = TryReadInt(context, "pastHubAddress");
         var currentHubAddress = TryReadInt(context, "currentHubAddress");
+        var pastTopologyAddress = TryReadInt(context, "pastTopologyAddress");
         var currentTopologyAddress = TryReadInt(context, "currentTopologyAddress");
         return
         [
-            new RuntimeJumpEvent("hub", currentHubAddress, 0, "route_missing"),
-            new RuntimeJumpEvent("topology", currentTopologyAddress, 0, "route_missing")
+            new RuntimeJumpEvent("hub", pastHubAddress, currentHubAddress, 0, "route_missing"),
+            new RuntimeJumpEvent("topology", pastTopologyAddress, currentTopologyAddress, 0, "route_missing")
         ];
     }
 
@@ -235,14 +237,32 @@ public class RuntimeExecutor : IDispatchableRuntime
         if (context is null) return null;
         if (!context.TryGetValue("jumpReason", out var reason) || !string.Equals(reason, "user_action", StringComparison.Ordinal))
             return null;
-        if (!context.TryGetValue("jumpScope", out var scope) ||
-            !(string.Equals(scope, "hub", StringComparison.Ordinal) || string.Equals(scope, "topology", StringComparison.Ordinal)))
+        if (!context.TryGetValue("jumpScope", out var scope))
             return null;
-        if (!TryReadRequiredInt(context, "jumpFrom", out var from))
-            return null;
-        if (!TryReadRequiredInt(context, "jumpTo", out var to))
-            return null;
-        return new RuntimeJumpEvent(scope, from, to, "user_action");
+
+        if (string.Equals(scope, "hub", StringComparison.Ordinal))
+        {
+            if (!TryReadRequiredInt(context, "pastHubAddress", out var pastAddress))
+                return null;
+            if (!TryReadRequiredInt(context, "currentHubAddress", out var currentAddress))
+                return null;
+            if (!TryReadRequiredInt(context, "plannedHubAddress", out var plannedAddress))
+                return null;
+            return new RuntimeJumpEvent("hub", pastAddress, currentAddress, plannedAddress, "user_action");
+        }
+
+        if (string.Equals(scope, "topology", StringComparison.Ordinal))
+        {
+            if (!TryReadRequiredInt(context, "pastTopologyAddress", out var pastAddress))
+                return null;
+            if (!TryReadRequiredInt(context, "currentTopologyAddress", out var currentAddress))
+                return null;
+            if (!TryReadRequiredInt(context, "plannedTopologyAddress", out var plannedAddress))
+                return null;
+            return new RuntimeJumpEvent("topology", pastAddress, currentAddress, plannedAddress, "user_action");
+        }
+
+        return null;
     }
 
     private static int TryReadInt(Dictionary<string, string>? context, string key)

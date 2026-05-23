@@ -118,13 +118,13 @@ public class DefaultEntitySearchIntegrationTests
                 e =>
                 {
                     Assert.Equal("hub", e.Scope);
-                    Assert.Equal(0, e.To);
+                    Assert.Equal(0, e.PlannedAddress);
                     Assert.Equal("route_missing", e.Reason);
                 },
                 e =>
                 {
                     Assert.Equal("topology", e.Scope);
-                    Assert.Equal(0, e.To);
+                    Assert.Equal(0, e.PlannedAddress);
                     Assert.Equal("route_missing", e.Reason);
                 });
         }
