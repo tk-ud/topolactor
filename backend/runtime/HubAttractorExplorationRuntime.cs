@@ -202,10 +202,7 @@ public class HubAttractorExplorationRuntime
                             break;
 
                         var (hub, scoring) = scoredHubs[rank];
-                        var phaseVectorJson = BuildPhaseVectorEvidenceJson(
-                            candidate,
-                            hub,
-                            scoring.VectorJson);
+                        var phaseVectorJson = BuildPhaseVectorJson(candidate, hub, scoring.VectorJson);
                         hits.Add(new HubAttractorExplorationHit(
                             CurrentId: candidate.CurrentId,
                             HubCurrentId: hub.HubCurrentId,
@@ -352,32 +349,39 @@ public class HubAttractorExplorationRuntime
         return unionCount == 0 ? 0.0 : (double)sharedCount / unionCount;
     }
 
-    private static string BuildPhaseVectorEvidenceJson(
+    private static string BuildPhaseVectorJson(
         WatchChangeCandidate candidate,
         HubCurrentCandidate hub,
         string vectorJson)
     {
-        var vectorMap = FlattenVectorJson(vectorJson);
         var axisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
-        var axisZScore = FlattenVectorJson(hub.AxisZScoreJson);
+        var axisMovement = FlattenVectorJson(hub.AxisZScoreJson);
+        var vectorBasis = NormalizeJsonObjectOrEmpty(vectorJson);
+        var vectorKeys = FlattenVectorJson(vectorJson).Keys.OrderBy(k => k).ToArray();
+        var phaseBasis = NormalizeJsonObjectOrEmpty(hub.PhaseBasisJson);
 
-        static double GetAxisValue(Dictionary<string, double> values, string keyA, string keyB)
-            => values.TryGetValue(keyA, out var vA) ? vA
-               : values.TryGetValue(keyB, out var vB) ? vB
-               : 0.0;
+        static double GetAxisValue(Dictionary<string, double> values, string key)
+            => values.TryGetValue(key, out var v) ? v : 0.0;
 
         var x = hub.PopulationCount;
         var y = hub.PopulationRecordcount;
-        var z = axisPopulation.Count == 0 ? 0.0 : axisPopulation.Values.Sum();
+        var z = GetAxisValue(axisPopulation, "z");
 
-        var i = GetAxisValue(axisZScore, "x", "i");
-        var j = GetAxisValue(axisZScore, "y", "j");
-        var k = GetAxisValue(axisZScore, "z", "k");
+        var i = GetAxisValue(axisMovement, "i");
+        var j = GetAxisValue(axisMovement, "j");
+        var k = GetAxisValue(axisMovement, "k");
 
         return JsonSerializer.Serialize(new
         {
-            basis_source = "logs.hub_current population_count/population_recordcount/axis_population_json/axis_z_score_json",
-            generated_from = "logs.attention.vector_json",
+            basis_source = "logs.hub_current",
+            meaning_boundary = new
+            {
+                w = "l2_norm",
+                xyz = "hub-side record-count bases",
+                ijk = "axis movement amounts",
+                phase_movement_source = "not_manifest_or_policy_cap",
+                no_automatic_topology_mutation = true
+            },
             w = candidate.L2Norm,
             x,
             y,
@@ -385,9 +389,28 @@ public class HubAttractorExplorationRuntime
             i,
             j,
             k,
-            vector_keys = vectorMap.Keys.OrderBy(key => key).ToArray(),
-            phase_basis_json = hub.PhaseBasisJson
+            generated_from = "logs.attention.vector_json",
+            vector_keys = vectorKeys,
+            vector_basis_json = vectorBasis,
+            phase_basis_json = phaseBasis
         });
+    }
+
+    private static JsonElement NormalizeJsonObjectOrEmpty(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<JsonElement>(json);
+            return parsed.ValueKind == JsonValueKind.Object
+                ? parsed
+                : JsonSerializer.Deserialize<JsonElement>("{}");
+        }
+        catch (JsonException)
+        {
+            return JsonSerializer.Deserialize<JsonElement>("{}");
+        }
     }
 
     /// <summary>

@@ -41,4 +41,5 @@ public class AttractorResolver
             SchemaId: record.SchemaId
         );
     }
+
 }
