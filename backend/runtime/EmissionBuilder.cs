@@ -26,6 +26,7 @@ public class EmissionBuilder
             ComponentIds: shape.ComponentIds,
             Data: shape.ResolvedData,
             Errors: errors,
+            JumpEvents: shape.JumpEvents,
             ContextRouteRecommendation: shape.ContextRouteRecommendation
         );
     }

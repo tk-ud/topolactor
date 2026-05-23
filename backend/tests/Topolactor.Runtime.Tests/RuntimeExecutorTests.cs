@@ -121,13 +121,72 @@ public class RuntimeExecutorTests
     public async Task ExecuteAsync_BrokenAttractor_ReturnsExplicitErrorWithoutFallback()
     {
         var executor = CreateExecutor();
-        var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+        var request = new EndpointRequestDto(
+            "Search",
+            "missing",
+            "entity",
+            "Search",
+            null,
+            null,
+            new Dictionary<string, string>
+            {
+                ["currentHubAddress"] = "12",
+                ["currentTopologyAddress"] = "34"
+            });
 
         var response = await executor.ExecuteAsync(request);
 
-        Assert.False(response.Success);
-        Assert.Null(response.Emission);
-        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+        Assert.NotNull(response.Emission!.JumpEvents);
+        Assert.Collection(
+            response.Emission.JumpEvents!,
+            e =>
+            {
+                Assert.Equal("hub", e.Scope);
+                Assert.Equal(12, e.From);
+                Assert.Equal(0, e.To);
+                Assert.Equal("route_missing", e.Reason);
+            },
+            e =>
+            {
+                Assert.Equal("topology", e.Scope);
+                Assert.Equal(34, e.From);
+                Assert.Equal(0, e.To);
+                Assert.Equal("route_missing", e.Reason);
+            });
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_EmitsOnlyOnExplicitUserAction()
+    {
+        var executor = CreateExecutor();
+        var withUserAction = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "7",
+                ["jumpTo"] = "9"
+            });
+
+        var resWithUserAction = await executor.ExecuteAsync(withUserAction);
+        Assert.True(resWithUserAction.Success);
+        Assert.Single(resWithUserAction.Emission!.JumpEvents!);
+        Assert.Equal("user_action", resWithUserAction.Emission.JumpEvents![0].Reason);
+
+        var recommendationOnly = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["currentHubAddress"] = "5",
+                ["currentTopologyAddress"] = "6"
+            });
+        var resRecommendationOnly = await executor.ExecuteAsync(recommendationOnly);
+        Assert.True(resRecommendationOnly.Success);
+        Assert.True(resRecommendationOnly.Emission!.JumpEvents is null || resRecommendationOnly.Emission.JumpEvents.Count == 0);
     }
 
     [Fact]
@@ -204,7 +263,7 @@ public class SchedulerDispatcherChainTests
     }
 
     [Fact]
-    public async Task SchedulerDispatcherChain_BrokenAttractor_PropagatesExplicitError()
+    public async Task SchedulerDispatcherChain_RouteMissing_PropagatesFallbackJumpEvent()
     {
         // Broken refs must propagate through the full chain — no silent fallback.
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -218,9 +277,11 @@ public class SchedulerDispatcherChainTests
         {
             var response = await scheduler.AlignAndDispatchAsync(request, cts.Token);
 
-            Assert.False(response.Success);
-            Assert.Null(response.Emission);
-            Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Empty(response.Errors);
+            Assert.NotNull(response.Emission!.JumpEvents);
+            Assert.Equal(2, response.Emission.JumpEvents!.Count);
         }
         finally
         {

@@ -86,6 +86,24 @@ public class RuntimeExecutor : IDispatchableRuntime
         {
             attractorResult = await _attractorResolver.Resolve(vector, ct);
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No structure map found for attractor key", StringComparison.Ordinal))
+        {
+            _logger.LogInformation("Route missing detected for key '{AttractorKey}'. Returning fallback jump event.", vector.AttractorKey);
+            var routeMissingJumpEvents = BuildRouteMissingJumpEvents(request.Context);
+            var routeMissingEmission = new Emission(
+                StructureMapId: null,
+                PackageId: null,
+                SchemaId: null,
+                ComponentIds: [],
+                Data: null,
+                Errors: [],
+                JumpEvents: routeMissingJumpEvents,
+                ContextRouteRecommendation: null);
+            return new EndpointResponseDto(
+                Success: true,
+                Emission: routeMissingEmission,
+                Errors: []);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "AttractorResolver failed for key '{AttractorKey}'.", vector.AttractorKey);
@@ -170,7 +188,9 @@ public class RuntimeExecutor : IDispatchableRuntime
             );
         }
 
-        workingShape = workingShape with { ContextRouteRecommendation = recommendation };
+        var userActionJump = BuildUserActionJumpEvent(request.Context);
+        var jumpEvents = userActionJump is null ? null : new[] { userActionJump };
+        workingShape = workingShape with { ContextRouteRecommendation = recommendation, JumpEvents = jumpEvents };
 
         // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
@@ -195,4 +215,33 @@ public class RuntimeExecutor : IDispatchableRuntime
             Success: false,
             Emission: null,
             Errors: [new ValidationError(code, message)]);
+
+    private static IReadOnlyList<RuntimeJumpEvent> BuildRouteMissingJumpEvents(Dictionary<string, string>? context)
+    {
+        var currentHubAddress = TryReadInt(context, "currentHubAddress");
+        var currentTopologyAddress = TryReadInt(context, "currentTopologyAddress");
+        return
+        [
+            new RuntimeJumpEvent("hub", currentHubAddress, 0, "route_missing"),
+            new RuntimeJumpEvent("topology", currentTopologyAddress, 0, "route_missing")
+        ];
+    }
+
+    private static RuntimeJumpEvent? BuildUserActionJumpEvent(Dictionary<string, string>? context)
+    {
+        if (context is null) return null;
+        if (!context.TryGetValue("jumpReason", out var reason) || !string.Equals(reason, "user_action", StringComparison.Ordinal))
+            return null;
+        if (!context.TryGetValue("jumpScope", out var scope))
+            return null;
+        var from = TryReadInt(context, "jumpFrom");
+        var to = TryReadInt(context, "jumpTo");
+        return new RuntimeJumpEvent(scope, from, to, "user_action");
+    }
+
+    private static int TryReadInt(Dictionary<string, string>? context, string key)
+    {
+        if (context is null) return 0;
+        return context.TryGetValue(key, out var raw) && int.TryParse(raw, out var parsed) ? parsed : 0;
+    }
 }
