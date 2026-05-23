@@ -73,7 +73,8 @@ public class SqlAttentionLogsRepository
     ///   - Empty hits → returns 0 without INSERT (no-change early return).
     ///   - append-only: INSERT only, no UPDATE or DELETE.
     ///   - archive_policy is always 'required'.
-    ///   - phase_vector_json is stored as provided; generation is a separate TODO.
+    ///   - phase_vector_json is stored as provided by runtime-generated evidence JSON.
+    ///   - write boundary does not generate phase vectors; it only appends provided evidence.
     ///   - statistics_json / ema_score are stored as provided; EMA integration is a separate TODO.
     ///   - No registry mutation / migration / column promotion.
     ///

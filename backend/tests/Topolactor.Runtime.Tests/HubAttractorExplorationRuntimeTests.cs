@@ -568,7 +568,8 @@ public class HubAttractorExplorationRuntime_BoundaryTests
     [Fact]
     public async Task ExploreAsync_OkResult_HitsHavePhaseVectorField()
     {
-        // phase_vector_json is excluded from HubAttractorExplorationHit — phase generation is a separate step.
+        // phase_vector_json is generated in runtime as post-main auxiliary evidence
+        // and carried on HubAttractorExplorationHit for write boundary persistence.
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
