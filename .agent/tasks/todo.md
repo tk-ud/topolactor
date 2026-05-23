@@ -11,8 +11,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 作業中に既存TODOへ一時的な in-progress 印を付ける場合は、チェックボックス（`[x]`）ではなく HTML comment marker を使う。
 - marker: `<!-- agent:in-progress -->`
-- 使い方: 対象TODO行または直下に一時的に付与する
-- 完了条件: 作業完了前に必ず marker を削除する（残存は構造チェック失敗）
+- 使い方: 対象TODOの**直下に単独行**で一時的に付与する（inline付与はしない）
+- 完了条件: 作業完了前に必ず marker 単独行を削除する（残存は構造チェック失敗）
 
 ```md
 ## <Area>
@@ -23,15 +23,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 
 ## SQL Attention observation runtime follow-up
-
-- [ ] logs.attention production evidence persistence を実装する
-      → 実装済み: cosine similarity(basis_vector_json × attractor_vector_json), l2_norm, vector_json(convergent components), evidence_json(scoring provenance) を logs.attention に永続化。
-      → LoadWatchCandidatesAsync SQL を refresh_logs_current_watch JOIN logs.current に更新し basis_vector_json/l2_norm を取得。
-      → HubAttractorExplorationHit に L2Norm/VectorJson/EvidenceJson フィールドを追加、RunExploration で production 値を設定。
-      → SqlAttentionScheduler は hit 値を使用 (placeholder 0.0/{} を廃止)。
-      → attractor_vector_json が {} の間はスコア 0 (honest); 意味あるスコアは SQLA-3 hub_current refresh 完了後。
-      → 残 TODO: phase_vector_json (SQLA-5), statistics/EMA (SQLA-6), hub_current refresh (SQLA-3)
-
 
 - [ ] phase_vector generation implementation を行う
       → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
