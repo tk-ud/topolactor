@@ -108,6 +108,7 @@ Protocol agenda map (condition-triggered):
 4. policy-judgment: `.agent/protocols/policy-judgment.md`
 5. registry-topology-semantics: `.agent/protocols/registry-tensor-policy.md`
 6. reports-and-todo-surfaces: `.agent/protocols/reports-and-todos.md`
+7. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
 
 ## Protocol Trigger Map
 
@@ -131,6 +132,8 @@ Protocol body routing:
   - `.agent/protocols/policy-judgment.md`
 - Registry tensor / topology semantics changes:
   - `.agent/protocols/registry-tensor-policy.md`
+- SSOT change / docs/design contract change / external observable contract change:
+  - `.agent/protocols/ssot-change-impact.md`
 
 ## Small Protocol Direct-Read
 
