@@ -255,10 +255,10 @@ system_roadmap_ssot:
         and consumer surface, not the SQL Attention parent observation body.
       blocking_gaps:
         - SQLA-1 logs.current refresh/watch production hardening or live verification remains
-        - SQLA-2 logs.hub_current attractor current not implemented
-        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+        - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
+        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
         - SQLA-4 logs.attention evidence persistence not implemented
-        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
         - SQLA-6 topology projection recommendation basis not implemented
         - SQLA-7 physical table identity mapping for logs.diff not decided
 
@@ -302,8 +302,8 @@ system_roadmap_ssot:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
       known_gap_ref:
-        - SQLA-2 logs.hub_current attractor current not implemented
-        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+        - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
+        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -314,9 +314,9 @@ system_roadmap_ssot:
       milestone: M7_sql_attention_observation_runtime
       public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
       known_gap_ref:
-        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
+        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
         - SQLA-4 logs.attention evidence persistence not implemented
-        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -374,7 +374,7 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
       known_gap_ref:
-        - SQLA-5 phase_vector auxiliary evidence transform not implemented
+        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
