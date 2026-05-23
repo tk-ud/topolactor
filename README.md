@@ -92,11 +92,9 @@ Reference measured sizes used in the estimate (chars): `AGENTS.md` 1,345; `.agen
 - Full `.agent` governance bundle read is **avoid by default**; route-targeted reading is the intended policy.
 - If full bundle loading happens, context cost can reach roughly **15k–30k+ tokens** depending on included protocol/docs surfaces.
 
-## AI-Driven Development OS Trade-off
+## AI-Driven Development OS Boundary
 
-The AI-Driven Development OS intentionally spends agent context on repository-local governance. This helps agents preserve design intent, follow SSOT documents, and avoid unsafe completion claims.
-
-The trade-off is **token and quota cost**. Agents may need to read entry contracts, prompt routers, protocols, roadmap entries, TODO surfaces, and target implementation files before making a small change. This improves semantic continuity and completion judgment, but it consumes more context, model usage, and time than ordinary one-shot code generation.
+This README keeps only the public positioning and context-cost estimate for AI governance. The execution contract, judgment rules, and detailed routing authority remain in `docs/agent-development-os.md`, `docs/governance/`, `AGENTS.md`, and `.agent/`; README is not the agent execution SSOT.
 
 ## Implementation Status
 
