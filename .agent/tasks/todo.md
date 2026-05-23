@@ -51,12 +51,32 @@ SSOT参照必読:
 - [ ] primitive component を UI topology tensor に DB 登録し drift を解消する
       → 依存関係: runtime recommendation TODO と独立（並行可）。
       → 対象責務: component topology の永続化・責務境界明記。
-      → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`。
+      → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`, `frontend/components/`, `frontend/routes/admin/ui-builder.tsx`, backend UI topology repository / package generator runtime 関連。
       → 詳細:
         - Button / Input / Table / Card は frontend/components/ に code-only で存在（drift / GAP）。
         - 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
         - CRUD wiring / CanDI wiring の責務境界を `docs/registrar-admin-ui-specification.md` に明記する。
-      → 完了条件: code-only component が 0 件（全て DB topology tensor に接続）。
+        - 登録対象は既存4種だけで止めず、UI primitive catalog として一般的な component を網羅する。
+      → 登録対象 primitive catalog:
+        - action: Button, IconButton, LinkButton, ToggleButton, SplitButton。
+        - form_input: Input, Textarea, Select, Combobox, Checkbox, Radio, Switch, Slider, DatePicker, TimePicker, FileInput, SearchInput。
+        - navigation: Tabs, Tab, TabList, TabPanel, Breadcrumb, Menu, DropdownMenu, SidebarNav, Pagination, Stepper。
+        - disclosure_structure: Accordion, Tree, TreeItem, Collapse, Details, Panel, Card, Section。
+        - feedback_status: Alert, Notice, Caution, Warning, ErrorMessage, Toast, Banner, Spinner, Progress, Skeleton。
+        - display_labeling: Label, Badge, StatusBadge, CountBadge, DotBadge, PillBadge, Chip, Tag, Avatar, Tooltip, EmptyState, HelpText。
+        - icon_symbol: Icon, IconBadge, IconLabel, IconButton, StatusIcon, SeverityIcon, LeadingIcon, TrailingIcon, ExpandIcon, CloseIcon, DragHandleIcon。
+        - data_display: Table, DataGrid, List, DescriptionList, KeyValueList, Timeline。
+        - overlay: Modal, Dialog, Drawer, Popover, TooltipOverlay。
+        - layout_primitive: Container, Stack, Grid, Divider, Spacer, ScrollArea。
+      → 可変 component 方針:
+        - ToggleButton は selected / pressed / disabled / size / tone / icon / label / group_role などの引数で状態・見た目を可変にし、状態差分ごとに別component乱立させない。
+        - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
+        - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
+      → 登録時の分類軸:
+        - component_kind / semantic_role / interaction_role / data_binding_role / accessibility_role / visual_role / parameter_schema を明示する。
+        - code-only 実装が残る場合は drift として残し、DB topology tensor 未接続を完了扱いしない。
+        - #89 layout builder が使う前提 component surface として、layoutId ではなく componentId / packageId 登録までを #86 の完了境界にする。
+      → 完了条件: code-only component が 0 件、または未登録 component が component catalog drift として明確に残TODO化されること。
 
 ## Admin Visual Layout Builder (Issue #89)
 
