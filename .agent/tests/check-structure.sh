@@ -182,6 +182,7 @@ check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tests/check-frontend-types.sh"
 check_file ".agent/tests/check-completion-judgment.sh"
+check_file ".agent/tests/check-worktype-routing.sh"
 check_file ".agent/tests/check-local-ci.sh"
 check_file ".agent/tasks/todo.md"
 check_file ".agent/reports/README.md"
@@ -671,4 +672,13 @@ if [ "$FAILURES" -eq 0 ]; then
 else
   echo "=== $FAILURES check(s) failed ===" >&2
   exit 1
+fi
+
+
+echo ""
+echo "=== Delegated routing checks ==="
+if bash "$REPO_ROOT/.agent/tests/check-worktype-routing.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-worktype-routing.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-worktype-routing.sh"
 fi

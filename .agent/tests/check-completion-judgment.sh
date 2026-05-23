@@ -81,6 +81,20 @@ check_term ".agent/protocols/runtime-boundary-matrix.md" "out-of-scope"
 check_term ".agent/docs/ssot-map.yaml" "required_docs"
 check_term ".agent/docs/required-paths.yaml" "required_files"
 
+check_term ".agent/routes/worktype-required-protocols.yaml" "todo_maintenance"
+check_term ".agent/routes/worktype-required-protocols.yaml" "design_change"
+check_term ".agent/routes/worktype-required-protocols.yaml" "implementation_change"
+check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/ssot-change-impact.md"
+check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/todo-carry-over.md"
+check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/completion-summary.md"
+check_term ".agent/prompt/design-change.md" "SSOT"
+check_term ".agent/prompt/design-change.md" "ssot-change-impact.md"
+check_term ".agent/prompt/implementation-change.md" "runtime/persistence/projection"
+check_term ".agent/prompt/implementation-change.md" "policy/scoring/threshold"
+check_term ".agent/tests/check-worktype-routing.sh" "routing existence"
+check_term ".agent/tests/check-worktype-routing.sh" "reference integrity"
+check_term ".agent/tests/check-worktype-routing.sh" "required vocabulary"
+
 # clarity guard: CI order note should not imply global workflow reordering
 check_term ".agent/protocols/completion.md" "completion order and blocking criteria"
 

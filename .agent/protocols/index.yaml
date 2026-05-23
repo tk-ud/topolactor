@@ -2,6 +2,7 @@ version: 2
 purpose: "Section-level grep route for condition-triggered protocol reading. This is not a judgment SSOT."
 usage:
   - "Use only to locate protocol files and target sections after a trigger or work-type route selects a protocol."
+  - "Work-type required routing map: .agent/routes/worktype-required-protocols.yaml"
   - "Do not use grep hit as PASS/FAIL judgment."
   - "Protocol body remains the judgment source."
   - "Do not read the whole protocol bundle by default."
