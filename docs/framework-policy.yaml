@@ -193,7 +193,7 @@ framework_policy:
       attention_override: prohibited
     frontend_boundary:
       projection_surface_only: true
-      spa_backend_driven: true
+      spa_runtime_authoritative_projection: true
       frontend_if_branching_for_business_route: prohibited
     route_missing_jump_event:
       behavior: runtime_jump_event_not_error
