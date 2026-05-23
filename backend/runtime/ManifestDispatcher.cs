@@ -114,8 +114,9 @@ public class ManifestDispatcher
                     SchemaId: null,
                     ComponentIds: [],
                     Data: overrideData,
-                    ContextRouteRecommendation: null,
-                    Errors: []);
+                    Errors: [],
+                    JumpEvents: null,
+                    ContextRouteRecommendation: null);
                 return new EndpointResponseDto(Success: true, Emission: emission, Errors: []);
             }
 

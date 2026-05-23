@@ -95,9 +95,10 @@ public class DefaultEntitySearchIntegrationTests
     }
 
     [Fact]
-    public async Task BrokenAttractor_DispatchEndpoint_ReturnsATTRACTOR_RESOLVE_FAILED()
+    public async Task RouteMissing_DispatchEndpoint_ReturnsFallbackJumpEvent()
     {
-        // Broken refs are explicit errors — no silent fallback to default:entity:search.
+        // Route missing is handled as a canonical fallback jump event (not silent fallback).
+        // Explicit infrastructure failure code paths (e.g. ATTRACTOR_RESOLVE_FAILED outside route_missing contract) are validated elsewhere.
         var (endpoint, scheduler) = CreateEndpoint();
         var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -107,9 +108,25 @@ public class DefaultEntitySearchIntegrationTests
         {
             var response = await endpoint.HandleAsync(request, cts.Token);
 
-            Assert.False(response.Success);
-            Assert.Null(response.Emission);
-            Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Empty(response.Errors);
+            Assert.NotNull(response.Emission!.JumpEvents);
+            Assert.Equal(2, response.Emission.JumpEvents!.Count);
+            Assert.Collection(
+                response.Emission.JumpEvents,
+                e =>
+                {
+                    Assert.Equal("hub", e.Scope);
+                    Assert.Equal(0, e.To);
+                    Assert.Equal("route_missing", e.Reason);
+                },
+                e =>
+                {
+                    Assert.Equal("topology", e.Scope);
+                    Assert.Equal(0, e.To);
+                    Assert.Equal("route_missing", e.Reason);
+                });
         }
         finally
         {

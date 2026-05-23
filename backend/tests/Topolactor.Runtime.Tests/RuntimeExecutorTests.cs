@@ -118,16 +118,158 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_BrokenAttractor_ReturnsExplicitErrorWithoutFallback()
+    public async Task ExecuteAsync_BrokenAttractor_ReturnsCanonicalRouteMissingJumpFallback()
     {
         var executor = CreateExecutor();
-        var request = new EndpointRequestDto("Search", "missing", "entity", "Search", null, null, null);
+        var request = new EndpointRequestDto(
+            "Search",
+            "missing",
+            "entity",
+            "Search",
+            null,
+            null,
+            new Dictionary<string, string>
+            {
+                ["currentHubAddress"] = "12",
+                ["currentTopologyAddress"] = "34"
+            });
 
         var response = await executor.ExecuteAsync(request);
 
-        Assert.False(response.Success);
-        Assert.Null(response.Emission);
-        Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Empty(response.Errors);
+        Assert.NotNull(response.Emission!.JumpEvents);
+        Assert.Collection(
+            response.Emission.JumpEvents!,
+            e =>
+            {
+                Assert.Equal("hub", e.Scope);
+                Assert.Equal(12, e.From);
+                Assert.Equal(0, e.To);
+                Assert.Equal("route_missing", e.Reason);
+            },
+            e =>
+            {
+                Assert.Equal("topology", e.Scope);
+                Assert.Equal(34, e.From);
+                Assert.Equal(0, e.To);
+                Assert.Equal("route_missing", e.Reason);
+            });
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_EmitsOnlyOnExplicitUserAction()
+    {
+        var executor = CreateExecutor();
+        var withUserAction = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "7",
+                ["jumpTo"] = "9"
+            });
+
+        var resWithUserAction = await executor.ExecuteAsync(withUserAction);
+        Assert.True(resWithUserAction.Success);
+        Assert.Single(resWithUserAction.Emission!.JumpEvents!);
+        Assert.Equal("user_action", resWithUserAction.Emission.JumpEvents![0].Reason);
+
+        var recommendationOnly = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["currentHubAddress"] = "5",
+                ["currentTopologyAddress"] = "6"
+            });
+        var resRecommendationOnly = await executor.ExecuteAsync(recommendationOnly);
+        Assert.True(resRecommendationOnly.Success);
+        Assert.True(resRecommendationOnly.Emission!.JumpEvents is null || resRecommendationOnly.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_MissingJumpTo_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "7"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_NonNumericJumpFrom_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "x",
+                ["jumpTo"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_InvalidScope_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "invalid",
+                ["jumpFrom"] = "7",
+                ["jumpTo"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_ValidTopologyScope_EmitsSingleJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "topology",
+                ["jumpFrom"] = "11",
+                ["jumpTo"] = "13"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
+        Assert.Equal(11, response.Emission.JumpEvents[0].From);
+        Assert.Equal(13, response.Emission.JumpEvents[0].To);
     }
 
     [Fact]
@@ -204,9 +346,9 @@ public class SchedulerDispatcherChainTests
     }
 
     [Fact]
-    public async Task SchedulerDispatcherChain_BrokenAttractor_PropagatesExplicitError()
+    public async Task SchedulerDispatcherChain_RouteMissing_PropagatesFallbackJumpEvent()
     {
-        // Broken refs must propagate through the full chain — no silent fallback.
+        // Route missing must propagate through the full chain as canonical fallback jump events.
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
@@ -218,9 +360,11 @@ public class SchedulerDispatcherChainTests
         {
             var response = await scheduler.AlignAndDispatchAsync(request, cts.Token);
 
-            Assert.False(response.Success);
-            Assert.Null(response.Emission);
-            Assert.Contains(response.Errors, e => e.Code == "ATTRACTOR_RESOLVE_FAILED");
+            Assert.True(response.Success);
+            Assert.NotNull(response.Emission);
+            Assert.Empty(response.Errors);
+            Assert.NotNull(response.Emission!.JumpEvents);
+            Assert.Equal(2, response.Emission.JumpEvents!.Count);
         }
         finally
         {

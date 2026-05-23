@@ -71,6 +71,7 @@ public record RuntimeWorkingShape(
     object? SchemaDef,
     JsonElement? ResolvedData,
     IReadOnlyList<ValidationError>? Errors,
+    IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
     // Raw JSONB from structure_maps.state_policy — used by ContextRouteRecommendationResolver
     // to resolve a scoped context_route_policy_ref instead of the global default_policy.
     string? StructureMapStatePolicyJson = null,
@@ -90,7 +91,15 @@ public record Emission(
     IReadOnlyList<string>? ComponentIds,
     JsonElement? Data,
     IReadOnlyList<ValidationError> Errors,
+    IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null
+);
+
+public record RuntimeJumpEvent(
+    string Scope,
+    int From,
+    int To,
+    string Reason
 );
 
 /// <summary>

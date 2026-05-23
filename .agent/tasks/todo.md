@@ -37,9 +37,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 
 
-- [ ] Runtime jump event implementation を実装する
-      → 対象ファイル: `backend/runtime/RuntimeExecutor.cs`, `backend/runtime/EmissionBuilder.cs`, `backend/schema/Contracts.cs` / 対象関数: route missing / user_action jump event 生成と emission。理由: SSOT の jump contract は定義済みだが Runtime 実装が未完。次の判断点: jump payload の最小必須フィールド（scope/from/to/reason）を既存 emission 形式へどう統合するか。
-
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
 SSOT参照必読:
