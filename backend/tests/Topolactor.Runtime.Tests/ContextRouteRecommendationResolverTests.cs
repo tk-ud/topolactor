@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Topolactor.Runtime.Tests;
 
-public class ContextRouteRecommendationResolverTests
+public partial class ContextRouteRecommendationResolverTests
 {
     private static ContextVectorBuilder VectorBuilder() => new();
     private static ContextNeighborSearch NeighborSearch() => new();
@@ -578,7 +578,7 @@ public class ContextRouteRecommendationResolverTests
     {
         // AppendContextEventAsync failure must return ExplicitError, not a recommendation result.
         var repo = new AppendThrowingRepository();
-        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+        var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
         var shape = MakeShape(sessionId: Guid.NewGuid().ToString());
 
         var result = await resolver.ResolveAsync(shape);
@@ -1143,4 +1143,92 @@ public class ContextRouteRecommendationResolverTests
             return Task.FromResult(result);
         }
     }
+}
+
+public partial class ContextRouteRecommendationResolverTests
+{
+    [Fact]
+    public void ResolveNextTokens_WithRecommendationBlend_ReordersByCurrentAttention()
+    {
+        var resolver = CreateResolver();
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
+
+        var neighbors = new List<ContextNeighborResult>
+        {
+            new(Guid.NewGuid(), 0, 0.9f, null, [tokenA]),
+            new(Guid.NewGuid(), 0, 0.8f, null, [tokenA]),
+            new(Guid.NewGuid(), 0, 0.7f, null, [tokenB]),
+            new(Guid.NewGuid(), 0, 0.6f, null, [tokenB]),
+            new(Guid.NewGuid(), 0, 0.5f, null, [tokenB]),
+        };
+
+        var policy = new ContextRoutePolicy(
+            0.05f, 50, 1, 90, 5, 0.5f, 0.5f, null,
+            new TopologyVectorRuntimePolicy(
+                true, null, null, null, null, null,
+                new RecommendationBlendPolicy(true, 1000, 1.0f, 0.0f, 0.0f)));
+
+        var map = new Dictionary<string, HubAttentionCurrentRecord>
+        {
+            [tokenA.ToString()] = new(Guid.NewGuid(), "context_token_registry", "token", tokenA, 1000, null, null, null, 1.0f, null, 0f, 0f, 0f, 0f, null, 20.0f, null, "[]", "[]", DateTimeOffset.UtcNow),
+            [tokenB.ToString()] = new(Guid.NewGuid(), "context_token_registry", "token", tokenB, 1000, null, null, null, 1.0f, null, 0f, 0f, 0f, 0f, null, 0.0f, null, "[]", "[]", DateTimeOffset.UtcNow)
+        };
+
+        var result = resolver.ResolveNextTokens(neighbors, policy, map);
+        Assert.Equal(tokenA.ToString(), result[0].Value);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_NoHubId_SkipsBlendRead_AndKeepsBaseline()
+    {
+        var tokenId = Guid.NewGuid();
+        var repo = new CountingBlendRepository(tokenId);
+        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: null));
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.Equal(0, repo.LoadHubAttentionCalls);
+    }
+
+    [Fact]
+    public async Task ResolveAsync_BlendCurrentMissing_KeepsBaselineRecommendation()
+    {
+        var tokenId = Guid.NewGuid();
+        var repo = new MissingBlendRowsRepository(tokenId);
+        var resolver = CreateResolver(repo, new StubValidPolicyTopologyRepository());
+
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()));
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.NotEmpty(result.NextTokens);
+    }
+
+
+    private class CountingBlendRepository(Guid tokenId) : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public int LoadHubAttentionCalls { get; private set; }
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(IEnumerable<Guid> tokenIds, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ContextTokenRecord>>([new ContextTokenRecord(tokenId, "stub_token", null, 1.0f, "active")]);
+        public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(string? tableName, string? role, int? maxDays, CancellationToken ct = default)
+        {
+            var vector = new Dictionary<Guid, float> { [tokenId] = 1.0f };
+            IReadOnlyList<ContextPrefixVectorRecord> result = Enumerable.Range(0, 15)
+                .Select(i => new ContextPrefixVectorRecord(Guid.NewGuid(), i, Guid.NewGuid(), vector, 1.0f, DateTimeOffset.UtcNow, "action_next", [tokenId]))
+                .ToList();
+            return Task.FromResult(result);
+        }
+        public override Task AppendContextEventAsync(ContextEventRecord e, CancellationToken ct = default) => Task.CompletedTask;
+        public override Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(string prevOperation, string? role, TransitionAggregationPolicy policy, int maxCandidatesShown, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
+        public override Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(Guid hubId, int scopeLimit, CancellationToken ct = default)
+        {
+            LoadHubAttentionCalls++;
+            return Task.FromResult<IReadOnlyList<HubAttentionCurrentRecord>>([]);
+        }
+    }
+
+    private sealed class MissingBlendRowsRepository(Guid tokenId) : CountingBlendRepository(tokenId) { }
+
 }

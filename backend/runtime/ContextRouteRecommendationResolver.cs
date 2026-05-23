@@ -217,10 +217,19 @@ public class ContextRouteRecommendationResolver
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
         }
 
-        var hubAttentionByCandidate = await LoadHubAttentionBlendMapAsync(shape, policy, ct);
+        IReadOnlyDictionary<string, HubAttentionCurrentRecord> tokenAttentionByCandidate;
+        try
+        {
+            tokenAttentionByCandidate = await LoadTokenAttentionBlendMapAsync(shape, policy, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ContextRouteRecommendationResolver: recommendation blend current query failed.");
+            return ExplicitError("RECOMMENDATION_BLEND_QUERY_FAILED");
+        }
 
-        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy, hubAttentionByCandidate);
-        var nextTokens = ResolveNextTokens(neighbors, policy, hubAttentionByCandidate);
+        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);
+        var nextTokens = ResolveNextTokens(neighbors, policy, tokenAttentionByCandidate);
         var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
 
@@ -374,7 +383,7 @@ public class ContextRouteRecommendationResolver
     }
 
 
-    private async Task<IReadOnlyDictionary<string, HubAttentionCurrentRecord>> LoadHubAttentionBlendMapAsync(
+    private async Task<IReadOnlyDictionary<string, HubAttentionCurrentRecord>> LoadTokenAttentionBlendMapAsync(
         RuntimeWorkingShape shape,
         ContextRoutePolicy policy,
         CancellationToken ct)
@@ -399,8 +408,7 @@ public class ContextRouteRecommendationResolver
     public IReadOnlyList<RecommendationCandidate> ResolveNextOperations(
         IReadOnlyList<ContextNeighborResult> neighbors,
         IReadOnlyList<ContextTransitionStat> transitionStats,
-        ContextRoutePolicy policy,
-        IReadOnlyDictionary<string, HubAttentionCurrentRecord>? hubAttentionByCandidate = null)
+        ContextRoutePolicy policy)
     {
         ArgumentNullException.ThrowIfNull(neighbors);
         ArgumentNullException.ThrowIfNull(transitionStats);
@@ -425,48 +433,19 @@ public class ContextRouteRecommendationResolver
         foreach (var (op, score) in baselineVotes)
             merged[op] = merged.GetValueOrDefault(op) + score;
 
-        var blendPolicy = policy.TopologyVectorRuntime?.RecommendationBlend;
-        var scored = merged
-            .Select(x =>
-            {
-                var blendScore = 0.0f;
-                var blendEvidence = new List<string>();
-                if (blendPolicy is { Enabled: true } && hubAttentionByCandidate is not null &&
-                    hubAttentionByCandidate.TryGetValue(x.Key, out var attention))
-                {
-                    var attentionTerm = (attention.AttentionScore ?? 0.0f) * blendPolicy.AttentionScoreWeight;
-                    var trendTerm = (attention.Trend ?? 0.0f) * blendPolicy.TrendWeight;
-                    var statTerm = (attention.StatisticalWeight ?? 0.0f) * blendPolicy.StatisticsWeight;
-                    blendScore = attentionTerm + trendTerm + statTerm;
-                    blendEvidence.Add($"attention_score={attentionTerm:F3}");
-                    blendEvidence.Add($"ema_trend={trendTerm:F3}");
-                    blendEvidence.Add($"statistical_weight={statTerm:F3}");
-                }
-
-                return new
-                {
-                    Candidate = x.Key,
-                    BaseScore = x.Value,
-                    BlendScore = blendScore,
-                    FinalScore = x.Value + blendScore,
-                    BlendEvidence = blendEvidence
-                };
-            });
-
-        return scored
-            .OrderByDescending(x => x.FinalScore)
+        return merged
+            .OrderByDescending(kv => kv.Value)
             .Take(policy.MaxCandidatesShown)
-            .Select(x =>
+            .Select(kv =>
             {
                 var evidence = new List<string>();
-                if (neighborVotes.TryGetValue(x.Candidate, out var nv))
+                if (neighborVotes.TryGetValue(kv.Key, out var nv))
                     evidence.Add($"neighbor_count={nv.Count} neighbor_score={nv.Score:F3}");
-                if (baselineVotes.TryGetValue(x.Candidate, out var bv))
+                if (baselineVotes.TryGetValue(kv.Key, out var bv))
                     evidence.Add($"baseline_score={bv:F3}");
-                evidence.AddRange(x.BlendEvidence);
                 return new RecommendationCandidate(
-                    Value: x.Candidate,
-                    Score: x.FinalScore,
+                    Value: kv.Key,
+                    Score: kv.Value,
                     Probability: null,
                     Evidence: evidence
                 );
