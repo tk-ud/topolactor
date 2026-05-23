@@ -4,7 +4,7 @@ Topolactor is a **data-driven topology runtime** and **Data-Driven OS** for buil
 
 Topolactor provides a data-driven topology runtime with explicit runtime-route and policy governance boundaries.
 
-The core architecture treats the registry table as a **semantic matrix**. DB, UI, endpoint, runtime, scheduler, and function surfaces are projected or expanded from the same registry tensor rather than implemented as disconnected CRUD screens.
+The core architecture treats the registry table as a **semantic matrix**. DB, UI, endpoint, runtime, scheduler, and function surfaces are projected or expanded from the same registry-defined topology coordinate space rather than implemented as disconnected CRUD screens.
 
 **Tech stack:** PostgreSQL / C# / Deno Fresh / Preact.
 
@@ -18,24 +18,25 @@ Topolactor has three main subjects:
 2. **AI-Driven Development OS** — agents modify the repository through explicit contracts, protocols, checklists, TODO surfaces, and CI gates instead of ad-hoc edits.
 3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not the topology-side recommendation current.
 
-Registry / hub / tensor shorthand:
+Registry / hub / topology-coordinate shorthand:
 
 - **registry = definitions and configuration** (target-dependent: hub registry / topology registry / ui registry)
+- **registry semantic matrix = definition/configuration basis** for topology vocabulary, axes, coordinates, and wiring; it is not a hub, attractor, or Attention entity itself
 - **hub = relation node** formed by resolved relations
-- **hub relation composition = tensor/vector** representation
+- **relation-bearing hub = tensor/vector-readable coordinate surface**
 - **vector convergence = attractor**
 - **Attention = observation point/operation, not the attractor itself**
-- **abstract function(tensor) = runtime/projection surface expander**
+- **abstract function(coordinate/tensor surface) = runtime/projection surface expander**
 
 ## Architecture Overview
 
-### Registry Tensor / Semantic Matrix
+### Registry Semantic Matrix / Hub Tensor Surfaces
 
-The registry is not a plain dictionary, config table, or metadata catalog. It stores definitions/configuration that resolve topology vocabulary and wiring axes. Hubs are relation nodes built from those definitions, and those relations are what become tensor/vector-readable.
+The registry is not a plain dictionary, config table, or metadata catalog. It stores definitions/configuration that resolve topology vocabulary and wiring axes. Registry itself is not a hub, attractor, or Attention entity. Hubs are relation nodes built from those definitions, and relation-bearing hubs become tensor/vector-readable coordinate surfaces.
 
 ### Projection / Expansion Surfaces
 
-DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are treated as projection or expansion surfaces of one registry tensor. Frontend projection renders resolved topology; it is not the meaning authority.
+DB / UI / endpoint / runtime / scheduler / function / CI-diagnostic are treated as projection or expansion surfaces of one registry-defined topology coordinate space. Frontend projection renders resolved topology; it is not the meaning authority.
 
 ### SQL Attention
 
@@ -117,7 +118,7 @@ For exact status/evidence and completion conditions, follow `docs/system-roadmap
 
 - Core policy SSOT: `docs/framework-policy.yaml`
 - Repository/runtime map: `docs/file-structure.yaml`
-- Registry tensor policy: `.agent/protocols/registry-tensor-policy.md`
+- Registry/topology tensor policy: `.agent/protocols/registry-tensor-policy.md`
 - Context-route recommendation SSOT: `docs/design/context-route-recommendation.md`
 - Topology recommendation CI runtime SSOT: `docs/design/topology-recommendation-ci-runtime.md`
 - Admin UI boundary: `docs/registrar-admin-ui-specification.md`
