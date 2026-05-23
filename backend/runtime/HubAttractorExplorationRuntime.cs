@@ -202,7 +202,7 @@ public class HubAttractorExplorationRuntime
                             break;
 
                         var (hub, scoring) = scoredHubs[rank];
-                        var phaseVectorJson = BuildPhaseVectorJson(candidate, hub);
+                        var phaseVectorJson = BuildPhaseVectorJson(candidate, hub, scoring.VectorJson);
                         hits.Add(new HubAttractorExplorationHit(
                             CurrentId: candidate.CurrentId,
                             HubCurrentId: hub.HubCurrentId,
@@ -351,10 +351,13 @@ public class HubAttractorExplorationRuntime
 
     private static string BuildPhaseVectorJson(
         WatchChangeCandidate candidate,
-        HubCurrentCandidate hub)
+        HubCurrentCandidate hub,
+        string vectorJson)
     {
         var axisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
         var axisMovement = FlattenVectorJson(hub.AxisZScoreJson);
+        var vectorBasis = NormalizeJsonObjectOrEmpty(vectorJson);
+        var vectorKeys = FlattenVectorJson(vectorJson).Keys.OrderBy(k => k).ToArray();
         var phaseBasis = NormalizeJsonObjectOrEmpty(hub.PhaseBasisJson);
 
         static double GetAxisValue(Dictionary<string, double> values, string key)
@@ -386,6 +389,9 @@ public class HubAttractorExplorationRuntime
             i,
             j,
             k,
+            generated_from = "logs.attention.vector_json",
+            vector_keys = vectorKeys,
+            vector_basis_json = vectorBasis,
             phase_basis_json = phaseBasis
         });
     }

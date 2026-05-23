@@ -249,6 +249,8 @@ CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(
     p_axis_move_i DOUBLE PRECISION,
     p_axis_move_j DOUBLE PRECISION,
     p_axis_move_k DOUBLE PRECISION,
+    p_vector_basis_json JSONB DEFAULT '{}'::jsonb,
+    p_vector_keys_json JSONB DEFAULT '[]'::jsonb,
     p_phase_basis_json JSONB DEFAULT '{}'::jsonb
 )
 RETURNS JSONB
@@ -270,13 +272,18 @@ AS $$
         'i', COALESCE(p_axis_move_i, 0),
         'j', COALESCE(p_axis_move_j, 0),
         'k', COALESCE(p_axis_move_k, 0),
+        'generated_from', 'logs.attention.vector_json',
+        'vector_keys', COALESCE(p_vector_keys_json, '[]'::jsonb),
+        'vector_basis_json', COALESCE(p_vector_basis_json, '{}'::jsonb),
         'phase_basis_json', COALESCE(p_phase_basis_json, '{}'::jsonb)
     );
 $$;
 
 -- ---------------------------------------------------------------------------
 -- logs.hub_current refresh function
--- Refreshes population/axis basis and axis z-score projections from logs.attention.
+-- Refreshes hub_current population/recordcount basis from logs.attention.
+-- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
+-- neighbor_score statistics are not written into i/j/k to avoid movement-semantic masquerade.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION logs.refresh_hub_current(
     p_source_set_id TEXT,

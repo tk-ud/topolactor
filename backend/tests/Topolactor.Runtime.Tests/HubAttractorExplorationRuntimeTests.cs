@@ -1231,6 +1231,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.True(root.TryGetProperty("i", out _));
             Assert.True(root.TryGetProperty("j", out _));
             Assert.True(root.TryGetProperty("k", out _));
+            Assert.Equal("logs.attention.vector_json", root.GetProperty("generated_from").GetString());
+            Assert.Equal(JsonValueKind.Array, root.GetProperty("vector_keys").ValueKind);
+            Assert.Equal(JsonValueKind.Object, root.GetProperty("vector_basis_json").ValueKind);
             Assert.Equal(JsonValueKind.Object, root.GetProperty("phase_basis_json").ValueKind);
         }
         finally
@@ -1257,8 +1260,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             using var doc = JsonDocument.Parse(request.PhaseVectorJson);
             var root = doc.RootElement;
             foreach (var key in new[]
-                     { "basis_source", "meaning_boundary", "w", "x", "y", "z", "i", "j", "k", "phase_basis_json" })
+                     { "basis_source", "meaning_boundary", "w", "x", "y", "z", "i", "j", "k", "generated_from", "vector_keys", "vector_basis_json", "phase_basis_json" })
                 Assert.True(root.TryGetProperty(key, out _), $"missing runtime key: {key}");
+            Assert.Equal("logs.attention.vector_json", root.GetProperty("generated_from").GetString());
 
             var sql = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/sql_attention_logs_tables.sql"));
             Assert.Contains("generate_attention_phase_vector", sql);
@@ -1275,7 +1279,14 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Contains("'i'", sql);
             Assert.Contains("'j'", sql);
             Assert.Contains("'k'", sql);
+            Assert.Contains("'generated_from'", sql);
+            Assert.Contains("'vector_keys'", sql);
+            Assert.Contains("'vector_basis_json'", sql);
             Assert.Contains("'phase_basis_json'", sql);
+
+            var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
+            Assert.Contains("BuildPhaseVectorJson(candidate, hub, scoring.VectorJson)", runtimeCode);
+            Assert.Contains("string vectorJson", runtimeCode);
         }
         finally
         {
