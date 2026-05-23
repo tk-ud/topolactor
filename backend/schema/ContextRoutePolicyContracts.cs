@@ -66,7 +66,8 @@ public record TopologyVectorRuntimePolicy(
     HubAttentionPolicy? HubAttention,
     TransitionKeyEvidencePolicy? TransitionKeyEvidence,
     TopologyMlpPolicy? TopologyMlp,
-    FeedbackWeightUpdatePolicy? FeedbackWeightUpdate
+    FeedbackWeightUpdatePolicy? FeedbackWeightUpdate,
+    RecommendationBlendPolicy? RecommendationBlend = null
 );
 
 /// <summary>
@@ -128,4 +129,17 @@ public record FeedbackWeightUpdatePolicy(
     float PositiveDelta,
     float NegativeDelta,
     float MissingCandidateDelta
+);
+
+
+/// <summary>
+/// Policy for blending recommendation candidates with persisted hub-attention statistics/EMA.
+/// All weights and scope selection are runtime policy from function_parameters.
+/// </summary>
+public record RecommendationBlendPolicy(
+    bool Enabled,
+    int ScopeLimit,
+    float AttentionScoreWeight,
+    float TrendWeight,
+    float StatisticsWeight
 );

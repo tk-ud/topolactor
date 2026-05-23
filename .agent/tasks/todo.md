@@ -21,13 +21,23 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
+## TODO dependency map（execution order）
 
-## SQL Attention observation runtime follow-up
+1. Runtime recommendation EMA/statistics integration（独立）
+2. UI primitive component DB registration（Issue #86）
+3. Visual layout builder（Issue #89, depends on #86）
 
-- [ ] statistics / EMA integration for topology projection recommendation を実装する
-      → 対象ファイル: `backend/runtime/PackageResolver.cs`, `backend/runtime/EmissionBuilder.cs` / 対象関数: recommendation candidate 並び替え・投影生成。理由: EMA/履歴を候補提示に統合する実装が未完。次の判断点: EMA の window/persistence を function_parameters 由来でどこまで外部化するか。
+---
 
+## Runtime Recommendation Pipeline
 
+- [x] statistics / EMA integration for topology projection recommendation を実装する
+      → 依存関係: なし（単独着手可）。
+      → 対象責務: recommendation candidate 並び替え・投影生成（runtime path）。
+      → 対象ファイル: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs`。
+      → 実装結果: operation候補は neighbor/baseline のみを維持。token候補のみ recommendation_blend 対象として、EMA/trend/statistics の重み・scope_limit を policy (`function_parameters`) へ外部化。EMA persistence は `context_hub_recommendation_current` を継続利用。
+      → 監査役TODO: operation候補へ blend 適用が必要な場合は、`candidate_kind="operation"` の current row 設計（key/ID整合・生成/読取導線分離）を別TODOとして起票する。
+      → 監査役TODO: 本番 policy row に `topology_vector_runtime.recommendation_blend` を追加し、運用重みを確定。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
@@ -36,20 +46,25 @@ SSOT参照必読:
 - `docs/framework-core.yaml`
 - `docs/framework-policy.yaml`
 
-## Frontend UI Component System (Issue #86)
+## Frontend UI Topology Tensor Registration (Issue #86)
 
-- [ ] [Claude] primitive component を UI topology tensor に DB 登録し drift を解消する
-      → Button / Input / Table / Card は frontend/components/ にコードのみ存在 (drift / GAP 状態)。
-      → 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
-      → CRUD wiring / CanDI wiring の責務境界を registrar-admin-ui-specification.md に明記する。
-      → 完了条件: code-only component が 0 件になる (全て DB topology tensor に接続)
-      → 対象: `db/ui_topology_tables.sql` (component 登録 surface 追加)、`docs/registrar-admin-ui-specification.md`
+- [ ] primitive component を UI topology tensor に DB 登録し drift を解消する
+      → 依存関係: runtime recommendation TODO と独立（並行可）。
+      → 対象責務: component topology の永続化・責務境界明記。
+      → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`。
+      → 詳細:
+        - Button / Input / Table / Card は frontend/components/ に code-only で存在（drift / GAP）。
+        - 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
+        - CRUD wiring / CanDI wiring の責務境界を `docs/registrar-admin-ui-specification.md` に明記する。
+      → 完了条件: code-only component が 0 件（全て DB topology tensor に接続）。
 
 ## Admin Visual Layout Builder (Issue #89)
 
-- [ ] [Claude] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
-      → LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装 (drag/drop) は未着手。
-      → layoutId / styleTokenId / responsiveRuleId の DB schema 未追加。
-      → 前提: Issue #86 component DB 登録完了後。
-      → 完了条件: admin_visual_layout_builder status=implemented (docs/system-roadmap.yaml)
-      → 対象: `db/ui_topology_tables.sql` (layout token schema)、`frontend/islands/` (drag/drop UI island)、`docs/registrar-admin-ui-specification.md`
+- [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
+      → 依存関係: **Issue #86 完了後に着手**（component DB registration が前提）。
+      → 対象責務: layout tensor schema + drag/drop UI island 実装。
+      → 対象ファイル: `db/ui_topology_tables.sql`, `frontend/islands/`, `docs/registrar-admin-ui-specification.md`。
+      → 詳細:
+        - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
+        - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
+      → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
