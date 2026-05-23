@@ -293,12 +293,17 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_hub_current:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.hub_current attractor current runtime lane is not yet implemented.
+      public_summary: logs.hub_current physical table, repository read path, and refresh_hub_current function exist, but attractor-vector population/runtime hardening and live verification are still incomplete.
+      files:
+        - db/sql_attention_logs_tables.sql
+        - backend/repository/SqlAttentionLogsRepository.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
       known_gap_ref:
         - SQLA-2 logs.hub_current attractor current not implemented
+        - SQLA-3 scheduler runtime hub-attractor exploration not implemented
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -359,10 +364,15 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_phase_vector:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: phase_vector auxiliary evidence transform lane is not yet implemented.
+      public_summary: phase_vector generation helpers and persistence fields exist in DB/runtime paths, but phase_vector evidence quality/completion criteria are not yet fully hardened.
+      files:
+        - db/sql_attention_logs_tables.sql
+        - backend/runtime/HubAttractorExplorationRuntime.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/schema/SqlAttentionContracts.cs
       known_gap_ref:
         - SQLA-5 phase_vector auxiliary evidence transform not implemented
       detail_ssot:
@@ -966,82 +976,6 @@ system_roadmap_ssot:
         - non-IT business app authoring loop not implemented
 
 
-    governance.agent_readme_directory_map_boundary:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: .agent/README.md is maintained as a directory-map-only surface and excludes token-estimate/protocol-body ownership.
-      files:
-        - .agent/README.md
-        - docs/governance/agent-governance-routing-ssot.yaml
-      evidence:
-        ci:
-          - worktype-routing
-          - completion-judgment
-          - Structure Check
-
-    governance.worktype_prompt_routing:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Canonical worktype routing is enforced through rule->prompt branching and prompt-router contracts for audit/specific/implementation_change/design_change/todo_maintenance/existing_pr_update.
-      files:
-        - .agent/rules/rule.md
-        - .agent/prompt/README.md
-        - .agent/prompt/audit.md
-        - .agent/prompt/specific.md
-        - .agent/prompt/implementation-change.md
-        - .agent/prompt/design-change.md
-        - .agent/prompt/todo-maintenance.md
-        - .agent/prompt/existing-pr-update.md
-        - .agent/routes/worktype-required-protocols.yaml
-      evidence:
-        ci:
-          - worktype-routing
-          - Structure Check
-
-    governance.protocol_index_and_completion_summary_contract:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Protocol index routing keys (intent/body/boundary) and completion-summary manual-paste-unit contract are documented and checker-aligned.
-      files:
-        - .agent/protocols/index.yaml
-        - .agent/protocols/completion-summary.md
-        - .agent/tests/check-completion-judgment.sh
-      evidence:
-        ci:
-          - completion-judgment
-          - Structure Check
-
-    governance.conditional_agent_docs_route:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: .agent/docs indexes are conditionally loaded by change-surface trigger (not always-read), with executable structure authority retained in check-structure.sh.
-      files:
-        - .agent/docs/ssot-map.yaml
-        - .agent/docs/required-paths.yaml
-        - .agent/tests/check-structure.sh
-      evidence:
-        ci:
-          - worktype-routing
-          - Structure Check
-
-    governance.local_ci_required_not_executed_boundary:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Local CI orchestration preserves explicit REQUIRED_NOT_EXECUTED semantics for missing runtime prerequisites (for example Docker), and does not collapse it into PASS.
-      files:
-        - .agent/tests/check-local-ci.sh
-        - .agent/protocols/completion.md
-        - docs/governance/agent-governance-routing-ssot.yaml
-      evidence:
-        ci:
-          - unified-test-gate
-          - local-ci-check
-          - Structure Check
 
   ci_expectations:
     source_of_truth:
