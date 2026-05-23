@@ -24,8 +24,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ## TODO dependency map（execution order）
 
 1. Runtime recommendation EMA/statistics integration（独立）
-2. UI primitive component DB registration（Issue #86）
-3. Visual layout builder（Issue #89, depends on #86）
+2. Frontend component event runtime（Issue #86 前提）
+3. UI primitive component DB registration（Issue #86）
+4. Visual layout builder（Issue #89, depends on #86）
 
 ---
 
@@ -46,10 +47,27 @@ SSOT参照必読:
 - `docs/framework-core.yaml`
 - `docs/framework-policy.yaml`
 
+## Frontend Component Event Runtime (Issue #86 前提)
+
+- [ ] component 操作イベントを frontend runtime queue に逐次送信し、約10秒ごとにバックグラウンドでDB永続化APIへflushする
+      → 依存関係: UI primitive component DB registration の前提。component catalog がAPI直書き分岐を持たないための runtime boundary。
+      → 対象責務: component操作イベントの集約・順序保持・定期flush・明示失敗。
+      → 対象ファイル候補: `frontend/runtime/`, `frontend/components/`, `frontend/routes/api/`, backend event-log intake endpoint / repository / schema 関連。
+      → 設計方針:
+        - 各componentは操作イベントを frontend runtime へ逐次emitするだけにする。
+        - componentからDB保存APIを直接叩かない。
+        - frontend runtime が queue / scheduler を持ち、約10秒間隔で batch flush する。
+        - flush対象は componentId / packageId / layoutId / event_type / payload / actor_or_source / occurred_at / idempotency_key を含む component operation event log。
+        - click / change / select / toggle / expand / collapse / submit / focus / blur / drag / drop を正規化イベントとして扱う。
+        - debounce / throttle / batch_size / flush_interval_seconds / retry_policy / explicit error を runtime policy または parameter として外部化できるようにする。
+        - offline / API失敗時は silent drop せず、queue保持・明示エラー・retry境界を定義する。
+        - backend側は受け取ったevent batchをDBへappendし、後続の学習・推薦・監査で使える形にする。
+      → 完了条件: component操作が frontend runtime queue に集約され、直接API分岐なしで定期batch永続化できる設計・実装・テストが揃うこと。
+
 ## Frontend UI Topology Tensor Registration (Issue #86)
 
 - [ ] primitive component を UI topology tensor に DB 登録し drift を解消する
-      → 依存関係: runtime recommendation TODO と独立（並行可）。
+      → 依存関係: Frontend Component Event Runtime の責務境界確定後に着手。
       → 対象責務: component topology の永続化・責務境界明記。
       → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`, `frontend/components/`, `frontend/routes/admin/ui-builder.tsx`, backend UI topology repository / package generator runtime 関連。
       → 詳細:
@@ -57,6 +75,7 @@ SSOT参照必読:
         - 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
         - CRUD wiring / CanDI wiring の責務境界を `docs/registrar-admin-ui-specification.md` に明記する。
         - 登録対象は既存4種だけで止めず、UI primitive catalog として一般的な component を網羅する。
+        - componentは操作イベントを直接APIへ送らず、Frontend Component Event Runtime へemitする。
       → 登録対象 primitive catalog:
         - action: Button, IconButton, LinkButton, ToggleButton, SplitButton。
         - form_input: Input, Textarea, Select, Combobox, Checkbox, Radio, Switch, Slider, DatePicker, TimePicker, FileInput, SearchInput。
@@ -72,6 +91,11 @@ SSOT参照必読:
         - ToggleButton は selected / pressed / disabled / size / tone / icon / label / group_role などの引数で状態・見た目を可変にし、状態差分ごとに別component乱立させない。
         - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
+      → runtime component adapter 方針:
+        - primitiveごとに個別frontend実装を増殖させるのではなく、原則として単一の runtime component adapter が `ui_topology_tensor` / component parameter の jsonb を展開し、既存の型付き interface / props に注入する。
+        - jsonb payload は `component_kind`, `semantic_role`, `visual_role`, `parameter_schema`, `default_parameters`, `event_binding` を持つDB側component definitionとして扱う。
+        - frontendはjsonbから展開された props を描画し、操作イベントを Frontend Component Event Runtime へemitする projection surface であり、topology判断・SQL Attention判断・API送信判断の所有者にしない。
+        - parameter_schema で表現できる variant / state / icon / label / binding 差分は component catalog entry と props 展開で吸収し、別component乱立を避ける。
       → 登録時の分類軸:
         - component_kind / semantic_role / interaction_role / data_binding_role / accessibility_role / visual_role / parameter_schema を明示する。
         - code-only 実装が残る場合は drift として残し、DB topology tensor 未接続を完了扱いしない。
