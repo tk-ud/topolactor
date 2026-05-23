@@ -114,7 +114,10 @@ internal static class ExplorationTestFactory
             BasisWindow: "7d",
             AttractorVectorJson: attractorVectorJson,
             PopulationCount: populationCount,
-            PopulationRecordcount: populationRecordcount);
+            PopulationRecordcount: populationRecordcount,
+            AxisPopulationJson: """{"x":10,"y":20,"z":30}""",
+            AxisZScoreJson: """{"x":0.1,"y":0.2,"z":0.3}""",
+            PhaseBasisJson: """{"basis":"hub_current"}""");
 
     public static string ValidPolicyJson(
         int topK = 3,
@@ -563,9 +566,10 @@ public class HubAttractorExplorationRuntime_BoundaryTests
     }
 
     [Fact]
-    public async Task ExploreAsync_OkResult_HitsHaveNoPhaseVectorField()
+    public async Task ExploreAsync_OkResult_HitsHavePhaseVectorField()
     {
-        // phase_vector_json is excluded from HubAttractorExplorationHit — phase generation is a separate step.
+        // phase_vector_json is generated in runtime as post-main auxiliary evidence
+        // and carried on HubAttractorExplorationHit for write boundary persistence.
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
@@ -574,9 +578,9 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
-        // Structural check: HubAttractorExplorationHit has no PhaseVectorJson property.
+        // Structural check: HubAttractorExplorationHit carries PhaseVectorJson evidence payload.
         var hitType = typeof(HubAttractorExplorationHit);
-        Assert.Null(hitType.GetProperty("PhaseVectorJson"));
+        Assert.NotNull(hitType.GetProperty("PhaseVectorJson"));
     }
 
     [Fact]
@@ -1043,8 +1047,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Equal("required", request.ArchivePolicy);
             // VectorJson: {} when attractor_vector_json is {} (no shared components until hub refresh)
             Assert.Equal("{}", request.VectorJson);
-            // PhaseVectorJson and StatisticsJson remain {} (separate TODOs)
-            Assert.Equal("{}", request.PhaseVectorJson);
+            Assert.NotEqual("{}", request.PhaseVectorJson);
             Assert.Equal("{}", request.StatisticsJson);
             Assert.Null(request.EmaScore);
             // EvidenceJson now contains scoring provenance (not placeholder {})
@@ -1152,7 +1155,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
                 Assert.Equal(10.0, request.L2Norm);
                 // VectorJson is {} when attractor_vector_json is {} (no shared components)
                 Assert.Equal("{}", request.VectorJson);
-                Assert.Equal("{}", request.PhaseVectorJson);
+                Assert.NotEqual("{}", request.PhaseVectorJson);
                 Assert.Equal("{}", request.StatisticsJson);
                 Assert.Null(request.EmaScore);
                 // EvidenceJson contains scoring provenance
@@ -1185,10 +1188,45 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             // No collapsed single score field — evidence layers stay separate
             Assert.Null(hitType.GetProperty("CollapsedScore"));
             Assert.Null(hitType.GetProperty("SingleScore"));
-            // Phase vector excluded from exploration hit (generation is separate TODO)
-            Assert.Null(hitType.GetProperty("PhaseVectorJson"));
+            // Phase vector evidence exists but remains separate from collapsed/single-score fields.
+            Assert.NotNull(hitType.GetProperty("PhaseVectorJson"));
             // Statistics excluded from exploration hit (integration is separate TODO)
             Assert.Null(hitType.GetProperty("StatisticsJson"));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_PhaseVectorEvidenceContainsSourcesAndWEqualsL2Norm()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)],
+                [ExplorationTestFactory.HubCurrent()]);
+
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            var request = Assert.Single(logsRepo.LastWriteRequests!);
+            using var doc = JsonDocument.Parse(request.PhaseVectorJson);
+            var root = doc.RootElement;
+            Assert.Equal(12.5, root.GetProperty("w").GetDouble());
+            Assert.True(root.TryGetProperty("basis_source", out _));
+            Assert.True(root.TryGetProperty("generated_from", out _));
+            Assert.True(root.TryGetProperty("vector_keys", out _));
+            Assert.True(root.TryGetProperty("x", out _));
+            Assert.True(root.TryGetProperty("y", out _));
+            Assert.True(root.TryGetProperty("z", out _));
+            Assert.True(root.TryGetProperty("i", out _));
+            Assert.True(root.TryGetProperty("j", out _));
+            Assert.True(root.TryGetProperty("k", out _));
         }
         finally
         {

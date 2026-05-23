@@ -202,6 +202,10 @@ public class HubAttractorExplorationRuntime
                             break;
 
                         var (hub, scoring) = scoredHubs[rank];
+                        var phaseVectorJson = BuildPhaseVectorEvidenceJson(
+                            candidate,
+                            hub,
+                            scoring.VectorJson);
                         hits.Add(new HubAttractorExplorationHit(
                             CurrentId: candidate.CurrentId,
                             HubCurrentId: hub.HubCurrentId,
@@ -216,6 +220,7 @@ public class HubAttractorExplorationRuntime
                             PermutationKey: permutationKey,
                             L2Norm: candidate.L2Norm,
                             VectorJson: scoring.VectorJson,
+                            PhaseVectorJson: phaseVectorJson,
                             EvidenceJson: scoring.EvidenceJson
                         ));
                     }
@@ -345,6 +350,44 @@ public class HubAttractorExplorationRuntime
         var unionCount = a.Keys.Union(b.Keys).Count();
 
         return unionCount == 0 ? 0.0 : (double)sharedCount / unionCount;
+    }
+
+    private static string BuildPhaseVectorEvidenceJson(
+        WatchChangeCandidate candidate,
+        HubCurrentCandidate hub,
+        string vectorJson)
+    {
+        var vectorMap = FlattenVectorJson(vectorJson);
+        var axisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
+        var axisZScore = FlattenVectorJson(hub.AxisZScoreJson);
+
+        static double GetAxisValue(Dictionary<string, double> values, string keyA, string keyB)
+            => values.TryGetValue(keyA, out var vA) ? vA
+               : values.TryGetValue(keyB, out var vB) ? vB
+               : 0.0;
+
+        var x = hub.PopulationCount;
+        var y = hub.PopulationRecordcount;
+        var z = axisPopulation.Count == 0 ? 0.0 : axisPopulation.Values.Sum();
+
+        var i = GetAxisValue(axisZScore, "x", "i");
+        var j = GetAxisValue(axisZScore, "y", "j");
+        var k = GetAxisValue(axisZScore, "z", "k");
+
+        return JsonSerializer.Serialize(new
+        {
+            basis_source = "logs.hub_current population_count/population_recordcount/axis_population_json/axis_z_score_json",
+            generated_from = "logs.attention.vector_json",
+            w = candidate.L2Norm,
+            x,
+            y,
+            z,
+            i,
+            j,
+            k,
+            vector_keys = vectorMap.Keys.OrderBy(key => key).ToArray(),
+            phase_basis_json = hub.PhaseBasisJson
+        });
     }
 
     /// <summary>

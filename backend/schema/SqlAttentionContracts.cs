@@ -31,7 +31,10 @@ public record HubCurrentCandidate(
     string BasisWindow,
     string AttractorVectorJson,
     long PopulationCount,
-    long PopulationRecordcount
+    long PopulationRecordcount,
+    string AxisPopulationJson,
+    string AxisZScoreJson,
+    string PhaseBasisJson
 );
 
 /// <summary>
@@ -69,6 +72,7 @@ public record HubAttractorExplorationHit(
     string PermutationKey,
     double L2Norm,
     string VectorJson,
+    string PhaseVectorJson,
     string EvidenceJson
 );
 
