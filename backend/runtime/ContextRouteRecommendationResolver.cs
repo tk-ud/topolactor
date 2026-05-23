@@ -217,8 +217,10 @@ public class ContextRouteRecommendationResolver
             return InsufficientHistory("INSUFFICIENT_CONTEXT_HISTORY");
         }
 
-        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);
-        var nextTokens = ResolveNextTokens(neighbors, policy);
+        var hubAttentionByCandidate = await LoadHubAttentionBlendMapAsync(shape, policy, ct);
+
+        var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy, hubAttentionByCandidate);
+        var nextTokens = ResolveNextTokens(neighbors, policy, hubAttentionByCandidate);
         var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
 
@@ -371,13 +373,34 @@ public class ContextRouteRecommendationResolver
         }
     }
 
+
+    private async Task<IReadOnlyDictionary<string, HubAttentionCurrentRecord>> LoadHubAttentionBlendMapAsync(
+        RuntimeWorkingShape shape,
+        ContextRoutePolicy policy,
+        CancellationToken ct)
+    {
+        var blend = policy.TopologyVectorRuntime?.RecommendationBlend;
+        if (blend is not { Enabled: true })
+            return new Dictionary<string, HubAttentionCurrentRecord>();
+
+        var hubId = shape.Vector?.IdOrHubId;
+        if (!hubId.HasValue)
+            return new Dictionary<string, HubAttentionCurrentRecord>();
+
+        var rows = await _contextRouteRepository.LoadHubAttentionCurrentAsync(hubId.Value, blend.ScopeLimit, ct);
+        return rows
+            .Where(r => r.CandidateKind == "token")
+            .ToDictionary(r => r.CandidateId.ToString(), r => r);
+    }
+
     /// <summary>
     /// Derives next operation candidates by blending neighbor voting with transition stat baseline.
     /// </summary>
     public IReadOnlyList<RecommendationCandidate> ResolveNextOperations(
         IReadOnlyList<ContextNeighborResult> neighbors,
         IReadOnlyList<ContextTransitionStat> transitionStats,
-        ContextRoutePolicy policy)
+        ContextRoutePolicy policy,
+        IReadOnlyDictionary<string, HubAttentionCurrentRecord>? hubAttentionByCandidate = null)
     {
         ArgumentNullException.ThrowIfNull(neighbors);
         ArgumentNullException.ThrowIfNull(transitionStats);
@@ -402,19 +425,48 @@ public class ContextRouteRecommendationResolver
         foreach (var (op, score) in baselineVotes)
             merged[op] = merged.GetValueOrDefault(op) + score;
 
-        return merged
-            .OrderByDescending(kv => kv.Value)
+        var blendPolicy = policy.TopologyVectorRuntime?.RecommendationBlend;
+        var scored = merged
+            .Select(x =>
+            {
+                var blendScore = 0.0f;
+                var blendEvidence = new List<string>();
+                if (blendPolicy is { Enabled: true } && hubAttentionByCandidate is not null &&
+                    hubAttentionByCandidate.TryGetValue(x.Key, out var attention))
+                {
+                    var attentionTerm = (attention.AttentionScore ?? 0.0f) * blendPolicy.AttentionScoreWeight;
+                    var trendTerm = (attention.Trend ?? 0.0f) * blendPolicy.TrendWeight;
+                    var statTerm = (attention.StatisticalWeight ?? 0.0f) * blendPolicy.StatisticsWeight;
+                    blendScore = attentionTerm + trendTerm + statTerm;
+                    blendEvidence.Add($"attention_score={attentionTerm:F3}");
+                    blendEvidence.Add($"ema_trend={trendTerm:F3}");
+                    blendEvidence.Add($"statistical_weight={statTerm:F3}");
+                }
+
+                return new
+                {
+                    Candidate = x.Key,
+                    BaseScore = x.Value,
+                    BlendScore = blendScore,
+                    FinalScore = x.Value + blendScore,
+                    BlendEvidence = blendEvidence
+                };
+            });
+
+        return scored
+            .OrderByDescending(x => x.FinalScore)
             .Take(policy.MaxCandidatesShown)
-            .Select(kv =>
+            .Select(x =>
             {
                 var evidence = new List<string>();
-                if (neighborVotes.TryGetValue(kv.Key, out var nv))
+                if (neighborVotes.TryGetValue(x.Candidate, out var nv))
                     evidence.Add($"neighbor_count={nv.Count} neighbor_score={nv.Score:F3}");
-                if (baselineVotes.TryGetValue(kv.Key, out var bv))
+                if (baselineVotes.TryGetValue(x.Candidate, out var bv))
                     evidence.Add($"baseline_score={bv:F3}");
+                evidence.AddRange(x.BlendEvidence);
                 return new RecommendationCandidate(
-                    Value: kv.Key,
-                    Score: kv.Value,
+                    Value: x.Candidate,
+                    Score: x.FinalScore,
                     Probability: null,
                     Evidence: evidence
                 );
@@ -427,7 +479,8 @@ public class ContextRouteRecommendationResolver
     /// </summary>
     public IReadOnlyList<RecommendationCandidate> ResolveNextTokens(
         IReadOnlyList<ContextNeighborResult> neighbors,
-        ContextRoutePolicy policy)
+        ContextRoutePolicy policy,
+        IReadOnlyDictionary<string, HubAttentionCurrentRecord>? hubAttentionByCandidate = null)
     {
         ArgumentNullException.ThrowIfNull(neighbors);
         ArgumentNullException.ThrowIfNull(policy);
@@ -444,14 +497,35 @@ public class ContextRouteRecommendationResolver
             }
         }
 
+        var blendPolicy = policy.TopologyVectorRuntime?.RecommendationBlend;
+
         return votes
-            .OrderByDescending(kv => kv.Value.Score)
+            .Select(kv =>
+            {
+                var key = kv.Key.ToString();
+                var blendScore = 0.0f;
+                var blendEvidence = new List<string>();
+                if (blendPolicy is { Enabled: true } && hubAttentionByCandidate is not null &&
+                    hubAttentionByCandidate.TryGetValue(key, out var attention))
+                {
+                    var attentionTerm = (attention.AttentionScore ?? 0.0f) * blendPolicy.AttentionScoreWeight;
+                    var trendTerm = (attention.Trend ?? 0.0f) * blendPolicy.TrendWeight;
+                    var statTerm = (attention.StatisticalWeight ?? 0.0f) * blendPolicy.StatisticsWeight;
+                    blendScore = attentionTerm + trendTerm + statTerm;
+                    blendEvidence.Add($"attention_score={attentionTerm:F3}");
+                    blendEvidence.Add($"ema_trend={trendTerm:F3}");
+                    blendEvidence.Add($"statistical_weight={statTerm:F3}");
+                }
+
+                return new { kv.Key, kv.Value, FinalScore = kv.Value.Score + blendScore, BlendEvidence = blendEvidence };
+            })
+            .OrderByDescending(x => x.FinalScore)
             .Take(policy.MaxCandidatesShown)
-            .Select(kv => new RecommendationCandidate(
-                Value: kv.Key.ToString(),
-                Score: kv.Value.Score,
+            .Select(x => new RecommendationCandidate(
+                Value: x.Key.ToString(),
+                Score: x.FinalScore,
                 Probability: null,
-                Evidence: [$"neighbor_count={kv.Value.Count}", $"total_sim={kv.Value.Score:F3}"]
+                Evidence: [$"neighbor_count={x.Value.Count}", $"total_sim={x.Value.Score:F3}", ..x.BlendEvidence]
             ))
             .ToList();
     }
@@ -552,7 +626,14 @@ public class ContextRouteRecommendationResolver
                         Enabled:               dto.TopologyVectorRuntime.FeedbackWeightUpdate.Enabled,
                         PositiveDelta:         dto.TopologyVectorRuntime.FeedbackWeightUpdate.PositiveDelta,
                         NegativeDelta:         dto.TopologyVectorRuntime.FeedbackWeightUpdate.NegativeDelta,
-                        MissingCandidateDelta: dto.TopologyVectorRuntime.FeedbackWeightUpdate.MissingCandidateDelta));
+                        MissingCandidateDelta: dto.TopologyVectorRuntime.FeedbackWeightUpdate.MissingCandidateDelta),
+                RecommendationBlend: dto.TopologyVectorRuntime.RecommendationBlend is null ? null
+                    : new RecommendationBlendPolicy(
+                        Enabled: dto.TopologyVectorRuntime.RecommendationBlend.Enabled,
+                        ScopeLimit: dto.TopologyVectorRuntime.RecommendationBlend.ScopeLimit,
+                        AttentionScoreWeight: dto.TopologyVectorRuntime.RecommendationBlend.AttentionScoreWeight,
+                        TrendWeight: dto.TopologyVectorRuntime.RecommendationBlend.TrendWeight,
+                        StatisticsWeight: dto.TopologyVectorRuntime.RecommendationBlend.StatisticsWeight));
 
         return new ContextRoutePolicy(
             MinSimilarity:          dto.MinSimilarity,
@@ -597,7 +678,8 @@ public class ContextRouteRecommendationResolver
         [property: JsonPropertyName("hub_attention")]            HubAttentionDto? HubAttention = null,
         [property: JsonPropertyName("transition_key_evidence")]  TransitionKeyEvidenceDto? TransitionKeyEvidence = null,
         [property: JsonPropertyName("topology_mlp")]             TopologyMlpDto? TopologyMlp = null,
-        [property: JsonPropertyName("feedback_weight_update")]   FeedbackWeightUpdateDto? FeedbackWeightUpdate = null
+        [property: JsonPropertyName("feedback_weight_update")]   FeedbackWeightUpdateDto? FeedbackWeightUpdate = null,
+        [property: JsonPropertyName("recommendation_blend")]   RecommendationBlendDto? RecommendationBlend = null
     );
 
     private record TransitionKeyEvidenceDto(
@@ -628,6 +710,14 @@ public class ContextRouteRecommendationResolver
     private record TopologyMlpDto(
         [property: JsonPropertyName("enabled")]                bool Enabled,
         [property: JsonPropertyName("max_feature_cross_order")] int MaxFeatureCrossOrder
+    );
+
+    private record RecommendationBlendDto(
+        [property: JsonPropertyName("enabled")]                 bool Enabled,
+        [property: JsonPropertyName("scope_limit")]             int ScopeLimit,
+        [property: JsonPropertyName("attention_score_weight")]  float AttentionScoreWeight,
+        [property: JsonPropertyName("trend_weight")]            float TrendWeight,
+        [property: JsonPropertyName("statistics_weight")]       float StatisticsWeight
     );
 
     private record FeedbackWeightUpdateDto(

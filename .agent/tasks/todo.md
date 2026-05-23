@@ -31,11 +31,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Runtime Recommendation Pipeline
 
-- [ ] statistics / EMA integration for topology projection recommendation を実装する
+- [x] statistics / EMA integration for topology projection recommendation を実装する
       → 依存関係: なし（単独着手可）。
       → 対象責務: recommendation candidate 並び替え・投影生成（runtime path）。
       → 対象ファイル: `backend/runtime/PackageResolver.cs`, `backend/runtime/EmissionBuilder.cs`。
-      → 次の判断点: EMA の window/persistence を `function_parameters` 由来でどこまで外部化するか。
+      → 実装結果: recommendation_blend を policy (`function_parameters`) で導入し、EMA/trend/statistics の重み・scope_limit を外部化。EMA persistence は `context_hub_recommendation_current` を継続利用。
+      → 監査役TODO: 本番 policy row に `topology_vector_runtime.recommendation_blend` を追加し、運用重みを確定。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
