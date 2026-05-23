@@ -228,6 +228,7 @@ fi
 echo "OK: AdminRuntime.ExecuteDataAsync returned success"
 
 echo "=== [RUNTIME_ENV] Live verification: OutputLaneRouter db_notify -> pg_notify -> LISTEN -> scheduler -> SSE ==="
+notify_channel="topolactor_topology_changed"
 seed_manifest_id="$(docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -tA -c "
 SELECT manifest_id::text
 FROM manifest
@@ -276,11 +277,11 @@ cleanup_sse() {
 trap cleanup_sse RETURN
 
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -v ON_ERROR_STOP=1 -c \
-  "NOTIFY db_notify, '$notify_payload';"
+  "SELECT pg_notify('${notify_channel}', \$\$${notify_payload}\$\$);"
 
 event_observed="false"
 for _ in $(seq 1 40); do
-  if rg -q "${probe_id}" "${sse_output_file}"; then
+  if grep -Fq "${probe_id}" "${sse_output_file}"; then
     event_observed="true"
     break
   fi
@@ -288,14 +289,14 @@ for _ in $(seq 1 40); do
 done
 
 if [ "${event_observed}" != "true" ]; then
-  echo "ERROR: live SSE E2E probe timed out; probe_id=${probe_id} was not observed on SSE stream" >&2
+  echo "ERROR: live SSE E2E probe timed out; channel=${notify_channel} probe_id=${probe_id} was not observed on SSE stream" >&2
   echo "=== [RUNTIME_ENV] SSE output snapshot ===" >&2
   tail -n 120 "${sse_output_file}" >&2 || true
   dump_logs
   exit 1
 fi
 
-echo "OK: observed live SSE projection event for probe_id=${probe_id}"
+echo "OK: observed live SSE projection event for channel=${notify_channel} probe_id=${probe_id}"
 cleanup_sse
 trap - RETURN
 
