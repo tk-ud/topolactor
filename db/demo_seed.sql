@@ -423,7 +423,7 @@ INSERT INTO topologys.function_parameters (function_name, parameter_key, paramet
 VALUES (
     'context_route_recommendation_resolve',
     'demo_policy',
-    '{"min_similarity":0.02,"top_k":20,"min_neighbors":1,"recent_days":null,"max_candidates_shown":3,"baseline_weight":0.4,"neighbor_weight":0.6,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null}}',
+    '{"min_similarity":0.02,"top_k":20,"min_neighbors":1,"recent_days":null,"max_candidates_shown":3,"baseline_weight":0.4,"neighbor_weight":0.6,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null},"topology_vector_runtime":{"recommendation_blend":{"enabled":true,"scope_limit":1000,"attention_score_weight":1.0,"trend_weight":0.0,"statistics_weight":0.0}}}',
     true
 )
 ON CONFLICT (function_name, parameter_key) DO UPDATE
