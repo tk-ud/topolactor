@@ -42,6 +42,16 @@ if [ -f "$ROUTE_FILE" ]; then
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/design-change.md"
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/implementation-change.md"
 
+
+  check_term "$ROUTE_FILE" "required_checks:"
+  check_term "$ROUTE_FILE" ".agent/tests/check-structure.sh"
+
+  check_term "$ROUTE_FILE" "prompt: .agent/prompt/audit.md"
+  check_term "$ROUTE_FILE" "prompt: .agent/prompt/specific.md"
+  check_term "$ROUTE_FILE" "prompt: .agent/prompt/existing-pr-update.md"
+
+  check_term "$ROUTE_FILE" ".agent/protocols/audit.md"
+  check_term "$ROUTE_FILE" ".agent/protocols/specific.md"
   check_term "$ROUTE_FILE" ".agent/protocols/todo-carry-over.md"
   check_term "$ROUTE_FILE" ".agent/protocols/ssot-change-impact.md"
   check_term "$ROUTE_FILE" ".agent/protocols/implementation-change.md"

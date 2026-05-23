@@ -13,7 +13,7 @@ protocols:
     stage: [JUDGMENT]
     sections:
       - marker: "## Trigger condition"
-        grep_keys: ["completion eligibility", "TODO `[x]`"]
+        grep_keys: ["completion eligibility", "required check scope declaration", "WorkEvent output sink gap"]
         read_when: ["completion eligibility decision"]
 
   - id: completion_summary
@@ -29,7 +29,7 @@ protocols:
     stage: [PUSH_OR_PR]
     sections:
       - marker: "## TODO surface responsibility"
-        grep_keys: ["todo", "carry-over", "remaining TODO"]
+        grep_keys: [".agent/tasks/todo.md", "remaining TODO", "direct close conditions"]
         read_when: ["remaining work classification"]
 
   - id: report_surfaces
@@ -37,7 +37,7 @@ protocols:
     stage: [PUSH_OR_PR]
     sections:
       - marker: "## `.agent/reports/` usage"
-        grep_keys: ["reports", "routine inspection", "periodic audit"]
+        grep_keys: [".agent/reports/", "routine inspection reports", "scheduled maintenance"]
         read_when: ["report placement routing"]
 
   - id: scenario_contract
@@ -45,7 +45,7 @@ protocols:
     stage: [SCENARIO_CONTRACT, VERIFY_SCENARIO_DIFF]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["runtime claim", "canonical route", "projection behavior"]
+        grep_keys: ["Boundary Extension Scenario", "Multi-instance leakage", "Frontend projection identity"]
         read_when: ["scenario-contract trigger check"]
       - marker: "## Precondition: Workflow Order Invariant Gate"
         grep_keys: ["docs/ SSOT reload", "READ_TARGET_SURFACES", "DEFINE_SCOPE"]
@@ -56,7 +56,7 @@ protocols:
     stage: [FILL_CHECKLISTS, JUDGMENT]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["scoring", "threshold", "routing", "validation", "projection behavior"]
+        grep_keys: ["Policy Judgment Gate", "scoring threshold", "CI queued/in_progress is not PASS"]
         read_when: ["policy change trigger confirmation"]
 
   - id: runtime_boundary_matrix
@@ -64,7 +64,7 @@ protocols:
     stage: [FILL_CHECKLISTS, JUDGMENT]
     sections:
       - marker: "## Trigger scope"
-        grep_keys: ["endpoint wiring", "repository write", "persistence mutation", "End-to-End Boundary Identity"]
+        grep_keys: ["Runtime Boundary Failure Matrix", "Repository mutation identity", "UI action identity"]
         read_when: ["boundary identity trigger confirmation"]
 
   - id: registry_tensor_policy
@@ -80,7 +80,7 @@ protocols:
     stage: [READ_TARGET_SURFACES, DEFINE_SCOPE, VERIFY_SCENARIO_DIFF]
     sections:
       - marker: "## Trigger"
-        grep_keys: ["docs/design", "externally observable contracts", "projection", "persistence"]
+        grep_keys: ["externally observable contract", "backward compatibility", "rollback plan"]
         read_when: ["SSOT update trigger confirmation"]
 
   - id: audit

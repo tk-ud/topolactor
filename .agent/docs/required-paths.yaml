@@ -73,6 +73,7 @@ required_files:
     - .agent/protocols/runtime-boundary-matrix.md
     - .agent/protocols/completion-summary.md
     - .agent/protocols/report-surfaces.md
+    - .agent/protocols/reports-and-todos.md
     - .agent/protocols/todo-carry-over.md
     - .agent/protocols/registry-tensor-policy.md
     - .agent/skills/structure-check.md
@@ -201,8 +202,8 @@ required_content_terms:
     - "version: 2"
     - "sections:"
     - "read_when"
-    - "completion-governance"
-    - "completion-summary / todo-carry-over / report-surfaces"
+    - "completion_summary"
+    - "completion_summary / todo_carry_over / report_surfaces"
   .agent/protocols/completion.md:
     - "Completion Sequence"
     - "Recursive Verification Gate"
