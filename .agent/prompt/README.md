@@ -36,4 +36,6 @@ Read only the router file that matches the current work type.
 2. Open the matching `.agent/prompt/<work-type>.md` only when applicable.
    - existing PR updates: `.agent/prompt/existing-pr-update.md`
 3. Follow that router to load minimum required SSOT and triggered protocols.
+   - design changes: `.agent/prompt/design-change.md`
+   - implementation changes: `.agent/prompt/implementation-change.md`
 4. Execute gate judgment in protocols; router guidance does not replace protocols.

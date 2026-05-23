@@ -82,6 +82,10 @@ required_files:
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
     - .agent/tests/check-completion-judgment.sh
+    - .agent/prompt/design-change.md
+    - .agent/prompt/implementation-change.md
+    - .agent/routes/worktype-required-protocols.yaml
+    - .agent/tests/check-worktype-routing.sh
     - .agent/tests/check-local-ci.sh
     - .agent/scripts/create-tmp.sh
     - .agent/scripts/delete-tmp.sh
@@ -369,3 +373,13 @@ notes:
   README_policy:
     - "README.md required terms are intentionally minimal and external-facing only."
     - "Internal governance / CI verification vocabulary belongs under .agent/protocols and .agent/docs, not README.md."
+
+  .agent/routes/worktype-required-protocols.yaml:
+    - "todo_maintenance"
+    - "design_change"
+    - "implementation_change"
+    - "required_protocols"
+  .agent/tests/check-worktype-routing.sh:
+    - "routing existence"
+    - "reference integrity"
+    - "required vocabulary"

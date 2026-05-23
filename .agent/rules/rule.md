@@ -20,9 +20,10 @@ Use this lightweight read route:
 3. `.agent/README.md`
 4. `.agent/skills/agent-workflow.md`
 5. when applicable, open matching `.agent/prompt/<work-type>.md`
-6. when target surface needs SSOT mapping, open `.agent/docs/ssot-map.yaml` and relevant `.agent/docs/` resume/index
-7. only when needed, open mapped `docs/` SSOT source pages
-8. only when needed, open condition-triggered `.agent/rules/core/`, `.agent/protocols/`, checklists, scripts, tests, and corresponding task skills
+6. when needed for yes/no routing guard, open `.agent/routes/worktype-required-protocols.yaml`
+7. when target surface needs SSOT mapping, open `.agent/docs/ssot-map.yaml` and relevant `.agent/docs/` resume/index
+8. only when needed, open mapped `docs/` SSOT source pages
+9. only when needed, open condition-triggered `.agent/rules/core/`, `.agent/protocols/`, checklists, scripts, tests, and corresponding task skills
 
 Do not treat protocol bundle, docs bundle, skills bundle, prompt bundle, or rule core bundle as always-read scope.
 
