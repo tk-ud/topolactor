@@ -50,6 +50,7 @@ Structural completion rule for `existing_pr_update`:
 - PR follow-up comment posting state は `### output sink state` に記録する。
 - local required check 未実行は `#### Required check scope` で `REQUIRED_NOT_EXECUTED` を記録する。
 - `### 残タスク引き継ぎ指示` は Auditor TODO input であり canonical TODO closure ではない。
+- Do not create a separate paste-ready body block; the full Completion Summary is the copy/paste unit.
 
 ## Completion Summary Template
 
