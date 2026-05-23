@@ -1201,7 +1201,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_PhaseVectorEvidenceContainsSourcesAndWEqualsL2Norm()
+    public async Task RunOnceAsync_OkWithHits_PhaseVectorJson_HasMeaningBoundaryAndObjectPhaseBasis()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -1218,15 +1218,64 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             using var doc = JsonDocument.Parse(request.PhaseVectorJson);
             var root = doc.RootElement;
             Assert.Equal(12.5, root.GetProperty("w").GetDouble());
-            Assert.True(root.TryGetProperty("basis_source", out _));
-            Assert.True(root.TryGetProperty("generated_from", out _));
-            Assert.True(root.TryGetProperty("vector_keys", out _));
+            Assert.Equal("logs.hub_current", root.GetProperty("basis_source").GetString());
+            var boundary = root.GetProperty("meaning_boundary");
+            Assert.Equal("l2_norm", boundary.GetProperty("w").GetString());
+            Assert.Equal("hub-side record-count bases", boundary.GetProperty("xyz").GetString());
+            Assert.Equal("axis movement amounts", boundary.GetProperty("ijk").GetString());
+            Assert.Equal("not_manifest_or_policy_cap", boundary.GetProperty("phase_movement_source").GetString());
+            Assert.True(boundary.GetProperty("no_automatic_topology_mutation").GetBoolean());
             Assert.True(root.TryGetProperty("x", out _));
             Assert.True(root.TryGetProperty("y", out _));
             Assert.True(root.TryGetProperty("z", out _));
             Assert.True(root.TryGetProperty("i", out _));
             Assert.True(root.TryGetProperty("j", out _));
             Assert.True(root.TryGetProperty("k", out _));
+            Assert.Equal(JsonValueKind.Object, root.GetProperty("phase_basis_json").ValueKind);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
+        }
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_OkWithHits_PhaseVectorJsonShape_AlignedWithSqlFunctionContract()
+    {
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
+        try
+        {
+            var logsRepo = new StubSqlAttentionLogsRepository(
+                [ExplorationTestFactory.ChangeCandidate(l2Norm: 2.0)],
+                [ExplorationTestFactory.HubCurrent()]);
+            var scheduler = CreateScheduler(logsRepo);
+            await scheduler.RunOnceAsync(CancellationToken.None);
+
+            var request = Assert.Single(logsRepo.LastWriteRequests!);
+            using var doc = JsonDocument.Parse(request.PhaseVectorJson);
+            var root = doc.RootElement;
+            foreach (var key in new[]
+                     { "basis_source", "meaning_boundary", "w", "x", "y", "z", "i", "j", "k", "phase_basis_json" })
+                Assert.True(root.TryGetProperty(key, out _), $"missing runtime key: {key}");
+
+            var sql = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/sql_attention_logs_tables.sql"));
+            Assert.Contains("generate_attention_phase_vector", sql);
+            Assert.Contains("'basis_source'", sql);
+            Assert.Contains("'meaning_boundary'", sql);
+            Assert.Contains("'w'", sql);
+            Assert.Contains("'xyz'", sql);
+            Assert.Contains("'ijk'", sql);
+            Assert.Contains("'phase_movement_source'", sql);
+            Assert.Contains("'no_automatic_topology_mutation'", sql);
+            Assert.Contains("'x'", sql);
+            Assert.Contains("'y'", sql);
+            Assert.Contains("'z'", sql);
+            Assert.Contains("'i'", sql);
+            Assert.Contains("'j'", sql);
+            Assert.Contains("'k'", sql);
+            Assert.Contains("'phase_basis_json'", sql);
         }
         finally
         {

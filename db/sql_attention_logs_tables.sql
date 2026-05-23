@@ -300,8 +300,7 @@ BEGIN
         a.hub_current_id,
         COUNT(*)::BIGINT AS population_count,
         COUNT(DISTINCT a.current_id)::BIGINT AS population_recordcount,
-        AVG(a.neighbor_score) AS mean_score,
-        STDDEV_POP(a.neighbor_score) AS stddev_score
+        COUNT(DISTINCT a.hub_relation_id)::BIGINT AS axis_population_recordcount
       FROM logs.attention a
       JOIN logs.hub_current h ON h.hub_current_id = a.hub_current_id
       WHERE h.source_set_id = p_source_set_id
@@ -315,12 +314,12 @@ BEGIN
              axis_population_json = jsonb_build_object(
                 'x', aa.population_count,
                 'y', aa.population_recordcount,
-                'z', aa.population_count + aa.population_recordcount
+                'z', aa.axis_population_recordcount
              ),
              axis_z_score_json = jsonb_build_object(
-                'i', COALESCE(aa.mean_score, 0),
-                'j', COALESCE(aa.stddev_score, 0),
-                'k', COALESCE(aa.mean_score, 0) - COALESCE(aa.stddev_score, 0)
+                'i', 0,
+                'j', 0,
+                'k', 0
              ),
              evaluated_at = now(),
              updated_at = now()
