@@ -537,6 +537,80 @@ runtime_orchestration_ssot:
         - test-only destinations added to backend_dispatchable_kinds
         - recycled stub used as production behavior substitute
 
+
+  route_attention_contract:
+    definitions:
+      route: business_mandatory_fixed_path
+      attention: recommendation_and_neighborhood_exploration
+    projection_tabs:
+      canonical_route_tab:
+        owns:
+          - fixed_route
+          - current_hub_address
+          - current_topology_address
+          - route_missing_fallback_jump
+      attention_recommendation_tab:
+        owns:
+          - sql_attention_recommendation
+          - topology_package_recommendation_candidates
+          - nearby_relation_candidates
+        must_not:
+          - overwrite_current_address_automatically
+          - replace_fixed_route
+          - mutate_route_state_without_explicit_user_action
+    invariants:
+      - attention_score_must_not_override_fixed_route
+      - recommendation_must_not_auto_transition_main_route
+      - runtime_route_resolver_owns_screen_transition_and_next_task_decision
+      - frontend_is_projection_surface_only
+      - spa_is_runtime_authoritative_projection
+      - frontend_if_branching_must_not_decide_business_route
+    schema_surfaces:
+      hubs_relation_route:
+        field: hubs.relation_route
+        role: fixed_business_route_between_hubs
+      topology_package_route:
+        field: topology.package_route
+        role: fixed_state_transition_within_same_topology
+    resolver_priority:
+      - fixed_route
+      - topology_enum_or_package_recommend_candidate_only
+      - sql_attention_relation_recommend_candidate_only
+      - route_missing_fallback_jump
+
+  runtime_jump_event_contract:
+    user:
+      - currentHubAddress
+      - currentTopologyAddress
+    jump_event:
+      fields:
+        - scope
+        - from
+        - to
+        - reason
+      scope_enum:
+        - hub
+        - topology
+      reason_enum:
+        - fixed_route
+        - route_missing
+        - user_action
+    attention_candidate_adoption_behavior:
+      policy: runtime_accepts_jump_only_on_explicit_user_selection
+      reason: user_action
+    route_missing_behavior:
+      policy: runtime_emits_jump_event_instead_of_error
+      hub_jump:
+        scope: hub
+        from: currentHubAddress
+        to: 0
+        reason: route_missing
+      topology_jump:
+        scope: topology
+        from: currentTopologyAddress
+        to: 0
+        reason: route_missing
+
   canonical_flow_summary:
     frontend_client_command:
       - ui_action

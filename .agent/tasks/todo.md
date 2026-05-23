@@ -24,33 +24,21 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## SQL Attention observation runtime follow-up
 
-- [ ] Concept SSOT に Runtime / Frontend / DB relation / SQL Attention の責務境界を短文追加する設計TODOを整理する
-      → Runtime = 状態正本、Frontend = projection surface、DB relation / SQL Attention = 業務導線の decision / support surface を明記し、画面遷移・次タスク判断・業務フローを Frontend / 固定REST / if分岐 / 旧fallback に逃がさない設計境界を SSOT 追記候補として定義する。
-      → 対象候補: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml` (本文更新は本TODOでは実施しない)。
-
-- [ ] route と attention の責務境界を SSOT / schema contract として定義する
-      → `Attention = 推薦・近傍探索`, `Route = 固定導線・業務上必須遷移` を明示し、SQL Attention を固定 route の代替にしない。
-      → resolver 優先順候補を `fixed route → topology enum/package recommend → SQL Attention relation recommend → explicit gap/error` として残し、業務必須遷移は route 優先で判定する。
-
-- [ ] `hubs.relation_route` schema / SSOT contract を設計する
-      → hub / relation をまたぐ固定業務導線 (例: 受付 → task生成 → inventory変動 → 請求) を Attention score で上書き不可な route として扱う contract を整理する。
-      → 必須導線 / 任意導線 / 補助導線の区分、Attention が補助してよい範囲、Runtime resolver が route を優先する条件を未実装TODOとして明確化する。
-
-- [ ] `topology.package_route` schema / SSOT contract を設計する
-      → 同一 topology 内の状態遷移 (例: 受付済 → 作業中 → 完了 → 請求待ち) について、fixed package route と enum/package recommend の責務差分を定義する。
-      → 推薦可能遷移と必須遷移の分離、UI projection emission 反映方針、topology 内状態束 route の schema 保持方式を設計TODOとして整理する。
-
 - [ ] phase_vector generation implementation を行う
-      → phase_vector は `logs.attention.vector_json` から始まる post-main auxiliary evidence transform として実装し、logs.attention.phase_vector_json に evidence として保存する。
+      → 対象ファイル: `db/sql_attention_logs_tables.sql`, `backend/runtime/AttractorResolver.cs` / 対象関数: AttractorResolver の attention evidence 更新系。理由: phase_vector 保存と evidence transform 実装が未完。次の判断点: phase_vector_json 更新タイミングを runtime emission 前後どちらに固定するか。
       → `w = l2_norm`、`x/y/z = hub-side record-count bases`、`i/j/k = axis movement amounts` の意味境界を維持し、phase movement は manifest / policy cap 由来ではないことを明示する。
       → phase_vector から自動 mutation/migration/promotion は行わない。
 
 - [ ] statistics / EMA integration for topology projection recommendation を実装する
-      → hit hub から投影される topologys 意味空間の提示順/候補強度を統計・EMA・履歴・利用頻度で扱う recommendation basis を実装する。
+      → 対象ファイル: `backend/runtime/PackageResolver.cs`, `backend/runtime/EmissionBuilder.cs` / 対象関数: recommendation candidate 並び替え・投影生成。理由: EMA/履歴を候補提示に統合する実装が未完。次の判断点: EMA の window/persistence を function_parameters 由来でどこまで外部化するか。
 
 - [ ] refresh logs.hub_current / attractor current function implementation を実装する
-      → hub-side attractor current と axis z-score を算出・更新する function contract を実装し、phase_vector 移動距離計算に必要な母数を提供する。
+      → 対象ファイル: `db/sql_attention_logs_tables.sql`, `backend/runtime/AttractorResolver.cs` / 対象関数: hub_current refresh と z-score 算出更新。理由: logs.hub_current 更新関数が未完。次の判断点: batch/trigger/client のどの経路で refresh を必須化するか。
 
+
+
+- [ ] Runtime jump event implementation を実装する
+      → 対象ファイル: `backend/runtime/RuntimeExecutor.cs`, `backend/runtime/EmissionBuilder.cs`, `backend/schema/Contracts.cs` / 対象関数: route missing / user_action jump event 生成と emission。理由: SSOT の jump contract は定義済みだが Runtime 実装が未完。次の判断点: jump payload の最小必須フィールド（scope/from/to/reason）を既存 emission 形式へどう統合するか。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 
