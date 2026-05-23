@@ -1,28 +1,395 @@
+# required-paths.yaml — Structure Check SSOT Reference
+#
+# This file documents the required paths and content terms that
+# .agent/tests/check-structure.sh enforces.
+# The shell script is the executable SSOT; this file is the human-readable reference.
+
+required_directories:
+  agent:
+    - .agent/docs
+    - .agent/rules
+    - .agent/protocols
+    - .agent/skills
+    - .agent/tests
+    - .agent/tasks
+    - .agent/reports
+    - .agent/checklists
+    - .agent/checklists/fixtures/policy-judgment
+    - .agent/checklists/fixtures/boundary-identity
+    - .agent/scripts
+    - .agent/tmp
+  docs:
+    - docs
+  db:
+    - db
+  backend:
+    - backend/endpoint
+    - backend/runtime
+    - backend/mapper
+    - backend/repository
+    - backend/guard
+    - backend/schema
+  frontend:
+    - frontend/routes
+    - frontend/islands
+    - frontend/components
+    - frontend/package
+    - frontend/schema
+    - frontend/registry
+    - frontend/runtime
+    - frontend/api
+  infra:
+    - infra
+
 required_files:
-  - AGENTS.md
-  - docs/governance/agent-governance-routing-ssot.yaml
-  - docs/governance/agent-governance-routing-ssot.md
-  - .agent/README.md
-  - .agent/rules/rule.md
-  - .agent/routes/worktype-required-protocols.yaml
-  - .agent/prompt/README.md
-  - .agent/prompt/audit.md
-  - .agent/prompt/specific.md
-  - .agent/prompt/implementation-change.md
-  - .agent/prompt/design-change.md
-  - .agent/prompt/todo-maintenance.md
-  - .agent/prompt/existing-pr-update.md
-  - .agent/protocols/index.yaml
-  - .agent/protocols/audit.md
-  - .agent/protocols/specific.md
-  - .agent/protocols/implementation-change.md
-  - .agent/protocols/design-change.md
-  - .agent/protocols/completion.md
-  - .agent/protocols/completion-summary.md
-  - .agent/protocols/todo-carry-over.md
-  - .agent/protocols/report-surfaces.md
-  - .agent/protocols/scenario-contract.md
-  - .agent/protocols/policy-judgment.md
-  - .agent/protocols/runtime-boundary-matrix.md
-  - .agent/protocols/registry-tensor-policy.md
-  - .agent/protocols/ssot-change-impact.md
+  root:
+    - README.md
+    - NOTICE.md
+    - AGENTS.md
+  docs:
+    - docs/agent-development-os.md
+    - docs/framework-core.yaml
+    - docs/framework-policy.yaml
+    - docs/file-structure.yaml
+    - docs/registrar-admin-ui-specification.md
+    - docs/promotion-manifest-editor-specification.md
+    - docs/design/relation-registry-fk-audit-and-abstract-migration.md
+    - docs/design/context-route-recommendation.md
+    - docs/design/context-route-recommendation.yaml
+    - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/db-schema.yaml
+    - docs/design/sql-attention-logs-ssot.yaml
+    - docs/design/sql-attention-logs-ssot.md
+  agent:
+    - .agent/README.md
+    - .agent/docs/structure-map.yaml
+    - .agent/docs/required-paths.yaml
+    - .agent/docs/ssot-map.yaml
+    - .agent/rules/rule.md
+    - .agent/protocols/completion.md
+    - .agent/protocols/index.yaml
+    - .agent/protocols/policy-judgment.md
+    - .agent/protocols/scenario-contract.md
+    - .agent/protocols/runtime-boundary-matrix.md
+    - .agent/protocols/completion-summary.md
+    - .agent/protocols/report-surfaces.md
+    - .agent/protocols/todo-carry-over.md
+    - .agent/protocols/registry-tensor-policy.md
+    - .agent/skills/structure-check.md
+    - .agent/skills/agent-workflow.md
+    - .agent/tests/check-structure.sh
+    - .agent/tests/check-backend-tests.sh
+    - .agent/tests/check-frontend-types.sh
+    - .agent/tests/check-default-entity-search.sh
+    - .agent/tests/check-completion-judgment.sh
+    - docs/governance/agent-governance-routing-ssot.md
+    - docs/governance/agent-governance-routing-ssot.yaml
+    - .agent/prompt/audit.md
+    - .agent/prompt/specific.md
+    - .agent/prompt/todo-maintenance.md
+    - .agent/prompt/existing-pr-update.md
+    - .agent/protocols/audit.md
+    - .agent/protocols/specific.md
+    - .agent/protocols/implementation-change.md
+    - .agent/protocols/design-change.md
+    - .agent/prompt/design-change.md
+    - .agent/prompt/implementation-change.md
+    - .agent/routes/worktype-required-protocols.yaml
+    - .agent/tests/check-worktype-routing.sh
+    - .agent/tests/check-local-ci.sh
+    - .agent/scripts/create-tmp.sh
+    - .agent/scripts/delete-tmp.sh
+    - .agent/tmp/.gitkeep
+    - .agent/tasks/todo.md
+    - .agent/reports/README.md
+    - .agent/checklists/policy-judgment.md
+    - .agent/checklists/boundary-identity.md
+    - .agent/checklists/check-boundary-identity.sh
+    - .agent/checklists/fixtures/boundary-identity/pass.md
+    - .agent/checklists/fixtures/boundary-identity/fail-unanswered.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-identity.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-leakage-test.md
+    - .agent/checklists/fixtures/boundary-identity/fail-missing-todo-update.md
+    - .agent/checklists/check-policy-judgment.sh
+    - .agent/checklists/fixtures/policy-judgment/pass.md
+    - .agent/checklists/fixtures/policy-judgment/fail-unanswered.md
+    - .agent/checklists/fixtures/policy-judgment/fail-policy-violation.md
+    - .agent/checklists/fixtures/policy-judgment/fail-partial-diff.md
+    - .agent/checklists/fixtures/policy-judgment/fail-local-checks.md
+    - .agent/checklists/fixtures/policy-judgment/fail-remaining-todos.md
+  ci:
+    - .github/workflows/structure-check.yml
+    - .github/workflows/backend-tests.yml
+    - .github/workflows/frontend-types.yml
+    - .github/workflows/default-entity-search.yml
+  db:
+    - db/schema.sql
+    - db/topology_tables.sql
+    - db/promotion_tables.sql
+    - db/sql_attention_logs_tables.sql
+    - db/seed_empty.sql
+    - db/README.md
+  backend:
+    - backend/endpoint/DispatchEndpoint.cs
+    - backend/runtime/RuntimeExecutor.cs
+    - backend/runtime/OperationVectorResolver.cs
+    - backend/runtime/AttractorResolver.cs
+    - backend/runtime/StructureMapResolver.cs
+    - backend/runtime/PackageResolver.cs
+    - backend/runtime/SchemaResolver.cs
+    - backend/runtime/EmissionBuilder.cs
+    - backend/mapper/SemanticMapper.cs
+    - backend/repository/TopologyRepository.cs
+    - backend/repository/DiffLogRepository.cs
+    - backend/guard/RuntimeGuard.cs
+    - backend/schema/Contracts.cs
+    - backend/README.md
+    - backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj
+    - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+    - backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs
+    - backend/tests/Topolactor.Runtime.Tests/RuntimeGuardTests.cs
+    - backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj
+    - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+  frontend:
+    - deno.json
+    - frontend/routes/index.tsx
+    - frontend/routes/admin/index.tsx
+    - frontend/routes/runtime-status.tsx
+    - frontend/islands/OperationPanel.tsx
+    - frontend/components/ProjectionView.tsx
+    - frontend/components/EmissionView.tsx
+    - frontend/package/defaultPackage.ts
+    - frontend/schema/defaultSchema.ts
+    - frontend/registry/componentRegistry.ts
+    - frontend/runtime/resolveOperationVector.ts
+    - frontend/runtime/renderEmission.ts
+    - frontend/runtime/restoreResume.ts
+    - frontend/api/dispatch.ts
+    - frontend/structure_map.ts
+    - frontend/README.md
+    - frontend/tests/defaultEntitySearch.test.ts
+  infra:
+    - infra/docker-compose.yml
+    - infra/nginx.conf
+    - infra/.env.example
+
+required_content_terms:
+  README.md:
+    - "data-driven topology runtime"
+    - "docs/agent-development-os.md"
+  AGENTS.md:
+    - "Recursive Verification Gate"
+    - ".agent/rules/rule.md"
+    - ".agent/tests/check-structure.sh"
+    - "Agent Contract"
+    - "Runtime Boundary Failure Matrix"
+    - "check-policy-judgment.sh"
+    - "Policy Judgment Gate"
+    - "Temporary Scenario Contract"
+  .agent/rules/rule.md:
+    - "Data-defined topology is the architecture subject"
+    - "OperationVector is internal runtime representation"
+    - "Broken refs are explicit errors"
+    - "Runtime Boundary Failure Matrix"
+    - "scenario contract"
+    - "Policy Judgment Gate"
+    - "End-to-End Boundary Identity"
+    - "Multi-instance leakage"
+  .agent/protocols/index.yaml:
+    - "grep route"
+    - "not a judgment SSOT"
+    - "version: 2"
+    - "sections:"
+    - "read_when"
+    - "completion-governance"
+    - "completion-summary / todo-carry-over / report-surfaces"
+  .agent/protocols/completion.md:
+    - "Completion Sequence"
+    - "Recursive Verification Gate"
+    - "Remote CI Equivalence Gate"
+    - "Structure Check is the always-on required gate."
+    - "scope-irrelevant workflow-level skip is not blocking."
+  .agent/protocols/policy-judgment.md:
+    - "Policy Judgment Gate"
+    - "Recursive Verification Gate"
+    - "CI queued/in_progress is not PASS"
+    - "scope-irrelevant workflow-level skip is not blocking"
+  .agent/protocols/scenario-contract.md:
+    - "Temporary Scenario Contract"
+    - "Recursive Verification Gate"
+    - "Boundary Extension Scenario"
+    - "Multi-instance leakage"
+    - "Frontend projection identity"
+    - "UI action identity"
+  .agent/protocols/runtime-boundary-matrix.md:
+    - "Runtime Boundary Failure Matrix"
+    - "Recursive Verification Gate"
+    - "End-to-End Boundary Identity"
+    - "Repository mutation identity"
+    - "Frontend projection identity"
+    - "UI action identity"
+  .agent/protocols/completion-summary.md:
+    - "Completion Summary Template"
+    - "output sink state"
+  .agent/protocols/report-surfaces.md:
+    - "routine inspection reports"
+  .agent/protocols/completion.md:
+    - "Recursive Verification Gate"
+  .agent/protocols/todo-carry-over.md:
+    - ".agent/tasks/todo.md"
+  .agent/scripts/create-tmp.sh:
+    - "Blocking failures found:"
+    - "Runtime Boundary Failure Matrix"
+    - "Temporary Scenario Contract"
+    - "Expected read / write / append / cache / return order"
+    - "Negative Scenarios"
+    - "This is not PASS/FAIL judgment and not completion proof."
+    - "Remote CI Equivalence Gate"
+    - "Boundary Extension Scenario"
+    - "Multi-instance leakage scenario"
+    - "Frontend projection identity"
+    - "UI action identity"
+  .agent/docs/structure-map.yaml:
+    - "temporary scenario contract"
+    - "periodic audit"
+  .agent/docs/required-paths.yaml:
+    - "Temporary Scenario Contract"
+    - "not a signal to read all docs/"
+    - "Runtime Boundary Failure Matrix"
+    - "routine inspection"
+    - ".agent/tmp/"
+    - ".agent/tmp/.gitkeep"
+  .agent/docs/ssot-map.yaml:
+    - "change-surface"
+    - "required_docs"
+    - "supporting_docs"
+    - "protocols"
+  .agent/skills/agent-workflow.md:
+    - "READ_TASK_MATERIALS"
+    - "READ_TARGET_SURFACES"
+    - "DEFINE_SCOPE"
+    - "STRUCTURE_CHECK"
+    - "completion summary must include remaining TODO"
+  .agent/tests/check-completion-judgment.sh:
+    - "Completion Judgment Gate Check"
+    - "Workflow Order Invariant"
+    - "docs/ SSOT reload"
+  .agent/reports/README.md:
+    - "routine inspection reports"
+    - "Do not use this directory as the default place for normal PR summaries"
+  docs/agent-development-os.md:
+    - "external overview and agenda"
+    - "governance layer"
+    - "not application runtime logic"
+    - "AGENTS.md"
+  docs/file-structure.yaml:
+    - "data_defined_topology_is_the_architecture_subject"
+    - "operation_vector_is_internal_runtime_representation"
+  docs/registrar-admin-ui-specification.md:
+    - "Registrar admin UI"
+    - "controlled registration boundary"
+    - "Draft registration"
+    - "Validate refs"
+    - "Promote to active registry state"
+    - "Broken refs are explicit validation errors"
+    - "not CRUD"
+    - "frontend must not become source of truth"
+  docs/promotion-manifest-editor-specification.md:
+    - "Promotion manifest editor"
+    - "controlled manifest editing boundary"
+    - "Draft manifest"
+    - "Validate refs and disclosure requirements"
+    - "Promote manifest version"
+    - "Broken refs must remain explicit validation errors"
+    - "frontend must not become source of truth"
+    - "disclosure text must be explicit"
+    - "editor does not execute runtime"
+  docs/design/runtime-orchestration-ssot.yaml:
+    - "runtime_orchestration_ssot"
+    - "runtime_timeline_scheduler"
+    - "manifest_dispatcher"
+    - "topology_transform_runtime"
+  docs/design/db-schema.yaml:
+    - "db_schema"
+    - "topology_definition"
+    - "manifest"
+    - "wiring_definition_for_dispatcher_and_projection"
+  .github/workflows/structure-check.yml:
+    - ".agent/tests/check-structure.sh"
+  .github/workflows/backend-tests.yml:
+    - "bash .agent/tests/check-backend-tests.sh"
+  .github/workflows/frontend-types.yml:
+    - "bash .agent/tests/check-frontend-types.sh"
+  .github/workflows/default-entity-search.yml:
+    - "bash .agent/tests/check-default-entity-search.sh"
+  .agent/tests/check-backend-tests.sh:
+    - "dotnet test"
+  .agent/tests/check-frontend-types.sh:
+    - "deno check"
+  .agent/tests/check-default-entity-search.sh:
+    - "dotnet test"
+    - "deno test"
+  .agent/checklists/policy-judgment.md:
+    - "recursion to fix phase"
+    - "Q1"
+    - "Q15"
+    - "Answer:"
+    - "scenario contract"
+    - "equivalent remote CI success"
+    - "Structure Check is always-on"
+  .agent/checklists/boundary-identity.md:
+    - "Answer:"
+    - "End-to-End Boundary Identity"
+    - "Multi-instance leakage"
+    - "minimum leakage detection test"
+    - "repository mutation identity"
+    - "Frontend projection identity"
+    - "UI action identity"
+  .agent/checklists/check-boundary-identity.sh:
+    - "Answer:"
+    - "--self-test"
+    - "Q1=yes AND Q12=no AND Q13=no"
+  .agent/checklists/check-policy-judgment.sh:
+    - "Answer:"
+    - "--self-test"
+    - "scenario contract"
+  backend/runtime/RuntimeExecutor.cs:
+    - "RuntimeExecutor"
+    - "OperationVectorResolver"
+    - "AttractorResolver"
+    - "StructureMapResolver"
+    - "PackageResolver"
+    - "SchemaResolver"
+    - "EmissionBuilder"
+  frontend/runtime/resolveOperationVector.ts:
+    - "OperationVector"
+    - "attractorKey"
+  db/topology_tables.sql:
+    - "structure_maps"
+    - "attractor_key"
+  backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  backend/tests/Topolactor.Runtime.Tests/OperationVectorResolverTests.cs:
+    - "default:entity:search"
+  backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs:
+    - "default:entity:search"
+    - "ATTRACTOR_RESOLVE_FAILED"
+  frontend/tests/defaultEntitySearch.test.ts:
+    - "renderEmission"
+    - "ATTRACTOR_RESOLVE_FAILED"
+
+notes:
+  README_policy:
+    - "README.md required terms are intentionally minimal and external-facing only."
+    - "Internal governance / CI verification vocabulary belongs under .agent/protocols and .agent/docs, not README.md."
+
+  .agent/routes/worktype-required-protocols.yaml:
+    - "todo_maintenance"
+    - "design_change"
+    - "implementation_change"
+    - "required_protocols"
+  .agent/tests/check-worktype-routing.sh:
+    - "routing existence"
+    - "reference integrity"
+    - "required vocabulary"

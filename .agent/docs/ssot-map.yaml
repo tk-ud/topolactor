@@ -1,17 +1,271 @@
-ssot:
-  governance_routing:
+# ssot-map.yaml — Change-Surface to docs/ SSOT Mapping
+#
+# Purpose:
+# - Provide task-time mapping from change surface to docs/ SSOT read set.
+# - Keep this as resume/index (not docs bundle always-read).
+
+version: 1
+
+mapping:
+  - work_type: repository_overview
+    change_surfaces:
+      - repository-level orientation
+      - governance entry overview
     required_docs:
-      - docs/governance/agent-governance-routing-ssot.yaml
+      - docs/agent-development-os.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: framework_core_runtime_canonical_route
+    change_surfaces:
+      - backend/runtime/*
+      - canonical route claims
+      - runtime flow semantics
+    required_docs:
+      - docs/framework-core.yaml
+    supporting_docs: []
+    protocols: []
+
+  - work_type: policy_scoring_threshold_routing_validation_projection
+    change_surfaces:
+      - runtime policy values
+      - scoring thresholds
+      - routing or validation behavior
+      - projection behavior
+    required_docs:
+      - docs/framework-policy.yaml
+    supporting_docs: []
+    protocols:
+      - .agent/protocols/policy-judgment.md
+
+  - work_type: file_structure_required_path_directory_governance
+    change_surfaces:
+      - repository structure checks
+      - required paths
+      - directory governance surfaces
+    required_docs:
+      - docs/file-structure.yaml
+    supporting_docs: []
+    protocols: []
+
+  - work_type: registrar_admin_ui_registry_registration
+    change_surfaces:
+      - registrar admin UI
+      - registry registration boundary
+    required_docs:
+      - docs/registrar-admin-ui-specification.md
+    supporting_docs: []
+    protocols:
+      - .agent/protocols/runtime-boundary-matrix.md
+
+  - work_type: promotion_manifest_disclosure_manifest_editing
+    change_surfaces:
+      - promotion manifest editor
+      - disclosure requirements
+      - manifest editing boundary
+    required_docs:
+      - docs/promotion-manifest-editor-specification.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: relation_registry_fk_abstract_migration
+    change_surfaces:
+      - relation registry
+      - foreign key policy
+      - abstract migration semantics
+    required_docs:
+      - docs/design/relation-registry-fk-audit-and-abstract-migration.md
+    supporting_docs: []
+    protocols: []
+
+  - work_type: context_route_recommendation_sql_attention_registry_tensor
+    change_surfaces:
+      - context route recommendation
+      - SQL Attention behavior
+      - registry tensor semantics
+    required_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+    supporting_docs:
+      - docs/framework-policy.yaml
+    protocols:
+      - .agent/protocols/registry-tensor-policy.md
+
+
+  - work_type: sql_attention_logs_current_attention_norm_trigger
+    change_surfaces:
+      - SQL Attention logs
+      - logs.diff
+      - logs.candidate
+      - logs.ui_operation
+      - logs.current
+      - logs.attention
+      - signal source
+      - current calculation basis
+      - l2 norm trigger
+      - norm level watch
+      - registry-neighbor exploration
+      - table registry vector search
+      - physical table pressure
+      - attention evidence
+      - promotion candidates as candidate pressure
+      - context_event as ui operation pressure
+      - topology_edit_log mismatch with physical tableid
+    required_docs:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    supporting_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/registry-tensor-policy.md
+
+
+  - work_type: topology_recommendation_ci_runtime_contract
+    change_surfaces:
+      - topology recommendation ci runtime
+      - topology_recommendation_candidate
+      - recommendation_check_result
+      - external_check_adapter_registry
+      - topology recommendation candidate status contract
+    required_docs:
+      - docs/design/topology-recommendation-ci-runtime.md
+      - docs/design/topology-recommendation-ci-runtime.yaml
+    supporting_docs:
+      - docs/design/context-route-recommendation.md
+      - docs/design/context-route-recommendation.yaml
+    protocols: []
+
+  - work_type: commit_inference_engine_contract
+    change_surfaces:
+      - commit inference engine
+      - session_s1
+      - session_s2
+      - operation_log_item event typing
+      - lifecycle inference gate
+    required_docs:
+      - docs/design/commit-inference-engine.md
+      - docs/design/commit-inference-engine.yaml
+    supporting_docs: []
+    protocols: []
+
+  - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
+    change_surfaces:
+      - runtime orchestration os
+      - runtime_timeline_scheduler
+      - runtime_queue_scheduler
+      - manifest_dispatcher
+      - backend/Program.cs
+      - backend/endpoint/DispatchEndpoint.cs
+      - backend/runtime/*
+      - backend/jobs/*
+      - frontend api trigger lane
+      - frontend sse projection lane
+      - frontend/api/dispatch.ts
+      - frontend/runtime/*
+      - frontend/routes/*
+      - backend topology transform runtime
+      - topology payload vector conversion and json linking
+      - topology_function_binder mapping and runtime mapping
+      - projection_constructor mapping
+      - manifest authority over role dispatcher runtime topology_function_binding
+    required_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    supporting_docs:
+      - docs/framework-core.yaml
+      - docs/framework-policy.yaml
+      - docs/design/context-route-recommendation.md
+      - docs/design/db-schema.yaml
+    protocols: []
+
+  - work_type: db_schema_table_structure_manifest
+    change_surfaces:
+      - db/*.sql
+      - db/schema.sql
+      - db/topology_tables.sql
+      - db/promotion_tables.sql
+      - db/context_route_tables.sql
+      - db/ui_topology_tables.sql
+      - db/manifest_tables.sql
+      - manifest table
+      - topology_definition tables
+      - context_route tables
+      - ui_topology tables
+    required_docs:
+      - docs/design/db-schema.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols: []
+
+  - work_type: pipeline_continuity_api_sse_identity_validation
+    change_surfaces:
+      - frontend/islands/OperationPanel.tsx
+      - frontend/runtime/resolveOperationVector.ts
+      - frontend/api/dispatch.ts
+      - frontend/components/EmissionView.tsx
+      - frontend/components/ProjectionView.tsx
+      - backend/endpoint/DispatchEndpoint.cs
+      - backend/runtime/RuntimeExecutor.cs
+      - backend/schema/Contracts.cs
+      - backend/runtime/EmissionBuilder.cs
+      - backend/schema/ContextRouteContracts.cs
+      - api command lane node identity
+      - sse projection lane node identity
+      - pipeline continuity check
+    required_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols: []
+
+  - work_type: system_roadmap_status_and_implementation_registry
+    change_surfaces:
+      - docs/system-roadmap.yaml
+      - implementation_registry
+      - milestone status
+      - production_ready claim
+      - implemented claim
+      - skeleton / partial / not_started status update
+      - completion summary
+      - TODO [x] update
+      - public roadmap status
+    required_docs:
+      - docs/system-roadmap.yaml
+    supporting_docs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    prompt:
+      - .agent/prompt/system-roadmap-status.md
+    protocols:
+      - .agent/protocols/completion.md
+      - .agent/protocols/completion-summary.md
+
+  - work_type: governance_routing_ssot
+    change_surfaces:
+      - .agent/rules/rule.md
+      - .agent/README.md
+      - .agent/prompt/*
+      - .agent/protocols/index.yaml
+      - .agent/routes/worktype-required-protocols.yaml
+      - .agent/tests/check-worktype-routing.sh
+      - .agent/tests/check-completion-judgment.sh
+      - .agent/tests/check-structure.sh
+    required_docs:
       - docs/governance/agent-governance-routing-ssot.md
-  worktypes:
-    ids:
-      - audit
-      - specific
-      - implementation_change
-      - design_change
-      - todo_maintenance
-      - existing_pr_update
-  grep_key_policy:
-    id_language: english
-    case_style: snake_case
-    explanation_language: japanese_allowed
+      - docs/governance/agent-governance-routing-ssot.yaml
+    supporting_docs:
+      - docs/agent-development-os.md
+    protocols:
+      - .agent/protocols/completion.md
+      - .agent/protocols/completion-summary.md
+
+worktypes:
+  ids:
+    - audit
+    - specific
+    - implementation_change
+    - design_change
+    - todo_maintenance
+    - existing_pr_update

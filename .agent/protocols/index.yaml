@@ -1,30 +1,116 @@
-version: 1
-purpose: Protocol grep index (routing hint only)
+version: 2
+purpose: "Section-level grep route for condition-triggered protocol reading. This is not a judgment SSOT."
+usage:
+  - "Use only to locate protocol files and target sections after a trigger or work-type route selects a protocol."
+  - "Work-type required routing map: .agent/routes/worktype-required-protocols.yaml"
+  - "Do not use grep hit as PASS/FAIL judgment."
+  - "Protocol body remains the judgment source."
+  - "Do not read the whole protocol bundle by default."
 
 protocols:
-  - id: audit
-    file: .agent/protocols/audit.md
-  - id: specific
-    file: .agent/protocols/specific.md
-  - id: implementation_change
-    file: .agent/protocols/implementation-change.md
-  - id: design_change
-    file: .agent/protocols/design-change.md
   - id: completion
     file: .agent/protocols/completion.md
+    stage: [JUDGMENT]
+    sections:
+      - marker: "## Trigger condition"
+        grep_keys: ["completion eligibility", "TODO `[x]`"]
+        read_when: ["completion eligibility decision"]
+
   - id: completion_summary
     file: .agent/protocols/completion-summary.md
+    stage: [JUDGMENT, PUSH_OR_PR]
+    sections:
+      - marker: "## Completion Summary Template"
+        grep_keys: ["WorkEvent", "output sink", "PR_COMMENT_NOT_POSTED", "Required check scope"]
+        read_when: ["terminal completion summary composition"]
+
   - id: todo_carry_over
     file: .agent/protocols/todo-carry-over.md
+    stage: [PUSH_OR_PR]
+    sections:
+      - marker: "## TODO surface responsibility"
+        grep_keys: ["todo", "carry-over", "remaining TODO"]
+        read_when: ["remaining work classification"]
+
   - id: report_surfaces
     file: .agent/protocols/report-surfaces.md
+    stage: [PUSH_OR_PR]
+    sections:
+      - marker: "## `.agent/reports/` usage"
+        grep_keys: ["reports", "routine inspection", "periodic audit"]
+        read_when: ["report placement routing"]
+
   - id: scenario_contract
     file: .agent/protocols/scenario-contract.md
+    stage: [SCENARIO_CONTRACT, VERIFY_SCENARIO_DIFF]
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys: ["runtime claim", "canonical route", "projection behavior"]
+        read_when: ["scenario-contract trigger check"]
+      - marker: "## Precondition: Workflow Order Invariant Gate"
+        grep_keys: ["docs/ SSOT reload", "READ_TARGET_SURFACES", "DEFINE_SCOPE"]
+        read_when: ["pre-implementation workflow validation"]
+
   - id: policy_judgment
     file: .agent/protocols/policy-judgment.md
+    stage: [FILL_CHECKLISTS, JUDGMENT]
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys: ["scoring", "threshold", "routing", "validation", "projection behavior"]
+        read_when: ["policy change trigger confirmation"]
+
   - id: runtime_boundary_matrix
     file: .agent/protocols/runtime-boundary-matrix.md
+    stage: [FILL_CHECKLISTS, JUDGMENT]
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys: ["endpoint wiring", "repository write", "persistence mutation", "End-to-End Boundary Identity"]
+        read_when: ["boundary identity trigger confirmation"]
+
   - id: registry_tensor_policy
     file: .agent/protocols/registry-tensor-policy.md
+    stage: [READ_TARGET_SURFACES, DEFINE_SCOPE, JUDGMENT]
+    sections:
+      - marker: "## Trigger scope"
+        grep_keys: ["registry tensor semantics", "semantic matrix"]
+        read_when: ["registry-topology protocol trigger check"]
+
   - id: ssot_change_impact
     file: .agent/protocols/ssot-change-impact.md
+    stage: [READ_TARGET_SURFACES, DEFINE_SCOPE, VERIFY_SCENARIO_DIFF]
+    sections:
+      - marker: "## Trigger"
+        grep_keys: ["docs/design", "externally observable contracts", "projection", "persistence"]
+        read_when: ["SSOT update trigger confirmation"]
+
+  - id: audit
+    file: .agent/protocols/audit.md
+    stage: [JUDGMENT]
+    sections:
+      - marker: "## judgment_scope"
+        grep_keys: ["semantic", "diff", "implementation meaning"]
+        read_when: ["audit worktype judgment"]
+
+  - id: specific
+    file: .agent/protocols/specific.md
+    stage: [DEFINE_SCOPE, JUDGMENT]
+    sections:
+      - marker: "## judgment_scope"
+        grep_keys: ["minimal target-surface", "scope expansion"]
+        read_when: ["specific worktype local-scope judgment"]
+
+  - id: implementation_change
+    file: .agent/protocols/implementation-change.md
+    stage: [DEFINE_SCOPE, JUDGMENT]
+    sections:
+      - marker: "## blocking_conditions"
+        grep_keys: ["scenario-contract", "policy-judgment"]
+        read_when: ["implementation_change conditional protocol gate"]
+
+  - id: design_change
+    file: .agent/protocols/design-change.md
+    stage: [DEFINE_SCOPE, JUDGMENT]
+    sections:
+      - marker: "## blocking_conditions"
+        grep_keys: ["SSOT change", "impact propagation"]
+        read_when: ["design_change impact gate"]

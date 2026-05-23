@@ -23,7 +23,7 @@ run_check() {
     return
   fi
 
-  if [ "$label" = "RUNTIME_ENVIRONMENT" ] && echo "$out" | rg -q "docker.sock|docker API|daemon is running"; then
+  if [ "$label" = "RUNTIME_ENVIRONMENT" ] && echo "$out" | grep -qE "docker.sock|docker API|daemon is running"; then
     echo "RESULT [${label}] REQUIRED_NOT_EXECUTED (docker runtime unavailable; not PASS)" >&2
     FAILURES=$((FAILURES + 1))
     return
