@@ -452,6 +452,4 @@ VALUES (
     '{"hot_days":90,"cold_days":365,"archive_strategy":"delete","batch_size":1000,"enabled":true,"schedule_interval_hours":24}',
     true
 )
-ON CONFLICT (function_name, parameter_key) DO UPDATE
-    SET parameter_value = EXCLUDED.parameter_value,
-        active          = EXCLUDED.active;
+ON CONFLICT (function_name, parameter_key) DO NOTHING;
