@@ -1,10 +1,25 @@
-# Design Change Prompt Router
+# design_change prompt router
 
-Use this router for SSOT, docs/design contract, or external observable contract changes.
+## purpose
+SSOT/docs/external contract change.
 
-## Route
+## trigger_condition
+Worktype is `design_change`.
 
-- Inspect SSOT dependency surfaces before making changes.
-- If SSOT changes are in scope, apply `.agent/protocols/ssot-change-impact.md`.
-- If new vocabulary affects shell/yaml required-path routing checks, update the referenced routing/check vocabulary.
-- Keep protocol bodies and SSOT bodies in their source files; do not duplicate them here.
+## required_reads
+- docs/governance/agent-governance-routing-ssot.yaml
+- docs/governance/agent-governance-routing-ssot.md
+- .agent/protocols/design-change.md
+
+## optional_reads
+- .agent/protocols/ssot-change-impact.md
+
+## protocol_triggers
+- always: design-change protocol
+- ssot change: ssot-change-impact protocol
+
+## output_shape
+changed contracts, impact map, required check scope
+
+## out_of_scope
+- implementation-only edits without design delta

@@ -1,12 +1,26 @@
-# Implementation Change Prompt Router
+# implementation_change prompt router
 
-Use this router for implementation changes.
+## purpose
+Implementation change under existing SSOT.
 
-## Route
+## trigger_condition
+Worktype is `implementation_change`.
 
-- Read the in-scope SSOT before implementation.
-- Implement in SSOT compliance.
-- If an out-of-design correction is required, evaluate and update SSOT.
-- If new vocabulary affects shell/yaml required-path routing checks, update the referenced routing/check vocabulary.
-- Apply `.agent/protocols/scenario-contract.md` for runtime/persistence/projection changes.
-- Apply `.agent/protocols/policy-judgment.md` for policy/scoring/threshold changes.
+## required_reads
+- mapped SSOT for touched runtime surface
+- .agent/protocols/implementation-change.md
+
+## optional_reads
+- .agent/protocols/scenario-contract.md
+- .agent/protocols/policy-judgment.md
+
+## protocol_triggers
+- always: implementation-change protocol
+- runtime/persistence/projection change -> scenario-contract
+- policy/scoring/threshold change -> policy-judgment
+
+## output_shape
+scope, implementation delta, protocol decisions, check results
+
+## out_of_scope
+- SSOT design rewrite without design_change route
