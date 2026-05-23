@@ -1,15 +1,31 @@
 # Agent Governance Routing SSOT
 
 Status: draft SSOT  
-Canonical YAML: `docs/governance/agent-governance-routing-ssot.yaml`
+YAML body: `docs/governance/agent-governance-routing-ssot.yaml`
 
-## Purpose
+## Role of This Markdown
 
-This document is the human-readable companion to the machine-readable governance routing SSOT.
+This Markdown is part of the SSOT set, but it is not the detailed rule body.
 
-The goal is to make `.agent` governance routing refer to a single repository-level source instead of spreading route definitions across README, rules, prompt routers, protocols, checklists, and shell checks.
+Use it as the agenda, resume, and index for humans and LLM agents.
+The YAML is the detailed body for closed-world structure, authority boundaries, worktype definitions, CI checker contracts, and validation order.
 
-## Canonical Route
+## Agenda
+
+1. Confirm the canonical governance route.
+2. Identify the worktype.
+3. Use the YAML to resolve directory responsibility, semantic closure, and authority boundary.
+4. Open only the matching worktype prompt and triggered protocol surfaces.
+5. Run required CI/checker contracts in the YAML-defined order.
+6. Keep `.agent` files subordinate to this governance SSOT set.
+
+## Resume
+
+This SSOT set defines repository-side agent governance routing.
+
+It exists to prevent `.agent` governance rules from being duplicated across README, rule files, prompt routers, protocols, checklists, and shell checks.
+
+The intended route is:
 
 ```text
 AGENTS.md
@@ -21,229 +37,48 @@ AGENTS.md
 → checklist / tests
 ```
 
-## Responsibility Split
-
-### `AGENTS.md`
-
-Repository entry contract.
-
-Owns:
-
-- agent role summary
-- entry handoff
-- minimum start instruction
-
-Does not own:
-
-- full routing body
-- protocol body
-- token estimate table
-
-### `.agent/rules/rule.md`
-
-Always-on prohibitions and worktype branch.
-
-Owns:
-
-- always-on prohibitions
-- minimal workflow invariant
-- worktype decision
-- branch to prompt
-
-Does not own:
-
-- directory role explanation
-- protocol body details
-- token estimates
-- large read-route explanation
-- duplicated prompt/protocol procedures
-
-### `.agent/README.md`
-
-`.agent` directory map.
-
-Owns:
-
-- `.agent` directory purpose
-- subdirectory responsibilities
-- permanent vs temporary surface distinction
-
-Does not own:
-
-- token estimates
-- protocol load comparison
-- worktype procedure body
-- completion judgment rules
-
-### `.agent/prompt/*`
-
-Worktype router surface.
-
-Owns:
-
-- worktype purpose
-- trigger condition
-- required reads
-- optional reads
-- protocol triggers
-- output shape
-- out of scope
-
-Does not own:
-
-- final PASS/FAIL judgment
-- protocol body duplication
-- checklist template answers
-
-### `.agent/protocols/*`
-
-Judgment gate surface.
-
-Owns:
-
-- triggered gate conditions
-- completion blockers
-- PASS / FAIL / NOT_REQUIRED / OUT_OF_SCOPE semantics
-- protocol-specific judgment rules
-
-Does not own:
-
-- worktype selection
-- directory map
-- executable CI implementation
-
-### `.agent/checklists/*`
-
-Viewpoint signature surface.
-
-Owns:
-
-- blank checklist templates
-- self-test fixtures
-- answer format expectations
-
-Does not own:
-
-- canonical judgment source
-- permanent PR-specific filled answers
-
-### `.agent/tests/*`
-
-Executable governance checks.
-
-Owns:
-
-- structure checks
-- routing existence checks
-- vocabulary/reference integrity checks
-- local CI wrapper checks
-
-Does not own:
-
-- semantic PR judgment
-- product design authority
-
-### `.agent/tasks/todo.md`
-
-Unresolved work queue.
-
-Owns:
-
-- unresolved implementation work
-- unresolved design work
-- unresolved SSOT alignment work
-- unresolved test-authoring work
-
-Does not own:
-
-- CI waiting records
-- local tool absence records
-- remote CI pass confirmation records
-- completed PR work logs
-
-## Worktypes
-
-### `audit`
-
-PR or diff semantic audit.
-
-Focus:
-
-- implementation meaning consistency
-- diff-to-intent consistency
-- residual work extraction
-- follow-up prompt output when fixes are needed
-
-Structural checks, build checks, type checks, and required path existence are delegated to CI/tests.
-
-### `specific`
-
-Targeted file/function/design-point inspection or correction.
-
-Focus:
-
-- minimal target-surface read
-- local scope fixation
-- triggered protocol use only when touched surfaces require it
-
-### `implementation_change`
-
-Implementation change against existing SSOT.
-
-### `design_change`
-
-SSOT, docs/design, or externally observable contract change.
-
-### `todo_maintenance`
-
-`.agent/tasks/todo.md` inspection, cleanup, or reconciliation.
-
-### `existing_pr_update`
-
-Follow-up work on an already-open PR.
-
-## Grep Key Policy
-
-- Route ids: English only
-- Markers: English only
-- Grep keys: English only
-- Explanatory prose: Japanese allowed
-- Case style: snake_case
-
-Stable worktype ids:
-
-```text
-audit
-specific
-implementation_change
-design_change
-todo_maintenance
-existing_pr_update
-```
-
-## Token Estimate Policy
-
-Repository-side governance overhead estimates belong in root `README.md` or another repository-level overview.
-
-`.agent/README.md` must remain a directory purpose map only.
-
-## Prohibited Duplication
-
-Do not duplicate:
-
-- token estimates inside `.agent/README.md`
-- protocol body details inside `.agent/rules/rule.md`
-- directory map inside `.agent/rules/rule.md`
-- judgment rules inside prompt files
-- worktype selection inside protocol files
-- completed PR work logs inside `.agent/tasks/todo.md`
-
-## Migration Target State
-
-- Add governance SSOT under `docs/governance/`
-- Move `.agent/README.md` token estimates to root `README.md`
-- Reduce `rule.md` to prohibitions and worktype branching
-- Add `audit` worktype prompt/protocol
-- Add `specific` worktype prompt/protocol
-- Unify grep keys to English snake_case
-- Update required paths and check scripts to reference new worktypes
+## YAML Index
+
+Read the YAML sections for detail:
+
+| Need | YAML section |
+|---|---|
+| Route order | `canonical_route` |
+| Physical directory structure | `directory_structure` |
+| Meaning closure / allowed edges | `semantic_closure` |
+| Closed-world constraints | `closed_world_rules` |
+| Authority boundaries | `authority_boundaries` |
+| `.agent` responsibility split | `responsibility_split` |
+| Worktype vocabulary | `worktypes` |
+| Prompt contract | `prompt_contract` |
+| Protocol contract | `protocol_contract` |
+| Checklist contract | `checklist_contract` |
+| Test/check contract | `test_contract` |
+| CI checker list, meaning, order | `ci_check_contract` |
+| Grep key policy | `grep_key_policy` |
+| Route index policy | `routing_index_policy` |
+| Token estimate placement | `token_estimate_policy` |
+| Validation closure | `validation_closure` |
+| Duplication prohibitions | `prohibited_duplication` |
+| Migration target | `migration_target_state` |
+
+## Worktype Index
+
+Canonical worktype ids:
+
+- `audit`
+- `specific`
+- `implementation_change`
+- `design_change`
+- `todo_maintenance`
+- `existing_pr_update`
+
+The YAML owns each worktype's prompt/protocol relation and required check scope.
+
+## Reading Rule
+
+- Use this Markdown to orient and navigate.
+- Use the YAML to decide.
+- Do not duplicate YAML body details into `.agent/README.md`, `.agent/rules/rule.md`, prompt files, protocol files, or check scripts.
+
+If this Markdown and the YAML disagree, update this Markdown to match the YAML agenda/index intent; the YAML body remains the detailed decision source.
