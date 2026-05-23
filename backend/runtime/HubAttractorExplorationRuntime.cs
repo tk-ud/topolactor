@@ -24,7 +24,7 @@ namespace Topolactor.Runtime;
 ///   - No change candidates → NoChange (exploration skipped, not an error)
 ///
 /// Prohibited:
-///   - Writing to logs.attention (write_logs_attention boundary is a separate TODO)
+///   - Writing to logs.attention directly (persistence boundary is SqlAttentionScheduler -> WriteLogsAttentionAsync)
 ///   - registry mutation / migration / column promotion
 ///   - Magic number policy defaults in runtime code
 /// </summary>
