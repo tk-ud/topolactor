@@ -426,7 +426,9 @@ VALUES (
     '{"min_similarity":0.05,"top_k":50,"min_neighbors":10,"recent_days":90,"max_candidates_shown":5,"baseline_weight":0.5,"neighbor_weight":0.5,"transition_aggregation":{"aggregation_limit":10000,"prefer_recent":true,"recent_days":null},"topology_vector_runtime":{"enabled":true,"registry_validation":{"enabled":true,"duplicate_threshold":1.0,"near_duplicate_threshold":0.85,"related_threshold":0.60,"top_k":10},"hub_attention":{"enabled":true,"scope_limits":[1000,3000,10000],"ema_fast_alpha":0.30,"ema_slow_alpha":0.10,"max_update_candidates_per_event":10000},"transition_key_evidence":{"enabled":true,"operation_contribution":1.0,"relation_contribution":0.8,"state_contribution":0.7,"table_contribution":0.6,"neighbor_top_k":3},"topology_mlp":{"enabled":true,"max_feature_cross_order":3},"feedback_weight_update":{"enabled":true,"positive_delta":0.05,"negative_delta":-0.02,"missing_candidate_delta":0.03},"recommendation_blend":{"enabled":true,"scope_limit":1000,"attention_score_weight":1.0,"trend_weight":0.0,"statistics_weight":0.0}}}',
     true
 )
-ON CONFLICT (function_name, parameter_key) DO NOTHING;
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;
 
 
 -- ---------------------------------------------------------------------------
@@ -450,4 +452,6 @@ VALUES (
     '{"hot_days":90,"cold_days":365,"archive_strategy":"delete","batch_size":1000,"enabled":true,"schedule_interval_hours":24}',
     true
 )
-ON CONFLICT (function_name, parameter_key) DO NOTHING;
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;
