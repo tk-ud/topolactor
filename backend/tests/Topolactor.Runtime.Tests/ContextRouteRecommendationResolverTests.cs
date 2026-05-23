@@ -1192,6 +1192,20 @@ public partial class ContextRouteRecommendationResolverTests
         Assert.Equal(0, repo.LoadHubAttentionCalls);
     }
 
+
+    [Fact]
+    public async Task ResolveAsync_BlendReadThrows_ReturnsExplicitErrorRecommendationBlendQueryFailed()
+    {
+        var tokenId = Guid.NewGuid();
+        var repo = new ThrowingBlendReadRepository(tokenId);
+        var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
+
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), tokenId.ToString(), hubId: Guid.NewGuid()));
+
+        Assert.Equal(RecommendationStatus.ExplicitError, result.Status);
+        Assert.Equal("RECOMMENDATION_BLEND_QUERY_FAILED", result.StatusDetail);
+    }
+
     [Fact]
     public async Task ResolveAsync_BlendCurrentMissing_KeepsBaselineRecommendation()
     {
@@ -1230,5 +1244,11 @@ public partial class ContextRouteRecommendationResolverTests
     }
 
     private sealed class MissingBlendRowsRepository(Guid tokenId) : CountingBlendRepository(tokenId) { }
+
+    private sealed class ThrowingBlendReadRepository(Guid tokenId) : CountingBlendRepository(tokenId)
+    {
+        public override Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(Guid hubId, int scopeLimit, CancellationToken ct = default)
+            => Task.FromException<IReadOnlyList<HubAttentionCurrentRecord>>(new InvalidOperationException("blend read failure"));
+    }
 
 }

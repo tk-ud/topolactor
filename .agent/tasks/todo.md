@@ -34,8 +34,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [x] statistics / EMA integration for topology projection recommendation を実装する
       → 依存関係: なし（単独着手可）。
       → 対象責務: recommendation candidate 並び替え・投影生成（runtime path）。
-      → 対象ファイル: `backend/runtime/PackageResolver.cs`, `backend/runtime/EmissionBuilder.cs`。
-      → 実装結果: recommendation_blend を policy (`function_parameters`) で導入し、EMA/trend/statistics の重み・scope_limit を外部化。EMA persistence は `context_hub_recommendation_current` を継続利用。
+      → 対象ファイル: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs`。
+      → 実装結果: operation候補は neighbor/baseline のみを維持。token候補のみ recommendation_blend 対象として、EMA/trend/statistics の重み・scope_limit を policy (`function_parameters`) へ外部化。EMA persistence は `context_hub_recommendation_current` を継続利用。
+      → 監査役TODO: operation候補へ blend 適用が必要な場合は、`candidate_kind="operation"` の current row 設計（key/ID整合・生成/読取導線分離）を別TODOとして起票する。
       → 監査役TODO: 本番 policy row に `topology_vector_runtime.recommendation_blend` を追加し、運用重みを確定。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
