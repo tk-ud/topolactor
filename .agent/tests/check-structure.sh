@@ -174,6 +174,7 @@ check_file ".agent/protocols/policy-judgment.md"
 check_file ".agent/protocols/scenario-contract.md"
 check_file ".agent/protocols/runtime-boundary-matrix.md"
 check_file ".agent/protocols/reports-and-todos.md"
+check_file ".agent/protocols/todo-carry-over.md"
 check_file ".agent/protocols/registry-tensor-policy.md"
 check_file ".agent/skills/agent-workflow.md"
 check_file ".agent/skills/structure-check.md"
@@ -338,12 +339,14 @@ check_content ".agent/protocols/index.yaml" "version: 2"
 check_content ".agent/protocols/index.yaml" "sections:"
 check_content ".agent/protocols/index.yaml" "read_when"
 check_content ".agent/protocols/index.yaml" "completion-governance"
-check_content ".agent/protocols/index.yaml" "reports-and-todo-surfaces"
+check_content ".agent/protocols/index.yaml" "todo-carry-over"
+check_content ".agent/protocols/index.yaml" "report-surfaces"
+check_content ".agent/protocols/index.yaml" "completion-summary"
 check_content ".agent/protocols/completion.md" "Completion Sequence"
 check_content ".agent/protocols/policy-judgment.md" "Policy Judgment Gate"
 check_content ".agent/protocols/scenario-contract.md" "Temporary Scenario Contract"
-check_content ".agent/protocols/reports-and-todos.md" "routine inspection reports"
-check_content ".agent/protocols/reports-and-todos.md" "Recursive Verification Gate"
+check_content ".agent/protocols/report-surfaces.md" "routine inspection reports"
+check_content ".agent/protocols/completion.md" "Recursive Verification Gate"
 check_content ".agent/protocols/registry-tensor-policy.md" "Registry Tensor Policy"
 check_content ".agent/protocols/registry-tensor-policy.md" "tensor basis / vector basis"
 check_content ".agent/protocols/registry-tensor-policy.md" "Drift / GAP classification"
@@ -591,22 +594,19 @@ fi
 
 
 check_content ".agent/rules/rule.md" "Audit Gap Response Gate"
-check_content ".agent/protocols/reports-and-todos.md" "Governance Gaps"
-check_content ".agent/protocols/reports-and-todos.md" "Proposed Governance Improvements"
-check_content ".agent/protocols/reports-and-todos.md" "Completion Eligibility"
 check_content ".agent/protocols/completion.md" "Audit Gap Response Gate"
 
 check_content ".agent/rules/rule.md" "Failure Triage Self-Recursion Gate"
 check_content ".agent/protocols/completion.md" "failure triage result"
 check_content ".agent/protocols/completion.md" "Apply Failure Triage Self-Recursion Gate"
-check_content ".agent/protocols/reports-and-todos.md" "Failure Triage Self-Recursion Gate Reporting Requirements"
+check_content ".agent/protocols/completion.md" "Failure Triage Self-Recursion Gate"
 check_content ".agent/rules/rule.md" "Required Check Scope Declaration Gate"
 check_content ".agent/protocols/completion.md" "required check scope declaration"
 check_content ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
-check_content ".agent/protocols/reports-and-todos.md" "Required Check Scope Declaration Gate Reporting Requirements"
+check_content ".agent/protocols/completion.md" "required check scope declaration"
 
 check_content ".agent/rules/rule.md" "Details:"
-check_content ".agent/rules/rule.md" ".agent/protocols/reports-and-todos.md"
+check_content ".agent/rules/rule.md" ".agent/protocols/completion-summary.md"
 check_content ".agent/rules/rule.md" ".agent/protocols/completion.md"
 
 if rg -n "REQUIRED_EXECUTED|required check failure|expected negative test|Governance Gaps|Proposed Governance Improvements|Completion Eligibility" "$REPO_ROOT/.agent/rules/rule.md" >/dev/null; then
@@ -664,6 +664,9 @@ fi
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== All checks passed ==="
+  echo "AGENT_HINT: Final completion summary must use .agent/protocols/completion-summary.md."
+  echo "AGENT_HINT: Use .agent/protocols/todo-carry-over.md only when remaining TODO classification is needed."
+  echo "AGENT_HINT: PR body or make_pr output does not replace the final completion summary."
   exit 0
 else
   echo "=== $FAILURES check(s) failed ===" >&2
