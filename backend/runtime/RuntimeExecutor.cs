@@ -10,7 +10,8 @@ namespace Topolactor.Runtime;
 /// <summary>
 /// Single canonical execution path for all operations.
 /// Orchestrates the full pipeline: vector → attractor → structure map → package → schema → emission.
-/// There are no fallback paths. Any broken reference returns a validation error response.
+/// Route missing is handled as a canonical fallback jump event.
+/// Dispatcher/manifest and runtime infrastructure failures remain explicit error responses.
 /// </summary>
 public class RuntimeExecutor : IDispatchableRuntime
 {
@@ -56,7 +57,9 @@ public class RuntimeExecutor : IDispatchableRuntime
     }
 
     /// <summary>
-    /// Executes the canonical pipeline. No fallbacks. Broken references yield explicit errors.
+    /// Executes the canonical pipeline.
+    /// Route-missing attractor resolution emits canonical fallback jump events.
+    /// Infrastructure failures (manifest/dispatcher/package/schema, etc.) remain explicit errors.
     /// manifestId is forwarded from the manifest dispatcher to the output lane router for db_notify.
     /// </summary>
     public async Task<EndpointResponseDto> ExecuteAsync(
@@ -232,10 +235,13 @@ public class RuntimeExecutor : IDispatchableRuntime
         if (context is null) return null;
         if (!context.TryGetValue("jumpReason", out var reason) || !string.Equals(reason, "user_action", StringComparison.Ordinal))
             return null;
-        if (!context.TryGetValue("jumpScope", out var scope))
+        if (!context.TryGetValue("jumpScope", out var scope) ||
+            !(string.Equals(scope, "hub", StringComparison.Ordinal) || string.Equals(scope, "topology", StringComparison.Ordinal)))
             return null;
-        var from = TryReadInt(context, "jumpFrom");
-        var to = TryReadInt(context, "jumpTo");
+        if (!TryReadRequiredInt(context, "jumpFrom", out var from))
+            return null;
+        if (!TryReadRequiredInt(context, "jumpTo", out var to))
+            return null;
         return new RuntimeJumpEvent(scope, from, to, "user_action");
     }
 
@@ -243,5 +249,12 @@ public class RuntimeExecutor : IDispatchableRuntime
     {
         if (context is null) return 0;
         return context.TryGetValue(key, out var raw) && int.TryParse(raw, out var parsed) ? parsed : 0;
+    }
+
+    private static bool TryReadRequiredInt(Dictionary<string, string>? context, string key, out int parsed)
+    {
+        parsed = 0;
+        if (context is null) return false;
+        return context.TryGetValue(key, out var raw) && int.TryParse(raw, out parsed);
     }
 }

@@ -118,7 +118,7 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_BrokenAttractor_ReturnsExplicitErrorWithoutFallback()
+    public async Task ExecuteAsync_BrokenAttractor_ReturnsCanonicalRouteMissingJumpFallback()
     {
         var executor = CreateExecutor();
         var request = new EndpointRequestDto(
@@ -187,6 +187,89 @@ public class RuntimeExecutorTests
         var resRecommendationOnly = await executor.ExecuteAsync(recommendationOnly);
         Assert.True(resRecommendationOnly.Success);
         Assert.True(resRecommendationOnly.Emission!.JumpEvents is null || resRecommendationOnly.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_MissingJumpTo_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "7"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_NonNumericJumpFrom_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "x",
+                ["jumpTo"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_InvalidScope_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "invalid",
+                ["jumpFrom"] = "7",
+                ["jumpTo"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_ValidTopologyScope_EmitsSingleJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "topology",
+                ["jumpFrom"] = "11",
+                ["jumpTo"] = "13"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
+        Assert.Equal(11, response.Emission.JumpEvents[0].From);
+        Assert.Equal(13, response.Emission.JumpEvents[0].To);
     }
 
     [Fact]
@@ -265,7 +348,7 @@ public class SchedulerDispatcherChainTests
     [Fact]
     public async Task SchedulerDispatcherChain_RouteMissing_PropagatesFallbackJumpEvent()
     {
-        // Broken refs must propagate through the full chain — no silent fallback.
+        // Route missing must propagate through the full chain as canonical fallback jump events.
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
         var scheduler = new RuntimeTimelineScheduler(NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
