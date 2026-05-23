@@ -78,12 +78,12 @@ Agent governance work usually consumes more context than one-shot code generatio
 | Route | Typical read-set | Estimated tokens (chars/4 to chars/3) |
 |---|---|---:|
 | Baseline worktype route | `AGENTS.md` + `rule.md` + `.agent/README.md` + selected prompt | ~1,130–1,550 |
-| audit | baseline + `prompt/audit.md` + `protocols/audit.md` (+ optional `ssot-map`) | ~1,500–1,950 (without `ssot-map`) / ~3,640–4,800 (with `ssot-map`) |
-| specific | baseline + `prompt/specific.md` + `protocols/specific.md` | ~1,440–1,900 |
-| implementation_change | baseline + implementation prompt/protocol + `ssot-map` + selected SSOT (+ triggered protocol) | ~3,940–5,230 before selected SSOT docs |
-| design_change | baseline + design prompt/protocol + governance SSOT + `ssot-change-impact` | ~2,370–3,150 before additional impacted SSOT docs |
-| existing_pr_update | baseline + existing-pr prompt + `completion-summary` (+ triggered protocol if needed) | ~2,340–3,080 |
-| todo_maintenance | baseline + todo prompt + `todo-carry-over` + `.agent/tasks/todo.md` | route-dependent (task backlog size dominates) |
+| audit | baseline + `protocols/audit.md` (+ optional `ssot-map`) | ~1,500–1,950 (without `ssot-map`) / ~3,640–4,800 (with `ssot-map`) |
+| specific | baseline + `protocols/specific.md` | ~1,440–1,900 |
+| implementation_change | baseline + implementation protocol + `ssot-map` + selected SSOT (+ triggered protocol) | ~3,940–5,230 before selected SSOT docs |
+| design_change | baseline + design protocol + governance SSOT + `ssot-change-impact` | ~2,370–3,150 before additional impacted SSOT docs |
+| existing_pr_update | baseline + `completion-summary` (+ triggered protocol if needed) | ~2,340–3,080 |
+| todo_maintenance | baseline + `todo-carry-over` + `.agent/tasks/todo.md` | route-dependent (task backlog size dominates) |
 
 Reference measured sizes used in the estimate (chars): `AGENTS.md` 1,345; `.agent/rules/rule.md` 1,122; `.agent/README.md` 1,329; prompts: ~736–966 each; `completion-summary.md` 4,083; `ssot-map.yaml` 8,558; `required-paths.yaml` 14,068.
 
