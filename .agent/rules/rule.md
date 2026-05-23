@@ -33,7 +33,7 @@ Work execution order follows `.agent/skills/agent-workflow.md`.
 - Do not bypass Workflow Order Invariant.
 - Do not treat structure check as a judgment substitute.
 - Do not push, PR update, TODO `[x]`, or completion summary before JUDGMENT and STRUCTURE_CHECK.
-- Do not use silent fallback. Broken refs are explicit errors.
+- Do not use silent fallback. Broken infrastructure references remain explicit errors; SSOT-defined runtime fallback events must stay explicit and observable.
 - Do not treat DTO, CRUD, layered MVC, or OperationVector as the architecture subject.
 - Do not hide runtime policy in magic numbers or private constants.
 - Do not read whole protocol/docs/skills/prompt/core bundles by default.
@@ -76,7 +76,7 @@ Open these files only when the trigger applies:
 
 - `.agent/rules/core/architecture-subject.md`
   - Trigger: architecture explanation, runtime ownership, DTO/entity boundary, DB topology, frontend projection, explicit-failure behavior.
-  - Index terms: Data-defined topology is the architecture subject; OperationVector is internal runtime representation; Broken refs are explicit errors.
+  - Index terms: Data-defined topology is the architecture subject; OperationVector is internal runtime representation; Broken refs are explicit errors for infrastructure boundaries, while SSOT-defined fallback events remain explicit and observable.
 - `.agent/rules/core/runtime-policy-magic-number.md`
   - Trigger: runtime behavior, scoring, threshold, routing, validation, persistence scope, emission, projection, registry policy, manifest policy, parameter defaults.
   - Index terms: Runtime Policy / Magic Number Rules; production fallback constants are prohibited.
@@ -108,6 +108,7 @@ Protocol agenda map (condition-triggered):
 4. policy-judgment: `.agent/protocols/policy-judgment.md`
 5. registry-topology-semantics: `.agent/protocols/registry-tensor-policy.md`
 6. reports-and-todo-surfaces: `.agent/protocols/reports-and-todos.md`
+7. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
 
 ## Protocol Trigger Map
 
@@ -131,6 +132,8 @@ Protocol body routing:
   - `.agent/protocols/policy-judgment.md`
 - Registry tensor / topology semantics changes:
   - `.agent/protocols/registry-tensor-policy.md`
+- SSOT change / docs/design contract change / external observable contract change:
+  - `.agent/protocols/ssot-change-impact.md`
 
 ## Small Protocol Direct-Read
 

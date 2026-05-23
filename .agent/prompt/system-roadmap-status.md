@@ -19,6 +19,8 @@ Use this router when any of the following applies:
 - `docs/design/runtime-orchestration-ssot.yaml`
 - `.agent/protocols/completion.md`
 - `.agent/protocols/reports-and-todos.md`
+- When SSOT contract text is changed, also apply `.agent/protocols/ssot-change-impact.md`.
+- Keep SSOT impact details in the protocol; do not duplicate procedure text in this router.
 
 ## Required Gates
 

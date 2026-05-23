@@ -276,3 +276,44 @@ protocols:
           - "GAP"
         read_when:
           - "drift/gap classification review"
+
+
+  - id: ssot-change-impact
+    file: .agent/protocols/ssot-change-impact.md
+    stage:
+      - READ_TARGET_SURFACES
+      - DEFINE_SCOPE
+      - VERIFY_SCENARIO_DIFF
+    sections:
+      - marker: "## Trigger"
+        grep_keys:
+          - "docs/design"
+          - "route"
+          - "response"
+          - "error"
+          - "emission"
+          - "projection"
+          - "jump"
+          - "persistence"
+          - "externally observable contracts"
+        read_when:
+          - "SSOT update trigger confirmation"
+      - marker: "## Required"
+        grep_keys:
+          - "reference surfaces"
+          - "stale expectations"
+          - "tests"
+          - ".agent/tests"
+          - "frontend contract tests"
+          - "prompt routers"
+          - "docs resume/index"
+          - ".agent/tasks/todo.md"
+        read_when:
+          - "SSOT impact check execution"
+      - marker: "## Prohibited"
+        grep_keys:
+          - "updating only SSOT body"
+          - "detailed per-SSOT specifications"
+          - "incident-specific"
+        read_when:
+          - "anti-bloat and stale-reference guard"
