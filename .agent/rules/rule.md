@@ -107,8 +107,11 @@ Protocol agenda map (condition-triggered):
 3. boundary-identity: `.agent/protocols/runtime-boundary-matrix.md`
 4. policy-judgment: `.agent/protocols/policy-judgment.md`
 5. registry-topology-semantics: `.agent/protocols/registry-tensor-policy.md`
-6. reports-and-todo-surfaces: `.agent/protocols/reports-and-todos.md`
-7. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
+6. todo-carry-over: `.agent/protocols/todo-carry-over.md`
+7. report-surfaces: `.agent/protocols/report-surfaces.md`
+8. completion-summary: `.agent/protocols/completion-summary.md`
+9. ssot-change-impact: `.agent/protocols/ssot-change-impact.md`
+
 
 ## Protocol Trigger Map
 
@@ -121,7 +124,7 @@ Protocol body routing:
 
 - Completion report / TODO `[x]` update / completion eligibility decision:
   - `.agent/protocols/completion.md`
-  - `.agent/protocols/reports-and-todos.md`
+  - `.agent/protocols/completion-summary.md`
 - Runtime claim / route / persistence / projection changes:
   - `.agent/protocols/scenario-contract.md` (Temporary Scenario Contract)
 - Endpoint / frontend API proxy / repository write / admin operation / persistence mutation / DB-backed registry operation:
@@ -146,7 +149,7 @@ When these are the triggered protocols, read them directly without opening index
 - `.agent/protocols/scenario-contract.md`
 
 When a task triggers one of these alongside a large protocol
-(completion.md, reports-and-todos.md, registry-tensor-policy.md),
+(completion.md, completion-summary.md, todo-carry-over.md, report-surfaces.md, registry-tensor-policy.md),
 open index.yaml once for the large protocol; small protocols are still direct-read.
 
 This exception applies only to named files above.
@@ -159,7 +162,7 @@ Recursive Verification Gate, Required Check Scope Declaration Gate, Failure Tria
 
 Details:
 - `.agent/protocols/completion.md`
-- `.agent/protocols/reports-and-todos.md`
+- `.agent/protocols/completion-summary.md`
 
 Skills are operation procedures and are not governance protocols. Read `.agent/skills/*.md` only when executing the corresponding task/check.
 

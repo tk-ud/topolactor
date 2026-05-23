@@ -240,4 +240,4 @@ mapping:
       - .agent/prompt/system-roadmap-status.md
     protocols:
       - .agent/protocols/completion.md
-      - .agent/protocols/reports-and-todos.md
+      - .agent/protocols/completion-summary.md

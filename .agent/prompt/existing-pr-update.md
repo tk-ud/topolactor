@@ -14,7 +14,7 @@ Open this router when the work updates an already-open remote PR (follow-up fixe
 
 - Work-type routing and sink selection: this router
 - Completion blocking judgment: `.agent/protocols/completion.md`
-- Completion summary body shape: `.agent/protocols/reports-and-todos.md`
+- Completion summary body shape: `.agent/protocols/completion-summary.md`
 
 ## Work-type route
 

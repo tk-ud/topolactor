@@ -15,7 +15,7 @@ Run this protocol only when any of the following is attempted:
 
 - writing completion summary / completion report
   - includes initial final summary and existing PR follow-up comment
-  - excludes initial PR body (follow thin PR body policy in `.agent/protocols/reports-and-todos.md`)
+  - excludes initial PR body (follow thin PR body policy in `.agent/protocols/completion-summary.md`)
 - completion eligibility decision
 - updating `.agent/tasks/todo.md` item to `[x]`
 
@@ -83,13 +83,16 @@ This protocol owns:
      2) required checks (or remote CI equivalent required success) are confirmed,
      3) target TODO/gap completion condition is semantically satisfied,
      4) no remaining concrete implementation/design/SSOT/test-authoring residue exists,
-     5) update is consistent with completion and reports-and-todos protocols.
+     5) update is consistent with completion, todo-carry-over, report-surfaces, and completion-summary protocols.
    - If any condition is unknown, disputed, or pending auditor judgment, defer canonical closure and emit Auditor TODO instead.
 8. Structure Verification
    - Run `bash .agent/tests/check-structure.sh` last.
    - Structure Check is the always-on required gate.
    - Structure verification is structural consistency check; it is not a semantic substitute.
-9. Push
+9. Terminal completion-output routing
+   - Execute completion output order: Structure Verification → todo-carry-over classification → report-surface routing (only when needed) → terminal completion summary emission.
+   - Terminal completion summary composition follows `.agent/protocols/completion-summary.md`.
+10. Push
    - Push only after all triggered gates pass and no blocking condition remains.
 
 
