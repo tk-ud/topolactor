@@ -242,23 +242,17 @@ public class RuntimeExecutor : IDispatchableRuntime
 
         if (string.Equals(scope, "hub", StringComparison.Ordinal))
         {
-            if (!TryReadRequiredInt(context, "pastHubAddress", out var pastAddress))
-                return null;
-            if (!TryReadRequiredInt(context, "currentHubAddress", out var currentAddress))
-                return null;
-            if (!TryReadRequiredInt(context, "plannedHubAddress", out var plannedAddress))
-                return null;
+            var pastAddress = TryReadInt(context, "pastHubAddress");
+            var currentAddress = TryReadInt(context, "currentHubAddress");
+            var plannedAddress = TryReadInt(context, "plannedHubAddress");
             return new RuntimeJumpEvent("hub", pastAddress, currentAddress, plannedAddress, "user_action");
         }
 
         if (string.Equals(scope, "topology", StringComparison.Ordinal))
         {
-            if (!TryReadRequiredInt(context, "pastTopologyAddress", out var pastAddress))
-                return null;
-            if (!TryReadRequiredInt(context, "currentTopologyAddress", out var currentAddress))
-                return null;
-            if (!TryReadRequiredInt(context, "plannedTopologyAddress", out var plannedAddress))
-                return null;
+            var pastAddress = TryReadInt(context, "pastTopologyAddress");
+            var currentAddress = TryReadInt(context, "currentTopologyAddress");
+            var plannedAddress = TryReadInt(context, "plannedTopologyAddress");
             return new RuntimeJumpEvent("topology", pastAddress, currentAddress, plannedAddress, "user_action");
         }
 
@@ -269,12 +263,5 @@ public class RuntimeExecutor : IDispatchableRuntime
     {
         if (context is null) return 0;
         return context.TryGetValue(key, out var raw) && int.TryParse(raw, out var parsed) ? parsed : 0;
-    }
-
-    private static bool TryReadRequiredInt(Dictionary<string, string>? context, string key, out int parsed)
-    {
-        parsed = 0;
-        if (context is null) return false;
-        return context.TryGetValue(key, out var raw) && int.TryParse(raw, out parsed);
     }
 }

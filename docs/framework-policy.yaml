@@ -199,8 +199,14 @@ framework_policy:
     route_missing_jump_event:
       behavior: runtime_jump_event_not_error
       user_fields:
-        - currentHubAddress
-        - currentTopologyAddress
+        hub:
+          - pastHubAddress
+          - currentHubAddress
+          - plannedHubAddress
+        topology:
+          - pastTopologyAddress
+          - currentTopologyAddress
+          - plannedTopologyAddress
       jump_fields:
         - scope
         - pastAddress

@@ -241,7 +241,7 @@ public class RuntimeExecutorTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_UserActionJumpContext_MissingJumpTo_DoesNotEmitJump()
+    public async Task ExecuteAsync_UserActionJumpContext_MissingPlannedHubAddress_EmitsJumpWithZeroPlannedAddress()
     {
         var executor = CreateExecutor();
         var request = new EndpointRequestDto(
@@ -257,11 +257,15 @@ public class RuntimeExecutorTests
         var response = await executor.ExecuteAsync(request);
 
         Assert.True(response.Success);
-        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("hub", response.Emission.JumpEvents[0].Scope);
+        Assert.Equal(7, response.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(8, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(0, response.Emission.JumpEvents[0].PlannedAddress);
     }
 
     [Fact]
-    public async Task ExecuteAsync_UserActionJumpContext_NonNumericJumpFrom_DoesNotEmitJump()
+    public async Task ExecuteAsync_UserActionJumpContext_NonNumericAddress_FallsBackToZeroAndEmitsJump()
     {
         var executor = CreateExecutor();
         var request = new EndpointRequestDto(
@@ -278,7 +282,11 @@ public class RuntimeExecutorTests
         var response = await executor.ExecuteAsync(request);
 
         Assert.True(response.Success);
-        Assert.True(response.Emission!.JumpEvents is null || response.Emission.JumpEvents.Count == 0);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("hub", response.Emission.JumpEvents[0].Scope);
+        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(8, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(9, response.Emission.JumpEvents[0].PlannedAddress);
     }
 
     [Fact]
@@ -326,6 +334,55 @@ public class RuntimeExecutorTests
         Assert.Equal(11, response.Emission.JumpEvents[0].PastAddress);
         Assert.Equal(12, response.Emission.JumpEvents[0].CurrentAddress);
         Assert.Equal(13, response.Emission.JumpEvents[0].PlannedAddress);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_MissingPastTopologyAddress_EmitsJumpWithZeroPastAddress()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "topology",
+                ["currentTopologyAddress"] = "12",
+                ["plannedTopologyAddress"] = "13"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("topology", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal("user_action", response.Emission.JumpEvents[0].Reason);
+        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(12, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(13, response.Emission.JumpEvents[0].PlannedAddress);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UserActionJumpContext_JumpFromJumpToOnly_DoesNotEmitJump()
+    {
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null,
+            new Dictionary<string, string>
+            {
+                ["jumpReason"] = "user_action",
+                ["jumpScope"] = "hub",
+                ["jumpFrom"] = "7",
+                ["jumpTo"] = "9"
+            });
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.Single(response.Emission!.JumpEvents!);
+        Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
+        Assert.Equal(0, response.Emission.JumpEvents[0].CurrentAddress);
+        Assert.Equal(0, response.Emission.JumpEvents[0].PlannedAddress);
     }
 
     [Fact]
