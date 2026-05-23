@@ -241,3 +241,31 @@ mapping:
     protocols:
       - .agent/protocols/completion.md
       - .agent/protocols/completion-summary.md
+
+  - work_type: governance_routing_ssot
+    change_surfaces:
+      - .agent/rules/rule.md
+      - .agent/README.md
+      - .agent/prompt/*
+      - .agent/protocols/index.yaml
+      - .agent/routes/worktype-required-protocols.yaml
+      - .agent/tests/check-worktype-routing.sh
+      - .agent/tests/check-completion-judgment.sh
+      - .agent/tests/check-structure.sh
+    required_docs:
+      - docs/governance/agent-governance-routing-ssot.md
+      - docs/governance/agent-governance-routing-ssot.yaml
+    supporting_docs:
+      - docs/agent-development-os.md
+    protocols:
+      - .agent/protocols/completion.md
+      - .agent/protocols/completion-summary.md
+
+worktypes:
+  ids:
+    - audit
+    - specific
+    - implementation_change
+    - design_change
+    - todo_maintenance
+    - existing_pr_update

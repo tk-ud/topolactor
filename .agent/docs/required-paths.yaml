@@ -82,6 +82,16 @@ required_files:
     - .agent/tests/check-frontend-types.sh
     - .agent/tests/check-default-entity-search.sh
     - .agent/tests/check-completion-judgment.sh
+    - docs/governance/agent-governance-routing-ssot.md
+    - docs/governance/agent-governance-routing-ssot.yaml
+    - .agent/prompt/audit.md
+    - .agent/prompt/specific.md
+    - .agent/prompt/todo-maintenance.md
+    - .agent/prompt/existing-pr-update.md
+    - .agent/protocols/audit.md
+    - .agent/protocols/specific.md
+    - .agent/protocols/implementation-change.md
+    - .agent/protocols/design-change.md
     - .agent/prompt/design-change.md
     - .agent/prompt/implementation-change.md
     - .agent/routes/worktype-required-protocols.yaml

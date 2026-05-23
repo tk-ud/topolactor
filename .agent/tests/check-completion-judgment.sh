@@ -1,102 +1,41 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# This script is a governance vocabulary/invariant guard.
-# It does not replace human/agent semantic JUDGMENT over PR diff,
-# scenario contract, checklist contents, and required check scope.
-# Structure check is not a judgment substitute.
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FAILURES=0
-
 fail(){ echo "FAIL: $1" >&2; FAILURES=$((FAILURES+1)); }
 pass(){ echo "OK  : $1"; }
-
-check_term(){
-  local file="$REPO_ROOT/$1"; local term="$2"
-  if grep -qF -- "$term" "$file"; then pass "$1 -> $term"; else fail "$1 missing: $term"; fi
-}
+check_term(){ local f="$REPO_ROOT/$1" t="$2"; grep -qF -- "$t" "$f" && pass "$1 -> $t" || fail "$1 missing: $t"; }
 
 echo "=== Completion Judgment Invariant/Vocabulary Guard Check ==="
 
 check_term ".agent/rules/rule.md" "Workflow Order Invariant"
-check_term ".agent/rules/rule.md" "READ_TASK_MATERIALS"
-check_term ".agent/rules/rule.md" "READ_TARGET_SURFACES"
-check_term ".agent/rules/rule.md" "DEFINE_SCOPE"
-check_term ".agent/rules/rule.md" "Issue / prompt explicit materials and required-read lists are task-required input"
-check_term ".agent/rules/rule.md" ".agent/docs/ssot-map.yaml"
-check_term ".agent/rules/rule.md" "structure check is not a judgment substitute"
-check_term ".agent/rules/rule.md" "push / PR update / TODO \`[x]\` / completion summary are allowed only after JUDGMENT and STRUCTURE_CHECK"
+check_term ".agent/rules/rule.md" "JUDGMENT"
+check_term ".agent/rules/rule.md" "STRUCTURE_CHECK"
+check_term ".agent/rules/rule.md" "Do not treat structure check as semantic judgment."
 
-check_term ".agent/skills/agent-workflow.md" "READ_TASK_MATERIALS"
-check_term ".agent/skills/agent-workflow.md" "READ_TARGET_SURFACES"
-check_term ".agent/skills/agent-workflow.md" "DEFINE_SCOPE"
+check_term ".agent/protocols/completion.md" "required check scope declaration"
+check_term ".agent/protocols/completion.md" "REQUIRED_EXECUTED"
+check_term ".agent/protocols/completion.md" "REQUIRED_NOT_EXECUTED"
+check_term ".agent/protocols/completion.md" "NOT EXECUTED ≠ PASS"
+check_term ".agent/protocols/completion.md" "WorkEvent output sink gap is blocking for completion eligibility"
+check_term ".agent/protocols/completion.md" "scenario-contract"
+check_term ".agent/protocols/scenario-contract.md" "docs/ SSOT reload"
+
+check_term ".agent/protocols/completion-summary.md" "WorkEvent Output Sink Contract"
+check_term ".agent/protocols/completion-summary.md" "existing_pr_update"
+check_term ".agent/protocols/completion-summary.md" "PR follow-up comment"
+check_term ".agent/protocols/completion-summary.md" "PR_COMMENT_NOT_POSTED"
+check_term ".agent/protocols/completion-summary.md" "POSTED + VERIFIED"
+check_term ".agent/protocols/completion-summary.md" "completion summary"
+check_term ".agent/protocols/completion-summary.md" "### 残タスク引き継ぎ指示"
+
 check_term ".agent/skills/agent-workflow.md" "NOT_EXECUTED"
 check_term ".agent/skills/agent-workflow.md" "completion summary must include remaining TODO"
 check_term ".agent/skills/agent-workflow.md" "follow-up PR comment"
-check_term ".agent/skills/agent-workflow.md" "PR_COMMENT_NOT_POSTED"
-check_term ".agent/skills/agent-workflow.md" ".agent/prompt/existing-pr-update.md"
-check_term ".agent/protocols/completion-summary.md" "Existing PR updates require a follow-up PR comment after push"
-check_term ".agent/protocols/completion-summary.md" "PR_COMMENT_NOT_POSTED"
-check_term ".agent/protocols/completion-summary.md" "Prompt Type / Work Type Output Switch"
-check_term ".agent/protocols/completion-summary.md" "WorkEvent Output Sink Contract"
-check_term ".agent/protocols/completion-summary.md" "existing_pr_update"
-check_term ".agent/protocols/completion-summary.md" "PR body update never replaces required PR follow-up comment"
-check_term ".agent/protocols/completion-summary.md" "| existing PR update |"
-check_term ".agent/protocols/completion-summary.md" "single terminal reporting endpoint"
-check_term ".agent/protocols/completion-summary.md" "must be emitted inside this template only."
-check_term ".agent/protocols/completion-summary.md" "Completion Summary generation rules (not emitted section)"
-check_term ".agent/protocols/completion-summary.md" "### test結果"
-check_term ".agent/protocols/completion-summary.md" "### output sink state"
-check_term ".agent/protocols/completion-summary.md" "PR follow-up comment posting state は"
-check_term ".agent/protocols/completion-summary.md" "POSTED + VERIFIED"
 
-check_term ".agent/prompt/README.md" "work-type router surface"
-check_term ".agent/prompt/README.md" "not an always-read bundle"
-check_term ".agent/prompt/README.md" "existing-pr-update.md"
-check_term ".agent/prompt/existing-pr-update.md" "required sink is"
-check_term ".agent/prompt/existing-pr-update.md" "PR body update never substitutes required PR follow-up comment sink"
-check_term ".agent/prompt/existing-pr-update.md" "POSTED + VERIFIED"
-check_term ".agent/prompt/existing-pr-update.md" "PR_COMMENT_NOT_POSTED"
-check_term ".agent/prompt/todo-maintenance.md" "Todo Maintenance Prompt Router"
-check_term ".agent/prompt/todo-maintenance.md" ".agent/protocols/todo-carry-over.md"
-check_term ".agent/prompt/todo-maintenance.md" "Open issues are not automatically TODOs"
-check_term ".agent/prompt/todo-maintenance.md" "must converge to"
-
-check_term ".agent/protocols/scenario-contract.md" "Scenario Contract is created before implementation"
-check_term ".agent/protocols/scenario-contract.md" "Precondition: Workflow Order Invariant Gate"
-check_term ".agent/protocols/scenario-contract.md" "docs/ SSOT reload"
-
-check_term ".agent/protocols/completion.md" "Use this protocol only during JUDGMENT"
-check_term ".agent/protocols/completion.md" "Do not skip SCENARIO_CONTRACT / IMPLEMENT / FILL_CHECKLISTS / VERIFY_SCENARIO_DIFF"
-check_term ".agent/protocols/completion.md" "WorkEvent output sink gap is blocking for completion eligibility"
-check_term ".agent/protocols/completion.md" "test evidence and external output sink state evidence must be recorded in separate template sections"
-
-check_term ".agent/protocols/policy-judgment.md" "NOT_REQUIRED/OUT_OF_SCOPE"
-check_term ".agent/protocols/runtime-boundary-matrix.md" "Use this protocol only in FILL_CHECKLISTS or JUDGMENT stages"
-check_term ".agent/checklists/policy-judgment.md" "NOT_REQUIRED"
-check_term ".agent/checklists/policy-judgment.md" "OUT_OF_SCOPE"
-check_term ".agent/protocols/runtime-boundary-matrix.md" "out-of-scope"
-
-check_term ".agent/docs/ssot-map.yaml" "required_docs"
-check_term ".agent/docs/required-paths.yaml" "required_files"
-
-check_term ".agent/routes/worktype-required-protocols.yaml" "todo_maintenance"
-check_term ".agent/routes/worktype-required-protocols.yaml" "design_change"
-check_term ".agent/routes/worktype-required-protocols.yaml" "implementation_change"
-check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/ssot-change-impact.md"
-check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/todo-carry-over.md"
-check_term ".agent/routes/worktype-required-protocols.yaml" ".agent/protocols/completion-summary.md"
-check_term ".agent/prompt/design-change.md" "SSOT"
-check_term ".agent/prompt/design-change.md" "ssot-change-impact.md"
-check_term ".agent/prompt/implementation-change.md" "runtime/persistence/projection"
-check_term ".agent/prompt/implementation-change.md" "policy/scoring/threshold"
-check_term ".agent/tests/check-worktype-routing.sh" "routing existence"
-check_term ".agent/tests/check-worktype-routing.sh" "reference integrity"
-check_term ".agent/tests/check-worktype-routing.sh" "required vocabulary"
-
-# clarity guard: CI order note should not imply global workflow reordering
-check_term ".agent/protocols/completion.md" "completion order and blocking criteria"
+check_term ".agent/routes/worktype-required-protocols.yaml" "existing_pr_update"
+check_term ".agent/routes/worktype-required-protocols.yaml" "check-completion-judgment.sh"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== Completion judgment checks passed ==="

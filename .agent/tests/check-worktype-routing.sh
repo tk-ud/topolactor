@@ -34,6 +34,9 @@ if [ -f "$ROUTE_FILE" ]; then
   check_term "$ROUTE_FILE" "todo_maintenance:"
   check_term "$ROUTE_FILE" "design_change:"
   check_term "$ROUTE_FILE" "implementation_change:"
+  check_term "$ROUTE_FILE" "audit:"
+  check_term "$ROUTE_FILE" "specific:"
+  check_term "$ROUTE_FILE" "existing_pr_update:"
 
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/todo-maintenance.md"
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/design-change.md"
@@ -41,14 +44,13 @@ if [ -f "$ROUTE_FILE" ]; then
 
   check_term "$ROUTE_FILE" ".agent/protocols/todo-carry-over.md"
   check_term "$ROUTE_FILE" ".agent/protocols/ssot-change-impact.md"
-  check_term "$ROUTE_FILE" ".agent/protocols/completion.md"
+  check_term "$ROUTE_FILE" ".agent/protocols/implementation-change.md"
   check_term "$ROUTE_FILE" ".agent/protocols/completion-summary.md"
   check_term "$ROUTE_FILE" "runtime_persistence_projection_changes:"
   check_term "$ROUTE_FILE" "policy_scoring_threshold_changes:"
   check_term "$ROUTE_FILE" ".agent/protocols/scenario-contract.md"
   check_term "$ROUTE_FILE" ".agent/protocols/policy-judgment.md"
 
-  check_term "$ROUTE_FILE" "Do not duplicate SSOT body into protocol."
 
   if grep -qiE 'full-read|read all protocols|always-read protocol bundle' "$ROUTE_FILE"; then
     fail "forbidden protocol bundle full-read vocabulary found in routing yaml"

@@ -1,42 +1,29 @@
 version: 1
-purpose: "Work-type required routing map for prompt/protocol/check yes-no guards."
-notes:
-  - "Prompt is a lightweight work-type router."
-  - "Protocol is a judgment gate."
-  - "Shell checks verify routing existence, reference integrity, and required vocabulary only."
-  - "Do not treat this map as semantic design-judgment authority."
+purpose: Worktype-to-prompt/protocol/check executable routing map
 
 worktypes:
-  todo_maintenance:
-    prompt: .agent/prompt/todo-maintenance.md
+  audit:
+    prompt: .agent/prompt/audit.md
     required_protocols:
-      - .agent/protocols/todo-carry-over.md
-    required_checks:
-      - .agent/tests/check-structure.sh
-    required:
-      - "Keep existing todo-carry-over routing stable."
-
-  design_change:
-    prompt: .agent/prompt/design-change.md
-    required_protocols:
-      - .agent/protocols/ssot-change-impact.md
-      - .agent/protocols/completion.md
-      - .agent/protocols/completion-summary.md
+      - .agent/protocols/audit.md
     required_checks:
       - .agent/tests/check-worktype-routing.sh
       - .agent/tests/check-completion-judgment.sh
       - .agent/tests/check-structure.sh
-    required:
-      - "Inspect SSOT dependency surfaces."
-      - "When docs/design contract changes, update shell-referenced yaml/route/check vocabulary as needed."
-      - "Do not duplicate SSOT body into protocol."
+
+  specific:
+    prompt: .agent/prompt/specific.md
+    required_protocols:
+      - .agent/protocols/specific.md
+    required_checks:
+      - .agent/tests/check-worktype-routing.sh
+      - .agent/tests/check-structure.sh
 
   implementation_change:
     prompt: .agent/prompt/implementation-change.md
     required_protocols:
-      - .agent/protocols/completion.md
-      - .agent/protocols/completion-summary.md
-    conditional_protocols:
+      - .agent/protocols/implementation-change.md
+    triggered_protocols:
       runtime_persistence_projection_changes:
         - .agent/protocols/scenario-contract.md
       policy_scoring_threshold_changes:
@@ -45,8 +32,30 @@ worktypes:
       - .agent/tests/check-worktype-routing.sh
       - .agent/tests/check-completion-judgment.sh
       - .agent/tests/check-structure.sh
-    required:
-      - "Read scope SSOT before implementation."
-      - "Implement in SSOT compliance."
-      - "If out-of-design correction is required, update SSOT."
-      - "When new vocabulary affects shell-referenced check/required yaml routing, update yaml/route/check vocabulary."
+
+  design_change:
+    prompt: .agent/prompt/design-change.md
+    required_protocols:
+      - .agent/protocols/design-change.md
+    triggered_protocols:
+      ssot_change:
+        - .agent/protocols/ssot-change-impact.md
+    required_checks:
+      - .agent/tests/check-worktype-routing.sh
+      - .agent/tests/check-completion-judgment.sh
+      - .agent/tests/check-structure.sh
+
+  todo_maintenance:
+    prompt: .agent/prompt/todo-maintenance.md
+    required_protocols:
+      - .agent/protocols/todo-carry-over.md
+    required_checks:
+      - .agent/tests/check-structure.sh
+
+  existing_pr_update:
+    prompt: .agent/prompt/existing-pr-update.md
+    required_protocols:
+      - .agent/protocols/completion-summary.md
+    required_checks:
+      - .agent/tests/check-completion-judgment.sh
+      - .agent/tests/check-structure.sh

@@ -6,27 +6,45 @@ FAILURES=0
 run_check() {
   local label="$1"
   local cmd="$2"
+  local required_mode="${3:-required}"
 
   echo ""
   echo "=== [LOCAL_CI] ${label} ==="
 
-  if bash -c "$cmd"; then
+  local out
+  set +e
+  out="$(bash -c "$cmd" 2>&1)"
+  code=$?
+  set -e
+  echo "$out"
+
+  if [ "$code" -eq 0 ]; then
     echo "RESULT [${label}] PASS"
-  else
-    local code=$?
-    if [ "$code" -eq 127 ]; then
-      echo "RESULT [${label}] NOT_EXECUTED (missing tool or command; exit=${code})" >&2
-    else
-      echo "RESULT [${label}] FAIL (exit=${code})" >&2
-    fi
-    FAILURES=$((FAILURES + 1))
+    return
   fi
+
+  if [ "$label" = "RUNTIME_ENVIRONMENT" ] && echo "$out" | grep -qE "docker.sock|docker API|daemon is running"; then
+    echo "RESULT [${label}] REQUIRED_NOT_EXECUTED (docker runtime unavailable; not PASS)" >&2
+    FAILURES=$((FAILURES + 1))
+    return
+  fi
+
+  if [ "$code" -eq 127 ]; then
+    if [ "$required_mode" = "required" ]; then
+      echo "RESULT [${label}] REQUIRED_NOT_EXECUTED (missing tool/command; not PASS)" >&2
+    else
+      echo "RESULT [${label}] NOT_EXECUTED (missing tool/command; not PASS)" >&2
+    fi
+  else
+    echo "RESULT [${label}] FAIL (exit=${code})" >&2
+  fi
+  FAILURES=$((FAILURES + 1))
 }
 
-run_check "UNIFIED_TEST_GATE" "bash .agent/tests/check-unified-test-gate.sh"
-run_check "RUNTIME_ENVIRONMENT" "bash .agent/tests/check-runtime-environment.sh"
+run_check "UNIFIED_TEST_GATE" "bash .agent/tests/check-unified-test-gate.sh" "required"
+run_check "RUNTIME_ENVIRONMENT" "bash .agent/tests/check-runtime-environment.sh" "required"
 # check-structure.sh must run last.
-run_check "STRUCTURE_CHECK_LAST" "bash .agent/tests/check-structure.sh"
+run_check "STRUCTURE_CHECK_LAST" "bash .agent/tests/check-structure.sh" "required"
 
 echo ""
 if [ "${FAILURES}" -eq 0 ]; then
