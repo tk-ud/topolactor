@@ -19,6 +19,13 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 ## judgment_scope
 Implementation meaning consistency against stated intent and roadmap/todo status.
 
+## approve_judgment_axis
+- Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
+- PR scope が partial 実装であっても、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていれば Approve 可能。
+- relevant SSOT completion_condition が未達のまま implemented / complete / closed を示す、または示唆する PR は Approve 禁止。
+- representative route、ACK-only intake、skeleton wiring、partial wiring は、SSOT completion_condition が許容しない限り implemented 根拠にしない。
+- Remote CI / tests passing は証拠の一部であり、単体では semantic completion 根拠にしない。
+
 ## required_output_contract
 - Diff reviewed: yes/no
 - Changed files
@@ -44,6 +51,8 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - ファイル存在だけで partial / implemented 判定しない
 - todo未実装scopeを見ずに roadmap status を判断しない
 - implementation_registry key 名だけで実装意味を判断しない
+- completion_condition 未達のまま implemented 判定しない
+- representative route / skeleton / ACK-only / partial wiring を implemented 根拠にしない
 
 
 ## todo_roadmap_finalization_gate
@@ -73,3 +82,5 @@ Implementation meaning consistency against stated intent and roadmap/todo status
   - remaining_todo
 - Required alignment surfaces explicitly cross-checked.
 - Semantic findings grounded in diff + implementation reality.
+- `implemented` 判定時、roadmap/TODO/SSOT completion_condition 充足を明示できる。
+- SSOT未達が残る場合、`known_gap_ref` と `remaining_todo` に未達条件が明示される。

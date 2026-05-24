@@ -2,6 +2,7 @@
 
 ## purpose
 PR/diff semantic audit and merge-readiness judgment with implementation-meaning alignment.
+Approve判断は「完全実装済みか」ではなく、PR scope の実装意味と SSOT状態分類（implemented/partial/remaining gaps）が整合しているかで行う。
 
 ## trigger_condition
 Worktype is `audit`, including any of:
@@ -29,6 +30,14 @@ Worktype is `audit`, including any of:
 ## protocol_triggers
 - always: .agent/protocols/audit.md
 - conditional: policy/scenario/runtime protocols only when touched
+
+## completion_judgment_axis
+- `implemented` 判定は roadmap/TODO/SSOT に定義された completion_condition を満たす場合のみ許可する。
+- representative route のみ成立、skeleton 実装、ACK-only、partial wiring は `implemented` 禁止で `partial` 判定に固定する。
+- Frontend Component Event Runtime などで queue/start/representative emit が存在しても、append-only DB境界未達や全surface配線未達が残る場合は `implemented` 禁止。
+- SSOT未達条件が1つでも残る場合、`known_gap_ref` と `remaining_todo` に未達項目を明示的に残す。
+- 実装意味が進んだ場合でも status 更新前に、TODO/roadmap 記載と実装実態を照合し、completion_condition 充足を再確認する。
+- summary-only / 動作確認-only / representative route-only を completion 根拠として扱わない。
 
 ## output_shape
 - Diff reviewed: yes/no
