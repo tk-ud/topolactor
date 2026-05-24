@@ -18,6 +18,7 @@ ci_contract_ssot:
     - CI_COMPLETION_CONDITION_ASSERTION
     - CI_GATE_MINIMAL_PRESENCE_CHECK
     - CI_DOTNET_LANE_TEST_PACKAGE
+    - CI_RUNTIME_ENVIRONMENT_LIVE_E2E
 
   ci_components:
     - id: ci.component.index
@@ -44,6 +45,9 @@ ci_contract_ssot:
       role: production path を汚さず repository / runtime 境界を spy / fixture 化する
     - id: ci.component.workflow_registration_guard
       role: 対象 lane test が CI workflow に登録されていることを確認する
+    - id: ci.component.runtime_environment_live_e2e
+      grep_marker: CI_RUNTIME_ENVIRONMENT_LIVE_E2E
+      role: docker compose / live DB / migration / auth-dispatch / AdminRuntime / pg_notify-to-SSE の実環境導線を検証する
     - id: ci.component.minimal_shell_gate
       grep_marker: CI_GATE_MINIMAL_PRESENCE_CHECK
       role: shell gate は存在確認・登録確認・SSOT参照確認だけを行う
