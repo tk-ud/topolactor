@@ -1,8 +1,8 @@
-# Work-Type Router: system-roadmap-status
+# Supplemental Router: system-roadmap-status
 
 ## Trigger
 
-Use this router when any of the following applies:
+Use this supplemental router when any of the following applies (with canonical worktype still selected via `.agent/routes/worktype-required-protocols.yaml`):
 
 - `docs/system-roadmap.yaml` is changed,
 - `implementation_registry` is changed,

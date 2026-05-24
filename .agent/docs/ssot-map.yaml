@@ -104,8 +104,10 @@ mapping:
       - current calculation basis
       - l2 norm trigger
       - norm level watch
-      - registry-neighbor exploration
-      - table registry vector search
+      - hub-attractor observation
+      - attractor tensor / hub_current observation boundary
+      - legacy key: registry-neighbor exploration (legacy / not target)
+      - legacy key: table registry vector search (legacy / not target)
       - physical table pressure
       - attention evidence
       - promotion candidates as candidate pressure
@@ -239,6 +241,8 @@ mapping:
       - docs/design/runtime-orchestration-ssot.yaml
     prompt:
       - .agent/prompt/system-roadmap-status.md
+    notes:
+      - system-roadmap-status is supplemental for roadmap-status checks in audit/design_change/todo_maintenance, not a canonical worktype.
     protocols:
       - .agent/protocols/completion.md
       - .agent/protocols/completion-summary.md

@@ -70,36 +70,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 対象責務: 追加済みpolicyの運用値確定・環境別適用面の確認・反映手順の整備。
       → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
-## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
-
-SSOT参照必読:
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `docs/framework-core.yaml`
-- `docs/framework-policy.yaml`
-
 ## Frontend Component Event Runtime (Issue #86 前提)
 
-- [ ] component 操作イベントを frontend runtime queue に逐次送信し、約10秒ごとにバックグラウンドでDB永続化APIへflushする
-      → 依存関係: UI primitive component DB registration の前提。component catalog がAPI直書き分岐を持たないための runtime boundary。
-      → 対象責務: component操作イベントの集約・順序保持・定期flush・明示失敗。
-      → 対象ファイル候補: `frontend/runtime/`, `frontend/components/`, `frontend/routes/api/`, backend event-log intake endpoint / repository / schema 関連。
-      → 設計方針:
-        - 各componentは操作イベントを frontend runtime へ逐次emitするだけにする。
-        - componentからDB保存APIを直接叩かない。
-        - frontend runtime が queue / scheduler を持ち、約10秒間隔で batch flush する。
-        - flush対象は componentId / packageId / layoutId / event_type / payload / actor_or_source / occurred_at / idempotency_key を含む component operation event log。
-        - click / change / select / toggle / expand / collapse / submit / focus / blur / drag / drop を正規化イベントとして扱う。
-        - debounce / throttle / batch_size / flush_interval_seconds / retry_policy / explicit error を runtime policy または parameter として外部化できるようにする。
-        - offline / API失敗時は silent drop せず、queue保持・明示エラー・retry境界を定義する。
-        - backend側は受け取ったevent batchをDBへappendし、後続の学習・推薦・監査で使える形にする。
-      → local cache fallback:
-        - 通常は in-memory queue を正規一次queueとして扱う。
-        - scheduler停止 / flush失敗 / offline / page lifecycle interruption 時は、未送信event batchを localStorage fallback cache に退避できるようにする。
-        - localStorage cache は送信成功ACKを受けた event から順に解放する。
-        - idempotency_key で重複送信をDB側/endpoint側で排除できる前提にする。
-        - localStorage fallback は永久保存ではなく、max_events / max_bytes / ttl / schema_version を持つ bounded cache として扱う。
-        - 機密値・巨大payload・秘密情報は localStorage に保存しない。event payload はcomponent操作ログに必要な最小情報へ制限する。
-      → 完了条件: component操作が frontend runtime queue に集約され、直接API分岐なしで定期batch永続化できる設計・実装・テストが揃うこと。
+- [ ] Frontend Component Event Runtime の残scopeを完了する（Issue #86 前提）
+      → 実装済み面: frontend queue/flush/localStorage fallback、`/api/component-events/append` route、backend append endpoint、idempotency境界、frontend/backend tests は存在する。
+      → 残作業: OperationPanel 以外を含む全component emit配線、component registration 依存の接続、実DB/live verification、運用hardening（retry/監視/失敗運用）を完了境界まで詰める。
+      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`, `backend/endpoint/ComponentEventAppendEndpoint.cs`, `frontend/tests/frontendComponentEventRuntime.test.ts`, `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`, `frontend/components/`。
+      → SSOT参照: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml`。
 
 ## Frontend UI Primitive Catalog Bucket/Promote (Issue #86)
 

@@ -20,6 +20,9 @@ ci_contract_ssot:
     - CI_DOTNET_LANE_TEST_PACKAGE
 
   ci_components:
+    - id: ci.component.index
+      grep_marker: CI_COMPONENT_INDEX
+      role: ci_components セクションの index marker（component項目一覧の整合ガード）
     - id: ci.component.orchestration_vocabulary_audit
       grep_marker: CI_ORCHESTRATION_VOCABULARY_AUDIT
       role: runtime-orchestration の flow / boundary / ownership 語彙と pipeline lane 語彙の整合を確認する

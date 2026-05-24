@@ -113,6 +113,19 @@ check_no_in_progress_todos() {
   fi
 }
 
+check_no_annotated_pseudo_paths_in_ssot_map() {
+  local ssot_map="$REPO_ROOT/.agent/docs/ssot-map.yaml"
+  if [ ! -f "$ssot_map" ]; then
+    fail "ssot-map path annotation check skipped (file missing): .agent/docs/ssot-map.yaml"
+    return
+  fi
+  if rg -n '^[[:space:]]*-[[:space:]]+[^#]*\.(md|yaml|sh)[[:space:]]{2,}[^#]+' "$ssot_map" >/dev/null; then
+    fail ".agent/docs/ssot-map.yaml contains inline-annotated pseudo-path entries (.md/.yaml/.sh path + trailing description)"
+  else
+    echo "OK  [ssot-map] no inline-annotated pseudo-path entries (.md/.yaml/.sh)"
+  fi
+}
+
 # ─── Required directories ────────────────────────────────────────────────────
 
 echo ""
@@ -583,6 +596,7 @@ fi
 check_tmp_runtime_artifacts
 check_tmp_tracked_files
 check_no_in_progress_todos
+check_no_annotated_pseudo_paths_in_ssot_map
 
 # Protocol split guard
 if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then
@@ -642,7 +656,13 @@ if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attentio
 else
   echo "OK  [ssot] Initial registry_kind candidates removed"
 fi
-if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+if awk '
+  BEGIN { in_dep=0; found=0 }
+  /^deprecated_or_rejected:/ { in_dep=1; next }
+  in_dep && /^[^[:space:]]/ { in_dep=0 }
+  in_dep && /logs\.hub_current/ { found=1 }
+  END { exit found ? 0 : 1 }
+' "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml"; then
   fail "logs.hub_current must not be in deprecated_or_rejected"
 else
   echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"
