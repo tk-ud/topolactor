@@ -706,7 +706,8 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. SSE dispatcher wiring and full projection runtime completion remain pending.
+      public_summary: >-
+        projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. SSE dispatcher wiring and full projection runtime completion remain pending.
       files:
         - frontend/runtime/projectionConstructor.ts
       completion_condition:
