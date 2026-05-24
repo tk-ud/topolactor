@@ -29,6 +29,7 @@ Worktype is `audit`, including any of:
 
 ## protocol_triggers
 - always: .agent/protocols/audit.md
+- conditional: .agent/protocols/todo-carry-over.md when TODO/Roadmap Finalization Judgment updates, closes, reclassifies, or carries over canonical TODO/roadmap state
 - conditional: policy/scenario/runtime protocols only when touched
 
 ## completion_judgment_axis

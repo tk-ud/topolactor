@@ -57,11 +57,13 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 
 ## todo_roadmap_finalization_gate
 - PR Approve requires TODO/Roadmap Finalization Judgment.
+- When TODO/Roadmap Finalization Judgment is executed, auditor must read `.agent/protocols/todo-carry-over.md` and apply its carry-over/closure gate before approval judgment.
 - If implementation meaning satisfies or changes any TODO / roadmap `implementation_registry` entry, auditor must either:
   1. update canonical TODO/roadmap in the same audit/follow-up maintenance task, or
   2. if canonical TODO/roadmap cannot be updated in the same task, emit a single explicit follow-up prompt for `todo_maintenance` as a blocked-state output obligation (not as an approval-unblock condition).
 - Approve is blocked when roadmap/TODO status remains materially stale.
 - When same-task canonical update is not possible, auditor must hold approval until stale status is resolved or explicitly reclassified as out-of-scope, after emitting the required follow-up prompt.
+- Audit is semantic consistency judgment for implementation meaning and canonical progress state; it is not self-approval for implementation completion.
 - Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
 
 
