@@ -23,22 +23,23 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## TODO dependency map（execution order）
 
-1. Runtime recommendation EMA/statistics integration（独立）
-2. Frontend component event runtime（Issue #86 前提）
-3. UI primitive component DB registration（Issue #86）
-4. Visual layout builder（Issue #89, depends on #86）
+1. Frontend Component Event Runtime（Issue #86 前提）
+2. UI primitive component DB registration（Issue #86）
+3. Visual layout builder（Issue #89, depends on #86）
+4. Runtime Recommendation operation blend 判断
+5. seed済み recommendation_blend の本番運用値確定 / seed以外の反映面確認
 
 ---
 
 ## Runtime Recommendation Pipeline
 
-- [x] statistics / EMA integration for topology projection recommendation を実装する
-      → 依存関係: なし（単独着手可）。
-      → 対象責務: recommendation candidate 並び替え・投影生成（runtime path）。
-      → 対象ファイル: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRouteRecommendationResolverTests.cs`, `backend/tests/Topolactor.Runtime.Tests/ContextRoutePolicyTestFixtures.cs`。
-      → 実装結果: operation候補は neighbor/baseline のみを維持。token候補のみ recommendation_blend 対象として、EMA/trend/statistics の重み・scope_limit を policy (`function_parameters`) へ外部化。EMA persistence は `context_hub_recommendation_current` を継続利用。
-      → 監査役TODO: operation候補へ blend 適用が必要な場合は、`candidate_kind="operation"` の current row 設計（key/ID整合・生成/読取導線分離）を別TODOとして起票する。
-      → 監査役TODO: 本番 policy row に `topology_vector_runtime.recommendation_blend` を追加し、運用重みを確定。
+- [ ] recommendation_blend を operation 候補にも適用するか判断し、必要なら `candidate_kind="operation"` current row 設計を起票/実装する
+      → 対象責務: operation候補に対する blend 適用要否の判断と、必要時の key/ID整合・生成/読取導線分離。
+      → 対象ファイル候補: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, recommendation current row 設計資料。
+
+- [ ] seed/demo seed に追加済みの `topology_vector_runtime.recommendation_blend` について、本番運用値を確定し seed以外の反映面（manifest/policy row）を確認する
+      → 対象責務: 追加済みpolicyの運用値確定・環境別適用面の確認・反映手順の整備。
+      → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 

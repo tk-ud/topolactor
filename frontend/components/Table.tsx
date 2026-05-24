@@ -15,7 +15,7 @@ export type TableProps<T> = {
 
 /**
  * Primitive Table component.
- * DB-registered primitive — not code-only. See db/ui_topology_tables.sql ui_component_registry.
+ * Code-only primitive (drift). DB registration pending via ui_component_bucket → package generator flow.
  * component_key: "table.primitive"
  */
 export function Table<T extends Record<string, unknown>>({

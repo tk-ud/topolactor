@@ -16,7 +16,7 @@ const variantStyles: Record<string, string> = {
 
 /**
  * Primitive Button component.
- * DB-registered primitive — not code-only. See db/ui_topology_tables.sql ui_component_registry.
+ * Code-only primitive (drift). DB registration pending via ui_component_bucket → package generator flow.
  * component_key: "button.primitive"
  */
 export function Button({

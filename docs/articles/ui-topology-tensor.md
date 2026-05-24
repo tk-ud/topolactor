@@ -22,9 +22,9 @@ Frontend adapters are stable projection surfaces. New specifications should prim
 
 ## Status
 
-- **Implemented now:** UI topology persistence tables and admin boundary specifications.
-- **Design-guarded:** tensor projection interpretation and package/persistence semantics.
-- **Future:** additional admin flows where explicitly documented as planned.
+- **Implemented now (partial scope):** UI topology persistence tables and admin boundary specifications are present, and package generation can issue componentId/packageId/layoutId/wiringId.
+- **Not completed yet:** primitive catalog still includes code-only drift entries and visual layout builder remains partial (mouse-driven editing and style/responsive rule authoring pending).
+- **Design-guarded:** tensor projection interpretation and package/persistence semantics remain governed by SSOT docs.
 
 
 ## Relation-first interpretation
