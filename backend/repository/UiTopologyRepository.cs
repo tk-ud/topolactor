@@ -36,7 +36,7 @@ public class UiTopologyRepository
             "UiTopologyRepository.ListBucketItemsAsync must be overridden by a production implementation.");
     }
 
-    public virtual Task<UiComponentBucketRecord> CreateBucketItemAsync(
+    public virtual Task<UiComponentBucketCreateResult> CreateBucketItemAsync(
         string componentKey,
         string sourcePath,
         string componentKind,

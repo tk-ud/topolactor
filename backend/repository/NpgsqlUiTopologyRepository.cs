@@ -55,34 +55,65 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return records;
     }
 
-    public override async Task<UiComponentBucketRecord> CreateBucketItemAsync(
+    public override async Task<UiComponentBucketCreateResult> CreateBucketItemAsync(
         string componentKey,
         string sourcePath,
         string componentKind,
         string? metadataJson = null,
         CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO ui_component_bucket (component_key, source_path, component_kind, metadata_json) " +
-            "VALUES (@key, @path, @kind, @metadata::jsonb) " +
-            "RETURNING bucket_item_id, component_key, source_path, component_kind, status";
-        cmd.Parameters.AddWithValue("key", componentKey);
-        cmd.Parameters.AddWithValue("path", sourcePath);
-        cmd.Parameters.AddWithValue("kind", componentKind);
-        cmd.Parameters.AddWithValue("metadata", metadataJson ?? "{}");
+        try
+        {
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText =
+                "INSERT INTO ui_component_bucket (component_key, source_path, component_kind, metadata_json) " +
+                "VALUES (@key, @path, @kind, @metadata::jsonb) " +
+                "RETURNING bucket_item_id, component_key, source_path, component_kind, status";
+            cmd.Parameters.AddWithValue("key", componentKey);
+            cmd.Parameters.AddWithValue("path", sourcePath);
+            cmd.Parameters.AddWithValue("kind", componentKind);
+            cmd.Parameters.AddWithValue("metadata", metadataJson ?? "{}");
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        await reader.ReadAsync(ct);
-        return new UiComponentBucketRecord(
-            BucketItemId: reader.GetGuid(0),
-            ComponentKey: reader.GetString(1),
-            SourcePath: reader.GetString(2),
-            ComponentKind: reader.GetString(3),
-            Status: reader.GetString(4)
-        );
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            var record = new UiComponentBucketRecord(
+                BucketItemId: reader.GetGuid(0),
+                ComponentKey: reader.GetString(1),
+                SourcePath: reader.GetString(2),
+                ComponentKind: reader.GetString(3),
+                Status: reader.GetString(4)
+            );
+            return new UiComponentBucketCreateResult(UiComponentBucketCreateCode.Success, record);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            return new UiComponentBucketCreateResult(
+                UiComponentBucketCreateCode.ConstraintViolation,
+                null,
+                "BUCKET_ALREADY_EXISTS",
+                "A bucket item with the same componentKey and sourcePath already exists.");
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.InvalidTextRepresentation
+            || ex.SqlState == PostgresErrorCodes.InvalidParameterValue
+            || ex.MessageText.Contains("json", StringComparison.OrdinalIgnoreCase))
+        {
+            return new UiComponentBucketCreateResult(
+                UiComponentBucketCreateCode.MalformedMetadataJson,
+                null,
+                "MALFORMED_METADATA_JSON",
+                "metadataJson must be valid JSON.");
+        }
+        catch (Exception ex)
+        {
+            _npgsqlLogger.LogError(ex, "CreateBucketItemAsync failed.");
+            return new UiComponentBucketCreateResult(
+                UiComponentBucketCreateCode.DbUnavailable,
+                null,
+                "DB_UNAVAILABLE",
+                ex.Message);
+        }
     }
 
     /// <summary>

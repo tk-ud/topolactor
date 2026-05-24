@@ -20,6 +20,21 @@ public record UiComponentBucketCreateRequestDto(
     [property: JsonPropertyName("metadataJson")]   string? MetadataJson = null
 );
 
+public enum UiComponentBucketCreateCode
+{
+    Success,
+    ConstraintViolation,
+    MalformedMetadataJson,
+    DbUnavailable,
+}
+
+public record UiComponentBucketCreateResult(
+    UiComponentBucketCreateCode Code,
+    UiComponentBucketRecord? Record,
+    string? ErrorCode = null,
+    string? Message = null
+);
+
 /// <summary>
 /// Request to promote a single bucket item through the package generator pipeline.
 /// bucketItemId must be the UUID primary key of a 'bucketed' row in ui_component_bucket.

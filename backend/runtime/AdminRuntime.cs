@@ -336,19 +336,23 @@ public class AdminRuntime
         if (string.IsNullOrWhiteSpace(request.ComponentKind))
             return (null, new ValidationError("COMPONENT_KIND_REQUIRED", "componentKind is required"));
 
-        try
+        var result = await _uiTopologyRepository.CreateBucketItemAsync(
+            request.ComponentKey, request.SourcePath, request.ComponentKind, request.MetadataJson, ct);
+        if (result.Code != UiComponentBucketCreateCode.Success || result.Record is null)
         {
-            var row = await _uiTopologyRepository.CreateBucketItemAsync(
-                request.ComponentKey, request.SourcePath, request.ComponentKind, request.MetadataJson, ct);
-            return (JsonSerializer.SerializeToElement(new UiComponentBucketItemDto(
-                row.BucketItemId.ToString(), row.ComponentKey, row.SourcePath, row.ComponentKind, row.Status
-            )), null);
+            var code = result.Code switch
+            {
+                UiComponentBucketCreateCode.ConstraintViolation => "CONSTRAINT_VIOLATION",
+                UiComponentBucketCreateCode.MalformedMetadataJson => "MALFORMED_METADATA_JSON",
+                UiComponentBucketCreateCode.DbUnavailable => "REPOSITORY_UNAVAILABLE",
+                _ => "BUCKET_CREATE_FAILED",
+            };
+            return (null, new ValidationError(code, result.Message ?? "Bucket create failed."));
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "AdminRuntime.DataCreateBucketItemAsync: failed to create bucket item.");
-            return (null, new ValidationError("REPOSITORY_UNAVAILABLE", ex.Message));
-        }
+        var row = result.Record;
+        return (JsonSerializer.SerializeToElement(new UiComponentBucketItemDto(
+            row.BucketItemId.ToString(), row.ComponentKey, row.SourcePath, row.ComponentKind, row.Status
+        )), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataGenerateAsync(
