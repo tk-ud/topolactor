@@ -710,13 +710,20 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >-
-        projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. SSE dispatcher wiring and full projection runtime completion remain pending.
+        projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. runtimeComponentAdapter + runtimePrimitiveRenderer are now connected as a projection runtime lane for Button/Input/Card/Table with explicit eventBinding validation and emit boundaries. SSE dispatcher wiring and full projection runtime completion remain pending.
       files:
         - frontend/runtime/projectionConstructor.ts
+        - frontend/runtime/renderEmission.ts
+        - frontend/runtime/runtimeComponentAdapter.ts
+        - frontend/runtime/runtimePrimitiveRenderer.ts
         - frontend/tests/projectionConstructor.test.ts
+        - frontend/tests/runtimeComponentAdapter.test.ts
+        - frontend/tests/runtimePrimitiveRenderer.test.ts
       evidence:
         tests:
           - projectionConstructor.test.ts
+          - runtimeComponentAdapter.test.ts
+          - runtimePrimitiveRenderer.test.ts
         ci:
           - check-pipeline-continuity.sh
       completion_condition:
