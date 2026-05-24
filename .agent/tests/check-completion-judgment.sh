@@ -37,6 +37,17 @@ check_term ".agent/skills/agent-workflow.md" "follow-up PR comment"
 check_term ".agent/routes/worktype-required-protocols.yaml" "existing_pr_update"
 check_term ".agent/routes/worktype-required-protocols.yaml" "check-completion-judgment.sh"
 
+check_term ".agent/protocols/audit.md" "partial Approve は、PR purpose / Issue目的 / user依頼が明示的に partial / scoped progress / non-closing progress の場合に限定して許可する。"
+check_term ".agent/protocols/audit.md" "implemented / close / completion / TODO"
+check_term ".agent/protocols/audit.md" "Request Changes とする。"
+check_term ".agent/protocols/audit.md" "implemented-target PR の Approve 根拠にはならない。"
+check_term ".agent/protocols/audit.md" "audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、implemented 未達のまま無条件 Approve は禁止する。"
+check_term ".agent/protocols/audit.md" "implemented 未達時は、implemented 到達可能な TODO 単位への細分化、または canonical TODO への carry-over 指示（remaining scope / next TODO）を Approve 前に必須とする。"
+check_term ".agent/protocols/audit.md" "implemented 未達 + TODO細分化なし + carry-over 指示なし + Approve は禁止（Request Changes）。"
+check_term ".agent/protocols/audit.md" "細分化TODO単位 completion_condition 充足に限定する。"
+check_term ".agent/prompt/audit.md" ".agent/protocols/audit.md の approve_judgment_axis に従う。"
+check_term ".agent/prompt/audit.md" "prompt 側では completion 判定本文を重複定義しない。"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== Completion judgment checks passed ==="
   exit 0
@@ -44,3 +55,4 @@ else
   echo "=== $FAILURES completion judgment check(s) failed ===" >&2
   exit 1
 fi
+

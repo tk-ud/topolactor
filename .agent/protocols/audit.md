@@ -21,7 +21,16 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 
 ## approve_judgment_axis
 - Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
-- PR scope が partial 実装であっても、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていれば Approve 可能。
+- audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、implemented 未達のまま無条件 Approve は禁止する。
+- implemented 未達時は、implemented 到達可能な TODO 単位への細分化、または canonical TODO への carry-over 指示（remaining scope / next TODO）を Approve 前に必須とする。
+- implemented 未達 + TODO細分化なし + carry-over 指示なし + Approve は禁止（Request Changes）。
+- 親 Issue / TODO が大きすぎる場合、対象を implemented 到達可能な小TODOへ分割し、Approve 根拠は今回PR対象の細分化TODO単位 completion_condition 充足に限定する。
+- 「未達が残っているが partial として整合」は Approve 理由にしない。
+- 「未達が残っているが、残TODOが canonical に明示細分化されている」場合のみ carry-over 整合として扱う。
+- partial Approve は、PR purpose / Issue目的 / user依頼が明示的に partial / scoped progress / non-closing progress の場合に限定して許可する。
+- 上記 partial purpose に該当する場合のみ、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていることを Approve 条件として扱える。
+- PR本文・Issue目的・user依頼・TODO項目のいずれかが implemented / close / completion / TODO `[x]` を目指す場合、`completion_condition` 未達、remaining `known_gap_ref`、concrete `remaining_todo` が1つでもあれば Request Changes とする。
+- TODO/roadmap に未達が明示されている事実は partial 分類の正しさの証拠であり、implemented-target PR の Approve 根拠にはならない。
 - relevant SSOT completion_condition が未達のまま implemented / complete / closed を示す、または示唆する PR は Approve 禁止。
 - representative route、ACK-only intake、skeleton wiring、partial wiring は、SSOT completion_condition が許容しない限り implemented 根拠にしない。
 - Remote CI / tests passing は証拠の一部であり、単体では semantic completion 根拠にしない。

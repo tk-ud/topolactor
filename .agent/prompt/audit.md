@@ -33,13 +33,9 @@ Worktype is `audit`, including any of:
 - conditional: policy/scenario/runtime protocols only when touched
 
 ## completion_judgment_axis
-- `implemented` 判定は roadmap/TODO/SSOT に定義された completion_condition を満たす場合のみ許可する。
-- representative route のみ成立、skeleton 実装、ACK-only、partial wiring は `implemented` 禁止で `partial` 判定に固定する。
-- Frontend Component Event Runtime などで queue/start/representative emit が存在しても、append-only DB境界未達や全surface配線未達が残る場合は `implemented` 禁止。
-- SSOT未達条件が1つでも残る場合、`known_gap_ref` と `remaining_todo` に未達項目を明示的に残す。
-- 実装意味が進んだ場合でも status 更新前に、TODO/roadmap 記載と実装実態を照合し、completion_condition 充足を再確認する。
-- summary-only / 動作確認-only / representative route-only を completion 根拠として扱わない。
-- Approve可能な non-blocker findings は PR本文だけで閉じず、`.agent/tasks/todo.md` の `Non-blocking cleanup / hardening carry-over` へ必ず carry-over する。
+- audit の implemented / partial / carry-over / Request Changes の詳細判定は .agent/protocols/audit.md の approve_judgment_axis に従う。
+- prompt 側では completion 判定本文を重複定義しない。
+- `implemented` 判定可否、partial Approve 条件、implemented 未達時の TODO細分化 / carry-over 必須条件は protocol 側を正本とする。
 
 ## output_shape
 - Diff reviewed: yes/no
