@@ -11,6 +11,19 @@ runtime_orchestration_ssot:
     - frontend_api_trigger_and_sse_projection
     - backend_topology_transform_and_attractor
 
+  verification_reference:
+    scope_statement: This SSOT defines runtime flow, ownership, and boundary invariants.
+    pipeline_continuity_reference:
+      source: docs/design/pipeline-continuity-ssot.yaml
+      owns:
+        - pipeline_and_lane_verification
+        - required_identity_contracts
+        - completion_condition_contracts
+        - pipeline_body_test_contracts
+        - csharp_dotnet_application_side_ci
+    orchestration_change_rule: Runtime orchestration changes that affect a lane must update or validate the corresponding pipeline-continuity lane contract.
+    non_duplication_rule: Do not duplicate detailed lane test conditions in this SSOT; keep fine-grained verification in pipeline-continuity SSOT.
+
   naming:
     system: runtime_orchestration_os
     scheduler: runtime_timeline_scheduler
