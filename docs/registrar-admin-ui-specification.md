@@ -85,7 +85,7 @@ For `/admin/ui-builder`, catalog entries are classified into exactly one state:
 - **code-only drift component**: component exists in code but has no promoted UI topology registration yet.
 - **alias-maintained component**: component kind is intentionally mapped to an existing primitive runtime renderer lane and is not treated as a dedicated primitive until explicitly promoted by SSOT/design decision.
 
-Alias-maintained kinds currently include `form_input/textarea`, `form_input/search_input`, `disclosure_structure/panel`, `disclosure_structure/section`, `data_display/data_grid`, `data_display/list`.
+Alias-maintained kinds include `form_input/textarea`, `form_input/search_input`, `disclosure_structure/panel`, `disclosure_structure/section`, `data_display/data_grid`, `data_display/list`.
 
 Boundary invariant: frontend catalog is projection only; topology authority remains DB registry + backend runtime.
 

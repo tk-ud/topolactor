@@ -5,8 +5,9 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
-/// Package Generator Runtime: validates the promotion request and delegates
-/// the entire atomic promotion to UiTopologyRepository.PromoteBucketItemAsync.
+/// Package Generator Runtime:
+/// - GenerateFromBucketAsync stages bucketed -> packaging (no ID issuance)
+/// - PromoteBucketItemAsync performs packaging -> promoted + ID issuance/registration
 ///
 /// The repository is the single persistence boundary — it owns the transaction
 /// and ensures no partial state can remain on failure.
@@ -32,9 +33,8 @@ public class PackageGeneratorRuntime
     }
 
     /// <summary>
-    /// Validates the request and delegates promotion to the repository.
-    /// Returns a PackageGenerateResult with all issued IDs on success,
-    /// or an explicit error code on any failure.
+    /// Validates the request and delegates staging transition (bucketed -> packaging)
+    /// to the repository. No topology IDs are issued in this stage.
     /// </summary>
     public async Task<PackageGenerateResult> GenerateFromBucketAsync(
         Guid bucketItemId,
@@ -64,8 +64,8 @@ public class PackageGeneratorRuntime
         if (result.Code == PackageGenerateCode.Success)
         {
             _logger.LogInformation(
-                "PackageGeneratorRuntime.GenerateFromBucketAsync: success tensorId={TensorId}, bucketItemId={Id}.",
-                result.TensorId, bucketItemId);
+                "PackageGeneratorRuntime.GenerateFromBucketAsync: staged bucket item {Id} to packaging.",
+                bucketItemId);
         }
 
         return result;

@@ -40,13 +40,25 @@ public class UiTopologyRegistrationContinuityIntegrationTests
         Assert.NotNull(create.Record);
 
         var runtime = CreateAdminRuntimeForIntegration(repo, connectionString);
-        var vector = new OperationVector("admin", "package_generator", "promote", null, "admin", JsonSerializer.SerializeToElement(new
+        var generateVector = new OperationVector("admin", "package_generator", "generate", null, "admin", JsonSerializer.SerializeToElement(new
         {
             bucketItemId = create.Record!.BucketItemId.ToString(),
             routeKey,
         }), null);
 
-        var (data, error) = await runtime.ExecuteDataAsync(vector, CancellationToken.None);
+        var (generateData, generateError) = await runtime.ExecuteDataAsync(generateVector, CancellationToken.None);
+        Assert.Null(generateError);
+        Assert.NotNull(generateData);
+        Assert.True(generateData!.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("packaging", generateData.Value.GetProperty("status").GetString());
+
+        var promoteVector = new OperationVector("admin", "package_generator", "promote", null, "admin", JsonSerializer.SerializeToElement(new
+        {
+            bucketItemId = create.Record!.BucketItemId.ToString(),
+            routeKey,
+        }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(promoteVector, CancellationToken.None);
         Assert.Null(error);
         Assert.NotNull(data);
         Assert.True(data!.Value.GetProperty("ok").GetBoolean());

@@ -148,7 +148,7 @@ function BucketSection(): JSX.Element {
       if (body?.success || body?.emission?.data?.ok) {
         const data = body?.emission?.data;
         setStatus(
-          `Package generated: tensorId=${data?.tensorId}, componentId=${data?.componentId}, packageId=${data?.packageId}`
+          `Generated/staged: bucketItemId=${data?.bucketItemId}, routeKey=${data?.routeKey}, status=${data?.status}`
         );
         await loadBucket();
       } else {
