@@ -276,7 +276,7 @@ public class SystemOperationCiRuntime
     ///   Gap: evidence is absent (HasEvidence=false) — no transition key evidence for this record.
     ///
     /// Returns a diagnostic result for the hub_attention_continuity target.
-    /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
+    /// Cron trigger wiring: implemented via SystemOperationCiScheduler (runtime diagnostic scheduler).
     /// </summary>
     public virtual async Task<SystemCiDiagnosticResult> InspectHubAttentionContinuityAsync(
         CancellationToken ct = default)
@@ -360,7 +360,7 @@ public class SystemOperationCiRuntime
     ///   violating the rebuildability invariant.
     ///
     /// Pass: either no hub attention records exist, or events are present.
-    /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
+    /// Cron trigger wiring: implemented via SystemOperationCiScheduler (runtime diagnostic scheduler).
     /// </summary>
     public virtual async Task<SystemCiDiagnosticResult> InspectCurrentRebuildabilityAsync(
         CancellationToken ct = default)
@@ -403,7 +403,7 @@ public class SystemOperationCiRuntime
     ///
     /// Gap: UnreferencedTokenCount > 0 — orphaned active tokens found.
     /// Pass: all active tokens are referenced, or no active tokens exist.
-    /// Cron trigger wiring: TODO — background worker / scheduled job integration pending.
+    /// Cron trigger wiring: implemented via SystemOperationCiScheduler (runtime diagnostic scheduler).
     /// </summary>
     public virtual async Task<SystemCiDiagnosticResult> InspectRegistryContinuityAsync(
         CancellationToken ct = default)

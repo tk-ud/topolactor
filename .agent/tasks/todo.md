@@ -41,7 +41,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime（Issue #86 前提）
-2. UI primitive component DB registration（Issue #86）
+2. UI primitive catalog bucket投入/promote（Issue #86）
 3. Visual layout builder（Issue #89, depends on #86）
 4. Runtime Recommendation operation blend 判断
 5. seed済み recommendation_blend の本番運用値確定 / seed以外の反映面確認
@@ -89,15 +89,15 @@ SSOT参照必読:
         - 機密値・巨大payload・秘密情報は localStorage に保存しない。event payload はcomponent操作ログに必要な最小情報へ制限する。
       → 完了条件: component操作が frontend runtime queue に集約され、直接API分岐なしで定期batch永続化できる設計・実装・テストが揃うこと。
 
-## Frontend UI Topology Tensor Registration (Issue #86)
+## Frontend UI Primitive Catalog Bucket/Promote (Issue #86)
 
-- [ ] primitive component を UI topology tensor に DB 登録し drift を解消する
+- [ ] primitive catalog の bucket投入/promote 残作業を完了し、UI topology tensor 登録 drift を解消する
       → 依存関係: Frontend Component Event Runtime の責務境界確定後に着手。
-      → 対象責務: component topology の永続化・責務境界明記。
+      → 対象責務: primitive catalog entry を bucket投入し promote で componentId/packageId を確定する運用残作業。
       → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`, `frontend/components/`, `frontend/routes/admin/ui-builder.tsx`, backend UI topology repository / package generator runtime 関連。
       → 詳細:
         - Button / Input / Table / Card は frontend/components/ に code-only で存在（drift / GAP）。
-        - 各 component を PackageGeneratorRuntime 経由で componentId / packageId 発行 → ui_topology_tensor に DB 保存する。
+        - 各 component の残作業は PackageGeneratorRuntime 経由 bucket投入 → promote で componentId / packageId 発行し ui_topology_tensor へ反映すること。
         - CRUD wiring / CanDI wiring の責務境界を `docs/registrar-admin-ui-specification.md` に明記する。
         - 登録対象は既存4種だけで止めず、UI primitive catalog として一般的な component を網羅する。
         - componentは操作イベントを直接APIへ送らず、Frontend Component Event Runtime へemitする。
