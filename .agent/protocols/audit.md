@@ -26,6 +26,14 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
 - Repo implementation checked: yes/no
+- problem
+- purpose
+- improvement_policy
+- reference_materials
+- target_files
+- target_functions
+- todo
+- remaining_todo
 - Semantic findings
 - Required follow-up
 - Merge judgment
@@ -44,5 +52,14 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 
 ## pass_conditions
 - Required output contract produced.
+- Required output contract includes semantic audit fields:
+  - problem
+  - purpose
+  - improvement_policy
+  - reference_materials
+  - target_files
+  - target_functions
+  - todo
+  - remaining_todo
 - Required alignment surfaces explicitly cross-checked.
 - Semantic findings grounded in diff + implementation reality.

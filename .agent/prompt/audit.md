@@ -37,6 +37,14 @@ Worktype is `audit`, including any of:
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
 - Repo implementation checked: yes/no
+- problem
+- purpose
+- improvement_policy
+- reference_materials
+- target_files
+- target_functions
+- todo
+- remaining_todo
 - Semantic findings
 - Required follow-up
 - Merge judgment
