@@ -101,6 +101,7 @@ SSOT参照必読:
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
       → 最小partial実装の現状:
         - frontend/runtime/projectionConstructor.ts で component data-hub constructor を追加し、default_parameters + json_key_value + projection override merge、component_kind別 props 正規化（button/input/card/table）、schema required/type mismatch の explicit error、event_binding 出力境界まで対応済み。
+        - pipeline continuity CI は `docs/design/pipeline-continuity-ssot.yaml` + `.agent/tests/check-pipeline-continuity.sh` で projectionConstructor lane（identity / prohibited / pipeline_body_test 参照）まで拡張済み。
         - 未対応 component_kind の catalog 拡張、event runtime への実際の emit 配線、DB registration 連携は未完了。
       → runtime component adapter 方針:
         - primitiveごとに個別frontend実装を増殖させるのではなく、原則として単一の runtime component adapter が `ui_topology_tensor` / component parameter の jsonb を展開し、既存の型付き interface / props に注入する。

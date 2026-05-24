@@ -1,6 +1,6 @@
 pipeline_continuity_ssot:
   name: topolactor_pipeline_continuity_ssot
-  version: 0.2.2
+  version: 0.2.3
   status: ssot_design_document
 
   purpose:
@@ -265,6 +265,80 @@ pipeline_continuity_ssot:
           Implementation must add tests proving event enqueue, interval/batch flush,
           localStorage fallback/release, idempotent backend intake, and no direct component
           persistence API branch.
+
+
+    frontend_projection_constructor_lane:
+      description: >
+        component_definition payload is transformed into projection_definition,
+        normalized through projectionConstructor, stored in ComponentDataHub shape,
+        and projected as primitive props. This lane is the frontend projection surface
+        contract and must preserve identity and explicit-failure boundaries.
+      direction: server_projection_to_frontend_props
+
+      required_identity:
+        - componentId
+        - componentKey
+        - packageId
+        - layoutId
+        - component_kind
+        - semantic_role
+        - visual_role
+        - event_binding
+        - parameter_schema
+        - merged_props
+
+      nodes:
+        - node: frontend.component_definition_payload
+          files:
+            - frontend/tests/projectionConstructor.test.ts
+
+        - node: frontend.projection_definition
+          files:
+            - frontend/runtime/projectionConstructor.ts
+
+        - node: frontend.projection_constructor
+          files:
+            - frontend/runtime/projectionConstructor.ts
+          implementation_note: >
+            Merge order is default_parameters -> json_key_value -> projectionOverrides.
+            Any malformed payload/schema/event binding must fail explicitly without silent fallback.
+
+        - node: frontend.component_data_hub
+          files:
+            - frontend/runtime/projectionConstructor.ts
+
+        - node: frontend.primitive_props_projection
+          files:
+            - frontend/runtime/projectionConstructor.ts
+
+      prohibited:
+        - componentId_drift
+        - silent_fallback_for_malformed_component_definition_payload
+        - malformed_schema_silent_pass
+        - unsupported_schema_type_silent_pass
+        - invalid_event_binding_fallback_to_empty_object
+        - boolean_coercion
+        - frontend_topology_judgment
+        - frontend_sql_attention_judgment
+        - frontend_persistence_judgment
+        - component_direct_api_or_db_persistence_decision
+
+      pipeline_body_test:
+        kind: unit_boundary_contract
+        ci_script: .agent/tests/check-pipeline-continuity.sh
+        note: >
+          check-pipeline-continuity.sh validates this lane's SSOT vocabulary contract and
+          delegates runtime semantics to projectionConstructor unit tests.
+        test_files:
+          - frontend/tests/projectionConstructor.test.ts
+        verifies:
+          - component_definition payload identity preservation
+          - componentId drift is rejected
+          - merge order default_parameters -> json_key_value -> projectionOverrides
+          - malformed or unsupported parameter_schema returns explicit error
+          - invalid event_binding payload returns explicit error
+          - boolean coercion and silent fallback are prohibited
+          - frontend does not own topology/SQL Attention/persistence judgment
 
     sse_projection_lane:
       description: >

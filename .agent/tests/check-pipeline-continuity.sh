@@ -47,6 +47,82 @@ else
   fail "[pipeline.body] check-default-entity-search.sh not found — pipeline body test missing"
 fi
 
+
+PROJECTION_TEST="$REPO_ROOT/frontend/tests/projectionConstructor.test.ts"
+if [ -f "$PROJECTION_TEST" ]; then
+  echo "OK  [pipeline.body] projection constructor test file present"
+else
+  fail "[pipeline.body] frontend/tests/projectionConstructor.test.ts not found — projection constructor lane body test missing"
+fi
+
+if [ -f "$SSOT" ]; then
+  if grep -q '^    frontend_projection_constructor_lane:' "$SSOT"; then
+    echo "OK  [pipeline.body] frontend_projection_constructor_lane present in SSOT"
+  else
+    fail "[pipeline.body] frontend_projection_constructor_lane missing in SSOT"
+  fi
+
+  PROJECTION_LANE_BLOCK="$(awk '
+    /^    frontend_projection_constructor_lane:/ { in_lane=1 }
+    in_lane {
+      if (/^    [a-z0-9_]+:/ && $0 !~ /^    frontend_projection_constructor_lane:/) {
+        exit
+      }
+      print
+    }
+  ' "$SSOT")"
+
+  if [ -z "$PROJECTION_LANE_BLOCK" ]; then
+    fail "[pipeline.body] failed to extract frontend_projection_constructor_lane block from SSOT"
+  else
+    echo "OK  [pipeline.body] extracted frontend_projection_constructor_lane block"
+  fi
+
+  for identity_key in componentId component_kind parameter_schema event_binding; do
+    if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -Eq "^[[:space:]]*-[[:space:]]${identity_key}$"; then
+      :
+    else
+      fail "[pipeline.body] frontend_projection_constructor_lane.required_identity missing key: ${identity_key}"
+    fi
+  done
+  echo "OK  [pipeline.body] lane-scoped required_identity minimum keys present"
+
+  for prohibited_key in \
+    componentId_drift \
+    silent_fallback_for_malformed_component_definition_payload \
+    malformed_schema_silent_pass \
+    unsupported_schema_type_silent_pass \
+    invalid_event_binding_fallback_to_empty_object \
+    boolean_coercion; do
+    if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -Eq "^[[:space:]]*-[[:space:]]${prohibited_key}$"; then
+      :
+    else
+      fail "[pipeline.body] frontend_projection_constructor_lane.prohibited missing key: ${prohibited_key}"
+    fi
+  done
+  echo "OK  [pipeline.body] lane-scoped prohibited guard keys present"
+
+  if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*pipeline_body_test:'; then
+    echo "OK  [pipeline.body] lane-scoped pipeline_body_test section present"
+  else
+    fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test missing"
+  fi
+
+  if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*kind:[[:space:]]*unit_boundary_contract$'; then
+    echo "OK  [pipeline.body] lane-scoped pipeline_body_test.kind is unit_boundary_contract"
+  else
+    fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test.kind must be unit_boundary_contract"
+  fi
+
+  if printf '%s\n' "$PROJECTION_LANE_BLOCK" | grep -q '^[[:space:]]*-[[:space:]]frontend/tests/projectionConstructor.test.ts$'; then
+    echo "OK  [pipeline.body] lane-scoped pipeline_body_test.test_files includes projectionConstructor test"
+  else
+    fail "[pipeline.body] frontend_projection_constructor_lane.pipeline_body_test.test_files missing frontend/tests/projectionConstructor.test.ts"
+  fi
+else
+  fail "[pipeline.body] pipeline-continuity-ssot.yaml not found"
+fi
+
 # ─── 2. HARDCODE GUARD — dispatcher bypass and fallback detection ──────────────
 # Guards that topology_transform_runtime (RuntimeExecutor) does not accumulate
 # hardcoded target/layer/action dispatch branching that replaces data-driven
