@@ -50,8 +50,9 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - PR Approve requires TODO/Roadmap Finalization Judgment.
 - If implementation meaning satisfies or changes any TODO / roadmap `implementation_registry` entry, auditor must either:
   1. update canonical TODO/roadmap in the same audit/follow-up maintenance task, or
-  2. emit a single explicit follow-up prompt for `todo_maintenance` before approving.
+  2. if canonical TODO/roadmap cannot be updated in the same task, emit a single explicit follow-up prompt for `todo_maintenance` as a blocked-state output obligation (not as an approval-unblock condition).
 - Approve is blocked when roadmap/TODO status remains materially stale.
+- When same-task canonical update is not possible, auditor must hold approval until stale status is resolved or explicitly reclassified as out-of-scope, after emitting the required follow-up prompt.
 - Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
 
 ## blocking_conditions
