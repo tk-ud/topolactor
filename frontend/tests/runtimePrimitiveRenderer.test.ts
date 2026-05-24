@@ -1,0 +1,51 @@
+import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
+import { __testOnly } from "../runtime/frontendScheduler.ts";
+
+Deno.test("runtimePrimitiveRenderer: invalid eventBinding is explicit error", () => {
+  const result = renderRuntimeComponent({
+    componentId: "c1",
+    componentType: "action/button",
+    props: { label: "Submit" },
+    eventBinding: { click: "bad" as unknown as Record<string, unknown> },
+  });
+  assertEquals(result, { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING: click" });
+});
+
+Deno.test("runtimePrimitiveRenderer: button click eventBinding emits component event", () => {
+  __testOnly.resetQueue();
+  const result = renderRuntimeComponent({
+    componentId: "c2",
+    packageId: "pkg",
+    layoutId: "lay",
+    componentType: "action/button",
+    props: { label: "Submit" },
+    eventBinding: { click: { eventType: "click", actorOrSource: "unit_test", payload: { source: "button" } } },
+  });
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  ((result.node as any).props.onClick as () => void)();
+  assertEquals(__testOnly.getQueueLength(), 1);
+});
+
+Deno.test("runtimePrimitiveRenderer: primitive components do not directly call API", () => {
+  const button = renderRuntimeComponent({ componentId: "b", componentType: "action/button", props: { label: "B" }, eventBinding: { click: { eventType: "click" } } });
+  const input = renderRuntimeComponent({ componentId: "i", componentType: "form_input/input", props: { value: "" }, eventBinding: { change: { eventType: "change" } } });
+  const card = renderRuntimeComponent({ componentId: "c", componentType: "display/card", props: { title: "T" }, eventBinding: {} });
+  const table = renderRuntimeComponent({ componentId: "t", componentType: "data_display/table", props: { columns: [], rows: [] }, eventBinding: {} });
+  assertEquals(button.ok, true);
+  assertEquals(input.ok, true);
+  assertEquals(card.ok, true);
+  assertEquals(table.ok, true);
+});
+
+
+Deno.test("runtimePrimitiveRenderer: missing required binding is explicit error", () => {
+  const result = renderRuntimeComponent({
+    componentId: "c3",
+    componentType: "form_input/input",
+    props: { value: "" },
+    eventBinding: {},
+  });
+  assertEquals(result, { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_MISSING_EVENT_BINDING: change" });
+});

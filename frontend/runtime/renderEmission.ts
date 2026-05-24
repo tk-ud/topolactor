@@ -1,20 +1,30 @@
 import type { Emission } from "../api/dispatch.ts";
 import type { ComponentRegistry } from "../registry/componentRegistry.ts";
+import { adaptComponentDataHub, type RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
+import type { ComponentDataHub } from "./projectionConstructor.ts";
 
 export type ComponentSpec = {
-  componentId: string;
+  componentId?: string;
   componentType: string;
   def: Record<string, unknown>;
+  runtime?: RuntimeComponentSpec;
 };
 
-/**
- * Resolves an Emission's componentIds through the ComponentRegistry and
- * returns an array of fully-expanded ComponentSpec objects.
- *
- * Broken references are errors, not silent no-ops: if a componentId listed in
- * the emission is not present in the registry, an error ComponentSpec is
- * returned in its place so the caller can surface the broken reference.
- */
+export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): ComponentSpec[] {
+  return componentDataHubs.map((hub) => {
+    const adapted = adaptComponentDataHub(hub);
+    if (!adapted.ok) {
+      return { componentType: "error", def: { error: adapted.error, componentId: hub.componentId } };
+    }
+    const rendered = renderRuntimeComponent(adapted.value);
+    if (!rendered.ok) {
+      return { componentId: adapted.value.componentId, componentType: "error", def: { error: rendered.error }, runtime: adapted.value };
+    }
+    return { componentId: adapted.value.componentId, componentType: adapted.value.componentType, def: { node: rendered.node }, runtime: adapted.value };
+  });
+}
+
 export function renderEmission(
   emission: Emission,
   registry: ComponentRegistry,

@@ -2,6 +2,8 @@ import type { ComponentDataHub } from "./projectionConstructor.ts";
 
 export type RuntimeComponentSpec = {
   componentId: string;
+  packageId?: string | null;
+  layoutId?: string | null;
   componentType: string;
   props: Record<string, unknown>;
   eventBinding: Record<string, unknown>;
@@ -9,12 +11,22 @@ export type RuntimeComponentSpec = {
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | { ok: false; error: string };
 
+const SUPPORTED_COMPONENT_KINDS = new Set([
+  "action/button",
+  "form_input/input",
+  "display/card",
+  "data_display/table",
+]);
+
 export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
   if (!hub.componentId || hub.componentId.trim().length === 0) {
     return { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID" };
   }
   if (!hub.componentKind || hub.componentKind.trim().length === 0) {
     return { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_KIND" };
+  }
+  if (!SUPPORTED_COMPONENT_KINDS.has(hub.componentKind)) {
+    return { ok: false, error: `RUNTIME_COMPONENT_ADAPTER_UNSUPPORTED_COMPONENT_KIND: ${hub.componentKind}` };
   }
   if (typeof hub.props !== "object" || hub.props === null || Array.isArray(hub.props)) {
     return { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_INVALID_PROPS" };
@@ -26,6 +38,8 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
     ok: true,
     value: {
       componentId: hub.componentId,
+      packageId: hub.packageId,
+      layoutId: hub.layoutId,
       componentType: hub.componentKind,
       props: hub.props,
       eventBinding: hub.eventBinding,
