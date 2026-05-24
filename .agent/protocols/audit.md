@@ -64,6 +64,13 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - When same-task canonical update is not possible, auditor must hold approval until stale status is resolved or explicitly reclassified as out-of-scope, after emitting the required follow-up prompt.
 - Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
 
+
+## non_blocker_carry_over_rule
+- SSOT completion_condition と実装意味整合が成立している PR は、軽微な cleanup / coverage expansion / future integration test が残っていても Approve 可能。
+- Approve可能な非ブロッカー残件は、PR summary/comment だけで閉じず `.agent/tasks/todo.md` の `Non-blocking cleanup / hardening carry-over` ブロックへ carry-over する。
+- 非ブロッカーTODOには分類タグを付ける（例: `coverage`, `hardening`, `cleanup`, `integration-test`, `surface-expansion`）。
+- 次の項目は非ブロッカー扱い禁止（Approve禁止条件）: SSOT completion_condition 未達、implemented 誤判定、required_identity 欠落、roadmap/TODO の material stale。
+
 ## blocking_conditions
 - Missing required audit output fields.
 - Replacing semantic audit with structure-only result.
