@@ -110,11 +110,17 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - ToggleButton は selected / pressed / disabled / size / tone / icon / label / group_role などの引数で状態・見た目を可変にし、状態差分ごとに別component乱立させない。
         - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
-      → 最小partial実装の現状:
-        - frontend/runtime/projectionConstructor.ts で component data-hub constructor を追加し、default_parameters + json_key_value + projection override merge、component_kind別 props 正規化（button/input/card/table）、schema required/type mismatch の explicit error、event_binding 出力境界まで対応済み。
-        - pipeline continuity CI は `docs/design/pipeline-continuity-ssot.yaml` + `.agent/tests/check-pipeline-continuity.sh` で projectionConstructor lane（identity / prohibited / pipeline_body_test 参照）まで拡張済み。
-        - runtimeComponentAdapter -> runtimePrimitiveRenderer の最小導線（Button/Input/Card/Table）と eventBinding -> emitComponentOperationEvent 境界は接続済み。
-        - 未対応 component_kind の catalog 拡張、SSE projection event からの runtime lane 統合、DB registration 連携は未完了。
+      → 今回PRで完了した細分化TODO単位（親Issue #86は未完了のまま）:
+        - runtime alias catalog coverage を `textarea/search_input/panel/section/data_grid/list` まで拡張。
+        - projection constructor / runtime adapter / primitive renderer への alias 接続を完了。
+        - SSE projection runtime lane の単体導線（`projection_runtime -> renderRuntimeComponents`）テストを追加。
+        - package_generator:generate の ID返却契約 unit test（tensorId/componentId/packageId/layoutId/wiringId）を追加。
+        - NotBucketed explicit error mapping unit test を追加。
+      → 親Issue #86 に対する残scope（implemented 判定は不可）:
+        - 実DB integration で `ui_component_bucket -> package_generator -> promote` 永続化連続性を確認する。
+        - catalog対象 component の bucket/generate/promote 登録を進め、componentId/packageId/layoutId/wiringId を DB topology 側へ接続する。
+        - code-only component/package drift を解消、または catalog単位で明示残TODO化する。
+        - alias扱いと専用primitive化の境界（textarea/list/panel/section/data_grid/search_input）を整理する。
       → runtime component adapter 方針:
         - primitiveごとに個別frontend実装を増殖させるのではなく、原則として単一の runtime component adapter が `ui_topology_tensor` / component parameter の jsonb を展開し、既存の型付き interface / props に注入する。
         - jsonb payload は `component_kind`, `semantic_role`, `visual_role`, `parameter_schema`, `default_parameters`, `event_binding` を持つDB側component definitionとして扱う。

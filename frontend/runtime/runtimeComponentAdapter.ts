@@ -14,8 +14,14 @@ type AdaptResult = { ok: true; value: RuntimeComponentSpec } | { ok: false; erro
 const SUPPORTED_COMPONENT_KINDS = new Set([
   "action/button",
   "form_input/input",
+  "form_input/textarea",
+  "form_input/search_input",
   "display/card",
+  "disclosure_structure/panel",
+  "disclosure_structure/section",
   "data_display/table",
+  "data_display/data_grid",
+  "data_display/list",
 ]);
 
 export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {

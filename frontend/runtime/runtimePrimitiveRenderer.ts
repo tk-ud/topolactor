@@ -68,7 +68,9 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
         }),
       };
     }
-    case "form_input/input": {
+    case "form_input/input":
+    case "form_input/textarea":
+    case "form_input/search_input": {
       if (props.value !== undefined && typeof props.value !== "string") return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_INPUT_PROPS" };
       const bindingCheck = requireBinding(spec, "change");
       if (!bindingCheck.ok) return bindingCheck;
@@ -79,7 +81,9 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
           placeholder: props.placeholder as string | undefined,
           disabled: props.disabled as boolean | undefined,
           label: props.label as string | undefined,
-          type: props.type as "text" | "password" | "number" | "email" | undefined,
+          type: (spec.componentType === "form_input/search_input"
+            ? "text"
+            : props.type) as "text" | "password" | "number" | "email" | undefined,
           onChange: (value: string) => {
             const result = emitBoundEvent(spec, "change", { value });
             if (!result.ok) throw new Error(result.error);
@@ -88,6 +92,8 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
       };
     }
     case "display/card":
+    case "disclosure_structure/panel":
+    case "disclosure_structure/section":
       return {
         ok: true,
         node: h(Card, {
@@ -97,7 +103,9 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
           footer: props.footer as string | undefined,
         }),
       };
-    case "data_display/table": {
+    case "data_display/table":
+    case "data_display/data_grid":
+    case "data_display/list": {
       if (!Array.isArray(props.columns) || !Array.isArray(props.rows)) return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_TABLE_PROPS" };
       const columns = props.columns as Array<{ key: string; header: string }>;
       const rows = props.rows as Array<Record<string, unknown>>;
