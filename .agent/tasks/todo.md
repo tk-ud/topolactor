@@ -99,6 +99,9 @@ SSOT参照必読:
         - ToggleButton は selected / pressed / disabled / size / tone / icon / label / group_role などの引数で状態・見た目を可変にし、状態差分ごとに別component乱立させない。
         - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
+      → 最小partial実装の現状:
+        - frontend/runtime/projectionConstructor.ts で component data-hub constructor を追加し、default_parameters + json_key_value + projection override merge、component_kind別 props 正規化（button/input/card/table）、schema required/type mismatch の explicit error、event_binding 出力境界まで対応済み。
+        - 未対応 component_kind の catalog 拡張、event runtime への実際の emit 配線、DB registration 連携は未完了。
       → runtime component adapter 方針:
         - primitiveごとに個別frontend実装を増殖させるのではなく、原則として単一の runtime component adapter が `ui_topology_tensor` / component parameter の jsonb を展開し、既存の型付き interface / props に注入する。
         - jsonb payload は `component_kind`, `semantic_role`, `visual_role`, `parameter_schema`, `default_parameters`, `event_binding` を持つDB側component definitionとして扱う。
