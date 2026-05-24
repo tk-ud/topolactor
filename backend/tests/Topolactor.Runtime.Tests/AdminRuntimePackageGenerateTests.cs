@@ -10,21 +10,11 @@ namespace Topolactor.Runtime.Tests;
 public class AdminRuntimePackageGenerateTests
 {
     [Fact]
-    public async Task ExecuteDataAsync_PackageGenerate_ReturnsAllIssuedIds()
+    public async Task ExecuteDataAsync_PackageGenerate_TransitionsToPackagingWithoutIssuedIds()
     {
-        var tensorId = Guid.NewGuid();
-        var componentId = Guid.NewGuid();
-        var packageId = Guid.NewGuid();
-        var layoutId = Guid.NewGuid();
-        var wiringId = Guid.NewGuid();
-
         var runtime = CreateRuntime(new StubUiTopologyRepository(new PackageGenerateResult(
             PackageGenerateCode.Success,
-            tensorId,
-            componentId,
-            packageId,
-            layoutId,
-            wiringId)));
+            null, null, null, null, null)));
 
         var vector = new OperationVector("admin", "package_generator", "generate", null, "admin", JsonSerializer.SerializeToElement(new
         {
@@ -37,11 +27,12 @@ public class AdminRuntimePackageGenerateTests
         Assert.Null(error);
         Assert.NotNull(data);
         Assert.True(data!.Value.GetProperty("ok").GetBoolean());
-        Assert.Equal(tensorId.ToString(), data.Value.GetProperty("tensorId").GetString());
-        Assert.Equal(componentId.ToString(), data.Value.GetProperty("componentId").GetString());
-        Assert.Equal(packageId.ToString(), data.Value.GetProperty("packageId").GetString());
-        Assert.Equal(layoutId.ToString(), data.Value.GetProperty("layoutId").GetString());
-        Assert.Equal(wiringId.ToString(), data.Value.GetProperty("wiringId").GetString());
+        Assert.Equal("packaging", data.Value.GetProperty("status").GetString());
+        Assert.False(data.Value.TryGetProperty("tensorId", out _));
+        Assert.False(data.Value.TryGetProperty("componentId", out _));
+        Assert.False(data.Value.TryGetProperty("packageId", out _));
+        Assert.False(data.Value.TryGetProperty("layoutId", out _));
+        Assert.False(data.Value.TryGetProperty("wiringId", out _));
     }
 
     [Fact]
@@ -67,7 +58,7 @@ public class AdminRuntimePackageGenerateTests
     }
 
     [Fact]
-    public async Task ExecuteDataAsync_PackagePromote_UsesGenerateContinuityAndReturnsIssuedIds()
+    public async Task ExecuteDataAsync_PackagePromote_FromPackaging_ReturnsIssuedIds()
     {
         var tensorId = Guid.NewGuid();
         var componentId = Guid.NewGuid();
@@ -100,6 +91,29 @@ public class AdminRuntimePackageGenerateTests
         Assert.Equal(wiringId.ToString(), data.Value.GetProperty("wiringId").GetString());
     }
 
+    [Fact]
+    public async Task ExecuteDataAsync_PackagePromote_FromBucketed_ReturnsExplicitError()
+    {
+        var runtime = CreateRuntime(new StubUiTopologyRepository(
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null),
+            new PackageGenerateResult(
+                PackageGenerateCode.NotBucketed,
+                null, null, null, null, null,
+                "NOT_PACKAGING",
+                "bucket item is not in packaging status")));
+
+        var vector = new OperationVector("admin", "package_generator", "promote", null, "admin", JsonSerializer.SerializeToElement(new
+        {
+            bucketItemId = Guid.NewGuid().ToString(),
+            routeKey = "admin:ui-builder"
+        }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("PACKAGE_NOT_BUCKETED", error!.Code);
+    }
+
     private static AdminRuntime CreateRuntime(UiTopologyRepository uiRepo)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
@@ -113,14 +127,19 @@ public class AdminRuntimePackageGenerateTests
     private sealed class StubUiTopologyRepository : UiTopologyRepository
     {
         private readonly PackageGenerateResult _generateResult;
+        private readonly PackageGenerateResult _promoteResult;
 
-        public StubUiTopologyRepository(PackageGenerateResult generateResult)
+        public StubUiTopologyRepository(PackageGenerateResult generateResult, PackageGenerateResult? promoteResult = null)
             : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
         {
             _generateResult = generateResult;
+            _promoteResult = promoteResult ?? generateResult;
         }
 
-        public override Task<PackageGenerateResult> PromoteBucketItemAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
+        public override Task<PackageGenerateResult> GenerateFromBucketAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
             => Task.FromResult(_generateResult);
+
+        public override Task<PackageGenerateResult> PromoteBucketItemAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
+            => Task.FromResult(_promoteResult);
     }
 }

@@ -7,6 +7,11 @@ Use in JUDGMENT for worktype `audit`.
 Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 
 ## required_alignment_surfaces
+- top-level semantic baseline SSOT (audit mandatory):
+  - docs/framework-core.yaml
+  - docs/framework-policy.yaml
+  - docs/design/runtime-orchestration-ssot.yaml
+  - docs/design/pipeline-continuity-ssot.yaml
 - PR diff or patch
 - changed file list
 - .agent/tasks/todo.md
@@ -18,6 +23,17 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 
 ## judgment_scope
 Implementation meaning consistency against stated intent and roadmap/todo status.
+
+## foundation_ssot_read_gate
+For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), in this order:
+
+1. `docs/framework-core.yaml`
+2. `docs/framework-policy.yaml`
+3. `docs/design/runtime-orchestration-ssot.yaml`
+4. `docs/design/pipeline-continuity-ssot.yaml`
+5. target-specific SSOT / DB / implementation files (via `.agent/docs/ssot-map.yaml` as discovery aid)
+
+`全部読むな` は維持するが、これは `.agent/docs` 全読みに対する制約であり、audit baseline 4SSOT の省略を許可しない。
 
 ## approve_judgment_axis
 - Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
@@ -59,6 +75,7 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - Required follow-up
 - Merge judgment
 - todo_granularity_judgment
+- top_level_ssot_checked
 
 ## forbidden_shortcuts
 - Summaryだけで判断しない

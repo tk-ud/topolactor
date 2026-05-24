@@ -47,9 +47,24 @@ public class UiTopologyRepository
             "UiTopologyRepository.CreateBucketItemAsync must be overridden by a production implementation.");
     }
 
+    
+
     /// <summary>
-    /// Atomically promotes a bucket item from 'bucketed' to 'promoted' by:
-    ///   1. SELECT + UPDATE status bucketed->packaging (fail fast if not bucketed)
+    /// Transitions a bucket item from 'bucketed' to 'packaging'.
+    /// No topology IDs are issued in this step.
+    /// </summary>
+    public virtual Task<PackageGenerateResult> GenerateFromBucketAsync(
+        Guid bucketItemId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.GenerateFromBucketAsync must be overridden by a production implementation.");
+    }
+
+    /// <summary>
+    /// Atomically promotes a bucket item from 'packaging' to 'promoted' by:
+    ///   1. SELECT with status precondition packaging (fail fast if not packaging)
     ///   2. INSERT ui_component_registry, ui_component_package, ui_package_component_map,
     ///      ui_layout_registry, ui_wiring_registry, ui_topology_tensor
     ///   3. UPDATE status packaging->promoted (verify rows==1; fail if not)
@@ -63,7 +78,7 @@ public class UiTopologyRepository
     ///   wiring_key    = "{routeKey}:{bucket.component_key}:wiring"
     ///
     /// Returns PackageGenerateCode.NotFound         when bucket item does not exist.
-    /// Returns PackageGenerateCode.NotBucketed      when bucket item is not in 'bucketed' status.
+    /// Returns PackageGenerateCode.NotBucketed      when bucket item is not in 'packaging' status.
     /// Returns PackageGenerateCode.ConstraintViolation when a unique key conflict occurs.
     /// Returns PackageGenerateCode.PromotionFailed  when final promoted update returns 0 rows.
     /// Returns PackageGenerateCode.DbUnavailable    when DB connection/transaction fails.

@@ -9,6 +9,16 @@
 
 Read this protocol only when classifying remaining work for `.agent/tasks/todo.md` or roadmap carry-over.
 
+## foundation_ssot_read_gate
+When TODO/roadmap classification touches projection/runtime lanes/API/SSE/event-log/DB-driven UI topology or implemented/partial `completion_condition` judgment, read foundation SSOT in this order before target-specific artifacts:
+
+1. `docs/framework-core.yaml`
+2. `docs/design/runtime-orchestration-ssot.yaml`
+3. `docs/design/pipeline-continuity-ssot.yaml`
+4. target SSOT / DB / implementation surfaces
+
+Skip is allowed only for typo/format-only/unrelated text cleanup with explicit `not_required` reason.
+
 ## TODO surface responsibility
 
 - `.agent/tasks/todo.md` is for unresolved implementation, design, SSOT, or test-authoring work that must survive beyond the current PR/conversation.

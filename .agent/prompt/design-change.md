@@ -21,7 +21,14 @@ Worktype is `design_change`.
 - ssot change: ssot-change-impact protocol (must stay consistent with ssot-change-impact requirements)
 
 ## output_shape
-changed contracts, impact map, required check scope
+changed contracts, impact map, foundation_ssot_read_judgment, required check scope
+
+## foundation_ssot_read_judgment
+- framework_core_read: yes/no/not_required
+- runtime_orchestration_read: yes/no/not_required
+- pipeline_continuity_read: yes/no/not_required
+- reason_if_not_required:
+- target_ssot_read_after_foundation:
 
 ## out_of_scope
 - implementation-only edits without design delta

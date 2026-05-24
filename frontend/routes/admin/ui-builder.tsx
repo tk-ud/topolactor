@@ -56,7 +56,7 @@ type ValidationError = { code: string; message: string };
 function PrimitiveCatalog(): JSX.Element {
   return (
     <section style={{ marginBottom: "24px" }}>
-      <h2>Primitive Component Catalog (Issue #86)</h2>
+      <h2>Component Catalog Classification (Issue #86 bundle)</h2>
       <p style={{ color: "#555", fontSize: "0.9rem" }}>
         Primitive components are defined in <code>frontend/components/</code>.
         Components must be registered in the UI topology DB (via the package generator) to become
@@ -74,10 +74,16 @@ function PrimitiveCatalog(): JSX.Element {
         </thead>
         <tbody>
           {[
-            { key: "button.primitive", kind: "primitive", path: "frontend/components/Button.tsx", status: "code-only (drift)" },
-            { key: "input.primitive",  kind: "primitive", path: "frontend/components/Input.tsx",  status: "code-only (drift)" },
-            { key: "table.primitive",  kind: "primitive", path: "frontend/components/Table.tsx",  status: "code-only (drift)" },
-            { key: "card.primitive",   kind: "primitive", path: "frontend/components/Card.tsx",   status: "code-only (drift)" },
+            { key: "button.primitive", kind: "action/button", path: "frontend/components/Button.tsx", status: "code-only drift (registration required)" },
+            { key: "input.primitive",  kind: "form_input/input", path: "frontend/components/Input.tsx",  status: "code-only drift (registration required)" },
+            { key: "table.primitive",  kind: "data_display/table", path: "frontend/components/Table.tsx",  status: "code-only drift (registration required)" },
+            { key: "card.primitive",   kind: "display/card", path: "frontend/components/Card.tsx",   status: "code-only drift (registration required)" },
+            { key: "textarea.alias",   kind: "form_input/textarea", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Input primitive adapter)" },
+            { key: "search_input.alias", kind: "form_input/search_input", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Input primitive adapter)" },
+            { key: "panel.alias", kind: "disclosure_structure/panel", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Card primitive adapter)" },
+            { key: "section.alias", kind: "disclosure_structure/section", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Card primitive adapter)" },
+            { key: "data_grid.alias", kind: "data_display/data_grid", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Table primitive adapter)" },
+            { key: "list.alias", kind: "data_display/list", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Table primitive adapter)" },
           ].map((c) => (
             <tr key={c.key} style={{ borderBottom: "1px solid #eee" }}>
               <td style={{ padding: "4px 8px" }}><code>{c.key}</code></td>
@@ -142,7 +148,7 @@ function BucketSection(): JSX.Element {
       if (body?.success || body?.emission?.data?.ok) {
         const data = body?.emission?.data;
         setStatus(
-          `Package generated: tensorId=${data?.tensorId}, componentId=${data?.componentId}, packageId=${data?.packageId}`
+          `Generated/staged: bucketItemId=${data?.bucketItemId}, routeKey=${data?.routeKey}, status=${data?.status}`
         );
         await loadBucket();
       } else {
@@ -184,7 +190,7 @@ function BucketSection(): JSX.Element {
 
   return (
     <section style={{ marginBottom: "24px" }}>
-      <h2>Component Bucket → Package Generator</h2>
+      <h2>Component Bucket → Generate → Promote → DB registration</h2>
       <p style={{ color: "#555", fontSize: "0.9rem" }}>
         Bucket items are unpackaged component candidates. The package generator promotes them
         to UI topology tensor entities (componentId / packageId / layoutId / wiringId issued).
@@ -246,7 +252,31 @@ function BucketSection(): JSX.Element {
               disabled={loading || !selectedId || !routeKey}
               style={{ padding: "6px 14px", background: "#0070f3", color: "#fff", border: "none" }}
             >
-              Generate package
+              Generate (bucketed → packaging)
+            </button>
+            <button
+              onClick={async () => {
+                if (!selectedId || !routeKey) return;
+                setLoading(true);
+                setStatus(null);
+                try {
+                  const body = await dispatchAdminOp("package_generator", "promote", { bucketItemId: selectedId, routeKey });
+                  if (body?.success || body?.emission?.data?.ok) {
+                    const data = body?.emission?.data;
+                    setStatus(`Package promoted: tensorId=${data?.tensorId}, componentId=${data?.componentId}, packageId=${data?.packageId}, layoutId=${data?.layoutId}, wiringId=${data?.wiringId}`);
+                    await loadBucket();
+                  } else {
+                    setErrors(body?.errors ?? []);
+                    setStatus("Package promote failed.");
+                  }
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading || !selectedId || !routeKey}
+              style={{ padding: "6px 14px", background: "#0a7a33", color: "#fff", border: "none" }}
+            >
+              Promote (packaging → promoted)
             </button>
           </div>
         </>

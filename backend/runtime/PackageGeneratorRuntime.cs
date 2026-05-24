@@ -5,8 +5,9 @@ using Topolactor.Schema;
 namespace Topolactor.Runtime;
 
 /// <summary>
-/// Package Generator Runtime: validates the promotion request and delegates
-/// the entire atomic promotion to UiTopologyRepository.PromoteBucketItemAsync.
+/// Package Generator Runtime:
+/// - GenerateFromBucketAsync stages bucketed -> packaging (no ID issuance)
+/// - PromoteBucketItemAsync performs packaging -> promoted + ID issuance/registration
 ///
 /// The repository is the single persistence boundary — it owns the transaction
 /// and ensures no partial state can remain on failure.
@@ -32,11 +33,10 @@ public class PackageGeneratorRuntime
     }
 
     /// <summary>
-    /// Validates the request and delegates promotion to the repository.
-    /// Returns a PackageGenerateResult with all issued IDs on success,
-    /// or an explicit error code on any failure.
+    /// Validates the request and delegates staging transition (bucketed -> packaging)
+    /// to the repository. No topology IDs are issued in this stage.
     /// </summary>
-    public async Task<PackageGenerateResult> GenerateAsync(
+    public async Task<PackageGenerateResult> GenerateFromBucketAsync(
         Guid bucketItemId,
         string routeKey,
         CancellationToken ct = default)
@@ -44,7 +44,46 @@ public class PackageGeneratorRuntime
         ArgumentException.ThrowIfNullOrWhiteSpace(routeKey);
 
         _logger.LogDebug(
-            "PackageGeneratorRuntime.GenerateAsync: bucketItemId={Id}, routeKey={Route}.",
+            "PackageGeneratorRuntime.GenerateFromBucketAsync: bucketItemId={Id}, routeKey={Route}.",
+            bucketItemId, routeKey);
+
+        PackageGenerateResult result;
+        try
+        {
+            result = await _repository.GenerateFromBucketAsync(bucketItemId, routeKey, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "PackageGeneratorRuntime.GenerateFromBucketAsync: unexpected exception for bucketItemId={Id}.", bucketItemId);
+            return new PackageGenerateResult(
+                PackageGenerateCode.DbUnavailable, null, null, null, null, null,
+                "DB_UNAVAILABLE", "Repository unavailable.");
+        }
+
+        if (result.Code == PackageGenerateCode.Success)
+        {
+            _logger.LogInformation(
+                "PackageGeneratorRuntime.GenerateFromBucketAsync: staged bucket item {Id} to packaging.",
+                bucketItemId);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Executes full DB registration promotion (packaging -> promoted) and issues
+    /// componentId/packageId/layoutId/wiringId/tensorId in one transaction.
+    /// </summary>
+    public async Task<PackageGenerateResult> PromoteBucketItemAsync(
+        Guid bucketItemId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(routeKey);
+
+        _logger.LogDebug(
+            "PackageGeneratorRuntime.PromoteBucketItemAsync: bucketItemId={Id}, routeKey={Route}.",
             bucketItemId, routeKey);
 
         PackageGenerateResult result;
@@ -55,7 +94,7 @@ public class PackageGeneratorRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex,
-                "PackageGeneratorRuntime.GenerateAsync: unexpected exception for bucketItemId={Id}.", bucketItemId);
+                "PackageGeneratorRuntime.PromoteBucketItemAsync: unexpected exception for bucketItemId={Id}.", bucketItemId);
             return new PackageGenerateResult(
                 PackageGenerateCode.DbUnavailable, null, null, null, null, null,
                 "DB_UNAVAILABLE", "Repository unavailable.");
@@ -64,10 +103,11 @@ public class PackageGeneratorRuntime
         if (result.Code == PackageGenerateCode.Success)
         {
             _logger.LogInformation(
-                "PackageGeneratorRuntime.GenerateAsync: success tensorId={TensorId}, bucketItemId={Id}.",
+                "PackageGeneratorRuntime.PromoteBucketItemAsync: success tensorId={TensorId}, bucketItemId={Id}.",
                 result.TensorId, bucketItemId);
         }
 
         return result;
     }
+
 }
