@@ -27,7 +27,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 2. UI primitive component DB registration（Issue #86）
 3. Visual layout builder（Issue #89, depends on #86）
 4. Runtime Recommendation operation blend 判断
-5. 本番 policy row `topology_vector_runtime.recommendation_blend` 運用値確定
+5. seed済み recommendation_blend の本番運用値確定 / seed以外の反映面確認
 
 ---
 
@@ -37,9 +37,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 対象責務: operation候補に対する blend 適用要否の判断と、必要時の key/ID整合・生成/読取導線分離。
       → 対象ファイル候補: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, recommendation current row 設計資料。
 
-- [ ] 本番 policy row に `topology_vector_runtime.recommendation_blend` を追加し、運用重みを確定する
-      → 対象責務: policy定義・運用値確定・反映手順の整備。
-      → 対象ファイル候補: policy seed/manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
+- [ ] seed/demo seed に追加済みの `topology_vector_runtime.recommendation_blend` について、本番運用値を確定し seed以外の反映面（manifest/policy row）を確認する
+      → 対象責務: 追加済みpolicyの運用値確定・環境別適用面の確認・反映手順の整備。
+      → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
 ## Runtime Orchestration SSOT 準拠 (SSOT: docs/design/runtime-orchestration-ssot.yaml)
 

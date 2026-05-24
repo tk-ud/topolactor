@@ -165,14 +165,14 @@ system_roadmap_ssot:
 
     M4_projection_runtime:
       title: SSE and projection runtime
-      status: not_started
+      status: partial
       goal: >
         Connect backend projection events through SSE into frontend scheduler,
         dispatcher, projection runtime, and UI projection without frontend topology judgment.
       unlocks:
         - backend.sse_emitter: partial
-        - frontend.sse_receiver: partial
-        - frontend.sse_dispatcher: partial
+        - frontend.sse_receiver: skeleton
+        - frontend.sse_dispatcher: skeleton
         - frontend.projection_runtime: partial
       blocking_gaps:
         - Gap-8 projection_constructor
@@ -257,7 +257,7 @@ system_roadmap_ssot:
         - SQLA-1 logs.current refresh/watch production hardening or live verification remains
         - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
         - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
-        - SQLA-4 logs.attention evidence persistence not implemented
+        - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
         - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
         - SQLA-6 topology projection recommendation basis not implemented
         - SQLA-7 physical table identity mapping for logs.diff not decided
@@ -315,7 +315,7 @@ system_roadmap_ssot:
       public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
       known_gap_ref:
         - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
-        - SQLA-4 logs.attention evidence persistence not implemented
+        - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
         - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
       files:
         - backend/repository/SqlAttentionLogsRepository.cs

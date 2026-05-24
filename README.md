@@ -103,8 +103,8 @@ Topolactor is currently a **public design + scaffold reference** with a **canoni
 - **Public status SSOT:** `docs/system-roadmap.yaml` is the canonical public status source for milestone and component state (`implemented` / `partial` / `skeleton` / `not_started` / `production_ready`).
 - **Current repository state (high level):**
   - **Implemented surfaces (component-level):** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, and governance/check surfaces.
-  - **Partial surfaces (milestone-level):** M1 / M2 / M3 / M5 / M7 are partial in the public roadmap; M4 / M6 are not_started.
-  - **SQL Attention posture:** parent observation runtime is partial; logs.current / logs.hub_current / logs.attention separation is design-guarded, and logs.attention evidence-row persistence remains incomplete in roadmap tracking.
+  - **Partial surfaces (milestone-level):** M1 / M2 / M3 / M4 / M5 / M7 are partial in the public roadmap; M6 is not_started.
+  - **SQL Attention posture:** parent observation runtime is partial; logs.current / logs.hub_current / logs.attention separation is design-guarded, and basic logs.attention evidence-row persistence is implemented while hub_current/phase/statistics/scoring hardening remains open.
   - **UI topology posture:** Button/Input/Table/Card remain code-only drift until DB registration flow (ui_component_bucket → PackageGeneratorRuntime → ui_topology_tensor) is completed.
 - **Design-guarded policy posture:** tensor-first projection discipline, package-generator promotion semantics, fixed surface-adapter posture, and explicit no-silent-fallback policy.
 

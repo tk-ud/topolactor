@@ -87,7 +87,7 @@ The DB schema above is an implemented projection / signal surface. It is not the
 ## Status
 
 - **Implemented now (child projection surfaces):** SQL-backed context-route recommendation tables, topology-internal discrete recommendation current, append-only feedback events, and policy-driven weighting surfaces.
-- **Partial (parent SQL Attention runtime):** SQL Attention observation runtime remains partial in roadmap tracking; logs.attention evidence-row persistence and some hub-current/runtime hardening are still open.
+- **Partial (parent SQL Attention runtime):** SQL Attention observation runtime remains partial in roadmap tracking; basic logs.attention evidence-row persistence is implemented, while hub_current attractor-vector population, phase/statistics evidence quality, scoring hardening, and live verification remain open.
 - **Design-guarded boundary:** child recommendation projection must not be treated as SQL Attention parent completion.
 - **Future:** planned expansions are explicitly marked in roadmap/SSOT docs.
 
