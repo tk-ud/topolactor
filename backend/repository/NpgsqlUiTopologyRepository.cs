@@ -129,7 +129,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "UPDATE ui_component_bucket SET status = 'packaging', updated_at = now() " +
-            "WHERE bucket_item_id = @id AND status = 'packaging' RETURNING bucket_item_id";
+            "WHERE bucket_item_id = @id AND status = 'bucketed' RETURNING bucket_item_id";
         cmd.Parameters.AddWithValue("id", bucketItemId);
 
         var updated = await cmd.ExecuteScalarAsync(ct);
@@ -141,7 +141,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             var existing = await checkCmd.ExecuteScalarAsync(ct);
             return existing is null
                 ? new PackageGenerateResult(PackageGenerateCode.NotFound, null, null, null, null, null, "NOT_FOUND", $"Bucket item {bucketItemId} not found.")
-                : new PackageGenerateResult(PackageGenerateCode.NotBucketed, null, null, null, null, null, "NOT_BUCKETED", $"Bucket item {bucketItemId} is in status '{existing}', expected 'packaging'.");
+                : new PackageGenerateResult(PackageGenerateCode.NotBucketed, null, null, null, null, null, "NOT_BUCKETED", $"Bucket item {bucketItemId} is in status '{existing}', expected 'bucketed'.");
         }
 
         return new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null);
@@ -162,14 +162,12 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
         try
         {
-            // 1. Atomically transition bucketed -> packaging
+            // 1. Validate status precondition: packaging (already generated)
             await using var transitionCmd = conn.CreateCommand();
             transitionCmd.Transaction = tx;
             transitionCmd.CommandText =
-                "UPDATE ui_component_bucket " +
-                "SET status = 'packaging', updated_at = now() " +
-                "WHERE bucket_item_id = @id AND status = 'packaging' " +
-                "RETURNING component_key, source_path, component_kind";
+                "SELECT component_key, source_path, component_kind FROM ui_component_bucket " +
+                "WHERE bucket_item_id = @id AND status = 'packaging'";
             transitionCmd.Parameters.AddWithValue("id", bucketItemId);
 
             string? componentKey = null;
@@ -188,7 +186,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
             if (componentKey is null)
             {
-                // Either not found or not in bucketed status — check which
+                // Either not found or not in packaging status — check which
                 await using var checkCmd = conn.CreateCommand();
                 checkCmd.Transaction = tx;
                 checkCmd.CommandText =

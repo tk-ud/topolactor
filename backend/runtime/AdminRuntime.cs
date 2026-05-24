@@ -405,16 +405,15 @@ public class AdminRuntime
             return (null, new ValidationError(errorCode, result.Message ?? "Operation failed."));
         }
 
-        var responseDto = new PackageGenerateResponseDto(
-            true,
-            result.TensorId!.Value.ToString(),
-            result.ComponentId!.Value.ToString(),
-            result.PackageId!.Value.ToString(),
-            result.LayoutId!.Value.ToString(),
-            result.WiringId!.Value.ToString(),
-            "Package generated successfully.");
-
-        return (JsonSerializer.SerializeToElement(responseDto), null);
+        var response = new
+        {
+            ok = true,
+            bucketItemId = request.BucketItemId,
+            routeKey = request.RouteKey,
+            status = "packaging",
+            message = "Package generation staged successfully."
+        };
+        return (JsonSerializer.SerializeToElement(response), null);
     }
 
 
