@@ -102,10 +102,10 @@ Topolactor is currently a **public design + scaffold reference** with a **canoni
 
 - **Public status SSOT:** `docs/system-roadmap.yaml` is the canonical public status source for milestone and component state (`implemented` / `partial` / `skeleton` / `not_started` / `production_ready`).
 - **Current repository state (high level):**
-  - **Implemented surfaces:** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, SQL Attention DB observation tables, and governance/check surfaces.
-  - **Partial surfaces:** runtime executor behavior and M1 runtime skeleton milestone progress.
-  - **Skeleton surfaces:** manifest dispatcher, runtime timeline scheduler, and SSE projection lane wiring.
-  - **Planned / not started:** most M2+ milestone scopes remain not started in roadmap SSOT.
+  - **Implemented surfaces (component-level):** selected boundaries such as frontend dispatch action/client, backend dispatch endpoint, default-entity-search vertical slice, and governance/check surfaces.
+  - **Partial surfaces (milestone-level):** M1 / M2 / M3 / M5 / M7 are partial in the public roadmap; M4 / M6 are not_started.
+  - **SQL Attention posture:** parent observation runtime is partial; logs.current / logs.hub_current / logs.attention separation is design-guarded, and logs.attention evidence-row persistence remains incomplete in roadmap tracking.
+  - **UI topology posture:** Button/Input/Table/Card remain code-only drift until DB registration flow (ui_component_bucket → PackageGeneratorRuntime → ui_topology_tensor) is completed.
 - **Design-guarded policy posture:** tensor-first projection discipline, package-generator promotion semantics, fixed surface-adapter posture, and explicit no-silent-fallback policy.
 
 For exact status/evidence and completion conditions, follow `docs/system-roadmap.yaml` first, then drill down into linked design SSOT files.
@@ -137,7 +137,7 @@ For exact status/evidence and completion conditions, follow `docs/system-roadmap
 - `docs/articles/registry-semantic-matrix.md`
 - `docs/articles/sql-attention.md`
 - `docs/articles/ui-topology-tensor.md`
-- SQL observation surface: `db/context_route_tables.sql`
+- SQL observation surfaces: `db/sql_attention_logs_tables.sql` (parent observation planes) / `db/context_route_tables.sql` (child recommendation projection surfaces)
 
 ### DB Schema Surfaces
 

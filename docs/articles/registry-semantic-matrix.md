@@ -19,9 +19,9 @@ A typical config table toggles static branches in code. In contrast, this archit
 
 ## Status
 
-- **Implemented now:** registry-driven topology surfaces and policy docs.
+- **Implemented now (partial platform):** registry-driven topology and policy surfaces exist, but platform milestones remain mixed across implemented/partial/skeleton/not_started in the public roadmap.
 - **Design discipline:** projection/expansion interpretation across surfaces.
-- **Future:** additional topology analyses described as planned in design docs.
+- **Future:** additional topology analyses remain roadmap-managed planned work, not current production-ready capability.
 
 
 ## Registry and hub boundary
