@@ -578,6 +578,7 @@ CREATE TABLE IF NOT EXISTS component_operation_event_log (
     component_id      TEXT NOT NULL,
     package_id        TEXT NULL,
     layout_id         TEXT NULL,
+    wiring_id         TEXT NULL,
     event_type        TEXT NOT NULL,
     payload           JSONB NOT NULL,
     actor_or_source   TEXT NOT NULL,
