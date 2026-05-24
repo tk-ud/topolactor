@@ -799,7 +799,7 @@ system_roadmap_ssot:
         UI topology DB tables and NpgsqlUiTopologyRepository already implement full promotion.
         Code-only components are explicitly labeled as drift/GAP.
         Frontend does not own topology or runtime judgment.
-        Remaining: components are not yet DB-registered (bucket + generate needed per component). Runtime alias coverage currently includes textarea/search_input/panel/section/data_grid/list mapped to existing primitives; dedicated primitive semantics remain follow-up.
+        Remaining: parent Issue #86 is still partial because DB registration continuity (bucket -> generate -> promote persistence verification), catalog-wide registration execution, and code-only drift closure are pending. Runtime alias coverage and unit-level projection/package-generate contract checks are completed as sub-units, but do not satisfy full completion_condition yet.
       files:
         - frontend/components/Button.tsx
         - frontend/components/Input.tsx
