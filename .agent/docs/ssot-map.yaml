@@ -197,6 +197,10 @@ mapping:
       - ui_topology tables
     required_docs:
       - docs/design/db-schema.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols: []
+
   - work_type: pipeline_continuity_api_sse_identity_validation
     change_surfaces:
       - frontend/islands/OperationPanel.tsx
@@ -215,6 +219,10 @@ mapping:
     required_docs:
       - docs/design/pipeline-continuity-ssot.yaml
       - docs/design/ci-contract-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols: []
+
   - work_type: system_roadmap_status_and_implementation_registry
     change_surfaces:
       - docs/system-roadmap.yaml
@@ -232,7 +240,9 @@ mapping:
       - docs/design/pipeline-continuity-ssot.yaml
       - docs/design/runtime-orchestration-ssot.yaml
     prompt:
-      - .agent/prompt/system-roadmap-status.md (support router for audit/design_change/todo_maintenance; not canonical worktype)
+      - .agent/prompt/system-roadmap-status.md
+    notes:
+      - system-roadmap-status is supplemental for roadmap-status checks in audit/design_change/todo_maintenance, not a canonical worktype.
     protocols:
       - .agent/protocols/completion.md
       - .agent/protocols/completion-summary.md

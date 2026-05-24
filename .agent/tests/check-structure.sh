@@ -113,6 +113,19 @@ check_no_in_progress_todos() {
   fi
 }
 
+check_no_annotated_pseudo_paths_in_ssot_map() {
+  local ssot_map="$REPO_ROOT/.agent/docs/ssot-map.yaml"
+  if [ ! -f "$ssot_map" ]; then
+    fail "ssot-map path annotation check skipped (file missing): .agent/docs/ssot-map.yaml"
+    return
+  fi
+  if rg -n '^[[:space:]]*-[[:space:]]+[^#]*\.(md|yaml|sh)[[:space:]]{2,}[^#]+' "$ssot_map" >/dev/null; then
+    fail ".agent/docs/ssot-map.yaml contains inline-annotated pseudo-path entries (.md/.yaml/.sh path + trailing description)"
+  else
+    echo "OK  [ssot-map] no inline-annotated pseudo-path entries (.md/.yaml/.sh)"
+  fi
+}
+
 # ─── Required directories ────────────────────────────────────────────────────
 
 echo ""
@@ -583,6 +596,7 @@ fi
 check_tmp_runtime_artifacts
 check_tmp_tracked_files
 check_no_in_progress_todos
+check_no_annotated_pseudo_paths_in_ssot_map
 
 # Protocol split guard
 if grep -q "## Completion Sequence (Mandatory)" "$REPO_ROOT/.agent/rules/rule.md"; then

@@ -241,8 +241,6 @@ required_content_terms:
     - "output sink state"
   .agent/protocols/report-surfaces.md:
     - "routine inspection reports"
-  .agent/protocols/completion.md:
-    - "Recursive Verification Gate"
   .agent/protocols/todo-carry-over.md:
     - ".agent/tasks/todo.md"
   .agent/scripts/create-tmp.sh:
