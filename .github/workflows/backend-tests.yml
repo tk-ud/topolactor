@@ -25,6 +25,23 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: topolactor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d topolactor_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TOPOLACTOR_TEST_DB_CONNECTION: Host=localhost;Port=5432;Database=topolactor_test;Username=postgres;Password=postgres
+      TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY: "1"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,6 +50,14 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply DB schema for continuity integration
+        run: |
+          psql "${TOPOLACTOR_TEST_DB_CONNECTION}" -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "${TOPOLACTOR_TEST_DB_CONNECTION}" -v ON_ERROR_STOP=1 -f db/ui_topology_tables.sql
 
       - name: Run backend tests
         run: bash .agent/tests/check-backend-tests.sh

@@ -16,7 +16,12 @@ public class UiTopologyRegistrationContinuityIntegrationTests
         var connectionString = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            // Environment-limited run: keep test explicit and non-failing when DB is absent.
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+            {
+                throw new InvalidOperationException(
+                    "TOPOLACTOR_TEST_DB_CONNECTION is required when TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1.");
+            }
+            // Local environment-limited run: allow non-failing skip when DB is absent.
             return;
         }
 
