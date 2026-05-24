@@ -6,6 +6,9 @@ worktypes:
     prompt: .agent/prompt/audit.md
     required_protocols:
       - .agent/protocols/audit.md
+    triggered_protocols:
+      todo_roadmap_finalization:
+        - .agent/protocols/todo-carry-over.md
     required_checks:
       - .agent/tests/check-worktype-routing.sh
       - .agent/tests/check-completion-judgment.sh
@@ -15,6 +18,9 @@ worktypes:
     prompt: .agent/prompt/specific.md
     required_protocols:
       - .agent/protocols/specific.md
+    triggered_protocols:
+      todo_roadmap_finalization:
+        - .agent/protocols/todo-carry-over.md
     required_checks:
       - .agent/tests/check-worktype-routing.sh
       - .agent/tests/check-structure.sh

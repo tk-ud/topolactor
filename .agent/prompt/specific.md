@@ -20,6 +20,7 @@ Worktype is `specific` and scope is strictly local:
 
 ## protocol_triggers
 - .agent/protocols/specific.md
+- conditional: .agent/protocols/todo-carry-over.md when the local target touches TODO/roadmap/status judgment or changes canonical progress state
 - runtime/policy/scenario protocols only if trigger applies
 
 ## output_shape
