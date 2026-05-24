@@ -21,6 +21,23 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
+## SSOT Wiring Audit CI 次段階計画
+
+- [ ] sh CI は AI / Agent 用の軽量運用 guard として維持し、アプリ本体の設計逸脱監査を C# / dotnet test CI へ分離する
+      → 対象責務: sh は governance 構造検査、C# CI は SSOT 配線設計の逸脱監査。
+
+- [ ] C# / dotnet test による SSOT wiring audit CI を 4系統で設計する
+      → 1) Topology Registration CI（topology/package/schema/relation/component ref と linking/binding の逸脱監査）
+      → 2) Hub Registration CI（hub registration / relation route / hub_current / attention logs の逸脱監査）
+      → 3) Scheduler / Runtime CI（RuntimeTimelineScheduler / ManifestDispatcher / RuntimeExecutor の canonical route 逸脱監査）
+      → 4) Component Registration CI（component_definition / ComponentDataHub / ui_topology_tensor 接続の逸脱監査）
+
+- [ ] 初期段階 C# CI は判定面を diagnostics / evidence / eligibility に限定し、DB書き込み・自動昇格を scope out として固定する
+      → 対象責務: staging → active 昇格判定や registry promotion の根拠面を先に整備し、実データ変更は後続に分離する。
+
+- [ ] 後続タスクとして C# test skeleton / SSOT YAML loader / fixtures / diagnostics evidence DTO を分離起票する
+      → 対象ファイル候補: backend test project, docs/design SSOT readers, fixture surface, promotion decision evidence contract.
+
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime（Issue #86 前提）

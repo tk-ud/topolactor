@@ -8,6 +8,33 @@ pipeline_continuity_ssot:
     - hardcode_guard_for_dispatcher_bypass_and_fallback_detection
     - canonical_route_identity_and_boundary_contract
 
+  ci_responsibility_split:
+    sh_checks:
+      role:
+        - ai_agent_operational_guard
+        - lightweight_structure_and_routing_guard
+      verifies:
+        - agents_rules_todo_summary_required_check_and_ssot_lane_existence
+    csharp_dotnet_tests:
+      role:
+        - application_side_ssot_wiring_audit
+        - runtime_registration_promotion_eligibility_validation
+      verifies:
+        - ssot_yaml_contracts
+        - staging_and_fixture_data
+        - registry_records_or_test_fixtures
+        - runtime_outputs
+        - diagnostics_and_evidence
+      lanes:
+        - topology_registration_ci
+        - hub_registration_ci
+        - scheduler_runtime_ci
+        - component_registration_ci
+      initial_scope_out:
+        - no_db_writes
+        - no_automatic_promotion
+        - verdict_surface_is_diagnostics_evidence_eligibility
+
   # Pipeline body checks use data-driven fixture execution, not vocabulary grep.
   # See pipeline_body_test.ci_script for the delegation target in each lane.
   # check-pipeline-continuity.sh covers hardcode_guard and gap_status only (bash).

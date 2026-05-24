@@ -47,6 +47,9 @@ system_roadmap_ssot:
       - .agent/reports/
 
   status_terms:
+    planned:
+      meaning: roadmap-approved planned lane or contract with implementation not started yet
+      production_ready: false
     not_started:
       meaning: required by roadmap or design SSOT, but no implementation surface exists yet
       production_ready: false
@@ -876,6 +879,51 @@ system_roadmap_ssot:
         - frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
       known_gap_ref:
         - Gap-13 frontend scheduler runtime completion
+
+    system_ci.dotnet_ssot_wiring_audit:
+      status: planned
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: >
+        C# / dotnet tests are planned as application-side SSOT wiring audit gates.
+        Shell checks remain AI/Agent operational guards, while C# CI audits
+        topology registration, hub registration, scheduler/runtime, and component
+        registration paths for SSOT wiring drift.
+      completion_condition:
+        - sh_checks_are_kept_as_ai_agent_operational_guard
+        - dotnet_ci_audits_application_wiring_against_ssot_contracts
+        - topology_registration_ci_lane_defined
+        - hub_registration_ci_lane_defined
+        - scheduler_runtime_ci_lane_defined
+        - component_registration_ci_lane_defined
+        - initial_phase_returns_diagnostics_evidence_eligibility_only
+      known_gap_ref:
+        - C# CI audit lanes are roadmap-defined only; test project/fixtures/loader/DTO are follow-up tasks
+
+    system_ci.topology_registration:
+      status: planned
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: Topology Registration CI lane will audit topology/package/schema/relation/component reference continuity and topology linking/binding drift against SSOT contracts.
+
+    system_ci.hub_registration:
+      status: planned
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: Hub Registration CI lane will audit hub registration, hub relation route, hub_current, and SQL Attention observation boundaries without route auto-mutation.
+
+    system_ci.scheduler_runtime:
+      status: planned
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: Scheduler/Runtime CI lane will audit RuntimeTimelineScheduler, ManifestDispatcher, RuntimeExecutor, and runtime destination selection continuity against canonical route.
+
+    system_ci.component_registration:
+      status: planned
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: Component Registration CI lane will audit component_definition and projection-surface registration paths, including componentId/packageId/layoutId/wiringId and event binding validity.
+
     external_connector_contract:
       status: not_started
       production_ready: false
