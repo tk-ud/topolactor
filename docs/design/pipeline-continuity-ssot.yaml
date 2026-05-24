@@ -164,7 +164,7 @@ pipeline_continuity_ssot:
               new targets must be routed through manifest_dispatcher, not hardcoded.
 
     frontend_component_event_log_lane:
-      status: planned_contract
+      status: implemented_contract
       description: >
         UI components emit operation events to a frontend runtime queue. The frontend runtime
         scheduler batches those events and flushes them to the backend component-event-log
@@ -287,11 +287,19 @@ pipeline_continuity_ssot:
         - components_do_not_directly_call_persistence_api
 
       pipeline_body_test:
-        kind: planned_boundary_contract
+        kind: boundary_contract
+        ci_script: .agent/tests/check-pipeline-continuity.sh
+        test_files:
+          - backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs
+          - frontend/tests/frontendComponentEventRuntime.test.ts
+        verifies:
+          - required_identity fields preserve through endpoint-to-repository append path
+          - duplicate idempotency is accepted
+          - invalid payload fails close (not ACK-only)
+          - queue flush/retry/bounded fallback behavior remains explicit
         note: >
-          Implementation must add tests proving event enqueue, interval/batch flush,
-          localStorage fallback/release, idempotent backend intake, and no direct component
-          persistence API branch.
+          check-pipeline-continuity.sh validates lane contract presence and CI registration;
+          runtime semantics are delegated to dedicated dotnet/deno tests above.
 
 
     frontend_projection_constructor_lane:
