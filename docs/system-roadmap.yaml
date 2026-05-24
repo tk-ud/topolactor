@@ -779,7 +779,7 @@ system_roadmap_ssot:
         - import_failure_is_explicit_and_fail_close
         - docker_compose_mounts_storage_volume
       known_gap_ref:
-        - Issue #84 partial (import canonical DB write not completed)
+        - External import apply remains partial for topology/schema/projection/general lanes
 
     frontend_ui_component_system:
       status: partial
@@ -885,6 +885,11 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: Runtime diagnostic scheduler is implemented with cron-triggered continuity inspections, while full diagnostic coverage remains partial.
+      completion_condition:
+        - cron_triggered_runtime_diagnostic_scheduler_wiring_is_implemented
+        - scheduler_executes_hub_attention_current_rebuildability_and_registry_continuity_inspections
+      known_gap_ref:
+        - Diagnostic coverage and downstream persistence/audit integration remain partial
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: planned
