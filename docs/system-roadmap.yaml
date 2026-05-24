@@ -761,8 +761,8 @@ system_roadmap_ssot:
         AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
         docker-compose mounts topolactor_seed_storage volume at /storage.
         Admin UI at /admin/seed provides all 5 operations.
-        Import is a skeleton: validates structure and counts runtimes.
-        Full canonical import requires SeedRuntime.ImportAsync canonical DB write implementation.
+        Import apply route is implemented (manifest route apply supported in runtime).
+        Remaining external import apply completion is limited to topology/schema/projection/general lanes.
         Import failure is explicit (fail-close). No silent fallback.
       files:
         - backend/repository/SeedJsonRepository.cs
@@ -779,7 +779,7 @@ system_roadmap_ssot:
         - import_failure_is_explicit_and_fail_close
         - docker_compose_mounts_storage_volume
       known_gap_ref:
-        - Issue #84 partial (import canonical DB write not completed)
+        - External import apply remains partial for topology/schema/projection/general lanes
 
     frontend_ui_component_system:
       status: partial
@@ -880,15 +880,22 @@ system_roadmap_ssot:
       known_gap_ref:
         - Gap-13 frontend scheduler runtime completion
 
-    system_ci.dotnet_ssot_wiring_audit:
+    system_ci.runtime_diagnostic_scheduler:
+      status: partial
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: Runtime diagnostic scheduler is implemented with cron-triggered continuity inspections, while full diagnostic coverage remains partial.
+      completion_condition:
+        - cron_triggered_runtime_diagnostic_scheduler_wiring_is_implemented
+        - scheduler_executes_hub_attention_current_rebuildability_and_registry_continuity_inspections
+      known_gap_ref:
+        - Diagnostic coverage and downstream persistence/audit integration remain partial
+
+    system_ci.dotnet_ssot_wiring_audit_tests:
       status: planned
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        C# / dotnet tests are planned as application-side SSOT wiring audit gates.
-        Shell checks remain AI/Agent operational guards, while C# CI audits
-        topology registration, hub registration, scheduler/runtime, and component
-        registration paths for SSOT wiring drift.
+      public_summary: C# / dotnet SSOT wiring audit tests are planned as application-side governance lanes separate from shell structural guards.
       completion_condition:
         - sh_checks_are_kept_as_ai_agent_operational_guard
         - dotnet_ci_audits_application_wiring_against_ssot_contracts
