@@ -799,7 +799,9 @@ system_roadmap_ssot:
         UI topology DB tables and NpgsqlUiTopologyRepository already implement full promotion.
         Code-only components are explicitly labeled as drift/GAP.
         Frontend does not own topology or runtime judgment.
-        Remaining: parent Issue #86 stays partial; this bundle clarifies catalog-wide classification boundary (registered / code-only drift / alias-maintained) and separates generate vs promote execution lane, but catalog-wide registration execution and code-only drift closure are still pending. Component operation event lane now preserves wiringId continuity (frontend emit queue -> append DTO -> repository log/DB column), but completion boundary remains unchanged (partial). DB registration continuity (bucket -> generate -> promote persistence verification) is now evidenced by remote backend-tests CI execution with PostgreSQL service + schema apply + continuity integration test success. Runtime alias coverage and unit-level projection/package-generate contract checks are completed as sub-units, but full completion_condition still requires catalog registration closure.
+        Completed sub-scope includes runtime alias coverage, projection constructor/adapter continuity, primitive renderer emit continuity, wiringId continuity, and generate/promote contract separation.
+        Remaining scope is a roadmap completion bundle: frontend component constructor/interface + DB-driven design/layout/wiring projection closure, then catalog registration closure.
+        Design/layout/wiring authority remains DB-side (`design.classname`/`design.tailwind`, package layout mapping, `ui_layout_registry`, `ui_wiring_registry`, `ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
       files:
         - frontend/components/Button.tsx
         - frontend/components/Input.tsx
@@ -813,7 +815,8 @@ system_roadmap_ssot:
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
       known_gap_ref:
-        - Issue #86 partial: catalog-wide registration execution and code-only drift closure pending (bundle clarified classification + generate/promote registration boundary)
+        - Issue #86 partial: frontend component constructor/interface + DB-driven design/layout/wiring projection bundle is not closed yet
+        - Issue #86 partial: catalog-wide registration execution and code-only drift closure pending after constructor/interface bundle closure
 
     admin_visual_layout_builder:
       status: partial
