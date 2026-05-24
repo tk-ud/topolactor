@@ -44,6 +44,7 @@ const DEFAULT_EVENT_QUEUE_CONFIG: ComponentEventQueueConfig = {
 const LOCAL_STORAGE_KEY = "topolactor:component-event-fallback";
 let queue: Array<ComponentOperationEvent & { retryCount: number }> = [];
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
+let lifecycleHookRegistered = false;
 
 function getStorage(): Storage | null {
   try {
@@ -97,7 +98,7 @@ function restoreFallback() {
   }
 }
 
-async function flushComponentEvents(): Promise<void> {
+export async function flushComponentEvents(): Promise<void> {
   if (queue.length === 0) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     console.error("COMPONENT_EVENT_FLUSH_OFFLINE");
@@ -143,13 +144,17 @@ export function emitComponentOperationEvent(input: Omit<ComponentOperationEvent,
 
 export function startComponentEventRuntime(): void {
   restoreFallback();
-  if (schedulerTimer !== null) return;
-  schedulerTimer = setInterval(() => {
-    void flushComponentEvents();
-  }, DEFAULT_EVENT_QUEUE_CONFIG.flushIntervalMs);
-  globalThis.addEventListener?.("beforeunload", () => {
-    persistFallback();
-  });
+  if (schedulerTimer === null) {
+    schedulerTimer = setInterval(() => {
+      void flushComponentEvents();
+    }, DEFAULT_EVENT_QUEUE_CONFIG.flushIntervalMs);
+  }
+  if (!lifecycleHookRegistered) {
+    globalThis.addEventListener?.("beforeunload", () => {
+      persistFallback();
+    });
+    lifecycleHookRegistered = true;
+  }
 }
 
 export function stopComponentEventRuntime(): void {
@@ -194,3 +199,15 @@ export async function queueClientCommand(
     token,
   );
 }
+
+
+export const __testOnly = {
+  resetQueue(): void {
+    queue = [];
+    const storage = getStorage();
+    storage?.removeItem(LOCAL_STORAGE_KEY);
+  },
+  getQueueLength(): number {
+    return queue.length;
+  },
+};

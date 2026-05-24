@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { emitComponentOperationEvent } from "../runtime/frontendScheduler.ts";
+import { __testOnly, emitComponentOperationEvent, flushComponentEvents, startComponentEventRuntime, stopComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 
 Deno.test("emitComponentOperationEvent: returns explicit error when componentId missing", () => {
   const result = emitComponentOperationEvent({
@@ -21,4 +21,48 @@ Deno.test("emitComponentOperationEvent: accepts normalized event", () => {
     payload: { checked: true, token: "hidden" },
   });
   assertEquals(result.ok, true);
+});
+
+Deno.test("component event runtime: start hook is callable and flush success drains queue", async () => {
+  __testOnly.resetQueue();
+  startComponentEventRuntime();
+
+  emitComponentOperationEvent({
+    componentId: "cmp-flush-1",
+    eventType: "click",
+    actorOrSource: "test",
+    payload: { value: "ok" },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ success: true, accepted: 1 }), { status: 202 });
+  try {
+    await flushComponentEvents();
+    assertEquals(__testOnly.getQueueLength(), 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    stopComponentEventRuntime();
+  }
+});
+
+Deno.test("component event runtime: flush failure retries and keeps queue", async () => {
+  __testOnly.resetQueue();
+  emitComponentOperationEvent({
+    componentId: "cmp-retry-1",
+    eventType: "submit",
+    actorOrSource: "test",
+    payload: { value: "retry" },
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("NETWORK_DOWN");
+  };
+  try {
+    await flushComponentEvents();
+    assertEquals(__testOnly.getQueueLength(), 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetQueue();
+  }
 });

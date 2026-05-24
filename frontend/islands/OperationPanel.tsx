@@ -2,7 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { JSX } from "preact";
 import type { UserOperation, OperationType } from "../runtime/resolveOperationVector.ts";
 import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
-import { queueClientCommand } from "../runtime/frontendScheduler.ts";
+import { emitComponentOperationEvent, queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { EmissionView } from "../components/EmissionView.tsx";
 
@@ -46,6 +46,7 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
   const [vectorPreview, setVectorPreview] = useState<string | null>(null);
 
   useEffect(() => {
+    startComponentEventRuntime();
     setToken(sessionStorage.getItem(SESSION_TOKEN_KEY));
   }, []);
 
@@ -70,6 +71,15 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
     const context: Record<string, string> = {};
     if (contextSessionId.trim()) context["ContextSessionId"] = contextSessionId.trim();
     if (contextTokenIds.trim()) context["ContextTokenIds"] = contextTokenIds.trim();
+
+    emitComponentOperationEvent({
+      componentId: "operation-panel:dispatch-form",
+      packageId: "runtime-operation-panel",
+      layoutId: "runtime-operation-layout",
+      eventType: "submit",
+      actorOrSource: "OperationPanel",
+      payload: { operationType, target, layer, action, hasContext: Object.keys(context).length > 0 },
+    });
 
     const response = await queueClientCommand(
       op,
@@ -183,9 +193,17 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
           <select
             style={inputStyle}
             value={operationType}
-            onChange={(e) =>
-              setOperationType((e.target as HTMLSelectElement).value as OperationType)
-            }
+            onChange={(e) => {
+              setOperationType((e.target as HTMLSelectElement).value as OperationType);
+              emitComponentOperationEvent({
+                componentId: "operation-panel:operation-type",
+                packageId: "runtime-operation-panel",
+                layoutId: "runtime-operation-layout",
+                eventType: "select",
+                actorOrSource: "OperationPanel",
+                payload: { value: (e.target as HTMLSelectElement).value },
+              });
+            }}
           >
             {OPERATION_TYPES.map((t) => (
               <option key={t} value={t}>
