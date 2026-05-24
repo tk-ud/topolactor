@@ -6,13 +6,27 @@ Use for worktype `specific` during DEFINE_SCOPE/JUDGMENT.
 ## trigger_condition
 Local file/function/design-point task.
 
+## allowed_scope
+- single-file local fix
+- single-function bug fix
+- explicitly-audited, clearly bounded one-point adjustment
+
+## disallowed_scope
+- PR diff audit
+- merge judgment
+- roadmap/todo/repo consistency audit
+- summary-truth verification
+- multi-surface semantic alignment checks
+
 ## judgment_scope
 Scope containment and correctness of local change.
 
 ## blocking_conditions
 - Unjustified scope expansion.
 - Full docs/protocol bundle read treated as required baseline.
+- Using `specific` for disallowed scope.
 
 ## pass_conditions
 - Minimal target-surface read is preserved.
 - Any scope expansion has explicit reason.
+- roadmap/todo touched status checks include minimum `.agent/tasks/todo.md` and `docs/system-roadmap.yaml` reads.

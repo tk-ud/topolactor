@@ -75,6 +75,22 @@ if [ -f "$ROUTE_FILE" ]; then
   done <<< "$refs"
 fi
 
+
+# prompt/protocol vocabulary guards for diff-based routing
+check_term "$REPO_ROOT/.agent/prompt/audit.md" "PR diff or patch"
+check_term "$REPO_ROOT/.agent/prompt/audit.md" "changed file list"
+check_term "$REPO_ROOT/.agent/prompt/audit.md" ".agent/tasks/todo.md"
+check_term "$REPO_ROOT/.agent/prompt/audit.md" "docs/system-roadmap.yaml"
+check_term "$REPO_ROOT/.agent/prompt/audit.md" "implementation_registry"
+check_term "$REPO_ROOT/.agent/protocols/audit.md" "Summaryだけで判断しない"
+check_term "$REPO_ROOT/.agent/protocols/audit.md" "PR metadata / mergeability だけで判断しない"
+check_term "$REPO_ROOT/.agent/prompt/specific.md" "PR差分監査"
+check_term "$REPO_ROOT/.agent/prompt/specific.md" "merge判断"
+check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "PR diff or patch"
+check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "changed files"
+check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" ".agent/tasks/todo.md"
+check_term "$REPO_ROOT/.agent/prompt/existing-pr-update.md" "docs/system-roadmap.yaml"
+
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== Work-type routing checks passed ==="
   exit 0

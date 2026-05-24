@@ -1,12 +1,22 @@
 # existing_pr_update prompt router
 
 ## purpose
-Follow-up work for an already-open PR.
+Follow-up work for an already-open PR based on reviewed diff and residual gaps.
 
 ## trigger_condition
-Worktype is `existing_pr_update`.
+Worktype is `existing_pr_update`, including:
+- 既存PRへ追加修正
+- PR差分レビュー後 follow-up 作成
+- merge前後の残ズレ修正
+- PR #xxx 差分に対する追加commit/追加prompt作成
 
 ## required_reads
+- PR diff or patch
+- changed files
+- previous review findings or explicit user findings
+- .agent/tasks/todo.md
+- docs/system-roadmap.yaml
+- target implementation files
 - .agent/protocols/completion-summary.md
 
 ## optional_reads
