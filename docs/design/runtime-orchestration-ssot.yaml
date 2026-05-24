@@ -21,6 +21,12 @@ runtime_orchestration_ssot:
         - completion_condition_contracts
         - pipeline_body_test_contracts
         - csharp_dotnet_application_side_ci
+    ci_contract_reference:
+      source: docs/design/ci-contract-ssot.yaml
+      owns:
+        - orchestration_vocabulary_audit_contract
+        - pipeline_lane_contract_loader_and_audit
+        - minimal_gate_vs_dotnet_semantic_assertion_responsibility_split
     orchestration_change_rule: Runtime orchestration changes that affect a lane must update or validate the corresponding pipeline-continuity lane contract.
     non_duplication_rule: Do not duplicate detailed lane test conditions in this SSOT; keep fine-grained verification in pipeline-continuity SSOT.
 

@@ -8,6 +8,19 @@ pipeline_continuity_ssot:
     - hardcode_guard_for_dispatcher_bypass_and_fallback_detection
     - canonical_route_identity_and_boundary_contract
 
+  ci_contract_reference:
+    source: docs/design/ci-contract-ssot.yaml
+    usage:
+      - csharp_dotnet_lane_tests_define_semantic_assertions
+      - shell_gate_keeps_minimal_presence_checks
+      - runtime_orchestration_vocabulary_is_audited_when_lane_contract_changes
+      - workflow_registration_must_cover_lane_test_packages
+    minimal_gate_scope:
+      - lane_definition_presence
+      - ci_package_or_test_file_reference_presence
+      - workflow_registration_presence
+      - ssot_reference_presence
+
   ci_responsibility_split:
     sh_checks:
       role:
