@@ -173,7 +173,7 @@ system_roadmap_ssot:
         - backend.sse_emitter: partial
         - frontend.sse_receiver: skeleton
         - frontend.sse_dispatcher: skeleton
-        - frontend.projection_runtime: partial
+        - frontend.projection_constructor: partial
       blocking_gaps:
         - Gap-8 projection_constructor
 
