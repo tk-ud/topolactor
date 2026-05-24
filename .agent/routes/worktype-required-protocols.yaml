@@ -50,6 +50,7 @@ worktypes:
     required_protocols:
       - .agent/protocols/todo-carry-over.md
     required_checks:
+      - .agent/tests/check-system-roadmap.sh
       - .agent/tests/check-structure.sh
 
   existing_pr_update:

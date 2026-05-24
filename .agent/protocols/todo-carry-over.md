@@ -53,3 +53,16 @@ Implementation agent may directly close/update canonical TODO/roadmap only when 
 5. update is consistent with completion-governance protocol.
 
 If any condition is unknown or unmet, defer closure and keep Auditor TODO input.
+
+
+## Roadmap update judgment gate
+
+When `docs/system-roadmap.yaml` is updated as part of TODO/roadmap maintenance, apply the following required judgments before completion:
+
+- Run `bash .agent/tests/check-system-roadmap.sh` as a required check for roadmap-changing work.
+- For status `partial` or `skeleton`, each changed entry must keep at least one explicit unresolved-condition anchor: `completion_condition` or `known_gap_ref`.
+- On status transitions (`planned`/`skeleton`/`partial`/`implemented`), verify `public_summary`, `known_gap_ref`, and unresolved scope are semantically consistent.
+- If implementation-complete phrasing is added to `public_summary`, keep only actually remaining unresolved scope in `known_gap_ref` with explicit boundaries.
+- Remove stale/obsolete gap statements; do not leave historical unresolved wording after the gap is resolved or reclassified.
+
+Failure to satisfy these checks is blocking for TODO/roadmap closure judgment.
