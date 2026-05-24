@@ -1,0 +1,84 @@
+import type { ComponentChildren } from "preact";
+import type { ComponentDesignParams } from "./Button.tsx";
+
+export type { ComponentDesignParams };
+
+export type { ComponentChildren };
+
+export type ComponentIdentityProps = {
+  componentId?: string;
+  packageId?: string | null;
+  layoutId?: string | null;
+  wiringId?: string | null;
+};
+
+export type ComponentState = "default" | "loading" | "success" | "error";
+
+export type ComponentEventHandlers = {
+  onClick?: () => void;
+  onChange?: (value: string) => void;
+  onSelect?: (value: string) => void;
+  onSubmit?: () => void;
+  onToggle?: (open: boolean) => void;
+  onExpand?: () => void;
+  onCollapse?: () => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
+};
+
+export type ComponentTemplateProps = ComponentIdentityProps & {
+  className?: string;
+  design?: ComponentDesignParams;
+  state?: ComponentState;
+  disabled?: boolean;
+  title?: string;
+  description?: string;
+  footer?: ComponentChildren;
+  actions?: ComponentChildren;
+  children?: ComponentChildren;
+};
+
+export function mergeDesignClassName(
+  className?: string,
+  design?: ComponentDesignParams,
+): string | undefined {
+  return (
+    [className, design?.classname, design?.className, design?.tailwind]
+      .filter(Boolean)
+      .join(" ") || undefined
+  );
+}
+
+export function mergeDesignStyle(
+  baseStyle: string,
+  design?: ComponentDesignParams,
+): string {
+  return design?.style ? `${baseStyle};${design.style}` : baseStyle;
+}
+
+export function computeDesignDisabled(
+  disabled: boolean | undefined,
+  design?: ComponentDesignParams,
+): boolean {
+  return disabled === true || design?.state === "loading";
+}
+
+// Candidate component_kind strings for future SUPPORTED_COMPONENT_KINDS registration.
+// These are code-only template candidates; registration requires DB promotion
+// (ui_component_bucket -> package_generator -> componentId/packageId/layoutId/wiringId).
+//
+// "form_input/select"      → Select
+// "form_input/checkbox"    → Checkbox
+// "form_input/textarea"    → Textarea
+// "display/badge"          → Badge / StatusBadge
+// "display/alert"          → Alert
+// "feedback/loading"       → LoadingState
+// "feedback/empty"         → EmptyState
+// "feedback/error"         → ErrorState
+// "data_display/json"      → JsonViewer
+// "shell/admin_page"       → AdminPageShell
+// "shell/admin_section"    → AdminSection
+// "validation/result"      → ValidationResultPanel
+// "disclosure/tabs"        → Tabs
+// "disclosure/modal"       → Modal
+// "data_display/tree"      → Tree / TreeNode
