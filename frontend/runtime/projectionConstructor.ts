@@ -117,12 +117,12 @@ function validateBySchema(schema: JsonObject, mergedProps: JsonObject): string |
   if (!properties) return undefined;
 
   for (const [key, definition] of Object.entries(properties)) {
-    if (!(key in mergedProps)) continue;
     if (!isObject(definition) || typeof definition.type !== "string") return `PROJECTION_CONSTRUCTOR_INVALID_PARAMETER_SCHEMA_DEFINITION: ${key}`;
-    const value = mergedProps[key];
-    if (value === null || value === undefined) continue;
     const expected = definition.type;
     if (!["string", "number", "boolean", "array", "object"].includes(expected)) return `PROJECTION_CONSTRUCTOR_INVALID_PARAMETER_SCHEMA_TYPE: ${key} unsupported type ${expected}`;
+    if (!(key in mergedProps)) continue;
+    const value = mergedProps[key];
+    if (value === null || value === undefined) continue;
     if (expected === "string" && typeof value !== "string") return `PROJECTION_CONSTRUCTOR_SCHEMA_TYPE_MISMATCH: ${key} expected string`;
     if (expected === "number" && typeof value !== "number") return `PROJECTION_CONSTRUCTOR_SCHEMA_TYPE_MISMATCH: ${key} expected number`;
     if (expected === "boolean" && typeof value !== "boolean") return `PROJECTION_CONSTRUCTOR_SCHEMA_TYPE_MISMATCH: ${key} expected boolean`;
@@ -142,9 +142,14 @@ export function constructProjection(jsonKeyValue: Record<string, unknown>, defin
       return { projection: { kind: "form_inputs", fields: definition.fieldDefs.map((def) => ({ key: def.key, label: def.label, kind: def.kind, value: jsonKeyValue[def.key] ?? null, options: def.options, required: def.required })) } };
     }
     case "component_projection": {
-      const componentId = definition.componentId ?? definition.componentDefinition?.componentId;
-      if (!componentId) return { error: "PROJECTION_CONSTRUCTOR_MISSING_COMPONENT_ID: componentId required for component_projection" };
       const componentDefinition = definition.componentDefinition;
+      const definitionComponentId = definition.componentId;
+      const payloadComponentId = componentDefinition?.componentId;
+      if (definitionComponentId && payloadComponentId && definitionComponentId !== payloadComponentId) {
+        return { error: "PROJECTION_CONSTRUCTOR_COMPONENT_ID_MISMATCH: definition.componentId and componentDefinition.componentId must match" };
+      }
+      const componentId = definitionComponentId ?? payloadComponentId;
+      if (!componentId) return { error: "PROJECTION_CONSTRUCTOR_MISSING_COMPONENT_ID: componentId required for component_projection" };
       if (!componentDefinition) return { error: "PROJECTION_CONSTRUCTOR_MISSING_COMPONENT_DEFINITION: componentDefinition required" };
       if (!componentDefinition.component_kind) return { error: "PROJECTION_CONSTRUCTOR_MISSING_COMPONENT_KIND: component_kind required" };
 
@@ -176,7 +181,7 @@ export function constructProjection(jsonKeyValue: Record<string, unknown>, defin
           componentId,
           props: normalized.value,
           componentDataHub: {
-            componentId: componentDefinition.componentId ?? componentId,
+            componentId,
             componentKey: componentDefinition.componentKey,
             packageId: componentDefinition.packageId,
             layoutId: componentDefinition.layoutId,

@@ -77,3 +77,30 @@ Deno.test("constructProjection: schema type mismatch is explicit error", () => {
   const result = constructProjection({ label: "x", disabled: "false" }, { constructorKey: "k", packageIds: ["p"], outputKind: "component_projection", componentId: "cmp", componentDefinition: { componentId: "cmp", component_kind: "action/button", parameter_schema: { properties: { disabled: { type: "boolean" } } } } });
   assertEquals(result.error, "PROJECTION_CONSTRUCTOR_SCHEMA_TYPE_MISMATCH: disabled expected boolean");
 });
+
+
+Deno.test("constructProjection: componentId mismatch returns explicit error", () => {
+  const result = constructProjection({}, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-a",
+    componentDefinition: { componentId: "cmp-b", component_kind: "display/card" },
+  });
+  assertEquals(result.error, "PROJECTION_CONSTRUCTOR_COMPONENT_ID_MISMATCH: definition.componentId and componentDefinition.componentId must match");
+});
+
+Deno.test("constructProjection: unsupported schema type errors even when prop missing", () => {
+  const result = constructProjection({}, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp",
+    componentDefinition: {
+      componentId: "cmp",
+      component_kind: "display/card",
+      parameter_schema: { properties: { ghost: { type: "integer" } } },
+    },
+  });
+  assertEquals(result.error, "PROJECTION_CONSTRUCTOR_INVALID_PARAMETER_SCHEMA_TYPE: ghost unsupported type integer");
+});
