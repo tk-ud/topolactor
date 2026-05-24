@@ -111,13 +111,18 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
       → 今回PRで完了した細分化TODO単位（親Issue #86は未完了のまま）:
+        - runtime primitive renderer の interactive emit coverage を拡張（input focus/blur, table select, card click optional bind）。
+        - primitive component props に runtime event hook (onFocus/onBlur/onRowClick/onClick) を追加し、direct API call なしの emit-only 経路を維持。
         - runtime alias catalog coverage を `textarea/search_input/panel/section/data_grid/list` まで拡張。
         - projection constructor / runtime adapter / primitive renderer への alias 接続を完了。
         - SSE projection runtime lane の単体導線（`projection_runtime -> renderRuntimeComponents`）テストを追加。
         - package_generator:generate の ID返却契約 unit test（tensorId/componentId/packageId/layoutId/wiringId）を追加。
         - NotBucketed explicit error mapping unit test を追加。
+        - admin_runtime `package_generator:promote` を generate continuity 経路へ接続し、issued ID返却契約 unit test を追加。
+        - projection_constructor/runtime_component_adapter で `wiringId` を保持する continuity test を追加。
+        - backend-tests CI に PostgreSQL service + schema適用 + `TOPOLACTOR_TEST_DB_CONNECTION` 必須実行を追加し、`UiTopologyRegistrationContinuityIntegrationTests` を remote 実行対象へ組み込む。
+        - remote backend-tests CI で `UiTopologyRegistrationContinuityIntegrationTests` が PostgreSQL service / schema apply / `TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1` 下で実行成功し、`ui_component_bucket -> package_generator:promote -> registration tables -> ui_topology_tensor` の実DB continuity を確認済み。
       → 親Issue #86 に対する残scope（implemented 判定は不可）:
-        - 実DB integration で `ui_component_bucket -> package_generator -> promote` 永続化連続性を確認する。
         - catalog対象 component の bucket/generate/promote 登録を進め、componentId/packageId/layoutId/wiringId を DB topology 側へ接続する。
         - code-only component/package drift を解消、または catalog単位で明示残TODO化する。
         - alias扱いと専用primitive化の境界（textarea/list/panel/section/data_grid/search_input）を整理する。

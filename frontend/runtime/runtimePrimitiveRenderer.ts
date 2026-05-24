@@ -88,6 +88,18 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
             const result = emitBoundEvent(spec, "change", { value });
             if (!result.ok) throw new Error(result.error);
           },
+          onFocus: spec.eventBinding.focus
+            ? () => {
+              const result = emitBoundEvent(spec, "focus", {});
+              if (!result.ok) throw new Error(result.error);
+            }
+            : undefined,
+          onBlur: spec.eventBinding.blur
+            ? () => {
+              const result = emitBoundEvent(spec, "blur", {});
+              if (!result.ok) throw new Error(result.error);
+            }
+            : undefined,
         }),
       };
     }
@@ -101,6 +113,12 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
           variant: props.variant as "default" | "info" | "warning" | "error" | undefined,
           children: h("div", null, (props.body as string | undefined) ?? ""),
           footer: props.footer as string | undefined,
+          onClick: spec.eventBinding.click
+            ? () => {
+              const result = emitBoundEvent(spec, "click", {});
+              if (!result.ok) throw new Error(result.error);
+            }
+            : undefined,
         }),
       };
     case "data_display/table":
@@ -116,6 +134,12 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
           rows,
           rowKey: (row) => String(row.id ?? JSON.stringify(row)),
           emptyMessage: (props.emptyMessage as string | undefined) ?? "No data.",
+          onRowClick: spec.eventBinding.select
+            ? (row) => {
+              const result = emitBoundEvent(spec, "select", { row });
+              if (!result.ok) throw new Error(result.error);
+            }
+            : undefined,
         }),
       };
     }

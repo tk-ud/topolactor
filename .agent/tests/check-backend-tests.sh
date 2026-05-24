@@ -13,3 +13,10 @@ fi
 cd "${REPO_ROOT}"
 
 dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo --verbosity minimal
+
+# Integration continuity proof for UI topology registration boundary.
+if [[ -n "${TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY:-}" ]]; then
+  dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
+    --filter UiTopologyRegistrationContinuityIntegrationTests \
+    --nologo --verbosity minimal
+fi

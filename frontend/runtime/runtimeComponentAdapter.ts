@@ -4,6 +4,7 @@ export type RuntimeComponentSpec = {
   componentId: string;
   packageId?: string | null;
   layoutId?: string | null;
+  wiringId?: string | null;
   componentType: string;
   props: Record<string, unknown>;
   eventBinding: Record<string, unknown>;
@@ -46,6 +47,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       componentId: hub.componentId,
       packageId: hub.packageId,
       layoutId: hub.layoutId,
+      wiringId: hub.wiringId,
       componentType: hub.componentKind,
       props: hub.props,
       eventBinding: hub.eventBinding,

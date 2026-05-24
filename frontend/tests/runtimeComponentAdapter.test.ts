@@ -31,6 +31,7 @@ Deno.test("runtimeComponentAdapter: projection constructor hub converts to butto
       componentId: "cmp-1",
       packageId: "pkg-1",
       layoutId: "lay-1",
+      wiringId: "wire-1",
       component_kind: "action/button",
       default_parameters: { label: "Run" },
       event_binding: { click: { eventType: "click", actorOrSource: "ui_test" } },
@@ -44,4 +45,6 @@ Deno.test("runtimeComponentAdapter: projection constructor hub converts to butto
   assertEquals(result.value.componentType, "action/button");
   assertEquals(result.value.componentId, "cmp-1");
   assertEquals(result.value.packageId, "pkg-1");
+  assertEquals(result.value.layoutId, "lay-1");
+  assertEquals(result.value.wiringId, "wire-1");
 });

@@ -18,6 +18,7 @@ export type ComponentDefinitionPayload = {
   componentKey?: string;
   packageId?: string | null;
   layoutId?: string | null;
+  wiringId?: string | null;
   component_kind: string;
   semantic_role?: string | null;
   visual_role?: string | null;
@@ -31,6 +32,7 @@ export type ComponentDataHub = {
   componentKey?: string;
   packageId?: string | null;
   layoutId?: string | null;
+  wiringId?: string | null;
   componentKind: string;
   semanticRole?: string | null;
   visualRole?: string | null;
@@ -191,6 +193,7 @@ export function constructProjection(jsonKeyValue: Record<string, unknown>, defin
             componentKey: componentDefinition.componentKey,
             packageId: componentDefinition.packageId,
             layoutId: componentDefinition.layoutId,
+            wiringId: componentDefinition.wiringId,
             componentKind: componentDefinition.component_kind,
             semanticRole: componentDefinition.semantic_role,
             visualRole: componentDefinition.visual_role,
