@@ -34,9 +34,18 @@ Worktype is `audit`, including any of:
 
 ## completion_judgment_axis
 - `implemented` 判定は roadmap/TODO/SSOT に定義された completion_condition を満たす場合のみ許可する。
+- audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しない。
+- implemented 未達時は、implemented 到達可能な TODO 単位への細分化、または canonical TODO への carry-over 指示（remaining scope / next TODO）を必須とする。
+- implemented 未達 + TODO細分化なし + carry-over 指示なし + Approve は禁止（Request Changes）。
+- 親 Issue / TODO が大きすぎる場合は、implemented 到達可能な小TODOへ分割し、Approve 根拠は今回PR対象の細分化TODO単位 completion_condition 充足に限定する。
+- 「未達が残っているが partial として整合」は Approve 理由にしない。
+- 「未達が残っているが、残TODOが canonical に明示細分化されている」場合のみ carry-over 整合として扱う。
 - representative route のみ成立、skeleton 実装、ACK-only、partial wiring は `implemented` 禁止で `partial` 判定に固定する。
 - Frontend Component Event Runtime などで queue/start/representative emit が存在しても、append-only DB境界未達や全surface配線未達が残る場合は `implemented` 禁止。
 - SSOT未達条件が1つでも残る場合、`known_gap_ref` と `remaining_todo` に未達項目を明示的に残す。
+- partial Approve は、PR purpose / Issue目的 / user依頼が明示的に partial / scoped progress / non-closing progress の場合に限定する。
+- PR本文・Issue目的・user依頼・TODO項目のいずれかが implemented / close / completion / TODO `[x]` を目指す場合、`completion_condition` 未達、remaining `known_gap_ref`、concrete `remaining_todo` が1つでもあれば Request Changes とする。
+- TODO/roadmap に未達が明示されている事実は partial 分類の正しさの証拠であり、implemented-target PR の Approve 根拠にはならない。
 - 実装意味が進んだ場合でも status 更新前に、TODO/roadmap 記載と実装実態を照合し、completion_condition 充足を再確認する。
 - summary-only / 動作確認-only / representative route-only を completion 根拠として扱わない。
 - Approve可能な non-blocker findings は PR本文だけで閉じず、`.agent/tasks/todo.md` の `Non-blocking cleanup / hardening carry-over` へ必ず carry-over する。
