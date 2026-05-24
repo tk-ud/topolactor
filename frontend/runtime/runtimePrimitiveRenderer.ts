@@ -34,6 +34,7 @@ function emitBoundEvent(spec: RuntimeComponentSpec, trigger: string, payload: Re
     componentId: spec.componentId,
     packageId: spec.packageId,
     layoutId: spec.layoutId,
+    wiringId: spec.wiringId,
     eventType: binding.eventType,
     actorOrSource: binding.actorOrSource ?? "runtime_primitive_renderer",
     payload: { ...binding.payload, ...payload },

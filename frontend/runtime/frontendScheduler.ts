@@ -20,6 +20,7 @@ type ComponentOperationEvent = {
   componentId: string;
   packageId?: string | null;
   layoutId?: string | null;
+  wiringId?: string | null;
   eventType: NormalizedComponentEventType;
   payload: Record<string, unknown>;
   actorOrSource: string;
@@ -130,6 +131,7 @@ export function emitComponentOperationEvent(input: Omit<ComponentOperationEvent,
     componentId: input.componentId,
     packageId: input.packageId,
     layoutId: input.layoutId,
+    wiringId: input.wiringId,
     eventType: input.eventType,
     payload,
     actorOrSource: input.actorOrSource,
@@ -209,5 +211,8 @@ export const __testOnly = {
   },
   getQueueLength(): number {
     return queue.length;
+  },
+  getQueueSnapshot(): Array<ComponentOperationEvent & { retryCount: number }> {
+    return queue.map((e) => ({ ...e }));
   },
 };
