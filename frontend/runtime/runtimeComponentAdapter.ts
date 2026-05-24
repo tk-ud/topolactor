@@ -8,6 +8,8 @@ export type RuntimeComponentSpec = {
   componentType: string;
   props: Record<string, unknown>;
   eventBinding: Record<string, unknown>;
+  className?: string;
+  design?: Record<string, unknown>;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | { ok: false; error: string };
@@ -41,6 +43,8 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
   if (typeof hub.eventBinding !== "object" || hub.eventBinding === null || Array.isArray(hub.eventBinding)) {
     return { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_INVALID_EVENT_BINDING" };
   }
+  const design = (typeof hub.design === "object" && hub.design !== null && !Array.isArray(hub.design)) ? hub.design : {};
+  const className = typeof design.classname === "string" ? design.classname : undefined;
   return {
     ok: true,
     value: {
@@ -51,6 +55,8 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       componentType: hub.componentKind,
       props: hub.props,
       eventBinding: hub.eventBinding,
+      className,
+      design,
     },
   };
 }

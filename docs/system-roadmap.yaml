@@ -815,8 +815,7 @@ system_roadmap_ssot:
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
       known_gap_ref:
-        - Issue #86 partial: frontend component constructor/interface + DB-driven design/layout/wiring projection bundle is not closed yet
-        - Issue #86 partial: catalog-wide registration execution and code-only drift closure pending after constructor/interface bundle closure
+        - Issue #86 partial: completion bundle (frontend constructor/interface + DB-driven design/layout/wiring projection + catalog registration closure) is not closed yet
 
     admin_visual_layout_builder:
       status: partial

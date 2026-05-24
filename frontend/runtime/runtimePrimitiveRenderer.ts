@@ -62,6 +62,8 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
           disabled: props.disabled as boolean | undefined,
           variant: props.variant as "primary" | "secondary" | "danger" | undefined,
           type: props.type as "button" | "submit" | "reset" | undefined,
+          className: spec.className,
+          design: spec.design ?? {},
           onClick: () => {
             const result = emitBoundEvent(spec, "click", {});
             if (!result.ok) throw new Error(result.error);
@@ -95,6 +97,8 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
               if (!result.ok) throw new Error(result.error);
             }
             : undefined,
+          className: spec.className,
+          design: spec.design ?? {},
           onBlur: spec.eventBinding.blur
             ? () => {
               const result = emitBoundEvent(spec, "blur", {});
@@ -111,6 +115,8 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
         ok: true,
         node: h(Card, {
           title: props.title as string | undefined,
+          className: spec.className,
+          design: spec.design ?? {},
           variant: props.variant as "default" | "info" | "warning" | "error" | undefined,
           children: h("div", null, (props.body as string | undefined) ?? ""),
           footer: props.footer as string | undefined,
@@ -132,6 +138,8 @@ export function renderRuntimeComponent(spec: RuntimeComponentSpec): RenderResult
         ok: true,
         node: h(Table<Record<string, unknown>>, {
           columns,
+          className: spec.className,
+          design: spec.design ?? {},
           rows,
           rowKey: (row) => String(row.id ?? JSON.stringify(row)),
           emptyMessage: (props.emptyMessage as string | undefined) ?? "No data.",

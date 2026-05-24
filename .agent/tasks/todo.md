@@ -85,29 +85,21 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Frontend UI Primitive Catalog Bucket/Promote (Issue #86)
 
-- [ ] [bundle][Issue #86][frontend_ui_component_system] frontend component constructor/interface + DB-driven design/layout/wiring projection bundle を完了する
+- [ ] [bundle][Issue #86][frontend_ui_component_system] frontend component constructor/interface + DB-driven design/layout/wiring projection + catalog registration completion bundle を完了する
       → roadmap entry: `docs/system-roadmap.yaml` `frontend_ui_component_system`
       → completion_condition 対応:
         - `primitive_and_packaged_component_boundary_is_defined`
         - `componentId_packageId_layoutId_wiringId_are_registered_in_UI_topology_DB`
         - `code_only_components_are_treated_as_drift_or_gap`
         - `frontend_does_not_own_runtime_or_topology_judgment`
-      → Bundle A: frontend component constructor/interface closure
-        - React component を physical template / constructor として整備し、個別見た目差分で component を乱立させず interface で吸収する。
-        - interface 前提: props, className, design param（tailwind/style token相当）, event hook, children/slot, disabled/state 最小制御。
-        - inline style / hardcoded variant 依存面は DB design 注入可能な interface へ寄せる（implementation atom の列挙は禁止）。
-      → Bundle B: DB-driven design/package projection closure
-        - design 正本は frontend 固定ではなく DB `design.classname` / `design.tailwind` 側で扱う前提を維持する。
-        - `packages.layout` の `{componentId, designId}` を constructor input へ流す境界を整理する。
-        - `runtimeComponentAdapter` / `runtimePrimitiveRenderer` が design/layout/wiring 由来の引数を component interface に投影する責務を閉じる。
-      → Bundle C: topology registration closure
-        - `ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor` 登録導線を constructor/interface 対応後に閉じる。
-        - code-only component/package drift は解消、または catalog 単位 drift として明示残TODO化する。
-        - #86 implemented 判定は「code-only drift 0件」または「未登録 component を catalog drift として明示残TODO化」まで不可。
-      → 監査観点（hook逸脱防止）:
-        - hook で design/layout/wiring 正本を保持していないか。
-        - UI constructor / adapter / renderer 経由で DB topology payload を投影しているか。
-        - admin UI 局所 state と topology projection 正本を混同していないか。
+      → closure scope（分割禁止）:
+        - frontend component constructor/interface を DB topology payload projection 前提（props/className/design/event hook/children/disabled/state）で閉じる。
+        - design/layout/wiring 正本を frontend 固定値に置かず、`design.classname`/`design.tailwind`、`packages.layout`、`ui_layout_registry`、`ui_wiring_registry`、`ui_topology_tensor` を投影元として扱う。
+        - `runtimeComponentAdapter` / `runtimePrimitiveRenderer` の責務を DB topology payload → component interface projection に揃える。
+        - `ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor` 登録導線を同一bundleで閉じる。
+      → 判定境界:
+        - code-only drift を完了扱いしない（解消 or catalog drift として bundle 単位で残TODO化）。
+        - Issue #86 implemented 判定は `docs/system-roadmap.yaml` の `completion_condition` / `known_gap_ref` と整合させる。
 
 ## Admin Visual Layout Builder (Issue #89)
 
