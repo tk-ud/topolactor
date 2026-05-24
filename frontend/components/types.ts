@@ -69,7 +69,10 @@ export function computeDesignDisabled(
 //
 // "form_input/select"      → Select
 // "form_input/checkbox"    → Checkbox
-// "form_input/textarea"    → Textarea
+// NOTE: "form_input/textarea" is already a live runtime alias in SUPPORTED_COMPONENT_KINDS
+// and currently flows through the Input primitive adapter path (see runtimePrimitiveRenderer
+// and /admin/ui-builder PrimitiveCatalog textarea.alias). Keep this candidate list scoped to
+// new code-only templates that are NOT runtime-connected in this PR.
 // "display/badge"          → Badge / StatusBadge
 // "display/alert"          → Alert
 // "feedback/loading"       → LoadingState
