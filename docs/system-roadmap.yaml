@@ -710,6 +710,12 @@ system_roadmap_ssot:
         projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. SSE dispatcher wiring and full projection runtime completion remain pending.
       files:
         - frontend/runtime/projectionConstructor.ts
+        - frontend/tests/projectionConstructor.test.ts
+      evidence:
+        tests:
+          - projectionConstructor.test.ts
+        ci:
+          - check-pipeline-continuity.sh
       completion_condition:
         - projection_definition_and_json_key_value_build_form_inputs_component_projection_or_ui_projection
         - projection_constructor_mapping_is_read_from_manifest_response

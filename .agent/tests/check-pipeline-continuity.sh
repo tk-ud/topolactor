@@ -47,6 +47,42 @@ else
   fail "[pipeline.body] check-default-entity-search.sh not found — pipeline body test missing"
 fi
 
+
+PROJECTION_TEST="$REPO_ROOT/frontend/tests/projectionConstructor.test.ts"
+if [ -f "$PROJECTION_TEST" ]; then
+  echo "OK  [pipeline.body] projection constructor test file present"
+else
+  fail "[pipeline.body] frontend/tests/projectionConstructor.test.ts not found — projection constructor lane body test missing"
+fi
+
+if [ -f "$SSOT" ]; then
+  if grep -q '^    frontend_projection_constructor_lane:' "$SSOT"; then
+    echo "OK  [pipeline.body] frontend_projection_constructor_lane present in SSOT"
+  else
+    fail "[pipeline.body] frontend_projection_constructor_lane missing in SSOT"
+  fi
+
+  for identity_key in componentId component_kind parameter_schema event_binding; do
+    if grep -q "^- ${identity_key}$\|^        - ${identity_key}$" "$SSOT"; then
+      :
+    else
+      fail "[pipeline.body] required_identity missing key: ${identity_key}"
+    fi
+  done
+  echo "OK  [pipeline.body] projection constructor required_identity minimum keys present"
+
+  for prohibited_key in     componentId_drift     silent_fallback_for_malformed_component_definition_payload     malformed_schema_silent_pass     unsupported_schema_type_silent_pass     invalid_event_binding_fallback_to_empty_object     boolean_coercion; do
+    if grep -q "^- ${prohibited_key}$\|^        - ${prohibited_key}$" "$SSOT"; then
+      :
+    else
+      fail "[pipeline.body] prohibited missing key: ${prohibited_key}"
+    fi
+  done
+  echo "OK  [pipeline.body] projection constructor prohibited guard keys present"
+else
+  fail "[pipeline.body] pipeline-continuity-ssot.yaml not found"
+fi
+
 # ─── 2. HARDCODE GUARD — dispatcher bypass and fallback detection ──────────────
 # Guards that topology_transform_runtime (RuntimeExecutor) does not accumulate
 # hardcoded target/layer/action dispatch branching that replaces data-driven
