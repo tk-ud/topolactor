@@ -66,3 +66,12 @@ Deno.test("component event runtime: flush failure retries and keeps queue", asyn
     __testOnly.resetQueue();
   }
 });
+
+Deno.test("component event runtime: bounded queue caps event count", () => {
+  __testOnly.resetQueue();
+  for (let i = 0; i < 400; i++) {
+    emitComponentOperationEvent({ componentId: `cmp-${i}`, eventType: "click", actorOrSource: "test", payload: { i } });
+  }
+  assertEquals(__testOnly.getQueueLength(), 300);
+  __testOnly.resetQueue();
+});

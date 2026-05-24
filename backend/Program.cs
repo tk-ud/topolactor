@@ -157,6 +157,7 @@ builder.Services.AddSingleton<SseEndpoint>(sp =>
         sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<AuthEndpoint>();
 builder.Services.AddSingleton<LegacyChangeIntakeEndpoint>();
+builder.Services.AddSingleton<ComponentEventAppendEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
 // ---------------------------------------------------------------------------
@@ -211,6 +212,16 @@ app.MapPost("/dispatch", async (
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
 
+
+
+app.MapPost("/component-events/append", async (
+    HttpContext ctx,
+    ComponentEventAppendRequestDto request,
+    ComponentEventAppendEndpoint endpoint) =>
+{
+    var result = await endpoint.HandleAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 202 : 422);
+});
 
 // POST /intake/legacy-change — existing-system change-event intake boundary.
 app.MapPost("/intake/legacy-change", (
