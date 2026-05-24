@@ -57,6 +57,8 @@ check_term ".agent/protocols/implementation-change.md" "docs/framework-core.yaml
 check_term ".agent/protocols/implementation-change.md" "docs/design/runtime-orchestration-ssot.yaml"
 check_term ".agent/protocols/implementation-change.md" "docs/design/pipeline-continuity-ssot.yaml"
 check_term ".agent/protocols/audit.md" "foundation_ssot_read_gate"
+check_term ".agent/protocols/audit.md" "docs/framework-policy.yaml"
+check_term ".agent/protocols/audit.md" "top_level_ssot_checked"
 check_term ".agent/protocols/todo-carry-over.md" "canonical TODO carry-over は roadmap completion bundle 単位"
 check_term ".agent/protocols/todo-carry-over.md" "foundation_ssot_read_gate"
 check_term ".agent/protocols/audit.md" "## required_output_contract"

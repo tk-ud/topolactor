@@ -14,6 +14,11 @@ Worktype is `audit`, including any of:
 - 「差分見て」「リポジトリ進捗見て」「マージしていいか」系依頼
 
 ## required_reads
+- semantic audit top-level SSOT baseline（always for audit worktype）:
+  1. docs/framework-core.yaml
+  2. docs/framework-policy.yaml
+  3. docs/design/runtime-orchestration-ssot.yaml
+  4. docs/design/pipeline-continuity-ssot.yaml
 - PR diff or patch
 - changed file list
 - .agent/tasks/todo.md
@@ -21,10 +26,8 @@ Worktype is `audit`, including any of:
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
-- foundation SSOT read gate judgment (when applicable):
-  1. docs/framework-core.yaml
-  2. docs/design/runtime-orchestration-ssot.yaml
-  3. docs/design/pipeline-continuity-ssot.yaml
+- target-specific SSOT discovery after top-level baseline:
+  - .agent/docs/ssot-map.yaml (surface-specific discovery; do not replace top-level baseline reads)
 
 ## optional_reads
 - README / docs/articles / design SSOT when diff claim validation requires public/docs context
@@ -61,6 +64,7 @@ Worktype is `audit`, including any of:
 - Merge judgment
 - todo_granularity_judgment
 - foundation_ssot_read_judgment
+- top_level_ssot_checked
 
 ## out_of_scope
 - full-bundle reading by default
@@ -77,8 +81,14 @@ Worktype is `audit`, including any of:
 - Issue closed 状態を implemented 根拠にしていないこと
 
 ## foundation_ssot_read_judgment
-- framework_core_read: yes/no/not_required
-- runtime_orchestration_read: yes/no/not_required
-- pipeline_continuity_read: yes/no/not_required
-- reason_if_not_required:
+- framework_core_read: yes/no
+- framework_policy_read: yes/no
+- runtime_orchestration_read: yes/no
+- pipeline_continuity_read: yes/no
 - target_ssot_read_after_foundation:
+
+## top_level_ssot_checked
+- docs/framework-core.yaml: yes/no
+- docs/framework-policy.yaml: yes/no
+- docs/design/runtime-orchestration-ssot.yaml: yes/no
+- docs/design/pipeline-continuity-ssot.yaml: yes/no

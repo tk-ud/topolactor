@@ -6,6 +6,9 @@
 
 version: 1
 
+notes:
+  - For worktype `audit`, read top-level semantic baseline SSOT first (docs/framework-core.yaml, docs/framework-policy.yaml, docs/design/runtime-orchestration-ssot.yaml, docs/design/pipeline-continuity-ssot.yaml) before using this map for surface-specific discovery.
+
 mapping:
   - work_type: repository_overview
     change_surfaces:
