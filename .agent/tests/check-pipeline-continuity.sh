@@ -182,6 +182,21 @@ fi
 # To implement a node: add file to SSOT files[], update status, add pipeline body test.
 
 echo ""
+
+# frontend_component_event_log_lane minimal gate: presence/CI registration/SSOT references only
+if ! grep -q "frontend_component_event_log_lane" "$SSOT"; then
+  fail "[pipeline.component_event_lane] lane definition missing"
+fi
+if ! grep -q "FrontendComponentEventLogLaneTests.cs" "$SSOT"; then
+  fail "[pipeline.component_event_lane] lane test file reference missing"
+fi
+if ! grep -q "frontend/tests/frontendComponentEventRuntime.test.ts" "$SSOT"; then
+  fail "[pipeline.component_event_lane] frontend runtime test reference missing"
+fi
+if ! grep -q "check-pipeline-continuity.sh" "$SSOT"; then
+  fail "[pipeline.component_event_lane] ci_script reference missing"
+fi
+
 echo "=== [pipeline.gap_status] known gaps (from pipeline-continuity-ssot.yaml) ==="
 if [ -f "$SSOT" ]; then
   sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" \
