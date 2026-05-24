@@ -60,6 +60,34 @@ public class FrontendComponentEventLogLaneTests
         Assert.Equal(1, res.Accepted);
     }
 
+
+    [Fact]
+    public async Task Continuity_NullWiringId_IsAccepted_AndPersistedAsNull()
+    {
+        var spy = new SpyRepo();
+        var sut = new ComponentEventAppendEndpoint(spy);
+
+        var req = new ComponentEventAppendRequestDto([
+            new ComponentOperationEventDto(
+                ComponentId: "cmp-null-wire",
+                PackageId: "pkg-001",
+                LayoutId: "layout-001",
+                WiringId: null,
+                EventType: "click",
+                Payload: new Dictionary<string, object?>(),
+                ActorOrSource: "ProjectionView",
+                OccurredAt: "2026-05-24T00:00:00.000Z",
+                IdempotencyKey: "idem-null-wire")
+        ]);
+
+        var res = await sut.HandleAsync(req, CancellationToken.None);
+
+        Assert.True(res.Success);
+        Assert.Equal(1, res.Accepted);
+        Assert.Single(spy.Appended);
+        Assert.Null(spy.Appended[0].WiringId);
+    }
+
     [Fact]
     public async Task Continuity_AckOnlyOrPayloadDrop_IsRejected_WhenRequiredIdentityMissing()
     {
