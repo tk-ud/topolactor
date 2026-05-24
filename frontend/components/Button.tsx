@@ -2,6 +2,7 @@ import { ComponentChildren, JSX } from "preact";
 
 export type ComponentDesignParams = {
   className?: string;
+  classname?: string;
   style?: string;
   tailwind?: string;
   state?: "default" | "loading" | "success" | "error";
@@ -14,6 +15,7 @@ export type ButtonProps = {
   variant?: "primary" | "secondary" | "danger";
   type?: "button" | "submit" | "reset";
   className?: string;
+  classname?: string;
   design?: ComponentDesignParams;
   children?: ComponentChildren;
 };
@@ -34,14 +36,26 @@ export function Button({
   design,
   children,
 }: ButtonProps): JSX.Element {
-  const designStyle = [design?.tailwind, design?.style].filter(Boolean).join(";");
+  const computedDisabled = disabled || design?.state === "loading";
+  const designStyle = [design?.style].filter(Boolean).join(";");
   return (
     <button
       type={type}
       onClick={onClick}
-      disabled={disabled || design?.state === "loading"}
-      className={className ?? design?.className}
-      style={`${variantStyles[variant]};padding:6px 14px;border-radius:4px;cursor:${disabled ? "not-allowed" : "pointer"};opacity:${disabled ? 0.6 : 1};font-family:monospace;${designStyle}`}
+      disabled={computedDisabled}
+      className={[
+        className,
+        design?.classname,
+        design?.className,
+        design?.tailwind,
+      ].filter(Boolean).join(" ") || undefined}
+      style={`${
+        variantStyles[variant]
+      };padding:6px 14px;border-radius:4px;cursor:${
+        computedDisabled ? "not-allowed" : "pointer"
+      };opacity:${
+        computedDisabled ? 0.6 : 1
+      };font-family:monospace;${designStyle}`}
     >
       {children ?? label}
     </button>

@@ -15,11 +15,32 @@ export type InputProps = {
   children?: ComponentChildren;
 };
 
-export function Input({ value, onChange, onFocus, onBlur, placeholder, disabled = false, label, type = "text", className, design, children }: InputProps): JSX.Element {
-  const containerClassName = className ?? design?.className;
-  const designStyle = [design?.tailwind, design?.style].filter(Boolean).join(";");
+export function Input(
+  {
+    value,
+    onChange,
+    onFocus,
+    onBlur,
+    placeholder,
+    disabled = false,
+    label,
+    type = "text",
+    className,
+    design,
+    children,
+  }: InputProps,
+): JSX.Element {
+  const computedDisabled = disabled || design?.state === "loading";
+  const containerClassName =
+    [className, design?.classname, design?.className, design?.tailwind].filter(
+      Boolean,
+    ).join(" ") || undefined;
+  const designStyle = [design?.style].filter(Boolean).join(";");
   return (
-    <div className={containerClassName} style={`display:flex;flex-direction:column;gap:4px;font-family:monospace;${designStyle}`}>
+    <div
+      className={containerClassName}
+      style={`display:flex;flex-direction:column;gap:4px;font-family:monospace;${designStyle}`}
+    >
       {label && <label style="font-size:0.85rem;color:#555">{label}</label>}
       <input
         type={type}
@@ -28,7 +49,7 @@ export function Input({ value, onChange, onFocus, onBlur, placeholder, disabled 
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={placeholder}
-        disabled={disabled || design?.state === "loading"}
+        disabled={computedDisabled}
         style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:0.9rem"
       />
       {children}
