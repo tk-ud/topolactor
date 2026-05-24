@@ -3,6 +3,8 @@ import { JSX } from "preact";
 export type InputProps = {
   value: string;
   onChange: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   placeholder?: string;
   disabled?: boolean;
   label?: string;
@@ -17,6 +19,8 @@ export type InputProps = {
 export function Input({
   value,
   onChange,
+  onFocus,
+  onBlur,
   placeholder,
   disabled = false,
   label,
@@ -29,6 +33,8 @@ export function Input({
         type={type}
         value={value}
         onInput={(e) => onChange((e.target as HTMLInputElement).value)}
+        onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         disabled={disabled}
         style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:0.9rem"

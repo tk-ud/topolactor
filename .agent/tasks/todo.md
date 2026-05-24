@@ -111,6 +111,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - Tabs / Tab は orientation / activeKey / variant / size / lazyMount / tabItems / panelBinding などの引数で可変にし、タブ数や選択状態をDB topology tensor側の component parameters として表現する。
         - Badge / Icon 系は semantic_role と visual_role を分け、status/severity/count/category/navigation/action の用途差分を variant / token / argument で表現する。
       → 今回PRで完了した細分化TODO単位（親Issue #86は未完了のまま）:
+        - runtime primitive renderer の interactive emit coverage を拡張（input focus/blur, table select, card click optional bind）。
+        - primitive component props に runtime event hook (onFocus/onBlur/onRowClick/onClick) を追加し、direct API call なしの emit-only 経路を維持。
         - runtime alias catalog coverage を `textarea/search_input/panel/section/data_grid/list` まで拡張。
         - projection constructor / runtime adapter / primitive renderer への alias 接続を完了。
         - SSE projection runtime lane の単体導線（`projection_runtime -> renderRuntimeComponents`）テストを追加。

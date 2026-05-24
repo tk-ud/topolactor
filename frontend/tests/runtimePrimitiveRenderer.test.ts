@@ -49,3 +49,36 @@ Deno.test("runtimePrimitiveRenderer: missing required binding is explicit error"
   });
   assertEquals(result, { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_MISSING_EVENT_BINDING: change" });
 });
+
+Deno.test("runtimePrimitiveRenderer: input optional focus/blur bindings emit component events", () => {
+  __testOnly.resetQueue();
+  const result = renderRuntimeComponent({
+    componentId: "c4",
+    componentType: "form_input/input",
+    props: { value: "" },
+    eventBinding: {
+      change: { eventType: "change" },
+      focus: { eventType: "focus" },
+      blur: { eventType: "blur" },
+    },
+  });
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  ((result.node as any).props.onFocus as () => void)();
+  ((result.node as any).props.onBlur as () => void)();
+  assertEquals(__testOnly.getQueueLength(), 2);
+});
+
+Deno.test("runtimePrimitiveRenderer: table select binding emits component events", () => {
+  __testOnly.resetQueue();
+  const result = renderRuntimeComponent({
+    componentId: "c5",
+    componentType: "data_display/table",
+    props: { columns: [{ key: "name", header: "Name" }], rows: [{ id: "r1", name: "A" }] },
+    eventBinding: { select: { eventType: "select", payload: { source: "table" } } },
+  });
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  ((result.node as any).props.onRowClick as (row: Record<string, unknown>) => void)({ id: "r1", name: "A" });
+  assertEquals(__testOnly.getQueueLength(), 1);
+});

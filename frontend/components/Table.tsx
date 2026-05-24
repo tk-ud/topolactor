@@ -11,6 +11,7 @@ export type TableProps<T> = {
   rows: T[];
   rowKey: (row: T) => string;
   emptyMessage?: string;
+  onRowClick?: (row: T) => void;
 };
 
 /**
@@ -23,6 +24,7 @@ export function Table<T extends Record<string, unknown>>({
   rows,
   rowKey,
   emptyMessage = "No data.",
+  onRowClick,
 }: TableProps<T>): JSX.Element {
   return (
     <table
@@ -53,7 +55,11 @@ export function Table<T extends Record<string, unknown>>({
           </tr>
         ) : (
           rows.map((row) => (
-            <tr key={rowKey(row)} style="border-bottom:1px solid #eee">
+            <tr
+              key={rowKey(row)}
+              style="border-bottom:1px solid #eee"
+              onClick={onRowClick ? () => onRowClick(row) : undefined}
+            >
               {columns.map((col) => (
                 <td key={col.key} style="padding:4px 8px">
                   {col.render

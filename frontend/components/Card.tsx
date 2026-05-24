@@ -5,6 +5,7 @@ export type CardProps = {
   children: ComponentChildren;
   footer?: ComponentChildren;
   variant?: "default" | "info" | "warning" | "error";
+  onClick?: () => void;
 };
 
 const variantBorder: Record<string, string> = {
@@ -24,9 +25,11 @@ export function Card({
   children,
   footer,
   variant = "default",
+  onClick,
 }: CardProps): JSX.Element {
   return (
     <section
+      onClick={onClick}
       style={`border:1px solid ${variantBorder[variant]};border-radius:6px;padding:16px;margin-bottom:16px;font-family:monospace`}
     >
       {title && (
