@@ -18,6 +18,7 @@ Deno.test("runtimePrimitiveRenderer: button click eventBinding emits component e
     componentId: "c2",
     packageId: "pkg",
     layoutId: "lay",
+    wiringId: "wir",
     componentType: "action/button",
     props: { label: "Submit" },
     eventBinding: { click: { eventType: "click", actorOrSource: "unit_test", payload: { source: "button" } } },
@@ -26,6 +27,8 @@ Deno.test("runtimePrimitiveRenderer: button click eventBinding emits component e
   if (!result.ok) return;
   ((result.node as any).props.onClick as () => void)();
   assertEquals(__testOnly.getQueueLength(), 1);
+  const [queued] = __testOnly.getQueueSnapshot();
+  assertEquals(queued.wiringId, "wir");
 });
 
 Deno.test("runtimePrimitiveRenderer: primitive components do not directly call API", () => {

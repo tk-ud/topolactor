@@ -16,6 +16,7 @@ Deno.test("emitComponentOperationEvent: accepts normalized event", () => {
     componentId: "cmp-1",
     packageId: "pkg-1",
     layoutId: "layout-1",
+    wiringId: "wiring-1",
     eventType: "toggle",
     actorOrSource: "ui",
     payload: { checked: true, token: "hidden" },
@@ -74,4 +75,19 @@ Deno.test("component event runtime: bounded queue caps event count", () => {
   }
   assertEquals(__testOnly.getQueueLength(), 300);
   __testOnly.resetQueue();
+});
+
+
+Deno.test("emitComponentOperationEvent: wiringId is preserved in queue payload", () => {
+  __testOnly.resetQueue();
+  emitComponentOperationEvent({
+    componentId: "cmp-wire",
+    packageId: "pkg-wire",
+    layoutId: "layout-wire",
+    wiringId: "wiring-wire",
+    eventType: "click",
+    actorOrSource: "ui",
+  });
+  const [queued] = __testOnly.getQueueSnapshot();
+  assertEquals(queued.wiringId, "wiring-wire");
 });

@@ -186,13 +186,14 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "INSERT INTO component_operation_event_log " +
-            "(component_id, package_id, layout_id, event_type, payload, actor_or_source, occurred_at, idempotency_key) " +
-            "VALUES (@componentId, @packageId, @layoutId, @eventType, @payload::jsonb, @actor, @occurredAt, @idempotencyKey) " +
+            "(component_id, package_id, layout_id, wiring_id, event_type, payload, actor_or_source, occurred_at, idempotency_key) " +
+            "VALUES (@componentId, @packageId, @layoutId, @wiringId, @eventType, @payload::jsonb, @actor, @occurredAt, @idempotencyKey) " +
             "ON CONFLICT (idempotency_key) DO NOTHING";
 
         cmd.Parameters.AddWithValue("componentId", ev.ComponentId);
         cmd.Parameters.AddWithValue("packageId", (object?)ev.PackageId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("layoutId", (object?)ev.LayoutId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("wiringId", (object?)ev.WiringId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("eventType", ev.EventType);
         cmd.Parameters.AddWithValue("payload", ev.PayloadJson);
         cmd.Parameters.AddWithValue("actor", ev.ActorOrSource);

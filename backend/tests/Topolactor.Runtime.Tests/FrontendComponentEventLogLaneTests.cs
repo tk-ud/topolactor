@@ -19,6 +19,7 @@ public class FrontendComponentEventLogLaneTests
                 ComponentId: "cmp-001",
                 PackageId: "pkg-001",
                 LayoutId: "layout-001",
+                WiringId: "wiring-001",
                 EventType: "click",
                 Payload: new Dictionary<string, object?> { ["label"] = "save", ["checked"] = true },
                 ActorOrSource: "ProjectionView",
@@ -35,6 +36,7 @@ public class FrontendComponentEventLogLaneTests
         Assert.Equal("cmp-001", appended.ComponentId);
         Assert.Equal("pkg-001", appended.PackageId);
         Assert.Equal("layout-001", appended.LayoutId);
+        Assert.Equal("wiring-001", appended.WiringId);
         Assert.Equal("click", appended.EventType);
         Assert.Contains("\"label\":\"save\"", appended.PayloadJson);
         Assert.Equal("ProjectionView", appended.ActorOrSource);
@@ -49,13 +51,41 @@ public class FrontendComponentEventLogLaneTests
         var sut = new ComponentEventAppendEndpoint(spy);
 
         var req = new ComponentEventAppendRequestDto([
-            new ComponentOperationEventDto("cmp-001", "pkg-001", "layout-001", "submit", new Dictionary<string, object?>(), "OperationPanel", "2026-05-24T00:00:00.000Z", "idem-dup")
+            new ComponentOperationEventDto("cmp-001", "pkg-001", "layout-001", "wiring-dup", "submit", new Dictionary<string, object?>(), "OperationPanel", "2026-05-24T00:00:00.000Z", "idem-dup")
         ]);
 
         var res = await sut.HandleAsync(req, CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
+    }
+
+
+    [Fact]
+    public async Task Continuity_NullWiringId_IsAccepted_AndPersistedAsNull()
+    {
+        var spy = new SpyRepo();
+        var sut = new ComponentEventAppendEndpoint(spy);
+
+        var req = new ComponentEventAppendRequestDto([
+            new ComponentOperationEventDto(
+                ComponentId: "cmp-null-wire",
+                PackageId: "pkg-001",
+                LayoutId: "layout-001",
+                WiringId: null,
+                EventType: "click",
+                Payload: new Dictionary<string, object?>(),
+                ActorOrSource: "ProjectionView",
+                OccurredAt: "2026-05-24T00:00:00.000Z",
+                IdempotencyKey: "idem-null-wire")
+        ]);
+
+        var res = await sut.HandleAsync(req, CancellationToken.None);
+
+        Assert.True(res.Success);
+        Assert.Equal(1, res.Accepted);
+        Assert.Single(spy.Appended);
+        Assert.Null(spy.Appended[0].WiringId);
     }
 
     [Fact]
@@ -68,6 +98,7 @@ public class FrontendComponentEventLogLaneTests
                 ComponentId: "",
                 PackageId: "pkg-001",
                 LayoutId: "layout-001",
+                WiringId: "wiring-001",
                 EventType: "click",
                 Payload: new Dictionary<string, object?>(),
                 ActorOrSource: "ProjectionView",

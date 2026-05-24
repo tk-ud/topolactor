@@ -799,7 +799,7 @@ system_roadmap_ssot:
         UI topology DB tables and NpgsqlUiTopologyRepository already implement full promotion.
         Code-only components are explicitly labeled as drift/GAP.
         Frontend does not own topology or runtime judgment.
-        Remaining: parent Issue #86 is still partial because catalog-wide registration execution and code-only drift closure are pending. DB registration continuity (bucket -> generate -> promote persistence verification) is now evidenced by remote backend-tests CI execution with PostgreSQL service + schema apply + continuity integration test success. Runtime alias coverage and unit-level projection/package-generate contract checks are completed as sub-units, but full completion_condition still requires catalog registration closure.
+        Remaining: parent Issue #86 is still partial because catalog-wide registration execution and code-only drift closure are pending. Component operation event lane now preserves wiringId continuity (frontend emit queue -> append DTO -> repository log/DB column), but completion boundary remains unchanged (partial). DB registration continuity (bucket -> generate -> promote persistence verification) is now evidenced by remote backend-tests CI execution with PostgreSQL service + schema apply + continuity integration test success. Runtime alias coverage and unit-level projection/package-generate contract checks are completed as sub-units, but full completion_condition still requires catalog registration closure.
       files:
         - frontend/components/Button.tsx
         - frontend/components/Input.tsx

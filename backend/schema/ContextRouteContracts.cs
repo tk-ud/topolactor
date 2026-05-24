@@ -260,6 +260,7 @@ public record ComponentOperationEventLogRecord(
     string ComponentId,
     string? PackageId,
     string? LayoutId,
+    string? WiringId,
     string EventType,
     string PayloadJson,
     string ActorOrSource,

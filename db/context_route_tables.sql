@@ -578,6 +578,7 @@ CREATE TABLE IF NOT EXISTS component_operation_event_log (
     component_id      TEXT NOT NULL,
     package_id        TEXT NULL,
     layout_id         TEXT NULL,
+    wiring_id         TEXT NULL,
     event_type        TEXT NOT NULL,
     payload           JSONB NOT NULL,
     actor_or_source   TEXT NOT NULL,
@@ -585,6 +586,10 @@ CREATE TABLE IF NOT EXISTS component_operation_event_log (
     idempotency_key   TEXT NOT NULL UNIQUE,
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+
+ALTER TABLE component_operation_event_log
+  ADD COLUMN IF NOT EXISTS wiring_id TEXT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_component_operation_event_log_occurred_at
   ON component_operation_event_log (occurred_at);
