@@ -17,6 +17,13 @@ Read this protocol only when classifying remaining work for `.agent/tasks/todo.m
 
 ## Carry-over classification
 
+### TODO granularity invariant
+
+- canonical TODO carry-over は roadmap completion bundle 単位で作成する。
+- implementation atom の羅列（alias追加/adapter接続/emit追加等）を canonical TODO として列挙することは禁止。
+- TODO には対象 roadmap entry と `completion_condition` / `known_gap_ref` を紐づける。
+- non-blocker carry-over は分類タグ付きで許可するが、SSOT completion_condition 未達を non-blocker 扱いしてはならない。
+
 ### 残すべき TODO 候補
 
 - unresolved implementation residue

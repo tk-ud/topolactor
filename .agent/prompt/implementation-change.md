@@ -27,3 +27,10 @@ scope, implementation delta, protocol decisions, check results
 ## out_of_scope
 - SSOT design rewrite without design_change route
 - treating `.agent/docs` as full-read bundle
+
+## todo_granularity_judgment
+- roadmap entry（`docs/system-roadmap.yaml`）
+- target `completion_condition` / `known_gap_ref`
+- carry-over が implementation atom ではなく completion bundle 単位か
+- TODO追加 / follow-up prompt / no TODO の判断
+- Issue closed 状態を implemented 根拠にしていないこと
