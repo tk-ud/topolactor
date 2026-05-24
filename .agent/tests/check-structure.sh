@@ -621,6 +621,16 @@ check_content ".agent/protocols/completion.md" "required check scope declaration
 check_content ".agent/rules/rule.md" "worktype-required-protocols.yaml"
 check_content ".agent/routes/worktype-required-protocols.yaml" "existing_pr_update:"
 check_content ".agent/routes/worktype-required-protocols.yaml" "audit:"
+check_content ".agent/protocols/audit.md" "roadmap completion bundle"
+check_content ".agent/protocols/implementation-change.md" "todo_granularity_guard"
+check_content ".agent/protocols/todo-carry-over.md" "canonical TODO carry-over は roadmap completion bundle 単位"
+check_content ".agent/prompt/audit.md" "todo_granularity_judgment"
+check_content ".agent/prompt/implementation-change.md" "todo_granularity_judgment"
+check_content ".agent/protocols/audit.md" "## required_output_contract"
+check_content ".agent/protocols/audit.md" "- todo_granularity_judgment"
+check_content ".agent/prompt/audit.md" "## output_shape"
+check_content ".agent/prompt/audit.md" "- todo_granularity_judgment"
+check_content ".agent/prompt/implementation-change.md" "scope, implementation delta, protocol decisions, todo_granularity_judgment, check results"
 
 if rg -n "REQUIRED_EXECUTED|required check failure|expected negative test|Governance Gaps|Proposed Governance Improvements|Completion Eligibility" "$REPO_ROOT/.agent/rules/rule.md" >/dev/null; then
   fail "rule.md must remain compact for gate details; move detailed classifications/sections to protocols"
