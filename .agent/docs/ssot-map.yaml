@@ -216,6 +216,7 @@ mapping:
       - pipeline continuity check
     required_docs:
       - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
     supporting_docs:
       - docs/design/runtime-orchestration-ssot.yaml
     protocols: []

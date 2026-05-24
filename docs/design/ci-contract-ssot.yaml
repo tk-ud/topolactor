@@ -1,0 +1,76 @@
+ci_contract_ssot:
+  name: topolactor_ci_contract_ssot
+  version: 0.1.0
+  status: ssot_design_document
+  purpose:
+    - end_to_end_ci_audit_contract_across_orchestration_pipeline_and_implementation
+    - keep_shell_gate_minimal_and_shift_semantic_assertions_to_dotnet_lane_tests
+    - preserve_vocabulary_and_ownership_continuity_before_implementation
+
+  grep_index:
+    - CI_CONTRACT_SSOT
+    - CI_COMPONENT_INDEX
+    - CI_PACKAGE_INDEX
+    - CI_ORCHESTRATION_VOCABULARY_AUDIT
+    - CI_PIPELINE_LANE_CONTRACT_AUDIT
+    - CI_LANE_CONTRACT_LOADER
+    - CI_REQUIRED_IDENTITY_ASSERTION
+    - CI_COMPLETION_CONDITION_ASSERTION
+    - CI_GATE_MINIMAL_PRESENCE_CHECK
+    - CI_DOTNET_LANE_TEST_PACKAGE
+
+  ci_components:
+    - id: ci.component.orchestration_vocabulary_audit
+      grep_marker: CI_ORCHESTRATION_VOCABULARY_AUDIT
+      role: runtime-orchestration の flow / boundary / ownership 語彙と pipeline lane 語彙の整合を確認する
+    - id: ci.component.ssot_contract_loader
+      grep_marker: CI_LANE_CONTRACT_LOADER
+      role: orchestration / pipeline SSOT から contract を読む
+    - id: ci.component.pipeline_lane_contract_audit
+      grep_marker: CI_PIPELINE_LANE_CONTRACT_AUDIT
+      role: lane required_identity / completion_condition / pipeline_body_test を検査対象にする
+    - id: ci.component.required_identity_assertion
+      grep_marker: CI_REQUIRED_IDENTITY_ASSERTION
+      role: endpoint / runtime / repository / projection 境界で required_identity が落ちないことを検証する
+    - id: ci.component.completion_condition_assertion
+      grep_marker: CI_COMPLETION_CONDITION_ASSERTION
+      role: implemented 判定前に completion_condition を満たすことを検証する
+    - id: ci.component.idempotency_boundary_assertion
+      role: duplicate / retry / deterministic identity 境界を検証する
+    - id: ci.component.test_double_boundary
+      role: production path を汚さず repository / runtime 境界を spy / fixture 化する
+    - id: ci.component.workflow_registration_guard
+      role: 対象 lane test が CI workflow に登録されていることを確認する
+    - id: ci.component.minimal_shell_gate
+      grep_marker: CI_GATE_MINIMAL_PRESENCE_CHECK
+      role: shell gate は存在確認・登録確認・SSOT参照確認だけを行う
+
+  ci_packages:
+    - name: Topolactor.CiContracts
+      grep_marker: CI_PACKAGE_INDEX
+      role: CI用 DTO / contract model / shared assertion surface
+    - name: Topolactor.SsotContractLoader
+      role: YAML SSOT loader / orchestration + pipeline contract reader
+    - name: Topolactor.OrchestrationVocabulary.Assertions
+      role: orchestration flow / ownership / boundary vocabulary の整合確認
+    - name: Topolactor.PipelineContinuity.Assertions
+      role: required_identity / completion_condition / duplicate boundary assertion helpers
+    - name: Topolactor.PipelineContinuity.Tests
+      grep_marker: CI_DOTNET_LANE_TEST_PACKAGE
+      role: laneごとの通貫 tests
+    - name: Topolactor.TestDoubles
+      role: repository spy / fake runtime / fixture handler
+
+  policy:
+    - gate は最小
+    - semantic assertion は C# / dotnet 通貫 tests
+    - CI は orchestration と pipeline を分断せず通貫する
+    - SSOTに未記載の要件を CI が勝手に増やさない
+    - implemented 判定は SSOT completion_condition を満たす場合のみ
+    - CI package は必要になった段階で共通化し、初期は個別 test から開始してよい
+
+  lane_usage_example:
+    - frontend_component_event_log_lane
+    - api_command_lane
+    - frontend_projection_constructor_lane
+    - sse_projection_lane
