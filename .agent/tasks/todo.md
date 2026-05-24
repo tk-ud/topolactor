@@ -118,6 +118,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - SSE projection runtime lane の単体導線（`projection_runtime -> renderRuntimeComponents`）テストを追加。
         - package_generator:generate の ID返却契約 unit test（tensorId/componentId/packageId/layoutId/wiringId）を追加。
         - NotBucketed explicit error mapping unit test を追加。
+        - admin_runtime `package_generator:promote` を generate continuity 経路へ接続し、issued ID返却契約 unit test を追加。
+        - projection_constructor/runtime_component_adapter で `wiringId` を保持する continuity test を追加。
       → 親Issue #86 に対する残scope（implemented 判定は不可）:
         - 実DB integration で `ui_component_bucket -> package_generator -> promote` 永続化連続性を確認する。
         - catalog対象 component の bucket/generate/promote 登録を進め、componentId/packageId/layoutId/wiringId を DB topology 側へ接続する。

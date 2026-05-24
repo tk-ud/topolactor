@@ -178,6 +178,7 @@ public class AdminRuntime
             "ui_component_bucket:create"       => await DataCreateBucketItemAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
+            "package_generator:promote"        => await DataGenerateAsync(vector, ct),
             "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
             "seed_runtime:load"                => await DataSeedLoadAsync(ct),
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),

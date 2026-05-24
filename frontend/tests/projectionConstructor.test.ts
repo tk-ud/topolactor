@@ -43,6 +43,29 @@ Deno.test("constructProjection: component_projection creates ComponentDataHub wi
   assertEquals(result.projection.componentDataHub.eventBinding.click, "emit.button.click");
 });
 
+Deno.test("constructProjection: preserves package/layout/wiring ids in componentDataHub", () => {
+  const def: ProjectionDefinition = {
+    constructorKey: "k",
+    packageIds: ["pkg-route"],
+    outputKind: "component_projection",
+    componentId: "cmp-id",
+    componentDefinition: {
+      componentId: "cmp-id",
+      packageId: "pkg-id",
+      layoutId: "layout-id",
+      wiringId: "wiring-id",
+      component_kind: "display/card",
+      default_parameters: { title: "x" },
+    },
+  };
+  const result = constructProjection({}, def);
+  assertExists(result.projection);
+  if (!result.projection || result.projection.kind !== "component_projection") throw new Error("unexpected projection kind");
+  assertEquals(result.projection.componentDataHub.packageId, "pkg-id");
+  assertEquals(result.projection.componentDataHub.layoutId, "layout-id");
+  assertEquals(result.projection.componentDataHub.wiringId, "wiring-id");
+});
+
 Deno.test("constructProjection: unknown component_kind returns explicit error", () => {
   const result = constructProjection({}, { constructorKey: "k", packageIds: ["p"], outputKind: "component_projection", componentId: "cmp-2", componentDefinition: { componentId: "cmp-2", component_kind: "unknown/kind" } });
   assertEquals(result.error?.startsWith("PROJECTION_CONSTRUCTOR_UNSUPPORTED_COMPONENT_KIND"), true);
