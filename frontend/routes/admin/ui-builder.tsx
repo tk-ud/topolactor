@@ -103,6 +103,9 @@ function BucketSection(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [routeKey, setRouteKey] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [componentKey, setComponentKey] = useState("");
+  const [sourcePath, setSourcePath] = useState("");
+  const [componentKind, setComponentKind] = useState("primitive");
 
   const loadBucket = async () => {
     setLoading(true);
@@ -153,6 +156,32 @@ function BucketSection(): JSX.Element {
     }
   };
 
+  const handleCreate = async () => {
+    if (!componentKey || !sourcePath || !componentKind) {
+      setStatus("componentKey/sourcePath/componentKind are required.");
+      return;
+    }
+    setLoading(true);
+    setStatus(null);
+    try {
+      const body = await dispatchAdminOp("ui_component_bucket", "create", {
+        componentKey,
+        sourcePath,
+        componentKind,
+        metadataJson: "{}",
+      });
+      if (body?.emission?.data?.bucketItemId) {
+        setStatus(`Bucket item created: ${body.emission.data.bucketItemId}`);
+        await loadBucket();
+      } else {
+        setErrors(body?.errors ?? []);
+        setStatus("Bucket create failed.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section style={{ marginBottom: "24px" }}>
       <h2>Component Bucket → Package Generator</h2>
@@ -161,6 +190,12 @@ function BucketSection(): JSX.Element {
         to UI topology tensor entities (componentId / packageId / layoutId / wiringId issued).
       </p>
       <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+        <input value={componentKey} onInput={(e) => setComponentKey((e.target as HTMLInputElement).value)} placeholder="componentKey" style={{ padding: "6px 8px", fontFamily: "monospace" }} />
+        <input value={sourcePath} onInput={(e) => setSourcePath((e.target as HTMLInputElement).value)} placeholder="sourcePath" style={{ padding: "6px 8px", fontFamily: "monospace", flex: 1 }} />
+        <input value={componentKind} onInput={(e) => setComponentKind((e.target as HTMLInputElement).value)} placeholder="componentKind" style={{ padding: "6px 8px", fontFamily: "monospace" }} />
+        <button onClick={handleCreate} disabled={loading} style={{ padding: "6px 14px" }}>
+          Register to bucket
+        </button>
         <button onClick={loadBucket} disabled={loading} style={{ padding: "6px 14px" }}>
           Load bucket (status: bucketed)
         </button>

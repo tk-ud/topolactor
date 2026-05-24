@@ -36,6 +36,17 @@ public class UiTopologyRepository
             "UiTopologyRepository.ListBucketItemsAsync must be overridden by a production implementation.");
     }
 
+    public virtual Task<UiComponentBucketCreateResult> CreateBucketItemAsync(
+        string componentKey,
+        string sourcePath,
+        string componentKind,
+        string? metadataJson = null,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.CreateBucketItemAsync must be overridden by a production implementation.");
+    }
+
     /// <summary>
     /// Atomically promotes a bucket item from 'bucketed' to 'promoted' by:
     ///   1. SELECT + UPDATE status bucketed->packaging (fail fast if not bucketed)
