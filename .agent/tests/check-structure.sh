@@ -642,7 +642,13 @@ if rg -n "Initial registry_kind candidates" "$REPO_ROOT/docs/design/sql-attentio
 else
   echo "OK  [ssot] Initial registry_kind candidates removed"
 fi
-if rg -n "deprecated_or_rejected:[\s\S]*logs\.hub_current" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+if awk '
+  BEGIN { in_dep=0; found=0 }
+  /^deprecated_or_rejected:/ { in_dep=1; next }
+  in_dep && /^[^[:space:]]/ { in_dep=0 }
+  in_dep && /logs\.hub_current/ { found=1 }
+  END { exit found ? 0 : 1 }
+' "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml"; then
   fail "logs.hub_current must not be in deprecated_or_rejected"
 else
   echo "OK  [ssot] logs.hub_current not in deprecated_or_rejected"

@@ -411,9 +411,11 @@ pipeline_continuity_ssot:
           files:
             - backend/endpoint/SseEndpoint.cs
           implementation_note: >
-            Lane boundary: keep-alive ping only (event: ping / data: connected,
-            then event: ping / data: keep-alive every 30s).
-            Real event streaming follows a separate runtime boundary contract.
+            Lane boundary: keep-alive ping plus projection event streaming.
+            SseEndpoint streams broadcaster subscriber-channel events (including
+            projection lane payloads) while also emitting ping keep-alive frames.
+            Live DB pg_notify hardening and full production verification remain
+            a separate runtime boundary contract.
 
         - node: frontend.sse_receiver
           files:

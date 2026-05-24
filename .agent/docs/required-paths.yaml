@@ -123,6 +123,9 @@ required_files:
     - .github/workflows/backend-tests.yml
     - .github/workflows/frontend-types.yml
     - .github/workflows/default-entity-search.yml
+    - .github/workflows/unified-test-gate.yml
+    - .github/workflows/bootstrap-validation.yml
+    - .github/workflows/runtime-semantics.yml
   db:
     - db/schema.sql
     - db/topology_tables.sql
@@ -169,6 +172,7 @@ required_files:
     - frontend/structure_map.ts
     - frontend/README.md
     - frontend/tests/defaultEntitySearch.test.ts
+    - frontend/tests/pipelineContinuity.test.ts
   infra:
     - infra/docker-compose.yml
     - infra/nginx.conf

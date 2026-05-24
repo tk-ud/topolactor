@@ -361,7 +361,7 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-3 logs.hub_current refresh (attractor_vector_json) not yet implemented — scores are 0 until complete
+        - SQLA-3 logs.hub_current refresh function exists, but attractor_vector_json population/hardening/live verification are incomplete — scores remain 0 until that boundary is completed
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
