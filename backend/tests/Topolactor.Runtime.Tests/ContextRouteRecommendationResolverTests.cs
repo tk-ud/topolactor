@@ -1179,6 +1179,21 @@ public partial class ContextRouteRecommendationResolverTests
         Assert.Equal(tokenA.ToString(), result[0].Value);
     }
 
+
+    [Fact]
+    public async Task ResolveAsync_BlendCurrentOperationKindOnly_DoesNotAffectTokenRanking()
+    {
+        var tokenA = Guid.NewGuid();
+        var tokenB = Guid.NewGuid();
+        var repo = new OperationKindBlendRepository(tokenA, tokenB);
+        var resolver = CreateResolver(repo, new StubBlendOnlyPolicyTopologyRepository());
+
+        var result = await resolver.ResolveAsync(MakeShape(Guid.NewGuid().ToString(), $"{tokenA},{tokenB}", hubId: Guid.NewGuid()));
+
+        Assert.Equal(RecommendationStatus.Ok, result.Status);
+        Assert.Equal(tokenB.ToString(), result.NextTokens[0].Value);
+    }
+
     [Fact]
     public async Task ResolveAsync_NoHubId_SkipsBlendRead_AndKeepsBaseline()
     {
@@ -1219,6 +1234,45 @@ public partial class ContextRouteRecommendationResolverTests
         Assert.NotEmpty(result.NextTokens);
     }
 
+
+
+    private sealed class OperationKindBlendRepository(Guid tokenA, Guid tokenB) : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
+    {
+        public override Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(IEnumerable<Guid> tokenIds, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ContextTokenRecord>>(
+            [
+                new ContextTokenRecord(tokenA, "tokenA", null, 1.0f, "active"),
+                new ContextTokenRecord(tokenB, "tokenB", null, 1.0f, "active")
+            ]);
+
+        public override Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(string? tableName, string? role, int? maxDays, CancellationToken ct = default)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var rows = Enumerable.Range(0, 12)
+                .Select(i => new ContextPrefixVectorRecord(
+                    SessionId: Guid.NewGuid(),
+                    PrefixIndex: i,
+                    LastEventId: Guid.NewGuid(),
+                    SparseVector: new Dictionary<Guid, float> { [i < 4 ? tokenA : tokenB] = 1.0f },
+                    L2Norm: 1.0f - (i * 0.01f),
+                    UpdatedAt: now.AddSeconds(-i),
+                    NextOperation: "op_next",
+                    NextTokenIdsHint: [i < 4 ? tokenA : tokenB]))
+                .ToList();
+            return Task.FromResult<IReadOnlyList<ContextPrefixVectorRecord>>(rows);
+        }
+
+        public override Task AppendContextEventAsync(ContextEventRecord e, CancellationToken ct = default) => Task.CompletedTask;
+        public override Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(string prevOperation, string? role, TransitionAggregationPolicy policy, int maxCandidatesShown, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
+
+        public override Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(Guid hubId, int scopeLimit, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<HubAttentionCurrentRecord>>(
+            [
+                new HubAttentionCurrentRecord(HubId: hubId, TargetTable: "context_operation_registry", CandidateKind: "operation", CandidateId: tokenA, ScopeLimit: scopeLimit, BaseProbability: null, CosineSimilarity: null, StaticRelationWeight: null, StatisticalWeight: 1.0f, MlpFeatureScore: null, FeedbackAdjustment: 0.0f, EmaFast: 0.0f, EmaSlow: 0.0f, Trend: 0.0f, CrossState: "none", AttentionScore: 999f, Rank: 1, EvidenceJson: "[]", MlpFeatureJson: "[]", UpdatedAt: DateTimeOffset.UtcNow),
+                new HubAttentionCurrentRecord(HubId: hubId, TargetTable: "context_token_registry", CandidateKind: "token", CandidateId: tokenB, ScopeLimit: scopeLimit, BaseProbability: null, CosineSimilarity: null, StaticRelationWeight: null, StatisticalWeight: 1.0f, MlpFeatureScore: null, FeedbackAdjustment: 0.0f, EmaFast: 0.0f, EmaSlow: 0.0f, Trend: 0.0f, CrossState: "none", AttentionScore: 0f, Rank: 2, EvidenceJson: "[]", MlpFeatureJson: "[]", UpdatedAt: DateTimeOffset.UtcNow)
+            ]);
+    }
 
     private class CountingBlendRepository(Guid tokenId) : ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy")
     {
