@@ -191,6 +191,8 @@ LogError のみで処理を継続し recommendation result を返す経路は禁
 ### やってはいけないこと
 - Runtime コード（ContextRouteRecommendationResolver / NpgsqlContextRouteRepository）に数値定数を直書きする
   → `function_parameters` 経由で読むこと。smoothing α/β 等も直書き禁止
+- `recommendation_blend` を `candidate_kind="operation"` に適用して route mutation 判断に使う
+  → 禁止。v1 の blend は `context_hub_recommendation_current.candidate_kind="token"` の推薦表示補助に限定し、operation は neighbor/baseline 統計のみで順位付けする
 - production fallback を C# コードに持たせる
   → policy-missing は `ExplicitError(CONTEXT_ROUTE_POLICY_NOT_FOUND)` を返す。silent fallback 禁止
 - malformed な `structure_maps.state_policy` を `default_policy` に silent fallback させる
