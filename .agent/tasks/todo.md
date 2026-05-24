@@ -121,8 +121,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - admin_runtime `package_generator:promote` を generate continuity 経路へ接続し、issued ID返却契約 unit test を追加。
         - projection_constructor/runtime_component_adapter で `wiringId` を保持する continuity test を追加。
         - backend-tests CI に PostgreSQL service + schema適用 + `TOPOLACTOR_TEST_DB_CONNECTION` 必須実行を追加し、`UiTopologyRegistrationContinuityIntegrationTests` を remote 実行対象へ組み込む。
+        - remote backend-tests CI で `UiTopologyRegistrationContinuityIntegrationTests` が PostgreSQL service / schema apply / `TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1` 下で実行成功し、`ui_component_bucket -> package_generator:promote -> registration tables -> ui_topology_tensor` の実DB continuity を確認済み。
       → 親Issue #86 に対する残scope（implemented 判定は不可）:
-        - 実DB integration で `ui_component_bucket -> package_generator -> promote` 永続化連続性を確認する。
         - catalog対象 component の bucket/generate/promote 登録を進め、componentId/packageId/layoutId/wiringId を DB topology 側へ接続する。
         - code-only component/package drift を解消、または catalog単位で明示残TODO化する。
         - alias扱いと専用primitive化の境界（textarea/list/panel/section/data_grid/search_input）を整理する。
