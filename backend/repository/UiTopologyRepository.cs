@@ -47,6 +47,21 @@ public class UiTopologyRepository
             "UiTopologyRepository.CreateBucketItemAsync must be overridden by a production implementation.");
     }
 
+    
+
+    /// <summary>
+    /// Transitions a bucket item from 'bucketed' to 'packaging'.
+    /// No topology IDs are issued in this step.
+    /// </summary>
+    public virtual Task<PackageGenerateResult> GenerateFromBucketAsync(
+        Guid bucketItemId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.GenerateFromBucketAsync must be overridden by a production implementation.");
+    }
+
     /// <summary>
     /// Atomically promotes a bucket item from 'bucketed' to 'promoted' by:
     ///   1. SELECT + UPDATE status bucketed->packaging (fail fast if not bucketed)

@@ -85,7 +85,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Frontend UI Primitive Catalog Bucket/Promote (Issue #86)
 
-- [ ] primitive catalog の bucket投入/promote 残作業を完了し、UI topology tensor 登録 drift を解消する
+- [ ] [bundle][Issue #86] frontend_ui_component_system catalog registration closure を完了し、UI topology tensor 登録 drift を解消する
       → 依存関係: Frontend Component Event Runtime の責務境界確定後に着手。
       → 対象責務: primitive catalog entry を bucket投入し promote で componentId/packageId を確定する運用残作業。
       → 対象ファイル: `db/ui_topology_tables.sql`, `docs/registrar-admin-ui-specification.md`, `frontend/components/`, `frontend/routes/admin/ui-builder.tsx`, backend UI topology repository / package generator runtime 関連。

@@ -113,14 +113,19 @@ public class AdminRuntimePackageGenerateTests
     private sealed class StubUiTopologyRepository : UiTopologyRepository
     {
         private readonly PackageGenerateResult _generateResult;
+        private readonly PackageGenerateResult _promoteResult;
 
-        public StubUiTopologyRepository(PackageGenerateResult generateResult)
+        public StubUiTopologyRepository(PackageGenerateResult generateResult, PackageGenerateResult? promoteResult = null)
             : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
         {
             _generateResult = generateResult;
+            _promoteResult = promoteResult ?? generateResult;
         }
 
-        public override Task<PackageGenerateResult> PromoteBucketItemAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
+        public override Task<PackageGenerateResult> GenerateFromBucketAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
             => Task.FromResult(_generateResult);
+
+        public override Task<PackageGenerateResult> PromoteBucketItemAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
+            => Task.FromResult(_promoteResult);
     }
 }

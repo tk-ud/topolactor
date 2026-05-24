@@ -116,7 +116,37 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
     }
 
-    /// <summary>
+    
+
+    public override async Task<PackageGenerateResult> GenerateFromBucketAsync(
+        Guid bucketItemId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE ui_component_bucket SET status = 'packaging', updated_at = now() " +
+            "WHERE bucket_item_id = @id AND status = 'packaging' RETURNING bucket_item_id";
+        cmd.Parameters.AddWithValue("id", bucketItemId);
+
+        var updated = await cmd.ExecuteScalarAsync(ct);
+        if (updated is null)
+        {
+            await using var checkCmd = conn.CreateCommand();
+            checkCmd.CommandText = "SELECT status FROM ui_component_bucket WHERE bucket_item_id = @id";
+            checkCmd.Parameters.AddWithValue("id", bucketItemId);
+            var existing = await checkCmd.ExecuteScalarAsync(ct);
+            return existing is null
+                ? new PackageGenerateResult(PackageGenerateCode.NotFound, null, null, null, null, null, "NOT_FOUND", $"Bucket item {bucketItemId} not found.")
+                : new PackageGenerateResult(PackageGenerateCode.NotBucketed, null, null, null, null, null, "NOT_BUCKETED", $"Bucket item {bucketItemId} is in status '{existing}', expected 'packaging'.");
+        }
+
+        return new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null);
+    }
+/// <summary>
     /// Promotes a bucket item to ui_topology_tensor within a single transaction.
     /// All INSERTs + status updates are atomic: on any failure the transaction rolls back
     /// and no partial rows remain in any registry table.
@@ -138,7 +168,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             transitionCmd.CommandText =
                 "UPDATE ui_component_bucket " +
                 "SET status = 'packaging', updated_at = now() " +
-                "WHERE bucket_item_id = @id AND status = 'bucketed' " +
+                "WHERE bucket_item_id = @id AND status = 'packaging' " +
                 "RETURNING component_key, source_path, component_kind";
             transitionCmd.Parameters.AddWithValue("id", bucketItemId);
 
@@ -173,7 +203,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         "NOT_FOUND", $"Bucket item {bucketItemId} not found.")
                     : new PackageGenerateResult(PackageGenerateCode.NotBucketed, null, null, null, null, null,
                         "NOT_BUCKETED",
-                        $"Bucket item {bucketItemId} is in status '{existing}', expected 'bucketed'.");
+                        $"Bucket item {bucketItemId} is in status '{existing}', expected 'packaging'.");
             }
 
             // 2. INSERT ui_component_registry

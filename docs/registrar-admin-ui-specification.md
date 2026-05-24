@@ -75,6 +75,20 @@ components bucket
 - Persisted rows in UI topology DB are the source of truth for projection; frontend projects DB topology definitions and does not judge topology meaning.
 - Code-only component or code-only package is drift/GAP because it is detached from registry tensor / semantic matrix persistence.
 
+
+
+### 2.5.1 Catalog classification boundary (Issue #86 bundle)
+
+For `/admin/ui-builder`, catalog entries are classified into exactly one state:
+
+- **registered component**: component has completed bucket -> generate -> promote and has `componentId/packageId/layoutId/wiringId` persisted in UI topology DB.
+- **code-only drift component**: component exists in code but has no promoted UI topology registration yet.
+- **alias-maintained component**: component kind is intentionally mapped to an existing primitive runtime renderer lane and is not treated as a dedicated primitive until explicitly promoted by SSOT/design decision.
+
+Alias-maintained kinds currently include `form_input/textarea`, `form_input/search_input`, `disclosure_structure/panel`, `disclosure_structure/section`, `data_display/data_grid`, `data_display/list`.
+
+Boundary invariant: frontend catalog is projection only; topology authority remains DB registry + backend runtime.
+
 ## 3. Managed Objects
 
 The Registrar admin UI manages the following topology registration objects at a

@@ -178,7 +178,7 @@ public class AdminRuntime
             "ui_component_bucket:create"       => await DataCreateBucketItemAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
-            "package_generator:promote"        => await DataGenerateAsync(vector, ct),
+            "package_generator:promote"        => await DataPromoteAsync(vector, ct),
             "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
             "seed_runtime:load"                => await DataSeedLoadAsync(ct),
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
@@ -391,7 +391,7 @@ public class AdminRuntime
             "AdminRuntime.DataGenerateAsync: bucketItemId={Id}, routeKey={Route}",
             bucketItemGuid, request.RouteKey);
 
-        var result = await _packageGeneratorRuntime.GenerateAsync(bucketItemGuid, request.RouteKey, ct);
+        var result = await _packageGeneratorRuntime.GenerateFromBucketAsync(bucketItemGuid, request.RouteKey, ct);
 
         if (result.Code != PackageGenerateCode.Success)
         {
@@ -417,6 +417,60 @@ public class AdminRuntime
         return (JsonSerializer.SerializeToElement(responseDto), null);
     }
 
+
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromoteAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for package_generator:promote"));
+
+        PackageGenerateRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<PackageGenerateRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (request is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(request.BucketItemId))
+            return (null, new ValidationError("BUCKET_ITEM_ID_REQUIRED", "bucketItemId is required"));
+        if (!Guid.TryParse(request.BucketItemId, out var bucketItemGuid))
+            return (null, new ValidationError("MALFORMED_BUCKET_ITEM_ID", "bucketItemId must be a valid UUID"));
+        if (string.IsNullOrWhiteSpace(request.RouteKey))
+            return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
+
+        var result = await _packageGeneratorRuntime.PromoteBucketItemAsync(bucketItemGuid, request.RouteKey, ct);
+        if (result.Code != PackageGenerateCode.Success)
+        {
+            var errorCode = result.Code switch
+            {
+                PackageGenerateCode.NotFound            => "PACKAGE_NOT_FOUND",
+                PackageGenerateCode.NotBucketed         => "PACKAGE_NOT_BUCKETED",
+                PackageGenerateCode.ConstraintViolation => "CONSTRAINT_VIOLATION",
+                PackageGenerateCode.PromotionFailed     => "PROMOTION_FAILED",
+                _                                       => "PACKAGE_PROMOTE_FAILED"
+            };
+            return (null, new ValidationError(errorCode, result.Message ?? "Promotion failed."));
+        }
+
+        var responseDto = new PackageGenerateResponseDto(
+            true,
+            result.TensorId!.Value.ToString(),
+            result.ComponentId!.Value.ToString(),
+            result.PackageId!.Value.ToString(),
+            result.LayoutId!.Value.ToString(),
+            result.WiringId!.Value.ToString(),
+            "Package promoted successfully.");
+
+        return (JsonSerializer.SerializeToElement(responseDto), null);
+    }
     // ---------------------------------------------------------------------------
     // Seed Runtime operations — Issue #84
     // ---------------------------------------------------------------------------
