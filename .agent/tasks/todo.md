@@ -38,6 +38,18 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] 後続タスクとして C# test skeleton / SSOT YAML loader / fixtures / diagnostics evidence DTO を分離起票する
       → 対象ファイル候補: backend test project, docs/design SSOT readers, fixture surface, promotion decision evidence contract.
 
+
+## Non-blocking cleanup / hardening carry-over
+
+- [ ] [cleanup][pr-220] `ContextRouteRepository.cs` の XML comment / indentation cleanup
+      → Approve可能な非ブロッカー残件。実装意味やSSOT completion conditionを変えない範囲で整備する。
+
+- [ ] [surface-expansion][pr-220] `OperationPanel` 以外の主要 component / projection surface への emit-only 配線拡張
+      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。
+
+- [ ] [integration-test][pr-220] `component_operation_event_log` の PostgreSQL 実体 integration test 追加
+      → Approve可能な非ブロッカー残件。append-only永続化境界の実DB検証を追加する。
+
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime（Issue #86 前提）

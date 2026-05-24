@@ -38,6 +38,7 @@ Worktype is `audit`, including any of:
 - SSOT未達条件が1つでも残る場合、`known_gap_ref` と `remaining_todo` に未達項目を明示的に残す。
 - 実装意味が進んだ場合でも status 更新前に、TODO/roadmap 記載と実装実態を照合し、completion_condition 充足を再確認する。
 - summary-only / 動作確認-only / representative route-only を completion 根拠として扱わない。
+- Approve可能な non-blocker findings は PR本文だけで閉じず、`.agent/tasks/todo.md` の `Non-blocking cleanup / hardening carry-over` へ必ず carry-over する。
 
 ## output_shape
 - Diff reviewed: yes/no
