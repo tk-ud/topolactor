@@ -174,6 +174,35 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         return records;
     }
 
+
+    public override async Task<bool> AppendComponentOperationEventLogAsync(
+        ComponentOperationEventLogRecord ev, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ev);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO component_operation_event_log " +
+            "(component_id, package_id, layout_id, event_type, payload, actor_or_source, occurred_at, idempotency_key) " +
+            "VALUES (@componentId, @packageId, @layoutId, @eventType, @payload::jsonb, @actor, @occurredAt, @idempotencyKey) " +
+            "ON CONFLICT (idempotency_key) DO NOTHING";
+
+        cmd.Parameters.AddWithValue("componentId", ev.ComponentId);
+        cmd.Parameters.AddWithValue("packageId", (object?)ev.PackageId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("layoutId", (object?)ev.LayoutId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("eventType", ev.EventType);
+        cmd.Parameters.AddWithValue("payload", ev.PayloadJson);
+        cmd.Parameters.AddWithValue("actor", ev.ActorOrSource);
+        cmd.Parameters.AddWithValue("occurredAt", ev.OccurredAt);
+        cmd.Parameters.AddWithValue("idempotencyKey", ev.IdempotencyKey);
+
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        return rows > 0;
+    }
+
     // ---------------------------------------------------------------------------
     // context_event
     // ---------------------------------------------------------------------------

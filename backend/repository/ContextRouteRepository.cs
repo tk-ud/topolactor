@@ -27,7 +27,19 @@ public class ContextRouteRepository
     /// Appends a context event to context_event (append-only).
     /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
-    public virtual Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+    
+    /// <summary>
+    /// Appends a component operation event log row preserving frontend_component_event_log_lane required_identity.
+    /// Returns true when appended, false when idempotency duplicate was accepted.
+    /// </summary>
+    public virtual Task<bool> AppendComponentOperationEventLogAsync(ComponentOperationEventLogRecord ev, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ev);
+        _logger.LogDebug("ContextRouteRepository.AppendComponentOperationEventLogAsync: in-memory skeleton — no-op for key={Key}.", ev.IdempotencyKey);
+        return Task.FromResult(true);
+    }
+
+public virtual Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ev);
         _logger.LogDebug("ContextRouteRepository.AppendContextEventAsync: in-memory skeleton — no-op for event={EventId}.", ev.EventId);

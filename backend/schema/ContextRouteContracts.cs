@@ -250,3 +250,19 @@ public record FeedbackWeightUpdateResult(
     int EventsApplied,
     string? StatusDetail = null
 );
+
+
+/// <summary>
+/// Canonical append-only component operation event log record for frontend_component_event_log_lane.
+/// Preserves required_identity end-to-end at repository boundary.
+/// </summary>
+public record ComponentOperationEventLogRecord(
+    string ComponentId,
+    string? PackageId,
+    string? LayoutId,
+    string EventType,
+    string PayloadJson,
+    string ActorOrSource,
+    DateTimeOffset OccurredAt,
+    string IdempotencyKey
+);

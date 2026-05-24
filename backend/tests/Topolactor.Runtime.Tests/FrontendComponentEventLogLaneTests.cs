@@ -32,16 +32,20 @@ public class FrontendComponentEventLogLaneTests
         Assert.Equal(1, res.Accepted);
         Assert.Single(spy.Appended);
         var appended = spy.Appended[0];
-        Assert.Equal("cmp-001", appended.RecordId);
-        Assert.Equal("click", appended.Operation);
-        Assert.Equal("frontend_component_event", appended.Role);
-        Assert.Equal("ui_component", appended.TableName);
+        Assert.Equal("cmp-001", appended.ComponentId);
+        Assert.Equal("pkg-001", appended.PackageId);
+        Assert.Equal("layout-001", appended.LayoutId);
+        Assert.Equal("click", appended.EventType);
+        Assert.Contains("\"label\":\"save\"", appended.PayloadJson);
+        Assert.Equal("ProjectionView", appended.ActorOrSource);
+        Assert.Equal(DateTimeOffset.Parse("2026-05-24T00:00:00.000Z"), appended.OccurredAt);
+        Assert.Equal("idem-001", appended.IdempotencyKey);
     }
 
     [Fact]
     public async Task Continuity_DuplicateIdempotency_IsAccepted()
     {
-        var spy = new SpyRepo { ThrowDuplicateOnFirst = true };
+        var spy = new SpyRepo { DuplicateMode = true };
         var sut = new ComponentEventAppendEndpoint(spy);
 
         var req = new ComponentEventAppendRequestDto([
@@ -79,20 +83,16 @@ public class FrontendComponentEventLogLaneTests
 
     private sealed class SpyRepo : ContextRouteRepository
     {
-        public List<ContextEventRecord> Appended { get; } = [];
-        public bool ThrowDuplicateOnFirst { get; set; }
+        public List<ComponentOperationEventLogRecord> Appended { get; } = [];
+        public bool DuplicateMode { get; set; }
 
         public SpyRepo() : base(NullLogger<ContextRouteRepository>.Instance, "dummy") { }
 
-        public override Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
+        public override Task<bool> AppendComponentOperationEventLogAsync(ComponentOperationEventLogRecord ev, CancellationToken ct = default)
         {
-            if (ThrowDuplicateOnFirst)
-            {
-                ThrowDuplicateOnFirst = false;
-                throw new Exception("23505 duplicate key");
-            }
+            if (DuplicateMode) return Task.FromResult(false);
             Appended.Add(ev);
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
     }
 }

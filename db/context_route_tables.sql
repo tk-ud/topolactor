@@ -569,3 +569,22 @@ CREATE INDEX IF NOT EXISTS idx_chfe_hub_candidate
 
 CREATE INDEX IF NOT EXISTS idx_chfe_created
     ON context_hub_feedback_event (created_at);
+
+
+-- component_operation_event_log
+-- frontend_component_event_log_lane canonical append-only log with required_identity preservation.
+CREATE TABLE IF NOT EXISTS component_operation_event_log (
+    event_log_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    component_id      TEXT NOT NULL,
+    package_id        TEXT NULL,
+    layout_id         TEXT NULL,
+    event_type        TEXT NOT NULL,
+    payload           JSONB NOT NULL,
+    actor_or_source   TEXT NOT NULL,
+    occurred_at       TIMESTAMPTZ NOT NULL,
+    idempotency_key   TEXT NOT NULL UNIQUE,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_component_operation_event_log_occurred_at
+  ON component_operation_event_log (occurred_at);
