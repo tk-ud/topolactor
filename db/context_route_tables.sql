@@ -587,5 +587,9 @@ CREATE TABLE IF NOT EXISTS component_operation_event_log (
     created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+
+ALTER TABLE component_operation_event_log
+  ADD COLUMN IF NOT EXISTS wiring_id TEXT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_component_operation_event_log_occurred_at
   ON component_operation_event_log (occurred_at);
