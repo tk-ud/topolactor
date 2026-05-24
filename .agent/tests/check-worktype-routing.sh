@@ -45,6 +45,7 @@ if [ -f "$ROUTE_FILE" ]; then
 
   check_term "$ROUTE_FILE" "required_checks:"
   check_term "$ROUTE_FILE" ".agent/tests/check-structure.sh"
+  check_term "$ROUTE_FILE" ".agent/tests/check-system-roadmap.sh"
 
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/audit.md"
   check_term "$ROUTE_FILE" "prompt: .agent/prompt/specific.md"
