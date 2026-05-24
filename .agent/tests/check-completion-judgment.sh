@@ -47,6 +47,12 @@ check_term ".agent/protocols/audit.md" "implemented 未達 + TODO細分化なし
 check_term ".agent/protocols/audit.md" "細分化TODO単位 completion_condition 充足に限定する。"
 check_term ".agent/prompt/audit.md" ".agent/protocols/audit.md の approve_judgment_axis に従う。"
 check_term ".agent/prompt/audit.md" "prompt 側では completion 判定本文を重複定義しない。"
+check_term ".agent/protocols/audit.md" "roadmap completion bundle"
+check_term ".agent/protocols/audit.md" "Issue は入口・作業チケット"
+check_term ".agent/prompt/audit.md" "todo_granularity_judgment"
+check_term ".agent/prompt/implementation-change.md" "todo_granularity_judgment"
+check_term ".agent/protocols/implementation-change.md" "todo_granularity_guard"
+check_term ".agent/protocols/todo-carry-over.md" "canonical TODO carry-over は roadmap completion bundle 単位"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== Completion judgment checks passed ==="

@@ -23,14 +23,19 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
 - audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、implemented 未達のまま無条件 Approve は禁止する。
 - implemented 未達時は、implemented 到達可能な TODO 単位への細分化、または canonical TODO への carry-over 指示（remaining scope / next TODO）を Approve 前に必須とする。
+  - ここでの「TODO 単位への細分化」は implementation atom 分割を意味せず、roadmap entry（docs/system-roadmap.yaml）を正本とした completion bundle 単位への再編を意味する。
 - implemented 未達 + TODO細分化なし + carry-over 指示なし + Approve は禁止（Request Changes）。
+  - TODO細分化は roadmap completion bundle 化を指し、implementation atom の小TODO分割を指さない。
 - 親 Issue / TODO が大きすぎる場合、対象を implemented 到達可能な小TODOへ分割し、Approve 根拠は今回PR対象の細分化TODO単位 completion_condition 充足に限定する。
+  - 小TODO分割とは implementation atom ではなく、roadmap `completion_condition` / `known_gap_ref` を閉じる completion bundle への再編を意味する。
 - 「未達が残っているが partial として整合」は Approve 理由にしない。
-- 「未達が残っているが、残TODOが canonical に明示細分化されている」場合のみ carry-over 整合として扱う。
+- 「未達が残っているが、残TODOが roadmap completion bundle として canonical に明示されている」場合のみ carry-over 整合として扱う。
 - partial Approve は、PR purpose / Issue目的 / user依頼が明示的に partial / scoped progress / non-closing progress の場合に限定して許可する。
 - 上記 partial purpose に該当する場合のみ、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていることを Approve 条件として扱える。
 - PR本文・Issue目的・user依頼・TODO項目のいずれかが implemented / close / completion / TODO `[x]` を目指す場合、`completion_condition` 未達、remaining `known_gap_ref`、concrete `remaining_todo` が1つでもあれば Request Changes とする。
 - TODO/roadmap に未達が明示されている事実は partial 分類の正しさの証拠であり、implemented-target PR の Approve 根拠にはならない。
+- Issue は入口・作業チケットであり、closed / aggregated / not_planned であっても implemented 判定の正本にしない。implemented 判定の正本は `docs/system-roadmap.yaml` の roadmap entry（`completion_condition` / `known_gap_ref`）とする。
+- 既存の「TODO細分化」「小TODOへ分割」という語は、implementation atom 分割ではなく roadmap completion bundle への再編を意味する。
 - relevant SSOT completion_condition が未達のまま implemented / complete / closed を示す、または示唆する PR は Approve 禁止。
 - representative route、ACK-only intake、skeleton wiring、partial wiring は、SSOT completion_condition が許容しない限り implemented 根拠にしない。
 - Remote CI / tests passing は証拠の一部であり、単体では semantic completion 根拠にしない。
