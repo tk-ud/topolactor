@@ -25,6 +25,7 @@ export type ComponentDefinitionPayload = {
   parameter_schema?: JsonObject;
   default_parameters?: JsonObject;
   event_binding?: JsonObject;
+  design?: JsonObject;
 };
 
 export type ComponentDataHub = {
@@ -38,6 +39,7 @@ export type ComponentDataHub = {
   visualRole?: string | null;
   props: JsonObject;
   eventBinding: JsonObject;
+  design?: JsonObject;
 };
 
 export type ProjectionField = {
@@ -169,6 +171,8 @@ export function constructProjection(jsonKeyValue: Record<string, unknown>, defin
       if (!schemaCheck.ok) return { error: schemaCheck.error };
       const eventBindingCheck = validateOptionalObject("EVENT_BINDING", componentDefinition.event_binding);
       if (!eventBindingCheck.ok) return { error: eventBindingCheck.error };
+      const designCheck = validateOptionalObject("DESIGN", componentDefinition.design);
+      if (!designCheck.ok) return { error: designCheck.error };
 
       const mergedProps: JsonObject = {
         ...(defaultsCheck.value ?? {}),
@@ -199,6 +203,7 @@ export function constructProjection(jsonKeyValue: Record<string, unknown>, defin
             visualRole: componentDefinition.visual_role,
             props: normalized.value,
             eventBinding: eventBindingCheck.value ?? {},
+            design: designCheck.value ?? {},
           },
         },
       };

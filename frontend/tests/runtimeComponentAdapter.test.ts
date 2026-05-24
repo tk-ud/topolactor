@@ -1,5 +1,8 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { constructProjection, type ProjectionDefinition } from "../runtime/projectionConstructor.ts";
+import {
+  constructProjection,
+  type ProjectionDefinition,
+} from "../runtime/projectionConstructor.ts";
 import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
 
 Deno.test("runtimeComponentAdapter: missing componentId is explicit error", () => {
@@ -8,7 +11,10 @@ Deno.test("runtimeComponentAdapter: missing componentId is explicit error", () =
     props: { label: "x" },
     eventBinding: {},
   });
-  assertEquals(result, { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID" });
+  assertEquals(result, {
+    ok: false,
+    error: "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_ID",
+  });
 });
 
 Deno.test("runtimeComponentAdapter: unsupported kind is explicit error", () => {
@@ -18,7 +24,10 @@ Deno.test("runtimeComponentAdapter: unsupported kind is explicit error", () => {
     props: {},
     eventBinding: {},
   });
-  assertEquals(result, { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_UNSUPPORTED_COMPONENT_KIND: x/unknown" });
+  assertEquals(result, {
+    ok: false,
+    error: "RUNTIME_COMPONENT_ADAPTER_UNSUPPORTED_COMPONENT_KIND: x/unknown",
+  });
 });
 
 Deno.test("runtimeComponentAdapter: projection constructor hub converts to button runtime spec", () => {
@@ -34,11 +43,16 @@ Deno.test("runtimeComponentAdapter: projection constructor hub converts to butto
       wiringId: "wire-1",
       component_kind: "action/button",
       default_parameters: { label: "Run" },
-      event_binding: { click: { eventType: "click", actorOrSource: "ui_test" } },
+      event_binding: {
+        click: { eventType: "click", actorOrSource: "ui_test" },
+      },
     },
   };
   const projection = constructProjection({}, def);
-  if (!projection.projection || projection.projection.kind !== "component_projection") throw new Error("unexpected");
+  if (
+    !projection.projection ||
+    projection.projection.kind !== "component_projection"
+  ) throw new Error("unexpected");
   const result = adaptComponentDataHub(projection.projection.componentDataHub);
   assertEquals(result.ok, true);
   if (!result.ok) return;
@@ -47,4 +61,22 @@ Deno.test("runtimeComponentAdapter: projection constructor hub converts to butto
   assertEquals(result.value.packageId, "pkg-1");
   assertEquals(result.value.layoutId, "lay-1");
   assertEquals(result.value.wiringId, "wire-1");
+});
+
+Deno.test("runtimeComponentAdapter: classname/className/tailwind are merged to spec.className", () => {
+  const result = adaptComponentDataHub({
+    componentId: "c",
+    componentKind: "display/card",
+    props: {},
+    eventBinding: {},
+    design: {
+      classname: "db-class",
+      className: "camel-class",
+      tailwind: "tw-p-2",
+      style: "color:red",
+    },
+  });
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.className, "db-class camel-class tw-p-2");
 });

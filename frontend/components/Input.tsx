@@ -1,4 +1,5 @@
-import { JSX } from "preact";
+import { ComponentChildren, JSX } from "preact";
+import type { ComponentDesignParams } from "./Button.tsx";
 
 export type InputProps = {
   value: string;
@@ -9,25 +10,37 @@ export type InputProps = {
   disabled?: boolean;
   label?: string;
   type?: "text" | "password" | "number" | "email";
+  className?: string;
+  design?: ComponentDesignParams;
+  children?: ComponentChildren;
 };
 
-/**
- * Primitive Input component.
- * Code-only primitive (drift). DB registration pending via ui_component_bucket → package generator flow.
- * component_key: "input.primitive"
- */
-export function Input({
-  value,
-  onChange,
-  onFocus,
-  onBlur,
-  placeholder,
-  disabled = false,
-  label,
-  type = "text",
-}: InputProps): JSX.Element {
+export function Input(
+  {
+    value,
+    onChange,
+    onFocus,
+    onBlur,
+    placeholder,
+    disabled = false,
+    label,
+    type = "text",
+    className,
+    design,
+    children,
+  }: InputProps,
+): JSX.Element {
+  const computedDisabled = disabled || design?.state === "loading";
+  const containerClassName =
+    [className, design?.classname, design?.className, design?.tailwind].filter(
+      Boolean,
+    ).join(" ") || undefined;
+  const designStyle = [design?.style].filter(Boolean).join(";");
   return (
-    <div style="display:flex;flex-direction:column;gap:4px;font-family:monospace">
+    <div
+      className={containerClassName}
+      style={`display:flex;flex-direction:column;gap:4px;font-family:monospace;${designStyle}`}
+    >
       {label && <label style="font-size:0.85rem;color:#555">{label}</label>}
       <input
         type={type}
@@ -36,9 +49,10 @@ export function Input({
         onFocus={onFocus}
         onBlur={onBlur}
         placeholder={placeholder}
-        disabled={disabled}
+        disabled={computedDisabled}
         style="padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-family:monospace;font-size:0.9rem"
       />
+      {children}
     </div>
   );
 }
