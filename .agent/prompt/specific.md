@@ -24,7 +24,14 @@ Worktype is `specific` and scope is strictly local:
 - runtime/policy/scenario protocols only if trigger applies
 
 ## output_shape
-local scope statement, touched targets, decisions, checks
+local scope statement, touched targets, decisions, foundation_ssot_read_judgment, checks
+
+## foundation_ssot_read_judgment
+- framework_core_read: yes/no/not_required
+- runtime_orchestration_read: yes/no/not_required
+- pipeline_continuity_read: yes/no/not_required
+- reason_if_not_required:
+- target_ssot_read_after_foundation:
 
 ## out_of_scope
 - PR差分監査

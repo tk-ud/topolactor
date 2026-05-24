@@ -10,6 +10,10 @@ Worktype is `implementation_change`.
 - .agent/docs/ssot-map.yaml
 - mapped SSOT for touched runtime surface selected through `.agent/docs/ssot-map.yaml`
 - .agent/protocols/implementation-change.md
+- foundation SSOT read gate judgment (when applicable):
+  1. docs/framework-core.yaml
+  2. docs/design/runtime-orchestration-ssot.yaml
+  3. docs/design/pipeline-continuity-ssot.yaml
 
 ## optional_reads
 - .agent/docs/required-paths.yaml only when touching `.agent/tests/check-structure.sh`, required paths, required terms, or check-structure expectation vocabulary
@@ -22,7 +26,15 @@ Worktype is `implementation_change`.
 - policy/scoring/threshold change -> policy-judgment
 
 ## output_shape
-scope, implementation delta, protocol decisions, todo_granularity_judgment, check results
+scope, implementation delta, protocol decisions, foundation_ssot_read_judgment, todo_granularity_judgment, check results
+legacy_minimum_shape: scope, implementation delta, protocol decisions, todo_granularity_judgment, check results
+
+## foundation_ssot_read_judgment
+- framework_core_read: yes/no/not_required
+- runtime_orchestration_read: yes/no/not_required
+- pipeline_continuity_read: yes/no/not_required
+- reason_if_not_required:
+- target_ssot_read_after_foundation:
 
 ## out_of_scope
 - SSOT design rewrite without design_change route

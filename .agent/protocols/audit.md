@@ -19,6 +19,16 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 ## judgment_scope
 Implementation meaning consistency against stated intent and roadmap/todo status.
 
+## foundation_ssot_read_gate
+Before semantic audit on runtime/frontend/backend/db/projection/pipeline/roadmap-completion surfaces, read foundation SSOT in this order:
+
+1. `docs/framework-core.yaml`
+2. `docs/design/runtime-orchestration-ssot.yaml`
+3. `docs/design/pipeline-continuity-ssot.yaml`
+4. target-specific SSOT / DB / implementation files
+
+`全部読むな` は維持する。純粋な typo / docs formatting / unrelated small text cleanup のみは `not_required` を許可するが、理由明記を必須とする。
+
 ## approve_judgment_axis
 - Approve requires semantic consistency between PR diff, TODO, roadmap, and relevant SSOT completion_condition classification.
 - audit 判定基準は常に implemented 到達基準に揃える。partial 状態そのものは禁止しないが、implemented 未達のまま無条件 Approve は禁止する。

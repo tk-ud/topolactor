@@ -21,6 +21,10 @@ Worktype is `audit`, including any of:
 - roadmap target milestone/unlocks and related implementation_registry entry
 - diff-target implementation files
 - .agent/protocols/audit.md
+- foundation SSOT read gate judgment (when applicable):
+  1. docs/framework-core.yaml
+  2. docs/design/runtime-orchestration-ssot.yaml
+  3. docs/design/pipeline-continuity-ssot.yaml
 
 ## optional_reads
 - README / docs/articles / design SSOT when diff claim validation requires public/docs context
@@ -56,6 +60,7 @@ Worktype is `audit`, including any of:
 - Required follow-up
 - Merge judgment
 - todo_granularity_judgment
+- foundation_ssot_read_judgment
 
 ## out_of_scope
 - full-bundle reading by default
@@ -70,3 +75,10 @@ Worktype is `audit`, including any of:
 - carry-over が implementation atom ではなく completion bundle 単位か
 - TODO追加 / follow-up prompt / no TODO の判断
 - Issue closed 状態を implemented 根拠にしていないこと
+
+## foundation_ssot_read_judgment
+- framework_core_read: yes/no/not_required
+- runtime_orchestration_read: yes/no/not_required
+- pipeline_continuity_read: yes/no/not_required
+- reason_if_not_required:
+- target_ssot_read_after_foundation:

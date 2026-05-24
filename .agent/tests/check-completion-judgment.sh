@@ -52,7 +52,13 @@ check_term ".agent/protocols/audit.md" "Issue は入口・作業チケット"
 check_term ".agent/prompt/audit.md" "todo_granularity_judgment"
 check_term ".agent/prompt/implementation-change.md" "todo_granularity_judgment"
 check_term ".agent/protocols/implementation-change.md" "todo_granularity_guard"
+check_term ".agent/protocols/implementation-change.md" "foundation_ssot_read_gate"
+check_term ".agent/protocols/implementation-change.md" "docs/framework-core.yaml"
+check_term ".agent/protocols/implementation-change.md" "docs/design/runtime-orchestration-ssot.yaml"
+check_term ".agent/protocols/implementation-change.md" "docs/design/pipeline-continuity-ssot.yaml"
+check_term ".agent/protocols/audit.md" "foundation_ssot_read_gate"
 check_term ".agent/protocols/todo-carry-over.md" "canonical TODO carry-over は roadmap completion bundle 単位"
+check_term ".agent/protocols/todo-carry-over.md" "foundation_ssot_read_gate"
 check_term ".agent/protocols/audit.md" "## required_output_contract"
 check_term ".agent/protocols/audit.md" "- todo_granularity_judgment"
 check_term ".agent/prompt/audit.md" "## output_shape"
@@ -66,4 +72,3 @@ else
   echo "=== $FAILURES completion judgment check(s) failed ===" >&2
   exit 1
 fi
-
