@@ -60,8 +60,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 1. Frontend Component Event Runtime（Issue #86 前提）
 2. UI primitive catalog bucket投入/promote（Issue #86）
 3. Visual layout builder（Issue #89, depends on #86）
-4. Runtime Recommendation operation blend 判断
-5. seed済み recommendation_blend の本番運用値確定 / seed以外の反映面確認
 
 ---
 
