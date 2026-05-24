@@ -175,6 +175,7 @@ public class AdminRuntime
             "context_token_registry:create"    => await DataCreateTokenAsync(vector, ct),
             "context_token_registry:deprecate" => await DataDeprecateTokenAsync(vector, ct),
             "registry_vector:validate"         => await DataValidateRegistryVectorAsync(vector, ct),
+            "ui_component_bucket:create"       => await DataCreateBucketItemAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
             "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
@@ -307,6 +308,47 @@ public class AdminRuntime
             .ToList();
 
         return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataCreateBucketItemAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for ui_component_bucket:create"));
+        UiComponentBucketCreateRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<UiComponentBucketCreateRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (request is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(request.ComponentKey))
+            return (null, new ValidationError("COMPONENT_KEY_REQUIRED", "componentKey is required"));
+        if (string.IsNullOrWhiteSpace(request.SourcePath))
+            return (null, new ValidationError("SOURCE_PATH_REQUIRED", "sourcePath is required"));
+        if (string.IsNullOrWhiteSpace(request.ComponentKind))
+            return (null, new ValidationError("COMPONENT_KIND_REQUIRED", "componentKind is required"));
+
+        try
+        {
+            var row = await _uiTopologyRepository.CreateBucketItemAsync(
+                request.ComponentKey, request.SourcePath, request.ComponentKind, request.MetadataJson, ct);
+            return (JsonSerializer.SerializeToElement(new UiComponentBucketItemDto(
+                row.BucketItemId.ToString(), row.ComponentKey, row.SourcePath, row.ComponentKind, row.Status
+            )), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminRuntime.DataCreateBucketItemAsync: failed to create bucket item.");
+            return (null, new ValidationError("REPOSITORY_UNAVAILABLE", ex.Message));
+        }
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataGenerateAsync(

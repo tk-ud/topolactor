@@ -55,6 +55,36 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return records;
     }
 
+    public override async Task<UiComponentBucketRecord> CreateBucketItemAsync(
+        string componentKey,
+        string sourcePath,
+        string componentKind,
+        string? metadataJson = null,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO ui_component_bucket (component_key, source_path, component_kind, metadata_json) " +
+            "VALUES (@key, @path, @kind, @metadata::jsonb) " +
+            "RETURNING bucket_item_id, component_key, source_path, component_kind, status";
+        cmd.Parameters.AddWithValue("key", componentKey);
+        cmd.Parameters.AddWithValue("path", sourcePath);
+        cmd.Parameters.AddWithValue("kind", componentKind);
+        cmd.Parameters.AddWithValue("metadata", metadataJson ?? "{}");
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await reader.ReadAsync(ct);
+        return new UiComponentBucketRecord(
+            BucketItemId: reader.GetGuid(0),
+            ComponentKey: reader.GetString(1),
+            SourcePath: reader.GetString(2),
+            ComponentKind: reader.GetString(3),
+            Status: reader.GetString(4)
+        );
+    }
+
     /// <summary>
     /// Promotes a bucket item to ui_topology_tensor within a single transaction.
     /// All INSERTs + status updates are atomic: on any failure the transaction rolls back
