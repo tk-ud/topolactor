@@ -45,6 +45,15 @@ Implementation meaning consistency against stated intent and roadmap/todo status
 - todo未実装scopeを見ずに roadmap status を判断しない
 - implementation_registry key 名だけで実装意味を判断しない
 
+
+## todo_roadmap_finalization_gate
+- PR Approve requires TODO/Roadmap Finalization Judgment.
+- If implementation meaning satisfies or changes any TODO / roadmap `implementation_registry` entry, auditor must either:
+  1. update canonical TODO/roadmap in the same audit/follow-up maintenance task, or
+  2. emit a single explicit follow-up prompt for `todo_maintenance` before approving.
+- Approve is blocked when roadmap/TODO status remains materially stale.
+- Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
+
 ## blocking_conditions
 - Missing required audit output fields.
 - Replacing semantic audit with structure-only result.
