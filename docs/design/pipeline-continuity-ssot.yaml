@@ -20,6 +20,20 @@ pipeline_continuity_ssot:
       - ci_package_or_test_file_reference_presence
       - workflow_registration_presence
       - ssot_reference_presence
+    ssot_vocabulary_contract:
+      rule:
+        - implementation_discrete_values_must_be_subset_of_ssot_allowed_values
+        - pipeline_body_and_contract_tests_must_read_ssot_yaml
+        - tests_must_not_redefine_expected_vocabulary
+      applies_to:
+        - component_catalog_classification
+        - db_seed_status_type_kind
+        - event_type
+        - runtime_destination
+        - property_naming
+        - validation_class
+        - pipeline_required_identity
+        - prohibited_boundary_terms
 
   ci_responsibility_split:
     sh_checks:

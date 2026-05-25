@@ -127,6 +127,21 @@ data_driven_topology_runtime_framework:
     - diffUpdate
     - logicalDelete
 
+  ssot_contract_axis:
+    ssot_role:
+      - allowed_vocabulary_source_of_truth
+      - allowed_shape_source_of_truth
+      - canonical_relation_source_of_truth
+    implementation_role:
+      - ssot_projection_surface
+      - ssot_concrete_instance_surface
+    test_role:
+      - verifies_implementation_conforms_to_ssot
+      - must_not_redefine_expected_vocabulary
+    vocabulary_extension_rule:
+      - new_discrete_value_requires_ssot_update_first
+      - implementation_value_without_ssot_definition_is_non_conformant
+
   topology_model:
     description: >
       This is not a simple graph in a single flat space.
