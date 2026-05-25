@@ -27,6 +27,15 @@ runtime_orchestration_ssot:
         - orchestration_vocabulary_audit_contract
         - pipeline_lane_contract_loader_and_audit
         - minimal_gate_vs_dotnet_semantic_assertion_responsibility_split
+    system_ci_admin_runtime_callable_surface_reference:
+      source: docs/design/system-ci-admin-runtime-callable-surface.yaml
+      owns:
+        - AdminRuntime_ExecuteDataAsync_to_system_ci_diagnostic_interface_route_contract
+        - admin_runtime_diagnostic_read_surface_boundary
+        - SystemOperationCiRuntime_is_the_existing_diagnostic_implementation_source_for_the_callable_surface
+      note:
+        - this_reference_declares_route_design_only
+        - implementation_wiring_is_follow_up_and_not_claimed_here
     orchestration_change_rule: Runtime orchestration changes that affect a lane must update or validate the corresponding pipeline-continuity lane contract.
     non_duplication_rule: Do not duplicate detailed lane test conditions in this SSOT; keep fine-grained verification in pipeline-continuity SSOT.
 
@@ -73,6 +82,7 @@ runtime_orchestration_ssot:
       - direct_vector_authoring_from_client
       - silent_fallback_for_broken_topology_refs
       - backend_entity_constructor_factory
+      - treating_test_runner_or_shell_ci_as_admin_runtime_diagnostic_lane
 
   endpoints:
     frontend:

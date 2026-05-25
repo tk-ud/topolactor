@@ -24,6 +24,7 @@ ci_contract_ssot:
     - CI_STATUS_VECTOR
     - CI_OPERATIONAL_CHECKER
     - CI_BRANCHABLE_STATUS_SIGNAL
+    - CI_ADMIN_RUNTIME_DIAGNOSTIC_SURFACE
 
   ci_components:
     - id: ci.component.index
@@ -67,6 +68,12 @@ ci_contract_ssot:
     - id: ci.component.status_vector_branching
       grep_marker: CI_STATUS_VECTOR
       role: PASS / GAP / BLOCKING / DRIFT / NOT_COVERED などの状態を branchable operational signal として扱う
+    - id: ci.component.admin_runtime_diagnostic_surface
+      grep_marker: CI_ADMIN_RUNTIME_DIAGNOSTIC_SURFACE
+      role:
+        - Admin UI / AdminRuntime から System Operation CI 診断結果を参照する read-only callable surface
+        - Admin UI / AdminRuntime は test runner や shell/CI process を product runtime lane として呼び出さない
+        - 詳細契約は docs/design/system-ci-admin-runtime-callable-surface.yaml を正本とする
 
   ci_packages:
     - name: Topolactor.CiContracts

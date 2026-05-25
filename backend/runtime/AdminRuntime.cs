@@ -18,6 +18,7 @@ public class AdminRuntime
     private readonly RegistrarValidationService _registrarValidationService;
     private readonly PackageGeneratorRuntime _packageGeneratorRuntime;
     private readonly UiTopologyRepository _uiTopologyRepository;
+    private readonly ISystemCiDiagnosticRunner? _systemCiDiagnosticRunner;
     private readonly SeedRuntime? _seedRuntime;
 
     public AdminRuntime(
@@ -26,6 +27,7 @@ public class AdminRuntime
         RegistrarValidationService registrarValidationService,
         PackageGeneratorRuntime packageGeneratorRuntime,
         UiTopologyRepository uiTopologyRepository,
+        ISystemCiDiagnosticRunner? systemCiDiagnosticRunner = null,
         SeedRuntime? seedRuntime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -33,6 +35,7 @@ public class AdminRuntime
         _registrarValidationService = registrarValidationService ?? throw new ArgumentNullException(nameof(registrarValidationService));
         _packageGeneratorRuntime = packageGeneratorRuntime ?? throw new ArgumentNullException(nameof(packageGeneratorRuntime));
         _uiTopologyRepository = uiTopologyRepository ?? throw new ArgumentNullException(nameof(uiTopologyRepository));
+        _systemCiDiagnosticRunner = systemCiDiagnosticRunner;
         _seedRuntime = seedRuntime;
     }
 
@@ -184,9 +187,44 @@ public class AdminRuntime
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
             "seed_runtime:preview"             => await DataSeedPreviewAsync(ct),
             "seed_runtime:import"              => await DataSeedImportAsync(ct),
+            "system_ci:list_targets"           => await DataSystemCiListTargetsAsync(ct),
+            "system_ci:inspect"                => await DataSystemCiInspectAsync(vector, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
+    }
+
+    private Task<(JsonElement? data, ValidationError? error)> DataSystemCiListTargetsAsync(CancellationToken ct)
+    {
+        _ = ct;
+        if (_systemCiDiagnosticRunner is null)
+            return Task.FromResult<(JsonElement?, ValidationError?)>((null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_NOT_AVAILABLE", "system_ci diagnostic runner is not registered")));
+        return Task.FromResult<(JsonElement?, ValidationError?)>((JsonSerializer.SerializeToElement(_systemCiDiagnosticRunner.ListTargets()), null));
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSystemCiInspectAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (_systemCiDiagnosticRunner is null)
+            return (null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_NOT_AVAILABLE", "system_ci diagnostic runner is not registered"));
+        if (vector.Payload is null)
+            return (null, new ValidationError("SYSTEM_CI_TARGET_REQUIRED", "payload.target is required for system_ci:inspect"));
+        if (!vector.Payload.Value.TryGetProperty("target", out var targetEl) || string.IsNullOrWhiteSpace(targetEl.GetString()))
+            return (null, new ValidationError("SYSTEM_CI_TARGET_REQUIRED", "payload.target is required for system_ci:inspect"));
+        var target = targetEl.GetString()!;
+        try
+        {
+            var result = await _systemCiDiagnosticRunner.InspectAsync(target, ct);
+            return (JsonSerializer.SerializeToElement(result), null);
+        }
+        catch (ArgumentException)
+        {
+            return (null, new ValidationError("SYSTEM_CI_TARGET_NOT_FOUND", $"Unknown system_ci target: {target}"));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminRuntime.DataSystemCiInspectAsync failed for target={Target}", target);
+            return (null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_FAILED", ex.Message));
+        }
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataListTokensAsync(

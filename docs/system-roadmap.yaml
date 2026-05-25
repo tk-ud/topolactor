@@ -899,6 +899,7 @@ system_roadmap_ssot:
         - scheduler_executes_hub_attention_current_rebuildability_and_registry_continuity_inspections
       known_gap_ref:
         - Diagnostic coverage and downstream persistence/audit integration remain partial
+        - SSOT wiring for AdminRuntime callable diagnostic surface is documented; runtime implementation wiring remains follow-up
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: planned

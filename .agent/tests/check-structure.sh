@@ -229,6 +229,7 @@ check_file ".agent/tests/check-bootstrap-validation.sh"
 check_file ".agent/tests/check-pipeline-continuity.sh"
 check_file ".agent/tests/check-unified-test-gate.sh"
 check_file ".agent/tests/check-sql-attention-ssot.sh"
+check_file ".agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 check_file "docs/design/pipeline-continuity-ssot.yaml"
 
 check_content ".agent/tests/check-local-ci.sh" "set -euo pipefail"
@@ -709,6 +710,12 @@ if bash "$REPO_ROOT/.agent/tests/check-worktype-routing.sh"; then
   echo "OK  [subcheck] .agent/tests/check-worktype-routing.sh"
 else
   fail "Subcheck failed: .agent/tests/check-worktype-routing.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then

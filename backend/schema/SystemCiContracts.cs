@@ -53,6 +53,13 @@ public record SystemCiDiagnosticResult(
 );
 
 /// <summary>
+/// Callable target descriptor for AdminRuntime system CI diagnostic surface.
+/// </summary>
+public record SystemCiTargetDto(
+    string Target
+);
+
+/// <summary>
 /// Lightweight summary of a context_hub_recommendation_current row for cron CI inspection.
 /// Avoids loading full evidence_json and mlp_feature_json blobs.
 /// HasEvidence: true when evidence_json contains at least one element.

@@ -72,6 +72,8 @@ builder.Services.AddSingleton<RuntimeGuard>();
 builder.Services.AddSingleton<ContextVectorBuilder>();
 builder.Services.AddSingleton<ContextNeighborSearch>();
 builder.Services.AddSingleton<SystemOperationCiRuntime>();
+builder.Services.AddSingleton<ISystemCiDiagnosticRunner>(sp =>
+    sp.GetRequiredService<SystemOperationCiRuntime>());
 builder.Services.AddSingleton<ContextRouteRecommendationResolver>();
 builder.Services.AddSingleton<TopologyVectorRuntime>();
 builder.Services.AddSingleton<RegistrarValidationService>();
@@ -82,6 +84,7 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<RegistrarValidationService>(),
         sp.GetRequiredService<PackageGeneratorRuntime>(),
         sp.GetRequiredService<UiTopologyRepository>(),
+        sp.GetRequiredService<ISystemCiDiagnosticRunner>(),
         sp.GetRequiredService<SeedRuntime>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>

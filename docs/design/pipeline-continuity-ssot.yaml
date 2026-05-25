@@ -16,6 +16,7 @@ pipeline_continuity_ssot:
       - runtime_orchestration_vocabulary_is_audited_when_lane_contract_changes
       - workflow_registration_must_cover_lane_test_packages
       - ci_status_is_branchable_operational_signal
+      - admin_runtime_diagnostic_read_surface_uses_runtime_callable_interface_not_test_runner
     minimal_gate_scope:
       - lane_definition_presence
       - ci_package_or_test_file_reference_presence
@@ -29,6 +30,7 @@ pipeline_continuity_ssot:
         - gap_blocking_drift_not_covered_are_not_equivalent_to_pass
         - pipeline_checks_must_expose_boundary_failures_as_structured_status_not_silent_fallback
         - enumerated_gap_status_must_not_be_treated_as_pass
+        - admin_ui_diagnostic_lane_must_use_runtime_read_surface_and_must_not_treat_shell_or_test_runner_as_product_runtime
       applies_to:
         - component_catalog_classification
         - db_seed_status_type_kind
@@ -38,6 +40,19 @@ pipeline_continuity_ssot:
         - validation_class
         - pipeline_required_identity
         - prohibited_boundary_terms
+
+  admin_runtime_diagnostic_read_lane_reference:
+    source: docs/design/system-ci-admin-runtime-callable-surface.yaml
+    route_intent:
+      - frontend_dispatch_api
+      - backend_dispatch_endpoint
+      - runtime_timeline_scheduler
+      - manifest_dispatcher
+      - AdminRuntime.ExecuteDataAsync
+      - system_ci_diagnostic_interface
+    boundary:
+      - diagnostics_evidence_eligibility_read_only_surface
+      - no_test_runner_or_shell_invocation_in_product_runtime_lane
 
   ci_responsibility_split:
     sh_checks:

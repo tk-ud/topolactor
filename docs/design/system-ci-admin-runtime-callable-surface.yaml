@@ -1,0 +1,101 @@
+system_ci_admin_runtime_callable_surface_ssot:
+  name: system_ci_admin_runtime_callable_surface
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - expose_existing_SystemOperationCiRuntime_diagnostics_to_Admin_UI
+    - place_diagnostic_reads_on_canonical_AdminRuntime_route
+    - admin_ui_must_call_runtime_diagnostic_interface_not_test_shell_or_ci_process
+    - limit_surface_to_read_only_diagnostics_evidence_eligibility
+
+  parent_ssot:
+    - docs/design/ci-contract-ssot.yaml
+    - docs/design/pipeline-continuity-ssot.yaml
+    - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/topology-recommendation-ci-runtime.md
+    - docs/design/topology-recommendation-ci-runtime.yaml
+    - docs/framework-policy.yaml
+
+  canonical_route:
+    - admin_ui_event
+    - frontend_dispatch_api
+    - backend_dispatch_endpoint
+    - runtime_timeline_scheduler
+    - manifest_dispatcher
+    - admin_runtime_dispatch_adapter
+    - AdminRuntime.ExecuteDataAsync
+    - system_ci_diagnostic_interface
+    - SystemOperationCiRuntime
+    - SystemCiDiagnosticResult
+
+  callable_surface:
+    interface_role: system_ci_diagnostic_interface
+    implementation_source: existing_SystemOperationCiRuntime
+    consumer_surfaces:
+      - AdminRuntime.ExecuteDataAsync
+      - SystemOperationCiRuntimeTests
+      - future_Admin_UI_diagnostic_panel
+
+  allowed_operations:
+    - operation: system_ci:list_targets
+      payload: null_or_empty
+      output: system_ci_target_list
+
+    - operation: system_ci:inspect
+      payload:
+        required:
+          - target
+      output: SystemCiDiagnosticResult
+
+  initial_target_vocabulary:
+    source: existing_SystemOperationCiRuntime_cron_continuity_targets
+    values:
+      - hub_attention_continuity
+      - current_rebuildability
+      - registry_continuity
+
+  output_contract:
+    result_type: SystemCiDiagnosticResult
+    status_type: SystemCiStatus
+    current_status_values:
+      - Pass
+      - Gap
+      - Blocking
+    required_fields:
+      - InspectionTarget
+      - InspectionKind
+      - OverallStatus
+      - Findings
+      - InspectedAt
+    finding_fields:
+      - CheckName
+      - Status
+      - Detail
+      - TargetId
+    note:
+      - drift_and_not_covered_exist_in_broader_ci_contract_status_vector
+      - this_callable_surface_does_not_require_drift_or_not_covered_until_SystemCiStatus_implementation_supports_them
+
+  boundary:
+    required:
+      - read_only_diagnostic_surface
+      - diagnostics_evidence_eligibility_only
+      - constructor_or_dependency_injection_callable_from_tests_and_AdminRuntime
+      - no_secondary_test_only_runtime_path
+    prohibited:
+      - Admin_UI_calls_test_execution
+      - AdminRuntime_calls_test_execution
+      - treating_test_runner_as_product_runtime
+      - DB_write_from_diagnostic_surface
+      - registry_mutation_from_diagnostic_surface
+      - automatic_repair_from_diagnostic_surface
+      - automatic_promotion_from_diagnostic_surface
+      - silent_fallback_to_pass
+      - synthetic_success_when_diagnostic_runtime_fails
+
+  test_contract:
+    - tests_may_construct_the_same_diagnostic_interface_with_fixtures
+    - tests_must_assert_the_interface_consumed_by_AdminRuntime
+    - tests_must_not_become_the_Admin_UI_runtime_dependency
+    - target_vocabulary_must_not_be_redefined_as_a_secondary_SSOT_in_tests
