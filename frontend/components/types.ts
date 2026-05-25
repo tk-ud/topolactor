@@ -93,6 +93,10 @@ export type ComponentVisualRole = "field" | "button" | "badge" | "alert" | "pane
 export type ComponentLifecycleStatus = "code_only_drift" | "alias_maintained" | "bucketed" | "packaging" | "promoted" | "registered" | "deprecated";
 export type ComponentCapabilityTag = "accepts_children" | "accepts_actions" | "emits_event" | "requires_event_binding" | "accepts_design" | "accepts_layout" | "displays_backend_result" | "displays_json" | "admin_only" | "recursive" | "selectable" | "controlled_value" | "error_display" | "loading_display";
 
+// runtimeConnected means runtime adapter/renderer support (code/runtime connection).
+// It does NOT mean DB-registered topology entity.
+// registrationRequired indicates DB registration/promotion is still required
+// before treating the component as a topology entity.
 export type ComponentCatalogClassification = {
   componentKey: string;
   componentKind: string;

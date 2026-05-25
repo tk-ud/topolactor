@@ -36,3 +36,11 @@ Deno.test("component catalog classification: textarea alias is alias-maintained,
   assertEquals(textareaTemplate.componentFamily, "template");
   assertEquals(textareaTemplate.lifecycleStatus, "code_only_drift");
 });
+
+Deno.test("component catalog classification: runtimeConnected primitives are explicit", () => {
+  for (const key of ["button.primitive", "input.primitive", "table.primitive", "card.primitive"]) {
+    const entry = COMPONENT_CATALOG_ENTRIES.find((e) => e.componentKey === key);
+    assert(entry);
+    assertEquals(entry.runtimeConnected, true);
+  }
+});

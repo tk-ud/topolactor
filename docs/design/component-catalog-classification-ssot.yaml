@@ -4,12 +4,19 @@ purpose: >
   Define catalog-side component classification metadata for UI Builder, catalog search,
   registration support, and authoring support, without changing runtime route or topology judgment.
 
+runtime_connected:
+  definition: runtime adapter/renderer supported (code/runtime connection)
+  note: does_not_mean_db_registered_topology_entity
+
+registration_required:
+  definition: requires DB registration/promotion before topology entity treatment
+
 component_kind:
   role:
     - runtime projection key
     - runtime adapter selection key
   non_goals:
-    - catalog classification唯一軸
+    - using component_kind as the only catalog classification axis
 
 component_family: [primitive, template, composite, packaged, alias]
 semantic_role: [input, action, display, feedback, validation, diagnostic, layout_shell, navigation, data_viewer, admin_operation]
