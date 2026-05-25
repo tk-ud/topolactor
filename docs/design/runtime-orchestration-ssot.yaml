@@ -205,6 +205,7 @@ runtime_orchestration_ssot:
       - role_definition
       - dispatcher_mapping
       - runtime_mapping
+      - db_notify_projection_mapping
       - ui_projection_mapping
       - topology_function_binding_mapping
       - projection_constructor_mapping
@@ -242,6 +243,7 @@ runtime_orchestration_ssot:
       - topology_transform_runtime
       - registry_attractor_runtime
       - admin_runtime
+      - sse_projection_runtime
     backend_to_frontend_bridge:
       lanes:
         - response

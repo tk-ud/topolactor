@@ -13,7 +13,6 @@
 #
 # NOT_COVERED (remaining todo):
 #   OutputLaneRouter.RouteAsync    — no unit test; requires SSE route integration fixture
-#   AdminRuntime.ExecuteDataAsync  — no unit test; covered only indirectly via Integration.Tests fixture
 #
 # docker-compose / DB / migration verification is covered in check-runtime-environment.sh.
 # Missing tool is an explicit failure, not a pass.
@@ -66,7 +65,7 @@ echo ""
 echo "=== [RUNTIME_INTEGRATION] Integration boundary tests ==="
 echo "    Scope: DefaultEntitySearchIntegrationTests"
 echo "           full dispatch path: dispatcher / executor / override"
-echo "           NOT_COVERED (direct): OutputLaneRouter.RouteAsync, AdminRuntime.ExecuteDataAsync"
+echo "           NOT_COVERED (direct): OutputLaneRouter.RouteAsync"
 
 if dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
     --nologo --verbosity minimal; then
@@ -91,12 +90,24 @@ else
   fail "[FRONTEND_CONTRACT] frontend contract tests failed"
 fi
 
+
+# ─── SSOT_VOCABULARY_CONTRACT ───────────────────────────────────────────────
+
+echo ""
+echo "=== [SSOT_VOCABULARY_CONTRACT] SSOT vocabulary subset contract checks ==="
+echo "    Scope: component catalog / seed runtime destination / pipeline prohibited+required identity vocabulary"
+
+if bash .agent/tests/check-ssot-vocabulary-contract.sh; then
+  echo "OK  [SSOT_VOCABULARY_CONTRACT] vocabulary contract checks passed"
+else
+  fail "[SSOT_VOCABULARY_CONTRACT] vocabulary contract checks failed"
+fi
+
 # ─── NOT_COVERED ──────────────────────────────────────────────────────────────
 
 echo ""
 echo "=== [NOT_COVERED] Functions without direct test coverage (remaining todo) ==="
 echo "NOT_COVERED  OutputLaneRouter.RouteAsync — no unit test; requires SSE route integration fixture"
-echo "NOT_COVERED  AdminRuntime.ExecuteDataAsync — no unit test; covered only indirectly via Integration.Tests fixture"
 echo "REMAINING_TODO  runtime-environment-gate covers docker-compose/DB/migration; env / volume / live API-route E2E is still not included"
 
 # ─── Result ───────────────────────────────────────────────────────────────────

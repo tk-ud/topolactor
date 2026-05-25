@@ -905,7 +905,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: C# direct AdminRuntime callable semantic tests and shell SSOT wiring check are implemented, while broader 4-lane SSOT wiring audit remains partial.
+      public_summary: C# direct AdminRuntime callable semantic tests, shell SSOT wiring check, and SSOT vocabulary contract checks are implemented, while broader 4-lane SSOT wiring audit remains partial.
       completion_condition:
         - sh_checks_are_kept_as_ai_agent_operational_guard
         - dotnet_ci_audits_application_wiring_against_ssot_contracts
@@ -916,7 +916,6 @@ system_roadmap_ssot:
         - initial_phase_returns_diagnostics_evidence_eligibility_only
       known_gap_ref:
         - Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.
-        - YAML-driven vocabulary assertion is not yet connected as full C# SSOT loader assertion.
         - diagnostics persistence / audit integration remains follow-up.
 
     system_ci.topology_registration:
