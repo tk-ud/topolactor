@@ -13,7 +13,7 @@ framework_policy:
       readme_is_ssot: false
       readme_must_link_to_canonical_docs_instead_of_duplicating_ssot_body: true
     canonical_authorities:
-      implementation_status: docs/system-roadmap.yaml
+      implementation_status: public_status_authority_document
       agent_execution_contract:
         - AGENTS.md
         - .agent/*
