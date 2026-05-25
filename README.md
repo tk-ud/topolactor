@@ -10,9 +10,9 @@ Development started: 2026-05-17 (first repository commit: 79d71f1)
 - **Package-resolved runtime:** Topology resolution selects package routes, schemas, components, and projections, reducing repeated frontend branching and raw exploration work.
 - **Performance posture:** Topolactor simplifies runtime paths through topology/package resolution and does not make benchmark-speed claims in this README.
 - **AI-Driven Development OS:** Change flow is governance-routed through explicit contracts, prompts, protocols, and checks.
-- **SQL Attention:** SQL-side attention evidence is treated as an observation surface for runtime-relevant pressure and continuity signals.
+- **SQL Attention:** SQL Attention is a DB + runtime hub-attractor observation pipeline spanning `logs.current`, `logs.hub_current`, append-only `logs.attention`, and scheduler/runtime/repository boundaries. It observes physical pressure and hub-current attractor evidence, and must not mutate registry/topology state.
 - **CI Attention:** CI Attention treats CI as an operational checker, not just a pass/fail gate.
-- **SSOT / CI governance posture:** System events, implementation diffs, runtime states, and SSOT contracts are projected into structured statuses such as pass, gap, blocking, drift, and not-covered. Those statuses drive follow-up actions such as merge, carry-over, repair, stop, or contract expansion.
+- **SSOT / CI governance posture:** Current runtime diagnostic surface (`SystemCiStatus`) supports `Pass`, `Gap`, and `Blocking`. Broader CI contract vocabulary can include `drift` and `not-covered`, but those are not runtime statuses unless implemented in `SystemCiStatus`. Current scheduler behavior emits structured diagnostics/logging; persisted or automated follow-up actions must not be claimed unless implemented.
 
 ## Tech Stack
 

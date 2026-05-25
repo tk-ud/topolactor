@@ -14,6 +14,13 @@ Worktype is `audit`, including any of:
 - 「差分見て」「リポジトリ進捗見て」「マージしていいか」系依頼
 
 ## required_reads
+
+Read scope rule:
+- Default full-bundle reading is prohibited.
+- Once an audit surface is triggered, all related SSOT + roadmap entries + TODO entries + implementation reality files for that surface are mandatory before semantic judgment.
+- Roadmap/TODO are dynamic progress/reference surfaces, not implementation-reality authorities; validate against implementation files + tests.
+- README/public docs judgments must not be made from roadmap snippets alone.
+- implementation_registry labels and file existence are metadata signals only; they are not implementation proof.
 - semantic audit top-level SSOT baseline（always for audit worktype）:
   1. docs/framework-core.yaml
   2. docs/framework-policy.yaml
@@ -50,7 +57,7 @@ Worktype is `audit`, including any of:
 - Todo checked: yes/no
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
-- Repo implementation checked: yes/no
+- Repo implementation checked: yes/no (allowed only when target implementation files were actually read)
 - problem
 - purpose
 - improvement_policy
@@ -92,3 +99,12 @@ Worktype is `audit`, including any of:
 - docs/framework-policy.yaml: yes/no
 - docs/design/runtime-orchestration-ssot.yaml: yes/no
 - docs/design/pipeline-continuity-ssot.yaml: yes/no
+
+
+## invalid_audit_gate
+- If related SSOT + implementation reality were not both read, output must be `Merge judgment: invalid audit / blocking`.
+- In invalid audit / blocking state, do not output Approve or Request Changes as final merge judgment.
+
+- If related implementation files/tests were not read: `Repo implementation checked: no` and `Merge judgment: invalid audit / blocking` are mandatory.
+- In invalid audit / blocking state, no implemented/partial/approve/request-changes semantic judgment may be emitted.
+- If roadmap/TODO conflicts with implementation reality, report `roadmap_todo_drift` and block approval until corrected or a single canonical maintenance follow-up is emitted.

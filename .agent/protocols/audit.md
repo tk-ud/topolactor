@@ -22,7 +22,26 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 - README/public docs only when needed for externally claimed behavior verification
 
 ## judgment_scope
-Implementation meaning consistency against stated intent and roadmap/todo status.
+Implementation meaning consistency against stated intent, SSOT boundary, and implementation reality; roadmap/todo are checked as dynamic projections of that reality.
+## triggered_surface_full_read_gate
+- Full-bundle reading by default is prohibited.
+- After a target surface is triggered, auditor must read all related SSOT, roadmap entries, TODO entries, and implementation reality files for that surface before semantic judgment.
+- Roadmap/TODO are not truth authorities by themselves; they must be cross-checked against implementation reality.
+- README/public-doc behavior claims must be validated against implementation reality and related SSOT; roadmap snippets alone are insufficient evidence.
+- If related SSOT + implementation reality reads are incomplete, audit output is invalid and must end with `Merge judgment: invalid audit / blocking`.
+- `Repo implementation checked: yes` is allowed only when target implementation files were actually read.
+- SSOT defines semantic contract/boundary; implementation files + tests define reached reality.
+- roadmap/TODO/README are projection/claim surfaces and must not substitute for implementation reads.
+- implementation_registry labels are metadata, not implementation proof.
+- file existence is not implementation proof.
+- If related implementation files/tests were not read:
+  - `Repo implementation checked: no`
+  - `Merge judgment: invalid audit / blocking`
+  - no implemented/partial/approve/request-changes semantic judgment output.
+- `Repo implementation checked: yes` is valid only when auditor lists actual implementation files/tests read.
+- If roadmap/TODO conflicts with implementation reality, emit `roadmap_todo_drift`; approval is blocked until same-task correction or one canonical follow-up maintenance instruction is emitted.
+
+
 
 ## foundation_ssot_read_gate
 For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), in this order:

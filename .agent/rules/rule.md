@@ -7,6 +7,9 @@
 - Do not mark completion before required judgment gates.
 - Do not use silent fallback for runtime boundary failures.
 - Do not read all prompt/protocol/docs bundles by default.
+- Once a surface is triggered, read all related SSOT, roadmap entries, TODO entries, and implementation reality files before semantic judgment.
+- If related implementation reality is not read, semantic judgment is invalid/blocking.
+- Roadmap/TODO/README/implementation_registry labels/file existence are not implementation proof.
 
 ## Minimal Workflow Invariant
 

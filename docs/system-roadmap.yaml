@@ -259,9 +259,9 @@ system_roadmap_ssot:
       blocking_gaps:
         - SQLA-1 logs.current refresh/watch production hardening or live verification remains
         - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
+        - SQLA-3 live DB verification + production hardening for scheduler exploration boundary remain
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
+        - SQLA-5 phase_vector evidence-quality hardening/verification expansion remains
         - SQLA-6 topology projection recommendation basis not implemented
         - SQLA-7 physical table identity mapping for logs.diff not decided
 
@@ -306,20 +306,20 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
       known_gap_ref:
         - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
+        - SQLA-3 live DB verification + production hardening for scheduler exploration boundary remain
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_scheduler_exploration:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
+      public_summary: scheduler/runtime hub-attractor exploration lane is implemented with production DI, watch/hub DB reads, runtime neighbor scoring, and append-only write boundary via WriteLogsAttentionAsync; remaining gaps are hardening/live verification.
       known_gap_ref:
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
+        - SQLA-3 live DB verification + production hardening for scheduler exploration boundary remain
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
+        - SQLA-5 phase_vector evidence-quality hardening/verification expansion remains
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -344,7 +344,7 @@ system_roadmap_ssot:
         scoring (basis_vector_json × attractor_vector_json), vector_json (convergent hit components),
         and evidence_json (scoring provenance) are now persisted to logs.attention.
         Scores are 0 until logs.hub_current.attractor_vector_json is populated by hub_current refresh
-        (SQLA-3, separate TODO). phase_vector_json and statistics_json remain {} pending SQLA-5/SQLA-6.
+        (SQLA-3, separate TODO). phase_vector_json is runtime-generated/persisted; statistics_json remains {} pending broader statistics/projection follow-up.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -361,23 +361,26 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-3 logs.hub_current refresh function exists, but attractor_vector_json population/hardening/live verification are incomplete — scores remain 0 until that boundary is completed
+        - SQLA-3 hub_current attractor_vector_json population/hardening/live verification remain; score quality stays constrained until this boundary is completed
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_phase_vector:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: phase_vector generation helpers and persistence fields exist in DB/runtime paths, but phase_vector evidence quality/completion criteria are not yet fully hardened.
+      public_summary: phase_vector evidence path is implemented in runtime (`BuildPhaseVectorJson`) and persisted to `logs.attention.phase_vector_json`; remaining gaps are evidence-quality hardening and verification depth.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
+      completion_condition:
+        - runtime_builds_phase_vector_json_for_hits
+        - phase_vector_json_is_persisted_to_logs_attention
       known_gap_ref:
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
+        - SQLA-5 phase_vector evidence-quality hardening/verification expansion remains
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -890,15 +893,15 @@ system_roadmap_ssot:
         - Gap-13 frontend scheduler runtime completion
 
     system_ci.runtime_diagnostic_scheduler:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: Runtime diagnostic scheduler and AdminRuntime callable diagnostic surface (`system_ci:list_targets` / `system_ci:inspect`) are implemented, while full diagnostic coverage remains partial.
+      public_summary: Runtime diagnostic scheduler and AdminRuntime callable diagnostic surface (`system_ci:list_targets` / `system_ci:inspect`) are implemented with current runtime status surface `Pass|Gap|Blocking`; broader coverage/persistence/audit integration remains partial.
       completion_condition:
         - cron_triggered_runtime_diagnostic_scheduler_wiring_is_implemented
         - scheduler_executes_hub_attention_current_rebuildability_and_registry_continuity_inspections
       known_gap_ref:
-        - Diagnostic coverage and downstream persistence/audit integration remain partial
+        - broader diagnostic coverage and downstream persistence/audit integration remain follow-up
         - frontend diagnostic panel exposure and broader operational coverage remain follow-up
 
     system_ci.dotnet_ssot_wiring_audit_tests:

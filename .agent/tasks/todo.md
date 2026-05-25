@@ -114,3 +114,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
       → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
+
+
+- [ ] Audit no-escape + truth-surface drift guard (completion bundle)
+  - scope: keep audit protocol/rules, README public claims, roadmap status text, and canonical TODO synchronized to SSOT boundary + implementation+tests reality.
+  - required drift rule: roadmap/TODO/README/implementation_registry/file existence must never substitute for implementation file/test reads.
+  - completion_condition: invalid-audit blocking gate is explicit, `Repo implementation checked: yes` requires listed implementation/test reads, and `roadmap_todo_drift` handling is explicit.
+  - remaining follow-up: SQL Attention live DB verification/hardening + evidence-quality expansion, CI broader status vocabulary expansion (`drift`/`not-covered`) only when implemented in runtime status model, and diagnostics persistence/audit integration.
