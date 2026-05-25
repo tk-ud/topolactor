@@ -223,6 +223,20 @@ runtime_orchestration_ssot:
       - dispatcher_bypassing_scheduler_alignment
 
   runtime_vocabulary_contract:
+    authority_boundary:
+      yaml_static_vocabulary:
+        - mapping_types
+        - backend_runtime_destinations
+        - trigger_kinds
+      seed_projection_surface:
+        - db/seed_empty.sql
+        - db/demo_seed.sql
+      ci_membership_rule:
+        - seed_manifest_topology_type_must_be_subset_of_mapping_types
+        - seed_runtime_destination_must_be_subset_of_backend_runtime_destinations
+      note:
+        - db_notify_projection_mapping_is_static_runtime_vocabulary_not_seed_defined
+        - sse_projection_runtime_is_static_runtime_vocabulary_not_seed_defined
     mapping_types:
       - dispatcher_mapping
       - runtime_mapping

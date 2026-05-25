@@ -106,6 +106,9 @@ ci_contract_ssot:
     - tests は SSOT を読み、implementation values が SSOT allowed values の subset であることを検証する
     - tests は expected vocabulary を secondary SSOT として再定義してはならない
     - implementation-only vocabulary は drift/GAP として扱う
+    - YAML static vocabulary is the source of truth for system-side status/kind/type/runtime discrete values
+    - DB seed is an implementation/concrete instance surface, not vocabulary authority
+    - CI validates seed discrete values as a subset of YAML static vocabulary
     - 新しい discrete value 追加は SSOT update を先行必須とする
     - CI は pass/fail gate だけではなく operational checker として扱う（CI_OPERATIONAL_CHECKER）
     - CI result は structured status vector として扱う（CI_STATUS_VECTOR）

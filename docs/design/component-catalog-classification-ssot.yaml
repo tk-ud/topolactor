@@ -56,3 +56,17 @@ prohibitions:
   - classification_tags_mutating_runtime_route
   - classification_tags_mutating_sql_attention
   - classification_tags_bypassing_component_registration
+
+seed_boundary:
+  db_seed_surface:
+    - ui_component_bucket bootstrap rows are concrete bucket instances
+    - AI/user may add component bucket rows later
+    - db seed is not classification vocabulary authority
+  yaml_authority:
+    - component_family
+    - semantic_role
+    - visual_role
+    - lifecycle_status
+    - capability_tags
+  ci_membership_rule:
+    - seed metadata_json.classification values must be subset of this SSOT
