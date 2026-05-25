@@ -14,6 +14,8 @@ mapping:
     change_surfaces:
       - repository-level orientation
       - governance entry overview
+      - README.md public overview surface
+      - README.md external entry point (non-SSOT)
     required_docs:
       - docs/agent-development-os.md
     supporting_docs: []
