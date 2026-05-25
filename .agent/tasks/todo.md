@@ -73,15 +73,21 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → Approve可能な非ブロッカー残件。実装意味やSSOT completion conditionを変えない範囲で整備する。
 
 - [ ] [surface-expansion][pr-220] `OperationPanel` 以外の主要 component / projection surface への emit-only 配線拡張
-      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。
+      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。canonical route は閉鎖済み。component 種別・CI 対象範囲の拡大が目的。
+      → 対象ファイル候補: `frontend/components/`, `frontend/runtime/frontendScheduler.ts`, `frontend/tests/frontendComponentEventRuntime.test.ts`。
 
 - [ ] [integration-test][pr-220] `component_operation_event_log` の PostgreSQL 実体 integration test 追加
       → Approve可能な非ブロッカー残件。append-only永続化境界の実DB検証を追加する。
+      → 対象ファイル候補: `backend/tests/Topolactor.Integration.Tests/`, `backend/endpoint/ComponentEventAppendEndpoint.cs`。
+
+- [ ] [hardening] Frontend Component Event Runtime の retry / 監視 / 失敗運用 hardening
+      → canonical route は閉鎖済み。production_ready:false のまま。retry 境界・監視フック・失敗運用パスの hardening が残る。
+      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`。
 
 ## TODO dependency map（execution order）
 
-1. Frontend Component Event Runtime（Issue #86 完了済み、依存クリア）
-2. Visual layout builder（Issue #89、Issue #86 依存クリア済み）
+1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
+2. Visual layout builder（Issue #89）— Issue #86 依存クリア済み、着手可能。
 
 ---
 
@@ -94,14 +100,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [x] seed/demo seed に追加済みの `topology_vector_runtime.recommendation_blend` について、本番運用値を確定し seed以外の反映面（manifest/policy row）を確認する
       → 確認結果: seed/demo seed は `function_parameters(default_policy)` 行として runtime読取面に接続済み。resolverに追加magic numberは導入しない。運用値は `attention_score_weight=1.0, trend/statistics=0.0, scope_limit=1000` を継続。
       → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
-
-## Frontend Component Event Runtime
-
-- [ ] Frontend Component Event Runtime の残scopeを完了する（Issue #86 完了済み、依存クリア）
-      → 実装済み面: frontend queue/flush/localStorage fallback、`/api/component-events/append` route、backend append endpoint、idempotency境界、frontend/backend tests は存在する。
-      → 残作業: OperationPanel 以外を含む全component emit配線、component registration 依存の接続、実DB/live verification、運用hardening（retry/監視/失敗運用）を完了境界まで詰める。
-      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`, `backend/endpoint/ComponentEventAppendEndpoint.cs`, `frontend/tests/frontendComponentEventRuntime.test.ts`, `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`, `frontend/components/`。
-      → SSOT参照: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml`。
 
 ## Admin Visual Layout Builder (Issue #89)
 
