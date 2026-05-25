@@ -76,6 +76,28 @@ fail!('seed mapping type extraction empty') if seed_types.empty?
 fail!("seed runtime_destination not in SSOT: #{(seed_dests-rtd).to_a.sort.join(', ')}") unless (seed_dests-rtd).empty?
 fail!("seed mapping type not in SSOT: #{(seed_types-map_types).to_a.sort.join(', ')}") unless (seed_types-map_types).empty?
 puts 'OK  DB seed runtime_destination/type vocabulary subset check'
+
+# ui_component_bucket seed classification subset (seed instance -> YAML authority)
+seed_class_rows = seed.scan(/"classification"\s*:\s*\{([^\}]*)\}/m).flatten
+fail!('ui_component_bucket classification extraction empty from seed SQL') if seed_class_rows.empty?
+seed_component_family = seed_class_rows.flat_map { |r| r.scan(/"componentFamily"\s*:\s*"([^"]+)"/).flatten }.to_set
+seed_semantic_role = seed_class_rows.flat_map { |r| r.scan(/"semanticRole"\s*:\s*"([^"]+)"/).flatten }.to_set
+seed_visual_role = seed_class_rows.flat_map { |r| r.scan(/"visualRole"\s*:\s*"([^"]+)"/).flatten }.to_set
+seed_lifecycle_status = seed_class_rows.flat_map { |r| r.scan(/"lifecycleStatus"\s*:\s*"([^"]+)"/).flatten }.to_set
+seed_capability_tags = seed_class_rows.flat_map { |r| r.scan(/"capabilityTags"\s*:\s*\[([^\]]+)\]/m).flatten.flat_map { |arr| arr.scan(/"([^"]+)"/).flatten } }.to_set
+
+{
+  'componentFamily' => seed_component_family,
+  'semanticRole' => seed_semantic_role,
+  'visualRole' => seed_visual_role,
+  'lifecycleStatus' => seed_lifecycle_status,
+  'capabilityTags' => seed_capability_tags,
+}.each do |k, vals|
+  fail!("seed classification extraction empty: #{k}") if vals.empty?
+  bad = vals - allowed[k]
+  fail!("seed classification #{k} not in SSOT: #{bad.to_a.sort.join(', ')}") unless bad.empty?
+end
+puts 'OK  ui_component_bucket seed classification vocabulary subset check'
 RUBY
 
 echo "=== SSOT vocabulary contract check passed ==="
