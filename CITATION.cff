@@ -3,7 +3,7 @@ title: topolactor
 message: If you use or build on topolactor, citation is appreciated.
 authors:
   - given-names: Takumi
-    alias: tk-ud
+    family-names: Udagawa
 year: 2026
 license: Apache-2.0
 repository-code: https://github.com/tk-ud/topolactor

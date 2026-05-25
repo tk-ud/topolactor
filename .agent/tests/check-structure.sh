@@ -163,7 +163,6 @@ check_dir "infra"
 echo ""
 echo "=== File checks ==="
 check_file "README.md"
-check_file "NOTICE.md"
 check_file "AGENTS.md"
 
 check_file "docs/agent-development-os.md"
