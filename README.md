@@ -10,9 +10,9 @@ Development started: 2026-05-17 (first repository commit: 79d71f1)
 - **Package-resolved runtime:** Topology resolution selects package routes, schemas, components, and projections, reducing repeated frontend branching and raw exploration work.
 - **Performance posture:** Topolactor simplifies runtime paths through topology/package resolution and does not make benchmark-speed claims in this README.
 - **AI-Driven Development OS:** Change flow is governance-routed through explicit contracts, prompts, protocols, and checks.
-- **SQL Attention:** SQL-side attention evidence is treated as an observation surface for runtime-relevant pressure and continuity signals.
+- **SQL Attention:** DB + runtime hub-attractor observation pipeline. Physical pressure is observed via logs.current (L2 norm watch function); hub-current attractor fields via logs.hub_current; attractor evidence rows are appended to logs.attention. Scheduler, runtime, and repository enforce no registry or topology mutation.
 - **CI Attention:** CI Attention treats CI as an operational checker, not just a pass/fail gate.
-- **SSOT / CI governance posture:** System events, implementation diffs, runtime states, and SSOT contracts are projected into structured statuses such as pass, gap, blocking, drift, and not-covered. Those statuses drive follow-up actions such as merge, carry-over, repair, stop, or contract expansion.
+- **SSOT / CI governance posture:** Runtime system CI diagnostics emit structured findings with `SystemCiStatus`: Pass, Gap, or Blocking. Agent governance checks use broader CI contract vocabulary defined in `docs/design/ci-contract-ssot.yaml`. Diagnostic results are structured log output; automated persistence and follow-up routing are not yet implemented.
 
 ## Tech Stack
 
@@ -23,16 +23,16 @@ PostgreSQL / C# / Deno Fresh / Preact
 Topolactor uses a route-based governance read path before implementation work, so context cost is intentionally estimated and managed.
 
 - Rough estimate method: repository-local character counts, then token approximation by `chars/4` (primary) and `chars/3` (upper-bound).
-- Route cost is workload-dependent, but baseline governance reads are typically in the low-thousands of tokens, and implementation/design routes increase from there depending on triggered protocol and SSOT reads.
+- Context cost is route-dependent and must be estimated from the selected read path using repository-local character counts. Small targeted governance reads may be low; semantic audit routes that trigger SSOT, implementation files, and test reads must be estimated from the actual file set.
 - Full governance bundle loading should be avoided; route-targeted loading is the intended operating posture.
 
 ## Implementation Status
 
-This project is in active development. Core dispatch pipeline (manifest-driven routing, runtime executor, timeline scheduler) is implemented. Output lanes, SSE projection, SQL Attention observation, and admin UI surfaces are in various stages of partial implementation. See `docs/system-roadmap.yaml` for component-level status across milestones M1–M7.
+This project is in active development. Core dispatch pipeline (manifest-driven routing, runtime executor, timeline scheduler) is implemented. Output lanes and SSE projection (M3/M4) are partial. SQL Attention scheduler/exploration runtime/evidence persistence subpaths are implemented (production_ready: false); parent milestone M7 is partial due to remaining live verification, hub_current attractor-vector hardening, and topology projection gaps. Admin UI surfaces (M5) are partial. See `docs/system-roadmap.yaml` for component-level status.
 
 ## Where to Go Next
 
-- Public roadmap and status SSOT: `docs/system-roadmap.yaml`
+- Public roadmap / status reference (implementation status must be verified against SSOT, implementation files, and tests): `docs/system-roadmap.yaml`
 - Agent development/governance overview: `docs/agent-development-os.md`
 - Core/runtime and policy SSOT entry points: `docs/framework-core.yaml`, `docs/framework-policy.yaml`
 - Design SSOT surfaces: `docs/design/`

@@ -50,7 +50,7 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - 上記 partial purpose に該当する場合のみ、未達SSOT条件が TODO / roadmap / `known_gap_ref` / `remaining_todo` に明示維持されていることを Approve 条件として扱える。
 - PR本文・Issue目的・user依頼・TODO項目のいずれかが implemented / close / completion / TODO `[x]` を目指す場合、`completion_condition` 未達、remaining `known_gap_ref`、concrete `remaining_todo` が1つでもあれば Request Changes とする。
 - TODO/roadmap に未達が明示されている事実は partial 分類の正しさの証拠であり、implemented-target PR の Approve 根拠にはならない。
-- Issue は入口・作業チケットであり、closed / aggregated / not_planned であっても implemented 判定の正本にしない。implemented 判定の正本は `docs/system-roadmap.yaml` の roadmap entry（`completion_condition` / `known_gap_ref`）とする。
+- Issue は入口・作業チケットであり、closed / aggregated / not_planned であっても implemented 判定根拠にしない。implemented 判定の正本は SSOT（`docs/design/*` 意味契約）・実装ファイル・テストとする。ロードマップの `completion_condition` / `known_gap_ref` は判定参照として使うが、ロードマップの status 記述のみを implemented 根拠にしない。ロードマップとTODOは動的な進捗参照面であり、実装実態の権威ソースではない。
 - 既存の「TODO細分化」「小TODOへ分割」という語は、implementation atom 分割ではなく roadmap completion bundle への再編を意味する。
 - relevant SSOT completion_condition が未達のまま implemented / complete / closed を示す、または示唆する PR は Approve 禁止。
 - representative route、ACK-only intake、skeleton wiring、partial wiring は、SSOT completion_condition が許容しない限り implemented 根拠にしない。
@@ -62,7 +62,7 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - Todo checked: yes/no
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
-- Repo implementation checked: yes/no
+- Repo implementation checked: yes/no (yes は実際に読んだ実装ファイル・テストのリストを必須とする; ファイル・テスト読取なしの yes は無効 → Merge judgment: invalid audit / blocking)
 - problem
 - purpose
 - improvement_policy
@@ -83,6 +83,7 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - ファイル存在だけで partial / implemented 判定しない
 - todo未実装scopeを見ずに roadmap status を判断しない
 - implementation_registry key 名だけで実装意味を判断しない
+- ロードマップの status 記述または implementation_registry エントリ名・ファイル存在のみによる実装意味判断
 - completion_condition 未達のまま implemented 判定しない
 - representative route / skeleton / ACK-only / partial wiring を implemented 根拠にしない
 

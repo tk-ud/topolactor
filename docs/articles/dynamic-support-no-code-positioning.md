@@ -153,8 +153,8 @@ topolactor の価値は、ノーコードの「作成自由度」を増やすこ
 本記事のポジションは topolactor の設計方針とロードマップ方向性を示しています。
 現時点の実装状態は以下のとおりです（詳細は `docs/system-roadmap.yaml` を参照）。
 
-**CI Attention（エージェントガバナンス面）:** SSOT 整合性チェック・構造チェック・完了判定プロトコルとして実装済みです。本記事で説明するエンドユーザーへの入力案内・候補提示 UX は現時点では未実装です。
+**CI Attention（現在の実装）:** `SystemOperationCiRuntime` と `SystemOperationCiScheduler` による runtime system CI が実装済みです。cron 実行でHub Attention 整合性・current rebuildability・registry continuity を検査し、`SystemCiStatus`（Pass / Gap / Blocking）で診断結果を structured log に出力します。診断結果は現時点では DB 永続化されておらず、自動 follow-up アクションも未実装です。エンドユーザー向けの「不足入力案内・有効候補提示」UX は将来の方向性であり、現時点では未実装です。
 
-**SQL Attention（observation runtime）:** `logs.current` / `logs.hub_current` / `logs.attention` の各 DB 層は実装済みで、基本的な evidence 永続化は動作しています。`hub_current` attractor-vector 生成・scoring hardening・live verification は未完了（roadmap: partial）です。context_hub_recommendation_current による topology 内部推薦は実装済みですが、SQL Attention parent observation の完全サイクルは未完成です。
+**SQL Attention（現在の実装）:** `SqlAttentionScheduler`・`HubAttractorExplorationRuntime`・`NpgsqlSqlAttentionLogsRepository` のスケジューラ/探索 runtime/repository subpath は実装済みです（production_ready: false）。`logs.current`（L2 norm watch）・`logs.hub_current`（attractor current）・`logs.attention`（evidence 永続化）の各 DB 層も実装済みです。残る gap は `hub_current` attractor-vector の生成・scoring hardening・live verification・topology projection basis であり、これらが未完であるため parent milestone M7 は partial 状態です。`context_hub_recommendation_current` による topology 内部推薦は別途実装済みですが、SQL Attention observation の完全フィードバックサイクルは構築中です。
 
-**動的サポート付きノーコード UX:** フロントエンド UI のノーコード UX（CI Attention によるユーザー案内・SQL Attention によるログ還流サイクル）は現在構築中です。基礎インフラ（manifest-driven dispatch・admin registry surface・component topology）は各マイルストーンの partial / implemented 状態にあります。
+**動的サポート付きノーコード UX:** manifest-driven dispatch・admin registry surface・component topology などの基礎インフラは partial / implemented 状態にあります。ログが CI Attention/SQL Attention を通じて次の UX へ還流する完全サイクルは構築中であり、本記事で説明する end-to-end UX は将来の方向性です。

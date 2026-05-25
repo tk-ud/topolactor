@@ -95,9 +95,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 確認結果: seed/demo seed は `function_parameters(default_policy)` 行として runtime読取面に接続済み。resolverに追加magic numberは導入しない。運用値は `attention_score_weight=1.0, trend/statistics=0.0, scope_limit=1000` を継続。
       → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
-## Frontend Component Event Runtime (Issue #86 前提)
+## Frontend Component Event Runtime
 
-- [ ] Frontend Component Event Runtime の残scopeを完了する（Issue #86 前提）
+- [ ] Frontend Component Event Runtime の残scopeを完了する（Issue #86 完了済み、依存クリア）
       → 実装済み面: frontend queue/flush/localStorage fallback、`/api/component-events/append` route、backend append endpoint、idempotency境界、frontend/backend tests は存在する。
       → 残作業: OperationPanel 以外を含む全component emit配線、component registration 依存の接続、実DB/live verification、運用hardening（retry/監視/失敗運用）を完了境界まで詰める。
       → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`, `backend/endpoint/ComponentEventAppendEndpoint.cs`, `frontend/tests/frontendComponentEventRuntime.test.ts`, `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`, `frontend/components/`。
@@ -106,10 +106,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ## Admin Visual Layout Builder (Issue #89)
 
 - [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
-      → 依存関係: **Issue #86 完了後に着手**（component DB registration が前提）。
+      → 依存関係: Issue #86（frontend_ui_component_system）は完了済み。着手可能。
       → 対象責務: layout tensor schema + drag/drop UI island 実装。
       → 対象ファイル: `db/ui_topology_tables.sql`, `frontend/islands/`, `docs/registrar-admin-ui-specification.md`。
       → 詳細:
         - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
-      → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
+      → 完了条件: `layout_tensor_and_variable_css_boundaries_are_defined` / `layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB` / `frontend_adapter_is_a_stable_projection_surface`（詳細は `docs/system-roadmap.yaml` の `admin_visual_layout_builder.completion_condition` 参照）。

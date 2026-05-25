@@ -28,7 +28,7 @@ RuntimeExecutor canonical pipeline:
 
 ## Implementation Status
 
-See `docs/system-roadmap.yaml` for component-level status. The core dispatch pipeline (M1 / M2: RuntimeTimelineScheduler, ManifestDispatcher, RuntimeExecutor) is implemented. Output lanes and SSE projection (M3 / M4) are partial. SQL Attention observation runtime (M7) is partial. Admin routes and visual layout builder (M5) are partial.
+See `docs/system-roadmap.yaml` for component-level status. The core dispatch pipeline (M1 / M2: RuntimeTimelineScheduler, ManifestDispatcher, RuntimeExecutor) is implemented. Output lanes and SSE projection (M3 / M4) are partial. SQL Attention (M7): SqlAttentionScheduler, HubAttractorExplorationRuntime, and evidence persistence subpaths are implemented (production_ready: false); parent milestone is partial due to remaining live verification, hub_current attractor-vector hardening, and topology projection gaps. Admin routes and visual layout builder (M5) are partial.
 
 ## Key Class Roles
 
