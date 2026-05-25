@@ -1,5 +1,12 @@
 framework_policy:
 
+  ci_attention_operational_policy:
+    ci_interpretation:
+      - hidden_fallback_is_not_acceptable_as_ci_operational_behavior
+      - errors_should_be_exposed_as_explicit_structured_status
+      - pass_fail_only_ci_interpretation_is_insufficient_when_gap_blocking_drift_not_covered_are_available
+      - branch_decisions_should_use_structured_ci_status_rather_than_silent_fallback
+
   topolactor_space_boundary_policy:
     registry: definition_and_configuration
     topology: semantic_space

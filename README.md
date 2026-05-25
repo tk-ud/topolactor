@@ -18,6 +18,8 @@ Topolactor has three main subjects:
 2. **AI-Driven Development OS** — agents modify the repository through explicit contracts, protocols, checklists, TODO surfaces, and CI gates instead of ad-hoc edits.
 3. **SQL Attention** — PostgreSQL observes physical-current pressure and hub-current square-matrix continuity as separate current planes, then records hub-attractor attention evidence without collapsing statistics, Attention, and Phase Attention into one score. It is not SQL-side QK dot-product reproduction and is not the topology-side recommendation current.
 
+CI is used as an operational checker, not just a pass/fail gate. System events, implementation diffs, runtime states, and SSOT contracts are projected into structured statuses (pass/gap/blocking/drift/not-covered), and those statuses drive follow-up actions such as merge, carry-over, repair, or contract expansion.
+
 Registry / hub / topology-coordinate shorthand:
 
 - **registry = definitions and configuration** (target-dependent: hub registry / topology registry / ui registry)

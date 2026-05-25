@@ -45,6 +45,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] [bundle][CI][SSOT vocabulary contract] SSOT YAML の許可集合・構造・命名を正本として implementation discrete values の subset 準拠を検査する CI contract を追加する（次段階 hardening）
       → 目的: SSOT YAML を allowed vocabulary / allowed shape / canonical relation の唯一正本にし、実装側が正本にない離散値を使った場合は CI fail とする。新語彙は implementation 先行ではなく SSOT 先行追加を通過条件にする。
+      → CI Attention 追加観点: CI result を pass/fail 二値ではなく structured status vector（pass/gap/blocking/drift/not_covered）として扱い、agent action（carry-over/repair/stop）分岐に接続する。
+      → silent fallback は CI 上で pass 扱いせず、境界失敗を structured status として明示露出する。
       → 対象責務（bundle 単位で一体管理）:
         - component catalog classification
         - DB seed / status / type / kind

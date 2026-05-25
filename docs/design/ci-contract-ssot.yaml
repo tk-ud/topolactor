@@ -20,6 +20,10 @@ ci_contract_ssot:
     - CI_DOTNET_LANE_TEST_PACKAGE
     - CI_RUNTIME_ENVIRONMENT_LIVE_E2E
     - CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION
+    - CI_ATTENTION
+    - CI_STATUS_VECTOR
+    - CI_OPERATIONAL_CHECKER
+    - CI_BRANCHABLE_STATUS_SIGNAL
 
   ci_components:
     - id: ci.component.index
@@ -57,6 +61,12 @@ ci_contract_ssot:
       role:
         - 実装側の離散値が SSOT YAML の allowed vocabulary / allowed shape / canonical relation に含まれることを検証する
         - test側 expected list の再定義ではなく、SSOT loader / contract reader 経由で検査する
+    - id: ci.component.ci_attention_lane
+      grep_marker: CI_ATTENTION
+      role: system event / implementation diff / runtime state / SSOT contract を structured CI status vector に射影する operational checker lane
+    - id: ci.component.status_vector_branching
+      grep_marker: CI_STATUS_VECTOR
+      role: PASS / GAP / BLOCKING / DRIFT / NOT_COVERED などの状態を branchable operational signal として扱う
 
   ci_packages:
     - name: Topolactor.CiContracts
@@ -90,6 +100,12 @@ ci_contract_ssot:
     - tests は expected vocabulary を secondary SSOT として再定義してはならない
     - implementation-only vocabulary は drift/GAP として扱う
     - 新しい discrete value 追加は SSOT update を先行必須とする
+    - CI は pass/fail gate だけではなく operational checker として扱う（CI_OPERATIONAL_CHECKER）
+    - CI result は structured status vector として扱う（CI_STATUS_VECTOR）
+    - error は fallback で隠さず structured signal として露出する（CI_BRANCHABLE_STATUS_SIGNAL）
+    - agent/runtime follow-up は CI status から条件分岐する（CI_BRANCHABLE_STATUS_SIGNAL）
+    - silent fallback による失敗隠蔽は禁止
+    - CI は SSOT未記載の意味を勝手に増やさない
 
   lane_usage_example:
     - frontend_component_event_log_lane
