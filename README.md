@@ -30,6 +30,7 @@ Topolactor uses a route-based governance read path before implementation work, s
 - Agent development/governance overview: `docs/agent-development-os.md`
 - Core/runtime and policy SSOT entry points: `docs/framework-core.yaml`, `docs/framework-policy.yaml`
 - Design SSOT surfaces: `docs/design/`
+- UX positioning article: `docs/articles/dynamic-support-no-code-positioning.md`
 - Agent execution contract and route surfaces: `AGENTS.md`, `.agent/`
 
 ## License
