@@ -103,26 +103,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`, `backend/endpoint/ComponentEventAppendEndpoint.cs`, `frontend/tests/frontendComponentEventRuntime.test.ts`, `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`, `frontend/components/`。
       → SSOT参照: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml`。
 
-## Frontend UI Primitive Catalog Bucket/Promote (Issue #86)
-
-- [ ] [bundle][Issue #86][frontend_ui_component_system] frontend component constructor/interface + DB-driven design/layout/wiring projection + catalog registration completion bundle を完了する
-      → roadmap entry: `docs/system-roadmap.yaml` `frontend_ui_component_system`
-      → completion_condition 対応:
-        - `primitive_and_packaged_component_boundary_is_defined`
-        - `componentId_packageId_layoutId_wiringId_are_registered_in_UI_topology_DB`
-        - `code_only_components_are_treated_as_drift_or_gap`
-        - `frontend_does_not_own_runtime_or_topology_judgment`
-      → closure scope（分割禁止）:
-        - frontend component constructor/interface を DB topology payload projection 前提（props/className/design/event hook/children/disabled/state）で閉じる。
-        - design/layout/wiring 正本を frontend 固定値に置かず、`design.classname`/`design.tailwind`、`packages.layout`、`ui_layout_registry`、`ui_wiring_registry`、`ui_topology_tensor` を投影元として扱う。
-        - `runtimeComponentAdapter` / `runtimePrimitiveRenderer` の責務を DB topology payload → component interface projection に揃える。
-        - `ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor` 登録導線を同一bundleで閉じる。
-      → 判定境界:
-        - code-only drift を完了扱いしない（解消 or catalog drift として bundle 単位で残TODO化）。
-        - Issue #86 implemented 判定は `docs/system-roadmap.yaml` の `completion_condition` / `known_gap_ref` と整合させる。
-      → 進捗メモ（完了済み sub-scope）: component catalog classification SSOT + all component classification entries + catalog seed registration surface（ui_component_bucket bootstrap seed）+ `ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor` continuity は実装/検証済み。
-      → 残件: completion bundle のうち frontend constructor/interface の最終整合判定、および DB-driven design/layout/wiring projection closure（frontend projection/component interface の最終整合判定を含む）。
-
 ## Admin Visual Layout Builder (Issue #89)
 
 - [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
