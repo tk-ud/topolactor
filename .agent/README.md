@@ -32,3 +32,4 @@ Canonical route:
 
 - `.agent/README.md` is a directory map only.
 - Token estimates, protocol body details, and completion judgment logic are out of scope here.
+- `docs/system-roadmap.yaml` と `.agent/tasks/todo.md` は常時変更対象の動的参照点。実装実態の正本ではない。実装状態の確認は実コードおよびテストから行い、ロードマップやTODOの記述のみを根拠に実装完了・未着手と判断しない。

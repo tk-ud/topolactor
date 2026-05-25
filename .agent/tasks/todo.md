@@ -73,16 +73,21 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → Approve可能な非ブロッカー残件。実装意味やSSOT completion conditionを変えない範囲で整備する。
 
 - [ ] [surface-expansion][pr-220] `OperationPanel` 以外の主要 component / projection surface への emit-only 配線拡張
-      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。
+      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。canonical route は閉鎖済み。component 種別・CI 対象範囲の拡大が目的。
+      → 対象ファイル候補: `frontend/components/`, `frontend/runtime/frontendScheduler.ts`, `frontend/tests/frontendComponentEventRuntime.test.ts`。
 
 - [ ] [integration-test][pr-220] `component_operation_event_log` の PostgreSQL 実体 integration test 追加
       → Approve可能な非ブロッカー残件。append-only永続化境界の実DB検証を追加する。
+      → 対象ファイル候補: `backend/tests/Topolactor.Integration.Tests/`, `backend/endpoint/ComponentEventAppendEndpoint.cs`。
+
+- [ ] [hardening] Frontend Component Event Runtime の retry / 監視 / 失敗運用 hardening
+      → canonical route は閉鎖済み。production_ready:false のまま。retry 境界・監視フック・失敗運用パスの hardening が残る。
+      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`。
 
 ## TODO dependency map（execution order）
 
-1. Frontend Component Event Runtime（Issue #86 前提）
-2. UI primitive catalog bucket投入/promote（Issue #86）
-3. Visual layout builder（Issue #89, depends on #86）
+1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
+2. Visual layout builder（Issue #89）— Issue #86 依存クリア済み、着手可能。
 
 ---
 
@@ -96,21 +101,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 確認結果: seed/demo seed は `function_parameters(default_policy)` 行として runtime読取面に接続済み。resolverに追加magic numberは導入しない。運用値は `attention_score_weight=1.0, trend/statistics=0.0, scope_limit=1000` を継続。
       → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
-## Frontend Component Event Runtime (Issue #86 前提)
-
-- [ ] Frontend Component Event Runtime の残scopeを完了する（Issue #86 前提）
-      → 実装済み面: frontend queue/flush/localStorage fallback、`/api/component-events/append` route、backend append endpoint、idempotency境界、frontend/backend tests は存在する。
-      → 残作業: OperationPanel 以外を含む全component emit配線、component registration 依存の接続、実DB/live verification、運用hardening（retry/監視/失敗運用）を完了境界まで詰める。
-      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`, `backend/endpoint/ComponentEventAppendEndpoint.cs`, `frontend/tests/frontendComponentEventRuntime.test.ts`, `backend/tests/Topolactor.Runtime.Tests/FrontendComponentEventLogLaneTests.cs`, `frontend/components/`。
-      → SSOT参照: `docs/design/runtime-orchestration-ssot.yaml`, `docs/framework-core.yaml`, `docs/framework-policy.yaml`。
-
 ## Admin Visual Layout Builder (Issue #89)
 
 - [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
-      → 依存関係: **Issue #86 完了後に着手**（component DB registration が前提）。
+      → 依存関係: Issue #86（frontend_ui_component_system）は完了済み。着手可能。
       → 対象責務: layout tensor schema + drag/drop UI island 実装。
       → 対象ファイル: `db/ui_topology_tables.sql`, `frontend/islands/`, `docs/registrar-admin-ui-specification.md`。
       → 詳細:
         - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
-      → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
+      → 完了条件: `layout_tensor_and_variable_css_boundaries_are_defined` / `layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB` / `frontend_adapter_is_a_stable_projection_surface`（詳細は `docs/system-roadmap.yaml` の `admin_visual_layout_builder.completion_condition` 参照）。

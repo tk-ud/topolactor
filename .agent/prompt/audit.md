@@ -50,7 +50,7 @@ Worktype is `audit`, including any of:
 - Todo checked: yes/no
 - Roadmap checked: yes/no
 - Implementation registry checked: yes/no
-- Repo implementation checked: yes/no
+- Repo implementation checked: yes/no (yes は実際に読んだ実装ファイル・テストのリストを出力必須; リストなしの yes は無効)
 - problem
 - purpose
 - improvement_policy

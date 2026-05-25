@@ -52,9 +52,9 @@ deno task start
 
 Requires backend running for dispatch operations.
 
-## Note
+## Implementation Status
 
-This is an empty skeleton. Real business screens are out of scope for this skeleton issue.
+Routes, islands, components, and runtime files are substantially implemented. Admin routes (`/admin/*`) are wired to backend registry flows for seed, bucket, and package operations; SSE receiver / dispatcher / projection runtime are partial (see `docs/system-roadmap.yaml` M4). Visual layout builder drag/drop UI is not yet implemented.
 
 ## Local type check
 

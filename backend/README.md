@@ -2,64 +2,72 @@
 
 ## Overview
 
-The backend is the **abstract runtime layer**. It receives user operations from the frontend (or any caller), resolves them through a strict data-driven pipeline, and emits validated responses. There are **no fallback paths** that bypass runtime resolution. Any broken reference — missing attractor, missing package, missing schema — produces an explicit `ValidationError` in the response rather than a silent default or partial result.
+The backend is the **abstract runtime layer**. It receives operations from the frontend (or any caller), aligns them through a timeline scheduler, resolves them through a manifest-driven pipeline, and routes effects to explicit output lanes. There are **no silent fallback paths**. Any broken manifest reference, missing attractor, or unresolvable package produces an explicit error response.
 
 ## Canonical Execution Path
 
 ```
-stored_topology_data
-  → user_operation (EndpointRequestDto)
-    → operation_vector (OperationVectorResolver)
-      → guard_validation (RuntimeGuard)
-        → attractor_resolve (AttractorResolver)
-          → structure_map_resolve (StructureMapResolver)
-            → package_resolve (PackageResolver)
-              → schema_resolve (SchemaResolver)
-                → semantic_map (SemanticMapper)
-                  → diff_log (DiffLogRepository)
-                    → emission_build (EmissionBuilder)
-                      → EndpointResponseDto
+EndpointRequestDto
+  → RuntimeTimelineScheduler   (cron / hook / client trigger alignment; Channel-based queue)
+    → ManifestDispatcher       (resolve active manifest by role + target + layer + action)
+      → IDispatchableRuntime handler
+          topology_transform_runtime → RuntimeExecutor
+          admin_runtime              → AdminRuntimeDispatchAdapter → AdminRuntime
+
+RuntimeExecutor canonical pipeline:
+  → OperationVectorResolver
+  → RuntimeGuard              (validation: target / layer / action / attractor_key)
+  → AttractorResolver
+  → StructureMapResolver
+  → PackageResolver
+  → SchemaResolver
+  → SemanticMapper / DiffLogRepository
+  → EmissionBuilder
+  → OutputLaneRouter          (response / db_notify_emission / registry_attractor_update)
 ```
 
-Every step either succeeds and passes its output to the next step, or returns an error response immediately. No step is skipped; no step has a silent fallback.
+## Implementation Status
 
-## Class Roles
+See `docs/system-roadmap.yaml` for component-level status. The core dispatch pipeline (M1 / M2: RuntimeTimelineScheduler, ManifestDispatcher, RuntimeExecutor) is implemented. Output lanes and SSE projection (M3 / M4) are partial. SQL Attention (M7): SqlAttentionScheduler, HubAttractorExplorationRuntime, and evidence persistence subpaths are implemented (production_ready: false); parent milestone is partial due to remaining live verification, hub_current attractor-vector hardening, and topology projection gaps. Admin routes and visual layout builder (M5) are partial.
 
-| Class | Namespace | Role |
-|---|---|---|
-| `DispatchEndpoint` | `Topolactor.Endpoint` | Thin boundary. Validates the request is not null, delegates entirely to `RuntimeExecutor`. No business logic. |
-| `RuntimeExecutor` | `Topolactor.Runtime` | Single canonical orchestrator of the full pipeline. Calls each resolver in order. Catches exceptions from each stage and converts them to `ValidationError` responses. |
-| `OperationVectorResolver` | `Topolactor.Runtime` | Maps `EndpointRequestDto` fields to an `OperationVector`. Derives `AttractorKey` as `target:layer:action` (lowercase). |
-| `RuntimeGuard` | `Topolactor.Guard` | Validates the `OperationVector` before resolution begins. Returns errors for missing `Target`, `Layer`, `Action`, or `AttractorKey`. |
-| `AttractorResolver` | `Topolactor.Runtime` | Loads the structure map record keyed by `AttractorKey`. Throws if not found — no fallback. |
-| `StructureMapResolver` | `Topolactor.Runtime` | Loads the full structure map by ID and constructs the initial `RuntimeWorkingShape`. |
-| `PackageResolver` | `Topolactor.Runtime` | Loads the package definition by `PackageId` from the working shape. Throws if missing or not found. |
-| `SchemaResolver` | `Topolactor.Runtime` | Loads the schema definition by `SchemaId` from the working shape. Throws if missing or not found. |
-| `EmissionBuilder` | `Topolactor.Runtime` | Constructs the final `Emission` from the fully resolved `RuntimeWorkingShape`. |
-| `SemanticMapper` | `Topolactor.Mapper` | Translates a resolved `RuntimeWorkingShape` into a `RepositoryCommand`. Maps domain meaning — not an ORM mapper. |
-| `TopologyRepository` | `Topolactor.Repository` | Loads stored topology data (structure maps, packages, schemas). In this skeleton it provides an in-memory default topology path for `default:entity:search`, while all other keys return null as explicit broken references. |
-| `DiffLogRepository` | `Topolactor.Repository` | Append-only log of topology mutations. Records before/after state for each operation. Stub logs to `ILogger`. |
+## Key Class Roles
 
-### Key Types (in `Topolactor.Schema`)
-
-- **`EndpointRequestDto`** — inbound DTO from the caller.
-- **`EndpointResponseDto`** — outbound DTO returned to the caller.
-- **`OperationVector`** — internal resolved vector; never returned to the frontend.
-- **`RuntimeWorkingShape`** — internal-only working state for a single execution pass; never returned to the frontend, never persisted as a business fact.
-- **`Emission`** — validated output carrying resolved identifiers and data.
-- **`AttractorResult`** — output of attractor resolution mapping key → structure map/package/schema IDs.
-- **`ValidationError`** — structured error with a `Code` and `Message`.
+| Class | Role |
+|---|---|
+| `RuntimeTimelineScheduler` | Aligns cron / hook / client triggers in one Channel-based queue. Routes to ManifestDispatcher. |
+| `ManifestDispatcher` | Resolves active manifest from DB by role + target + layer + action. Dispatches to registered `IDispatchableRuntime` handler. Returns explicit error for MANIFEST_NOT_FOUND / MANIFEST_AMBIGUOUS / RUNTIME_DESTINATION_UNKNOWN. |
+| `RuntimeExecutor` | Canonical pipeline orchestrator. No target/layer/action dispatch branches. Registered as handler for `topology_transform_runtime`. |
+| `AdminRuntime` / `AdminRuntimeDispatchAdapter` | Admin operation handler registered for `admin_runtime` destination. Covers seed, bucket, package generation, and system CI operations. |
+| `OperationVectorResolver` | Maps `EndpointRequestDto` fields to `OperationVector`. Derives `AttractorKey` as `target:layer:action`. |
+| `RuntimeGuard` | Validates `OperationVector` before resolution begins. |
+| `AttractorResolver` | Loads structure map record by `AttractorKey`. Throws if not found. |
+| `StructureMapResolver` | Loads full structure map by ID; constructs `RuntimeWorkingShape`. |
+| `PackageResolver` | Loads package definition by `PackageId`. Throws if missing. |
+| `SchemaResolver` | Loads schema definition by `SchemaId`. Throws if missing. |
+| `EmissionBuilder` | Constructs final `Emission` from fully resolved `RuntimeWorkingShape`. |
+| `OutputLaneRouter` | Routes post-emission effects: response, `db_notify_emission`, `registry_attractor_update`. |
+| `SseProjectionRuntime` | Handles `sse_projection_runtime` destination; broadcasts to `SseEventBroadcaster`. |
+| `HubAttractorExplorationRuntime` | SQL Attention hub-attractor exploration scheduler runtime. |
+| `SqlAttentionScheduler` | Scheduler for SQL Attention observation cycles. |
+| `DbNotifyListener` | Routes pg_notify events through `RuntimeTimelineScheduler` as hook triggers. |
+| `SystemOperationCiRuntime` | Admin-callable system CI diagnostics surface. |
 
 ## How to Run
 
-This PR provides source-level runtime skeleton files only. A runnable .NET host, DI wiring, and HTTP server entrypoint are intentionally out of scope and should be added in a later issue.
+```sh
+# From repo root — start Postgres first
+bash .agent/scripts/bootstrap-local-postgres.sh
 
-## Database Dependency
+# Then run backend
+source ~/.topolactor-tools/env.sh
+cd backend
+dotnet run
+```
 
-`TopologyRepository` provides an in-memory default topology path: the `default:entity:search` attractor key resolves through the full canonical route and returns a dummy emission without a database connection. All other keys return null and produce explicit `ValidationError` responses — no silent fallback.
+See `.agent/protocols/claude.md` for environment setup details when running in an ephemeral container.
 
-Real DB-backed repository loading is future work. When wired to a database, pass the connection string via the `TopologyRepository` constructor or configure it via dependency injection. The expected schema is defined in `db/schema.sql`, `db/topology_tables.sql`, and `db/promotion_tables.sql`.
+## Database
 
-## Scope Note
+Real DB-backed Npgsql repositories (`NpgsqlManifestRepository`, `NpgsqlTopologyRepository`, `NpgsqlUiTopologyRepository`, etc.) are wired in `Program.cs`. Schema setup and seed order are documented in `db/README.md`.
 
-All implementations in this layer are **skeleton stubs**. Real business logic — attractor table population, package/schema storage, semantic mapping rules, diff log persistence — is out of scope for this skeleton. The structural wiring, type contracts, and canonical execution path are the deliverables.
+The `default:entity:search` attractor resolves through the full canonical pipeline using the seed topology.
