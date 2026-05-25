@@ -801,7 +801,7 @@ system_roadmap_ssot:
         Code-only components are explicitly labeled as drift/GAP.
         Frontend does not own topology or runtime judgment.
         Completed sub-scope includes runtime alias coverage, projection constructor/adapter continuity, primitive renderer emit continuity, wiringId continuity, and generate/promote contract separation.
-        Remaining scope is a roadmap completion bundle: frontend component constructor/interface + DB-driven design/layout/wiring projection closure, then catalog registration closure.
+        Completed sub-scope now also includes catalog registration seed surface (ui_component_bucket bootstrap seed from catalog registrationRequired entries). Remaining scope is a roadmap completion bundle: frontend component constructor/interface + DB-driven design/layout/wiring projection closure + full registration continuity judgment (componentId/packageId/layoutId/wiringId/tensor) at bundle level.
         Design/layout/wiring authority remains DB-side (`design.classname`/`design.tailwind`, package layout mapping, `ui_layout_registry`, `ui_wiring_registry`, `ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
       files:
         - frontend/components/Button.tsx
@@ -816,7 +816,7 @@ system_roadmap_ssot:
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
       known_gap_ref:
-        - Issue #86 partial: completion bundle (frontend constructor/interface + DB-driven design/layout/wiring projection + catalog registration closure) is not closed yet
+        - Issue #86 partial: completion bundle (frontend constructor/interface + DB-driven design/layout/wiring projection + full registration continuity judgment) is not closed yet; catalog seed registration surface is completed but does not close the full bundle
 
     admin_visual_layout_builder:
       status: partial
