@@ -44,7 +44,6 @@ required_directories:
 required_files:
   root:
     - README.md
-    - NOTICE.md
     - AGENTS.md
   docs:
     - docs/agent-development-os.md
