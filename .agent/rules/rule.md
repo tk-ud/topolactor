@@ -7,6 +7,7 @@
 - Do not mark completion before required judgment gates.
 - Do not use silent fallback for runtime boundary failures.
 - Do not read all prompt/protocol/docs bundles by default.
+- Do not treat `docs/system-roadmap.yaml` or `.agent/tasks/todo.md` as the authoritative source for implementation state. Read actual code to determine current state; roadmap and todo are dynamic reference points subject to constant change.
 
 ## Minimal Workflow Invariant
 

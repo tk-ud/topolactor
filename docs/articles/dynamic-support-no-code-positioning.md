@@ -145,3 +145,16 @@ topolactor の価値は、ノーコードの「作成自由度」を増やすこ
 > 作れるノーコードから、育つノーコードへ
 
 というUXポジションを取ります。
+
+---
+
+## 実装状態
+
+本記事のポジションは topolactor の設計方針とロードマップ方向性を示しています。
+現時点の実装状態は以下のとおりです（詳細は `docs/system-roadmap.yaml` を参照）。
+
+**CI Attention（エージェントガバナンス面）:** SSOT 整合性チェック・構造チェック・完了判定プロトコルとして実装済みです。本記事で説明するエンドユーザーへの入力案内・候補提示 UX は現時点では未実装です。
+
+**SQL Attention（observation runtime）:** `logs.current` / `logs.hub_current` / `logs.attention` の各 DB 層は実装済みで、基本的な evidence 永続化は動作しています。`hub_current` attractor-vector 生成・scoring hardening・live verification は未完了（roadmap: partial）です。context_hub_recommendation_current による topology 内部推薦は実装済みですが、SQL Attention parent observation の完全サイクルは未完成です。
+
+**動的サポート付きノーコード UX:** フロントエンド UI のノーコード UX（CI Attention によるユーザー案内・SQL Attention によるログ還流サイクル）は現在構築中です。基礎インフラ（manifest-driven dispatch・admin registry surface・component topology）は各マイルストーンの partial / implemented 状態にあります。

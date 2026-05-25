@@ -80,9 +80,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## TODO dependency map（execution order）
 
-1. Frontend Component Event Runtime（Issue #86 前提）
-2. UI primitive catalog bucket投入/promote（Issue #86）
-3. Visual layout builder（Issue #89, depends on #86）
+1. Frontend Component Event Runtime（Issue #86 完了済み、依存クリア）
+2. Visual layout builder（Issue #89、Issue #86 依存クリア済み）
 
 ---
 

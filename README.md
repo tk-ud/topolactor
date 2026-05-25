@@ -26,6 +26,10 @@ Topolactor uses a route-based governance read path before implementation work, s
 - Route cost is workload-dependent, but baseline governance reads are typically in the low-thousands of tokens, and implementation/design routes increase from there depending on triggered protocol and SSOT reads.
 - Full governance bundle loading should be avoided; route-targeted loading is the intended operating posture.
 
+## Implementation Status
+
+This project is in active development. Core dispatch pipeline (manifest-driven routing, runtime executor, timeline scheduler) is implemented. Output lanes, SSE projection, SQL Attention observation, and admin UI surfaces are in various stages of partial implementation. See `docs/system-roadmap.yaml` for component-level status across milestones M1–M7.
+
 ## Where to Go Next
 
 - Public roadmap and status SSOT: `docs/system-roadmap.yaml`
