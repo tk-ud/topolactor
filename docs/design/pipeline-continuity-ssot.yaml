@@ -28,7 +28,7 @@ pipeline_continuity_ssot:
         - tests_must_not_redefine_expected_vocabulary
         - gap_blocking_drift_not_covered_are_not_equivalent_to_pass
         - pipeline_checks_must_expose_boundary_failures_as_structured_status_not_silent_fallback
-        - known_gaps_may_be_enumerated_but_must_not_be_treated_as_pass
+        - enumerated_gap_status_must_not_be_treated_as_pass
       applies_to:
         - component_catalog_classification
         - db_seed_status_type_kind
