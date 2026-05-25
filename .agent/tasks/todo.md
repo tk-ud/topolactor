@@ -43,6 +43,25 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`。
       → 完了条件: `.agent/tests/check-unified-test-gate.sh` の NOT_COVERED から該当2関数を削除できること。
 
+- [ ] [bundle][CI][SSOT vocabulary contract] SSOT YAML の許可集合・構造・命名を正本として implementation discrete values の subset 準拠を検査する CI contract を追加する（次段階 hardening）
+      → 目的: SSOT YAML を allowed vocabulary / allowed shape / canonical relation の唯一正本にし、実装側が正本にない離散値を使った場合は CI fail とする。新語彙は implementation 先行ではなく SSOT 先行追加を通過条件にする。
+      → 対象責務（bundle 単位で一体管理）:
+        - component catalog classification
+        - DB seed / status / type / kind
+        - event type / runtime destination
+        - property naming
+        - validation class
+        - pipeline required_identity / prohibited vocabulary
+      → 対象ファイル候補:
+        - SSOT: `docs/framework-core.yaml`, `docs/framework-policy.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`
+        - governance map: `.agent/docs/ssot-map.yaml`
+        - CI test surface: `.agent/tests/check-pipeline-continuity.sh`, `.agent/tests/check-unified-test-gate.sh`, （必要なら）`.agent/tests/check-ssot-vocabulary-contract.sh`
+      → 完了条件:
+        - test 側で expected list / expectedKeys / union vocabulary を重複再定義しない。
+        - test は常に SSOT YAML を読み、implementation values ⊆ SSOT allowed values を検査する。
+        - check-structure.sh を巨大語彙 grep 集に肥大化させず、構造ガード責務を維持する。
+        - 本 bundle は Issue #86 / #241 の分類 PR とは混ぜず、CI hardening の次段階として独立管理する。
+
 
 ## Non-blocking cleanup / hardening carry-over
 
@@ -110,4 +129,3 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
       → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
-
