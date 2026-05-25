@@ -36,7 +36,7 @@ namespace Topolactor.Runtime;
 ///   → InspectHubAttentionContinuityAsync / InspectCurrentRebuildabilityAsync / InspectRegistryContinuityAsync
 ///   → reportable diagnostic results emitted via structured logging
 /// </summary>
-public class SystemOperationCiRuntime
+public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
 {
     private readonly ILogger<SystemOperationCiRuntime> _logger;
     private readonly ContextRouteRepository _repository;
@@ -47,6 +47,12 @@ public class SystemOperationCiRuntime
     private const string HubAttentionContinuityTarget  = "hub_attention_continuity";
     private const string CurrentRebuildabilityTarget   = "current_rebuildability";
     private const string RegistryContinuityTarget      = "registry_continuity";
+    private static readonly IReadOnlyList<SystemCiTargetDto> CallableTargets =
+    [
+        new(HubAttentionContinuityTarget),
+        new(CurrentRebuildabilityTarget),
+        new(RegistryContinuityTarget)
+    ];
 
     public SystemOperationCiRuntime(
         ILogger<SystemOperationCiRuntime> logger,
@@ -54,6 +60,19 @@ public class SystemOperationCiRuntime
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+    }
+
+    public virtual IReadOnlyList<SystemCiTargetDto> ListTargets() => CallableTargets;
+
+    public virtual Task<SystemCiDiagnosticResult> InspectAsync(string target, CancellationToken ct = default)
+    {
+        return target switch
+        {
+            HubAttentionContinuityTarget => InspectHubAttentionContinuityAsync(ct),
+            CurrentRebuildabilityTarget => InspectCurrentRebuildabilityAsync(ct),
+            RegistryContinuityTarget => InspectRegistryContinuityAsync(ct),
+            _ => throw new ArgumentException($"Unknown system_ci target: {target}", nameof(target))
+        };
     }
 
     // ─── Event-driven inspection (in-memory, no extra DB round-trip) ─────────

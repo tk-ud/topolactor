@@ -145,6 +145,23 @@ mapping:
       - docs/design/context-route-recommendation.yaml
     protocols: []
 
+  - work_type: system_ci_admin_runtime_callable_surface
+    change_surfaces:
+      - system ci admin runtime callable surface
+      - AdminRuntime system_ci diagnostics
+      - SystemOperationCiRuntime admin UI diagnostic surface
+      - admin UI callable diagnostic route
+    required_docs:
+      - docs/design/system-ci-admin-runtime-callable-surface.yaml
+    supporting_docs:
+      - docs/design/ci-contract-ssot.yaml
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/topology-recommendation-ci-runtime.md
+      - docs/design/topology-recommendation-ci-runtime.yaml
+      - docs/framework-policy.yaml
+    protocols: []
+
   - work_type: commit_inference_engine_contract
     change_surfaces:
       - commit inference engine

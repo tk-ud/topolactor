@@ -133,3 +133,7 @@ connection:
     Only ci_pass candidates are presented to admin.
   excitation_design: docs/design/runtime-excitation-and-package-dispatch.md
   recommendation_design: docs/design/context-route-recommendation.md
+  admin_callable_surface_design: docs/design/system-ci-admin-runtime-callable-surface.yaml
+  admin_callable_surface_boundary:
+    - System_Operation_CI_diagnostic_meaning_and_checks_remain_in_existing_System_Operation_CI_design_surfaces
+    - Admin_UI_reachability_route_contract_is_delegated_to_system_ci_admin_runtime_callable_surface_ssot

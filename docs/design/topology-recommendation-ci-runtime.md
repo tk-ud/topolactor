@@ -424,3 +424,13 @@ Pass     → no action required
 - LogError-only 禁止 (Blocking の場合)
 - Blocking は ExplicitError として接続する
 - Gap は reportable diagnostic として記録する
+
+### Admin UI callable diagnostic surface 参照
+
+System Operation CI の診断意味（何を検査し、どの status を返すか）の正本は本章を含む既存 System Operation CI 設計面にある。  
+一方、Admin UI からの到達経路（AdminRuntime 経由の callable diagnostic route）の正本は以下に委譲する。
+
+- `docs/design/system-ci-admin-runtime-callable-surface.yaml`
+
+この参照は **SSOT配線** であり、実装配線完了を意味しない。  
+Admin UI / AdminRuntime は test runner / shell / CI process を product runtime lane として直接呼び出さない。

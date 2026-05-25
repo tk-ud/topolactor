@@ -38,10 +38,15 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] 後続タスクとして C# test skeleton / SSOT YAML loader / fixtures / diagnostics evidence DTO を分離起票する
       → 対象ファイル候補: backend test project, docs/design SSOT readers, fixture surface, promotion decision evidence contract.
 
-- [ ] C# direct semantic tests for `OutputLaneRouter.RouteAsync` / `AdminRuntime.ExecuteDataAsync` を追加する
-      → 対象責務: live E2E ではなく、dispatcher / output lane / admin runtime の意味境界を fixture で直接検証する。
-      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/OutputLaneRouter.cs`, `backend/runtime/AdminRuntime.cs`。
-      → 完了条件: `.agent/tests/check-unified-test-gate.sh` の NOT_COVERED から該当2関数を削除できること。
+- [ ] C# direct semantic tests for `OutputLaneRouter.RouteAsync` を追加する
+      → 対象責務: live E2E ではなく、dispatcher / output lane の意味境界を fixture で直接検証する。
+      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/OutputLaneRouter.cs`。
+      → 完了条件: `.agent/tests/check-unified-test-gate.sh` の NOT_COVERED から `OutputLaneRouter.RouteAsync` を削除できること。
+
+- [ ] C# / dotnet SSOT wiring audit CI の次段階として、System CI admin callable surface の YAML-driven vocabulary assertion を追加する
+      → 対象責務: `docs/design/system-ci-admin-runtime-callable-surface.yaml` の vocabulary を C# test 側で loader 経由参照し、test側固定語彙を二重正本にしない。
+      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, SSOT loader surface。
+      → 補足: `AdminRuntime.ExecuteDataAsync` の system_ci callable surface direct semantic tests は実装済み（PR #250）。
 
 - [ ] [bundle][CI][SSOT vocabulary contract] SSOT YAML の許可集合・構造・命名を正本として implementation discrete values の subset 準拠を検査する CI contract を追加する（次段階 hardening）
       → 目的: SSOT YAML を allowed vocabulary / allowed shape / canonical relation の唯一正本にし、実装側が正本にない離散値を使った場合は CI fail とする。新語彙は implementation 先行ではなく SSOT 先行追加を通過条件にする。
