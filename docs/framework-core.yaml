@@ -252,6 +252,14 @@ data_driven_topology_runtime_framework:
       - jump_topology_to_zero_planned_only
       - sql_attention_recommendation_must_not_overwrite_route_state_automatically
 
+  ci_attention_projection_axis:
+    ci_role:
+      - CI can act as an observation/projection surface for system state.
+      - CI projects implementation/runtime/event state into structured status.
+    ssot_basis:
+      - SSOT defines basis / allowed vocabulary / allowed shape.
+      - implementation should be interpreted through SSOT-defined basis.
+
 
 current_projection_namespace_split:
   role: namespace_design_boundary
