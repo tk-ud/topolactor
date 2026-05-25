@@ -16,7 +16,7 @@ ok() {
 must_have() {
   local file="$1"
   local term="$2"
-  if rg -n -F -- "$term" "$REPO_ROOT/$file" >/dev/null; then
+  if grep -nF -- "$term" "$REPO_ROOT/$file" >/dev/null; then
     ok "$file -> $term"
   else
     fail "$file missing term: $term"
