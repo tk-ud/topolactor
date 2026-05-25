@@ -7,6 +7,22 @@ framework_policy:
       - pass_fail_only_ci_interpretation_is_insufficient_when_gap_blocking_drift_not_covered_are_available
       - branch_decisions_should_use_structured_ci_status_rather_than_silent_fallback
 
+  readme_surface_policy:
+    role: public_overview_surface_and_external_entry_point
+    readme_authority_boundary:
+      readme_is_ssot: false
+      readme_must_link_to_canonical_docs_instead_of_duplicating_ssot_body: true
+    canonical_authorities:
+      implementation_status: docs/system-roadmap.yaml
+      agent_execution_contract:
+        - AGENTS.md
+        - .agent/*
+      architecture_and_policy:
+        - docs/framework-core.yaml
+        - docs/framework-policy.yaml
+        - docs/design/*
+      ci_attention_contract: docs/design/ci-contract-ssot.yaml
+
   topolactor_space_boundary_policy:
     registry: definition_and_configuration
     topology: semantic_space
