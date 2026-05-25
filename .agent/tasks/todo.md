@@ -21,52 +21,52 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
-## SSOT Wiring Audit CI 次段階計画
+## SSOT Wiring Audit CI carry-over（roadmap completion bundle）
 
-- [ ] sh CI は AI / Agent 用の軽量運用 guard として維持し、アプリ本体の設計逸脱監査を C# / dotnet test CI へ分離する
-      → 対象責務: sh は governance 構造検査、C# CI は SSOT 配線設計の逸脱監査。
+- [ ] [bundle][CI][Topology Registration closure]
+      → roadmap entry: `system_ci.topology_registration`（`docs/system-roadmap.yaml`）。
+      → completion_condition: `system_ci.dotnet_ssot_wiring_audit_tests.completion_condition.topology_registration_ci_lane_defined`。
+      → known_gap_ref: `system_ci.dotnet_ssot_wiring_audit_tests.known_gap_ref` の「Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.」。
+      → 対象SSOT: `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/ci-contract-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`。
+      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `.agent/tests/check-pipeline-continuity.sh`, `docs/system-roadmap.yaml`。
+      → 検出したい drift / gap: topology/package/schema/relation/component reference continuity と topology linking/binding の SSOT 逸脱が diagnostics/evidence で検出不能な状態。
+      → out_of_scope: CI待ち・remote CI pass確認・実DB昇格処理・実装修正の atom 分割。
 
-- [ ] C# / dotnet test による SSOT wiring audit CI を 4系統で設計する
-      → 1) Topology Registration CI（topology/package/schema/relation/component ref と linking/binding の逸脱監査）
-      → 2) Hub Registration CI（hub registration / relation route / hub_current / attention logs の逸脱監査）
-      → 3) Scheduler / Runtime CI（RuntimeTimelineScheduler / ManifestDispatcher / RuntimeExecutor の canonical route 逸脱監査）
-      → 4) Component Registration CI（component_definition / ComponentDataHub / ui_topology_tensor 接続の逸脱監査）
+- [ ] [bundle][CI][Hub Registration closure]
+      → roadmap entry: `system_ci.hub_registration`（`docs/system-roadmap.yaml`）。
+      → completion_condition: `system_ci.dotnet_ssot_wiring_audit_tests.completion_condition.hub_registration_ci_lane_defined`。
+      → known_gap_ref: `system_ci.dotnet_ssot_wiring_audit_tests.known_gap_ref` の「Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.」。
+      → 対象SSOT: `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/ci-contract-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`。
+      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/RuntimeExecutor.cs`, `docs/system-roadmap.yaml`。
+      → 検出したい drift / gap: hub registration / relation route / hub_current / SQL Attention 境界（auto-mutation禁止）を lane 監査で証跡化できない状態。
+      → out_of_scope: runtime route 自体の実装変更、attention 推薦ロジック拡張、CI結果の待機メモ。
 
-- [ ] 初期段階 C# CI は判定面を diagnostics / evidence / eligibility に限定し、DB書き込み・自動昇格を scope out として固定する
-      → 対象責務: staging → active 昇格判定や registry promotion の根拠面を先に整備し、実データ変更は後続に分離する。
+- [ ] [bundle][CI][Scheduler Runtime route closure]
+      → roadmap entry: `system_ci.scheduler_runtime`（`docs/system-roadmap.yaml`）。
+      → completion_condition: `system_ci.dotnet_ssot_wiring_audit_tests.completion_condition.scheduler_runtime_ci_lane_defined`。
+      → known_gap_ref: `system_ci.dotnet_ssot_wiring_audit_tests.known_gap_ref` の「Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.」。
+      → 対象SSOT: `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/system-ci-admin-runtime-callable-surface.yaml`。
+      → 対象ファイル候補: `backend/scheduler/RuntimeTimelineScheduler.cs`, `backend/runtime/ManifestDispatcher.cs`, `backend/runtime/RuntimeExecutor.cs`, `backend/tests/Topolactor.Runtime.Tests/`。
+      → 検出したい drift / gap: RuntimeTimelineScheduler → ManifestDispatcher → RuntimeExecutor canonical route continuity を diagnostics/evidence/eligibility 面で閉じられない状態。
+      → out_of_scope: runtime destination追加、dispatcher仕様変更、remote環境依存の live 結果追記。
 
-- [ ] 後続タスクとして C# test skeleton / SSOT YAML loader / fixtures / diagnostics evidence DTO を分離起票する
-      → 対象ファイル候補: backend test project, docs/design SSOT readers, fixture surface, promotion decision evidence contract.
+- [ ] [bundle][CI][Component Registration closure]
+      → roadmap entry: `system_ci.component_registration`（`docs/system-roadmap.yaml`）。
+      → completion_condition: `system_ci.dotnet_ssot_wiring_audit_tests.completion_condition.component_registration_ci_lane_defined`。
+      → known_gap_ref: `system_ci.dotnet_ssot_wiring_audit_tests.known_gap_ref` の「Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.」。
+      → 対象SSOT: `docs/design/component-catalog-classification-ssot.yaml`, `docs/design/ci-contract-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`。
+      → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/`。
+      → 検出したい drift / gap: YAML static vocabulary → catalog implementation → ui_component_bucket seed/bootstrap instance → runtime adapter/renderer support → registration/promotion surface の identity continuity を lane 監査で保証できない状態。
+      → out_of_scope: visual layout builder 完了主張、frontend diagnostic panel 実装、DB seed を vocabulary authority とみなす記述。
 
-- [x] C# direct semantic tests for `OutputLaneRouter.RouteAsync` を追加する
-      → 対象責務: live E2E ではなく、dispatcher / output lane の意味境界を fixture で直接検証する。
-      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/OutputLaneRouter.cs`。
-      → 完了条件: `.agent/tests/check-unified-test-gate.sh` の NOT_COVERED から `OutputLaneRouter.RouteAsync` を削除できること。
-
-- [x] [bundle][CI][SSOT vocabulary contract] SSOT YAML の許可集合・構造・命名を正本として implementation discrete values の subset 準拠を検査する CI contract を追加する（次段階 hardening）
-      → 目的: SSOT YAML を allowed vocabulary / allowed shape / canonical relation の唯一正本にし、実装側が正本にない離散値を使った場合は CI fail とする。新語彙は implementation 先行ではなく SSOT 先行追加を通過条件にする。
-      → 境界: YAML static vocabulary is the authority; DB seed is a concrete bootstrap/user-operable instance surface. CI checks seed values as subset of YAML vocabulary.
-      → CI Attention 追加観点: CI result を pass/fail 二値ではなく structured status vector（pass/gap/blocking/drift/not_covered）として扱い、agent action（carry-over/repair/stop）分岐に接続する。
-      → silent fallback は CI 上で pass 扱いせず、境界失敗を structured status として明示露出する。
-      → 対象責務（bundle 単位で一体管理）:
-        - component catalog classification
-        - DB seed / status / type / kind
-        - event type / runtime destination
-        - property naming
-        - validation class
-        - pipeline required_identity / prohibited vocabulary
-      → 対象ファイル候補:
-        - SSOT: `docs/framework-core.yaml`, `docs/framework-policy.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/ci-contract-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`
-        - governance map: `.agent/docs/ssot-map.yaml`
-        - CI test surface: `.agent/tests/check-pipeline-continuity.sh`, `.agent/tests/check-unified-test-gate.sh`, （必要なら）`.agent/tests/check-ssot-vocabulary-contract.sh`
-      → 完了条件:
-        - test 側で expected list / expectedKeys / union vocabulary を重複再定義しない。
-        - test は常に SSOT YAML を読み、implementation values ⊆ SSOT allowed values を検査する。
-        - SSOT 未定義値が実装に出た場合は CI fail とし、SSOT 側へ先行追加した後に pass する。
-        - check-structure.sh を巨大語彙 grep 集に肥大化させず、構造ガード責務を維持する。
-        - 本 bundle は Issue #86 / #241 の分類 PR とは混ぜず、CI hardening の次段階として独立管理する。
-
-
+- [ ] [bundle][CI][Diagnostics evidence eligibility closure]
+      → roadmap entry: `system_ci.dotnet_ssot_wiring_audit_tests`（`docs/system-roadmap.yaml`）。
+      → completion_condition: `system_ci.dotnet_ssot_wiring_audit_tests.completion_condition.initial_phase_returns_diagnostics_evidence_eligibility_only`。
+      → known_gap_ref: `system_ci.dotnet_ssot_wiring_audit_tests.known_gap_ref` の「diagnostics persistence / audit integration remains follow-up.」。
+      → 対象SSOT: `docs/design/ci-contract-ssot.yaml`, `docs/design/system-ci-admin-runtime-callable-surface.yaml`, `docs/design/pipeline-continuity-ssot.yaml`。
+      → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/SystemCi*`, `backend/runtime/SystemOperationCiRuntime.cs`, `.agent/tests/check-pipeline-continuity.sh`。
+      → 検出したい drift / gap: diagnostics/evidence/eligibility 判定面と persistence/audit integration 後続面の境界が曖昧で、未完了条件が non-blocker 化される状態。
+      → out_of_scope: persistence 実装追加、audit DB書き込み、remote運用監視の記録。
 ## Non-blocking cleanup / hardening carry-over
 
 - [ ] [cleanup][pr-220] `ContextRouteRepository.cs` の XML comment / indentation cleanup
