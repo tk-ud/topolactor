@@ -8,7 +8,7 @@ Development started: 2026-05-17 (first repository commit: 79d71f1)
 
 - **Data-Driven OS:** Runtime behavior is resolved from persisted topology, registry, manifest, and package definitions rather than ad-hoc surface-by-surface wiring.
 - **Package-resolved runtime:** Topology resolution selects package routes, schemas, components, and projections, reducing repeated frontend branching and raw exploration work.
-- **Performance posture:** Topolactor simplifies runtime paths through topology/package resolution and does not make benchmark-speed claims in this README.
+- **Performance posture:** Topolactor is designed to keep runtime paths predictable as the system grows. By resolving UI and operations through topology/package definitions, it avoids accumulating ad-hoc branches that typically make large systems slower and harder to maintain.
 - **AI-Driven Development OS:** Change flow is governance-routed through explicit contracts, prompts, protocols, and checks.
 - **SQL Attention:** DB + runtime hub-attractor observation pipeline. Physical pressure is observed via logs.current (L2 norm watch function); hub-current attractor fields via logs.hub_current; attractor evidence rows are appended to logs.attention. Scheduler, runtime, and repository enforce no registry or topology mutation.
 - **CI Attention:** CI Attention treats CI as an operational checker, not just a pass/fail gate.
