@@ -94,12 +94,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → boundary(computation): 計算系 primitive/function は即 mutation せず preview → validate → explicit apply を必須にし、結果は candidate として確認後に適用する。
       → boundary(lookup): 外部 lookup は canonical SSOT にしない。郵便番号/住所/電話番号 lookup は adapter または candidate surface として扱い、電話番号↔住所 lookup は内部 master / 登録済みデータ / 許可済み provider に限定する。
       → boundary(style): font/background/color/spacing/layout は hardcode せず manifest/style token 経由で扱う。
-      → boundary(db-seed-authority): UI/UX primitive / component / function / calculation / lookup / style / layout の分類語彙は YAML ではなく DB registry authority を正とする方針で整理する。
-      → boundary(seed-role): seed は authority ではなく初期 bootstrap catalog rows の配布面として扱い、標準 primitive catalog 初期値のみ `db/seed_empty.sql` / `db/demo_seed.sql` に置く。
+      → boundary(yaml-static-vocabulary): 既存 YAML enum / classification vocabulary は DB移行対象にしない。YAML enum は静的制約・CI補助・分類定義として残す。
+      → boundary(db-registry-scope): SQL Attention / runtime recommendation の対象にしたい primitive のみ DB registry + seed bootstrap に登録する。DB登録対象は user / AI / usecase により増減・推薦・rank・promotion される runtime-growable primitive に限定する。
+      → boundary(seed-role): seed は DB registry の初期 bootstrap row であり authority ではない。標準 primitive catalog 初期値のみ `db/seed_empty.sql` / `db/demo_seed.sql` に置く。
       → boundary(runtime-growth): user / AI / usecase で増える primitive は seed 追記ではなく runtime DB row として追加する。
       → boundary(registry-candidates): `component_primitive_registry`, `function_primitive_registry`, `calculation_primitive_registry`, `lookup_primitive_registry`, `table_operation_primitive_registry`, `design_token_registry`, `layout_primitive_registry` を候補 registry として扱う。
-      → boundary(ssot-migration-decision): `docs/design/component-catalog-classification-ssot.yaml` が YAML authority を持つ場合は DB authority 方針と衝突するため、実装前に SSOT 移行 / 廃止 / 降格 judgment TODO を追加して整合判断を行う。
-      → boundary(ci-shift): CI は YAML subset 検査中心ではなく、seed/bootstrap rows と DB registry contract の整合検査へ寄せる判断TODOを維持する。
+      → boundary(sql-attention-apply): DB登録された primitive は SQL Attention recommendation / ranking / promotion candidate 対象になり得るが、SQL Attention は registry を直接 mutate しない。apply は preview → validate → explicit confirm → registry write → diff_log append を通す。
+      → boundary(ci-shift): CI は YAML subset のみで閉じず、seed/bootstrap rows と DB registry contract の整合検査を補助線として扱う。
       → UI/UX primitive categories:
         - Text / DB search: `AutoCompleteInput`, `SuggestInput`, `SearchCombobox`, `SelectImportDialog`, `RelationCandidatePicker`, `RecentInputSuggest`, `DuplicateMergeCandidatePanel`。
         - Inline edit / update / audit: `InlineEditableField`, `InlineEditableJsonbField`, `PatchPreviewPanel`, `DiffStrikeText`, `AuditDiffDrawer`, `OptimisticUpdateBoundary`, `ConfirmedUpdateButton`。
