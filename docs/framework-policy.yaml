@@ -258,6 +258,20 @@ framework_policy:
       - code_only_package_is_not_topology_entity
       - ui_topology_component_catalog_only_interpretation_is_prohibited
 
+  ssot_vocabulary_judgment_policy:
+    implementation_only_vocabulary: drift_or_gap
+    test_only_expected_values: prohibited_secondary_ssot
+    undefined_value_acceptance:
+      runtime: prohibited
+      db_seed: prohibited
+      component_catalog: prohibited
+      event: prohibited
+      validation: prohibited
+    new_value_introduction_rule:
+      - ssot_update_is_required_before_implementation_use
+    audit_axis:
+      - implementation_values_must_be_subset_of_ssot_allowed_values
+
   registries:
     master_registry:
       role: table_name_and_id_dictionary

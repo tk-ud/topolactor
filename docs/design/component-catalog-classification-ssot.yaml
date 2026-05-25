@@ -24,6 +24,21 @@ visual_role: [field, button, badge, alert, panel, table, card, modal, tabs, tree
 lifecycle_status: [code_only_drift, alias_maintained, bucketed, packaging, promoted, registered, deprecated]
 capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display]
 
+catalog_vocabulary_contract:
+  source_of_truth: this_ssot_defines_component_catalog_classification_values
+  implementation_surface:
+    file: frontend/components/catalog.ts
+    fields:
+      - componentFamily
+      - semanticRole
+      - visualRole
+      - lifecycleStatus
+      - capabilityTags
+  test_contract:
+    - tests_must_read_this_ssot
+    - implementation_values_must_be_subset_of_ssot_allowed_values
+    - catalog_length_or_handwritten_expected_keys_is_not_coverage_evidence
+
 persistence:
   initial_persistence_surface: ui_component_bucket.metadata_json.classification
   promoted_registry_surface: ui_component_registry.props_schema_json

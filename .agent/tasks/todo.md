@@ -59,6 +59,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 完了条件:
         - test 側で expected list / expectedKeys / union vocabulary を重複再定義しない。
         - test は常に SSOT YAML を読み、implementation values ⊆ SSOT allowed values を検査する。
+        - SSOT 未定義値が実装に出た場合は CI fail とし、SSOT 側へ先行追加した後に pass する。
         - check-structure.sh を巨大語彙 grep 集に肥大化させず、構造ガード責務を維持する。
         - 本 bundle は Issue #86 / #241 の分類 PR とは混ぜず、CI hardening の次段階として独立管理する。
 
