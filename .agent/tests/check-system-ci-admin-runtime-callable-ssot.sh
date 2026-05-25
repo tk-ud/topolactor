@@ -71,21 +71,10 @@ must_have "docs/design/topology-recommendation-ci-runtime.md" "Admin"
 must_have "docs/design/topology-recommendation-ci-runtime.yaml" "system-ci-admin-runtime-callable-surface.yaml"
 must_have "docs/design/topology-recommendation-ci-runtime.yaml" "admin_callable_surface_design"
 
-# operation vocabulary
-must_have "$TARGET_SSOT" "system_ci:list_targets"
-must_have "$TARGET_SSOT" "system_ci:inspect"
-
-# target vocabulary
-must_have "$TARGET_SSOT" "hub_attention_continuity"
-must_have "$TARGET_SSOT" "current_rebuildability"
-must_have "$TARGET_SSOT" "registry_continuity"
-
-# output contract vocabulary
-must_have "$TARGET_SSOT" "SystemCiDiagnosticResult"
-must_have "$TARGET_SSOT" "SystemCiStatus"
-must_have "$TARGET_SSOT" "Pass"
-must_have "$TARGET_SSOT" "Gap"
-must_have "$TARGET_SSOT" "Blocking"
+# section presence (avoid secondary-SSOT duplication of individual values)
+must_have "$TARGET_SSOT" "allowed_operations:"
+must_have "$TARGET_SSOT" "initial_target_vocabulary:"
+must_have "$TARGET_SSOT" "output_contract:"
 
 # prohibited / required boundary vocabulary
 must_have "$TARGET_SSOT" "read_only_diagnostic_surface"

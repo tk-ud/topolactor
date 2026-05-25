@@ -9,13 +9,6 @@ namespace Topolactor.Runtime.Tests;
 
 public class SystemCiAdminRuntimeTests
 {
-    private static readonly IReadOnlyList<string> KnownSystemCiTargets =
-    [
-        "hub_attention_continuity",
-        "current_rebuildability",
-        "registry_continuity"
-    ];
-
     [Fact]
     public void DiagnosticRunner_ListTargets_ReturnsCallableTargets()
     {
@@ -23,7 +16,8 @@ public class SystemCiAdminRuntimeTests
 
         var targets = runtime.ListTargets();
 
-        Assert.Equal(KnownSystemCiTargets, targets.Select(t => t.Target).ToArray());
+        Assert.NotEmpty(targets);
+        Assert.All(targets, t => Assert.False(string.IsNullOrWhiteSpace(t.Target)));
     }
 
     [Fact]
@@ -48,7 +42,8 @@ public class SystemCiAdminRuntimeTests
     [Fact]
     public async Task AdminRuntime_SystemCiListTargets_ReturnsTargetsViaExecuteDataAsync()
     {
-        var runtime = CreateAdminRuntime(new StubRunner());
+        var expectedTargets = CreateCiRuntime().ListTargets().Select(t => t.Target).ToArray();
+        var runtime = CreateAdminRuntime(new StubRunner(expectedTargets));
         var vector = new OperationVector("admin", "system_ci", "list_targets", null, "admin", null, null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
@@ -56,13 +51,13 @@ public class SystemCiAdminRuntimeTests
         Assert.Null(error);
         Assert.NotNull(data);
         var arr = data!.Value.EnumerateArray().Select(x => x.GetProperty("Target").GetString()).ToArray();
-        Assert.Equal(KnownSystemCiTargets, arr);
+        Assert.Equal(expectedTargets, arr);
     }
 
     [Fact]
     public async Task AdminRuntime_SystemCiInspect_MissingTarget_ReturnsExplicitError()
     {
-        var runtime = CreateAdminRuntime(new StubRunner());
+        var runtime = CreateAdminRuntime(new StubRunner(CreateCiRuntime().ListTargets().Select(t => t.Target).ToArray()));
         var vector = new OperationVector("admin", "system_ci", "inspect", null, "admin", JsonSerializer.SerializeToElement(new { }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
@@ -75,7 +70,7 @@ public class SystemCiAdminRuntimeTests
     [Fact]
     public async Task AdminRuntime_SystemCiInspect_UnknownTarget_ReturnsExplicitError()
     {
-        var runtime = CreateAdminRuntime(new StubRunner());
+        var runtime = CreateAdminRuntime(new StubRunner(CreateCiRuntime().ListTargets().Select(t => t.Target).ToArray()));
         var vector = new OperationVector("admin", "system_ci", "inspect", null, "admin", JsonSerializer.SerializeToElement(new { target = "unknown_target" }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
@@ -88,14 +83,15 @@ public class SystemCiAdminRuntimeTests
     [Fact]
     public async Task AdminRuntime_SystemCiInspect_ReturnsDiagnosticResult()
     {
-        var runtime = CreateAdminRuntime(new StubRunner());
-        var vector = new OperationVector("admin", "system_ci", "inspect", null, "admin", JsonSerializer.SerializeToElement(new { target = "hub_attention_continuity" }), null);
+        var expectedTargets = CreateCiRuntime().ListTargets().Select(t => t.Target).ToArray();
+        var runtime = CreateAdminRuntime(new StubRunner(expectedTargets));
+        var vector = new OperationVector("admin", "system_ci", "inspect", null, "admin", JsonSerializer.SerializeToElement(new { target = expectedTargets[0] }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
 
         Assert.Null(error);
         Assert.NotNull(data);
-        Assert.Equal("hub_attention_continuity", data!.Value.GetProperty("InspectionTarget").GetString());
+        Assert.Equal(expectedTargets[0], data!.Value.GetProperty("InspectionTarget").GetString());
     }
 
     private static SystemOperationCiRuntime CreateCiRuntime()
@@ -117,13 +113,16 @@ public class SystemCiAdminRuntimeTests
 
     private sealed class StubRunner : ISystemCiDiagnosticRunner
     {
+        private readonly IReadOnlyList<string> _targets;
+        public StubRunner(IReadOnlyList<string> targets) => _targets = targets;
+
         public IReadOnlyList<SystemCiTargetDto> ListTargets() =>
-            KnownSystemCiTargets.Select(x => new SystemCiTargetDto(x)).ToArray();
+            _targets.Select(x => new SystemCiTargetDto(x)).ToArray();
 
         public Task<SystemCiDiagnosticResult> InspectAsync(string target, CancellationToken ct = default)
         {
             _ = ct;
-            if (!KnownSystemCiTargets.Contains(target))
+            if (!_targets.Contains(target))
                 throw new ArgumentException("unknown target", nameof(target));
             return Task.FromResult(new SystemCiDiagnosticResult(target, SystemCiInspectionKind.CronContinuity, SystemCiStatus.Pass, [], DateTimeOffset.UtcNow));
         }
