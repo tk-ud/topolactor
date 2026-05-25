@@ -1,4 +1,39 @@
-import type { ComponentCatalogEntry } from "./types.ts";
+import type { ComponentCatalogEntry, ComponentCatalogIdentity } from "./types.ts";
+
+
+export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
+  { componentKey: "button.primitive", componentKind: "action/button", sourcePath: "frontend/components/Button.tsx" },
+  { componentKey: "input.primitive", componentKind: "form_input/input", sourcePath: "frontend/components/Input.tsx" },
+  { componentKey: "table.primitive", componentKind: "data_display/table", sourcePath: "frontend/components/Table.tsx" },
+  { componentKey: "card.primitive", componentKind: "display/card", sourcePath: "frontend/components/Card.tsx" },
+  { componentKey: "form_field.template", componentKind: "form_input/form_field", sourcePath: "frontend/components/FormField.tsx" },
+  { componentKey: "select.template", componentKind: "form_input/select", sourcePath: "frontend/components/Select.tsx" },
+  { componentKey: "checkbox.template", componentKind: "form_input/checkbox", sourcePath: "frontend/components/Checkbox.tsx" },
+  { componentKey: "badge.template", componentKind: "display/badge", sourcePath: "frontend/components/Badge.tsx" },
+  { componentKey: "status_badge.template", componentKind: "display/status_badge", sourcePath: "frontend/components/Badge.tsx" },
+  { componentKey: "alert.template", componentKind: "display/alert", sourcePath: "frontend/components/Alert.tsx" },
+  { componentKey: "loading_state.template", componentKind: "feedback/loading", sourcePath: "frontend/components/LoadingState.tsx" },
+  { componentKey: "empty_state.template", componentKind: "feedback/empty", sourcePath: "frontend/components/EmptyState.tsx" },
+  { componentKey: "error_state.template", componentKind: "feedback/error", sourcePath: "frontend/components/ErrorState.tsx" },
+  { componentKey: "json_viewer.template", componentKind: "data_display/json", sourcePath: "frontend/components/JsonViewer.tsx" },
+  { componentKey: "admin_page_shell.template", componentKind: "shell/admin_page", sourcePath: "frontend/components/AdminPageShell.tsx" },
+  { componentKey: "admin_section.template", componentKind: "shell/admin_section", sourcePath: "frontend/components/AdminSection.tsx" },
+  { componentKey: "validation_result_panel.template", componentKind: "validation/result", sourcePath: "frontend/components/ValidationResultPanel.tsx" },
+  { componentKey: "textarea.template", componentKind: "form_input/textarea_template", sourcePath: "frontend/components/Textarea.tsx" },
+  { componentKey: "tabs.template", componentKind: "disclosure/tabs", sourcePath: "frontend/components/Tabs.tsx" },
+  { componentKey: "modal.template", componentKind: "disclosure/modal", sourcePath: "frontend/components/Modal.tsx" },
+  { componentKey: "tree.template", componentKind: "data_display/tree", sourcePath: "frontend/components/Tree.tsx" },
+  { componentKey: "tree_node.template", componentKind: "data_display/tree_node", sourcePath: "frontend/components/Tree.tsx" },
+];
+
+export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
+  { componentKey: "textarea.alias", componentKind: "form_input/textarea", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+  { componentKey: "search_input.alias", componentKind: "form_input/search_input", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+  { componentKey: "panel.alias", componentKind: "disclosure_structure/panel", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+  { componentKey: "section.alias", componentKind: "disclosure_structure/section", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+  { componentKey: "data_grid.alias", componentKind: "data_display/data_grid", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+  { componentKey: "list.alias", componentKind: "data_display/list", sourcePath: "frontend/runtime/runtimePrimitiveRenderer.ts" },
+];
 
 export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   { componentKey: "button.primitive", componentKind: "action/button", sourcePath: "frontend/components/Button.tsx", componentFamily: "primitive", semanticRole: "action", visualRole: "button", lifecycleStatus: "code_only_drift", capabilityTags: ["emits_event", "requires_event_binding", "accepts_design"], runtimeConnected: true, registrationRequired: true },

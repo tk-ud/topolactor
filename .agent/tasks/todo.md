@@ -98,6 +98,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 判定境界:
         - code-only drift を完了扱いしない（解消 or catalog drift として bundle 単位で残TODO化）。
         - Issue #86 implemented 判定は `docs/system-roadmap.yaml` の `completion_condition` / `known_gap_ref` と整合させる。
+      → 進捗メモ: component catalog classification SSOT + all component classification entries は追加済み。残件は registration closure。
 
 ## Admin Visual Layout Builder (Issue #89)
 
@@ -110,4 +111,3 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
       → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
 
-- [ ] Frontend UI Primitive Catalog Bucket/Promote (Issue #86): progress note — component catalog classification SSOT + all component classification entries added; registration closure remains.

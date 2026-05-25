@@ -97,6 +97,12 @@ export type ComponentCapabilityTag = "accepts_children" | "accepts_actions" | "e
 // It does NOT mean DB-registered topology entity.
 // registrationRequired indicates DB registration/promotion is still required
 // before treating the component as a topology entity.
+export type ComponentCatalogIdentity = {
+  componentKey: string;
+  componentKind: string;
+  sourcePath: string;
+};
+
 export type ComponentCatalogClassification = {
   componentKey: string;
   componentKind: string;

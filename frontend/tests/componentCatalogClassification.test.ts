@@ -1,5 +1,9 @@
 import { assertEquals, assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
+import {
+  COMPONENT_CATALOG_ENTRIES,
+  COMPONENT_TEMPLATE_CATALOG_IDENTITIES,
+  RUNTIME_ALIAS_CATALOG_IDENTITIES,
+} from "../components/catalog.ts";
 
 Deno.test("component catalog classification: required fields exist", () => {
   for (const entry of COMPONENT_CATALOG_ENTRIES) {
@@ -42,5 +46,17 @@ Deno.test("component catalog classification: runtimeConnected primitives are exp
     const entry = COMPONENT_CATALOG_ENTRIES.find((e) => e.componentKey === key);
     assert(entry);
     assertEquals(entry.runtimeConnected, true);
+  }
+});
+
+
+Deno.test("component catalog classification: interface identities are included in catalog entries", () => {
+  for (const identity of [...COMPONENT_TEMPLATE_CATALOG_IDENTITIES, ...RUNTIME_ALIAS_CATALOG_IDENTITIES]) {
+    const matched = COMPONENT_CATALOG_ENTRIES.find((entry) =>
+      entry.componentKey === identity.componentKey &&
+      entry.componentKind === identity.componentKind &&
+      entry.sourcePath === identity.sourcePath
+    );
+    assert(matched, `missing catalog identity: ${identity.componentKey}`);
   }
 });
