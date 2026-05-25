@@ -24,6 +24,45 @@ Semantic PR/diff audit, merge judgment, or summary-truth verification requested.
 ## judgment_scope
 Implementation meaning consistency against stated intent and roadmap/todo status.
 
+## evidence_based_classification
+
+For each implementation/status claim, auditor must classify by evidence only.
+
+### Evidence sufficient path
+
+1. Read related SSOT (`docs/design/*` for the touched surface).
+2. Read related implementation files.
+3. Read related tests.
+4. Emit the status supported by the evidence:
+   - `implemented`: SSOT completion_condition met; code path exists and is not skeleton/placeholder; tests cover the behavior.
+   - `partial`: some completion_conditions met; code path exists but known gaps remain.
+   - `skeleton`: boundary or adapter exists; runtime behavior is pass-through or placeholder.
+   - `not_started`: no implementation surface exists yet.
+5. Do not suppress `implemented` merely to avoid overclaim. If SSOT + code + tests support `implemented`, emit `implemented`.
+
+### Evidence insufficient path
+
+If SSOT, implementation files, or tests for the claimed surface have NOT been read:
+- Emit `Repo implementation checked: no`.
+- Emit `Merge judgment: invalid audit / blocking`.
+- List the missing evidence (which SSOT / files / tests were not read).
+- Do not guess `partial` or `implemented` without reading the evidence.
+
+### roadmap_todo_drift
+
+If implementation reality (read from SSOT + code + tests) proves `implemented` but roadmap/TODO claims `partial`, `skeleton`, or `not_started`:
+- Report `roadmap_todo_drift: yes`.
+- Stale underclaim is a false status claim, not a safe conservative default.
+- Auditor must request or perform roadmap/TODO update to match the evidence.
+- Holding the stale roadmap/TODO status without update is a blocking condition.
+
+### Anti-overclaim / anti-underclaim symmetry
+
+Both directions are invalid audit behavior:
+- **Overclaim**: claiming `implemented` without reading SSOT + code + tests.
+- **Underclaim**: claiming `partial` or `skeleton` despite `implemented` evidence from SSOT + code + tests.
+- Holding a conservative status because "implemented might be exaggerated" without reading code and tests is invalid and is treated as `Repo implementation checked: no`.
+
 ## foundation_ssot_read_gate
 For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), in this order:
 
@@ -86,6 +125,8 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - ロードマップの status 記述または implementation_registry エントリ名・ファイル存在のみによる実装意味判断
 - completion_condition 未達のまま implemented 判定しない
 - representative route / skeleton / ACK-only / partial wiring を implemented 根拠にしない
+- SSOT + コード + テストを読まずに実装実態が implemented かもしれないという保守的理由で partial/skeleton を保持しない（underclaim）
+- "overclaim を避けるため" という理由のみで、証拠が supported する implemented を抑制しない
 
 
 ## todo_roadmap_finalization_gate
@@ -95,6 +136,7 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
   1. update canonical TODO/roadmap in the same audit/follow-up maintenance task, or
   2. if canonical TODO/roadmap cannot be updated in the same task, emit a single explicit follow-up prompt for `todo_maintenance` as a blocked-state output obligation (not as an approval-unblock condition).
 - Approve is blocked when roadmap/TODO status remains materially stale.
+- `roadmap_todo_drift`: when SSOT + code + tests prove a component is `implemented` but roadmap/TODO records it as `partial`/`skeleton`/`not_started`, the stale entry is a false status claim and must be updated. Holding stale underclaim without update is a blocking condition identical to holding stale overclaim.
 - When same-task canonical update is not possible, auditor must hold approval until stale status is resolved or explicitly reclassified as out-of-scope, after emitting the required follow-up prompt.
 - Audit is semantic consistency judgment for implementation meaning and canonical progress state; it is not self-approval for implementation completion.
 - Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
