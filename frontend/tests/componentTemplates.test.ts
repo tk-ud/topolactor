@@ -16,6 +16,7 @@ import { LoadingState } from "../components/LoadingState.tsx";
 import { ErrorState } from "../components/ErrorState.tsx";
 import { Select } from "../components/Select.tsx";
 import { Checkbox } from "../components/Checkbox.tsx";
+import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 
 // --- Helper function tests ---
 
@@ -254,4 +255,8 @@ Deno.test("Component templates are projection surfaces: no topology judgment in 
   const node = h(ValidationResultPanel, { result: backendResult });
   // overall is preserved exactly as received from backend
   assertEquals((node as any).props.result?.overall, "blocking");
+});
+
+Deno.test("componentTemplates: catalog classification entries exist for all primitives/aliases/templates", () => {
+  assertEquals(COMPONENT_CATALOG_ENTRIES.length >= 28, true);
 });

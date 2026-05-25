@@ -1,0 +1,36 @@
+version: 1
+ssot: component_catalog_classification
+purpose: >
+  Define catalog-side component classification metadata for UI Builder, catalog search,
+  registration support, and authoring support, without changing runtime route or topology judgment.
+
+component_kind:
+  role:
+    - runtime projection key
+    - runtime adapter selection key
+  non_goals:
+    - catalog classification唯一軸
+
+component_family: [primitive, template, composite, packaged, alias]
+semantic_role: [input, action, display, feedback, validation, diagnostic, layout_shell, navigation, data_viewer, admin_operation]
+visual_role: [field, button, badge, alert, panel, table, card, modal, tabs, tree, page_shell, json_viewer]
+lifecycle_status: [code_only_drift, alias_maintained, bucketed, packaging, promoted, registered, deprecated]
+capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display]
+
+persistence:
+  initial_persistence_surface: ui_component_bucket.metadata_json.classification
+  promoted_registry_surface: ui_component_registry.props_schema_json
+  future_promotion_candidate:
+    - ui_component_registry.classification_json jsonb
+    - ui_component_registry.semantic_role text
+    - ui_component_registry.visual_role text
+    - ui_component_registry.capability_tags text[]
+
+prohibitions:
+  - using_component_kind_as_only_catalog_classification
+  - treating_code_only_template_as_topology_entity
+  - treating_alias_maintained_kind_as_new_template_registration
+  - frontend_deriving_topology_judgment_from_tags
+  - classification_tags_mutating_runtime_route
+  - classification_tags_mutating_sql_attention
+  - classification_tags_bypassing_component_registration

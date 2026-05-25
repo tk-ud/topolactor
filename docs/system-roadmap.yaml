@@ -789,6 +789,7 @@ system_roadmap_ssot:
         - External import apply remains partial for topology/schema/projection/general lanes
 
     frontend_ui_component_system:
+      public_summary_addendum: "component catalog classification SSOT and full catalog classification entries added; status remains partial."
       status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology

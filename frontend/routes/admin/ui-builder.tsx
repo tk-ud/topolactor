@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
+import { COMPONENT_CATALOG_ENTRIES } from "../../components/catalog.ts";
 
 /**
  * /admin/ui-builder — UI component system and layout builder.
@@ -65,7 +66,7 @@ function PrimitiveCatalog(): JSX.Element {
       <table cellPadding="6" style={{ borderCollapse: "collapse", width: "100%", fontFamily: "monospace" }}>
         <thead>
           <tr>
-            {["component_key", "kind", "source_path", "status"].map((h) => (
+            {["component_key", "kind", "source_path", "family", "semantic_role", "visual_role", "lifecycle_status", "runtime_connected", "registration_required", "capability_tags"].map((h) => (
               <th key={h} style={{ textAlign: "left", borderBottom: "2px solid #ccc", padding: "4px 8px", background: "#f5f5f5" }}>
                 {h}
               </th>
@@ -73,23 +74,18 @@ function PrimitiveCatalog(): JSX.Element {
           </tr>
         </thead>
         <tbody>
-          {[
-            { key: "button.primitive", kind: "action/button", path: "frontend/components/Button.tsx", status: "code-only drift (registration required)" },
-            { key: "input.primitive",  kind: "form_input/input", path: "frontend/components/Input.tsx",  status: "code-only drift (registration required)" },
-            { key: "table.primitive",  kind: "data_display/table", path: "frontend/components/Table.tsx",  status: "code-only drift (registration required)" },
-            { key: "card.primitive",   kind: "display/card", path: "frontend/components/Card.tsx",   status: "code-only drift (registration required)" },
-            { key: "textarea.alias",   kind: "form_input/textarea", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Input primitive adapter)" },
-            { key: "search_input.alias", kind: "form_input/search_input", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Input primitive adapter)" },
-            { key: "panel.alias", kind: "disclosure_structure/panel", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Card primitive adapter)" },
-            { key: "section.alias", kind: "disclosure_structure/section", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Card primitive adapter)" },
-            { key: "data_grid.alias", kind: "data_display/data_grid", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Table primitive adapter)" },
-            { key: "list.alias", kind: "data_display/list", path: "frontend/runtime/runtimePrimitiveRenderer.ts", status: "alias-maintained (Table primitive adapter)" },
-          ].map((c) => (
-            <tr key={c.key} style={{ borderBottom: "1px solid #eee" }}>
-              <td style={{ padding: "4px 8px" }}><code>{c.key}</code></td>
-              <td style={{ padding: "4px 8px" }}>{c.kind}</td>
-              <td style={{ padding: "4px 8px" }}><code>{c.path}</code></td>
-              <td style={{ padding: "4px 8px", color: "#c80" }}>{c.status}</td>
+          {COMPONENT_CATALOG_ENTRIES.map((c) => (
+            <tr key={c.componentKey} style={{ borderBottom: "1px solid #eee" }}>
+              <td style={{ padding: "4px 8px" }}><code>{c.componentKey}</code></td>
+              <td style={{ padding: "4px 8px" }}>{c.componentKind}</td>
+              <td style={{ padding: "4px 8px" }}><code>{c.sourcePath}</code></td>
+              <td style={{ padding: "4px 8px" }}>{c.componentFamily}</td>
+              <td style={{ padding: "4px 8px" }}>{c.semanticRole}</td>
+              <td style={{ padding: "4px 8px" }}>{c.visualRole}</td>
+              <td style={{ padding: "4px 8px", color: c.lifecycleStatus === "code_only_drift" ? "#c80" : "#067" }}>{c.lifecycleStatus}</td>
+              <td style={{ padding: "4px 8px" }}>{String(c.runtimeConnected)}</td>
+              <td style={{ padding: "4px 8px" }}>{String(c.registrationRequired)}</td>
+              <td style={{ padding: "4px 8px" }}><code>{c.capabilityTags.join(",")}</code></td>
             </tr>
           ))}
         </tbody>

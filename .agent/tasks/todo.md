@@ -109,3 +109,5 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
         - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
       → 完了条件: `docs/system-roadmap.yaml` の `admin_visual_layout_builder status=implemented`。
+
+- [ ] Frontend UI Primitive Catalog Bucket/Promote (Issue #86): progress note — component catalog classification SSOT + all component classification entries added; registration closure remains.

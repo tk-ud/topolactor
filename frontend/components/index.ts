@@ -61,3 +61,9 @@ export { Modal } from "./Modal.tsx";
 export type { ModalProps } from "./Modal.tsx";
 export { Tree, TreeNode } from "./Tree.tsx";
 export type { TreeProps, TreeNodeProps, TreeNodeData } from "./Tree.tsx";
+
+export { COMPONENT_CATALOG_ENTRIES } from "./catalog.ts";
+export type {
+  ComponentFamily, ComponentSemanticRole, ComponentVisualRole, ComponentLifecycleStatus,
+  ComponentCapabilityTag, ComponentCatalogClassification, ComponentCatalogEntry,
+} from "./types.ts";
