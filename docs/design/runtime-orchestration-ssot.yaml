@@ -222,6 +222,24 @@ runtime_orchestration_ssot:
       - dispatcher_silent_fallback
       - dispatcher_bypassing_scheduler_alignment
 
+  runtime_vocabulary_contract:
+    mapping_types:
+      - dispatcher_mapping
+      - runtime_mapping
+      - db_notify_projection_mapping
+      - ui_projection_mapping
+      - topology_function_binding_mapping
+      - projection_constructor_mapping
+    backend_runtime_destinations:
+      - topology_transform_runtime
+      - registry_attractor_runtime
+      - admin_runtime
+      - sse_projection_runtime
+    trigger_kinds:
+      - cron
+      - hook
+      - client
+
   runtime_contract:
     scope: shared_runtime_taxonomy
     not_scope: backend_dispatch_destination_only

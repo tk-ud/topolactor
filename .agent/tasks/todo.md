@@ -38,7 +38,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] 後続タスクとして C# test skeleton / SSOT YAML loader / fixtures / diagnostics evidence DTO を分離起票する
       → 対象ファイル候補: backend test project, docs/design SSOT readers, fixture surface, promotion decision evidence contract.
 
-- [ ] C# direct semantic tests for `OutputLaneRouter.RouteAsync` を追加する
+- [x] C# direct semantic tests for `OutputLaneRouter.RouteAsync` を追加する
       → 対象責務: live E2E ではなく、dispatcher / output lane の意味境界を fixture で直接検証する。
       → 対象ファイル候補: `backend/tests/Topolactor.Runtime.Tests/`, `backend/runtime/OutputLaneRouter.cs`。
       → 完了条件: `.agent/tests/check-unified-test-gate.sh` の NOT_COVERED から `OutputLaneRouter.RouteAsync` を削除できること。

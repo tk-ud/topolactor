@@ -61,7 +61,7 @@ public class OutputLaneRouterTests
     }
 
     [Fact]
-    public async Task RouteAsync_DbNotifyFailure_IsExplicitAndStopsRouting()
+    public async Task RouteAsync_DbNotifyFailure_IsNonBlockingAndStillEnqueuesAttractorSignal()
     {
         var sut = new OutputLaneRouter(
             NullLogger<OutputLaneRouter>.Instance,
@@ -69,8 +69,13 @@ public class OutputLaneRouterTests
         var vector = new OperationVector("table-registry-id", "runtime", "upsert", "attractor-alpha", "admin", null, null);
         var response = new EndpointResponseDto(true, null, []);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.RouteAsync(vector, response, Guid.NewGuid()));
-        Assert.False(sut.RebuildSignalChannel.Reader.TryRead(out _));
+        var manifestId = Guid.NewGuid();
+        await sut.RouteAsync(vector, response, manifestId);
+
+        Assert.True(sut.RebuildSignalChannel.Reader.TryRead(out var signal));
+        Assert.NotNull(signal);
+        Assert.Equal("attractor-alpha", signal!.AttractorKey);
+        Assert.Equal(manifestId, signal.ManifestId);
     }
 
     private sealed class SpyDbNotifyRepository() : DbNotifyRepository(NullLogger<DbNotifyRepository>.Instance)

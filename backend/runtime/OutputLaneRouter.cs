@@ -77,15 +77,26 @@ public class OutputLaneRouter
         var tableId = vector.AttractorKey;
         var tableRegistryId = vector.Target;
 
-        await _dbNotifyRepository.NotifyAsync(
-            tableId: tableId,
-            tableRegistryId: tableRegistryId,
-            manifestId: manifestId,
-            ct: ct);
+        try
+        {
+            await _dbNotifyRepository.NotifyAsync(
+                tableId: tableId,
+                tableRegistryId: tableRegistryId,
+                manifestId: manifestId,
+                ct: ct);
 
-        _logger.LogDebug(
-            "OutputLaneRouter: db_notify lane routed for tableId={TableId} manifestId={ManifestId}",
-            tableId, manifestId);
+            _logger.LogDebug(
+                "OutputLaneRouter: db_notify lane routed for tableId={TableId} manifestId={ManifestId}",
+                tableId, manifestId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "OutputLaneRouter: db_notify lane failed (non-blocking). tableId={TableId} manifestId={ManifestId}",
+                tableId,
+                manifestId);
+        }
     }
 
     private void RouteRegistryAttractorLane(OperationVector vector, Guid? manifestId)

@@ -12,7 +12,6 @@
 #   FRONTEND_CONTRACT   — adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts
 #
 # NOT_COVERED (remaining todo):
-#   OutputLaneRouter.RouteAsync    — no unit test; requires SSE route integration fixture
 #
 # docker-compose / DB / migration verification is covered in check-runtime-environment.sh.
 # Missing tool is an explicit failure, not a pass.
@@ -65,7 +64,6 @@ echo ""
 echo "=== [RUNTIME_INTEGRATION] Integration boundary tests ==="
 echo "    Scope: DefaultEntitySearchIntegrationTests"
 echo "           full dispatch path: dispatcher / executor / override"
-echo "           NOT_COVERED (direct): OutputLaneRouter.RouteAsync"
 
 if dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
     --nologo --verbosity minimal; then
@@ -107,7 +105,6 @@ fi
 
 echo ""
 echo "=== [NOT_COVERED] Functions without direct test coverage (remaining todo) ==="
-echo "NOT_COVERED  OutputLaneRouter.RouteAsync — no unit test; requires SSE route integration fixture"
 echo "REMAINING_TODO  runtime-environment-gate covers docker-compose/DB/migration; env / volume / live API-route E2E is still not included"
 
 # ─── Result ───────────────────────────────────────────────────────────────────
