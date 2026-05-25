@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+title: topolactor
+message: If you use or build on topolactor, citation is appreciated.
+authors:
+  - given-names: Takumi
+    alias: tk-ud
+year: 2026
+license: Apache-2.0
+repository-code: https://github.com/tk-ud/topolactor
+abstract: >-
+  topolactor is a data-driven topology runtime and AI-Driven Development OS
+  centered on SSOT governance, CI Attention, SQL Attention, and
+  contract-first runtime projection.
