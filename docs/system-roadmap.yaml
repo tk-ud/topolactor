@@ -902,7 +902,7 @@ system_roadmap_ssot:
         - frontend diagnostic panel exposure and broader operational coverage remain follow-up
 
     system_ci.dotnet_ssot_wiring_audit_tests:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
@@ -940,6 +940,7 @@ system_roadmap_ssot:
         - component_registration_ci_lane_defined
         - initial_phase_returns_diagnostics_evidence_eligibility_only
       known_gap_ref:
+        - dotnet lane tests do not yet read SSOT YAML contracts directly
         - diagnostics persistence / audit integration remains follow-up
 
     system_ci.topology_registration:
@@ -1023,7 +1024,8 @@ system_roadmap_ssot:
         - unknown_runtime_destination_returns_explicit_error_no_fallthrough
         - missing_manifest_returns_manifest_not_found_no_default_fallback
         - registered_handler_selected_by_manifest_runtime_destination
-      known_gap_ref: []
+      known_gap_ref:
+        - scheduler runtime lane remains unit-boundary focused; broader live-runtime continuity verification remains follow-up
 
     system_ci.component_registration:
       status: partial

@@ -178,6 +178,7 @@ public class SsotWiringAuditComponentRegistrationTests
         var (data, error) = await runtime.ExecuteDataAsync(vector);
 
         Assert.Null(error);
+        Assert.True(data!.Value.TryGetProperty("tensorId", out _));
         Assert.True(data!.Value.TryGetProperty("componentId", out _));
         Assert.True(data!.Value.TryGetProperty("packageId", out _));
         Assert.True(data!.Value.TryGetProperty("layoutId", out _));

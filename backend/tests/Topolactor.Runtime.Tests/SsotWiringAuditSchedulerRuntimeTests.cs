@@ -92,9 +92,12 @@ public class SsotWiringAuditSchedulerRuntimeTests
             NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
         var scheduler = new RuntimeTimelineScheduler(
-            NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 0);
+            NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher, queueCapacity: 1);
         var request = new EndpointRequestDto(
             "Search", "default", "entity", "Search", null, null, null);
+
+        var queued = scheduler.EnqueueCronTrigger(request);
+        Assert.True(queued);
 
         var response = await scheduler.AlignAndDispatchAsync(request);
 
