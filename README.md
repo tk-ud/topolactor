@@ -31,3 +31,11 @@ Topolactor uses a route-based governance read path before implementation work, s
 - Core/runtime and policy SSOT entry points: `docs/framework-core.yaml`, `docs/framework-policy.yaml`
 - Design SSOT surfaces: `docs/design/`
 - Agent execution contract and route surfaces: `AGENTS.md`, `.agent/`
+
+## License
+
+Licensed under the Apache License 2.0.
+
+Original concept and architecture by Takumi / tk-ud.
+Commercial use, modification, redistribution, and cloud deployment are allowed under the license.
+If you build on topolactor, attribution and citation are appreciated.
