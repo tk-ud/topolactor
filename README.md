@@ -6,7 +6,9 @@ Development started: 2026-05-17 (first repository commit: 79d71f1)
 
 ## Highlights
 
-- **Data-Driven OS:** Runtime behavior is resolved from persisted topology/registry definitions rather than ad-hoc surface-by-surface wiring.
+- **Data-Driven OS:** Runtime behavior is resolved from persisted topology, registry, manifest, and package definitions rather than ad-hoc surface-by-surface wiring.
+- **Package-resolved runtime:** Topology resolution selects package routes, schemas, components, and projections, reducing repeated frontend branching and raw exploration work.
+- **Performance posture:** Topolactor simplifies runtime paths through topology/package resolution and does not make benchmark-speed claims in this README.
 - **AI-Driven Development OS:** Change flow is governance-routed through explicit contracts, prompts, protocols, and checks.
 - **SQL Attention:** SQL-side attention evidence is treated as an observation surface for runtime-relevant pressure and continuity signals.
 - **CI Attention:** CI Attention treats CI as an operational checker, not just a pass/fail gate.
@@ -37,6 +39,6 @@ Topolactor uses a route-based governance read path before implementation work, s
 
 Licensed under the Apache License 2.0.
 
-Original concept and architecture by Takumi / tk-ud.
+Original concept and architecture by Takumi Udagawa.
 Commercial use, modification, redistribution, and cloud deployment are allowed under the license.
 If you build on topolactor, attribution and citation are appreciated.
