@@ -2,6 +2,8 @@
 
 Topolactor is a **data-driven topology runtime** and **AI-Driven Development OS** with **SQL Attention** and **CI Attention** for governed, contract-first evolution.
 
+Development started: 2026-05-17 (first repository commit: 79d71f1)
+
 ## Highlights
 
 - **Data-Driven OS:** Runtime behavior is resolved from persisted topology/registry definitions rather than ad-hoc surface-by-surface wiring.
