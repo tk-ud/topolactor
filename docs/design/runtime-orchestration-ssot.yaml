@@ -34,8 +34,9 @@ runtime_orchestration_ssot:
         - admin_runtime_diagnostic_read_surface_boundary
         - SystemOperationCiRuntime_is_the_existing_diagnostic_implementation_source_for_the_callable_surface
       note:
-        - this_reference_declares_route_design_only
-        - implementation_wiring_is_follow_up_and_not_claimed_here
+        - callable_interface_wiring_is_implemented_for_AdminRuntime_ExecuteDataAsync_system_ci_list_targets_and_system_ci_inspect
+        - production_dispatch_route_reachability_requires_manifest_and_structure_map_registration_for_admin_system_ci_actions
+        - future_scope_is_frontend_diagnostic_panel_surface_not_backend_callable_interface_wiring
     orchestration_change_rule: Runtime orchestration changes that affect a lane must update or validate the corresponding pipeline-continuity lane contract.
     non_duplication_rule: Do not duplicate detailed lane test conditions in this SSOT; keep fine-grained verification in pipeline-continuity SSOT.
 

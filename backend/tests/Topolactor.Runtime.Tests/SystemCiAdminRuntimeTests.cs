@@ -9,19 +9,21 @@ namespace Topolactor.Runtime.Tests;
 
 public class SystemCiAdminRuntimeTests
 {
+    private static readonly IReadOnlyList<string> KnownSystemCiTargets =
+    [
+        "hub_attention_continuity",
+        "current_rebuildability",
+        "registry_continuity"
+    ];
+
     [Fact]
-    public void DiagnosticRunner_ListTargets_MatchesSsotVocabulary()
+    public void DiagnosticRunner_ListTargets_ReturnsCallableTargets()
     {
         var runtime = CreateCiRuntime();
 
         var targets = runtime.ListTargets();
 
-        Assert.Equal(new[]
-        {
-            "hub_attention_continuity",
-            "current_rebuildability",
-            "registry_continuity"
-        }, targets.Select(t => t.Target).ToArray());
+        Assert.Equal(KnownSystemCiTargets, targets.Select(t => t.Target).ToArray());
     }
 
     [Fact]
@@ -54,7 +56,7 @@ public class SystemCiAdminRuntimeTests
         Assert.Null(error);
         Assert.NotNull(data);
         var arr = data!.Value.EnumerateArray().Select(x => x.GetProperty("Target").GetString()).ToArray();
-        Assert.Equal(new[] { "hub_attention_continuity", "current_rebuildability", "registry_continuity" }, arr);
+        Assert.Equal(KnownSystemCiTargets, arr);
     }
 
     [Fact]
@@ -116,16 +118,12 @@ public class SystemCiAdminRuntimeTests
     private sealed class StubRunner : ISystemCiDiagnosticRunner
     {
         public IReadOnlyList<SystemCiTargetDto> ListTargets() =>
-        [
-            new("hub_attention_continuity"),
-            new("current_rebuildability"),
-            new("registry_continuity")
-        ];
+            KnownSystemCiTargets.Select(x => new SystemCiTargetDto(x)).ToArray();
 
         public Task<SystemCiDiagnosticResult> InspectAsync(string target, CancellationToken ct = default)
         {
             _ = ct;
-            if (target is not ("hub_attention_continuity" or "current_rebuildability" or "registry_continuity"))
+            if (!KnownSystemCiTargets.Contains(target))
                 throw new ArgumentException("unknown target", nameof(target));
             return Task.FromResult(new SystemCiDiagnosticResult(target, SystemCiInspectionKind.CronContinuity, SystemCiStatus.Pass, [], DateTimeOffset.UtcNow));
         }

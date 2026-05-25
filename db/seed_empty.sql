@@ -255,6 +255,26 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    (
+        '00000000-0000-0000-0000-00000000005b',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"system_ci","action":"list_targets"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-00000000005c',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"system_ci","action":"inspect"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -345,6 +365,24 @@ VALUES
         '00000000-0000-0000-0000-000000000035',
         'admin_package_generator_generate',
         'admin:package_generator:generate',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000041',
+        'admin_system_ci_list_targets',
+        'admin:system_ci:list_targets',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000042',
+        'admin_system_ci_inspect',
+        'admin:system_ci:inspect',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
