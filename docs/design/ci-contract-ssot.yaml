@@ -19,6 +19,7 @@ ci_contract_ssot:
     - CI_GATE_MINIMAL_PRESENCE_CHECK
     - CI_DOTNET_LANE_TEST_PACKAGE
     - CI_RUNTIME_ENVIRONMENT_LIVE_E2E
+    - CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION
 
   ci_components:
     - id: ci.component.index
@@ -51,6 +52,11 @@ ci_contract_ssot:
     - id: ci.component.minimal_shell_gate
       grep_marker: CI_GATE_MINIMAL_PRESENCE_CHECK
       role: shell gate は存在確認・登録確認・SSOT参照確認だけを行う
+    - id: ci.component.ssot_vocabulary_membership_assertion
+      grep_marker: CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION
+      role:
+        - 実装側の離散値が SSOT YAML の allowed vocabulary / allowed shape / canonical relation に含まれることを検証する
+        - test側 expected list の再定義ではなく、SSOT loader / contract reader 経由で検査する
 
   ci_packages:
     - name: Topolactor.CiContracts
@@ -67,6 +73,10 @@ ci_contract_ssot:
       role: laneごとの通貫 tests
     - name: Topolactor.TestDoubles
       role: repository spy / fake runtime / fixture handler
+    - name: Topolactor.SsotVocabulary.Assertions
+      role:
+        - SSOT YAML allowed vocabulary と implementation discrete values の subset 検査 helper
+        - component catalog / DB seed / event type / runtime destination / property naming / validation class へ展開可能な共通 assertion surface
 
   policy:
     - gate は最小
@@ -75,6 +85,11 @@ ci_contract_ssot:
     - SSOTに未記載の要件を CI が勝手に増やさない
     - implemented 判定は SSOT completion_condition を満たす場合のみ
     - CI package は必要になった段階で共通化し、初期は個別 test から開始してよい
+    - implementation discrete values は SSOT allowed vocabulary / allowed shape / canonical relation の projection として扱う
+    - tests は SSOT を読み、implementation values が SSOT allowed values の subset であることを検証する
+    - tests は expected vocabulary を secondary SSOT として再定義してはならない
+    - implementation-only vocabulary は drift/GAP として扱う
+    - 新しい discrete value 追加は SSOT update を先行必須とする
 
   lane_usage_example:
     - frontend_component_event_log_lane

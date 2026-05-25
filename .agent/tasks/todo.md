@@ -53,7 +53,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         - validation class
         - pipeline required_identity / prohibited vocabulary
       → 対象ファイル候補:
-        - SSOT: `docs/framework-core.yaml`, `docs/framework-policy.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`
+        - SSOT: `docs/framework-core.yaml`, `docs/framework-policy.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`, `docs/design/ci-contract-ssot.yaml`, `docs/design/component-catalog-classification-ssot.yaml`, `docs/governance/agent-governance-routing-ssot.yaml`
         - governance map: `.agent/docs/ssot-map.yaml`
         - CI test surface: `.agent/tests/check-pipeline-continuity.sh`, `.agent/tests/check-unified-test-gate.sh`, （必要なら）`.agent/tests/check-ssot-vocabulary-contract.sh`
       → 完了条件:
