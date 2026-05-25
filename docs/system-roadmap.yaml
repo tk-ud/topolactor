@@ -789,7 +789,7 @@ system_roadmap_ssot:
         - External import apply remains partial for topology/schema/projection/general lanes
 
     frontend_ui_component_system:
-      public_summary_addendum: "component catalog classification SSOT and full catalog classification entries added; status remains partial."
+      public_summary_addendum: "component catalog classification SSOT / full catalog classification entries / catalog seed registration surface / registration continuity (generate→promote→registry/tensor) are implemented; status remains partial."
       status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
@@ -801,7 +801,8 @@ system_roadmap_ssot:
         Code-only components are explicitly labeled as drift/GAP.
         Frontend does not own topology or runtime judgment.
         Completed sub-scope includes runtime alias coverage, projection constructor/adapter continuity, primitive renderer emit continuity, wiringId continuity, and generate/promote contract separation.
-        Completed sub-scope now also includes catalog registration seed surface (ui_component_bucket bootstrap seed from catalog registrationRequired entries). Remaining scope is a roadmap completion bundle: frontend component constructor/interface + DB-driven design/layout/wiring projection closure + full registration continuity judgment (componentId/packageId/layoutId/wiringId/tensor) at bundle level.
+        Completed sub-scope now also includes catalog registration seed surface (ui_component_bucket bootstrap seed from catalog registrationRequired entries) and registration continuity (`ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor`).
+        Remaining scope is limited to roadmap completion bundle closure for frontend component constructor/interface and DB-driven design/layout/wiring projection (including final frontend projection/component interface alignment judgment).
         Design/layout/wiring authority remains DB-side (`design.classname`/`design.tailwind`, package layout mapping, `ui_layout_registry`, `ui_wiring_registry`, `ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
       files:
         - frontend/components/Button.tsx
@@ -816,7 +817,7 @@ system_roadmap_ssot:
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
       known_gap_ref:
-        - Issue #86 partial: completion bundle (frontend constructor/interface + DB-driven design/layout/wiring projection + full registration continuity judgment) is not closed yet; catalog seed registration surface is completed but does not close the full bundle
+        - Issue #86 partial: completion bundle closure is not finished for DB-driven design/layout/wiring projection and final frontend projection/component interface alignment judgment; registration continuity (generate→promote→registry/tensor) and catalog seed registration surface are completed
 
     admin_visual_layout_builder:
       status: partial

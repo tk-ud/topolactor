@@ -120,7 +120,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 判定境界:
         - code-only drift を完了扱いしない（解消 or catalog drift として bundle 単位で残TODO化）。
         - Issue #86 implemented 判定は `docs/system-roadmap.yaml` の `completion_condition` / `known_gap_ref` と整合させる。
-      → 進捗メモ: component catalog classification SSOT + all component classification entries + catalog seed registration surface（ui_component_bucket bootstrap seed）は完了済み。残件は completion bundle（frontend constructor/interface + DB-driven design/layout/wiring projection + full registration continuity judgment）。
+      → 進捗メモ（完了済み sub-scope）: component catalog classification SSOT + all component classification entries + catalog seed registration surface（ui_component_bucket bootstrap seed）+ `ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor` continuity は実装/検証済み。
+      → 残件: completion bundle のうち frontend constructor/interface の最終整合判定、および DB-driven design/layout/wiring projection closure（frontend projection/component interface の最終整合判定を含む）。
 
 ## Admin Visual Layout Builder (Issue #89)
 
