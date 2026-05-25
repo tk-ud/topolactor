@@ -142,3 +142,13 @@ Deno.test("runtimePrimitiveRenderer: forwards className/design and keeps tailwin
   assertEquals((result.node as any).props.className, "dbx tw-bg-red");
   assertEquals((result.node as any).props.design.tailwind, "tw-bg-red");
 });
+
+Deno.test("runtimePrimitiveRenderer: alias-maintained textarea renders via Input adapter path", () => {
+  const result = renderRuntimeComponent({
+    componentId: "alias-tx",
+    componentType: "form_input/textarea",
+    props: { value: "hello" },
+    eventBinding: { change: { eventType: "change" } },
+  });
+  assertEquals(result.ok, true);
+});

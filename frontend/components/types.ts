@@ -85,3 +85,36 @@ export function computeDesignDisabled(
 // "disclosure/tabs"        → Tabs
 // "disclosure/modal"       → Modal
 // "data_display/tree"      → Tree / TreeNode
+
+
+export type ComponentFamily = "primitive" | "template" | "composite" | "packaged" | "alias";
+export type ComponentSemanticRole = "input" | "action" | "display" | "feedback" | "validation" | "diagnostic" | "layout_shell" | "navigation" | "data_viewer" | "admin_operation";
+export type ComponentVisualRole = "field" | "button" | "badge" | "alert" | "panel" | "table" | "card" | "modal" | "tabs" | "tree" | "page_shell" | "json_viewer";
+export type ComponentLifecycleStatus = "code_only_drift" | "alias_maintained" | "bucketed" | "packaging" | "promoted" | "registered" | "deprecated";
+export type ComponentCapabilityTag = "accepts_children" | "accepts_actions" | "emits_event" | "requires_event_binding" | "accepts_design" | "accepts_layout" | "displays_backend_result" | "displays_json" | "admin_only" | "recursive" | "selectable" | "controlled_value" | "error_display" | "loading_display";
+
+// runtimeConnected means runtime adapter/renderer support (code/runtime connection).
+// It does NOT mean DB-registered topology entity.
+// registrationRequired indicates DB registration/promotion is still required
+// before treating the component as a topology entity.
+export type ComponentCatalogIdentity = {
+  componentKey: string;
+  componentKind: string;
+  sourcePath: string;
+};
+
+export type ComponentCatalogClassification = {
+  componentKey: string;
+  componentKind: string;
+  sourcePath: string;
+  componentFamily: ComponentFamily;
+  semanticRole: ComponentSemanticRole;
+  visualRole: ComponentVisualRole;
+  lifecycleStatus: ComponentLifecycleStatus;
+  capabilityTags: ComponentCapabilityTag[];
+  runtimeConnected: boolean;
+  registrationRequired: boolean;
+  notes?: string;
+};
+
+export type ComponentCatalogEntry = ComponentCatalogClassification;

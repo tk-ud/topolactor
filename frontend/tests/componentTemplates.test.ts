@@ -255,3 +255,4 @@ Deno.test("Component templates are projection surfaces: no topology judgment in 
   // overall is preserved exactly as received from backend
   assertEquals((node as any).props.result?.overall, "blocking");
 });
+
