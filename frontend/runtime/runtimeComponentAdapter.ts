@@ -1,4 +1,8 @@
 import type { ComponentDataHub } from "./projectionConstructor.ts";
+import {
+  ensureRuntimeComponentRegistryInitialized,
+  hasRuntimeComponentFactory,
+} from "./runtimeComponentRegistry.ts";
 
 type NormalizedDesign = {
   classname?: string;
@@ -67,19 +71,6 @@ function normalizeDesign(
   };
 }
 
-const SUPPORTED_COMPONENT_KINDS = new Set([
-  "action/button",
-  "form_input/input",
-  "form_input/textarea",
-  "form_input/search_input",
-  "display/card",
-  "disclosure_structure/panel",
-  "disclosure_structure/section",
-  "data_display/table",
-  "data_display/data_grid",
-  "data_display/list",
-]);
-
 export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
   if (!hub.componentId || hub.componentId.trim().length === 0) {
     return {
@@ -93,7 +84,8 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       error: "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_KIND",
     };
   }
-  if (!SUPPORTED_COMPONENT_KINDS.has(hub.componentKind)) {
+  ensureRuntimeComponentRegistryInitialized();
+  if (!hasRuntimeComponentFactory(hub.componentKind)) {
     return {
       ok: false,
       error:

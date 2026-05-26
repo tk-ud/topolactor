@@ -78,10 +78,12 @@ public class SsotWiringAuditComponentRegistrationTests
     }
 
     [Fact]
-    public void ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByAdapterAndRenderer()
+    public void ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByFactoryRegistryBoundary()
     {
         var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
         var adapter = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentAdapter.ts");
+        var registry = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentRegistry.ts");
+        var factory = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentFactory.ts");
         var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
 
         var connectedKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?runtimeConnected:\s*true")
@@ -90,20 +92,23 @@ public class SsotWiringAuditComponentRegistrationTests
             .ToArray();
 
         Assert.NotEmpty(connectedKinds);
+        Assert.Contains("hasRuntimeComponentFactory", adapter);
+        Assert.Contains("resolveRuntimeComponentFactory", registry);
+        Assert.Contains("RUNTIME_COMPONENT_FACTORIES", factory);
+        Assert.DoesNotContain("switch (spec.componentType)", renderer);
         foreach (var kind in connectedKinds)
         {
             Assert.True(
-                adapter.Contains($"\"{kind}\"", StringComparison.Ordinal)
-                || renderer.Contains($"\"{kind}\"", StringComparison.Ordinal)
-                || renderer.Contains($"case \"{kind}\"", StringComparison.Ordinal),
-                $"runtimeConnected componentKind must be supported by adapter or renderer: {kind}");
+                factory.Contains($"\"{kind}\"", StringComparison.Ordinal),
+                $"runtimeConnected componentKind must be declared in runtime component factory componentKinds: {kind}");
         }
     }
 
     [Fact]
-    public void ComponentRegistrationLane_EventBindingRequiredComponents_MustDeclareBindingSurface()
+    public void ComponentRegistrationLane_EventBindingRequiredComponents_MustDeclareFactoryBindingSurface()
     {
         var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
+        var factory = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentFactory.ts");
         var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
 
         var requiringBindingKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?capabilityTags:\s*\[[^\]]*""requires_event_binding""[\s\S]*?runtimeConnected:\s*true")
@@ -112,13 +117,14 @@ public class SsotWiringAuditComponentRegistrationTests
             .ToArray();
 
         Assert.NotEmpty(requiringBindingKinds);
-        Assert.Contains("emitBoundEvent", renderer);
+        Assert.Contains("emitBoundEvent", factory);
+        Assert.Contains("requireBinding", factory);
+        Assert.DoesNotContain("emitBoundEvent", renderer);
         foreach (var kind in requiringBindingKinds)
         {
             Assert.True(
-                renderer.Contains($"case \"{kind}\"", StringComparison.Ordinal)
-                || renderer.Contains($"\"{kind}\"", StringComparison.Ordinal),
-                $"event-binding-required runtimeConnected kind must be renderer reachable: {kind}");
+                factory.Contains($"\"{kind}\"", StringComparison.Ordinal),
+                $"event-binding-required runtimeConnected kind must be factory componentKinds reachable: {kind}");
         }
     }
 
