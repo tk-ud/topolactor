@@ -1115,7 +1115,9 @@ system_roadmap_ssot:
       public_summary: >
         UI/UX primitive catalog SSOT (docs/design/ui-ux-primitive-catalog-ssot.yaml)
         and abstract function primitive registry SSOT
-        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined.
+        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined, including a
+        basic calculation operator vocabulary (11 operators) for formula contracts with explicit
+        zero-division policy and no implicit eval boundary.
         Frontend component catalog (frontend/components/catalog.ts) extended with 82
         primitive lineup entries across 8 categories: search/suggest, inline edit/audit,
         table/list/view, kanban/drag-drop, design token, calculation/topology,
@@ -1134,7 +1136,7 @@ system_roadmap_ssot:
         - db/demo_seed.sql
       completion_condition:
         - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
-        - abstract_function_primitive_registry_ssot_defines_6_categories_with_contract
+        - abstract_function_primitive_registry_ssot_defines_7_categories_with_contract
         - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
         - frontend_component_catalog_extended_with_82_primitive_lineup_entries_and_registration_required_semantics
         - implemented_promotion_requires_react_components_runtime_adapter_renderer_db_seed_rows_ssot_reader_tests_and_catalog_subset_static_checks

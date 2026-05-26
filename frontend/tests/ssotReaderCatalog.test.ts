@@ -54,6 +54,7 @@ const FUNCTION_CATEGORY_KEYS = [
   "category_d_calculation_topology",
   "category_e_layout_design_token",
   "category_f_operation_safety",
+  "category_g_basic_calculation_operators",
 ];
 
 // Boundary keys declared in ui-ux-primitive-catalog-ssot.yaml meaning_boundaries
@@ -165,19 +166,19 @@ Deno.test("abstract-function-primitive-registry-ssot: file is readable and parse
   assert(ssot.version !== undefined, "SSOT must have version field");
 });
 
-Deno.test("abstract-function-primitive-registry-ssot: registry_summary declares 6 categories and 49 functions", async () => {
+Deno.test("abstract-function-primitive-registry-ssot: registry_summary declares 7 categories and 60 functions", async () => {
   const raw = await Deno.readTextFile(FUNCTION_SSOT_PATH);
   const ssot = parse(raw) as AbstractFunctionSsot;
   assert(ssot.registry_summary, "registry_summary must exist");
   assertEquals(
     ssot.registry_summary.total_categories,
-    6,
-    "registry_summary.total_categories must be 6",
+    7,
+    "registry_summary.total_categories must be 7",
   );
   assertEquals(
     ssot.registry_summary.total_functions,
-    49,
-    "registry_summary.total_functions must be 49",
+    60,
+    "registry_summary.total_functions must be 60",
   );
 });
 
@@ -246,5 +247,30 @@ Deno.test("abstract-function-primitive-registry-ssot: every function has require
         `function '${name}' in '${catKey}' must declare mutation_boundary`,
       );
     }
+  }
+});
+
+
+Deno.test("abstract-function-primitive-registry-ssot: basic calculation operators exist and keep readonly/preview boundaries", async () => {
+  const raw = await Deno.readTextFile(FUNCTION_SSOT_PATH);
+  const ssot = parse(raw) as AbstractFunctionSsot;
+  const category = ssot["category_g_basic_calculation_operators"] as {
+    functions?: Record<string, Record<string, unknown>>;
+  } | undefined;
+  assert(category?.functions, "category_g_basic_calculation_operators.functions must exist");
+
+  const required = ["add", "subtract", "multiply", "divide", "percentage", "round", "floor", "ceil", "min", "max", "clamp"];
+  for (const name of required) {
+    const fn = category.functions[name];
+    assert(fn, `operator '${name}' must exist`);
+    assert(typeof fn.signature === "string" && fn.signature.length > 0, `operator '${name}' must have signature`);
+    assert(typeof fn.output_kind === "string" && fn.output_kind.length > 0, `operator '${name}' must have output_kind`);
+    assert(typeof fn.mutation_boundary === "string" && fn.mutation_boundary.length > 0, `operator '${name}' must have mutation_boundary`);
+    assert(["readonly", "preview_only"].includes(String(fn.mutation_boundary)), `operator '${name}' mutation_boundary must be readonly or preview_only`);
+  }
+
+  for (const name of ["divide", "percentage"]) {
+    const fn = category.functions[name] as Record<string, unknown>;
+    assert(typeof fn.zero_division_policy === "object" && fn.zero_division_policy !== null, `operator '${name}' must define zero_division_policy`);
   }
 });
