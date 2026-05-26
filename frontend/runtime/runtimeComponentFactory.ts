@@ -54,6 +54,10 @@ import { PermissionHintPanel } from "../components/PermissionHintPanel.tsx";
 import { DryRunResultPanel } from "../components/DryRunResultPanel.tsx";
 import { RollbackCandidatePanel } from "../components/RollbackCandidatePanel.tsx";
 import { OperationAuditLogPanel } from "../components/OperationAuditLogPanel.tsx";
+import { FormField } from "../components/FormField.tsx";
+import { KanbanBoard } from "../components/KanbanBoard.tsx";
+import { LayoutGridEditor } from "../components/LayoutGridEditor.tsx";
+import { CalculationPreviewPanel } from "../components/CalculationPreviewPanel.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
@@ -1714,6 +1718,94 @@ function operationAuditLogPanelFactory(spec: RuntimeComponentSpec): RenderResult
   };
 }
 
+function formFieldFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(FormField, {
+      label: data.label as string | undefined,
+      required: data.required as boolean | undefined,
+      error: data.error as string | undefined,
+      help: data.help as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      children: h("span", null, ""),
+    }),
+  };
+}
+
+function kanbanBoardFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const rawColumns = Array.isArray(data.columns) ? data.columns : [];
+  const columns = rawColumns.filter(
+    (c): c is { key: string; label: string; items?: Array<{ id: string; label: string; description?: string }> } =>
+      typeof c === "object" && c !== null &&
+      typeof (c as Record<string, unknown>).key === "string" &&
+      typeof (c as Record<string, unknown>).label === "string",
+  );
+  return {
+    ok: true,
+    node: h(KanbanBoard, {
+      title: data.title as string | undefined,
+      columns,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: spec.eventBinding.select
+        ? (id: string) => {
+          const r = emitBoundEvent(spec, "select", { id });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function layoutGridEditorFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(LayoutGridEditor, {
+      value: data.value as string | undefined,
+      label: data.label as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: spec.eventBinding.change
+        ? (value: string) => {
+          const r = emitBoundEvent(spec, "change", { value });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function calculationPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(CalculationPreviewPanel, {
+      title: data.title as string | undefined,
+      result: data.result,
+      status: data.status as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
 export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["action/button"], render: buttonFactory },
   {
@@ -1818,4 +1910,8 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["safety_guard/dry_run_result_panel"], render: dryRunResultPanelFactory },
   { componentKinds: ["safety_guard/rollback_candidate_panel"], render: rollbackCandidatePanelFactory },
   { componentKinds: ["safety_guard/operation_audit_log_panel"], render: operationAuditLogPanelFactory },
+  { componentKinds: ["form_input/form_field"], render: formFieldFactory },
+  { componentKinds: ["kanban_drag/kanban_board"], render: kanbanBoardFactory },
+  { componentKinds: ["design_token/layout_grid_editor"], render: layoutGridEditorFactory },
+  { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
 ];

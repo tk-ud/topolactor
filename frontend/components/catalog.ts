@@ -170,11 +170,7 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   // patch_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // Category C: Table / List / View Operation UI
   // Category D: Kanban / Tree / Drag-Drop / State Transition UI (#89 prerequisite)
-  {
-    componentKey: "kanban_board.primitive",
-    componentKind: "kanban_drag/kanban_board",
-    sourcePath: CATALOG_SSOT,
-  },
+  // kanban_board.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "drag_drop_state_transition.primitive",
     componentKind: "kanban_drag/drag_drop_state_transition",
@@ -223,22 +219,14 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   // Category E: Design Token / Style Token / Layout Token UI (#89 prerequisite)
   // theme_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // style_token_picker.primitive promoted to runtimeConnected:true — removed from catalog-only list
-  {
-    componentKey: "layout_grid_editor.primitive",
-    componentKind: "design_token/layout_grid_editor",
-    sourcePath: CATALOG_SSOT,
-  },
+  // layout_grid_editor.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "responsive_rule_editor.primitive",
     componentKind: "design_token/responsive_rule_editor",
     sourcePath: CATALOG_SSOT,
   },
   // Category F: Calculation / Topology Computation UI
-  {
-    componentKey: "calculation_preview_panel.primitive",
-    componentKind: "calc_topology/calculation_preview_panel",
-    sourcePath: CATALOG_SSOT,
-  },
+  // calculation_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "formula_builder.primitive",
     componentKind: "calc_topology/formula_builder",
@@ -484,7 +472,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_children", "error_display", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -1146,15 +1134,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "kanban_board.primitive",
     componentKind: "kanban_drag/kanban_board",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/KanbanBoard.tsx",
     componentFamily: "primitive",
     semanticRole: "data_viewer",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_children", "selectable", "accepts_layout"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | #89 prerequisite",
+    notes: "#89 prerequisite",
   },
   {
     componentKey: "drag_drop_state_transition.primitive",
@@ -1364,7 +1352,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "layout_grid_editor.primitive",
     componentKind: "design_token/layout_grid_editor",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/LayoutGridEditor.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "panel",
@@ -1375,9 +1363,9 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "admin_only",
       "accepts_layout",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | #89 layout grid configuration",
+    notes: "#89 layout grid configuration",
   },
   {
     componentKey: "responsive_rule_editor.primitive",
@@ -1454,15 +1442,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "calculation_preview_panel.primitive",
     componentKind: "calc_topology/calculation_preview_panel",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/CalculationPreviewPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | previewOnly:true | candidateSurface:true",
+    notes: "previewOnly:true | candidateSurface:true",
   },
   {
     componentKey: "formula_builder.primitive",

@@ -79,6 +79,12 @@ export { SchemaPromotionCandidatePanel } from "./SchemaPromotionCandidatePanel.t
 export type { SchemaPromotionCandidatePanelProps, SchemaPromotionCandidate } from "./SchemaPromotionCandidatePanel.tsx";
 export { SelectImportDialog } from "./SelectImportDialog.tsx";
 export type { SelectImportDialogProps, SelectImportDialogCandidate } from "./SelectImportDialog.tsx";
+export { KanbanBoard } from "./KanbanBoard.tsx";
+export type { KanbanBoardProps, KanbanBoardColumn, KanbanBoardItem } from "./KanbanBoard.tsx";
+export { LayoutGridEditor } from "./LayoutGridEditor.tsx";
+export type { LayoutGridEditorProps } from "./LayoutGridEditor.tsx";
+export { CalculationPreviewPanel } from "./CalculationPreviewPanel.tsx";
+export type { CalculationPreviewPanelProps } from "./CalculationPreviewPanel.tsx";
 
 // inline_edit components
 export { InlineEditableJsonbField } from "./InlineEditableJsonbField.tsx";
