@@ -10,6 +10,10 @@ runtime_connected:
 
 registration_required:
   definition: requires DB registration/promotion before topology entity treatment
+  rule:
+    - catalog_definition_only primitive/template candidates are registrationRequired:true by default
+    - registrationRequired:false is allowed only for runtime aliases that reuse an existing registered primitive path
+    - exception reason must be recorded in entry notes and matched by SSOT boundary text
 
 component_kind:
   role:

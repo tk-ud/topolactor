@@ -44,7 +44,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] [Codex-follow-up][bundle][manifest-driven-ui][topology-db-operation] UI/UX primitive catalog と abstract function registry の Codex 向け閉じ作業
       → 上位SSOT作成完了: `docs/design/ui-ux-primitive-catalog-ssot.yaml`（8 categories / 82 primitives）
       → 上位SSOT作成完了: `docs/design/abstract-function-primitive-registry-ssot.yaml`（6 categories / 49 functions）
-      → frontend/components/catalog.ts 拡張完了: 80+ エントリ（8カテゴリ）追加、`UI_UX_PRIMITIVE_CATALOG_IDENTITIES` export 追加
+      → frontend/components/catalog.ts 拡張完了: 82 primitive lineup entries（8カテゴリ）追加、`UI_UX_PRIMITIVE_CATALOG_IDENTITIES` export 追加
       → docs/system-roadmap.yaml 更新完了: `ui_ux_primitive_catalog_and_abstract_function_registry` エントリ追加
       → meaning boundary 全件 SSOT に明文化完了（frontend/mutation/calculation/lookup/sql-attention/seed/style-token/yaml-vocab）
       → Codex follow-up として残る作業（implementation atom ではなく completion bundle 単位）:
@@ -56,7 +56,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
            → 対象: `db/seed_empty.sql`, `db/demo_seed.sql`
         4. [codex] runtime adapter / renderer 到達性テスト: 新 catalog entry の runtimeConnected 昇格候補について `runtimeComponentAdapter.ts` + `runtimePrimitiveRenderer.ts` の機械的到達性テスト追加
            → 対象: `frontend/tests/runtimeComponentAdapter.test.ts`, `frontend/tests/runtimePrimitiveRenderer.test.ts`
-        5. [codex] roadmap status 整合: `ui_ux_primitive_catalog_and_abstract_function_registry` の status を `implemented` に上げる条件（React 実装 + adapter 配線確認）
+        5. [codex] roadmap status 整合: `ui_ux_primitive_catalog_and_abstract_function_registry` の status を `implemented` に上げる条件（React実装 / adapter+renderer到達性 / DB seed bootstrap rows / SSOT reader tests / catalog identity subset static check）
            → `docs/system-roadmap.yaml` の known_gap_ref を消化した時点で更新
       → boundary(ssot): search node は hub、display subject は entity を維持し、frontend は topology judgment を持たず candidate / preview / confirm surface に限定する。
       → boundary(update): inline update は `preview_update_patch` / `validate_candidate` / `apply_confirmed_update` の順で explicit apply し、本体更新と `append_diff_log` の境界を明記する。
