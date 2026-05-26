@@ -41,35 +41,30 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
-- [ ] [bundle][manifest-driven-ui][topology-db-operation] UI/UX primitive catalog と abstract function primitive registry を task surface として整理する
-      → scope: 実装指示ではなく TODO bundle。frontend component 単体ではなく、manifest-driven UI / topology DB operation の primitive catalog と function registry 境界を定義する。
+- [ ] [Codex-follow-up][bundle][manifest-driven-ui][topology-db-operation] UI/UX primitive catalog と abstract function registry の Codex 向け閉じ作業
+      → 上位SSOT作成完了: `docs/design/ui-ux-primitive-catalog-ssot.yaml`（8 categories / 82 primitives）
+      → 上位SSOT作成完了: `docs/design/abstract-function-primitive-registry-ssot.yaml`（6 categories / 49 functions）
+      → frontend/components/catalog.ts 拡張完了: 82 primitive lineup entries（8カテゴリ）追加、`UI_UX_PRIMITIVE_CATALOG_IDENTITIES` export 追加
+      → docs/system-roadmap.yaml 更新完了: `ui_ux_primitive_catalog_and_abstract_function_registry` エントリ追加
+      → meaning boundary 全件 SSOT に明文化完了（frontend/mutation/calculation/lookup/sql-attention/seed/style-token/yaml-vocab）
+      → Codex follow-up として残る作業（implementation atom ではなく completion bundle 単位）:
+        1. [codex] SSOT reader tests: `docs/design/ui-ux-primitive-catalog-ssot.yaml` / `docs/design/abstract-function-primitive-registry-ssot.yaml` の構造整合テスト追加
+           → 対象: `.agent/tests/` または `backend/tests/` のSSOT読取テスト
+        2. [codex] catalog.ts 全件 subset 検査: `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES` の componentKey 整合性静的テスト
+           → 対象: `frontend/tests/`
+        3. [codex] seed/bootstrap rows: primitive registry 候補の `db/seed_empty.sql` / `db/demo_seed.sql` への初期 bootstrap row 追加（authority ではなく bootstrap として）
+           → 対象: `db/seed_empty.sql`, `db/demo_seed.sql`
+        4. [codex] runtime adapter / renderer 到達性テスト: 新 catalog entry の runtimeConnected 昇格候補について `runtimeComponentAdapter.ts` + `runtimePrimitiveRenderer.ts` の機械的到達性テスト追加
+           → 対象: `frontend/tests/runtimeComponentAdapter.test.ts`, `frontend/tests/runtimePrimitiveRenderer.test.ts`
+        5. [codex] roadmap status 整合: `ui_ux_primitive_catalog_and_abstract_function_registry` の status を `implemented` に上げる条件（React実装 / adapter+renderer到達性 / DB seed bootstrap rows / SSOT reader tests / catalog identity subset static check）
+           → `docs/system-roadmap.yaml` の known_gap_ref を消化した時点で更新
       → boundary(ssot): search node は hub、display subject は entity を維持し、frontend は topology judgment を持たず candidate / preview / confirm surface に限定する。
       → boundary(update): inline update は `preview_update_patch` / `validate_candidate` / `apply_confirmed_update` の順で explicit apply し、本体更新と `append_diff_log` の境界を明記する。
-      → boundary(computation): 計算系 primitive/function は即 mutation せず preview → validate → explicit apply を必須にし、結果は candidate として確認後に適用する。
-      → boundary(lookup): 外部 lookup は canonical SSOT にしない。郵便番号/住所/電話番号 lookup は adapter または candidate surface として扱い、電話番号↔住所 lookup は内部 master / 登録済みデータ / 許可済み provider に限定する。
-      → boundary(style): font/background/color/spacing/layout は hardcode せず manifest/style token 経由で扱う。
-      → boundary(yaml-static-vocabulary): 既存 YAML enum / classification vocabulary は DB移行対象にしない。YAML enum は静的制約・CI補助・分類定義として残す。
-      → boundary(db-registry-scope): SQL Attention / runtime recommendation の対象にしたい primitive のみ DB registry + seed bootstrap に登録する。DB登録対象は user / AI / usecase により増減・推薦・rank・promotion される runtime-growable primitive に限定する。
-      → boundary(seed-role): seed は DB registry の初期 bootstrap row であり authority ではない。標準 primitive catalog 初期値のみ `db/seed_empty.sql` / `db/demo_seed.sql` に置く。
-      → boundary(runtime-growth): user / AI / usecase で増える primitive は seed 追記ではなく runtime DB row として追加する。
-      → boundary(registry-candidates): `component_primitive_registry`, `function_primitive_registry`, `calculation_primitive_registry`, `lookup_primitive_registry`, `table_operation_primitive_registry`, `design_token_registry`, `layout_primitive_registry` を候補 registry として扱う。
-      → boundary(sql-attention-apply): DB登録された primitive は SQL Attention recommendation / ranking / promotion candidate 対象になり得るが、SQL Attention は registry を直接 mutate しない。apply は preview → validate → explicit confirm → registry write → diff_log append を通す。
-      → boundary(ci-shift): CI は YAML subset のみで閉じず、seed/bootstrap rows と DB registry contract の整合検査を補助線として扱う。
-      → UI/UX primitive categories:
-        - Text / DB search: `AutoCompleteInput`, `SuggestInput`, `SearchCombobox`, `SelectImportDialog`, `RelationCandidatePicker`, `RecentInputSuggest`, `DuplicateMergeCandidatePanel`。
-        - Inline edit / update / audit: `InlineEditableField`, `InlineEditableJsonbField`, `PatchPreviewPanel`, `DiffStrikeText`, `AuditDiffDrawer`, `OptimisticUpdateBoundary`, `ConfirmedUpdateButton`。
-        - Design / visual token: `FontTokenEditor`, `BackgroundColorEditor`, `TextColorEditor`, `SpacingTokenEditor`, `BorderRadiusEditor`, `ThemePreviewPanel`。
-        - Table / list operation: `FacetedFilterBar`, `ColumnFilter`, `ColumnVisibilityEditor`, `SortControl`, `GroupByControl`, `SavedViewSelector`, `BulkActionPanel`, `VirtualizedDataTable`。
-        - Kanban / drag-and-drop: `KanbanBoard`, `DragDropStateTransition`, `DragSortList`, `RelationDropZone`, `TreeReorderDropZone`。
-        - Calculation / topology computation: `CalculationPreviewPanel`, `FormulaBuilder`, `ComputedFieldPreview`, `RelationScorePreview`, `HubStatisticsPanel`, `AggregationPreviewTable`, `CrossEntityCalculationPanel`, `TopologyDistancePreview`, `RouteCostPreview`, `AttentionWeightPreview`。
-        - External / helper lookup: `KanaAssistInput`, `PostalAddressLookup`, `AddressPostalLookup`, `TelAddressCandidateLookup`, `NormalizeAddressCandidate`, `LookupCandidateConfirmPanel`。
-        - Recommended inspector / safety: `CommandPalette`, `FieldResolverInspector`, `CandidateConfidenceBadge`, `ConflictResolutionPanel`, `RelationPathPreview`, `SchemaPromotionCandidatePanel`, `UndoTimeline`, `EmptyStateActionPanel`。
-      → abstract function registry candidates (non-implementation):
-        - Search / suggest: `search_hub_candidates(query, context)`, `search_entity_candidates(query, context)`, `suggest_relation_candidates(hub_id, context)`, `autocomplete_field_value(target, field, query, context)`。
-        - Normalize / lookup / import: `normalize_text(value, rule)`, `extract_kana(value)`, `resolve_postal_address(postal_code)`, `resolve_address_postal(address)`, `resolve_tel_candidate(tel_or_address)`, `import_rows_to_candidates(source, mapping)`。
-        - Candidate update / audit: `validate_candidate(candidate, manifest)`, `preview_update_patch(target, payload)`, `apply_confirmed_update(target, payload)`, `append_diff_log(target, before, after, editor)`。
-        - Calculation registry: `calculate_entity_field_value(entity_id, formula, context)`, `calculate_relation_score(from_id, to_id, context)`, `calculate_relation_cooccurrence(source, target, window)`, `calculate_hub_statistics(hub_id, filters)`, `calculate_group_statistics(target, group_by, filters)`, `calculate_topology_distance(from_hub, to_hub, context)`, `calculate_route_cost(route, context)`, `calculate_attention_weight(target, evidence)`, `calculate_rank_score(candidates, policy)`, `preview_computed_field(target, formula, context)`, `validate_formula_contract(formula, manifest)`, `promote_computation_candidate(path, evidence)`。
-      → out_of_scope: frontend/backend/DB 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加、seed 変更。
+      → boundary(computation): 計算系 primitive/function は即 mutation せず preview → validate → explicit apply を必須にする。
+      → boundary(lookup): 外部 lookup は canonical SSOT にしない。adapter / candidate surface として扱う。
+      → boundary(sql-attention): SQL Attention は registry / primitive を直接 mutate しない。recommendation / ranking は candidate surface に限定。
+      → boundary(seed-role): seed は bootstrap row であり authority ではない。
+      → out_of_scope (引き続き): React 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加。
 
 ## TODO dependency map（execution order）
 
