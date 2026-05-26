@@ -344,7 +344,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -356,7 +356,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -368,7 +368,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "badge",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -380,7 +380,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "badge",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -392,7 +392,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "alert",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design", "error_display"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -404,7 +404,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["loading_display", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -416,7 +416,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -428,7 +428,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["error_display", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -440,7 +440,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "json_viewer",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_json", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -457,7 +457,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "admin_only",
       "accepts_layout",
     ],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -474,7 +474,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "admin_only",
       "accepts_layout",
     ],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -486,7 +486,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -498,7 +498,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -510,7 +510,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "tabs",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["selectable", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -522,7 +522,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "modal",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_children", "accepts_actions", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -534,7 +534,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "tree",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["recursive", "selectable", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
   {
@@ -546,7 +546,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "tree",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["recursive", "selectable", "accepts_design"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
   },
 
@@ -1021,7 +1021,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "drag_sort_list.primitive",
     componentKind: "kanban_drag/drag_sort_list",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/DragSortList.tsx",
     componentFamily: "primitive",
     semanticRole: "data_viewer",
     visualRole: "panel",
@@ -1040,7 +1040,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "relation_drop_zone.primitive",
     componentKind: "kanban_drag/relation_drop_zone",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/RelationDropZone.tsx",
     componentFamily: "primitive",
     semanticRole: "layout_shell",
     visualRole: "panel",
@@ -1053,7 +1053,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "tree_reorder_drop_zone.primitive",
     componentKind: "kanban_drag/tree_reorder_drop_zone",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/TreeReorderDropZone.tsx",
     componentFamily: "primitive",
     semanticRole: "layout_shell",
     visualRole: "tree",
@@ -1067,7 +1067,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "layout_drop_zone.primitive",
     componentKind: "kanban_drag/layout_drop_zone",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/LayoutDropZone.tsx",
     componentFamily: "primitive",
     semanticRole: "layout_shell",
     visualRole: "panel",
@@ -1080,7 +1080,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "component_placement_handle.primitive",
     componentKind: "kanban_drag/component_placement_handle",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/ComponentPlacementHandle.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "panel",
@@ -1093,7 +1093,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "snap_grid_overlay.primitive",
     componentKind: "kanban_drag/snap_grid_overlay",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/SnapGridOverlay.tsx",
     componentFamily: "primitive",
     semanticRole: "layout_shell",
     visualRole: "panel",
@@ -1106,7 +1106,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "state_transition_arrow.primitive",
     componentKind: "kanban_drag/state_transition_arrow",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/StateTransitionArrow.tsx",
     componentFamily: "primitive",
     semanticRole: "display",
     visualRole: "panel",
@@ -1114,12 +1114,12 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only",
+    notes: "",
   },
   {
     componentKey: "slot_placeholder_panel.primitive",
     componentKind: "kanban_drag/slot_placeholder_panel",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/SlotPlaceholderPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "layout_shell",
     visualRole: "panel",
@@ -1230,7 +1230,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "responsive_rule_editor.primitive",
     componentKind: "design_token/responsive_rule_editor",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/ResponsiveRuleEditor.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "panel",
@@ -1315,7 +1315,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "formula_builder.primitive",
     componentKind: "calc_topology/formula_builder",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/FormulaBuilder.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "panel",
@@ -1329,7 +1329,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "computed_field_preview.primitive",
     componentKind: "calc_topology/computed_field_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/ComputedFieldPreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1342,7 +1342,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "relation_score_preview.primitive",
     componentKind: "calc_topology/relation_score_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/RelationScorePreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1355,7 +1355,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "hub_statistics_panel.primitive",
     componentKind: "calc_topology/hub_statistics_panel",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/HubStatisticsPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "data_viewer",
     visualRole: "panel",
@@ -1368,7 +1368,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "aggregation_preview_table.primitive",
     componentKind: "calc_topology/aggregation_preview_table",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/AggregationPreviewTable.tsx",
     componentFamily: "primitive",
     semanticRole: "data_viewer",
     visualRole: "table",
@@ -1381,7 +1381,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "cross_entity_calculation_panel.primitive",
     componentKind: "calc_topology/cross_entity_calculation_panel",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/CrossEntityCalculationPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1394,7 +1394,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "topology_distance_preview.primitive",
     componentKind: "calc_topology/topology_distance_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/TopologyDistancePreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1407,7 +1407,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "route_cost_preview.primitive",
     componentKind: "calc_topology/route_cost_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/RouteCostPreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1420,7 +1420,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "attention_weight_preview.primitive",
     componentKind: "calc_topology/attention_weight_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/AttentionWeightPreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1434,7 +1434,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "cooccurrence_matrix_preview.primitive",
     componentKind: "calc_topology/cooccurrence_matrix_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/CooccurrenceMatrixPreview.tsx",
     componentFamily: "primitive",
     semanticRole: "data_viewer",
     visualRole: "panel",
@@ -1447,7 +1447,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "rank_score_preview.primitive",
     componentKind: "calc_topology/rank_score_preview",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/RankScorePreview.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1463,7 +1463,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "kana_assist_input.primitive",
     componentKind: "external_lookup/kana_assist_input",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/KanaAssistInput.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
@@ -1477,7 +1477,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "postal_address_lookup.primitive",
     componentKind: "external_lookup/postal_address_lookup",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/PostalAddressLookup.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
@@ -1491,7 +1491,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "address_postal_lookup.primitive",
     componentKind: "external_lookup/address_postal_lookup",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/AddressPostalLookup.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
@@ -1505,7 +1505,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "tel_address_candidate_lookup.primitive",
     componentKind: "external_lookup/tel_address_candidate_lookup",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/TelAddressCandidateLookup.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
@@ -1519,7 +1519,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "normalize_address_candidate.primitive",
     componentKind: "external_lookup/normalize_address_candidate",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/NormalizeAddressCandidate.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
@@ -1533,7 +1533,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "lookup_candidate_confirm_panel.primitive",
     componentKind: "external_lookup/lookup_candidate_confirm_panel",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/LookupCandidateConfirmPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "validation",
     visualRole: "panel",
@@ -1547,7 +1547,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "bulk_import_candidate_panel.primitive",
     componentKind: "external_lookup/bulk_import_candidate_panel",
-    sourcePath: "frontend/components/DragDropStateTransition.tsx",
+    sourcePath: "frontend/components/BulkImportCandidatePanel.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "panel",
@@ -1793,7 +1793,7 @@ export const UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES:
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["admin_only"],
-    runtimeConnected: true,
+    runtimeConnected: false,
     registrationRequired: true,
     notes: "catalog_definition_only",
   }));
