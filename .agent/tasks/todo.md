@@ -23,31 +23,20 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
-- [ ] [Codex-follow-up][bundle][manifest-driven-ui][topology-db-operation] UI/UX primitive catalog と abstract function registry の Codex 向け閉じ作業
-      → 上位SSOT作成完了: `docs/design/ui-ux-primitive-catalog-ssot.yaml`（8 categories / 82 primitives）
-      → 上位SSOT作成完了: `docs/design/abstract-function-primitive-registry-ssot.yaml`（6 categories / 49 functions）
-      → frontend/components/catalog.ts 拡張完了: 82 primitive lineup entries（8カテゴリ）追加、`UI_UX_PRIMITIVE_CATALOG_IDENTITIES` export 追加
-      → docs/system-roadmap.yaml 更新完了: `ui_ux_primitive_catalog_and_abstract_function_registry` エントリ追加
-      → meaning boundary 全件 SSOT に明文化完了（frontend/mutation/calculation/lookup/sql-attention/seed/style-token/yaml-vocab）
-      → Codex follow-up として残る作業（implementation atom ではなく completion bundle 単位）:
-        1. [codex] SSOT reader tests: `docs/design/ui-ux-primitive-catalog-ssot.yaml` / `docs/design/abstract-function-primitive-registry-ssot.yaml` の構造整合テスト追加
-           → 対象: `.agent/tests/` または `backend/tests/` のSSOT読取テスト
-        2. [codex] catalog.ts 全件 subset 検査: `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES` の componentKey 整合性静的テスト
-           → 対象: `frontend/tests/`
-        3. [codex] seed/bootstrap rows: primitive registry 候補の `db/seed_empty.sql` / `db/demo_seed.sql` への初期 bootstrap row 追加（authority ではなく bootstrap として）
-           → 対象: `db/seed_empty.sql`, `db/demo_seed.sql`
-        4. [codex] runtime adapter / renderer 到達性テスト: 新 catalog entry の runtimeConnected 昇格候補について `runtimeComponentAdapter.ts` + `runtimePrimitiveRenderer.ts` の機械的到達性テスト追加
-           → 対象: `frontend/tests/runtimeComponentAdapter.test.ts`, `frontend/tests/runtimePrimitiveRenderer.test.ts`
-        5. [codex] roadmap status 整合: `ui_ux_primitive_catalog_and_abstract_function_registry` の status を `implemented` に上げる条件（React実装 / adapter+renderer到達性 / DB seed bootstrap rows / SSOT reader tests / catalog identity subset static check）
-           → `docs/system-roadmap.yaml` の known_gap_ref を消化した時点で更新
-      → boundary(ssot): search node は hub、display subject は entity を維持し、frontend は topology judgment を持たず candidate / preview / confirm surface に限定する。
-      → boundary(update): inline update は `preview_update_patch` / `validate_candidate` / `apply_confirmed_update` の順で explicit apply し、本体更新と `append_diff_log` の境界を明記する。
-      → boundary(computation): 計算系 primitive/function は即 mutation せず preview → validate → explicit apply を必須にする。
-      → boundary(lookup): 外部 lookup は canonical SSOT にしない。adapter / candidate surface として扱う。
-      → boundary(sql-attention): SQL Attention は registry / primitive を直接 mutate しない。recommendation / ranking は candidate surface に限定。
-      → boundary(seed-role): seed は bootstrap row であり authority ではない。
-      → out_of_scope (引き続き): React 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加。
+- [ ] [ui-ux-catalog][ssot-reader-tests] ui-ux primitive catalog SSOT / abstract function primitive registry SSOT の構造整合テストを追加する
+      → 対象: `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `docs/design/abstract-function-primitive-registry-ssot.yaml` を読むSSOT readerテスト。
 
+- [ ] [ui-ux-catalog][catalog-identity-subset] `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES.componentKey` の全件 subset/equality 静的検査を追加する
+      → 既存CI guard `.agent/tests/check-ui-ux-executable-component-slice.sh` は implemented guard として維持し、全件 subset/equality が未証明な分のみ TODO として扱う。
+
+- [ ] [ui-ux-catalog][seed-bootstrap] `db/seed_empty.sql` / `db/demo_seed.sql` へ primitive registry bootstrap rows を追加する
+      → seed は authority ではなく bootstrap row 境界を維持する。
+
+- [ ] [ui-ux-catalog][promoted-runtime-reachability] promoted primitive 向け runtime adapter / renderer 到達性テストを追加する
+      → 対象: `frontend/tests/runtimeComponentAdapter.test.ts`, `frontend/tests/runtimePrimitiveRenderer.test.ts`。
+
+- [ ] [ui-ux-catalog][roadmap-status] 上記完了後に `docs/system-roadmap.yaml` の `ui_ux_primitive_catalog_and_abstract_function_registry` status/known_gap を実装実態へ整合させる
+      → boundary note（frontendはtopology judgmentを持たず candidate/preview/confirm surface に限定、preview→validate→apply、SQL attentionはcandidate限定）を維持する。
 
 ## TODO dependency map（execution order）
 
@@ -56,22 +45,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ---
 
-## Runtime Recommendation Pipeline
-
-- [x] recommendation_blend を operation 候補にも適用するか判断し、必要なら `candidate_kind="operation"` current row 設計を起票/実装する
-      → 判定: **現時点では非適用**。operation候補は route mutation authority と混同しやすいため、blend は token候補の recommendation surface に限定する。resolver 側は candidate_kind="token" のみ読取。
-      → 対象ファイル候補: `backend/runtime/ContextRouteRecommendationResolver.cs`, `backend/schema/ContextRoutePolicyContracts.cs`, recommendation current row 設計資料。
-
-- [x] seed/demo seed に追加済みの `topology_vector_runtime.recommendation_blend` について、本番運用値を確定し seed以外の反映面（manifest/policy row）を確認する
-      → 確認結果: seed/demo seed は `function_parameters(default_policy)` 行として runtime読取面に接続済み。resolverに追加magic numberは導入しない。運用値は `attention_score_weight=1.0, trend/statistics=0.0, scope_limit=1000` を継続。
-      → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
-
-
 ## UI/UX Primitive Executable Component Slice
 
-- [ ] #264 完了反映: runtime/catalog/factory 境界は implemented 扱いとして維持する
-      → pipeline 意味は `runtime adapter(normalize + factory reachability check) -> runtime registry(kind lookup) -> runtime factory(kind -> constructor/component interface) -> concrete component`。
-      → `runtimeConnected:true` は factory/constructor reachable を意味する。#264 all green（runtime semantics audit 含む）を根拠に partial へ戻さない。
+boundary note: runtime/catalog/factory 境界は implemented 維持（`runtime adapter -> runtime registry -> runtime factory -> component`、`runtimeConnected:true` は factory/constructor reachable を意味）。
 
 - [ ] representative UI/UX executable component slice を completion bundle 単位で昇格する
       → 単位は `componentKind selector -> RuntimeComponentFactory interface registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> static/type/deno による interface reachability check` を 1 bundle とする。
@@ -105,17 +81,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Admin Visual Layout Builder (Issue #89)
 
-- [ ] [issue-89][db-runtime] styleTokenId / responsiveRuleId の本体DB schema・runtime保存導線を実装する
-      → 今回は css dictionary wiring/CI/UI selector まで。styleTokenId/responsiveRuleId の本体保存は未実装。
+- [ ] [issue-89][db-runtime] styleTokenId / responsiveRuleId / layout tensor の DB schema・runtime保存導線を実装する
+      → layout tensor schema と `layoutId` / `styleTokenId` / `responsiveRuleId` 永続化導線を統合して実装する。
 
-- [ ] [issue-89][ui] mouse-driven layout editor 本体を実装する
-      → 今回は selector 候補表示と token ref draft shape まで。drag/drop editor は未着手。
+- [ ] [issue-89][ui] mouse-driven layout editor / drag-drop UI island を実装する
+      → selector候補表示のみで止めず、layout editor 本体の mouse 操作 UI を実装する。
 
-- [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
-      → 依存関係: Issue #86（frontend_ui_component_system）は完了済み。着手可能。
-      → 対象責務: layout tensor schema + drag/drop UI island 実装。
-      → 対象ファイル: `db/ui_topology_tables.sql`, `frontend/islands/`, `docs/registrar-admin-ui-specification.md`。
-      → 詳細:
-        - LayoutBuilderSection は ui-builder.tsx に文書化済みだが UI 実装（drag/drop）は未着手。
-        - `layoutId` / `styleTokenId` / `responsiveRuleId` の DB schema 未追加。
-      → 完了条件: `layout_tensor_and_variable_css_boundaries_are_defined` / `layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB` / `frontend_adapter_is_a_stable_projection_surface`（詳細は `docs/system-roadmap.yaml` の `admin_visual_layout_builder.completion_condition` 参照）。
+## Component Operation Event Log PostgreSQL Integration
+
+- [ ] [integration-test][pr-220] component_operation_event_log の PostgreSQL 実体 integration test を追加する
+      → backend endpoint / repository boundary tests は実装済み。残りは real PostgreSQL-backed component_operation_event_log append/idempotency verification。
