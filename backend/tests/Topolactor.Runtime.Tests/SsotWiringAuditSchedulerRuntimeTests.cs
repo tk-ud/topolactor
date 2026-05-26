@@ -20,6 +20,19 @@ namespace Topolactor.Runtime.Tests;
 //   - Canonical route preserves topology identity (StructureMapId/PackageId/SchemaId).
 public class SsotWiringAuditSchedulerRuntimeTests
 {
+    [Fact]
+    public void SchedulerRuntimeLane_CompletionConditionKeys_MustExistInRoadmapSsot()
+    {
+        var keys = SsotYamlContractReader.RoadmapCompletionConditions("system_ci.scheduler_runtime");
+
+        Assert.NotEmpty(keys);
+        Assert.Contains("canonical_route_scheduler_dispatcher_executor_preserves_topology_ids", keys);
+        Assert.Contains("queue_overflow_returns_explicit_scheduler_queue_full_not_silent_drop", keys);
+        Assert.Contains("unknown_runtime_destination_returns_explicit_error_no_fallthrough", keys);
+        Assert.Contains("missing_manifest_returns_manifest_not_found_no_default_fallback", keys);
+        Assert.Contains("registered_handler_selected_by_manifest_runtime_destination", keys);
+    }
+
     // ─── Canonical route: full stack ID continuity ────────────────────────────
 
     [Fact]
@@ -45,6 +58,7 @@ public class SsotWiringAuditSchedulerRuntimeTests
             Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission?.StructureMapId);
             Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission?.PackageId);
             Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission?.SchemaId);
+            Assert.NotEmpty(response.Emission?.ComponentIds ?? []);
         }
         finally
         {
@@ -73,7 +87,12 @@ public class SsotWiringAuditSchedulerRuntimeTests
 
             Assert.True(response.Success);
             Assert.Empty(response.Errors);
-            Assert.NotEmpty(response.Emission?.JumpEvents ?? []);
+            var jumpEvents = response.Emission?.JumpEvents ?? [];
+            Assert.NotEmpty(jumpEvents);
+            Assert.Contains(jumpEvents, e => e.Scope == "hub" && e.Reason == "route_missing");
+            Assert.Contains(jumpEvents, e => e.Scope == "topology" && e.Reason == "route_missing");
+            Assert.DoesNotContain(response.Errors, e =>
+                e.Code is "PACKAGE_RESOLVE_FAILED" or "SCHEMA_RESOLVE_FAILED" or "RUNTIME_DESTINATION_UNKNOWN");
         }
         finally
         {
