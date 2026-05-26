@@ -105,6 +105,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] component slice reachability check bundle を追加する
       → catalog -> componentKind -> factory/interface reachability を static check / TypeScript check / Deno test で検証する（個別 UI behavior test 必須化はしない）。
+      → primitive に付随する abstract function / calculation / validation / external lookup / mutation boundary / patch generation / layout collision は UI component ではなく runtime function boundary として unit test 対象にする。
 
 - [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
       → 誤昇格防止。未実装 primitive を implemented 扱いしない。

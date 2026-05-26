@@ -830,6 +830,7 @@ system_roadmap_ssot:
         Next executable slice promotion is governed by catalog -> componentKind -> runtime factory/interface reachability invariants,
         sourcePath promotion, factory registration continuity, and static/type/deno checks.
         runtimeConnected:true is limited to factory/constructor reachable and is not a claim of per-component UI behavior verification.
+        Unit-test scope is runtime function boundaries (abstract function/calculation/validation/external lookup/mutation boundary/patch generation/layout collision), not component rendering behavior.
       completion_condition:
         - representative_ui_ux_slice_has_componentKind_selector_and_factory_interface_registration
         - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
@@ -838,6 +839,7 @@ system_roadmap_ssot:
         - mutation_boundary_primitives_remain_preview_validate_explicit_confirm_only
         - sql_attention_primitives_remain_observation_or_candidate_surface_only
         - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
+        - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
         - UI/UX primitive React/Preact component implementation not started
         - catalog entries still sourcePath: CATALOG_SSOT for unimplemented primitives
