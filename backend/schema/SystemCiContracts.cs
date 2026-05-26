@@ -27,6 +27,13 @@ public enum SystemCiStatus
 /// <summary>
 /// Classification axis for a finding reason.
 /// This is separate from SystemCiStatus (overall severity aggregation axis).
+/// MissingRequired: a required identity field is absent (e.g. hub_id, candidate_id).
+/// NotCovered: an observation or evidence is absent (e.g. HasEvidence=false, empty event log).
+/// RuntimeFailure: a computation invariant is violated (e.g. non-finite score/EMA).
+/// ProhibitedValue: a value or operation is explicitly prohibited by SSOT.
+/// InvalidShape: data is present but in an invalid format or shape.
+/// UndefinedImplementationValue: a SSOT-undefined target or relation is referenced.
+/// Pass: reserved — no finding classification (used as default for no-finding semantics).
 /// </summary>
 public enum SystemCiFindingClassification
 {
@@ -43,6 +50,7 @@ public enum SystemCiFindingClassification
 /// A single finding from a system CI inspection check.
 /// CheckName: hardcoded invariant identifier (e.g. "ATTENTION_SCORE_NOT_FINITE").
 /// TargetId: optional record identifier for the specific failing row.
+/// Classification: SSOT-defined category of the invariant violated.
 /// </summary>
 public record SystemCiFinding(
     string CheckName,

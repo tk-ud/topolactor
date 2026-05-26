@@ -995,6 +995,11 @@ system_roadmap_ssot:
         - hub_id_empty_produces_blocking_finding
         - unknown_target_throws_not_silent_fallback
         - inspected_at_and_inspection_kind_are_set_in_every_result
+        - hub_id_empty_classification_is_missing_required
+        - candidate_id_empty_classification_is_missing_required
+        - has_evidence_false_classification_is_not_covered
+        - non_finite_score_ema_classification_is_runtime_failure
+        - ssot_reader_connects_hub_registration_completion_conditions
       known_gap_ref:
         - hub_current attractor_vector_json population remains follow-up (SQLA-3)
 
