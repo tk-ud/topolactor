@@ -1,10 +1,13 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   constructProjection,
   type ProjectionDefinition,
 } from "../runtime/projectionConstructor.ts";
 import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
-import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
+import {
+  COMPONENT_CATALOG_ENTRIES,
+  UI_UX_PRIMITIVE_CATALOG_IDENTITIES,
+} from "../components/catalog.ts";
 
 Deno.test("runtimeComponentAdapter: missing componentId is explicit error", () => {
   const result = adaptComponentDataHub({
@@ -96,6 +99,29 @@ Deno.test("runtimeComponentAdapter: runtimeConnected catalog entries are factory
       result.ok,
       true,
       `runtimeConnected catalog kind must be adapter-supported: ${entry.componentKind}`,
+    );
+  }
+});
+
+Deno.test("runtimeComponentAdapter: UI_UX_PRIMITIVE_CATALOG_IDENTITIES (runtimeConnected:false) return unsupported-kind error", () => {
+  for (const identity of UI_UX_PRIMITIVE_CATALOG_IDENTITIES) {
+    const result = adaptComponentDataHub({
+      componentId: "c",
+      componentKind: identity.componentKind,
+      props: {},
+      eventBinding: {},
+    });
+    assertEquals(
+      result.ok,
+      false,
+      `catalog-only primitive must not be factory-reachable: ${identity.componentKind}`,
+    );
+    assert(
+      !result.ok &&
+        result.error.startsWith(
+          "RUNTIME_COMPONENT_ADAPTER_UNSUPPORTED_COMPONENT_KIND",
+        ),
+      `expected UNSUPPORTED_COMPONENT_KIND error for catalog-only: ${identity.componentKind}`,
     );
   }
 });

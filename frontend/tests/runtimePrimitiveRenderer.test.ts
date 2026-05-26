@@ -1,6 +1,10 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
 import { __testOnly } from "../runtime/frontendScheduler.ts";
+import {
+  COMPONENT_CATALOG_ENTRIES,
+  UI_UX_PRIMITIVE_CATALOG_IDENTITIES,
+} from "../components/catalog.ts";
 
 Deno.test("runtimePrimitiveRenderer: invalid eventBinding is explicit error", () => {
   const result = renderRuntimeComponent({
@@ -182,4 +186,50 @@ Deno.test("runtimePrimitiveRenderer: accepts topology envelope props via data/ta
   });
   assertEquals(button.ok, true);
   assertEquals(table.ok, true);
+});
+
+Deno.test("runtimePrimitiveRenderer: runtimeConnected catalog entries are renderer-reachable (interface reachability)", () => {
+  const runtimeConnectedKinds = COMPONENT_CATALOG_ENTRIES
+    .filter((e) => e.runtimeConnected)
+    .map((e) => e.componentKind);
+  const uniqueKinds = [...new Set(runtimeConnectedKinds)];
+  for (const kind of uniqueKinds) {
+    const result = renderRuntimeComponent({
+      componentId: "reach-check",
+      componentType: kind,
+      props: {},
+      eventBinding: {},
+    });
+    assert(
+      result.ok !== false ||
+        (result.ok === false &&
+          !result.error.startsWith(
+            "RUNTIME_PRIMITIVE_RENDERER_UNSUPPORTED_COMPONENT_KIND",
+          )),
+      `runtimeConnected kind must be renderer-reachable (factory registered): ${kind}`,
+    );
+  }
+});
+
+Deno.test("runtimePrimitiveRenderer: UI_UX_PRIMITIVE_CATALOG_IDENTITIES (runtimeConnected:false) return unsupported-kind error", () => {
+  for (const identity of UI_UX_PRIMITIVE_CATALOG_IDENTITIES) {
+    const result = renderRuntimeComponent({
+      componentId: "c",
+      componentType: identity.componentKind,
+      props: {},
+      eventBinding: {},
+    });
+    assertEquals(
+      result.ok,
+      false,
+      `catalog-only primitive must not be renderer-reachable: ${identity.componentKind}`,
+    );
+    assert(
+      !result.ok &&
+        result.error.startsWith(
+          "RUNTIME_PRIMITIVE_RENDERER_UNSUPPORTED_COMPONENT_KIND",
+        ),
+      `expected UNSUPPORTED_COMPONENT_KIND error for catalog-only: ${identity.componentKind}`,
+    );
+  }
 });
