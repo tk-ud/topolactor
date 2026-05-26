@@ -68,13 +68,31 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Frontend Projection Constructor / Manifest Mapping
 
-- [ ] [projection-constructor][manifest-route] backend/manifest response から ProjectionDefinition / constructor mapping を frontend に供給する route を実装する
-      → `projectionFromEmission` helper は実装済み: `emission.data` → `constructProjection(jsonKeyValue, definition)` 経路は sseLane.test.ts で証明済み。
-      → 残りは backend/manifest response が ProjectionDefinition / constructor_mapping を frontend へ供給する end-to-end route の実装・証明。
+- [ ] [projection-constructor][mapping-source] ProjectionDefinition / constructor mapping の canonical supply source を定義する
+      → 対象: backend manifest response / dispatch response / manifest fetch route のどれを supply source とするか。
+      → frontend が ProjectionDefinition をテスト内・呼び出し側で手渡しするだけの状態を completion としない。
+      → frontend は topology judgment / SQL Attention judgment を持たない。
+      → `projectionFromEmission` helper は実装済みとして扱う。
+
+- [ ] [projection-constructor][response-contract] backend/frontend response contract に ProjectionDefinition / constructor mapping の受け渡し境界を反映する
+      → 対象候補: backend emission / manifest response DTO / frontend `Emission` / `DispatchResponse` / manifest fetch response。
+      → `Emission.data` だけでは constructor mapping supply proof にならない。
+      → 必要なら field 追加、または manifest fetch route を明示する。
+
+- [ ] [projection-constructor][runtime-definition-load] frontend projection runtime が canonical route から ProjectionDefinition を受け取り `setProjectionDefinition` できる経路を実装/証明する
+      → 対象候補: `frontend/runtime/projectionRuntime.ts`, `frontend/runtime/renderEmission.ts`, dispatch/manifest response handling surface。
+      → SSE projection event が来る前に definition が設定される、または未設定時に explicit failure / explicit policy になること。
+      → 現状の `projectionFromEmission(emission, definition)` は caller-supplied definition 前提なので、このTODOを完了扱いにしない。
+
+- [ ] [projection-constructor][end-to-end-proof] manifest response / dispatch response から ProjectionDefinition / constructor mapping を取得し、`projectionFromEmission` / `constructProjection` に到達する end-to-end test を追加する
       → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`
-      → 対象ファイル候補: `frontend/api/dispatch.ts`, `frontend/runtime/renderEmission.ts`, backend emission / manifest response surfaces。
-      → RuntimeTopologyComponentProps envelope / runtime component interface boundary は完了済みとして扱い、未完了に戻さない。
-      → frontend は projection surface のみ。topology meaning judgment / SQL Attention judgment を持たせない。
+      → 現在のように test-local `ProjectionDefinition` を手渡しするだけでは不可。
+      → RuntimeTopologyComponentProps envelope / runtime adapter / runtime factory interface boundary は完了済みとして扱う。
+
+- [ ] [projection-constructor][explicit-missing-definition] ProjectionDefinition / constructor mapping が欠落した場合の explicit error / policy を定義する
+      → silent fallback 禁止。
+      → projection runtime が no definition で skip するだけなら roadmap 上は partial のまま。
+      → error / diagnostic / explicit no-op policy のどれかを SSOT整合で明示する。
 
 ## TODO dependency map（execution order）
 
