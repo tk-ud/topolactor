@@ -3,6 +3,15 @@ import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
 import { Table } from "../components/Table.tsx";
+import { AutoCompleteInput } from "../components/AutoCompleteInput.tsx";
+import { SearchCombobox } from "../components/SearchCombobox.tsx";
+import { CandidateConfidenceBadge } from "../components/CandidateConfidenceBadge.tsx";
+import { InlineEditableField } from "../components/InlineEditableField.tsx";
+import { PatchPreviewPanel } from "../components/PatchPreviewPanel.tsx";
+import { ApplyConfirmDialog } from "../components/ApplyConfirmDialog.tsx";
+import { StyleTokenPicker } from "../components/StyleTokenPicker.tsx";
+import { ThemePreviewPanel } from "../components/ThemePreviewPanel.tsx";
+import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
@@ -242,6 +251,278 @@ function tableFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
+function autoCompleteInputFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (data.value !== undefined && typeof data.value !== "string") {
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_AUTOCOMPLETE_INPUT_PROPS" };
+  }
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  const suggestions = Array.isArray(data.suggestions)
+    ? data.suggestions.filter((s): s is string => typeof s === "string")
+    : [];
+  return {
+    ok: true,
+    node: h(AutoCompleteInput, {
+      value: (data.value as string | undefined) ?? "",
+      suggestions,
+      placeholder: data.placeholder as string | undefined,
+      label: data.label as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (value: string) => {
+        const result = emitBoundEvent(spec, "change", { value });
+        if (!result.ok) throw new Error(result.error);
+      },
+      onSelect: spec.eventBinding.select
+        ? (value: string) => {
+          const result = emitBoundEvent(spec, "select", { value });
+          if (!result.ok) throw new Error(result.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function searchComboboxFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (data.value !== undefined && typeof data.value !== "string") {
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_SEARCH_COMBOBOX_PROPS" };
+  }
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  const rawOptions = Array.isArray(data.options) ? data.options : [];
+  const options = rawOptions
+    .filter((o): o is { label: string; value: string } =>
+      typeof o === "object" && o !== null &&
+      typeof (o as Record<string, unknown>).value === "string"
+    )
+    .map((o) => ({
+      label: typeof o.label === "string" ? o.label : o.value,
+      value: o.value,
+    }));
+  return {
+    ok: true,
+    node: h(SearchCombobox, {
+      value: (data.value as string | undefined) ?? "",
+      options,
+      placeholder: data.placeholder as string | undefined,
+      label: data.label as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (value: string) => {
+        const result = emitBoundEvent(spec, "change", { value });
+        if (!result.ok) throw new Error(result.error);
+      },
+      onSelect: spec.eventBinding.select
+        ? (value: string) => {
+          const result = emitBoundEvent(spec, "select", { value });
+          if (!result.ok) throw new Error(result.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function candidateConfidenceBadgeFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (typeof data.label !== "string") {
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_CANDIDATE_CONFIDENCE_BADGE_PROPS" };
+  }
+  const rawConf = data.confidence;
+  const confidence = rawConf === "high" || rawConf === "medium" || rawConf === "low"
+    ? rawConf
+    : "unknown";
+  const score = typeof data.score === "number" ? data.score : undefined;
+  return {
+    ok: true,
+    node: h(CandidateConfidenceBadge, {
+      label: data.label as string,
+      confidence,
+      score,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function inlineEditableFieldFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (data.value !== undefined && typeof data.value !== "string") {
+    return { ok: false, error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_INLINE_EDITABLE_FIELD_PROPS" };
+  }
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  return {
+    ok: true,
+    node: h(InlineEditableField, {
+      value: (data.value as string | undefined) ?? "",
+      editing: data.editing as boolean | undefined,
+      label: data.label as string | undefined,
+      placeholder: data.placeholder as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (value: string) => {
+        const result = emitBoundEvent(spec, "change", { value });
+        if (!result.ok) throw new Error(result.error);
+      },
+      onToggle: spec.eventBinding.toggle
+        ? (editing: boolean) => {
+          const result = emitBoundEvent(spec, "toggle", { editing });
+          if (!result.ok) throw new Error(result.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function patchPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const rawFields = Array.isArray(data.fields) ? data.fields : [];
+  const fields = rawFields.filter(
+    (f): f is { fieldLabel: string; before: string; after: string } =>
+      typeof f === "object" && f !== null &&
+      typeof (f as Record<string, unknown>).fieldLabel === "string",
+  ).map((f) => ({
+    fieldLabel: f.fieldLabel,
+    before: typeof f.before === "string" ? f.before : "",
+    after: typeof f.after === "string" ? f.after : "",
+  }));
+  return {
+    ok: true,
+    node: h(PatchPreviewPanel, {
+      fields,
+      title: data.title as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function applyConfirmDialogFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const submitCheck = requireBinding(spec, "submit");
+  if (!submitCheck.ok) return submitCheck;
+  const toggleCheck = requireBinding(spec, "toggle");
+  if (!toggleCheck.ok) return toggleCheck;
+  return {
+    ok: true,
+    node: h(ApplyConfirmDialog, {
+      open: data.open as boolean ?? false,
+      title: data.title as string | undefined,
+      description: data.description as string | undefined,
+      confirmLabel: data.confirmLabel as string | undefined,
+      cancelLabel: data.cancelLabel as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onConfirm: () => {
+        const result = emitBoundEvent(spec, "submit", {});
+        if (!result.ok) throw new Error(result.error);
+      },
+      onCancel: () => {
+        const result = emitBoundEvent(spec, "toggle", { open: false });
+        if (!result.ok) throw new Error(result.error);
+      },
+    }),
+  };
+}
+
+function styleTokenPickerFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const bindingCheck = requireBinding(spec, "select");
+  if (!bindingCheck.ok) return bindingCheck;
+  const rawTokens = Array.isArray(data.tokens) ? data.tokens : [];
+  const tokens = rawTokens.filter(
+    (t): t is { key: string; value: string; label?: string } =>
+      typeof t === "object" && t !== null &&
+      typeof (t as Record<string, unknown>).key === "string" &&
+      typeof (t as Record<string, unknown>).value === "string",
+  );
+  return {
+    ok: true,
+    node: h(StyleTokenPicker, {
+      value: data.value as string | undefined,
+      tokens,
+      label: data.label as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: (token) => {
+        const result = emitBoundEvent(spec, "select", { token });
+        if (!result.ok) throw new Error(result.error);
+      },
+    }),
+  };
+}
+
+function themePreviewPanelFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const rawTokens = Array.isArray(data.tokens) ? data.tokens : [];
+  const tokens = rawTokens.filter(
+    (t): t is { key: string; value: string; description?: string } =>
+      typeof t === "object" && t !== null &&
+      typeof (t as Record<string, unknown>).key === "string" &&
+      typeof (t as Record<string, unknown>).value === "string",
+  );
+  return {
+    ok: true,
+    node: h(ThemePreviewPanel, {
+      tokens,
+      title: data.title as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function validationErrorPanelFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const rawErrors = Array.isArray(data.errors) ? data.errors : [];
+  const errors = rawErrors.filter(
+    (e): e is { message: string; field?: string; code?: string } =>
+      typeof e === "object" && e !== null &&
+      typeof (e as Record<string, unknown>).message === "string",
+  );
+  return {
+    ok: true,
+    node: h(ValidationErrorPanel, {
+      errors,
+      title: data.title as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
 export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["action/button"], render: buttonFactory },
   {
@@ -267,5 +548,41 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
       "data_display/list",
     ],
     render: tableFactory,
+  },
+  {
+    componentKinds: ["search_suggest/autocomplete_input"],
+    render: autoCompleteInputFactory,
+  },
+  {
+    componentKinds: ["search_suggest/search_combobox"],
+    render: searchComboboxFactory,
+  },
+  {
+    componentKinds: ["search_suggest/candidate_confidence_badge"],
+    render: candidateConfidenceBadgeFactory,
+  },
+  {
+    componentKinds: ["inline_edit/inline_editable_field"],
+    render: inlineEditableFieldFactory,
+  },
+  {
+    componentKinds: ["inline_edit/patch_preview_panel"],
+    render: patchPreviewPanelFactory,
+  },
+  {
+    componentKinds: ["safety_guard/apply_confirm_dialog"],
+    render: applyConfirmDialogFactory,
+  },
+  {
+    componentKinds: ["design_token/style_token_picker"],
+    render: styleTokenPickerFactory,
+  },
+  {
+    componentKinds: ["design_token/theme_preview_panel"],
+    render: themePreviewPanelFactory,
+  },
+  {
+    componentKinds: ["safety_guard/validation_error_panel"],
+    render: validationErrorPanelFactory,
   },
 ];

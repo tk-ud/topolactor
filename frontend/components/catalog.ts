@@ -161,21 +161,14 @@ export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
 // Upper SSOT: docs/design/ui-ux-primitive-catalog-ssot.yaml
 export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   // Category A: Search / Suggest / Candidate UI
-  {
-    componentKey: "autocomplete_input.primitive",
-    componentKind: "search_suggest/autocomplete_input",
-    sourcePath: CATALOG_SSOT,
-  },
+  // autocomplete_input.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "suggest_input.primitive",
     componentKind: "search_suggest/suggest_input",
     sourcePath: CATALOG_SSOT,
   },
-  {
-    componentKey: "search_combobox.primitive",
-    componentKind: "search_suggest/search_combobox",
-    sourcePath: CATALOG_SSOT,
-  },
+  // search_combobox.primitive promoted to runtimeConnected:true — removed from catalog-only list
+  // candidate_confidence_badge.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "select_import_dialog.primitive",
     componentKind: "search_suggest/select_import_dialog",
@@ -197,11 +190,6 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     sourcePath: CATALOG_SSOT,
   },
   {
-    componentKey: "candidate_confidence_badge.primitive",
-    componentKind: "search_suggest/candidate_confidence_badge",
-    sourcePath: CATALOG_SSOT,
-  },
-  {
     componentKey: "relation_path_preview.primitive",
     componentKind: "search_suggest/relation_path_preview",
     sourcePath: CATALOG_SSOT,
@@ -217,19 +205,11 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     sourcePath: CATALOG_SSOT,
   },
   // Category B: Inline Edit / Preview Update / Audit UI
-  {
-    componentKey: "inline_editable_field.primitive",
-    componentKind: "inline_edit/inline_editable_field",
-    sourcePath: CATALOG_SSOT,
-  },
+  // inline_editable_field.primitive promoted to runtimeConnected:true — removed from catalog-only list
+  // patch_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "inline_editable_jsonb_field.primitive",
     componentKind: "inline_edit/inline_editable_jsonb_field",
-    sourcePath: CATALOG_SSOT,
-  },
-  {
-    componentKey: "patch_preview_panel.primitive",
-    componentKind: "inline_edit/patch_preview_panel",
     sourcePath: CATALOG_SSOT,
   },
   {
@@ -395,11 +375,8 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     componentKind: "design_token/border_radius_editor",
     sourcePath: CATALOG_SSOT,
   },
-  {
-    componentKey: "theme_preview_panel.primitive",
-    componentKind: "design_token/theme_preview_panel",
-    sourcePath: CATALOG_SSOT,
-  },
+  // theme_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
+  // style_token_picker.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "layout_grid_editor.primitive",
     componentKind: "design_token/layout_grid_editor",
@@ -408,11 +385,6 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   {
     componentKey: "responsive_rule_editor.primitive",
     componentKind: "design_token/responsive_rule_editor",
-    sourcePath: CATALOG_SSOT,
-  },
-  {
-    componentKey: "style_token_picker.primitive",
-    componentKind: "design_token/style_token_picker",
     sourcePath: CATALOG_SSOT,
   },
   {
@@ -558,11 +530,7 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     componentKind: "safety_guard/dry_run_result_panel",
     sourcePath: CATALOG_SSOT,
   },
-  {
-    componentKey: "apply_confirm_dialog.primitive",
-    componentKind: "safety_guard/apply_confirm_dialog",
-    sourcePath: CATALOG_SSOT,
-  },
+  // apply_confirm_dialog.primitive promoted to runtimeConnected:true — removed from catalog-only list
   {
     componentKey: "rollback_candidate_panel.primitive",
     componentKind: "safety_guard/rollback_candidate_panel",
@@ -573,11 +541,7 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
     componentKind: "safety_guard/operation_audit_log_panel",
     sourcePath: CATALOG_SSOT,
   },
-  {
-    componentKey: "validation_error_panel.primitive",
-    componentKind: "safety_guard/validation_error_panel",
-    sourcePath: CATALOG_SSOT,
-  },
+  // validation_error_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
 ];
 
 export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
@@ -958,16 +922,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "autocomplete_input.primitive",
     componentKind: "search_suggest/autocomplete_input",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/AutoCompleteInput.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "catalog_definition_only | candidateSurface:true | mutation_boundary:preview_before_apply",
+    notes: "candidateSurface:true | mutation_boundary:preview_before_apply",
   },
   {
     componentKey: "suggest_input.primitive",
@@ -985,7 +948,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "search_combobox.primitive",
     componentKind: "search_suggest/search_combobox",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/SearchCombobox.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
@@ -996,9 +959,9 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "selectable",
       "accepts_design",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | candidateSurface:true",
+    notes: "candidateSurface:true",
   },
   {
     componentKey: "select_import_dialog.primitive",
@@ -1061,15 +1024,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "candidate_confidence_badge.primitive",
     componentKind: "search_suggest/candidate_confidence_badge",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/CandidateConfidenceBadge.tsx",
     componentFamily: "primitive",
     semanticRole: "display",
     visualRole: "badge",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | candidateSurface:true",
+    notes: "candidateSurface:true",
   },
   {
     componentKey: "relation_path_preview.primitive",
@@ -1120,16 +1083,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "inline_editable_field.primitive",
     componentKind: "inline_edit/inline_editable_field",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/InlineEditableField.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "catalog_definition_only | mutation_boundary:preview_validate_explicit_apply",
+    notes: "mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "inline_editable_jsonb_field.primitive",
@@ -1153,15 +1115,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "patch_preview_panel.primitive",
     componentKind: "inline_edit/patch_preview_panel",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/PatchPreviewPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "diagnostic",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | previewOnly:true",
+    notes: "previewOnly:true",
   },
   {
     componentKey: "diff_strike_text.primitive",
@@ -1611,15 +1573,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "theme_preview_panel.primitive",
     componentKind: "design_token/theme_preview_panel",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/ThemePreviewPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "display",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | previewOnly:true | #89 token management",
+    notes: "previewOnly:true | #89 token management",
   },
   {
     componentKey: "layout_grid_editor.primitive",
@@ -1660,15 +1622,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "style_token_picker.primitive",
     componentKind: "design_token/style_token_picker",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/StyleTokenPicker.tsx",
     componentFamily: "primitive",
     semanticRole: "input",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["selectable", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only | candidateSurface:true | #89 token picker",
+    notes: "candidateSurface:true | #89 token picker",
   },
   {
     componentKey: "css_variable_preview.primitive",
@@ -2057,16 +2019,15 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "apply_confirm_dialog.primitive",
     componentKind: "safety_guard/apply_confirm_dialog",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/ApplyConfirmDialog.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "modal",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_actions", "admin_only"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "catalog_definition_only | mutation_boundary:explicit_confirm_required",
+    notes: "mutation_boundary:explicit_confirm_required",
   },
   {
     componentKey: "rollback_candidate_panel.primitive",
@@ -2102,7 +2063,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "validation_error_panel.primitive",
     componentKind: "safety_guard/validation_error_panel",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/ValidationErrorPanel.tsx",
     componentFamily: "primitive",
     semanticRole: "validation",
     visualRole: "panel",
@@ -2112,9 +2073,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "displays_backend_result",
       "accepts_design",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
-    notes: "catalog_definition_only",
   },
 ];
 
