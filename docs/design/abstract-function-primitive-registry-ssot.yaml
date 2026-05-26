@@ -574,12 +574,105 @@ category_f_operation_safety:
       ui_primitive_consumers:
         - RollbackCandidatePanel
 
+
+# =============================================================================
+# Category G: Basic Calculation Operators
+# =============================================================================
+
+category_g_basic_calculation_operators:
+  label: Basic Calculation Operators
+  boundary: preview_candidate_surface_only
+  note: >
+    Minimal operator vocabulary for formula execution surfaces
+    (calculate_entity_field_value / preview_computed_field / validate_formula_contract).
+    No free-form eval or implicit expression execution is allowed.
+    Operator outputs are preview/candidate only and never mutate DB directly.
+  functions:
+    add:
+      signature: "add(a, b) -> number"
+      description: Add two numeric values
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    subtract:
+      signature: "subtract(a, b) -> number"
+      description: Subtract b from a
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    multiply:
+      signature: "multiply(a, b) -> number"
+      description: Multiply two numeric values
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    divide:
+      signature: "divide(a, b, zero_division_policy) -> number | validation_error"
+      description: Divide a by b with explicit zero-division behavior
+      output_kind: preview_only
+      mutation_boundary: readonly
+      zero_division_policy:
+        required: true
+        allowed:
+          - return_validation_error
+          - return_zero
+          - return_null
+
+    percentage:
+      signature: "percentage(numerator, denominator, zero_division_policy) -> number | validation_error"
+      description: Compute percentage with explicit zero-division behavior
+      output_kind: preview_only
+      mutation_boundary: readonly
+      zero_division_policy:
+        required: true
+        allowed:
+          - return_validation_error
+          - return_zero
+          - return_null
+
+    round:
+      signature: "round(value, digits) -> number"
+      description: Round value to the specified decimal digits
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    floor:
+      signature: "floor(value) -> number"
+      description: Return the largest integer less than or equal to value
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    ceil:
+      signature: "ceil(value) -> number"
+      description: Return the smallest integer greater than or equal to value
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    min:
+      signature: "min(values[]) -> number"
+      description: Return the minimum value from a numeric array
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    max:
+      signature: "max(values[]) -> number"
+      description: Return the maximum value from a numeric array
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+    clamp:
+      signature: "clamp(value, min, max) -> number"
+      description: Clamp value within the inclusive [min, max] range
+      output_kind: preview_only
+      mutation_boundary: readonly
+
+
 # =============================================================================
 # Summary
 # =============================================================================
 
 registry_summary:
-  total_categories: 6
+  total_categories: 7
   categories:
     - A: search_suggest (9 functions)
     - B: normalize_lookup_import (7 functions)
@@ -587,7 +680,8 @@ registry_summary:
     - D: calculation_topology (12 functions)
     - E: layout_design_token (7 functions)
     - F: operation_safety (7 functions)
-  total_functions: 49
+    - G: basic_calculation_operators (11 functions)
+  total_functions: 60
   sql_attention_boundary_note: >
     Functions marked sql_attention_boundary=observation_surface_only or
     recommendation_candidate_surface_only must not mutate registry, route,
