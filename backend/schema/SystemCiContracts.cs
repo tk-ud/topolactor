@@ -49,6 +49,8 @@ public record SystemCiFinding(
     SystemCiStatus Status,
     string Detail,
     string? TargetId = null,
+    // Pass classification is reserved for no-finding/pass-result semantics.
+    // Gap/Blocking findings must use an explicit non-Pass classification.
     SystemCiFindingClassification Classification = SystemCiFindingClassification.Pass
 );
 
