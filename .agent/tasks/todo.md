@@ -66,6 +66,34 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → boundary(seed-role): seed は bootstrap row であり authority ではない。
       → out_of_scope (引き続き): React 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加。
 
+## Frontend Projection Constructor / Manifest Mapping
+
+- [ ] [projection-constructor][mapping-source] ProjectionDefinition / constructor mapping の canonical supply source を定義する
+      → 対象: backend manifest response / dispatch response / manifest fetch route のどれを supply source とするか。
+      → frontend が ProjectionDefinition をテスト内・呼び出し側で手渡しするだけの状態を completion としない。
+      → frontend は topology judgment / SQL Attention judgment を持たない。
+      → `projectionFromEmission` helper は実装済みとして扱う。
+
+- [ ] [projection-constructor][response-contract] backend/frontend response contract に ProjectionDefinition / constructor mapping の受け渡し境界を反映する
+      → 対象候補: backend emission / manifest response DTO / frontend `Emission` / `DispatchResponse` / manifest fetch response。
+      → `Emission.data` だけでは constructor mapping supply proof にならない。
+      → 必要なら field 追加、または manifest fetch route を明示する。
+
+- [ ] [projection-constructor][runtime-definition-load] frontend projection runtime が canonical route から ProjectionDefinition を受け取り `setProjectionDefinition` できる経路を実装/証明する
+      → 対象候補: `frontend/runtime/projectionRuntime.ts`, `frontend/runtime/renderEmission.ts`, dispatch/manifest response handling surface。
+      → SSE projection event が来る前に definition が設定される、または未設定時に explicit failure / explicit policy になること。
+      → 現状の `projectionFromEmission(emission, definition)` は caller-supplied definition 前提なので、このTODOを完了扱いにしない。
+
+- [ ] [projection-constructor][end-to-end-proof] manifest response / dispatch response から ProjectionDefinition / constructor mapping を取得し、`projectionFromEmission` / `constructProjection` に到達する end-to-end test を追加する
+      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`
+      → 現在のように test-local `ProjectionDefinition` を手渡しするだけでは不可。
+      → RuntimeTopologyComponentProps envelope / runtime adapter / runtime factory interface boundary は完了済みとして扱う。
+
+- [ ] [projection-constructor][explicit-missing-definition] ProjectionDefinition / constructor mapping が欠落した場合の explicit error / policy を定義する
+      → silent fallback 禁止。
+      → projection runtime が no definition で skip するだけなら roadmap 上は partial のまま。
+      → error / diagnostic / explicit no-op policy のどれかを SSOT整合で明示する。
+
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
@@ -112,42 +140,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] roadmap status を実装実態に合わせて更新する
       → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。
-
-## Frontend Projection Constructor / Manifest Mapping
-
-- [ ] [projection-constructor][manifest-route] manifest response constructor mapping の end-to-end route proof を実装/検証する
-      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`。
-      → 対象: backend dispatch/emission response から frontend projection constructor mapping / ProjectionDefinition / constructProjection へ到達する経路。
-      → 対象ファイル候補: `frontend/api/dispatch.ts`, `frontend/runtime/renderEmission.ts`, `frontend/runtime/projectionConstructor.ts`, backend emission / manifest response surfaces。
-      → RuntimeTopologyComponentProps envelope / runtime component interface boundary は完了済みとして扱い、未完了に戻さない。
-
-## Frontend SSE Receiver
-
-- [ ] [frontend-sse-receiver][scheduler-hook] SSE receiver が frontend scheduler へ hook trigger として投入する経路を実装する
-      → 完了条件: `sse_receiver_feeds_frontend_scheduler_as_hook_trigger`。
-      → 対象: `frontend/runtime/sseReceiver.ts`, `frontend/runtime/frontendScheduler.ts`。
-
-- [ ] [frontend-sse-receiver][identity] receiver が projection event identity を構造化して保持する
-      → 完了条件: `receiver_preserves_projection_event_identity`。
-      → 対象: `frontend/runtime/sseReceiver.ts`, projection event payload type。
-
-- [ ] [frontend-sse-receiver][error-state] backend SSE error states を明示的に扱う
-      → 完了条件: `backend_sse_error_states_are_explicit`。
-      → 対象: `frontend/runtime/sseReceiver.ts`。
-
-## Frontend SSE Dispatcher
-
-- [ ] [frontend-sse-dispatcher][projection-runtime] dispatcher が projection events を projection runtime へ route する
-      → 完了条件: `dispatcher_routes_projection_events_into_projection_runtime`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`, `frontend/runtime/renderEmission.ts`。
-
-- [ ] [frontend-sse-dispatcher][unhandled-policy] unhandled event policy を明示化する
-      → 完了条件: `unhandled_event_policy_is_explicit`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`。
-
-- [ ] [frontend-sse-dispatcher][identity] dispatcher が projection event identity を保持して渡す
-      → 完了条件: `projection_event_identity_is_preserved`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`, projection event payload type。
 
 ## Abstract Function / Heavy Primitive Function Boundary
 

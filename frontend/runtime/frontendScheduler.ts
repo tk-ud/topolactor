@@ -203,6 +203,24 @@ export async function queueClientCommand(
 }
 
 
+/**
+ * Enqueues a projection hook trigger from the SSE receiver into the SSE dispatcher.
+ *
+ * Bridge in the sse_projection_lane:
+ *   sseReceiver → enqueueProjectionHookTrigger (scheduler hook) → sseDispatcher → projectionRuntime
+ *
+ * Identity is preserved in trigger.data (contains manifest_id/table_id/table_registry_id).
+ * The dispatcher routes by trigger.eventType to the registered projection runtime handler.
+ *
+ * Completion condition: sse_receiver_feeds_frontend_scheduler_as_hook_trigger
+ */
+export function enqueueProjectionHookTrigger(
+  trigger: { eventType: string; data: string },
+  dispatcher: { route: (eventType: string, data: string) => void },
+): void {
+  dispatcher.route(trigger.eventType, trigger.data);
+}
+
 export const __testOnly = {
   resetQueue(): void {
     queue = [];

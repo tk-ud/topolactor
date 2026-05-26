@@ -11,6 +11,9 @@ namespace Topolactor.Endpoint;
 /// </summary>
 public class DispatchEndpoint
 {
+    private static readonly HashSet<string> _allowedTriggerKinds =
+        new(StringComparer.OrdinalIgnoreCase) { "client", "hook", "cron" };
+
     private readonly ILogger<DispatchEndpoint> _logger;
     private readonly RuntimeTimelineScheduler _scheduler;
 
@@ -37,6 +40,19 @@ public class DispatchEndpoint
                 Success: false,
                 Emission: null,
                 Errors: [new("REQUEST_NULL", "Request must not be null.")]);
+        }
+
+        if (request.TriggerKind is not null && !_allowedTriggerKinds.Contains(request.TriggerKind))
+        {
+            _logger.LogWarning(
+                "Invalid trigger_kind '{TriggerKind}' at dispatch boundary. Allowed: client, hook, cron.",
+                request.TriggerKind);
+            return new EndpointResponseDto(
+                Success: false,
+                Emission: null,
+                Errors: [new ValidationError(
+                    "TRIGGER_KIND_INVALID",
+                    $"trigger_kind '{request.TriggerKind}' is not valid. Allowed values: client, hook, cron.")]);
         }
 
         _logger.LogDebug(
