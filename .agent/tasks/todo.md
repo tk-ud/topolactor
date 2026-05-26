@@ -86,26 +86,75 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Executable Component Slice
 
-- [ ] 代表primitiveの React/Preact 実体コンポーネントを実装する
-      → 初回 representative slice: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
+- [ ] #264 完了反映: runtime/catalog/factory 境界は implemented 扱いとして維持する
+      → pipeline 意味は `runtime adapter(normalize + factory reachability check) -> runtime registry(kind lookup) -> runtime factory(kind -> constructor/component interface) -> concrete component`。
+      → `runtimeConnected:true` は factory/constructor reachable を意味する。#264 all green（runtime semantics audit 含む）を根拠に partial へ戻さない。
 
-- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ更新する
-      → 実装が未着手の primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時にのみ昇格する。
+- [ ] representative UI/UX executable component slice を completion bundle 単位で昇格する
+      → 単位は `componentKind selector -> RuntimeComponentFactory interface registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> static/type/deno による interface reachability check` を 1 bundle とする。
 
-- [ ] 実装済み primitive の runtimeConnected を true に昇格する
-      → runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。catalog_definition_only は false 維持。
+- [ ] UI/UX primitive catalog の実行可能昇格を段階実装する
+      → 初回 representative slice は interface/thin-wrapper 中心で実施し、個別 UI behavior test 必須化ではなく catalog 昇格 invariant を主軸に進める。
+      → representative names（昇格対象一覧）: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-- [ ] runtimePrimitiveRenderer / runtimeComponentAdapter から componentKey 到達可能にする
-      → 実行可能 slice は renderer/adapter 経路到達を必須にし、単独ファイル実装のみで完了扱いしない。
+- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ昇格する
+      → 未実装 primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時のみ昇格する。
 
-- [ ] 到達性テストを追加する
-      → catalog -> renderer/adapter reachability を CI 補助線として検証する。
+- [ ] 実装済み primitive の runtimeConnected を false から true へ昇格する
+      → factory registration + runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。
+
+- [ ] component slice reachability check bundle を追加する
+      → catalog -> componentKind -> factory/interface reachability を static check / TypeScript check / Deno test で検証する（個別 UI behavior test 必須化はしない）。
+      → primitive に付随する abstract function / calculation / validation / external lookup / mutation boundary / patch generation / layout collision は UI component ではなく runtime function boundary として unit test 対象にする。
 
 - [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
-      → 誤昇格防止。registrationRequired:false は alias_maintained のみに限定する。
+      → 誤昇格防止。未実装 primitive を implemented 扱いしない。
 
 - [ ] roadmap status を実装実態に合わせて更新する
       → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。
+
+## Frontend Projection Constructor / Manifest Mapping
+
+- [ ] [projection-constructor][manifest-route] manifest response constructor mapping の end-to-end route proof を実装/検証する
+      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`。
+      → 対象: backend dispatch/emission response から frontend projection constructor mapping / ProjectionDefinition / constructProjection へ到達する経路。
+      → 対象ファイル候補: `frontend/api/dispatch.ts`, `frontend/runtime/renderEmission.ts`, `frontend/runtime/projectionConstructor.ts`, backend emission / manifest response surfaces。
+      → RuntimeTopologyComponentProps envelope / runtime component interface boundary は完了済みとして扱い、未完了に戻さない。
+
+## Frontend SSE Receiver
+
+- [ ] [frontend-sse-receiver][scheduler-hook] SSE receiver が frontend scheduler へ hook trigger として投入する経路を実装する
+      → 完了条件: `sse_receiver_feeds_frontend_scheduler_as_hook_trigger`。
+      → 対象: `frontend/runtime/sseReceiver.ts`, `frontend/runtime/frontendScheduler.ts`。
+
+- [ ] [frontend-sse-receiver][identity] receiver が projection event identity を構造化して保持する
+      → 完了条件: `receiver_preserves_projection_event_identity`。
+      → 対象: `frontend/runtime/sseReceiver.ts`, projection event payload type。
+
+- [ ] [frontend-sse-receiver][error-state] backend SSE error states を明示的に扱う
+      → 完了条件: `backend_sse_error_states_are_explicit`。
+      → 対象: `frontend/runtime/sseReceiver.ts`。
+
+## Frontend SSE Dispatcher
+
+- [ ] [frontend-sse-dispatcher][projection-runtime] dispatcher が projection events を projection runtime へ route する
+      → 完了条件: `dispatcher_routes_projection_events_into_projection_runtime`。
+      → 対象: `frontend/runtime/sseDispatcher.ts`, `frontend/runtime/renderEmission.ts`。
+
+- [ ] [frontend-sse-dispatcher][unhandled-policy] unhandled event policy を明示化する
+      → 完了条件: `unhandled_event_policy_is_explicit`。
+      → 対象: `frontend/runtime/sseDispatcher.ts`。
+
+- [ ] [frontend-sse-dispatcher][identity] dispatcher が projection event identity を保持して渡す
+      → 完了条件: `projection_event_identity_is_preserved`。
+      → 対象: `frontend/runtime/sseDispatcher.ts`, projection event payload type。
+
+## Abstract Function / Heavy Primitive Function Boundary
+
+- [ ] [abstract-function][unit-tests] function-backed primitive が使う heavy function boundary に unit tests を追加する
+      → 対象: calculation / validation / patch generation / external lookup / layout collision / mutation boundary / ranking explanation。
+      → component rendering の単体テストではなく、付加処理関数の unit test として扱う。
+      → promoted primitive がこれらの function を invoke する場合、UI component behavior test ではなく function boundary test を追加する。
 
 ## Admin Visual Layout Builder (Issue #89)
 
