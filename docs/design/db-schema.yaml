@@ -582,6 +582,10 @@ db_schema:
       category: ui_topology
       file: db/ui_topology_tables.sql
       role: component_styling_definition
+      css_dictionary_boundary:
+        vocabulary_authority: docs/design/css-dictionary-ssot.yaml
+        db_authority: design_or_layout_stores_cssTokenRefs_and_promoted_design_state_not_css_dictionary
+        non_goal: no_css_token_registry_table_for_static_vocabulary
       key_columns:
         - name: design_id
           type: uuid
@@ -591,7 +595,7 @@ db_schema:
         - name: design
           type: jsonb
           role: styling_with_soft_component_ref
-          shape: "{componentId: uuid, classname: string, tailwind: string}"
+          shape: "{componentId: uuid, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}}"
           note: componentId_is_soft_ref_for_editor_filtering_not_fk
 
     packages:

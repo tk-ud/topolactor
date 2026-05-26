@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../../components/catalog.ts";
+import { CSS_DICTIONARY_TOKENS } from "../../runtime/cssDictionary.ts";
 
 /**
  * /admin/ui-builder — UI component system and layout builder.
@@ -295,6 +296,31 @@ function BucketSection(): JSX.Element {
   );
 }
 
+
+function CssTokenSelectorSection(): JSX.Element {
+  const [componentScope, setComponentScope] = useState("Button");
+  const candidates = CSS_DICTIONARY_TOKENS.filter((t) => t.componentScope.includes(componentScope));
+  return (
+    <section style={{ marginBottom: "24px" }}>
+      <h2>CSS Dictionary Selector (Issue #89 wiring)</h2>
+      <p style={{ color: "#555", fontSize: "0.9rem" }}>
+        Selector candidates are projected from <code>docs/design/css-dictionary-ssot.yaml</code> derived artifact.
+        Drafts should hold <code>cssTokenRefs</code> / <code>responsiveTokenRefs</code>; raw CSS is legacy-only.
+      </p>
+      <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+        <label>component_scope</label>
+        <select value={componentScope} onChange={(e) => setComponentScope((e.target as HTMLSelectElement).value)}>
+          {["Button","Input","Table","Card"].map((k) => <option value={k}>{k}</option>)}
+        </select>
+      </div>
+      <table cellPadding="6" style={{ borderCollapse: "collapse", width: "100%", fontFamily: "monospace" }}>
+        <thead><tr>{["token_key","category","component_scope","semantic_role","property"].map((h)=><th style={{textAlign:"left",borderBottom:"2px solid #ccc",background:"#f5f5f5"}}>{h}</th>)}</tr></thead>
+        <tbody>{candidates.map((t)=><tr><td><code>{t.tokenKey}</code></td><td>{t.category}</td><td>{t.componentScope.join(",")}</td><td>{t.semanticRole}</td><td>{t.property}</td></tr>)}</tbody>
+      </table>
+    </section>
+  );
+}
+
 function LayoutBuilderSection(): JSX.Element {
   return (
     <section style={{ marginBottom: "24px" }}>
@@ -339,6 +365,7 @@ export default function UiBuilderAdmin(): JSX.Element {
 
       <PrimitiveCatalog />
       <BucketSection />
+      <CssTokenSelectorSection />
       <LayoutBuilderSection />
     </main>
   );

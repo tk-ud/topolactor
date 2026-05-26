@@ -118,3 +118,10 @@ export type ComponentCatalogClassification = {
 };
 
 export type ComponentCatalogEntry = ComponentCatalogClassification;
+
+
+export type DesignTokenRefDraft = {
+  cssTokenRefs?: string[];
+  responsiveTokenRefs?: Record<string, string[]>;
+  rawCssFallbackReason?: "legacy_allowed" | "no_dictionary_token_exists_yet" | "follow_up_token_addition";
+};

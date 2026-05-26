@@ -288,6 +288,25 @@ mapping:
       - .agent/protocols/completion.md
       - .agent/protocols/completion-summary.md
 
+
+  - work_type: css_dictionary_static_vocabulary
+    change_surfaces:
+      - docs/design/css-dictionary-ssot.yaml
+      - admin ui style selector
+      - ui builder style token candidate projection
+      - css token ref draft shape
+      - css dictionary ci check
+    required_docs:
+      - docs/design/css-dictionary-ssot.yaml
+      - docs/design/ci-contract-ssot.yaml
+      - docs/design/db-schema.yaml
+    supporting_docs:
+      - docs/registrar-admin-ui-specification.md
+      - docs/system-roadmap.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit

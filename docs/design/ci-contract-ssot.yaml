@@ -62,6 +62,13 @@ ci_contract_ssot:
       role:
         - 実装側の離散値が SSOT YAML の allowed vocabulary / allowed shape / canonical relation に含まれることを検証する
         - test側 expected list の再定義ではなく、SSOT loader / contract reader 経由で検査する
+
+    - id: ci.component.css_dictionary_vocabulary_assertion
+      grep_marker: CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION
+      role:
+        - docs/design/css-dictionary-ssot.yaml の token/property/value_ref 語彙整合を検査する
+        - css property allowlist / blocked property policy / token_key_rule.regex を検証する
+        - style selector が辞書語彙に接続される前提を CI で fail-close する
     - id: ci.component.ci_attention_lane
       grep_marker: CI_ATTENTION
       role: system event / implementation diff / runtime state / SSOT contract を structured CI status vector に射影する operational checker lane
@@ -107,6 +114,7 @@ ci_contract_ssot:
     - tests は expected vocabulary を secondary SSOT として再定義してはならない
     - implementation-only vocabulary は drift/GAP として扱う
     - YAML static vocabulary is the source of truth for system-side status/kind/type/runtime discrete values
+    - CSS static vocabulary membership is asserted from docs/design/css-dictionary-ssot.yaml (token key / property allowlist / value_ref resolution)
     - DB seed is an implementation/concrete instance surface, not vocabulary authority
     - CI validates seed discrete values as a subset of YAML static vocabulary
     - 新しい discrete value 追加は SSOT update を先行必須とする

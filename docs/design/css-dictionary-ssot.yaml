@@ -348,9 +348,8 @@ css_dictionary_ssot:
       Run repository structure check last.
 
   integration_status:
-    ui_binding: not_wired
-    ci_check: not_wired
+    ui_binding: wired
+    ci_check: wired
     db_token_ref_validation: not_wired
     note: >-
-      This SSOT file defines the dictionary contract only. UI binding, CI script wiring,
-      and DB validation are follow-up implementation surfaces.
+      UI binding and CI check are wired. DB token-ref validation in persistence/runtime remains follow-up.
