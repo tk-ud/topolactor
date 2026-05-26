@@ -23,20 +23,15 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
-- [ ] [ui-ux-catalog][ssot-reader-tests] ui-ux primitive catalog SSOT / abstract function primitive registry SSOT の構造整合テストを追加する
-      → 対象: `docs/design/ui-ux-primitive-catalog-ssot.yaml`, `docs/design/abstract-function-primitive-registry-ssot.yaml` を読むSSOT readerテスト。
-
-- [ ] [ui-ux-catalog][catalog-identity-subset] `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES.componentKey` の全件 subset/equality 静的検査を追加する
-      → 既存CI guard `.agent/tests/check-ui-ux-executable-component-slice.sh` は implemented guard として維持し、全件 subset/equality が未証明な分のみ TODO として扱う。
-
-- [ ] [ui-ux-catalog][seed-bootstrap] `db/seed_empty.sql` / `db/demo_seed.sql` へ primitive registry bootstrap rows を追加する
-      → seed は authority ではなく bootstrap row 境界を維持する。
-
-- [ ] [ui-ux-catalog][promoted-runtime-reachability] promoted primitive 向け runtime adapter / renderer 到達性テストを追加する
-      → 対象: `frontend/tests/runtimeComponentAdapter.test.ts`, `frontend/tests/runtimePrimitiveRenderer.test.ts`。
-
-- [ ] [ui-ux-catalog][roadmap-status] 上記完了後に `docs/system-roadmap.yaml` の `ui_ux_primitive_catalog_and_abstract_function_registry` status/known_gap を実装実態へ整合させる
-      → boundary note（frontendはtopology judgmentを持たず candidate/preview/confirm surface に限定、preview→validate→apply、SQL attentionはcandidate限定）を維持する。
+- [ ] [ui-ux-catalog][completion-bundle] UI/UX primitive catalog / abstract function primitive registry の completion bundle を完了する
+      → completion conditions（独立TODOへ分割しない）:
+        - SSOT reader tests（`docs/design/ui-ux-primitive-catalog-ssot.yaml` / `docs/design/abstract-function-primitive-registry-ssot.yaml`）
+        - `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES.componentKey` の全件 subset/equality static check
+        - primitive registry bootstrap rows を `db/seed_empty.sql` / `db/demo_seed.sql` に追加（seed は authority ではなく bootstrap 境界）
+        - promoted primitive 向け runtime adapter / renderer reachability tests
+        - 上記完了後の `docs/system-roadmap.yaml` status / known_gap 整合更新
+      → 既存CI guard `.agent/tests/check-ui-ux-executable-component-slice.sh` は implemented guard として維持し、未証明分のみ completion condition として消化する。
+      → boundary note（frontend は topology judgment を持たず candidate/preview/confirm surface に限定、preview→validate→apply、SQL attention は candidate surface 限定）を維持する。
 
 ## TODO dependency map（execution order）
 
@@ -81,13 +76,14 @@ boundary note: runtime/catalog/factory 境界は implemented 維持（`runtime a
 
 ## Admin Visual Layout Builder (Issue #89)
 
-- [ ] [issue-89][db-runtime] styleTokenId / responsiveRuleId / layout tensor の DB schema・runtime保存導線を実装する
-      → layout tensor schema と `layoutId` / `styleTokenId` / `responsiveRuleId` 永続化導線を統合して実装する。
+- [ ] [issue-89][db-runtime] layout tensor + css token reference persistence の DB/runtime保存導線を実装する
+      → CSS dictionary SSOT に沿って `cssTokenRefs` / `responsiveTokenRefs`（または同等の token reference persistence）を保存境界として実装する。
+      → `styleTokenId` / `responsiveRuleId` の列名・IDモデルや専用registryが必要な場合は、先にSSOT更新を完了条件に含める。
 
 - [ ] [issue-89][ui] mouse-driven layout editor / drag-drop UI island を実装する
       → selector候補表示のみで止めず、layout editor 本体の mouse 操作 UI を実装する。
 
-## Component Operation Event Log PostgreSQL Integration
+## Component Operation Event Log PostgreSQL Integration (non-blocking hardening carry-over)
 
-- [ ] [integration-test][pr-220] component_operation_event_log の PostgreSQL 実体 integration test を追加する
+- [ ] [integration-test][pr-220][non-blocking-hardening] component_operation_event_log の PostgreSQL 実体 integration test を追加する
       → backend endpoint / repository boundary tests は実装済み。残りは real PostgreSQL-backed component_operation_event_log append/idempotency verification。
