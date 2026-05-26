@@ -25,6 +25,21 @@ public enum SystemCiStatus
 }
 
 /// <summary>
+/// Classification axis for a finding reason.
+/// This is separate from SystemCiStatus (overall severity aggregation axis).
+/// </summary>
+public enum SystemCiFindingClassification
+{
+    Pass,
+    MissingRequired,
+    UndefinedImplementationValue,
+    InvalidShape,
+    ProhibitedValue,
+    NotCovered,
+    RuntimeFailure
+}
+
+/// <summary>
 /// A single finding from a system CI inspection check.
 /// CheckName: hardcoded invariant identifier (e.g. "ATTENTION_SCORE_NOT_FINITE").
 /// TargetId: optional record identifier for the specific failing row.
@@ -33,7 +48,8 @@ public record SystemCiFinding(
     string CheckName,
     SystemCiStatus Status,
     string Detail,
-    string? TargetId = null
+    string? TargetId = null,
+    SystemCiFindingClassification Classification = SystemCiFindingClassification.Pass
 );
 
 /// <summary>

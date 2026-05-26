@@ -485,6 +485,97 @@ public class SystemOperationCiRuntimeTests
             f => Assert.Equal(SystemCiStatus.Gap, f.Status));
     }
 
+    [Fact]
+    public void SystemCiFindingClassification_Enum_CoversPhase1Vocabulary()
+    {
+        var expected = new[]
+        {
+            SystemCiFindingClassification.Pass,
+            SystemCiFindingClassification.MissingRequired,
+            SystemCiFindingClassification.UndefinedImplementationValue,
+            SystemCiFindingClassification.InvalidShape,
+            SystemCiFindingClassification.ProhibitedValue,
+            SystemCiFindingClassification.NotCovered,
+            SystemCiFindingClassification.RuntimeFailure
+        };
+
+        Assert.Equal(expected, Enum.GetValues<SystemCiFindingClassification>());
+    }
+
+    [Fact]
+    public void InspectHubAttentionAfterUpdate_HubIdEmpty_ClassificationIsMissingRequired()
+    {
+        var runtime = CreateRuntime(new ContextRouteRepository(
+            NullLogger<ContextRouteRepository>.Instance, "dummy"));
+        var record = MakeValidHubAttentionRecord() with { HubId = Guid.Empty };
+
+        var result = runtime.InspectHubAttentionAfterUpdate(record, "[]", "[]");
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "HUB_ID_EMPTY"));
+        Assert.Equal(SystemCiFindingClassification.MissingRequired, finding.Classification);
+        Assert.Equal(SystemCiStatus.Blocking, result.OverallStatus);
+    }
+
+    [Fact]
+    public void InspectHubAttentionAfterUpdate_EvidenceJsonNotParseable_ClassificationIsInvalidShape()
+    {
+        var runtime = CreateRuntime(new ContextRouteRepository(
+            NullLogger<ContextRouteRepository>.Instance, "dummy"));
+
+        var result = runtime.InspectHubAttentionAfterUpdate(
+            MakeValidHubAttentionRecord(), "{", "[]");
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "EVIDENCE_JSON_NOT_PARSEABLE"));
+        Assert.Equal(SystemCiFindingClassification.InvalidShape, finding.Classification);
+        Assert.Equal(SystemCiStatus.Gap, result.OverallStatus);
+    }
+
+    [Fact]
+    public void InspectEvidenceIntegrity_EmptyEvidenceWithOperation_ClassificationIsNotCovered()
+    {
+        var runtime = CreateRuntime(new ContextRouteRepository(
+            NullLogger<ContextRouteRepository>.Instance, "dummy"));
+
+        var result = runtime.InspectEvidenceIntegrity("search", []);
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "EVIDENCE_EMPTY_WITH_OPERATION"));
+        Assert.Equal(SystemCiFindingClassification.NotCovered, finding.Classification);
+        Assert.Equal(SystemCiStatus.Gap, result.OverallStatus);
+    }
+
+    [Fact]
+    public void InspectEvidenceIntegrity_NegativeContribution_ClassificationIsProhibitedValue()
+    {
+        var runtime = CreateRuntime(new ContextRouteRepository(
+            NullLogger<ContextRouteRepository>.Instance, "dummy"));
+        var evidence = new[]
+        {
+            new TransitionKeyEvidence("token", "id-1", "Token 1", -0.1f, "test negative")
+        };
+
+        var result = runtime.InspectEvidenceIntegrity("search", evidence);
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "EVIDENCE_NEGATIVE_CONTRIBUTION"));
+        Assert.Equal(SystemCiFindingClassification.ProhibitedValue, finding.Classification);
+        Assert.Equal(SystemCiStatus.Blocking, result.OverallStatus);
+    }
+
+    [Fact]
+    public async Task InspectHubAttentionContinuityAsync_NonFiniteScore_ClassificationIsRuntimeFailure()
+    {
+        var summaries = new[]
+        {
+            new HubAttentionCiSummary(Guid.NewGuid(), Guid.NewGuid(), 1000, float.NaN, 0.1f, 0.1f, true, DateTimeOffset.UtcNow)
+        };
+        var runtime = CreateRuntime(new StubHubAttentionCiRepository(summaries, eventCount: 1));
+
+        var result = await runtime.InspectHubAttentionContinuityAsync();
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "CRON_ATTENTION_SCORE_NOT_FINITE"));
+        Assert.Equal(SystemCiFindingClassification.RuntimeFailure, finding.Classification);
+        Assert.Equal(SystemCiStatus.Blocking, result.OverallStatus);
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private static HubAttentionCurrentRecord MakeValidHubAttentionRecord() =>

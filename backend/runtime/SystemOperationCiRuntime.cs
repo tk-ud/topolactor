@@ -105,7 +105,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "HUB_ID_EMPTY",
                 SystemCiStatus.Blocking,
                 "hub_id is Guid.Empty — hub identity is required for hub attention.",
-                record.HubId.ToString()
+                record.HubId.ToString(),
+                SystemCiFindingClassification.MissingRequired
             ));
         }
 
@@ -116,7 +117,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "CANDIDATE_ID_EMPTY",
                 SystemCiStatus.Blocking,
                 "candidate_id is Guid.Empty — candidate identity is required.",
-                record.CandidateId.ToString()
+                record.CandidateId.ToString(),
+                SystemCiFindingClassification.MissingRequired
             ));
         }
 
@@ -128,7 +130,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 SystemCiStatus.Blocking,
                 $"attention_score={record.AttentionScore.Value} is not finite — " +
                 "indicates a scoring computation failure.",
-                $"hub={record.HubId} candidate={record.CandidateId}"
+                $"hub={record.HubId} candidate={record.CandidateId}",
+                SystemCiFindingClassification.RuntimeFailure
             ));
         }
 
@@ -139,7 +142,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "EMA_FAST_NOT_FINITE",
                 SystemCiStatus.Blocking,
                 $"ema_fast={record.EmaFast.Value} is not finite — EMA computation failure.",
-                $"hub={record.HubId} candidate={record.CandidateId}"
+                $"hub={record.HubId} candidate={record.CandidateId}",
+                SystemCiFindingClassification.RuntimeFailure
             ));
         }
 
@@ -150,7 +154,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "EMA_SLOW_NOT_FINITE",
                 SystemCiStatus.Blocking,
                 $"ema_slow={record.EmaSlow.Value} is not finite — EMA computation failure.",
-                $"hub={record.HubId} candidate={record.CandidateId}"
+                $"hub={record.HubId} candidate={record.CandidateId}",
+                SystemCiFindingClassification.RuntimeFailure
             ));
         }
 
@@ -161,7 +166,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "EVIDENCE_JSON_NOT_PARSEABLE",
                 SystemCiStatus.Gap,
                 "evidence_json is not a valid JSON array — evidence integrity cannot be verified.",
-                $"hub={record.HubId}"
+                $"hub={record.HubId}",
+                SystemCiFindingClassification.InvalidShape
             ));
         }
 
@@ -172,7 +178,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "MLP_FEATURE_JSON_NOT_PARSEABLE",
                 SystemCiStatus.Gap,
                 "mlp_feature_json is not a valid JSON array — MLP feature integrity cannot be verified.",
-                $"hub={record.HubId}"
+                $"hub={record.HubId}",
+                SystemCiFindingClassification.InvalidShape
             ));
         }
 
@@ -205,7 +212,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 $"Evidence is empty but currentOperation='{currentOperation}' is present. " +
                 "Evidence should explain why this operation contributes to the transition key. " +
                 "Check TransitionKeyEvidencePolicy.Enabled and policy resolution.",
-                currentOperation
+                currentOperation,
+                SystemCiFindingClassification.NotCovered
             ));
         }
 
@@ -220,7 +228,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     $"Evidence entry key_kind='{entry.KeyKind}' key_id='{entry.KeyId}' " +
                     $"has contribution_score={entry.ContributionScore:F4} — must be >= 0. " +
                     "Negative contribution scores are an invariant violation.",
-                    entry.KeyId
+                    entry.KeyId,
+                    SystemCiFindingClassification.ProhibitedValue
                 ));
             }
         }
@@ -253,7 +262,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Blocking,
                     $"feedback_kind='{ev.FeedbackKind}' has delta_applied=0 — " +
                     "delta must be non-zero. Check FeedbackWeightUpdatePolicy values.",
-                    $"hub={ev.HubId} candidate={ev.CandidateId}"
+                    $"hub={ev.HubId} candidate={ev.CandidateId}",
+                    SystemCiFindingClassification.ProhibitedValue
                 ));
                 continue;
             }
@@ -277,7 +287,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Blocking,
                     $"feedback_kind='{ev.FeedbackKind}' delta_applied={ev.DeltaApplied:F4}: {signViolation}. " +
                     "Delta sign must match feedback kind — this is a system invariant.",
-                    $"hub={ev.HubId} candidate={ev.CandidateId}"
+                    $"hub={ev.HubId} candidate={ev.CandidateId}",
+                    SystemCiFindingClassification.ProhibitedValue
                 ));
             }
         }
@@ -323,7 +334,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Blocking,
                     $"attention_score={s.AttentionScore.Value} is not finite for " +
                     $"hub={s.HubId} candidate={s.CandidateId} scope={s.ScopeLimit}.",
-                    $"hub={s.HubId} candidate={s.CandidateId}"
+                    $"hub={s.HubId} candidate={s.CandidateId}",
+                    SystemCiFindingClassification.RuntimeFailure
                 ));
             }
 
@@ -334,7 +346,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Blocking,
                     $"ema_fast={s.EmaFast.Value} is not finite for " +
                     $"hub={s.HubId} candidate={s.CandidateId}.",
-                    $"hub={s.HubId} candidate={s.CandidateId}"
+                    $"hub={s.HubId} candidate={s.CandidateId}",
+                    SystemCiFindingClassification.RuntimeFailure
                 ));
             }
 
@@ -345,7 +358,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Blocking,
                     $"ema_slow={s.EmaSlow.Value} is not finite for " +
                     $"hub={s.HubId} candidate={s.CandidateId}.",
-                    $"hub={s.HubId} candidate={s.CandidateId}"
+                    $"hub={s.HubId} candidate={s.CandidateId}",
+                    SystemCiFindingClassification.RuntimeFailure
                 ));
             }
 
@@ -356,7 +370,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                     SystemCiStatus.Gap,
                     $"evidence_json is empty for hub={s.HubId} candidate={s.CandidateId} scope={s.ScopeLimit}. " +
                     "Hub attention record has no transition key evidence.",
-                    $"hub={s.HubId} candidate={s.CandidateId}"
+                    $"hub={s.HubId} candidate={s.CandidateId}",
+                    SystemCiFindingClassification.NotCovered
                 ));
             }
         }
@@ -402,7 +417,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 "but context_event has 0 rows and context_hub_feedback_event has 0 rows. " +
                 "Materialized current cannot be rebuilt from any append-only event source. " +
                 "Verify that context_event append is wired correctly before hub attention upsert.",
-                null
+                null,
+                SystemCiFindingClassification.NotCovered
             ));
         }
 
@@ -449,7 +465,8 @@ public class SystemOperationCiRuntime : ISystemCiDiagnosticRunner
                 $"{summary.UnreferencedTokenCount} of {summary.TotalActiveTokens} active tokens " +
                 "in context_token_registry are not referenced by any hub attention record. " +
                 "Orphaned tokens do not participate in hub attention scoring.",
-                null
+                null,
+                SystemCiFindingClassification.MissingRequired
             ));
         }
 
