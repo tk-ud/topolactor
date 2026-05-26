@@ -1120,13 +1120,18 @@ system_roadmap_ssot:
         primitive lineup entries across 8 categories: search/suggest, inline edit/audit,
         table/list/view, kanban/drag-drop, design token, calculation/topology,
         external lookup, and safety/guard.
-        Runtime/catalog/factory boundary semantics are closed by PR #264 (all green): runtime adapter normalize + factory reachability check, runtime registry kind lookup, runtime factory kind -> constructor/component interface. runtimeConnected:true now means factory/constructor reachable. Catalog entries that are still unimplemented primitives remain runtimeConnected:false (catalog_definition_only).
+        Runtime/catalog/factory boundary semantics are closed (all green): runtime adapter normalize + factory reachability check, runtime registry kind lookup, runtime factory kind -> constructor/component interface. runtimeConnected:true now means factory/constructor reachable. Catalog entries that are still unimplemented primitives remain runtimeConnected:false (catalog_definition_only).
         Mutation boundaries, external lookup boundaries, SQL Attention boundaries,
         seed role boundaries, and style token boundaries are formally documented in SSOT.
+        Completion bundle: SSOT reader tests (ssotReaderCatalog.test.ts), catalog subset/equality static checks (catalogSubsetCheck.test.ts), DB seed bootstrap rows (seed_empty.sql + demo_seed.sql, 82 entries), and runtime adapter/renderer reachability tests added. catalog-only primitives confirmed factory-unreachable; runtimeConnected:true entries confirmed factory+renderer-reachable.
       files:
         - docs/design/ui-ux-primitive-catalog-ssot.yaml
         - docs/design/abstract-function-primitive-registry-ssot.yaml
         - frontend/components/catalog.ts
+        - frontend/tests/ssotReaderCatalog.test.ts
+        - frontend/tests/catalogSubsetCheck.test.ts
+        - db/seed_empty.sql
+        - db/demo_seed.sql
       completion_condition:
         - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
         - abstract_function_primitive_registry_ssot_defines_6_categories_with_contract
@@ -1135,10 +1140,8 @@ system_roadmap_ssot:
         - implemented_promotion_requires_react_components_runtime_adapter_renderer_db_seed_rows_ssot_reader_tests_and_catalog_subset_static_checks
       known_gap_ref:
         - React implementation of new primitives pending (code_only_drift catalog entries have no component file)
-        - runtimeConnected true promotion for each primitive still requires factory registration + catalog sourcePath promotion + interface reachability proof (static/type/deno check boundary)
-        - DB seed bootstrap rows for primitive registries not yet written
-        - SSOT reader tests for new SSOT files not yet written
-        - roadmap status can be raised to implemented only after completion_condition bundle is fully satisfied
+        - runtimeConnected true promotion for each primitive still requires factory registration + catalog sourcePath promotion + interface reachability proof; all 82 UI/UX primitives remain runtimeConnected:false until promoted
+        - roadmap status can be raised to implemented only when React components are implemented and runtimeConnected:true promotion bundle is complete for representative slice
 
     external_connector_contract:
       status: not_started

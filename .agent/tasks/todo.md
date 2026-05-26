@@ -23,16 +23,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
-- [ ] [ui-ux-catalog][completion-bundle] UI/UX primitive catalog / abstract function primitive registry の completion bundle を完了する
-      → completion conditions（独立TODOへ分割しない）:
-        - SSOT reader tests（`docs/design/ui-ux-primitive-catalog-ssot.yaml` / `docs/design/abstract-function-primitive-registry-ssot.yaml`）
-        - `UI_UX_PRIMITIVE_CATALOG_IDENTITIES` と `COMPONENT_CATALOG_ENTRIES.componentKey` の全件 subset/equality static check
-        - primitive registry bootstrap rows を `db/seed_empty.sql` / `db/demo_seed.sql` に追加（seed は authority ではなく bootstrap 境界）
-        - promoted primitive 向け runtime adapter / renderer reachability tests
-        - 上記完了後の `docs/system-roadmap.yaml` status / known_gap 整合更新
-      → 既存CI guard `.agent/tests/check-ui-ux-executable-component-slice.sh` は implemented guard として維持し、未証明分のみ completion condition として消化する。
-      → boundary note（frontend は topology judgment を持たず candidate/preview/confirm surface に限定、preview→validate→apply、SQL attention は candidate surface 限定）を維持する。
-
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
