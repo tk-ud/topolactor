@@ -11,10 +11,12 @@ ok(){ echo "OK: $1"; }
 [ -f "$FILE" ] || { echo "FAIL: missing $FILE" >&2; exit 1; }
 ok "css dictionary file exists"
 
-python3 - "$FILE" <<'PY'
+python3 - "$FILE" "$REPO_ROOT/frontend/runtime/cssDictionary.ts" <<'PY'
 import re,sys
 p=sys.argv[1]
+ts=sys.argv[2]
 lines=open(p,encoding='utf-8').read().splitlines()
+ts_text=open(ts,encoding='utf-8').read()
 
 in_allow=False; in_scales=False; in_tokens=False; in_blocked=False; in_status=False
 allow=set(); scales=set(); blocked=set(); tokens=[]; statuses={}
@@ -84,6 +86,70 @@ if dup: errors.append('duplicate token keys: ' + ', '.join(sorted(set(dup))))
 
 for key in ('ui_binding','ci_check','db_token_ref_validation'):
     if key not in statuses: errors.append(f'integration_status missing: {key}')
+
+prev=''
+
+# projection drift check: docs/design/css-dictionary-ssot.yaml -> frontend/runtime/cssDictionary.ts
+yaml_proj=[]
+for t,prop,vref in tokens:
+    pass
+
+# re-parse YAML for projection fields
+in_tokens=False
+cur=None
+proj={}
+in_component_scope=False
+for ln in lines:
+    if re.match(r'^  tokens:\s*$',ln):
+        in_tokens=True
+        continue
+    if in_tokens and re.match(r'^  [a-z_]+:\s*$',ln):
+        in_tokens=False
+    if not in_tokens:
+        continue
+    m=re.match(r'^    ([a-z0-9._-]+):\s*$',ln)
+    if m:
+        cur=m.group(1)
+        proj[cur]={"componentScope":[]}
+        in_component_scope=False
+        continue
+    if not cur:
+        continue
+    m=re.match(r'^      category:\s+(.+)$',ln)
+    if m: proj[cur]["category"]=m.group(1).strip(); in_component_scope=False; continue
+    m=re.match(r'^      property:\s+(.+)$',ln)
+    if m: proj[cur]["property"]=m.group(1).strip(); in_component_scope=False; continue
+    m=re.match(r'^      semantic_role:\s+(.+)$',ln)
+    if m: proj[cur]["semanticRole"]=m.group(1).strip(); in_component_scope=False; continue
+    if re.match(r'^      component_scope:\s*$',ln):
+        in_component_scope=True
+        continue
+    m=re.match(r'^        -\s+(.+)$',ln)
+    if m and in_component_scope:
+        proj[cur]["componentScope"].append(m.group(1).strip())
+        continue
+    if re.match(r'^      [a-z_]+:\s*',ln):
+        in_component_scope=False
+
+ts_entries={}
+for m in re.finditer(r'\{\s*tokenKey:\s*"([^"]+)"\s*,\s*category:\s*"([^"]+)"\s*,\s*property:\s*"([^"]+)"\s*,\s*componentScope:\s*\[([^\]]*)\]\s*,\s*semanticRole:\s*"([^"]+)"\s*\}', ts_text):
+    key,cat,prop,scopes,role=m.groups()
+    scope=[x.strip().strip('"') for x in scopes.split(',') if x.strip()]
+    ts_entries[key]={"category":cat,"property":prop,"componentScope":scope,"semanticRole":role}
+
+for k,v in proj.items():
+    if k not in ts_entries:
+        errors.append(f'projection drift: missing token in cssDictionary.ts: {k}')
+        continue
+    tv=ts_entries[k]
+    for field in ("category","property","semanticRole"):
+        if v.get(field)!=tv.get(field):
+            errors.append(f'projection drift: {k} field {field} yaml={v.get(field)} ts={tv.get(field)}')
+    if sorted(v.get("componentScope",[]))!=sorted(tv.get("componentScope",[])):
+        errors.append(f'projection drift: {k} componentScope yaml={v.get("componentScope",[])} ts={tv.get("componentScope",[])}')
+for k in ts_entries:
+    if k not in proj:
+        errors.append(f'projection drift: extra token in cssDictionary.ts: {k}')
 
 if errors:
     print('CSS dictionary check failed:')

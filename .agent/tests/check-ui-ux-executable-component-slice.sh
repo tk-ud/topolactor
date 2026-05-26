@@ -10,6 +10,24 @@ FAIL=0
 fail(){ echo "FAIL: $1" >&2; FAIL=$((FAIL+1)); }
 ok(){ echo "OK: $1"; }
 
+if ! command -v rg >/dev/null 2>&1; then
+  rg() {
+    local opts=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        -n|-q|-s|-i|-v) opts+=("$1"); shift ;;
+        -P|-U) shift ;;
+        --) shift; break ;;
+        -*) shift ;;
+        *) break ;;
+      esac
+    done
+    local pattern="${1:-}"
+    [ $# -gt 0 ] && shift
+    grep -E "${opts[@]}" -- "$pattern" "$@"
+  }
+fi
+
 rg -n "frontend\.ui_ux_executable_component_slice:" "$ROADMAP" >/dev/null || fail "roadmap entry missing: frontend.ui_ux_executable_component_slice"
 rg -n "## UI/UX Primitive Executable Component Slice" "$TODO_FILE" >/dev/null || fail "todo bundle missing"
 rg -n "UI_UX_PRIMITIVE_CATALOG_IDENTITIES" "$CATALOG" >/dev/null || fail "catalog constant missing: UI_UX_PRIMITIVE_CATALOG_IDENTITIES"
