@@ -77,6 +77,8 @@ export { DuplicateMergeCandidatePanel } from "./DuplicateMergeCandidatePanel.tsx
 export type { DuplicateMergeCandidatePanelProps, DuplicateMergeCandidate } from "./DuplicateMergeCandidatePanel.tsx";
 export { SchemaPromotionCandidatePanel } from "./SchemaPromotionCandidatePanel.tsx";
 export type { SchemaPromotionCandidatePanelProps, SchemaPromotionCandidate } from "./SchemaPromotionCandidatePanel.tsx";
+export { SelectImportDialog } from "./SelectImportDialog.tsx";
+export type { SelectImportDialogProps, SelectImportDialogCandidate } from "./SelectImportDialog.tsx";
 
 // inline_edit components
 export { InlineEditableJsonbField } from "./InlineEditableJsonbField.tsx";

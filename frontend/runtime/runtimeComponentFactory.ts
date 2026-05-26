@@ -3,6 +3,7 @@ import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
 import { Table } from "../components/Table.tsx";
+import { SelectImportDialog } from "../components/SelectImportDialog.tsx";
 import { AutoCompleteInput } from "../components/AutoCompleteInput.tsx";
 import { SearchCombobox } from "../components/SearchCombobox.tsx";
 import { CandidateConfidenceBadge } from "../components/CandidateConfidenceBadge.tsx";
@@ -756,6 +757,49 @@ function schemaPromotionCandidatePanelFactory(spec: RuntimeComponentSpec): Rende
           if (!r.ok) throw new Error(r.error);
         }
         : undefined,
+    }),
+  };
+}
+
+function selectImportDialogFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const submitCheck = requireBinding(spec, "submit");
+  if (!submitCheck.ok) return submitCheck;
+  const toggleCheck = requireBinding(spec, "toggle");
+  if (!toggleCheck.ok) return toggleCheck;
+  const rawCandidates = Array.isArray(data.candidates) ? data.candidates : [];
+  const candidates = rawCandidates.filter(
+    (c): c is { label: string; value: string; description?: string } =>
+      typeof c === "object" && c !== null &&
+      typeof (c as Record<string, unknown>).label === "string" &&
+      typeof (c as Record<string, unknown>).value === "string",
+  );
+  return {
+    ok: true,
+    node: h(SelectImportDialog, {
+      open: Boolean(data.open),
+      title: data.title as string | undefined,
+      candidates,
+      selectedValue: data.selectedValue as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: spec.eventBinding.select
+        ? (value: string) => {
+          const r = emitBoundEvent(spec, "select", { value });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : undefined,
+      onSubmit: () => {
+        const r = emitBoundEvent(spec, "submit", {});
+        if (!r.ok) throw new Error(r.error);
+      },
+      onCancel: () => {
+        const r = emitBoundEvent(spec, "toggle", { open: false });
+        if (!r.ok) throw new Error(r.error);
+      },
     }),
   };
 }
@@ -1739,6 +1783,7 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["search_suggest/relation_path_preview"], render: relationPathPreviewFactory },
   { componentKinds: ["search_suggest/field_resolver_inspector"], render: fieldResolverInspectorFactory },
   { componentKinds: ["search_suggest/schema_promotion_candidate_panel"], render: schemaPromotionCandidatePanelFactory },
+  { componentKinds: ["search_suggest/select_import_dialog"], render: selectImportDialogFactory },
   { componentKinds: ["inline_edit/inline_editable_jsonb_field"], render: inlineEditableJsonbFieldFactory },
   { componentKinds: ["inline_edit/diff_strike_text"], render: diffStrikeTextFactory },
   { componentKinds: ["inline_edit/audit_diff_drawer"], render: auditDiffDrawerFactory },

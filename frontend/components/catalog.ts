@@ -164,11 +164,7 @@ export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
   // autocomplete_input.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // search_combobox.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // candidate_confidence_badge.primitive promoted to runtimeConnected:true — removed from catalog-only list
-  {
-    componentKey: "select_import_dialog.primitive",
-    componentKind: "search_suggest/select_import_dialog",
-    sourcePath: CATALOG_SSOT,
-  },
+  // select_import_dialog.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // Category B: Inline Edit / Preview Update / Audit UI
   // inline_editable_field.primitive promoted to runtimeConnected:true — removed from catalog-only list
   // patch_preview_panel.primitive promoted to runtimeConnected:true — removed from catalog-only list
@@ -761,16 +757,21 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   {
     componentKey: "select_import_dialog.primitive",
     componentKind: "search_suggest/select_import_dialog",
-    sourcePath: CATALOG_SSOT,
+    sourcePath: "frontend/components/SelectImportDialog.tsx",
     componentFamily: "primitive",
     semanticRole: "admin_operation",
     visualRole: "modal",
     lifecycleStatus: "code_only_drift",
-    capabilityTags: ["accepts_children", "accepts_actions", "admin_only"],
-    runtimeConnected: false,
+    capabilityTags: [
+      "selectable",
+      "emits_event",
+      "requires_event_binding",
+      "accepts_actions",
+      "admin_only",
+    ],
+    runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "catalog_definition_only | candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "relation_candidate_picker.primitive",
