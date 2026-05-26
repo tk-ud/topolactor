@@ -120,18 +120,18 @@ public class ComponentEventAppendIntegrationTests
 
 
     [Fact]
-    public async Task AppendBoundary_ActorMismatch_ReturnsExplicitError_NotSpoofable()
+    public async Task AppendBoundary_AuthenticatedSubjectPayloadMismatch_ReturnsExplicitError_NotSpoofable()
     {
         var endpoint = CreateEndpoint();
         var req = new ComponentEventAppendRequestDto([
-            new ComponentOperationEventDto("cmp-spoof", "pkg-s", null, null, "click", new(), "attacker", "2026-05-26T00:00:00.000Z", "idem-spoof")
+            new ComponentOperationEventDto("cmp-spoof", "pkg-s", null, null, "click", new Dictionary<string, object?> { ["authenticatedSubject"] = "attacker-sub" }, "OperationPanel", "2026-05-26T00:00:00.000Z", "idem-spoof")
         ]);
 
         var res = await endpoint.HandleAsync(req, "trusted-subject", CancellationToken.None);
 
         Assert.False(res.Success);
         Assert.NotNull(res.Errors);
-        Assert.Contains(res.Errors!, e => e.Code == "COMPONENT_EVENT_ACTOR_MISMATCH");
+        Assert.Contains(res.Errors!, e => e.Code == "COMPONENT_EVENT_AUTH_SUBJECT_MISMATCH");
     }
 
     [Fact]

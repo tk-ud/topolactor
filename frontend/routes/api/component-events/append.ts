@@ -8,9 +8,12 @@ export const handler: Handlers = {
     }
     try {
       const body = await req.text();
+      const authHeader = req.headers.get("Authorization");
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (authHeader) headers.Authorization = authHeader;
       const response = await fetch(`${backendUrl}/component-events/append`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body,
       });
       const json: unknown = await response.json();

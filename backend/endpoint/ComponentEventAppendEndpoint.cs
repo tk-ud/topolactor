@@ -42,10 +42,10 @@ public class ComponentEventAppendEndpoint
             if (!DateTimeOffset.TryParse(e.OccurredAt, out var occurredAt))
                 return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_OCCURRED_AT_INVALID", "occurred_at must be ISO datetime")]);
 
-            // Auth boundary hardening: actor/source must match authenticated JWT subject.
-            // This prevents external callers from spoofing arbitrary actor/source identity.
-            if (!string.Equals(e.ActorOrSource, authenticatedSubject, StringComparison.Ordinal))
-                return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_ACTOR_MISMATCH", "actor_or_source must match authenticated subject")]);
+            var payload = e.Payload is null ? new Dictionary<string, object?>() : new Dictionary<string, object?>(e.Payload);
+            if (payload.TryGetValue("authenticatedSubject", out var incomingSub) && incomingSub is string incomingSubString && !string.Equals(incomingSubString, authenticatedSubject, StringComparison.Ordinal))
+                return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_AUTH_SUBJECT_MISMATCH", "authenticatedSubject payload field must match authenticated subject")]);
+            payload["authenticatedSubject"] = authenticatedSubject;
 
             var appended = await _repo.AppendComponentOperationEventLogAsync(new ComponentOperationEventLogRecord(
                 ComponentId: e.ComponentId!,
@@ -53,7 +53,7 @@ public class ComponentEventAppendEndpoint
                 LayoutId: e.LayoutId,
                 WiringId: e.WiringId,
                 EventType: e.EventType!,
-                PayloadJson: JsonSerializer.Serialize(e.Payload ?? new Dictionary<string, object?>()),
+                PayloadJson: JsonSerializer.Serialize(payload),
                 ActorOrSource: e.ActorOrSource!,
                 OccurredAt: occurredAt,
                 IdempotencyKey: e.IdempotencyKey!), ct);
