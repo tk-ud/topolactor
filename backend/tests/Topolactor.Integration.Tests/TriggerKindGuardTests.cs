@@ -23,11 +23,49 @@ public class TriggerKindGuardTests
     private static DispatchEndpoint CreateEndpoint(RuntimeTimelineScheduler scheduler) =>
         new(NullLogger<DispatchEndpoint>.Instance, scheduler);
 
+    /// <summary>
+    /// Builds a minimal RuntimeTimelineScheduler for trigger_kind guard tests.
+    /// Uses dev/demo bypass (manifestRepository: null) with AlwaysSucceedRuntime as
+    /// the topology_transform_runtime handler. This is sufficient for guard boundary
+    /// tests that only verify the presence or absence of TRIGGER_KIND_INVALID.
+    /// </summary>
     private static RuntimeTimelineScheduler CreateScheduler()
     {
+        var alwaysSucceed = new AlwaysSucceedRuntime();
+        var handlers = new Dictionary<string, IDispatchableRuntime>
+        {
+            ["topology_transform_runtime"] = alwaysSucceed,
+            ["admin_runtime"] = alwaysSucceed,
+            ["sse_projection_runtime"] = alwaysSucceed,
+        };
+
         var topologyRepo = new TopologyRepository(
             NullLogger<TopologyRepository>.Instance, "test-double");
-        var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
+        var contextRouteRepo = new ContextRouteRepository(
+            NullLogger<ContextRouteRepository>.Instance, "test-double");
+        var uiTopoRepo = new UiTopologyRepository(
+            NullLogger<UiTopologyRepository>.Instance, "test-double");
+        var topoVectorRuntime = new TopologyVectorRuntime(
+            NullLogger<TopologyVectorRuntime>.Instance, contextRouteRepo);
+        var adminRuntime = new AdminRuntime(
+            NullLogger<AdminRuntime>.Instance,
+            contextRouteRepo,
+            new RegistrarValidationService(
+                NullLogger<RegistrarValidationService>.Instance,
+                topologyRepo, topoVectorRuntime),
+            new PackageGeneratorRuntime(
+                NullLogger<PackageGeneratorRuntime>.Instance, uiTopoRepo),
+            uiTopoRepo);
+        var targetOverride = new TargetDispatchOverride(
+            NullLogger<TargetDispatchOverride>.Instance, topologyRepo, adminRuntime);
+
+        var dispatcher = new ManifestDispatcher(
+            NullLogger<ManifestDispatcher>.Instance,
+            handlers,
+            new OperationVectorResolver(),
+            targetOverride,
+            manifestRepository: null);
+
         return new RuntimeTimelineScheduler(
             NullLogger<RuntimeTimelineScheduler>.Instance, dispatcher);
     }
@@ -129,5 +167,20 @@ public class TriggerKindGuardTests
         {
             await scheduler.StopAsync(CancellationToken.None);
         }
+    }
+
+    // ─── Test runtime helper ──────────────────────────────────────────────────
+
+    /// <summary>
+    /// Minimal IDispatchableRuntime that always returns Success=true.
+    /// Used to decouple trigger_kind guard tests from full topology pipeline execution.
+    /// </summary>
+    private sealed class AlwaysSucceedRuntime : IDispatchableRuntime
+    {
+        public Task<EndpointResponseDto> ExecuteAsync(
+            EndpointRequestDto request,
+            Guid? manifestId,
+            CancellationToken ct = default) =>
+            Task.FromResult(new EndpointResponseDto(Success: true, Emission: null, Errors: []));
     }
 }

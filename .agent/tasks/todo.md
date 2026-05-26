@@ -66,6 +66,16 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → boundary(seed-role): seed は bootstrap row であり authority ではない。
       → out_of_scope (引き続き): React 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加。
 
+## Frontend Projection Constructor / Manifest Mapping
+
+- [ ] [projection-constructor][manifest-route] backend/manifest response から ProjectionDefinition / constructor mapping を frontend に供給する route を実装する
+      → `projectionFromEmission` helper は実装済み: `emission.data` → `constructProjection(jsonKeyValue, definition)` 経路は sseLane.test.ts で証明済み。
+      → 残りは backend/manifest response が ProjectionDefinition / constructor_mapping を frontend へ供給する end-to-end route の実装・証明。
+      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`
+      → 対象ファイル候補: `frontend/api/dispatch.ts`, `frontend/runtime/renderEmission.ts`, backend emission / manifest response surfaces。
+      → RuntimeTopologyComponentProps envelope / runtime component interface boundary は完了済みとして扱い、未完了に戻さない。
+      → frontend は projection surface のみ。topology meaning judgment / SQL Attention judgment を持たせない。
+
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
