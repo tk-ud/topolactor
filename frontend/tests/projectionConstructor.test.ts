@@ -281,3 +281,26 @@ Deno.test("constructProjection: non-object design returns explicit error", () =>
     "PROJECTION_CONSTRUCTOR_INVALID_DESIGN: DESIGN must be object",
   );
 });
+
+
+Deno.test("constructProjection: normalizes topology envelope fields for table and button", () => {
+  const button = constructProjection({ label: "Run" }, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-btn",
+    componentDefinition: { componentId: "cmp-btn", component_kind: "action/button" },
+  });
+  if (!button.projection || button.projection.kind !== "component_projection") throw new Error("unexpected");
+  assertEquals(typeof button.projection.props.data, "object");
+
+  const table = constructProjection({ columns: [], rows: [] }, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-table",
+    componentDefinition: { componentId: "cmp-table", component_kind: "data_display/table" },
+  });
+  if (!table.projection || table.projection.kind !== "component_projection") throw new Error("unexpected");
+  assertEquals(typeof table.projection.props.table, "object");
+});

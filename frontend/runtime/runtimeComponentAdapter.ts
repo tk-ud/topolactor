@@ -1,4 +1,5 @@
 import type { ComponentDataHub } from "./projectionConstructor.ts";
+import type { RuntimeTopologyComponentProps } from "../components/runtimeContract.ts";
 import {
   ensureRuntimeComponentRegistryInitialized,
   hasRuntimeComponentFactory,
@@ -18,7 +19,7 @@ export type RuntimeComponentSpec = {
   layoutId?: string | null;
   wiringId?: string | null;
   componentType: string;
-  props: Record<string, unknown>;
+  props: RuntimeTopologyComponentProps;
   eventBinding: Record<string, unknown>;
   className?: string;
   design?: NormalizedDesign;
@@ -71,6 +72,12 @@ function normalizeDesign(
   };
 }
 
+function normalizeTopologyProps(
+  props: Record<string, unknown>,
+): RuntimeTopologyComponentProps {
+  return props as RuntimeTopologyComponentProps;
+}
+
 export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
   if (!hub.componentId || hub.componentId.trim().length === 0) {
     return {
@@ -119,7 +126,7 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
       layoutId: hub.layoutId,
       wiringId: hub.wiringId,
       componentType: hub.componentKind,
-      props: hub.props,
+      props: normalizeTopologyProps(hub.props),
       eventBinding: hub.eventBinding,
       className,
       design,

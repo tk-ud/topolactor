@@ -86,23 +86,27 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Executable Component Slice
 
-- [ ] 代表primitiveの React/Preact 実体コンポーネントを実装する
+- [ ] #264 完了反映: runtime/catalog/factory 境界は implemented 扱いとして維持する
+      → pipeline 意味は `runtime adapter(normalize + factory reachability check) -> runtime registry(kind lookup) -> runtime factory(kind -> constructor/component interface) -> concrete component`。
+      → `runtimeConnected:true` は factory/constructor reachable を意味する。#264 all green（runtime semantics audit 含む）を根拠に partial へ戻さない。
+
+- [ ] representative UI/UX primitive component slice を実装する
+      → 単位は衝突しない completion bundle として固定: `interface/props contract -> component tag/componentKind -> component implementation -> factory registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> reachability test`。
+
+- [ ] UI/UX primitive 82件の React/Preact component 実体化を段階実装する
       → 初回 representative slice: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ更新する
-      → 実装が未着手の primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時にのみ昇格する。
+- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ昇格する
+      → 未実装 primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時のみ昇格する。
 
-- [ ] 実装済み primitive の runtimeConnected を true に昇格する
-      → runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。catalog_definition_only は false 維持。
+- [ ] 実装済み primitive の runtimeConnected を false から true へ昇格する
+      → factory registration + runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。
 
-- [ ] runtimePrimitiveRenderer / runtimeComponentAdapter から componentKey 到達可能にする
-      → 実行可能 slice は renderer/adapter 経路到達を必須にし、単独ファイル実装のみで完了扱いしない。
-
-- [ ] 到達性テストを追加する
-      → catalog -> renderer/adapter reachability を CI 補助線として検証する。
+- [ ] component slice reachability tests を追加する
+      → catalog -> adapter/renderer reachability と factory/constructor reachable を CI 補助線として検証する。
 
 - [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
-      → 誤昇格防止。registrationRequired:false は alias_maintained のみに限定する。
+      → 誤昇格防止。未実装 primitive を implemented 扱いしない。
 
 - [ ] roadmap status を実装実態に合わせて更新する
       → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。

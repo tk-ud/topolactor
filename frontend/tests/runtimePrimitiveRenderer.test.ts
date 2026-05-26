@@ -165,3 +165,21 @@ Deno.test("runtimePrimitiveRenderer: unregistered kind is explicit error", () =>
     error: "RUNTIME_PRIMITIVE_RENDERER_UNSUPPORTED_COMPONENT_KIND: x/unknown",
   });
 });
+
+
+Deno.test("runtimePrimitiveRenderer: accepts topology envelope props via data/table", () => {
+  const button = renderRuntimeComponent({
+    componentId: "b2",
+    componentType: "action/button",
+    props: { data: { label: "B2", disabled: false } },
+    eventBinding: { click: { eventType: "click" } },
+  });
+  const table = renderRuntimeComponent({
+    componentId: "t2",
+    componentType: "data_display/table",
+    props: { table: { columns: [], rows: [] } },
+    eventBinding: {},
+  });
+  assertEquals(button.ok, true);
+  assertEquals(table.ok, true);
+});

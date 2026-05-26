@@ -707,11 +707,11 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.projection_constructor:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >-
-        projectionConstructor.ts now provides a partial component data-hub constructor/runtime adapter: it expands component_definition payload (component_kind/roles/schema/default_parameters/event_binding), merges default_parameters + json_key_value + projection overrides, normalizes props for existing primitive kinds, and returns explicit errors for unknown kinds or schema mismatch. runtimeComponentAdapter + runtimePrimitiveRenderer are now connected as a projection runtime lane for Button/Input/Card/Table with explicit eventBinding validation and emit boundaries. SSE dispatcher wiring and full projection runtime completion remain pending.
+        PR #264 all green confirms runtime/catalog/factory semantic boundary closure for projection constructor lane: runtimeComponentAdapter is limited to normalize + factory reachability check, runtimePrimitiveRenderer is limited to registry resolve, runtimeComponentRegistry owns kind lookup/reachability boundary, and runtimeComponentFactory owns kind -> constructor/component interface mapping to concrete component. runtimeConnected:true now consistently means factory/constructor reachable. Remaining work is outside this boundary (SSE dispatcher wiring and broader executable primitive implementation slices).
       files:
         - frontend/runtime/projectionConstructor.ts
         - frontend/runtime/renderEmission.ts
@@ -732,7 +732,8 @@ system_roadmap_ssot:
         - projection_constructor_mapping_is_read_from_manifest_response
         - frontend_does_not_make_topology_or_sql_attention_judgment
       known_gap_ref:
-        - Gap-8 projection_constructor
+        - SSE dispatcher wiring for end-to-end projection event route remains outside this implemented boundary
+        - Executable UI/UX primitive component slice expansion remains follow-up
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -1091,7 +1092,7 @@ system_roadmap_ssot:
         primitive lineup entries across 8 categories: search/suggest, inline edit/audit,
         table/list/view, kanban/drag-drop, design token, calculation/topology,
         external lookup, and safety/guard.
-        All new catalog entries are runtimeConnected:false (catalog_definition_only).
+        Runtime/catalog/factory boundary semantics are closed by PR #264 (all green): runtime adapter normalize + factory reachability check, runtime registry kind lookup, runtime factory kind -> constructor/component interface. runtimeConnected:true now means factory/constructor reachable. Catalog entries that are still unimplemented primitives remain runtimeConnected:false (catalog_definition_only).
         Mutation boundaries, external lookup boundaries, SQL Attention boundaries,
         seed role boundaries, and style token boundaries are formally documented in SSOT.
       files:
@@ -1106,7 +1107,7 @@ system_roadmap_ssot:
         - implemented_promotion_requires_react_components_runtime_adapter_renderer_db_seed_rows_ssot_reader_tests_and_catalog_subset_static_checks
       known_gap_ref:
         - React implementation of new primitives pending (code_only_drift catalog entries have no component file)
-        - runtimeConnected promotion requires adapter/renderer wiring in runtimeComponentAdapter + runtimePrimitiveRenderer
+        - runtimeConnected true promotion for each primitive still requires concrete component implementation + factory registration + adapter/renderer reachability proof
         - DB seed bootstrap rows for primitive registries not yet written
         - SSOT reader tests for new SSOT files not yet written
         - roadmap status can be raised to implemented only after completion_condition bundle is fully satisfied

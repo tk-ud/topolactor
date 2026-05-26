@@ -42,6 +42,22 @@ export type ComponentDataHub = {
   design?: JsonObject;
 };
 
+type RuntimeTopologyComponentProps = JsonObject & {
+  table?: unknown;
+  data?: unknown;
+  layoutCss?: {
+    classname?: string;
+    className?: string;
+    style?: string;
+    cssTokenRefs?: string[];
+    responsiveTokenRefs?: Record<string, string[]>;
+  };
+  designTailwind?: {
+    tailwind?: string;
+    state?: "default" | "loading" | "success" | "error";
+  };
+};
+
 export type ProjectionField = {
   key: string;
   label: string;
@@ -82,14 +98,14 @@ function validateOptionalObject(name: string, value: unknown): Result<JsonObject
   return { ok: true, value };
 }
 
-function normalizeComponentProps(componentKind: string, props: JsonObject): Result<JsonObject> {
+function normalizeComponentProps(componentKind: string, props: JsonObject): Result<RuntimeTopologyComponentProps> {
   switch (componentKind) {
     case "action/button": {
       if (typeof props.label !== "string" || props.label.length === 0) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_BUTTON_LABEL: label(string) is required" };
       if (props.disabled !== undefined && typeof props.disabled !== "boolean") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_BUTTON_DISABLED: disabled must be boolean" };
       if (props.variant !== undefined && props.variant !== "primary" && props.variant !== "secondary" && props.variant !== "danger") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_BUTTON_VARIANT: variant must be primary|secondary|danger" };
       if (props.type !== undefined && props.type !== "button" && props.type !== "submit" && props.type !== "reset") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_BUTTON_TYPE: type must be button|submit|reset" };
-      return { ok: true, value: { ...props, disabled: props.disabled ?? false, variant: props.variant ?? "primary", type: props.type ?? "button" } };
+      return { ok: true, value: { ...props, data: props.data ?? props, disabled: props.disabled ?? false, variant: props.variant ?? "primary", type: props.type ?? "button" } };
     }
     case "form_input/input":
     case "form_input/textarea":
@@ -97,19 +113,19 @@ function normalizeComponentProps(componentKind: string, props: JsonObject): Resu
       if (props.value !== undefined && typeof props.value !== "string") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_INPUT_VALUE: value must be string" };
       if (props.disabled !== undefined && typeof props.disabled !== "boolean") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_INPUT_DISABLED: disabled must be boolean" };
       if (props.type !== undefined && props.type !== "text" && props.type !== "password" && props.type !== "number" && props.type !== "email") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_INPUT_TYPE: type must be text|password|number|email" };
-      return { ok: true, value: { ...props, value: props.value ?? "", disabled: props.disabled ?? false, type: props.type ?? "text" } };
+      return { ok: true, value: { ...props, data: props.data ?? props, value: props.value ?? "", disabled: props.disabled ?? false, type: props.type ?? "text" } };
     }
     case "display/card":
     case "disclosure_structure/panel":
     case "disclosure_structure/section":
       if (props.variant !== undefined && props.variant !== "default" && props.variant !== "info" && props.variant !== "warning" && props.variant !== "error") return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_CARD_VARIANT: variant must be default|info|warning|error" };
-      return { ok: true, value: { ...props, variant: props.variant ?? "default" } };
+      return { ok: true, value: { ...props, data: props.data ?? props, variant: props.variant ?? "default" } };
     case "data_display/table":
     case "data_display/data_grid":
     case "data_display/list":
       if (!Array.isArray(props.columns)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_COLUMNS: columns(array) is required" };
       if (!Array.isArray(props.rows)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_ROWS: rows(array) is required" };
-      return { ok: true, value: props };
+      return { ok: true, value: { ...props, table: props.table ?? { columns: props.columns, rows: props.rows } } };
     default:
       return { ok: false, error: `PROJECTION_CONSTRUCTOR_UNSUPPORTED_COMPONENT_KIND: ${componentKind}` };
   }

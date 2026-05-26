@@ -102,7 +102,10 @@ function requireBinding(
 
 function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  if (typeof props.label !== "string") {
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (typeof data.label !== "string") {
     return {
       ok: false,
       error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_BUTTON_PROPS",
@@ -111,12 +114,12 @@ function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
   const bindingCheck = requireBinding(spec, "click");
   if (!bindingCheck.ok) return bindingCheck;
   return {
-    ok: true,
-    node: h(Button, {
-      label: props.label,
-      disabled: props.disabled as boolean | undefined,
-      variant: props.variant as "primary" | "secondary" | "danger" | undefined,
-      type: props.type as "button" | "submit" | "reset" | undefined,
+      ok: true,
+      node: h(Button, {
+      label: data.label as string,
+      disabled: data.disabled as boolean | undefined,
+      variant: data.variant as "primary" | "secondary" | "danger" | undefined,
+      type: data.type as "button" | "submit" | "reset" | undefined,
       className: spec.className,
       design: spec.design ?? {},
       onClick: () => {
@@ -129,7 +132,10 @@ function buttonFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function inputFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  if (props.value !== undefined && typeof props.value !== "string") {
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  if (data.value !== undefined && typeof data.value !== "string") {
     return {
       ok: false,
       error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_INPUT_PROPS",
@@ -140,13 +146,13 @@ function inputFactory(spec: RuntimeComponentSpec): RenderResult {
   return {
     ok: true,
     node: h(Input, {
-      value: (props.value as string | undefined) ?? "",
-      placeholder: props.placeholder as string | undefined,
-      disabled: props.disabled as boolean | undefined,
-      label: props.label as string | undefined,
+      value: (data.value as string | undefined) ?? "",
+      placeholder: data.placeholder as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      label: data.label as string | undefined,
       type: (spec.componentType === "form_input/search_input"
         ? "text"
-        : props.type) as "text" | "password" | "number" | "email" | undefined,
+        : data.type) as "text" | "password" | "number" | "email" | undefined,
       onChange: (value: string) => {
         const result = emitBoundEvent(spec, "change", { value });
         if (!result.ok) {
@@ -177,20 +183,23 @@ function inputFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function cardFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
   return {
     ok: true,
     node: h(Card, {
-      title: props.title as string | undefined,
+      title: data.title as string | undefined,
       className: spec.className,
       design: spec.design ?? {},
-      variant: props.variant as
+      variant: data.variant as
         | "default"
         | "info"
         | "warning"
         | "error"
         | undefined,
-      children: h("div", null, (props.body as string | undefined) ?? ""),
-      footer: props.footer as string | undefined,
+      children: h("div", null, (data.body as string | undefined) ?? ""),
+      footer: data.footer as string | undefined,
       onClick: spec.eventBinding.click
         ? () => {
           const result = emitBoundEvent(spec, "click", {});
@@ -203,14 +212,17 @@ function cardFactory(spec: RuntimeComponentSpec): RenderResult {
 
 function tableFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  if (!Array.isArray(props.columns) || !Array.isArray(props.rows)) {
+  const table = (typeof props.table === "object" && props.table !== null && !Array.isArray(props.table))
+    ? props.table as Record<string, unknown>
+    : props;
+  if (!Array.isArray(table.columns) || !Array.isArray(table.rows)) {
     return {
       ok: false,
       error: "RUNTIME_PRIMITIVE_RENDERER_INVALID_TABLE_PROPS",
     };
   }
-  const columns = props.columns as Array<{ key: string; header: string }>;
-  const rows = props.rows as Array<Record<string, unknown>>;
+  const columns = table.columns as Array<{ key: string; header: string }>;
+  const rows = table.rows as Array<Record<string, unknown>>;
   return {
     ok: true,
     node: h(Table<Record<string, unknown>>, {
@@ -219,7 +231,7 @@ function tableFactory(spec: RuntimeComponentSpec): RenderResult {
       design: spec.design ?? {},
       rows,
       rowKey: (row) => String(row.id ?? JSON.stringify(row)),
-      emptyMessage: (props.emptyMessage as string | undefined) ?? "No data.",
+      emptyMessage: (table.emptyMessage as string | undefined) ?? "No data.",
       onRowClick: spec.eventBinding.select
         ? (row) => {
           const result = emitBoundEvent(spec, "select", { row });
