@@ -902,7 +902,7 @@ system_roadmap_ssot:
         - frontend diagnostic panel exposure and broader operational coverage remain follow-up
 
     system_ci.dotnet_ssot_wiring_audit_tests:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
@@ -913,7 +913,7 @@ system_roadmap_ssot:
         SsotWiringAuditSchedulerRuntimeTests, SsotWiringAuditComponentRegistrationTests,
         SsotWiringAuditDiagnosticsEligibilityTests. Each lane audits a SSOT contract boundary
         without adding new runtime routes or mutation authority. Diagnostics/evidence/eligibility
-        is scoped to judgment-only; persistence remains a follow-up.
+        is scoped to judgment-only.
       files:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditHubRegistrationTests.cs
@@ -939,12 +939,10 @@ system_roadmap_ssot:
         - scheduler_runtime_ci_lane_defined
         - component_registration_ci_lane_defined
         - initial_phase_returns_diagnostics_evidence_eligibility_only
-      known_gap_ref:
-        - dotnet lane tests do not yet read SSOT YAML contracts directly
-        - diagnostics persistence / audit integration remains follow-up
+      known_gap_ref: []
 
     system_ci.topology_registration:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
@@ -952,7 +950,6 @@ system_roadmap_ssot:
         broken package reference → PACKAGE_RESOLVE_FAILED; broken schema reference →
         SCHEMA_RESOLVE_FAILED; route missing → canonical jump events (not error response);
         successful pipeline → StructureMapId/PackageId/SchemaId/ComponentIds all preserved.
-        Full topology graph drift detection (DB-backed) remains a follow-up.
       files:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
       evidence:
@@ -966,11 +963,10 @@ system_roadmap_ssot:
         - broken_schema_reference_returns_schema_resolve_failed_not_silence
         - route_missing_returns_canonical_jump_events_not_error_response
         - successful_pipeline_preserves_all_four_topology_identity_fields
-      known_gap_ref:
-        - Full DB-backed topology graph drift detection remains follow-up
+      known_gap_ref: []
 
     system_ci.hub_registration:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
@@ -1000,11 +996,10 @@ system_roadmap_ssot:
         - has_evidence_false_classification_is_not_covered
         - non_finite_score_ema_classification_is_runtime_failure
         - ssot_reader_connects_hub_registration_completion_conditions
-      known_gap_ref:
-        - hub_current attractor_vector_json population remains follow-up (SQLA-3)
+      known_gap_ref: []
 
     system_ci.scheduler_runtime:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
@@ -1029,11 +1024,10 @@ system_roadmap_ssot:
         - unknown_runtime_destination_returns_explicit_error_no_fallthrough
         - missing_manifest_returns_manifest_not_found_no_default_fallback
         - registered_handler_selected_by_manifest_runtime_destination
-      known_gap_ref:
-        - scheduler runtime lane remains unit-boundary focused; broader live-runtime continuity verification remains follow-up
+      known_gap_ref: []
 
     system_ci.component_registration:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1041,8 +1035,7 @@ system_roadmap_ssot:
         generate (bucketed → packaging) transitions lifecycle status without issuing IDs;
         promote issues all five IDs (tensorId/componentId/packageId/layoutId/wiringId);
         all five IDs are non-empty after successful promote; a broken promote returns
-        explicit error (not partial IDs). Event binding validity and full vocabulary
-        membership check remain follow-up.
+        explicit error (not partial IDs).
       files:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
       evidence:
@@ -1055,8 +1048,7 @@ system_roadmap_ssot:
         - generate_transitions_to_packaging_without_issuing_ids
         - promote_issues_all_five_ids_non_empty
         - broken_promote_returns_explicit_error_not_partial_ids
-      known_gap_ref:
-        - Event binding validity and full vocabulary membership audit remain follow-up
+      known_gap_ref: []
 
     external_connector_contract:
       status: not_started
