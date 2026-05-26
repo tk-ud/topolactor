@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
@@ -24,6 +25,103 @@ namespace Topolactor.Runtime.Tests;
 // Test doubles isolate the UiTopologyRepository boundary. No DB access.
 public class SsotWiringAuditComponentRegistrationTests
 {
+    [Fact]
+    public void ComponentRegistrationLane_CompletionConditionKeys_MustExistInRoadmapSsot()
+    {
+        var keys = SsotYamlContractReader.RoadmapCompletionConditions("system_ci.component_registration");
+
+        Assert.NotEmpty(keys);
+        Assert.Contains("generate_transitions_to_packaging_without_issuing_ids", keys);
+        Assert.Contains("promote_issues_all_five_ids_non_empty", keys);
+        Assert.Contains("broken_promote_returns_explicit_error_not_partial_ids", keys);
+    }
+
+    [Fact]
+    public void ComponentRegistrationLane_ComponentClassificationVocabulary_MustBeLoadedFromSsot()
+    {
+        var family = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "component_family");
+        var semantic = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "semantic_role");
+        var visual = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "visual_role");
+        var lifecycle = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "lifecycle_status");
+        var tags = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "capability_tags");
+
+        Assert.NotEmpty(family);
+        Assert.NotEmpty(semantic);
+        Assert.NotEmpty(visual);
+        Assert.NotEmpty(lifecycle);
+        Assert.NotEmpty(tags);
+    }
+
+    [Fact]
+    public void ComponentRegistrationLane_ComponentCatalogValues_MustBeSubsetOfSsotVocabulary()
+    {
+        var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
+        var familyAllowed = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "component_family").ToHashSet();
+        var semanticAllowed = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "semantic_role").ToHashSet();
+        var visualAllowed = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "visual_role").ToHashSet();
+        var lifecycleAllowed = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "lifecycle_status").ToHashSet();
+        var tagAllowed = SsotYamlContractReader.ReadInlineArray("docs/design/component-catalog-classification-ssot.yaml", "capability_tags").ToHashSet();
+
+        foreach (Match m in Regex.Matches(catalog, @"componentFamily:\s*""([^""]+)"""))
+            Assert.Contains(m.Groups[1].Value, familyAllowed);
+        foreach (Match m in Regex.Matches(catalog, @"semanticRole:\s*""([^""]+)"""))
+            Assert.Contains(m.Groups[1].Value, semanticAllowed);
+        foreach (Match m in Regex.Matches(catalog, @"visualRole:\s*""([^""]+)"""))
+            Assert.Contains(m.Groups[1].Value, visualAllowed);
+        foreach (Match m in Regex.Matches(catalog, @"lifecycleStatus:\s*""([^""]+)"""))
+            Assert.Contains(m.Groups[1].Value, lifecycleAllowed);
+        foreach (Match m in Regex.Matches(catalog, @"capabilityTags:\s*\[([^\]]*)\]"))
+        {
+            foreach (Match tag in Regex.Matches(m.Groups[1].Value, "\"([^\"]+)\""))
+                Assert.Contains(tag.Groups[1].Value, tagAllowed);
+        }
+    }
+
+    [Fact]
+    public void ComponentRegistrationLane_RuntimeConnectedKinds_MustBeSupportedByAdapterAndRenderer()
+    {
+        var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
+        var adapter = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentAdapter.ts");
+        var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
+
+        var connectedKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?runtimeConnected:\s*true")
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToArray();
+
+        Assert.NotEmpty(connectedKinds);
+        foreach (var kind in connectedKinds)
+        {
+            Assert.True(
+                adapter.Contains($"\"{kind}\"", StringComparison.Ordinal)
+                || renderer.Contains($"\"{kind}\"", StringComparison.Ordinal)
+                || renderer.Contains($"case \"{kind}\"", StringComparison.Ordinal),
+                $"runtimeConnected componentKind must be supported by adapter or renderer: {kind}");
+        }
+    }
+
+    [Fact]
+    public void ComponentRegistrationLane_EventBindingRequiredComponents_MustDeclareBindingSurface()
+    {
+        var catalog = SsotYamlContractReader.ReadDoc("frontend/components/catalog.ts");
+        var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
+
+        var requiringBindingKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?capabilityTags:\s*\[[^\]]*""requires_event_binding""[\s\S]*?runtimeConnected:\s*true")
+            .Select(m => m.Groups[1].Value)
+            .Distinct()
+            .ToArray();
+
+        Assert.NotEmpty(requiringBindingKinds);
+        Assert.Contains("emitBoundEvent", renderer);
+        foreach (var kind in requiringBindingKinds)
+        {
+            Assert.True(
+                renderer.Contains($"case \"{kind}\"", StringComparison.Ordinal)
+                || renderer.Contains($"\"{kind}\"", StringComparison.Ordinal),
+                $"event-binding-required runtimeConnected kind must be renderer reachable: {kind}");
+        }
+    }
+
     // ─── Generate: lifecycle transitions to packaging without issuing IDs ─────
 
     [Fact]
