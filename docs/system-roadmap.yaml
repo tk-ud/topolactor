@@ -903,14 +903,14 @@ system_roadmap_ssot:
         - frontend/runtime/runtimeComponentFactory.ts
         - frontend/components/catalog.ts
       public_summary: >
-        Bulk promotion pass: 50 total components now runtimeConnected:true (9 from representative
-        slice + 41 bulk-promoted). Categories covered: A (search/suggest), B (inline edit/audit),
-        C (table/view ops), E (design tokens), H (safety/guard). All are factory-registered thin
-        components with no business logic, DB writes, or topology judgment. Remaining catalog-only
-        entries (Cat D kanban/drag, Cat E layout/responsive, Cat F calc/topology, Cat G
-        external/lookup) stay runtimeConnected:false / sourcePath:CATALOG_SSOT.
-        runtimeConnected:true is factory/constructor reachable only; DB promotion and topology
-        entity registration remain registrationRequired:true.
+        Post-PR #272 executable slice alignment is complete for the promoted set: 65 connected
+        primitives / 65 factory kinds / 6 aliases are synchronized across
+        frontend/runtime/runtimeComponentFactory.ts, frontend/components/catalog.ts,
+        and db/seed_empty.sql, with slice invariants verified by
+        .agent/tests/check-ui-ux-executable-component-slice.sh and runtime-semantics checks.
+        runtimeConnected:true means factory/constructor reachability only (not DB topology
+        entity registration completion). registrationRequired:true remains for explicit
+        DB-side registration/promotion governance.
       completion_condition:
         - representative_ui_ux_slice_has_componentKind_selector_and_factory_interface_registration
         - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
@@ -921,8 +921,11 @@ system_roadmap_ssot:
         - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
-        - Cat D (kanban/drag), Cat E layout_grid/responsive_rule, Cat F (calc/topology), Cat G (external/lookup) remain catalog-only
-        - abstract function / heavy logic boundary unit tests not yet added for promoted primitives
+        - remaining catalog-only primitive 28件の昇格バッチ（component file / factory registration / sourcePath / runtimeConnected / seed同期 / reachability checks）
+        - abstract function boundary unit tests（function-backed primitive 参照境界）
+        - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
+        - Issue #89 mouse-driven layout editor / drag-drop UI island
+        - component_operation_event_log PostgreSQL append/idempotency integration test
         - deno test execution not verified locally (deno not installed in this environment)
 
     admin_visual_layout_builder:
@@ -1170,35 +1173,37 @@ system_roadmap_ssot:
       public_summary: >
         UI/UX primitive catalog SSOT (docs/design/ui-ux-primitive-catalog-ssot.yaml)
         and abstract function primitive registry SSOT
-        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined, including a
-        basic calculation operator vocabulary (11 operators) for formula contracts with explicit
-        zero-division policy and no implicit eval boundary.
-        Frontend component catalog (frontend/components/catalog.ts) extended with 82
-        primitive lineup entries across 8 categories: search/suggest, inline edit/audit,
-        table/list/view, kanban/drag-drop, design token, calculation/topology,
-        external lookup, and safety/guard.
-        Runtime/catalog/factory boundary semantics are closed (all green): runtime adapter normalize + factory reachability check, runtime registry kind lookup, runtime factory kind -> constructor/component interface. runtimeConnected:true now means factory/constructor reachable. Catalog entries that are still unimplemented primitives remain runtimeConnected:false (catalog_definition_only).
-        Mutation boundaries, external lookup boundaries, SQL Attention boundaries,
-        seed role boundaries, and style token boundaries are formally documented in SSOT.
-        Completion bundle: SSOT reader tests (ssotReaderCatalog.test.ts), catalog subset/equality static checks (catalogSubsetCheck.test.ts), DB seed bootstrap rows (seed_empty.sql + demo_seed.sql, 82 entries), and runtime adapter/renderer reachability tests added. catalog-only primitives confirmed factory-unreachable; runtimeConnected:true entries confirmed factory+renderer-reachable.
+        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined and
+        wired to the current executable slice boundary. Post-PR #272 runtime/catalog/factory
+        semantics are aligned and all green: runtimeConnected:true entries are factory/constructor-reachable,
+        and the current slice is synchronized across frontend.runtimeComponentFactory.ts,
+        frontend/components/catalog.ts, db/seed_empty.sql, runtime-semantics checks,
+        and UI/UX executable component slice checks. Current implementation shape is
+        65 connected primitives / 65 factory kinds / 6 aliases.
+        runtimeConnected:true means factory/constructor reachability only (not DB topology
+        entity registration completion), and registrationRequired:true remains to preserve
+        explicit registration governance.
       files:
         - docs/design/ui-ux-primitive-catalog-ssot.yaml
         - docs/design/abstract-function-primitive-registry-ssot.yaml
         - frontend/components/catalog.ts
+        - frontend/runtime/frontend.runtimeComponentFactory.ts
         - frontend/tests/ssotReaderCatalog.test.ts
         - frontend/tests/catalogSubsetCheck.test.ts
         - db/seed_empty.sql
-        - db/demo_seed.sql
+        - .agent/tests/check-ui-ux-executable-component-slice.sh
       completion_condition:
         - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
         - abstract_function_primitive_registry_ssot_defines_7_categories_with_contract
         - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
-        - frontend_component_catalog_extended_with_82_primitive_lineup_entries_and_registration_required_semantics
-        - implemented_promotion_requires_react_components_runtime_adapter_renderer_db_seed_rows_ssot_reader_tests_and_catalog_subset_static_checks
+        - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
       known_gap_ref:
-        - React implementation of new primitives pending (code_only_drift catalog entries have no component file)
-        - runtimeConnected true promotion for each primitive still requires factory registration + catalog sourcePath promotion + interface reachability proof; all 82 UI/UX primitives remain runtimeConnected:false until promoted
-        - roadmap status can be raised to implemented only when React components are implemented and runtimeConnected:true promotion bundle is complete for representative slice
+        - remaining catalog-only primitive 28件の昇格バッチ（component file / factory registration / sourcePath / runtimeConnected / seed同期 / reachability checks）
+        - abstract function boundary unit tests（function-backed primitive 参照境界）
+        - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
+        - Issue #89 mouse-driven layout editor / drag-drop UI island
+        - component_operation_event_log PostgreSQL append/idempotency integration test
+
 
     external_connector_contract:
       status: not_started
