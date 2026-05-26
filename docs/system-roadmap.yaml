@@ -926,7 +926,6 @@ system_roadmap_ssot:
         - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
         - Issue #89 mouse-driven layout editor / drag-drop UI island
         - component_operation_event_log PostgreSQL append/idempotency integration test
-        - deno test execution not verified locally (deno not installed in this environment)
 
     admin_visual_layout_builder:
       status: partial
@@ -1187,7 +1186,7 @@ system_roadmap_ssot:
         - docs/design/ui-ux-primitive-catalog-ssot.yaml
         - docs/design/abstract-function-primitive-registry-ssot.yaml
         - frontend/components/catalog.ts
-        - frontend/runtime/frontend.runtimeComponentFactory.ts
+        - frontend/runtime/runtimeComponentFactory.ts
         - frontend/tests/ssotReaderCatalog.test.ts
         - frontend/tests/catalogSubsetCheck.test.ts
         - db/seed_empty.sql

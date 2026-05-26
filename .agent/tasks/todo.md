@@ -32,8 +32,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Executable Component Slice
 
-- [ ] [ui-ux-catalog][representative-slice-context] 代表スライス境界の維持（実装済みの bundle は再TODO化しない）
-      → representative names (implemented): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
+note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
 ## UI/UX Primitive Catalog Remaining Promotion
 
