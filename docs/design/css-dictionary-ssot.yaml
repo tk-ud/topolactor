@@ -1,0 +1,356 @@
+css_dictionary_ssot:
+  name: topolactor_css_dictionary
+  version: 0.1.0
+  status: draft_ssot
+  canonical_path: docs/design/css-dictionary-ssot.yaml
+
+  purpose:
+    summary: >-
+      Define the static CSS vocabulary for UI style selectors and CI checks.
+      CSS tokens are presentation vocabulary, not topology usage aggregation data.
+    goals:
+      - provide_css_token_dictionary_for_admin_ui_style_binding
+      - keep_style_selection_bounded_and_ci_checkable
+      - prevent_freeform_css_or_tailwind_strings_from_becoming_authority
+      - allow_db_design_or_layout_records_to store token references instead of raw CSS when possible
+      - distinguish_static_css_vocabulary_from_db_backed_primitive_registry
+    non_goals:
+      - runtime_usage_aggregation
+      - primitive_usage_grouping
+      - sql_attention_observation_target
+      - topology_judgment
+      - replacing_ui_topology_db_registry
+      - defining_mouse_layout_editor_behavior
+
+  authority_boundary:
+    yaml_owns:
+      - css_token_key_vocabulary
+      - css_property_allowlist
+      - css_value_scales
+      - responsive_breakpoint_vocabulary
+      - style_selector_grouping
+      - ci_dictionary_validation_contract
+    db_owns:
+      - promoted_component_registry
+      - promoted_package_layout_wiring_tensor
+      - primitive_usage_grouping_and_aggregation
+      - runtime_admin_created_design_or_layout_state
+      - route_package_layout_wiring_binding
+    frontend_owns:
+      - projection_of_style_selectors
+      - local_draft_before_preview_validate_apply
+      - preview_rendering
+    prohibited:
+      - frontend_topology_judgment_from_css
+      - treating_css_token_usage_as_sql_attention_parent_observation
+      - direct_db_mutation_from_style_selector_without_preview_validate_apply
+      - silent_fallback_to_unknown_css_token
+      - treating_tailwind_string_as_css_authority
+
+  design_principles:
+    css_is_static_vocabulary_not_aggregation_surface: true
+    primitive_registry_is_db_backed_because_usage_grouping_is_required: true
+    css_dictionary_is_yaml_backed_because_selection_and_ci_are_primary_uses: true
+    db_records_should_store_token_refs_before_raw_css_when_possible: true
+
+  binding_flow_contract:
+    - css_dictionary_ssot
+    - ui_style_selector
+    - component_or_layout_design_draft
+    - preview
+    - validate
+    - explicit_apply
+    - db_design_or_layout_record_with_token_refs
+    - frontend_projection
+
+  token_key_rule:
+    format: dot_separated_lower_snake_case
+    regex: "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)+$"
+    examples:
+      - color.action.primary.background
+      - color.action.primary.text
+      - spacing.control.padding_md
+      - radius.control.sm
+      - typography.control.monospace
+
+  css_property_allowlist:
+    color:
+      - background
+      - color
+      - border-color
+    border:
+      - border
+      - border-width
+      - border-style
+      - border-color
+      - border-radius
+    spacing:
+      - padding
+      - padding-top
+      - padding-right
+      - padding-bottom
+      - padding-left
+      - margin
+      - margin-top
+      - margin-right
+      - margin-bottom
+      - margin-left
+      - gap
+      - row-gap
+      - column-gap
+    typography:
+      - font-family
+      - font-size
+      - font-weight
+      - line-height
+      - text-align
+    layout:
+      - display
+      - flex-direction
+      - justify-content
+      - align-items
+      - grid-template-columns
+      - grid-template-rows
+      - width
+      - height
+      - min-width
+      - min-height
+      - max-width
+      - max-height
+    interaction:
+      - cursor
+      - opacity
+    overflow:
+      - overflow
+      - overflow-x
+      - overflow-y
+
+  blocked_property_policy:
+    default: block_unlisted_properties
+    examples:
+      - position
+      - z-index
+      - transform
+      - animation
+      - transition
+      - filter
+    expansion_rule: >-
+      Add high-risk CSS properties only through this SSOT before UI binding or CI acceptance.
+
+  value_scales:
+    color:
+      transparent: transparent
+      text_default: "#333"
+      text_inverse: "#fff"
+      surface_default: "#fff"
+      surface_muted: "#f5f5f5"
+      surface_secondary: "#eee"
+      border_default: "#ccc"
+      action_primary: "#0070f3"
+      action_danger: "#e00"
+      success_default: "#090"
+      warning_default: "#c80"
+      error_default: "#c00"
+    spacing:
+      none: "0"
+      xs: "2px"
+      sm: "4px"
+      md: "8px"
+      lg: "12px"
+      xl: "16px"
+      control_padding_sm: "4px 8px"
+      control_padding_md: "6px 14px"
+    radius:
+      none: "0"
+      sm: "4px"
+      md: "8px"
+      lg: "12px"
+      full: "9999px"
+    typography:
+      monospace: monospace
+      font_size_sm: "0.85rem"
+      font_size_md: "0.9rem"
+      font_size_base: "1rem"
+      font_weight_normal: "400"
+      font_weight_bold: "700"
+    opacity:
+      disabled: "0.6"
+      visible: "1"
+
+  responsive_breakpoints:
+    base:
+      min_width: null
+      role: default_projection
+    sm:
+      min_width: 640px
+      role: small_viewport
+    md:
+      min_width: 768px
+      role: medium_viewport
+    lg:
+      min_width: 1024px
+      role: large_viewport
+    xl:
+      min_width: 1280px
+      role: extra_large_viewport
+
+  tokens:
+    color.action.primary.background:
+      category: color
+      property: background
+      value_ref: color.action_primary
+      component_scope:
+        - Button
+      semantic_role: primary_action
+    color.action.primary.text:
+      category: color
+      property: color
+      value_ref: color.text_inverse
+      component_scope:
+        - Button
+      semantic_role: primary_action
+    color.action.secondary.background:
+      category: color
+      property: background
+      value_ref: color.surface_secondary
+      component_scope:
+        - Button
+      semantic_role: secondary_action
+    color.action.secondary.text:
+      category: color
+      property: color
+      value_ref: color.text_default
+      component_scope:
+        - Button
+      semantic_role: secondary_action
+    color.action.danger.background:
+      category: color
+      property: background
+      value_ref: color.action_danger
+      component_scope:
+        - Button
+      semantic_role: danger_action
+    color.action.danger.text:
+      category: color
+      property: color
+      value_ref: color.text_inverse
+      component_scope:
+        - Button
+      semantic_role: danger_action
+    border.control.default:
+      category: border
+      property: border
+      value: "1px solid #ccc"
+      component_scope:
+        - Button
+        - Input
+      semantic_role: control_boundary
+    radius.control.sm:
+      category: radius
+      property: border-radius
+      value_ref: radius.sm
+      component_scope:
+        - Button
+        - Input
+        - Card
+      semantic_role: control_shape
+    spacing.control.padding_md:
+      category: spacing
+      property: padding
+      value_ref: spacing.control_padding_md
+      component_scope:
+        - Button
+      semantic_role: control_spacing
+    spacing.field.padding_sm:
+      category: spacing
+      property: padding
+      value_ref: spacing.control_padding_sm
+      component_scope:
+        - Input
+      semantic_role: field_spacing
+    typography.control.monospace:
+      category: typography
+      property: font-family
+      value_ref: typography.monospace
+      component_scope:
+        - Button
+        - Input
+        - Table
+        - Card
+      semantic_role: admin_ui_text
+    interaction.control.pointer:
+      category: interaction
+      property: cursor
+      value: pointer
+      component_scope:
+        - Button
+      semantic_role: clickable_control
+    interaction.control.disabled_opacity:
+      category: interaction
+      property: opacity
+      value_ref: opacity.disabled
+      component_scope:
+        - Button
+        - Input
+      semantic_role: disabled_state
+    layout.stack.flex_column:
+      category: layout
+      property: flex-direction
+      value: column
+      component_scope:
+        - Card
+      semantic_role: stacked_layout
+    layout.table.full_width:
+      category: layout
+      property: width
+      value: "100%"
+      component_scope:
+        - Table
+      semantic_role: data_table_width
+
+  ui_binding_contract:
+    selector_source: css_dictionary_ssot.tokens
+    selector_grouping:
+      - category
+      - component_scope
+      - semantic_role
+      - responsive_breakpoint
+    draft_shape:
+      cssTokenRefs:
+        type: array
+        items: token_key
+      responsiveTokenRefs:
+        type: object
+        key: breakpoint_key
+        value: token_key_array
+    apply_rule: preview_validate_apply_required
+    raw_css_policy:
+      default: discouraged
+      allowed_only_when:
+        - explicit_legacy_allowed_comment
+        - no_dictionary_token_exists_yet
+        - follow_up_token_addition_is_recorded
+
+  ci_check_contract:
+    intended_script: .agent/tests/check-css-dictionary.sh
+    required_checks:
+      - css_dictionary_file_exists
+      - token_keys_are_unique
+      - token_keys_match_token_key_rule
+      - token_properties_are_in_allowlist
+      - token_value_refs_resolve_to_value_scales
+      - blocked_properties_are_not_used_without_dictionary_expansion
+      - ui_style_selector_reads_dictionary_or_generated_dictionary_artifact
+      - frontend_managed_styles_do_not_introduce_new_untracked_freeform_css
+      - design_or_layout_token_refs_resolve_to_defined_tokens
+    required_order_note: >-
+      Run the CSS dictionary check before frontend type checks when UI style binding changes.
+      Run repository structure check last.
+
+  integration_status:
+    ui_binding: not_wired
+    ci_check: not_wired
+    db_token_ref_validation: not_wired
+    note: >-
+      This SSOT file defines the dictionary contract only. UI binding, CI script wiring,
+      and DB validation are follow-up implementation surfaces.
