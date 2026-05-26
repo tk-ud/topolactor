@@ -1076,13 +1076,14 @@ system_roadmap_ssot:
         - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
         - abstract_function_primitive_registry_ssot_defines_6_categories_with_contract
         - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
-        - frontend_component_catalog_extended_with_primitive_lineup_entries
+        - frontend_component_catalog_extended_with_82_primitive_lineup_entries_and_registration_required_semantics
+        - implemented_promotion_requires_react_components_runtime_adapter_renderer_db_seed_rows_ssot_reader_tests_and_catalog_subset_static_checks
       known_gap_ref:
         - React implementation of new primitives pending (code_only_drift catalog entries have no component file)
         - runtimeConnected promotion requires adapter/renderer wiring in runtimeComponentAdapter + runtimePrimitiveRenderer
         - DB seed bootstrap rows for primitive registries not yet written
         - SSOT reader tests for new SSOT files not yet written
-        - roadmap status can be raised to implemented when React components exist and adapter wiring is verified
+        - roadmap status can be raised to implemented only after completion_condition bundle is fully satisfied
 
     external_connector_contract:
       status: not_started

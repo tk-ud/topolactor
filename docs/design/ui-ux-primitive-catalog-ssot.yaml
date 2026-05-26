@@ -31,6 +31,16 @@ prerequisite_for:
 # =============================================================================
 
 meaning_boundaries:
+
+  registration_boundary:
+    rule: catalog_definition_only primitives are future topology-entity candidates
+    catalog_contract:
+      - runtimeConnected:false is maintained until adapter/renderer wiring exists
+      - registrationRequired:true is required until DB registration/promotion is completed
+    exception_policy:
+      - registrationRequired:false is only for alias_maintained entries that reuse existing runtime registered paths
+      - exceptions must be documented in frontend/components/catalog.ts notes and classification SSOT
+
   frontend_topology_judgment:
     rule: frontend does not own topology judgment
     allowed: candidate / preview / confirm surface only
