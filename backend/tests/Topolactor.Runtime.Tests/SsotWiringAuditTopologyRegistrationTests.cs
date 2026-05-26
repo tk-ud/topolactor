@@ -18,6 +18,18 @@ namespace Topolactor.Runtime.Tests;
 // Error codes tested: PACKAGE_RESOLVE_FAILED, SCHEMA_RESOLVE_FAILED.
 public class SsotWiringAuditTopologyRegistrationTests
 {
+    [Fact]
+    public void TopologyRegistrationLane_CompletionConditionKeys_MustExistInRoadmapSsot()
+    {
+        var keys = SsotYamlContractReader.RoadmapCompletionConditions("system_ci.topology_registration");
+
+        Assert.NotEmpty(keys);
+        Assert.Contains("broken_package_reference_returns_package_resolve_failed_not_silence", keys);
+        Assert.Contains("broken_schema_reference_returns_schema_resolve_failed_not_silence", keys);
+        Assert.Contains("route_missing_returns_canonical_jump_events_not_error_response", keys);
+        Assert.Contains("successful_pipeline_preserves_all_four_topology_identity_fields", keys);
+    }
+
     // ─── Broken package reference: explicit error code ────────────────────────
 
     [Fact]
@@ -34,6 +46,7 @@ public class SsotWiringAuditTopologyRegistrationTests
 
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "PACKAGE_RESOLVE_FAILED");
+        Assert.Empty(response.Emission?.JumpEvents ?? []);
     }
 
     [Fact]
@@ -66,6 +79,7 @@ public class SsotWiringAuditTopologyRegistrationTests
 
         Assert.False(response.Success);
         Assert.Contains(response.Errors, e => e.Code == "SCHEMA_RESOLVE_FAILED");
+        Assert.Empty(response.Emission?.JumpEvents ?? []);
     }
 
     [Fact]
@@ -140,6 +154,23 @@ public class SsotWiringAuditTopologyRegistrationTests
     }
 
     [Fact]
+    public async Task TopologyRegistration_SuccessfulPipeline_AllFourIdentityFieldsArePresent()
+    {
+        var executor = RuntimeExecutorTests.CreateExecutor();
+        var request = new EndpointRequestDto(
+            "Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Equal(TopologyRepository.DefaultStructureMapId, response.Emission!.StructureMapId);
+        Assert.Equal(TopologyRepository.DefaultPackageId, response.Emission.PackageId);
+        Assert.Equal(TopologyRepository.DefaultSchemaId, response.Emission.SchemaId);
+        Assert.NotEmpty(response.Emission.ComponentIds ?? []);
+    }
+
+    [Fact]
     public async Task TopologyRegistration_SuccessfulPipeline_DefaultComponentIdPresent()
     {
         // DefaultComponentId must appear in ComponentIds after successful pipeline execution.
@@ -168,6 +199,8 @@ public class SsotWiringAuditTopologyRegistrationTests
 
         Assert.True(response.Success);
         Assert.Empty(response.Errors);
+        Assert.DoesNotContain(response.Emission?.JumpEvents ?? [],
+            j => j.Reason == "PACKAGE_RESOLVE_FAILED" || j.Reason == "SCHEMA_RESOLVE_FAILED");
     }
 
     [Fact]
