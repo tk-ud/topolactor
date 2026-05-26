@@ -10,6 +10,7 @@ export type BackgroundColorEditorProps = ComponentIdentityProps & {
   value?: string;
   label?: string;
   onChange: (value: string) => void;
+  tokens?: { key: string; value: string; label?: string }[];
   className?: string;
   design?: ComponentDesignParams;
 };
@@ -18,6 +19,7 @@ export function BackgroundColorEditor({
   value,
   label,
   onChange,
+  tokens,
   className,
   design,
 }: BackgroundColorEditorProps): JSX.Element {
@@ -52,6 +54,24 @@ export function BackgroundColorEditor({
         <div
           style={`height:28px;border-radius:4px;border:1px solid #e0e0e0;background:${value}`}
         />
+      )}
+      {tokens && tokens.length > 0 && (
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:2px">
+          {tokens.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onChange(t.value)}
+              style={`padding:3px 9px;border-radius:4px;cursor:pointer;font-family:monospace;font-size:0.8rem;border:1px solid ${
+                value === t.value ? "#1a73e8" : "#ddd"
+              };background:${
+                value === t.value ? "#e8f0fe" : "#fff"
+              };color:${value === t.value ? "#1a73e8" : "#333"}`}
+            >
+              {t.label ?? t.key}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

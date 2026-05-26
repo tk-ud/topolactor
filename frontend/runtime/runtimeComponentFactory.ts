@@ -1447,11 +1447,19 @@ function animationTokenEditorFactory(spec: RuntimeComponentSpec): RenderResult {
     : props;
   const bindingCheck = requireBinding(spec, "change");
   if (!bindingCheck.ok) return bindingCheck;
+  const rawTokens = Array.isArray(data.tokens) ? data.tokens : [];
+  const tokens = rawTokens.filter(
+    (t): t is { key: string; value: string; label?: string } =>
+      typeof t === "object" && t !== null &&
+      typeof (t as Record<string, unknown>).key === "string" &&
+      typeof (t as Record<string, unknown>).value === "string",
+  );
   return {
     ok: true,
     node: h(AnimationTokenEditor, {
       value: data.value as string | undefined,
       label: data.label as string | undefined,
+      tokens,
       className: spec.className,
       design: spec.design ?? {},
       onChange: (value: string) => {
