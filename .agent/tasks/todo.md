@@ -34,43 +34,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-## UI/UX Primitive Catalog Remaining Promotion
-
-- [ ] [ui-ux-catalog][remaining-catalog-only] 残 catalog-only primitive 28件を次バッチ昇格する
-      → 対象 componentKind:
-        - kanban_drag/drag_drop_state_transition
-        - kanban_drag/drag_sort_list
-        - kanban_drag/relation_drop_zone
-        - kanban_drag/tree_reorder_drop_zone
-        - kanban_drag/layout_drop_zone
-        - kanban_drag/component_placement_handle
-        - kanban_drag/snap_grid_overlay
-        - kanban_drag/state_transition_arrow
-        - kanban_drag/slot_placeholder_panel
-        - design_token/responsive_rule_editor
-        - calc_topology/formula_builder
-        - calc_topology/computed_field_preview
-        - calc_topology/relation_score_preview
-        - calc_topology/hub_statistics_panel
-        - calc_topology/aggregation_preview_table
-        - calc_topology/cross_entity_calculation_panel
-        - calc_topology/topology_distance_preview
-        - calc_topology/route_cost_preview
-        - calc_topology/attention_weight_preview
-        - calc_topology/cooccurrence_matrix_preview
-        - calc_topology/rank_score_preview
-        - external_lookup/kana_assist_input
-        - external_lookup/postal_address_lookup
-        - external_lookup/address_postal_lookup
-        - external_lookup/tel_address_candidate_lookup
-        - external_lookup/normalize_address_candidate
-        - external_lookup/lookup_candidate_confirm_panel
-        - external_lookup/bulk_import_candidate_panel
-      → 完了条件:
-        component file 追加 / RuntimeComponentFactory 登録 / catalog sourcePath 実ファイル昇格 / runtimeConnected:true / seed同期 / factory-catalog linter pass / runtime-semantics pass。
-      → 境界:
-        drag/drop・lookup・calculation は thin surface に限定し、DB write / topology judgment / mutation apply / SQL Attention score計算は持たせない。
-
 ## Abstract Function Boundary Tests
 
 - [ ] [abstract-function][unit-tests] function-backed primitive が参照する abstract function boundary tests を追加する

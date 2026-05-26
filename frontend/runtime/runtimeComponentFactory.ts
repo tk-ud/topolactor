@@ -58,6 +58,34 @@ import { FormField } from "../components/FormField.tsx";
 import { KanbanBoard } from "../components/KanbanBoard.tsx";
 import { LayoutGridEditor } from "../components/LayoutGridEditor.tsx";
 import { CalculationPreviewPanel } from "../components/CalculationPreviewPanel.tsx";
+import { DragDropStateTransition } from "../components/DragDropStateTransition.tsx";
+import { DragSortList } from "../components/DragSortList.tsx";
+import { RelationDropZone } from "../components/RelationDropZone.tsx";
+import { TreeReorderDropZone } from "../components/TreeReorderDropZone.tsx";
+import { LayoutDropZone } from "../components/LayoutDropZone.tsx";
+import { ComponentPlacementHandle } from "../components/ComponentPlacementHandle.tsx";
+import { SnapGridOverlay } from "../components/SnapGridOverlay.tsx";
+import { StateTransitionArrow } from "../components/StateTransitionArrow.tsx";
+import { SlotPlaceholderPanel } from "../components/SlotPlaceholderPanel.tsx";
+import { ResponsiveRuleEditor } from "../components/ResponsiveRuleEditor.tsx";
+import { FormulaBuilder } from "../components/FormulaBuilder.tsx";
+import { ComputedFieldPreview } from "../components/ComputedFieldPreview.tsx";
+import { RelationScorePreview } from "../components/RelationScorePreview.tsx";
+import { HubStatisticsPanel } from "../components/HubStatisticsPanel.tsx";
+import { AggregationPreviewTable } from "../components/AggregationPreviewTable.tsx";
+import { CrossEntityCalculationPanel } from "../components/CrossEntityCalculationPanel.tsx";
+import { TopologyDistancePreview } from "../components/TopologyDistancePreview.tsx";
+import { RouteCostPreview } from "../components/RouteCostPreview.tsx";
+import { AttentionWeightPreview } from "../components/AttentionWeightPreview.tsx";
+import { CooccurrenceMatrixPreview } from "../components/CooccurrenceMatrixPreview.tsx";
+import { RankScorePreview } from "../components/RankScorePreview.tsx";
+import { KanaAssistInput } from "../components/KanaAssistInput.tsx";
+import { PostalAddressLookup } from "../components/PostalAddressLookup.tsx";
+import { AddressPostalLookup } from "../components/AddressPostalLookup.tsx";
+import { TelAddressCandidateLookup } from "../components/TelAddressCandidateLookup.tsx";
+import { NormalizeAddressCandidate } from "../components/NormalizeAddressCandidate.tsx";
+import { LookupCandidateConfirmPanel } from "../components/LookupCandidateConfirmPanel.tsx";
+import { BulkImportCandidatePanel } from "../components/BulkImportCandidatePanel.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
@@ -1806,6 +1834,24 @@ function calculationPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResul
   };
 }
 
+
+
+function thinPreviewFactory(component: any, requiredBinding?: string): (spec: RuntimeComponentSpec)=>RenderResult {
+  return (spec) => {
+    if (requiredBinding) { const check = requireBinding(spec, requiredBinding); if (!check.ok) return check; }
+    return { ok: true, node: h(component, {
+      title: typeof spec.props.title === "string" ? spec.props.title : undefined,
+      value: typeof spec.props.value === "string" ? spec.props.value : undefined,
+      items: Array.isArray(spec.props.items) ? spec.props.items : undefined,
+      preview: spec.props.preview ?? spec.props.result ?? spec.props.data,
+      onChange: spec.eventBinding.change ? (value: string) => { const r = emitBoundEvent(spec, "change", { value }); if (!r.ok) throw new Error(r.error);} : undefined,
+      onSelect: spec.eventBinding.select ? (value: string) => { const r = emitBoundEvent(spec, "select", { value }); if (!r.ok) throw new Error(r.error);} : undefined,
+      onConfirm: spec.eventBinding.submit ? () => { const r = emitBoundEvent(spec, "submit", {}); if (!r.ok) throw new Error(r.error);} : undefined,
+      className: spec.className, design: spec.design ?? {},
+    })};
+  };
+}
+
 export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["action/button"], render: buttonFactory },
   {
@@ -1912,6 +1958,34 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["safety_guard/operation_audit_log_panel"], render: operationAuditLogPanelFactory },
   { componentKinds: ["form_input/form_field"], render: formFieldFactory },
   { componentKinds: ["kanban_drag/kanban_board"], render: kanbanBoardFactory },
+  { componentKinds: ["kanban_drag/drag_drop_state_transition"], render: thinPreviewFactory(DragDropStateTransition, "drop") },
+  { componentKinds: ["kanban_drag/drag_sort_list"], render: thinPreviewFactory(DragSortList, "drag") },
+  { componentKinds: ["kanban_drag/relation_drop_zone"], render: thinPreviewFactory(RelationDropZone, "drop") },
+  { componentKinds: ["kanban_drag/tree_reorder_drop_zone"], render: thinPreviewFactory(TreeReorderDropZone, "drop") },
+  { componentKinds: ["kanban_drag/layout_drop_zone"], render: thinPreviewFactory(LayoutDropZone, "drop") },
+  { componentKinds: ["kanban_drag/component_placement_handle"], render: thinPreviewFactory(ComponentPlacementHandle, "drag") },
+  { componentKinds: ["kanban_drag/snap_grid_overlay"], render: thinPreviewFactory(SnapGridOverlay) },
+  { componentKinds: ["kanban_drag/state_transition_arrow"], render: thinPreviewFactory(StateTransitionArrow) },
+  { componentKinds: ["kanban_drag/slot_placeholder_panel"], render: thinPreviewFactory(SlotPlaceholderPanel) },
+  { componentKinds: ["design_token/responsive_rule_editor"], render: thinPreviewFactory(ResponsiveRuleEditor, "change") },
+  { componentKinds: ["calc_topology/formula_builder"], render: thinPreviewFactory(FormulaBuilder, "change") },
+  { componentKinds: ["calc_topology/computed_field_preview"], render: thinPreviewFactory(ComputedFieldPreview) },
+  { componentKinds: ["calc_topology/relation_score_preview"], render: thinPreviewFactory(RelationScorePreview) },
+  { componentKinds: ["calc_topology/hub_statistics_panel"], render: thinPreviewFactory(HubStatisticsPanel) },
+  { componentKinds: ["calc_topology/aggregation_preview_table"], render: thinPreviewFactory(AggregationPreviewTable) },
+  { componentKinds: ["calc_topology/cross_entity_calculation_panel"], render: thinPreviewFactory(CrossEntityCalculationPanel) },
+  { componentKinds: ["calc_topology/topology_distance_preview"], render: thinPreviewFactory(TopologyDistancePreview) },
+  { componentKinds: ["calc_topology/route_cost_preview"], render: thinPreviewFactory(RouteCostPreview) },
+  { componentKinds: ["calc_topology/attention_weight_preview"], render: thinPreviewFactory(AttentionWeightPreview) },
+  { componentKinds: ["calc_topology/cooccurrence_matrix_preview"], render: thinPreviewFactory(CooccurrenceMatrixPreview) },
+  { componentKinds: ["calc_topology/rank_score_preview"], render: thinPreviewFactory(RankScorePreview) },
+  { componentKinds: ["external_lookup/kana_assist_input"], render: thinPreviewFactory(KanaAssistInput, "change") },
+  { componentKinds: ["external_lookup/postal_address_lookup"], render: thinPreviewFactory(PostalAddressLookup, "change") },
+  { componentKinds: ["external_lookup/address_postal_lookup"], render: thinPreviewFactory(AddressPostalLookup, "change") },
+  { componentKinds: ["external_lookup/tel_address_candidate_lookup"], render: thinPreviewFactory(TelAddressCandidateLookup, "change") },
+  { componentKinds: ["external_lookup/normalize_address_candidate"], render: thinPreviewFactory(NormalizeAddressCandidate) },
+  { componentKinds: ["external_lookup/lookup_candidate_confirm_panel"], render: thinPreviewFactory(LookupCandidateConfirmPanel, "submit") },
+  { componentKinds: ["external_lookup/bulk_import_candidate_panel"], render: thinPreviewFactory(BulkImportCandidatePanel, "submit") },
   { componentKinds: ["design_token/layout_grid_editor"], render: layoutGridEditorFactory },
   { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
 ];

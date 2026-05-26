@@ -921,7 +921,6 @@ system_roadmap_ssot:
         - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
-        - remaining catalog-only primitive 28件の昇格バッチ（component file / factory registration / sourcePath / runtimeConnected / seed同期 / reachability checks）
         - abstract function boundary unit tests（function-backed primitive 参照境界）
         - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
         - Issue #89 mouse-driven layout editor / drag-drop UI island
@@ -1197,7 +1196,6 @@ system_roadmap_ssot:
         - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
         - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
       known_gap_ref:
-        - remaining catalog-only primitive 28件の昇格バッチ（component file / factory registration / sourcePath / runtimeConnected / seed同期 / reachability checks）
         - abstract function boundary unit tests（function-backed primitive 参照境界）
         - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
         - Issue #89 mouse-driven layout editor / drag-drop UI island
