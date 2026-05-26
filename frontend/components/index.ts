@@ -62,6 +62,46 @@ export type { ModalProps } from "./Modal.tsx";
 export { Tree, TreeNode } from "./Tree.tsx";
 export type { TreeProps, TreeNodeProps, TreeNodeData } from "./Tree.tsx";
 
+// search_suggest components
+export { SuggestInput } from "./SuggestInput.tsx";
+export type { SuggestInputProps } from "./SuggestInput.tsx";
+export { RecentInputSuggest } from "./RecentInputSuggest.tsx";
+export type { RecentInputSuggestProps } from "./RecentInputSuggest.tsx";
+export { RelationPathPreview } from "./RelationPathPreview.tsx";
+export type { RelationPathPreviewProps, RelationPathSegment } from "./RelationPathPreview.tsx";
+export { FieldResolverInspector } from "./FieldResolverInspector.tsx";
+export type { FieldResolverInspectorProps } from "./FieldResolverInspector.tsx";
+export { RelationCandidatePicker } from "./RelationCandidatePicker.tsx";
+export type { RelationCandidatePickerProps, RelationCandidate } from "./RelationCandidatePicker.tsx";
+export { DuplicateMergeCandidatePanel } from "./DuplicateMergeCandidatePanel.tsx";
+export type { DuplicateMergeCandidatePanelProps, DuplicateMergeCandidate } from "./DuplicateMergeCandidatePanel.tsx";
+export { SchemaPromotionCandidatePanel } from "./SchemaPromotionCandidatePanel.tsx";
+export type { SchemaPromotionCandidatePanelProps, SchemaPromotionCandidate } from "./SchemaPromotionCandidatePanel.tsx";
+export { SelectImportDialog } from "./SelectImportDialog.tsx";
+export type { SelectImportDialogProps, SelectImportDialogCandidate } from "./SelectImportDialog.tsx";
+export { KanbanBoard } from "./KanbanBoard.tsx";
+export type { KanbanBoardProps, KanbanBoardColumn, KanbanBoardItem } from "./KanbanBoard.tsx";
+export { LayoutGridEditor } from "./LayoutGridEditor.tsx";
+export type { LayoutGridEditorProps } from "./LayoutGridEditor.tsx";
+export { CalculationPreviewPanel } from "./CalculationPreviewPanel.tsx";
+export type { CalculationPreviewPanelProps } from "./CalculationPreviewPanel.tsx";
+
+// inline_edit components
+export { InlineEditableJsonbField } from "./InlineEditableJsonbField.tsx";
+export type { InlineEditableJsonbFieldProps } from "./InlineEditableJsonbField.tsx";
+export { DiffStrikeText } from "./DiffStrikeText.tsx";
+export type { DiffStrikeTextProps } from "./DiffStrikeText.tsx";
+export { AuditDiffDrawer } from "./AuditDiffDrawer.tsx";
+export type { AuditDiffDrawerProps, AuditDiffEntry } from "./AuditDiffDrawer.tsx";
+export { OptimisticUpdateBoundary } from "./OptimisticUpdateBoundary.tsx";
+export type { OptimisticUpdateBoundaryProps } from "./OptimisticUpdateBoundary.tsx";
+export { ConfirmedUpdateButton } from "./ConfirmedUpdateButton.tsx";
+export type { ConfirmedUpdateButtonProps } from "./ConfirmedUpdateButton.tsx";
+export { UndoTimeline } from "./UndoTimeline.tsx";
+export type { UndoTimelineProps, UndoTimelineItem } from "./UndoTimeline.tsx";
+export { ConflictResolutionPanel } from "./ConflictResolutionPanel.tsx";
+export type { ConflictResolutionPanelProps, ConflictEntry } from "./ConflictResolutionPanel.tsx";
+
 export { COMPONENT_CATALOG_ENTRIES } from "./catalog.ts";
 export type {
   ComponentFamily, ComponentSemanticRole, ComponentVisualRole, ComponentLifecycleStatus,

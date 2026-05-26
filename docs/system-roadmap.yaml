@@ -846,15 +846,71 @@ system_roadmap_ssot:
 
 
     frontend.ui_ux_executable_component_slice:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
+      files:
+        - frontend/components/AutoCompleteInput.tsx
+        - frontend/components/SearchCombobox.tsx
+        - frontend/components/CandidateConfidenceBadge.tsx
+        - frontend/components/InlineEditableField.tsx
+        - frontend/components/PatchPreviewPanel.tsx
+        - frontend/components/ApplyConfirmDialog.tsx
+        - frontend/components/StyleTokenPicker.tsx
+        - frontend/components/ThemePreviewPanel.tsx
+        - frontend/components/ValidationErrorPanel.tsx
+        - frontend/components/SuggestInput.tsx
+        - frontend/components/RecentInputSuggest.tsx
+        - frontend/components/RelationCandidatePicker.tsx
+        - frontend/components/DuplicateMergeCandidatePanel.tsx
+        - frontend/components/RelationPathPreview.tsx
+        - frontend/components/FieldResolverInspector.tsx
+        - frontend/components/SchemaPromotionCandidatePanel.tsx
+        - frontend/components/InlineEditableJsonbField.tsx
+        - frontend/components/DiffStrikeText.tsx
+        - frontend/components/AuditDiffDrawer.tsx
+        - frontend/components/OptimisticUpdateBoundary.tsx
+        - frontend/components/ConfirmedUpdateButton.tsx
+        - frontend/components/UndoTimeline.tsx
+        - frontend/components/ConflictResolutionPanel.tsx
+        - frontend/components/FacetedFilterBar.tsx
+        - frontend/components/ColumnFilter.tsx
+        - frontend/components/ColumnVisibilityEditor.tsx
+        - frontend/components/SortControl.tsx
+        - frontend/components/GroupByControl.tsx
+        - frontend/components/SavedViewSelector.tsx
+        - frontend/components/BulkActionPanel.tsx
+        - frontend/components/VirtualizedDataTable.tsx
+        - frontend/components/RowDetailDrawer.tsx
+        - frontend/components/PaginationControl.tsx
+        - frontend/components/ExportCandidatePanel.tsx
+        - frontend/components/FontTokenEditor.tsx
+        - frontend/components/BackgroundColorEditor.tsx
+        - frontend/components/TextColorEditor.tsx
+        - frontend/components/SpacingTokenEditor.tsx
+        - frontend/components/BorderRadiusEditor.tsx
+        - frontend/components/CssVariablePreview.tsx
+        - frontend/components/ShadowTokenEditor.tsx
+        - frontend/components/AnimationTokenEditor.tsx
+        - frontend/components/CommandPalette.tsx
+        - frontend/components/EmptyStateActionPanel.tsx
+        - frontend/components/OperationGuardBanner.tsx
+        - frontend/components/MutationBoundaryInspector.tsx
+        - frontend/components/PermissionHintPanel.tsx
+        - frontend/components/DryRunResultPanel.tsx
+        - frontend/components/RollbackCandidatePanel.tsx
+        - frontend/components/OperationAuditLogPanel.tsx
+        - frontend/runtime/runtimeComponentFactory.ts
+        - frontend/components/catalog.ts
       public_summary: >
-        UI/UX primitive catalog SSOT is defined and runtime interface envelope preparation is in place.
-        Next executable slice promotion is governed by catalog -> componentKind -> runtime factory/interface reachability invariants,
-        sourcePath promotion, factory registration continuity, and static/type/deno checks.
-        runtimeConnected:true is limited to factory/constructor reachable and is not a claim of per-component UI behavior verification.
-        Unit-test scope is runtime function boundaries (abstract function/calculation/validation/external lookup/mutation boundary/patch generation/layout collision), not component rendering behavior.
+        Bulk promotion pass: 50 total components now runtimeConnected:true (9 from representative
+        slice + 41 bulk-promoted). Categories covered: A (search/suggest), B (inline edit/audit),
+        C (table/view ops), E (design tokens), H (safety/guard). All are factory-registered thin
+        components with no business logic, DB writes, or topology judgment. Remaining catalog-only
+        entries (Cat D kanban/drag, Cat E layout/responsive, Cat F calc/topology, Cat G
+        external/lookup) stay runtimeConnected:false / sourcePath:CATALOG_SSOT.
+        runtimeConnected:true is factory/constructor reachable only; DB promotion and topology
+        entity registration remain registrationRequired:true.
       completion_condition:
         - representative_ui_ux_slice_has_componentKind_selector_and_factory_interface_registration
         - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
@@ -865,10 +921,9 @@ system_roadmap_ssot:
         - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
-        - UI/UX primitive React/Preact component implementation not started
-        - catalog entries still sourcePath: CATALOG_SSOT for unimplemented primitives
-        - runtimeConnected remains false for catalog_definition_only entries
-        - catalog -> componentKind -> factory/interface reachability check bundle remains follow-up for promoted primitives
+        - Cat D (kanban/drag), Cat E layout_grid/responsive_rule, Cat F (calc/topology), Cat G (external/lookup) remain catalog-only
+        - abstract function / heavy logic boundary unit tests not yet added for promoted primitives
+        - deno test execution not verified locally (deno not installed in this environment)
 
     admin_visual_layout_builder:
       status: partial

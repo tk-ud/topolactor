@@ -86,7 +86,12 @@ public class SsotWiringAuditComponentRegistrationTests
         var factory = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentFactory.ts");
         var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
 
-        var connectedKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?runtimeConnected:\s*true")
+        // Parse entry-by-entry so runtimeConnected:true in one entry does not
+        // bleed into an adjacent entry that has runtimeConnected:false.
+        var connectedKinds = ExtractCatalogEntries(catalog)
+            .Where(entry => Regex.IsMatch(entry, @"runtimeConnected:\s*true"))
+            .Select(entry => Regex.Match(entry, @"componentKind:\s*""([^""]+)"""))
+            .Where(m => m.Success)
             .Select(m => m.Groups[1].Value)
             .Distinct()
             .ToArray();
@@ -111,7 +116,14 @@ public class SsotWiringAuditComponentRegistrationTests
         var factory = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimeComponentFactory.ts");
         var renderer = SsotYamlContractReader.ReadDoc("frontend/runtime/runtimePrimitiveRenderer.ts");
 
-        var requiringBindingKinds = Regex.Matches(catalog, @"componentKind:\s*""([^""]+)""[\s\S]*?capabilityTags:\s*\[[^\]]*""requires_event_binding""[\s\S]*?runtimeConnected:\s*true")
+        // Parse entry-by-entry: only collect kinds where BOTH requires_event_binding
+        // AND runtimeConnected:true appear within the same catalog entry object.
+        var requiringBindingKinds = ExtractCatalogEntries(catalog)
+            .Where(entry =>
+                Regex.IsMatch(entry, @"runtimeConnected:\s*true") &&
+                Regex.IsMatch(entry, @"capabilityTags:\s*\[[^\]]*""requires_event_binding"""))
+            .Select(entry => Regex.Match(entry, @"componentKind:\s*""([^""]+)"""))
+            .Where(m => m.Success)
             .Select(m => m.Groups[1].Value)
             .Distinct()
             .ToArray();
@@ -126,6 +138,48 @@ public class SsotWiringAuditComponentRegistrationTests
                 factory.Contains($"\"{kind}\"", StringComparison.Ordinal),
                 $"event-binding-required runtimeConnected kind must be factory componentKinds reachable: {kind}");
         }
+    }
+
+    // Extracts each top-level { ... } entry from COMPONENT_CATALOG_ENTRIES by tracking
+    // balanced braces. This ensures per-entry field reads do not cross object boundaries.
+    private static IEnumerable<string> ExtractCatalogEntries(string catalog)
+    {
+        var idx = catalog.IndexOf("COMPONENT_CATALOG_ENTRIES", StringComparison.Ordinal);
+        if (idx < 0) return Enumerable.Empty<string>();
+
+        // Use '= [' to locate the array initializer, skipping the type annotation '[]'.
+        var eqBracket = catalog.IndexOf("= [", idx, StringComparison.Ordinal);
+        if (eqBracket < 0) return Enumerable.Empty<string>();
+
+        var arrayStart = eqBracket + 2; // position of '['
+        var entries = new List<string>();
+        var depth = 0;
+        var entryStart = -1;
+
+        for (var i = arrayStart; i < catalog.Length; i++)
+        {
+            var ch = catalog[i];
+            if (ch == '{')
+            {
+                if (depth == 0) entryStart = i;
+                depth++;
+            }
+            else if (ch == '}')
+            {
+                depth--;
+                if (depth == 0 && entryStart >= 0)
+                {
+                    entries.Add(catalog.Substring(entryStart, i - entryStart + 1));
+                    entryStart = -1;
+                }
+            }
+            else if (ch == ']' && depth == 0)
+            {
+                break; // reached end of COMPONENT_CATALOG_ENTRIES array
+            }
+        }
+
+        return entries;
     }
 
     // ─── Generate: lifecycle transitions to packaging without issuing IDs ─────
