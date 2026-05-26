@@ -49,7 +49,7 @@ public class ComponentEventAppendIntegrationTests
                 IdempotencyKey: "idem-integration-001")
         ]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "ProjectionView", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
@@ -69,7 +69,7 @@ public class ComponentEventAppendIntegrationTests
             new ComponentOperationEventDto("cmp-batch-c", "pkg-b", null, null, "select", new(), "EntityTableProjection", "2026-05-26T00:00:02.000Z", "idem-batch-c"),
         ]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "EntityTableProjection", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(3, res.Accepted);
@@ -86,7 +86,7 @@ public class ComponentEventAppendIntegrationTests
             new ComponentOperationEventDto("cmp-dup", "pkg-d", null, null, "submit", new(), "OperationPanel", "2026-05-26T00:00:00.000Z", "idem-dup-001")
         ]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "OperationPanel", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
@@ -111,11 +111,27 @@ public class ComponentEventAppendIntegrationTests
                 IdempotencyKey: "idem-missing")
         ]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "ProjectionView", CancellationToken.None);
 
         Assert.False(res.Success);
         Assert.NotNull(res.Errors);
         Assert.Contains(res.Errors!, e => e.Code == "COMPONENT_EVENT_INVALID");
+    }
+
+
+    [Fact]
+    public async Task AppendBoundary_ActorMismatch_ReturnsExplicitError_NotSpoofable()
+    {
+        var endpoint = CreateEndpoint();
+        var req = new ComponentEventAppendRequestDto([
+            new ComponentOperationEventDto("cmp-spoof", "pkg-s", null, null, "click", new(), "attacker", "2026-05-26T00:00:00.000Z", "idem-spoof")
+        ]);
+
+        var res = await endpoint.HandleAsync(req, "trusted-subject", CancellationToken.None);
+
+        Assert.False(res.Success);
+        Assert.NotNull(res.Errors);
+        Assert.Contains(res.Errors!, e => e.Code == "COMPONENT_EVENT_ACTOR_MISMATCH");
     }
 
     [Fact]
@@ -124,7 +140,7 @@ public class ComponentEventAppendIntegrationTests
         var endpoint = CreateEndpoint();
         var req = new ComponentEventAppendRequestDto([]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "ProjectionView", CancellationToken.None);
 
         Assert.False(res.Success);
         Assert.NotNull(res.Errors);
@@ -179,7 +195,7 @@ public class ComponentEventAppendIntegrationTests
             new ComponentOperationEventDto("obs-cmp", "pkg-obs", null, null, "change", new Dictionary<string, object?> { ["value"] = "new-value" }, "ObservationSurface", "2026-05-26T00:00:00.000Z", "idem-obs-001")
         ]);
 
-        var res = await endpoint.HandleAsync(req, CancellationToken.None);
+        var res = await endpoint.HandleAsync(req, "ObservationSurface", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Single(spy.Appended);

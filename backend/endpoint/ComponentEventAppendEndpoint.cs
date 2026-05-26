@@ -28,7 +28,7 @@ public class ComponentEventAppendEndpoint
         _repo = repo ?? throw new ArgumentNullException(nameof(repo));
     }
 
-    public async Task<ComponentEventAppendResponseDto> HandleAsync(ComponentEventAppendRequestDto request, CancellationToken ct)
+    public async Task<ComponentEventAppendResponseDto> HandleAsync(ComponentEventAppendRequestDto request, string authenticatedSubject, CancellationToken ct)
     {
         if (request.Events is null || request.Events.Count == 0)
             return new ComponentEventAppendResponseDto(false, 0, [new ValidationError("COMPONENT_EVENT_BATCH_REQUIRED", "events must be non-empty array")]);
@@ -41,6 +41,11 @@ public class ComponentEventAppendEndpoint
 
             if (!DateTimeOffset.TryParse(e.OccurredAt, out var occurredAt))
                 return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_OCCURRED_AT_INVALID", "occurred_at must be ISO datetime")]);
+
+            // Auth boundary hardening: actor/source must match authenticated JWT subject.
+            // This prevents external callers from spoofing arbitrary actor/source identity.
+            if (!string.Equals(e.ActorOrSource, authenticatedSubject, StringComparison.Ordinal))
+                return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_ACTOR_MISMATCH", "actor_or_source must match authenticated subject")]);
 
             var appended = await _repo.AppendComponentOperationEventLogAsync(new ComponentOperationEventLogRecord(
                 ComponentId: e.ComponentId!,

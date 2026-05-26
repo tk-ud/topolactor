@@ -57,6 +57,12 @@ internal static class TestJwtBuilder
         return BuildTokenFromPayloadObject(secret, new { sub = "testuser", role = "test", exp = "not-a-number" });
     }
 
+    public static string BuildTokenWithoutSub(string secret, long? expUnix = null)
+    {
+        var exp = expUnix ?? DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
+        return BuildTokenFromPayloadObject(secret, new { role = "test", exp });
+    }
+
     private static string BuildTokenFromPayloadObject(string secret, object payloadObj)
     {
         var rawPayloadJson = JsonSerializer.Serialize(payloadObj);

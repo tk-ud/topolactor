@@ -66,6 +66,32 @@ public class JwtGuard
         return [];
     }
 
+
+    /// <summary>
+    /// Extracts JWT subject (sub) from a previously validated token.
+    /// Returns null when token/payload is malformed or sub is absent.
+    /// </summary>
+    public string? TryGetSubject(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return null;
+
+        var parts = token.Split('.');
+        if (parts.Length != 3) return null;
+
+        try
+        {
+            var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
+            using var doc = JsonDocument.Parse(payloadJson);
+            if (!doc.RootElement.TryGetProperty("sub", out var subProp)) return null;
+            if (subProp.ValueKind != JsonValueKind.String) return null;
+            var sub = subProp.GetString();
+            return string.IsNullOrWhiteSpace(sub) ? null : sub;
+        }
+        catch
+        {
+            return null;
+        }
+    }
     private static string Base64UrlEncode(byte[] data) =>
         Convert.ToBase64String(data).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
