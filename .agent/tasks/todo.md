@@ -90,11 +90,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → pipeline 意味は `runtime adapter(normalize + factory reachability check) -> runtime registry(kind lookup) -> runtime factory(kind -> constructor/component interface) -> concrete component`。
       → `runtimeConnected:true` は factory/constructor reachable を意味する。#264 all green（runtime semantics audit 含む）を根拠に partial へ戻さない。
 
-- [ ] representative UI/UX primitive component slice を実装する
-      → 単位は衝突しない completion bundle として固定: `interface/props contract -> component tag/componentKind -> component implementation -> factory registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> reachability test`。
+- [ ] representative UI/UX executable component slice を completion bundle 単位で昇格する
+      → 単位は `componentKind selector -> RuntimeComponentFactory interface registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> static/type/deno による interface reachability check` を 1 bundle とする。
 
-- [ ] UI/UX primitive 82件の React/Preact component 実体化を段階実装する
-      → 初回 representative slice: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
+- [ ] UI/UX primitive catalog の実行可能昇格を段階実装する
+      → 初回 representative slice は interface/thin-wrapper 中心で実施し、個別 UI behavior test 必須化ではなく catalog 昇格 invariant を主軸に進める。
+      → representative names（昇格対象一覧）: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
 - [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ昇格する
       → 未実装 primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時のみ昇格する。
@@ -102,8 +103,8 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] 実装済み primitive の runtimeConnected を false から true へ昇格する
       → factory registration + runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。
 
-- [ ] component slice reachability tests を追加する
-      → catalog -> adapter/renderer reachability と factory/constructor reachable を CI 補助線として検証する。
+- [ ] component slice reachability check bundle を追加する
+      → catalog -> componentKind -> factory/interface reachability を static check / TypeScript check / Deno test で検証する（個別 UI behavior test 必須化はしない）。
 
 - [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
       → 誤昇格防止。未実装 primitive を implemented 扱いしない。
