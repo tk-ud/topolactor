@@ -91,3 +91,112 @@ Deno.test("emitComponentOperationEvent: wiringId is preserved in queue payload",
   const [queued] = __testOnly.getQueueSnapshot();
   assertEquals(queued.wiringId, "wiring-wire");
 });
+
+// ─── surface-expansion: emit-only wiring for additional component surfaces ───
+// Proves the emit-only boundary extends to components beyond OperationPanel.
+// Components emit normalized events only; no topology/API dispatch branching.
+
+Deno.test("surface-expansion: ProjectionView surface emits projection-related event (change)", () => {
+  __testOnly.resetQueue();
+  const result = emitComponentOperationEvent({
+    componentId: "projection-view-001",
+    packageId: "pkg-projection",
+    layoutId: "layout-proj",
+    eventType: "change",
+    actorOrSource: "ProjectionView",
+    payload: { field: "username", value: "alice" },
+  });
+  assertEquals(result.ok, true);
+  assertEquals(__testOnly.getQueueLength(), 1);
+  const [queued] = __testOnly.getQueueSnapshot();
+  assertEquals(queued.componentId, "projection-view-001");
+  assertEquals(queued.eventType, "change");
+  assertEquals(queued.actorOrSource, "ProjectionView");
+  __testOnly.resetQueue();
+});
+
+Deno.test("surface-expansion: EntityTableProjection surface emits select event", () => {
+  __testOnly.resetQueue();
+  const result = emitComponentOperationEvent({
+    componentId: "entity-table-001",
+    packageId: "pkg-entity",
+    layoutId: "layout-entity",
+    eventType: "select",
+    actorOrSource: "EntityTableProjection",
+    payload: { rowId: "row-42", action: "select" },
+  });
+  assertEquals(result.ok, true);
+  assertEquals(__testOnly.getQueueLength(), 1);
+  const [queued] = __testOnly.getQueueSnapshot();
+  assertEquals(queued.componentId, "entity-table-001");
+  assertEquals(queued.eventType, "select");
+  __testOnly.resetQueue();
+});
+
+Deno.test("surface-expansion: RecommendationPanel surface emits toggle event (emit-only, no mutation)", () => {
+  __testOnly.resetQueue();
+  const result = emitComponentOperationEvent({
+    componentId: "rec-panel-001",
+    packageId: "pkg-rec",
+    eventType: "toggle",
+    actorOrSource: "RecommendationPanel",
+    payload: { candidateId: "cand-001", toggled: true },
+  });
+  assertEquals(result.ok, true);
+  const [queued] = __testOnly.getQueueSnapshot();
+  assertEquals(queued.eventType, "toggle");
+  assertEquals(queued.actorOrSource, "RecommendationPanel");
+  __testOnly.resetQueue();
+});
+
+Deno.test("surface-expansion: multiple component surfaces emit independently without interference", () => {
+  __testOnly.resetQueue();
+  emitComponentOperationEvent({ componentId: "surface-a", eventType: "click", actorOrSource: "ComponentA", payload: {} });
+  emitComponentOperationEvent({ componentId: "surface-b", eventType: "focus", actorOrSource: "ComponentB", payload: {} });
+  emitComponentOperationEvent({ componentId: "surface-c", eventType: "blur", actorOrSource: "ComponentC", payload: {} });
+  assertEquals(__testOnly.getQueueLength(), 3);
+  const snapshot = __testOnly.getQueueSnapshot();
+  assertEquals(snapshot[0].componentId, "surface-a");
+  assertEquals(snapshot[1].componentId, "surface-b");
+  assertEquals(snapshot[2].componentId, "surface-c");
+  __testOnly.resetQueue();
+});
+
+// ─── hardening: retry boundary, monitoring hook, failure path ────────────────
+
+Deno.test("hardening: flush failure increments retryCount and keeps event in queue", async () => {
+  __testOnly.resetQueue();
+  emitComponentOperationEvent({ componentId: "hard-001", eventType: "submit", actorOrSource: "test", payload: {} });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("NETWORK_FAIL"); };
+  try {
+    await flushComponentEvents();
+    const snapshot = __testOnly.getQueueSnapshot();
+    assertEquals(snapshot.length, 1, "event must remain in queue after flush failure");
+    assertEquals(snapshot[0].retryCount, 1, "retryCount must be incremented on flush failure");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetQueue();
+  }
+});
+
+Deno.test("hardening: event is dropped from queue after maxRetry exhausted", async () => {
+  __testOnly.resetQueue();
+  emitComponentOperationEvent({ componentId: "hard-retry", eventType: "click", actorOrSource: "test", payload: {} });
+
+  // Exhaust all retries (maxRetry=3 means 3 failures, then dropped on the 4th attempt).
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error("NETWORK_FAIL"); };
+  try {
+    await flushComponentEvents(); // retryCount -> 1
+    await flushComponentEvents(); // retryCount -> 2
+    await flushComponentEvents(); // retryCount -> 3
+    assertEquals(__testOnly.getQueueLength(), 1, "event must remain at retryCount=3");
+    await flushComponentEvents(); // retryCount 3 -> filtered out (> maxRetry=3)
+    assertEquals(__testOnly.getQueueLength(), 0, "event must be dropped after maxRetry is exhausted");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetQueue();
+  }
+});

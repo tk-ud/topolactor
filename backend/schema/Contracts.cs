@@ -83,6 +83,10 @@ public record RuntimeWorkingShape(
 /// ContextRouteRecommendation carries next operation and token candidates derived
 /// from the context route recommendation runtime. Status is always explicit —
 /// InsufficientHistory when not enough history exists, never silently null.
+/// ProjectionDefinition carries the projection_constructor_mapping from the resolved manifest
+/// topology entry. Frontend uses this to call setProjectionDefinition on the projection runtime
+/// before processing SSE projection events. Null when no manifest is configured or no
+/// projection_constructor_mapping entry exists in the manifest topology.
 /// </summary>
 public record Emission(
     string? StructureMapId,
@@ -92,7 +96,8 @@ public record Emission(
     JsonElement? Data,
     IReadOnlyList<ValidationError> Errors,
     IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
-    ContextRouteRecommendationResult? ContextRouteRecommendation = null
+    ContextRouteRecommendationResult? ContextRouteRecommendation = null,
+    JsonElement? ProjectionDefinition = null
 );
 
 public record RuntimeJumpEvent(

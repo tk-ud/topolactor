@@ -25,22 +25,42 @@ export type ProjectionEventPayload = {
 
 export type ProjectionUpdateHandler = (projection: UiProjection, payload: ProjectionEventPayload) => void;
 
+/**
+ * Policy for projection events received before a ProjectionDefinition is set.
+ *
+ *   "error"  — emit PROJECTION_RUNTIME_DEFINITION_MISSING to console.error (default).
+ *              Silent fallback is prohibited; missing definition is an explicit configuration gap.
+ *   "ignore" — explicit acknowledged no-op. Use only when the caller owns the lifecycle
+ *              and knows events may arrive before definition is available.
+ */
+export type DefinitionMissingPolicy = "error" | "ignore";
+
+export type ProjectionRuntimeOptions = {
+  /** Policy when projection events arrive before a definition is set. Default: "error". */
+  definitionMissingPolicy?: DefinitionMissingPolicy;
+};
+
 export type ProjectionRuntime = {
   /** Register a handler for projection updates. Returns an unregister function. */
   onProjectionUpdate: (handler: ProjectionUpdateHandler) => () => void;
   /** Process an incoming projection event payload from the sse_dispatcher. */
   handleProjectionEvent: (rawData: string) => void;
-  /** Set the projection definition (loaded from manifest via dispatch). */
+  /** Set the projection definition (loaded from manifest via dispatch response). */
   setProjectionDefinition: (definition: ProjectionDefinition | null) => void;
 };
 
 /**
  * Creates a projection_runtime instance.
  * Receives hook_triggers from sse_dispatcher and produces ui_projection updates.
+ *
+ * Call setProjectionDefinition() with the projectionDefinition from the dispatch response
+ * Emission before SSE projection events arrive. When no definition is set and an event
+ * arrives, the definitionMissingPolicy determines the behavior (default: "error").
  */
-export function createProjectionRuntime(): ProjectionRuntime {
+export function createProjectionRuntime(options?: ProjectionRuntimeOptions): ProjectionRuntime {
   const handlers = new Set<ProjectionUpdateHandler>();
   let currentDefinition: ProjectionDefinition | null = null;
+  const definitionMissingPolicy: DefinitionMissingPolicy = options?.definitionMissingPolicy ?? "error";
 
   function onProjectionUpdate(handler: ProjectionUpdateHandler): () => void {
     handlers.add(handler);
@@ -61,7 +81,16 @@ export function createProjectionRuntime(): ProjectionRuntime {
     }
 
     if (!currentDefinition) {
-      console.warn("[projectionRuntime] received projection event but no definition is set; skipping.");
+      if (definitionMissingPolicy === "ignore") {
+        // Explicit acknowledged no-op: caller declared events may arrive before definition is set.
+        return;
+      }
+      // Default "error" policy: explicit diagnostic error. Silent fallback is prohibited.
+      // Call setProjectionDefinition() with emission.projectionDefinition before events arrive.
+      console.error(
+        "[projectionRuntime] PROJECTION_RUNTIME_DEFINITION_MISSING: received projection event but no ProjectionDefinition is set. " +
+        "Load the projectionDefinition from the dispatch response Emission and call setProjectionDefinition() before SSE events arrive.",
+      );
       return;
     }
 

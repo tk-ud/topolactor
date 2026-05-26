@@ -1,3 +1,5 @@
+import type { ProjectionDefinition } from "../runtime/projectionConstructor.ts";
+
 /**
  * Structured validation error matching backend ValidationError { Code, Message }.
  * Both PascalCase (from C# serialization) and camelCase are accepted.
@@ -41,6 +43,14 @@ export type Emission = {
   data?: Record<string, unknown>;
   errors?: ValidationError[];
   contextRouteRecommendation?: ContextRouteRecommendation;
+  /**
+   * ProjectionDefinition extracted from the manifest topology's projection_constructor_mapping entry.
+   * Supplied by the backend ManifestDispatcher when a manifest with a projection_constructor_mapping
+   * entry is resolved. Frontend must call projectionRuntime.setProjectionDefinition() with this value
+   * before SSE projection events arrive. Null/absent when no manifest is configured or no
+   * projection_constructor_mapping entry exists.
+   */
+  projectionDefinition?: ProjectionDefinition;
 };
 
 export type DispatchRequest = {

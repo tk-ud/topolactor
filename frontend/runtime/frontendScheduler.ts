@@ -47,6 +47,44 @@ let queue: Array<ComponentOperationEvent & { retryCount: number }> = [];
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 let lifecycleHookRegistered = false;
 
+// ─── Retry / monitoring / failure path hooks ─────────────────────────────────
+// Explicit failure observability. Silent failure is prohibited.
+// Callers may register hooks to monitor flush failures and retry exhaustion.
+
+type FlushFailureEvent = {
+  kind: "flush_failed";
+  error: string;
+  remainingInQueue: number;
+  retryingCount: number;
+};
+
+type RetryExhaustedEvent = {
+  kind: "retry_exhausted";
+  droppedCount: number;
+};
+
+type FlushMonitorEvent = FlushFailureEvent | RetryExhaustedEvent;
+
+type FlushMonitorHook = (event: FlushMonitorEvent) => void;
+
+const flushMonitorHooks: Set<FlushMonitorHook> = new Set();
+
+/**
+ * Register a monitoring hook for flush failures and retry exhaustion.
+ * Returns an unregister function. Use for observability dashboards and alerting.
+ * Silent failure is prohibited — hooks receive structured events for all failure paths.
+ */
+export function onFlushMonitor(hook: FlushMonitorHook): () => void {
+  flushMonitorHooks.add(hook);
+  return () => flushMonitorHooks.delete(hook);
+}
+
+function emitFlushMonitor(event: FlushMonitorEvent): void {
+  for (const hook of flushMonitorHooks) {
+    try { hook(event); } catch { /* hook errors must not propagate to flush path */ }
+  }
+}
+
 function getStorage(): Storage | null {
   try {
     return globalThis.localStorage ?? null;
@@ -117,10 +155,18 @@ export async function flushComponentEvents(): Promise<void> {
     queue = queue.slice(batch.length);
     persistFallback();
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
     console.error("COMPONENT_EVENT_FLUSH_FAILED", error);
-    queue = batch.map((evt) => ({ ...evt, retryCount: evt.retryCount + 1 })).filter((evt) => evt.retryCount <= DEFAULT_EVENT_QUEUE_CONFIG.maxRetry)
-      .concat(queue.slice(batch.length));
+    const incremented = batch.map((evt) => ({ ...evt, retryCount: evt.retryCount + 1 }));
+    const surviving = incremented.filter((evt) => evt.retryCount <= DEFAULT_EVENT_QUEUE_CONFIG.maxRetry);
+    const droppedCount = incremented.length - surviving.length;
+    queue = surviving.concat(queue.slice(batch.length));
     persistFallback();
+    emitFlushMonitor({ kind: "flush_failed", error: errorMsg, remainingInQueue: queue.length, retryingCount: surviving.length });
+    if (droppedCount > 0) {
+      console.error(`COMPONENT_EVENT_RETRY_EXHAUSTED: ${droppedCount} event(s) dropped after maxRetry=${DEFAULT_EVENT_QUEUE_CONFIG.maxRetry}`);
+      emitFlushMonitor({ kind: "retry_exhausted", droppedCount });
+    }
   }
 }
 
@@ -232,5 +278,8 @@ export const __testOnly = {
   },
   getQueueSnapshot(): Array<ComponentOperationEvent & { retryCount: number }> {
     return queue.map((e) => ({ ...e }));
+  },
+  clearMonitorHooks(): void {
+    flushMonitorHooks.clear();
   },
 };

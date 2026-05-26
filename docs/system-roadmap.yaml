@@ -177,9 +177,8 @@ system_roadmap_ssot:
         - backend.sse_emitter: partial
         - frontend.sse_receiver: skeleton
         - frontend.sse_dispatcher: skeleton
-        - frontend.projection_constructor: partial
-      blocking_gaps:
-        - Gap-8 projection_constructor
+        - frontend.projection_constructor: implemented
+      blocking_gaps: []
 
     M5_admin_and_ui_topology:
       title: Admin UI, component topology, and seed runtime
@@ -727,25 +726,30 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.projection_constructor:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >-
-        RuntimeTopologyComponentProps envelope (`data`/`table`/`layoutCss`/`designTailwind`) and runtime component interface preparation are closed for projection runtime handoff. projectionFromEmission helper in renderEmission.ts is implemented: emission.data flows as jsonKeyValue into constructProjection via a caller-supplied ProjectionDefinition, and sseLane.test.ts proves this path. However, the end-to-end route proof requires backend/manifest response to supply ProjectionDefinition / constructor mapping to the frontend — that route is not yet proven. Boundary semantics remain fixed: runtime adapter = normalize + factory reachability check, runtime registry = componentKind lookup, runtime factory = kind -> constructor/component interface, concrete component = interface expansion surface. runtimeConnected:true means factory/constructor reachable.
+        Projection constructor supply route is closed. backend Emission.ProjectionDefinition carries the projection_constructor_mapping from the resolved manifest topology entry. frontend Emission.projectionDefinition receives it from the dispatch response. Frontend projectionRuntime.setProjectionDefinition() applies it before SSE events arrive. projectionFromEmission / constructProjection end-to-end route is proven in sseLane.test.ts: DispatchResponse.emission.projectionDefinition flows into projectionRuntime and constructProjection without test-local definition bypass. DefinitionMissingPolicy is explicit (default "error" emits PROJECTION_RUNTIME_DEFINITION_MISSING; "ignore" is declared no-op). RuntimeTopologyComponentProps envelope, runtime adapter, runtime factory, and interface boundary remain closed. Frontend does not hold topology judgment or SQL Attention judgment. runtimeConnected:true means factory/constructor reachable.
       files:
         - frontend/runtime/projectionConstructor.ts
         - frontend/runtime/renderEmission.ts
+        - frontend/runtime/projectionRuntime.ts
         - frontend/runtime/runtimeComponentAdapter.ts
         - frontend/runtime/runtimePrimitiveRenderer.ts
+        - frontend/api/dispatch.ts
+        - backend/schema/Contracts.cs
+        - backend/runtime/ManifestDispatcher.cs
         - frontend/tests/projectionConstructor.test.ts
         - frontend/tests/runtimeComponentAdapter.test.ts
         - frontend/tests/runtimePrimitiveRenderer.test.ts
+        - frontend/tests/sseLane.test.ts
       evidence:
         tests:
           - projectionConstructor.test.ts
           - runtimeComponentAdapter.test.ts
           - runtimePrimitiveRenderer.test.ts
-          - sseLane.test.ts
+          - sseLane.test.ts (manifest_response_constructor_mapping_end_to_end_route_is_proven)
         ci:
           - check-pipeline-continuity.sh
       completion_condition:
@@ -754,8 +758,6 @@ system_roadmap_ssot:
         - manifest_response_constructor_mapping_end_to_end_route_is_proven
         - frontend_does_not_make_topology_or_sql_attention_judgment
       known_gap_ref:
-        - manifest_response_constructor_mapping_end_to_end_route_is_proven is not yet closed
-        - SSE dispatcher wiring for end-to-end projection event route connects to projectionRuntime, but backend/manifest supply of ProjectionDefinition / constructor mapping to frontend is not yet implemented
         - Executable UI/UX primitive component slice expansion remains follow-up
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
