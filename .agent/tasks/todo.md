@@ -32,48 +32,109 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## UI/UX Primitive Executable Component Slice
 
-boundary note: runtime/catalog/factory 境界は implemented 維持（`runtime adapter -> runtime registry -> runtime factory -> component`、`runtimeConnected:true` は factory/constructor reachable を意味）。
+note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-- [ ] representative UI/UX executable component slice を completion bundle 単位で昇格する
-      → 単位は `componentKind selector -> RuntimeComponentFactory interface registration -> catalog sourcePath promotion -> runtimeConnected:true promotion -> static/type/deno による interface reachability check` を 1 bundle とする。
+## UI/UX Primitive Catalog Remaining Promotion
 
-- [ ] UI/UX primitive catalog の実行可能昇格を段階実装する
-      → 初回 representative slice は interface/thin-wrapper 中心で実施し、個別 UI behavior test 必須化ではなく catalog 昇格 invariant を主軸に進める。
-      → representative names（昇格対象一覧）: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
+- [ ] [ui-ux-catalog][remaining-catalog-only] 残 catalog-only primitive 28件を次バッチ昇格する
+      → 対象 componentKind:
+        - kanban_drag/drag_drop_state_transition
+        - kanban_drag/drag_sort_list
+        - kanban_drag/relation_drop_zone
+        - kanban_drag/tree_reorder_drop_zone
+        - kanban_drag/layout_drop_zone
+        - kanban_drag/component_placement_handle
+        - kanban_drag/snap_grid_overlay
+        - kanban_drag/state_transition_arrow
+        - kanban_drag/slot_placeholder_panel
+        - design_token/responsive_rule_editor
+        - calc_topology/formula_builder
+        - calc_topology/computed_field_preview
+        - calc_topology/relation_score_preview
+        - calc_topology/hub_statistics_panel
+        - calc_topology/aggregation_preview_table
+        - calc_topology/cross_entity_calculation_panel
+        - calc_topology/topology_distance_preview
+        - calc_topology/route_cost_preview
+        - calc_topology/attention_weight_preview
+        - calc_topology/cooccurrence_matrix_preview
+        - calc_topology/rank_score_preview
+        - external_lookup/kana_assist_input
+        - external_lookup/postal_address_lookup
+        - external_lookup/address_postal_lookup
+        - external_lookup/tel_address_candidate_lookup
+        - external_lookup/normalize_address_candidate
+        - external_lookup/lookup_candidate_confirm_panel
+        - external_lookup/bulk_import_candidate_panel
+      → 完了条件:
+        component file 追加 / RuntimeComponentFactory 登録 / catalog sourcePath 実ファイル昇格 / runtimeConnected:true / seed同期 / factory-catalog linter pass / runtime-semantics pass。
+      → 境界:
+        drag/drop・lookup・calculation は thin surface に限定し、DB write / topology judgment / mutation apply / SQL Attention score計算は持たせない。
 
-- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ昇格する
-      → 未実装 primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時のみ昇格する。
+## Abstract Function Boundary Tests
 
-- [ ] 実装済み primitive の runtimeConnected を false から true へ昇格する
-      → factory registration + runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。
+- [ ] [abstract-function][unit-tests] function-backed primitive が参照する abstract function boundary tests を追加する
+      → component rendering test ではなく、function boundary unit test として実装する。
+      → 優先対象:
+        candidate/search:
+          - rank_candidate_results
+          - explain_candidate_match
+          - detect_duplicate_candidates
+          - suggest_schema_promotion_candidates
+        import/lookup:
+          - import_rows_to_candidates
+          - deduplicate_import_candidates
+          - resolve_postal_address
+          - resolve_address_postal
+          - resolve_tel_candidate
+        mutation/audit:
+          - validate_candidate
+          - preview_update_patch
+          - apply_confirmed_update
+          - append_diff_log
+          - build_rollback_candidate
+          - resolve_conflict_candidate
+        calculation/topology:
+          - calculate_attention_weight
+          - calculate_rank_score
+          - calculate_topology_distance
+          - calculate_route_cost
+          - validate_formula_contract
+        layout/design token:
+          - preview_layout_patch
+          - validate_layout_constraint
+          - apply_confirmed_layout_patch
+          - resolve_style_token
+          - preview_responsive_rule
+          - validate_component_placement
+        operation safety:
+          - dry_run_operation
+          - validate_mutation_boundary
+          - explain_operation_risk
+          - check_permission_for_operation
+          - build_confirmable_operation
+      → 検査境界:
+        SQL Attention functions は observation/candidate surface only。
+        mutation系は validate → explicit confirm → apply → append log の順序を崩さない。
+        external lookup は candidate surface only で、canonical write しない。
 
-- [ ] component slice reachability check bundle を追加する
-      → catalog -> componentKind -> factory/interface reachability を static check / TypeScript check / Deno test で検証する（個別 UI behavior test 必須化はしない）。
-      → primitive に付随する abstract function / calculation / validation / external lookup / mutation boundary / patch generation / layout collision は UI component ではなく runtime function boundary として unit test 対象にする。
-
-- [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
-      → 誤昇格防止。未実装 primitive を implemented 扱いしない。
-
-- [ ] roadmap status を実装実態に合わせて更新する
-      → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。
-
-## Abstract Function / Heavy Primitive Function Boundary
-
-- [ ] [abstract-function][unit-tests] function-backed primitive が使う heavy function boundary に unit tests を追加する
-      → 対象: calculation / validation / patch generation / external lookup / layout collision / mutation boundary / ranking explanation。
-      → component rendering の単体テストではなく、付加処理関数の unit test として扱う。
-      → promoted primitive がこれらの function を invoke する場合、UI component behavior test ではなく function boundary test を追加する。
-
-## Admin Visual Layout Builder (Issue #89)
+## Admin Visual Layout Builder Issue #89
 
 - [ ] [issue-89][db-runtime] layout tensor + css token reference persistence の DB/runtime保存導線を実装する
-      → CSS dictionary SSOT に沿って `cssTokenRefs` / `responsiveTokenRefs`（または同等の token reference persistence）を保存境界として実装する。
-      → `styleTokenId` / `responsiveRuleId` の列名・IDモデルや専用registryが必要な場合は、先にSSOT更新を完了条件に含める。
+      → 対象:
+        - cssTokenRefs
+        - responsiveTokenRefs
+        - layout tensor persistence
+        - ui_layout_registry / ui_wiring_registry / ui_topology_tensor との保存境界
+      → 完了条件:
+        frontend projection は token ref を渡すだけで、DB/topology judgment は backend/runtime/DB 境界で行う。
 
 - [ ] [issue-89][ui] mouse-driven layout editor / drag-drop UI island を実装する
-      → selector候補表示のみで止めず、layout editor 本体の mouse 操作 UI を実装する。
+      → selector候補や preview component ではなく、実際の mouse operation UI を作る。
+      → drag/drop mutation は direct DB write ではなく、preview / validate / explicit apply route に接続する。
 
-## Component Operation Event Log PostgreSQL Integration (non-blocking hardening carry-over)
+## Component Operation Event Log Integration
 
-- [ ] [integration-test][pr-220][non-blocking-hardening] component_operation_event_log の PostgreSQL 実体 integration test を追加する
-      → backend endpoint / repository boundary tests は実装済み。残りは real PostgreSQL-backed component_operation_event_log append/idempotency verification。
+- [ ] [integration-test][component-operation-event-log] PostgreSQL-backed append/idempotency integration test を追加する
+      → backend endpoint / repository boundary tests は実装済み。
+      → 残りは real PostgreSQL-backed component_operation_event_log append/idempotency verification。
