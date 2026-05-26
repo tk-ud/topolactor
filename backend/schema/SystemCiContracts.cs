@@ -69,6 +69,8 @@ public record SystemCiFinding(
 /// OverallStatus: worst status across all findings (Pass when Findings is empty).
 /// Findings: all individual check results.
 /// InspectedAt: UTC timestamp of the inspection.
+/// Boundary: this is a read-only judgment payload. It does not carry persistence
+/// commands, repair commands, promotion instructions, or route/recommendation mutations.
 /// </summary>
 public record SystemCiDiagnosticResult(
     string InspectionTarget,

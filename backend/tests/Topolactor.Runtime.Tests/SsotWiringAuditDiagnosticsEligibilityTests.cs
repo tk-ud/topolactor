@@ -35,6 +35,14 @@ public class SsotWiringAuditDiagnosticsEligibilityTests
     // ─── OverallStatus consistency ────────────────────────────────────────────
 
     [Fact]
+    public void DiagnosticsEligibility_SsotCompletionConditionKey_Exists()
+    {
+        var keys = SsotYamlContractReader.RoadmapCompletionConditions("system_ci.dotnet_ssot_wiring_audit_tests");
+
+        Assert.Contains("initial_phase_returns_diagnostics_evidence_eligibility_only", keys);
+    }
+
+    [Fact]
     public void DiagnosticsEligibility_PassResult_HasZeroFindings()
     {
         // Pass result must have empty Findings list.
@@ -128,6 +136,10 @@ public class SsotWiringAuditDiagnosticsEligibilityTests
 
         Assert.Equal(SystemCiStatus.Gap, result.OverallStatus);
         Assert.DoesNotContain(result.Findings, f => f.Status == SystemCiStatus.Blocking);
+        Assert.Contains(result.Findings, f =>
+            f.CheckName == "CRON_EVIDENCE_MISSING" &&
+            f.Classification == SystemCiFindingClassification.NotCovered &&
+            f.Status == SystemCiStatus.Gap);
     }
 
     [Fact]
@@ -195,6 +207,7 @@ public class SsotWiringAuditDiagnosticsEligibilityTests
 
         Assert.True(result.InspectedAt > before,
             "InspectedAt must be set to a timestamp at or after the inspection call.");
+        Assert.False(string.IsNullOrWhiteSpace(result.InspectionTarget));
     }
 
     [Fact]
@@ -206,6 +219,20 @@ public class SsotWiringAuditDiagnosticsEligibilityTests
         var result = await runtime.InspectHubAttentionContinuityAsync();
 
         Assert.True(result.InspectedAt > before);
+        Assert.False(string.IsNullOrWhiteSpace(result.InspectionTarget));
+    }
+
+    [Fact]
+    public void DiagnosticsEligibility_InvalidEvidenceShape_UsesInvalidShapeClassification()
+    {
+        var runtime = CreateRuntime();
+        var record = MakeValidHubRecord();
+
+        var result = runtime.InspectHubAttentionAfterUpdate(record, "not-json", "[]");
+
+        var finding = Assert.Single(result.Findings.Where(f => f.CheckName == "EVIDENCE_JSON_NOT_PARSEABLE"));
+        Assert.Equal(SystemCiFindingClassification.InvalidShape, finding.Classification);
+        Assert.Equal(SystemCiStatus.Gap, finding.Status);
     }
 
     // ─── Persistence boundary: diagnostic result is not void or trigger ───────
@@ -223,6 +250,21 @@ public class SsotWiringAuditDiagnosticsEligibilityTests
         Assert.NotNull(result);
         Assert.NotNull(result.InspectionTarget);
         Assert.NotNull(result.Findings);
+    }
+
+    [Fact]
+    public void DiagnosticsEligibility_DiagnosticResultShape_ContainsNoMutationCommands()
+    {
+        var propNames = typeof(SystemCiDiagnosticResult).GetProperties()
+            .Select(p => p.Name)
+            .ToArray();
+
+        Assert.DoesNotContain("Persist", propNames);
+        Assert.DoesNotContain("Write", propNames);
+        Assert.DoesNotContain("Repair", propNames);
+        Assert.DoesNotContain("Promote", propNames);
+        Assert.DoesNotContain("Mutate", propNames);
+        Assert.DoesNotContain("Recommendation", propNames);
     }
 
     [Fact]
