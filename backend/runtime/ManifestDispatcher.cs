@@ -210,7 +210,18 @@ public class ManifestDispatcher
                         errorMessage)]);
             }
 
-            return await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
+            var projectionDefinition = ExtractProjectionConstructorMapping(manifest.Topology);
+            var response = await DispatchToHandlerAsync(destination, request, manifest.ManifestId, ct);
+
+            // Inject projection_constructor_mapping from manifest into emission so the frontend
+            // projection runtime can call setProjectionDefinition without frontend topology judgment.
+            if (response.Success && response.Emission is not null && projectionDefinition.HasValue)
+            {
+                var updatedEmission = response.Emission with { ProjectionDefinition = projectionDefinition };
+                return response with { Emission = updatedEmission };
+            }
+
+            return response;
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("MANIFEST_AMBIGUOUS", StringComparison.Ordinal))
         {
@@ -329,6 +340,25 @@ public class ManifestDispatcher
 
     private static readonly HashSet<string> AllowedLegacyOperations =
         new(StringComparer.OrdinalIgnoreCase) { "create", "update", "delete", "transition" };
+
+    /// <summary>
+    /// Extracts the projection_definition from the projection_constructor_mapping topology entry.
+    /// Returns null when no projection_constructor_mapping entry is present.
+    /// The returned JsonElement carries the raw projection_definition JSON for the frontend to
+    /// deserialize as ProjectionDefinition — backend does not interpret the structure.
+    /// </summary>
+    private static JsonElement? ExtractProjectionConstructorMapping(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) || typeEl.ValueKind != JsonValueKind.String) continue;
+            if (!string.Equals(typeEl.GetString(), "projection_constructor_mapping", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!entry.TryGetProperty("projection_definition", out var definitionEl)) continue;
+            if (definitionEl.ValueKind == JsonValueKind.Object) return definitionEl;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Extracts runtime_destination from the runtime_mapping topology entry.

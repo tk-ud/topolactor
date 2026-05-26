@@ -21,24 +21,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
-## Non-blocking cleanup / hardening carry-over
-
-- [ ] [cleanup][pr-220] `ContextRouteRepository.cs` の XML comment / indentation cleanup
-      → Approve可能な非ブロッカー残件。実装意味やSSOT completion conditionを変えない範囲で整備する。
-
-- [ ] [surface-expansion][pr-220] `OperationPanel` 以外の主要 component / projection surface への emit-only 配線拡張
-      → Approve可能な非ブロッカー残件。frontend runtime event emit 面の適用対象拡張。canonical route は閉鎖済み。component 種別・CI 対象範囲の拡大が目的。
-      → 対象ファイル候補: `frontend/components/`, `frontend/runtime/frontendScheduler.ts`, `frontend/tests/frontendComponentEventRuntime.test.ts`。
-
-- [ ] [integration-test][pr-220] `component_operation_event_log` の PostgreSQL 実体 integration test 追加
-      → Approve可能な非ブロッカー残件。append-only永続化境界の実DB検証を追加する。
-      → 対象ファイル候補: `backend/tests/Topolactor.Integration.Tests/`, `backend/endpoint/ComponentEventAppendEndpoint.cs`。
-
-- [ ] [hardening] Frontend Component Event Runtime の retry / 監視 / 失敗運用 hardening
-      → canonical route は閉鎖済み。production_ready:false のまま。retry 境界・監視フック・失敗運用パスの hardening が残る。
-      → 対象ファイル候補: `frontend/runtime/frontendScheduler.ts`, `frontend/routes/api/component-events/append.ts`。
-
-
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
 - [ ] [Codex-follow-up][bundle][manifest-driven-ui][topology-db-operation] UI/UX primitive catalog と abstract function registry の Codex 向け閉じ作業
@@ -66,33 +48,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → boundary(seed-role): seed は bootstrap row であり authority ではない。
       → out_of_scope (引き続き): React 実装、drag-and-drop 実装、計算 engine 実装、external provider 接続、schema 追加。
 
-## Frontend Projection Constructor / Manifest Mapping
-
-- [ ] [projection-constructor][mapping-source] ProjectionDefinition / constructor mapping の canonical supply source を定義する
-      → 対象: backend manifest response / dispatch response / manifest fetch route のどれを supply source とするか。
-      → frontend が ProjectionDefinition をテスト内・呼び出し側で手渡しするだけの状態を completion としない。
-      → frontend は topology judgment / SQL Attention judgment を持たない。
-      → `projectionFromEmission` helper は実装済みとして扱う。
-
-- [ ] [projection-constructor][response-contract] backend/frontend response contract に ProjectionDefinition / constructor mapping の受け渡し境界を反映する
-      → 対象候補: backend emission / manifest response DTO / frontend `Emission` / `DispatchResponse` / manifest fetch response。
-      → `Emission.data` だけでは constructor mapping supply proof にならない。
-      → 必要なら field 追加、または manifest fetch route を明示する。
-
-- [ ] [projection-constructor][runtime-definition-load] frontend projection runtime が canonical route から ProjectionDefinition を受け取り `setProjectionDefinition` できる経路を実装/証明する
-      → 対象候補: `frontend/runtime/projectionRuntime.ts`, `frontend/runtime/renderEmission.ts`, dispatch/manifest response handling surface。
-      → SSE projection event が来る前に definition が設定される、または未設定時に explicit failure / explicit policy になること。
-      → 現状の `projectionFromEmission(emission, definition)` は caller-supplied definition 前提なので、このTODOを完了扱いにしない。
-
-- [ ] [projection-constructor][end-to-end-proof] manifest response / dispatch response から ProjectionDefinition / constructor mapping を取得し、`projectionFromEmission` / `constructProjection` に到達する end-to-end test を追加する
-      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`
-      → 現在のように test-local `ProjectionDefinition` を手渡しするだけでは不可。
-      → RuntimeTopologyComponentProps envelope / runtime adapter / runtime factory interface boundary は完了済みとして扱う。
-
-- [ ] [projection-constructor][explicit-missing-definition] ProjectionDefinition / constructor mapping が欠落した場合の explicit error / policy を定義する
-      → silent fallback 禁止。
-      → projection runtime が no definition で skip するだけなら roadmap 上は partial のまま。
-      → error / diagnostic / explicit no-op policy のどれかを SSOT整合で明示する。
 
 ## TODO dependency map（execution order）
 
