@@ -204,6 +204,26 @@ active registry. The runtime can then resolve through the canonical route.
 **Runtime resolution**: Once promoted, the runtime resolves through the
 normal canonical route. The Registrar UI has no further involvement.
 
+
+## 5.5 CSS dictionary selector flow (Issue #89 pre-step)
+
+CSS style authoring for `/admin/ui-builder` must follow YAML static vocabulary authority:
+
+```text
+css-dictionary-ssot.yaml
+→ UI selector candidates (token_key/category/component_scope/semantic_role)
+→ local draft (cssTokenRefs/responsiveTokenRefs)
+→ preview
+→ validate
+→ explicit apply
+→ DB design/layout promoted state
+```
+
+- CSS dictionary authority is `docs/design/css-dictionary-ssot.yaml`.
+- Frontend projects selector candidates only and must not perform topology/SQL Attention judgment.
+- DB persistence stores token refs (`cssTokenRefs` / `responsiveTokenRefs`) preferentially over raw CSS strings.
+- Raw CSS is legacy-only and requires explicit reason (`legacy_allowed` / `no_dictionary_token_exists_yet` / `follow_up_token_addition`).
+
 ## 6. Validation Model
 
 The following validation classes apply during the validate-refs stage:

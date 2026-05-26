@@ -83,7 +83,37 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 確認結果: seed/demo seed は `function_parameters(default_policy)` 行として runtime読取面に接続済み。resolverに追加magic numberは導入しない。運用値は `attention_score_weight=1.0, trend/statistics=0.0, scope_limit=1000` を継続。
       → 対象ファイル候補: `db/seed_empty.sql`, `db/demo_seed.sql`, policy manifest surfaces, `backend/runtime/ContextRouteRecommendationResolver.cs`。
 
+
+## UI/UX Primitive Executable Component Slice
+
+- [ ] 代表primitiveの React/Preact 実体コンポーネントを実装する
+      → 初回 representative slice: AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
+
+- [ ] 実装済み primitive の catalog.ts sourcePath を CATALOG_SSOT から実ファイルへ更新する
+      → 実装が未着手の primitive は sourcePath: CATALOG_SSOT のまま維持し、実装完了時にのみ昇格する。
+
+- [ ] 実装済み primitive の runtimeConnected を true に昇格する
+      → runtimePrimitiveRenderer/runtimeComponentAdapter 到達性証明後のみ true。catalog_definition_only は false 維持。
+
+- [ ] runtimePrimitiveRenderer / runtimeComponentAdapter から componentKey 到達可能にする
+      → 実行可能 slice は renderer/adapter 経路到達を必須にし、単独ファイル実装のみで完了扱いしない。
+
+- [ ] 到達性テストを追加する
+      → catalog -> renderer/adapter reachability を CI 補助線として検証する。
+
+- [ ] 未実装 primitive は catalog_definition_only / runtimeConnected:false / registrationRequired:true のまま維持する
+      → 誤昇格防止。registrationRequired:false は alias_maintained のみに限定する。
+
+- [ ] roadmap status を実装実態に合わせて更新する
+      → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。
+
 ## Admin Visual Layout Builder (Issue #89)
+
+- [ ] [issue-89][db-runtime] styleTokenId / responsiveRuleId の本体DB schema・runtime保存導線を実装する
+      → 今回は css dictionary wiring/CI/UI selector まで。styleTokenId/responsiveRuleId の本体保存は未実装。
+
+- [ ] [issue-89][ui] mouse-driven layout editor 本体を実装する
+      → 今回は selector 候補表示と token ref draft shape まで。drag/drop editor は未着手。
 
 - [ ] visual layout builder の mouse 操作 UI と layout tensor DB 管理を実装する
       → 依存関係: Issue #86（frontend_ui_component_system）は完了済み。着手可能。

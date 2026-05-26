@@ -195,6 +195,8 @@ check_file ".agent/tests/check-structure.sh"
 check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tests/check-frontend-types.sh"
 check_file ".agent/tests/check-completion-judgment.sh"
+check_file ".agent/tests/check-css-dictionary.sh"
+check_file ".agent/tests/check-ui-ux-executable-component-slice.sh"
 check_file ".agent/tests/check-worktype-routing.sh"
 check_file ".agent/tests/check-local-ci.sh"
 check_file ".agent/tasks/todo.md"
@@ -396,6 +398,7 @@ check_content ".agent/tests/check-bootstrap-validation.sh" "context_hub_recommen
 check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_orchestration_ssot"
 check_content "docs/design/ci-contract-ssot.yaml" "CI_SSOT_VOCABULARY_MEMBERSHIP_ASSERTION"
 check_content "docs/design/ci-contract-ssot.yaml" "CI_ATTENTION"
+check_content "docs/design/css-dictionary-ssot.yaml" "css_dictionary_ssot"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_timeline_scheduler"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "manifest_dispatcher"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "topology_transform_runtime"
@@ -587,6 +590,18 @@ check_content ".agent/scripts/create-tmp.sh" "UI action identity"
 check_content ".agent/checklists/policy-judgment.md" "scenario contract"
 check_content ".agent/checklists/check-policy-judgment.sh" "scenario contract"
 check_content ".github/workflows/structure-check.yml" "check-sql-attention-ssot.sh"
+
+if bash "$REPO_ROOT/.agent/tests/check-css-dictionary.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-css-dictionary.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-css-dictionary.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-ui-ux-executable-component-slice.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-ui-ux-executable-component-slice.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-ui-ux-executable-component-slice.sh"
+fi
 
 echo ""
 echo "=== Template checklist pollution guard ==="

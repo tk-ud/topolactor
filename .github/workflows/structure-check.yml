@@ -27,5 +27,11 @@ jobs:
       - name: Run pipeline continuity check
         run: bash .agent/tests/check-pipeline-continuity.sh
 
+      - name: Run CSS dictionary check
+        run: bash .agent/tests/check-css-dictionary.sh
+
+      - name: Run UI/UX executable component slice check
+        run: bash .agent/tests/check-ui-ux-executable-component-slice.sh
+
       - name: Run structure check
         run: bash .agent/tests/check-structure.sh

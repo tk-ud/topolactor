@@ -272,3 +272,38 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
   { componentKey: "operation_audit_log_panel.primitive", componentKind: "safety_guard/operation_audit_log_panel", sourcePath: CATALOG_SSOT, componentFamily: "primitive", semanticRole: "diagnostic", visualRole: "panel", lifecycleStatus: "code_only_drift", capabilityTags: ["displays_backend_result", "accepts_design"], runtimeConnected: false, registrationRequired: true, notes: "catalog_definition_only | previewOnly:true" },
   { componentKey: "validation_error_panel.primitive", componentKind: "safety_guard/validation_error_panel", sourcePath: CATALOG_SSOT, componentFamily: "primitive", semanticRole: "validation", visualRole: "panel", lifecycleStatus: "code_only_drift", capabilityTags: ["error_display", "displays_backend_result", "accepts_design"], runtimeConnected: false, registrationRequired: true, notes: "catalog_definition_only" },
 ];
+
+// UI/UX primitive catalog identities are definition-only until executable component slice is implemented.
+// sourcePath: CATALOG_SSOT means the primitive exists in SSOT/todo planning, not as executable component path yet.
+export const UI_UX_PRIMITIVE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
+  { componentKey: "AutoCompleteInput", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "SearchCombobox", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "CandidateConfidenceBadge", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "InlineEditableField", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "PatchPreviewPanel", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "ApplyConfirmDialog", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "FacetedFilterBar", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "VirtualizedDataTable", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "LayoutDropZone", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "ComponentPlacementHandle", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "SnapGridOverlay", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "StyleTokenPicker", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "ThemePreviewPanel", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "DryRunResultPanel", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+  { componentKey: "ValidationErrorPanel", componentKind: "ui_ux/primitive", sourcePath: "CATALOG_SSOT" },
+];
+
+export const UI_UX_PRIMITIVE_CATALOG_DEFINITION_ENTRIES: ComponentCatalogEntry[] =
+  UI_UX_PRIMITIVE_CATALOG_IDENTITIES.map((identity) => ({
+    componentKey: identity.componentKey,
+    componentKind: identity.componentKind,
+    sourcePath: identity.sourcePath,
+    componentFamily: "template",
+    semanticRole: "admin_operation",
+    visualRole: "panel",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: ["admin_only"],
+    runtimeConnected: false,
+    registrationRequired: true,
+    notes: "catalog_definition_only",
+  }));

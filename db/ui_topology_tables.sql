@@ -141,7 +141,8 @@ CREATE TABLE IF NOT EXISTS design (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- design shape: {componentId: uuid, classname: string, tailwind: string}
+-- design shape: {componentId: uuid, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}}
+-- CSS vocabulary authority is docs/design/css-dictionary-ssot.yaml (static YAML); DB stores promoted token refs/draft state, not CSS dictionary registry rows.
 -- componentId is a soft reference for filtering designs by component in the package editor.
 -- The authoritative component+design binding lives in packages.layout.
 

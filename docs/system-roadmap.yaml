@@ -41,6 +41,7 @@ system_roadmap_ssot:
       - docs/design/sql-attention-logs-ssot.yaml
       - docs/framework-core.yaml
       - docs/framework-policy.yaml
+      - docs/design/css-dictionary-ssot.yaml
     task_queue:
       - .agent/tasks/todo.md
     audit_reports:
@@ -817,6 +818,29 @@ system_roadmap_ssot:
         - code_only_components_are_treated_as_drift_or_gap
         - frontend_does_not_own_runtime_or_topology_judgment
 
+
+    frontend.ui_ux_executable_component_slice:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        UI/UX primitive catalog SSOT is defined, but executable component slice is not built yet.
+        Promotion to executable slice requires React/Preact component files, runtimePrimitiveRenderer/runtimeComponentAdapter reachability,
+        catalog.ts sourcePath promotion, runtimeConnected:true promotion only after reachability, and tests.
+      completion_condition:
+        - representative_ui_ux_primitives_have_react_or_preact_component_files
+        - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
+        - implemented_primitives_are_runtimeConnected_true_only_after_renderer_adapter_reachability
+        - runtimePrimitiveRenderer_or_runtimeComponentAdapter_can_render_each_implemented_key
+        - mutation_boundary_primitives_remain_preview_validate_explicit_confirm_only
+        - sql_attention_primitives_remain_observation_or_candidate_surface_only
+        - executable_component_slice_tests_cover_catalog_to_renderer_reachability
+      known_gap_ref:
+        - UI/UX primitive React/Preact component implementation not started
+        - catalog entries still sourcePath: CATALOG_SSOT for unimplemented primitives
+        - runtimeConnected remains false for catalog_definition_only entries
+        - runtime adapter/renderer reachability not proven for new UI/UX primitives
+
     admin_visual_layout_builder:
       status: partial
       production_ready: false
@@ -833,6 +857,8 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlUiTopologyRepository.cs
       completion_condition:
         - layout_tensor_and_variable_css_boundaries_are_defined
+        - css_dictionary_ui_binding_is_wired_to_style_selector_candidates
+        - css_dictionary_ci_check_is_wired_and_fail_close
         - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
