@@ -257,7 +257,9 @@ notify_payload="$(jq -nc \
   '{table_id:$table_id,table_registry_id:$table_registry_id,manifest_id:$manifest_id,probe_id:$probe_id}')"
 
 sse_output_file="$(mktemp)"
-curl -sS -N "${BACKEND_URL}/sse" > "${sse_output_file}" &
+curl -sS -N \
+  -H "Authorization: Bearer ${token}" \
+  "${BACKEND_URL}/sse" > "${sse_output_file}" &
 sse_pid=$!
 sleep 1
 

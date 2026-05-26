@@ -145,10 +145,20 @@ export async function flushComponentEvents(): Promise<void> {
     return;
   }
   const batch = queue.slice(0, DEFAULT_EVENT_QUEUE_CONFIG.maxBatchSize);
+  const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? null;
+  if (!token) {
+    console.error("COMPONENT_EVENT_AUTH_TOKEN_MISSING");
+    persistFallback();
+    emitFlushMonitor({ kind: "flush_failed", error: "AUTH_TOKEN_MISSING", remainingInQueue: queue.length, retryingCount: 0 });
+    return;
+  }
   try {
     const response = await fetch("/api/component-events/append", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ events: batch }),
     });
     if (!response.ok) throw new Error(`HTTP_${response.status}`);

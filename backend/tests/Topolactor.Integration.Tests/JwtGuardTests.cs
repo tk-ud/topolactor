@@ -115,4 +115,28 @@ public class JwtGuardTests
         var errors = guard.Validate(token);
         Assert.Empty(errors);
     }
+
+    [Fact]
+    public void ValidToken_TryGetSubject_Returns_Sub()
+    {
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret);
+        var token = TestJwtBuilder.BuildToken(TestSecret, subject: "actor-1");
+        var guard = new JwtGuard();
+
+        var sub = guard.TryGetSubject(token);
+
+        Assert.Equal("actor-1", sub);
+    }
+
+    [Fact]
+    public void TokenWithoutSub_TryGetSubject_Returns_Null()
+    {
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret);
+        var token = TestJwtBuilder.BuildTokenWithoutSub(TestSecret);
+        var guard = new JwtGuard();
+
+        var sub = guard.TryGetSubject(token);
+
+        Assert.Null(sub);
+    }
 }

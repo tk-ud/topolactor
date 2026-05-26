@@ -80,13 +80,19 @@ function extractProjectionIdentity(rawData: string): { ok: true; identity: Proje
  * Error states are always explicit — never silent fallback.
  */
 export function createSseReceiver(options: SseReceiverOptions): SseReceiver {
-  const url = options.url ?? "/api/sse";
+  const baseUrl = options.url ?? "/api/sse";
   let source: EventSource | null = null;
 
   function connect(): void {
     if (source !== null) return;
 
-    source = new EventSource(url);
+    const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? null;
+    if (!token) {
+      options.onError?.({ kind: "connection_error", event: new Event("AUTH_TOKEN_MISSING") });
+      return;
+    }
+    const qs = new URLSearchParams({ access_token: token });
+    source = new EventSource(`${baseUrl}?${qs.toString()}`);
 
     source.addEventListener("ping", (e: MessageEvent) => {
       options.onEvent?.("ping", e.data);

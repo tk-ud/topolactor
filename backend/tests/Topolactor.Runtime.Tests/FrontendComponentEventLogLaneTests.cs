@@ -27,7 +27,7 @@ public class FrontendComponentEventLogLaneTests
                 IdempotencyKey: "idem-001")
         ]);
 
-        var res = await sut.HandleAsync(req, CancellationToken.None);
+        var res = await sut.HandleAsync(req, "ProjectionView", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
@@ -54,7 +54,7 @@ public class FrontendComponentEventLogLaneTests
             new ComponentOperationEventDto("cmp-001", "pkg-001", "layout-001", "wiring-dup", "submit", new Dictionary<string, object?>(), "OperationPanel", "2026-05-24T00:00:00.000Z", "idem-dup")
         ]);
 
-        var res = await sut.HandleAsync(req, CancellationToken.None);
+        var res = await sut.HandleAsync(req, "OperationPanel", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
@@ -80,7 +80,7 @@ public class FrontendComponentEventLogLaneTests
                 IdempotencyKey: "idem-null-wire")
         ]);
 
-        var res = await sut.HandleAsync(req, CancellationToken.None);
+        var res = await sut.HandleAsync(req, "ProjectionView", CancellationToken.None);
 
         Assert.True(res.Success);
         Assert.Equal(1, res.Accepted);
@@ -106,7 +106,7 @@ public class FrontendComponentEventLogLaneTests
                 IdempotencyKey: "idem-missing")
         ]);
 
-        var res = await sut.HandleAsync(req, CancellationToken.None);
+        var res = await sut.HandleAsync(req, "ProjectionView", CancellationToken.None);
         Assert.False(res.Success);
         Assert.NotNull(res.Errors);
         Assert.Contains(res.Errors!, e => e.Code == "COMPONENT_EVENT_INVALID");

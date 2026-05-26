@@ -220,9 +220,22 @@ app.MapPost("/dispatch", async (
 app.MapPost("/component-events/append", async (
     HttpContext ctx,
     ComponentEventAppendRequestDto request,
-    ComponentEventAppendEndpoint endpoint) =>
+    ComponentEventAppendEndpoint endpoint,
+    JwtGuard jwtGuard) =>
 {
-    var result = await endpoint.HandleAsync(request, ctx.RequestAborted);
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new ComponentEventAppendResponseDto(false, 0, authErrors), statusCode: 401);
+
+    var subject = jwtGuard.TryGetSubject(token);
+    if (string.IsNullOrWhiteSpace(subject))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
+        return Results.Json(new ComponentEventAppendResponseDto(false, 0, errors), statusCode: 401);
+    }
+
+    var result = await endpoint.HandleAsync(request, subject, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 202 : 422);
 });
 
@@ -252,12 +265,18 @@ app.MapPost("/auth/login", async (
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
 });
 
-// GET /sse — SSE projection lane.
+// GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).
 // Streams projection events from DbNotifyListener via SseEventBroadcaster.
-// Per pipeline-continuity-ssot.yaml sse_projection_lane.
-app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse) =>
+// Guarded to keep reader authorization boundary explicit for runtime/admin projections.
+app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse, JwtGuard jwtGuard) =>
 {
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
+
     await sse.StreamAsync(ctx.Response, ctx.RequestAborted);
+    return Results.Empty;
 });
 
 app.Run();

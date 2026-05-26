@@ -28,9 +28,13 @@ export const handler: Handlers = {
     }
 
     try {
-      const authHeader = req.headers.get("Authorization");
-      const headers: Record<string, string> = { Accept: "text/event-stream" };
-      if (authHeader) headers["Authorization"] = authHeader;
+      const reqUrl = new URL(req.url);
+      const queryToken = reqUrl.searchParams.get("access_token");
+      const authHeader = req.headers.get("Authorization") ?? (queryToken ? `Bearer ${queryToken}` : null);
+      if (!authHeader) {
+        return Response.json({ success: false, errors: [{ code: "AUTH_TOKEN_MISSING", message: "Authorization token is required." }] }, { status: 401 });
+      }
+      const headers: Record<string, string> = { Accept: "text/event-stream", Authorization: authHeader };
 
       const upstream = await fetch(`${backendUrl}/sse`, {
         method: "GET",

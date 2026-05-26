@@ -28,7 +28,7 @@ public class ComponentEventAppendEndpoint
         _repo = repo ?? throw new ArgumentNullException(nameof(repo));
     }
 
-    public async Task<ComponentEventAppendResponseDto> HandleAsync(ComponentEventAppendRequestDto request, CancellationToken ct)
+    public async Task<ComponentEventAppendResponseDto> HandleAsync(ComponentEventAppendRequestDto request, string authenticatedSubject, CancellationToken ct)
     {
         if (request.Events is null || request.Events.Count == 0)
             return new ComponentEventAppendResponseDto(false, 0, [new ValidationError("COMPONENT_EVENT_BATCH_REQUIRED", "events must be non-empty array")]);
@@ -42,13 +42,18 @@ public class ComponentEventAppendEndpoint
             if (!DateTimeOffset.TryParse(e.OccurredAt, out var occurredAt))
                 return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_OCCURRED_AT_INVALID", "occurred_at must be ISO datetime")]);
 
+            var payload = e.Payload is null ? new Dictionary<string, object?>() : new Dictionary<string, object?>(e.Payload);
+            if (payload.TryGetValue("authenticatedSubject", out var incomingSub) && incomingSub is string incomingSubString && !string.Equals(incomingSubString, authenticatedSubject, StringComparison.Ordinal))
+                return new ComponentEventAppendResponseDto(false, accepted, [new ValidationError("COMPONENT_EVENT_AUTH_SUBJECT_MISMATCH", "authenticatedSubject payload field must match authenticated subject")]);
+            payload["authenticatedSubject"] = authenticatedSubject;
+
             var appended = await _repo.AppendComponentOperationEventLogAsync(new ComponentOperationEventLogRecord(
                 ComponentId: e.ComponentId!,
                 PackageId: e.PackageId,
                 LayoutId: e.LayoutId,
                 WiringId: e.WiringId,
                 EventType: e.EventType!,
-                PayloadJson: JsonSerializer.Serialize(e.Payload ?? new Dictionary<string, object?>()),
+                PayloadJson: JsonSerializer.Serialize(payload),
                 ActorOrSource: e.ActorOrSource!,
                 OccurredAt: occurredAt,
                 IdempotencyKey: e.IdempotencyKey!), ct);
