@@ -82,9 +82,20 @@ Deno.test("runtimeComponentAdapter: classname/className/tailwind are merged to s
   assertEquals(result.value.className, "db-class camel-class tw-p-2");
 });
 
-Deno.test("runtimeComponentAdapter: runtimeConnected catalog entries are adapter supported", () => {
-  for (const entry of COMPONENT_CATALOG_ENTRIES.filter((e) => e.runtimeConnected)) {
-    const result = adaptComponentDataHub({ componentId: "c", componentKind: entry.componentKind, props: {}, eventBinding: {} });
-    assertEquals(result.ok, true, `runtimeConnected catalog kind must be adapter-supported: ${entry.componentKind}`);
+Deno.test("runtimeComponentAdapter: runtimeConnected catalog entries are factory-reachable and adapter-supported", () => {
+  for (
+    const entry of COMPONENT_CATALOG_ENTRIES.filter((e) => e.runtimeConnected)
+  ) {
+    const result = adaptComponentDataHub({
+      componentId: "c",
+      componentKind: entry.componentKind,
+      props: {},
+      eventBinding: {},
+    });
+    assertEquals(
+      result.ok,
+      true,
+      `runtimeConnected catalog kind must be adapter-supported: ${entry.componentKind}`,
+    );
   }
 });

@@ -152,3 +152,16 @@ Deno.test("runtimePrimitiveRenderer: alias-maintained textarea renders via Input
   });
   assertEquals(result.ok, true);
 });
+
+Deno.test("runtimePrimitiveRenderer: unregistered kind is explicit error", () => {
+  const result = renderRuntimeComponent({
+    componentId: "u1",
+    componentType: "x/unknown",
+    props: {},
+    eventBinding: {},
+  });
+  assertEquals(result, {
+    ok: false,
+    error: "RUNTIME_PRIMITIVE_RENDERER_UNSUPPORTED_COMPONENT_KIND: x/unknown",
+  });
+});
