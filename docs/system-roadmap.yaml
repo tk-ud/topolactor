@@ -570,19 +570,30 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.minimal_event_shape:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M2_manifest_runtime
-      public_summary: trigger_kind and role fields added to EndpointRequestDto and DispatchRequest. OperationVector carries TriggerKind. Guard validation for trigger_kind enum not yet enforced.
+      public_summary: >
+        trigger_kind and role fields in EndpointRequestDto and DispatchRequest.
+        DispatchEndpoint enforces trigger_kind enum guard: invalid values return TRIGGER_KIND_INVALID
+        before reaching the scheduler. Allowed values: client | hook | cron (case-insensitive).
+        frontend DispatchRequest.triggerKind type is synchronized as "cron" | "hook" | "client".
       files:
         - backend/schema/Contracts.cs
+        - backend/endpoint/DispatchEndpoint.cs
         - frontend/api/dispatch.ts
+      evidence:
+        tests:
+          - TriggerKindGuardTests
+        ci:
+          - backend-tests
       completion_condition:
         - request_contract_includes_trigger_kind
         - request_contract_includes_role_or_role_is_resolved_from_jwt_claim_at_boundary
         - frontend_and_backend_request_contracts_are_synchronized
-      known_gap_ref:
-        - Gap-5 minimal_event_shape trigger_kind and role
+        - trigger_kind_enum_guard_validation_rejects_invalid_values_with_explicit_error
+        - invalid_trigger_kind_does_not_reach_scheduler_or_manifest_dispatcher
+      known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -661,16 +672,21 @@ system_roadmap_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.sse_receiver:
-      status: skeleton
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: EventSource receiver exists, but scheduler/dispatcher/projection runtime wiring is not complete.
+      public_summary: >
+        SSE receiver feeds frontend scheduler as projection hook trigger via onProjectionHookTrigger.
+        Projection event identity (manifest_id/table_id/table_registry_id) is preserved in
+        ProjectionHookTrigger.identity. Backend SSE error states are explicit via SseErrorState
+        discriminated union (connection_error | parse_error | connection_closed). Never silent fallback.
       files:
         - frontend/runtime/sseReceiver.ts
         - frontend/routes/api/sse.ts
       evidence:
         tests:
           - pipelineContinuity.test.ts
+          - sseLane.test.ts
         ci:
           - frontend-types
           - default-entity-search
@@ -678,25 +694,27 @@ system_roadmap_ssot:
         - sse_receiver_feeds_frontend_scheduler_as_hook_trigger
         - receiver_preserves_projection_event_identity
         - backend_sse_error_states_are_explicit
-      known_gap_ref:
-        - Gap-7 SSE projection lane
-        - sse_receiver_feeds_frontend_scheduler_as_hook_trigger is not yet closed
-        - receiver_preserves_projection_event_identity is not yet closed
-        - backend_sse_error_states_are_explicit is not yet closed
+      known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.sse_dispatcher:
-      status: skeleton
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
-      public_summary: Handler-map dispatcher exists, but projection runtime connection is not complete.
+      public_summary: >
+        SSE dispatcher routes projection events to ProjectionRuntime via
+        createSseDispatcherWithProjectionRuntime. Unhandled event policy is explicit:
+        "log" (default) emits SSE_UNHANDLED_EVENT_TYPE warning; "ignore" is an
+        explicitly acknowledged no-op. Projection event identity (manifest_id/table_id/
+        table_registry_id) flows unchanged through route path into projectionRuntime.
       files:
         - frontend/runtime/sseDispatcher.ts
       evidence:
         tests:
           - pipelineContinuity.test.ts
+          - sseLane.test.ts
         ci:
           - frontend-types
           - default-entity-search
@@ -704,20 +722,16 @@ system_roadmap_ssot:
         - dispatcher_routes_projection_events_into_projection_runtime
         - unhandled_event_policy_is_explicit
         - projection_event_identity_is_preserved
-      known_gap_ref:
-        - Gap-7 SSE projection lane
-        - dispatcher_routes_projection_events_into_projection_runtime is not yet closed
-        - unhandled_event_policy_is_explicit is not yet closed
-        - projection_event_identity_is_preserved is not yet closed
+      known_gap_ref: []
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
     frontend.projection_constructor:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >-
-        RuntimeTopologyComponentProps envelope (`data`/`table`/`layoutCss`/`designTailwind`) and runtime component interface preparation are closed for projection runtime handoff. At the same time, end-to-end manifest response constructor mapping proof across dispatch/emission route remains partial, so this entry stays partial. Boundary semantics remain fixed: runtime adapter = normalize + factory reachability check, runtime registry = componentKind lookup, runtime factory = kind -> constructor/component interface, concrete component = interface expansion surface. runtimeConnected:true means factory/constructor reachable.
+        RuntimeTopologyComponentProps envelope (`data`/`table`/`layoutCss`/`designTailwind`) and runtime component interface preparation are closed for projection runtime handoff. projectionFromEmission in renderEmission.ts closes the manifest_response_constructor_mapping_end_to_end_route: emission.data flows as jsonKeyValue into constructProjection via ProjectionDefinition. Boundary semantics remain fixed: runtime adapter = normalize + factory reachability check, runtime registry = componentKind lookup, runtime factory = kind -> constructor/component interface, concrete component = interface expansion surface. runtimeConnected:true means factory/constructor reachable.
       files:
         - frontend/runtime/projectionConstructor.ts
         - frontend/runtime/renderEmission.ts
@@ -731,6 +745,7 @@ system_roadmap_ssot:
           - projectionConstructor.test.ts
           - runtimeComponentAdapter.test.ts
           - runtimePrimitiveRenderer.test.ts
+          - sseLane.test.ts
         ci:
           - check-pipeline-continuity.sh
       completion_condition:
@@ -739,8 +754,6 @@ system_roadmap_ssot:
         - manifest_response_constructor_mapping_end_to_end_route_is_proven
         - frontend_does_not_make_topology_or_sql_attention_judgment
       known_gap_ref:
-        - manifest_response_constructor_mapping_end_to_end_route_is_proven is not yet closed
-        - SSE dispatcher wiring for end-to-end projection event route remains outside this implemented boundary
         - Executable UI/UX primitive component slice expansion remains follow-up
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml

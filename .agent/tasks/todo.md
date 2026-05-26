@@ -113,42 +113,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] roadmap status を実装実態に合わせて更新する
       → frontend.ui_ux_executable_component_slice を実装進捗に合わせて not_started/partial/implemented へ更新する。
 
-## Frontend Projection Constructor / Manifest Mapping
-
-- [ ] [projection-constructor][manifest-route] manifest response constructor mapping の end-to-end route proof を実装/検証する
-      → 完了条件: `manifest_response_constructor_mapping_end_to_end_route_is_proven`。
-      → 対象: backend dispatch/emission response から frontend projection constructor mapping / ProjectionDefinition / constructProjection へ到達する経路。
-      → 対象ファイル候補: `frontend/api/dispatch.ts`, `frontend/runtime/renderEmission.ts`, `frontend/runtime/projectionConstructor.ts`, backend emission / manifest response surfaces。
-      → RuntimeTopologyComponentProps envelope / runtime component interface boundary は完了済みとして扱い、未完了に戻さない。
-
-## Frontend SSE Receiver
-
-- [ ] [frontend-sse-receiver][scheduler-hook] SSE receiver が frontend scheduler へ hook trigger として投入する経路を実装する
-      → 完了条件: `sse_receiver_feeds_frontend_scheduler_as_hook_trigger`。
-      → 対象: `frontend/runtime/sseReceiver.ts`, `frontend/runtime/frontendScheduler.ts`。
-
-- [ ] [frontend-sse-receiver][identity] receiver が projection event identity を構造化して保持する
-      → 完了条件: `receiver_preserves_projection_event_identity`。
-      → 対象: `frontend/runtime/sseReceiver.ts`, projection event payload type。
-
-- [ ] [frontend-sse-receiver][error-state] backend SSE error states を明示的に扱う
-      → 完了条件: `backend_sse_error_states_are_explicit`。
-      → 対象: `frontend/runtime/sseReceiver.ts`。
-
-## Frontend SSE Dispatcher
-
-- [ ] [frontend-sse-dispatcher][projection-runtime] dispatcher が projection events を projection runtime へ route する
-      → 完了条件: `dispatcher_routes_projection_events_into_projection_runtime`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`, `frontend/runtime/renderEmission.ts`。
-
-- [ ] [frontend-sse-dispatcher][unhandled-policy] unhandled event policy を明示化する
-      → 完了条件: `unhandled_event_policy_is_explicit`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`。
-
-- [ ] [frontend-sse-dispatcher][identity] dispatcher が projection event identity を保持して渡す
-      → 完了条件: `projection_event_identity_is_preserved`。
-      → 対象: `frontend/runtime/sseDispatcher.ts`, projection event payload type。
-
 ## Abstract Function / Heavy Primitive Function Boundary
 
 - [ ] [abstract-function][unit-tests] function-backed primitive が使う heavy function boundary に unit tests を追加する
