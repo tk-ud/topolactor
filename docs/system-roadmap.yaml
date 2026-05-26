@@ -1050,6 +1050,40 @@ system_roadmap_ssot:
         - broken_promote_returns_explicit_error_not_partial_ids
       known_gap_ref: []
 
+    ui_ux_primitive_catalog_and_abstract_function_registry:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      prerequisite_for:
+        - admin_visual_layout_builder (Issue #89)
+        - no_code_db_driven_ui_operation_surface
+      public_summary: >
+        UI/UX primitive catalog SSOT (docs/design/ui-ux-primitive-catalog-ssot.yaml)
+        and abstract function primitive registry SSOT
+        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined.
+        Frontend component catalog (frontend/components/catalog.ts) extended with 82
+        primitive lineup entries across 8 categories: search/suggest, inline edit/audit,
+        table/list/view, kanban/drag-drop, design token, calculation/topology,
+        external lookup, and safety/guard.
+        All new catalog entries are runtimeConnected:false (catalog_definition_only).
+        Mutation boundaries, external lookup boundaries, SQL Attention boundaries,
+        seed role boundaries, and style token boundaries are formally documented in SSOT.
+      files:
+        - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        - docs/design/abstract-function-primitive-registry-ssot.yaml
+        - frontend/components/catalog.ts
+      completion_condition:
+        - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
+        - abstract_function_primitive_registry_ssot_defines_6_categories_with_contract
+        - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
+        - frontend_component_catalog_extended_with_primitive_lineup_entries
+      known_gap_ref:
+        - React implementation of new primitives pending (code_only_drift catalog entries have no component file)
+        - runtimeConnected promotion requires adapter/renderer wiring in runtimeComponentAdapter + runtimePrimitiveRenderer
+        - DB seed bootstrap rows for primitive registries not yet written
+        - SSOT reader tests for new SSOT files not yet written
+        - roadmap status can be raised to implemented when React components exist and adapter wiring is verified
+
     external_connector_contract:
       status: not_started
       production_ready: false

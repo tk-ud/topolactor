@@ -1,0 +1,599 @@
+version: 1
+ssot: abstract_function_primitive_registry
+purpose: >
+  Define the abstract function primitive vocabulary, input/output contracts,
+  and mutation boundary for functions invoked by UI/UX primitives.
+
+  This SSOT is the upper-level vocabulary definition for:
+  - function names referenced by UI primitives in ui-ux-primitive-catalog-ssot.yaml
+  - function contract boundaries (mutation / candidate / preview / readonly)
+  - function categories that map to UI primitive categories
+  - Issue #89 layout builder function vocabulary
+  - no-code / DB-driven UI topology operation builder
+
+  This SSOT does NOT own:
+  - execution engine implementation
+  - backend runtime dispatch configuration
+  - DB schema for function persistence
+  - SQL Attention ranking / promotion implementation
+  - external provider connection details
+
+  Function vocabulary design rules:
+  - All functions that produce candidates declare output as candidate surface
+  - All functions that write to DB declare explicit mutation_boundary
+  - SQL Attention functions are observation-only and do not mutate registry
+  - Calculation functions produce preview results; apply requires explicit confirm
+  - External lookup functions produce candidates; canonical write requires confirm
+
+# =============================================================================
+# Mutation boundary types (referenced by function entries)
+# =============================================================================
+
+mutation_boundary_types:
+  readonly:
+    description: Function only reads; no DB write at all
+  candidate_surface:
+    description: Function produces candidates; no write side effect
+  preview_only:
+    description: Function produces a preview result without writing
+  preview_validate_explicit_apply:
+    description: >
+      Function produces a preview or patch; DB write requires
+      validate_candidate then apply_confirmed_update then append_diff_log
+  explicit_confirm_required:
+    description: Write only after explicit user/admin confirmation
+  append_only:
+    description: Function appends an audit or log entry; no mutation of existing rows
+  sql_attention_observation_only:
+    description: SQL Attention observation; does not mutate registry or route state
+
+# =============================================================================
+# Category A: Search / Suggest Functions
+# =============================================================================
+
+category_a_search_suggest:
+  label: Search / Suggest Functions
+  boundary: candidate_surface
+  note: All functions produce candidate results. No direct DB write.
+  functions:
+    search_hub_candidates:
+      signature: "search_hub_candidates(query, context) -> candidates[]"
+      description: Search hubs matching query with context-aware ranking
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - AutoCompleteInput
+        - SearchCombobox
+        - RelationCandidatePicker
+
+    search_entity_candidates:
+      signature: "search_entity_candidates(query, context) -> candidates[]"
+      description: Search entities matching query with context filters
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - AutoCompleteInput
+        - SuggestInput
+        - SearchCombobox
+
+    suggest_relation_candidates:
+      signature: "suggest_relation_candidates(hub_id, context) -> candidates[]"
+      description: Suggest related hub candidates based on hub_id and topology context
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - RelationCandidatePicker
+        - RelationPathPreview
+
+    autocomplete_field_value:
+      signature: "autocomplete_field_value(target, field, query, context) -> suggestions[]"
+      description: Autocomplete a field value from registered candidates for the given target
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - AutoCompleteInput
+        - SuggestInput
+
+    rank_candidate_results:
+      signature: "rank_candidate_results(candidates, policy) -> ranked_candidates[]"
+      description: Rank a candidate list using the given policy (SQL Attention score, recency, etc.)
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      sql_attention_boundary: observation_and_ranking_only
+      note: SQL Attention ranking is candidate surface only; ranked list does not auto-write registry
+      ui_primitive_consumers:
+        - CandidateConfidenceBadge
+        - RankScorePreview
+
+    explain_candidate_match:
+      signature: "explain_candidate_match(candidate, context) -> explanation"
+      description: Explain why a candidate was matched (field overlap, topology distance, score)
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - CandidateConfidenceBadge
+        - FieldResolverInspector
+
+    detect_duplicate_candidates:
+      signature: "detect_duplicate_candidates(candidates, policy) -> duplicate_groups[]"
+      description: Detect near-duplicate candidates using cosine similarity and policy thresholds
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - DuplicateMergeCandidatePanel
+
+    resolve_recent_inputs:
+      signature: "resolve_recent_inputs(target, field, context) -> recents[]"
+      description: Return recently used input values for a field based on observation logs
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - RecentInputSuggest
+
+    suggest_schema_promotion_candidates:
+      signature: "suggest_schema_promotion_candidates(context) -> candidates[]"
+      description: Suggest jsonb paths or fields ready for schema promotion
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: Promotion requires explicit confirm through schema promotion flow
+      ui_primitive_consumers:
+        - SchemaPromotionCandidatePanel
+
+# =============================================================================
+# Category B: Normalize / Lookup / Import Functions
+# =============================================================================
+
+category_b_normalize_lookup_import:
+  label: Normalize / Lookup / Import Functions
+  boundary: candidate_surface
+  note: External lookup functions produce candidates only. Canonical write requires confirm.
+  functions:
+    normalize_text:
+      signature: "normalize_text(value, rule) -> normalized_value"
+      description: Normalize text by rule (trim, kana, full-width, etc.)
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - NormalizeAddressCandidate
+        - KanaAssistInput
+
+    extract_kana:
+      signature: "extract_kana(value) -> kana_candidate"
+      description: Extract kana reading from CJK text
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - KanaAssistInput
+
+    resolve_postal_address:
+      signature: "resolve_postal_address(postal_code) -> address_candidate"
+      description: Resolve postal code to address candidate via allowed postal provider or master
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      external_lookup: postal_address
+      canonical_authority: candidate_surface_not_SSOT
+      ui_primitive_consumers:
+        - PostalAddressLookup
+        - LookupCandidateConfirmPanel
+
+    resolve_address_postal:
+      signature: "resolve_address_postal(address) -> postal_candidate"
+      description: Resolve address to postal code candidate
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      external_lookup: address_postal
+      canonical_authority: candidate_surface_not_SSOT
+      ui_primitive_consumers:
+        - AddressPostalLookup
+        - LookupCandidateConfirmPanel
+
+    resolve_tel_candidate:
+      signature: "resolve_tel_candidate(tel_or_address) -> candidates[]"
+      description: Resolve tel number or address against internal master / registered data only
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      external_lookup: tel_address
+      restriction: internal_master_and_registered_data_only
+      canonical_authority: candidate_surface_not_SSOT
+      ui_primitive_consumers:
+        - TelAddressCandidateLookup
+        - LookupCandidateConfirmPanel
+
+    import_rows_to_candidates:
+      signature: "import_rows_to_candidates(source, mapping) -> import_candidates[]"
+      description: Map source rows to topology payload candidates using the given column mapping
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: Import result is candidate only; apply requires validate_candidate + explicit confirm
+      ui_primitive_consumers:
+        - SelectImportDialog
+        - BulkImportCandidatePanel
+
+    deduplicate_import_candidates:
+      signature: "deduplicate_import_candidates(candidates, policy) -> dedup_candidates[]"
+      description: Remove or flag near-duplicate candidates from an import batch
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - DuplicateMergeCandidatePanel
+        - BulkImportCandidatePanel
+
+# =============================================================================
+# Category C: Candidate Update / Audit Functions
+# =============================================================================
+
+category_c_candidate_update_audit:
+  label: Candidate Update / Audit Functions
+  boundary: preview_validate_explicit_apply
+  note: >
+    All write operations follow: preview_update_patch → validate_candidate →
+    apply_confirmed_update → append_diff_log.
+    No shortcut path bypasses validate_candidate.
+  functions:
+    validate_candidate:
+      signature: "validate_candidate(candidate, manifest) -> validation_result"
+      description: Validate a candidate against the manifest schema and required field constraints
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - OptimisticUpdateBoundary
+        - ApplyConfirmDialog
+        - BulkActionPanel
+
+    preview_update_patch:
+      signature: "preview_update_patch(target, payload) -> patch_preview"
+      description: Produce a before/after patch preview without writing to DB
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - PatchPreviewPanel
+        - InlineEditableField
+        - InlineEditableJsonbField
+
+    apply_confirmed_update:
+      signature: "apply_confirmed_update(target, payload) -> apply_result"
+      description: Write confirmed patch to DB after validate_candidate pass and explicit confirm
+      output_kind: mutation_result
+      mutation_boundary: explicit_confirm_required
+      prerequisite:
+        - validate_candidate must pass
+        - explicit user/admin confirmation must precede call
+      ui_primitive_consumers:
+        - ConfirmedUpdateButton
+        - ApplyConfirmDialog
+        - BulkActionPanel
+
+    append_diff_log:
+      signature: "append_diff_log(target, before, after, editor) -> diff_log_entry"
+      description: Append an immutable diff log entry after apply_confirmed_update succeeds
+      output_kind: append_only
+      mutation_boundary: append_only
+      note: Must be called after apply_confirmed_update, never before
+      ui_primitive_consumers:
+        - AuditDiffDrawer
+        - UndoTimeline
+
+    build_rollback_candidate:
+      signature: "build_rollback_candidate(diff_id) -> rollback_candidate"
+      description: Build a rollback candidate from a diff_log entry
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: Rollback requires apply_confirmed_update + append_diff_log
+      ui_primitive_consumers:
+        - RollbackCandidatePanel
+        - UndoTimeline
+
+    compare_candidate_with_current_state:
+      signature: "compare_candidate_with_current_state(candidate, target) -> comparison_result"
+      description: Compare a candidate with the current DB state before apply
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ConflictResolutionPanel
+        - PatchPreviewPanel
+
+    resolve_conflict_candidate:
+      signature: "resolve_conflict_candidate(conflict, resolution_policy) -> resolved_candidate"
+      description: Produce a resolved candidate from a conflict using the given resolution policy
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: Resolved candidate still requires apply_confirmed_update
+      ui_primitive_consumers:
+        - ConflictResolutionPanel
+
+# =============================================================================
+# Category D: Calculation / Topology Functions
+# =============================================================================
+
+category_d_calculation_topology:
+  label: Calculation / Topology Functions
+  boundary: preview_candidate_surface_only
+  note: >
+    All calculation functions produce preview or candidate results.
+    Calculation results do not directly mutate DB state.
+    SQL Attention functions are observation-only.
+  functions:
+    calculate_entity_field_value:
+      signature: "calculate_entity_field_value(entity_id, formula, context) -> computed_value"
+      description: Calculate a computed field value using the given formula and entity context
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ComputedFieldPreview
+        - CalculationPreviewPanel
+
+    calculate_relation_score:
+      signature: "calculate_relation_score(from_id, to_id, context) -> score"
+      description: Calculate relation score between two entities using topology distance and co-occurrence
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      sql_attention_boundary: observation_based_scoring_only
+      ui_primitive_consumers:
+        - RelationScorePreview
+        - RankScorePreview
+
+    calculate_relation_cooccurrence:
+      signature: "calculate_relation_cooccurrence(source, target, window) -> cooccurrence_matrix"
+      description: Calculate co-occurrence frequency between source and target within time window
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - CooccurrenceMatrixPreview
+        - RelationScorePreview
+
+    calculate_hub_statistics:
+      signature: "calculate_hub_statistics(hub_id, filters) -> statistics"
+      description: Calculate aggregated statistics for a hub (count, state distribution, etc.)
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - HubStatisticsPanel
+
+    calculate_group_statistics:
+      signature: "calculate_group_statistics(target, group_by, filters) -> grouped_stats"
+      description: Calculate grouped aggregate statistics over a target result set
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - AggregationPreviewTable
+        - CrossEntityCalculationPanel
+
+    calculate_topology_distance:
+      signature: "calculate_topology_distance(from_hub, to_hub, context) -> distance_result"
+      description: Calculate the topology distance (hop count, cosine similarity) between two hubs
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - TopologyDistancePreview
+        - RelationPathPreview
+
+    calculate_route_cost:
+      signature: "calculate_route_cost(route, context) -> cost_result"
+      description: Calculate traversal cost for a candidate route
+      output_kind: candidate_surface
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - RouteCostPreview
+
+    calculate_attention_weight:
+      signature: "calculate_attention_weight(target, evidence) -> attention_weight"
+      description: >
+        Calculate attention weight from SQL Attention observation evidence.
+        This is an observation function. Result is preview/candidate; does not mutate registry.
+      output_kind: candidate_surface
+      mutation_boundary: sql_attention_observation_only
+      sql_attention_boundary: observation_surface_only
+      note: SQL Attention is observation layer; attention_weight result does not auto-promote
+      ui_primitive_consumers:
+        - AttentionWeightPreview
+
+    calculate_rank_score:
+      signature: "calculate_rank_score(candidates, policy) -> ranked_candidates[]"
+      description: Rank candidates by policy-defined score (attention_score, recency, trend)
+      output_kind: candidate_surface
+      mutation_boundary: sql_attention_observation_only
+      sql_attention_boundary: recommendation_candidate_surface_only
+      note: Ranked list is candidate surface only; no auto-mutation of registry or route
+      ui_primitive_consumers:
+        - RankScorePreview
+        - CandidateConfidenceBadge
+
+    preview_computed_field:
+      signature: "preview_computed_field(target, formula, context) -> preview_result"
+      description: Dry-run preview of a computed field formula result without DB write
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ComputedFieldPreview
+        - FormulaBuilder
+
+    validate_formula_contract:
+      signature: "validate_formula_contract(formula, manifest) -> validation_result"
+      description: Validate a formula against the manifest schema before apply
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - FormulaBuilder
+
+    promote_computation_candidate:
+      signature: "promote_computation_candidate(path, evidence) -> promotion_candidate"
+      description: Promote a computed field or aggregation result to a schema candidate
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: Promotion candidate requires explicit confirm through schema promotion flow
+      ui_primitive_consumers:
+        - SchemaPromotionCandidatePanel
+        - ComputedFieldPreview
+
+# =============================================================================
+# Category E: Layout / Design Token Functions
+# =============================================================================
+
+category_e_layout_design_token:
+  label: Layout / Design Token Functions
+  boundary: preview_validate_explicit_apply
+  note: "#89 admin visual layout builder function vocabulary"
+  functions:
+    preview_layout_patch:
+      signature: "preview_layout_patch(layout_id, patch, context) -> layout_preview"
+      description: Preview a layout patch without writing to ui_layout_registry
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ThemePreviewPanel
+        - LayoutGridEditor
+
+    validate_layout_constraint:
+      signature: "validate_layout_constraint(layout_id, patch, rules) -> validation_result"
+      description: Validate a layout patch against responsive rules and placement constraints
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ApplyConfirmDialog
+        - ResponsiveRuleEditor
+
+    apply_confirmed_layout_patch:
+      signature: "apply_confirmed_layout_patch(layout_id, patch) -> apply_result"
+      description: Write confirmed layout patch to ui_layout_registry after validation and confirm
+      output_kind: mutation_result
+      mutation_boundary: explicit_confirm_required
+      prerequisite:
+        - validate_layout_constraint must pass
+        - explicit admin confirmation required
+      ui_primitive_consumers:
+        - ApplyConfirmDialog
+        - LayoutGridEditor
+
+    resolve_style_token:
+      signature: "resolve_style_token(token_id, context) -> resolved_value"
+      description: Resolve a style token to its actual CSS value using registry and context
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - CssVariablePreview
+        - StyleTokenPicker
+        - ThemePreviewPanel
+
+    preview_responsive_rule:
+      signature: "preview_responsive_rule(rule, viewport) -> preview_result"
+      description: Preview how a responsive rule applies to a given viewport size
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - ResponsiveRuleEditor
+
+    validate_component_placement:
+      signature: "validate_component_placement(component, layout, constraints) -> validation_result"
+      description: Validate a component placement against layout constraints
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - LayoutDropZone
+        - SnapGridOverlay
+
+    resolve_design_token_cascade:
+      signature: "resolve_design_token_cascade(token_ids, context) -> cascade_result"
+      description: Resolve token cascade order (component → package → global → default)
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - StyleTokenPicker
+        - ThemePreviewPanel
+        - CssVariablePreview
+
+# =============================================================================
+# Category F: Operation Safety Functions
+# =============================================================================
+
+category_f_operation_safety:
+  label: Operation Safety Functions
+  boundary: preview_validate_explicit_apply
+  note: All destructive operations must pass dry_run and explicit confirm before execute
+  functions:
+    dry_run_operation:
+      signature: "dry_run_operation(operation, context) -> dry_run_result"
+      description: Simulate an operation without executing it; returns expected mutations and risks
+      output_kind: preview_only
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - DryRunResultPanel
+        - CommandPalette
+
+    validate_mutation_boundary:
+      signature: "validate_mutation_boundary(operation, policy) -> boundary_result"
+      description: Check whether an operation crosses mutation boundaries defined in policy
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - MutationBoundaryInspector
+        - OperationGuardBanner
+
+    explain_operation_risk:
+      signature: "explain_operation_risk(operation, context) -> risk_explanation"
+      description: Explain operation risks before confirmation
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - OperationGuardBanner
+        - ApplyConfirmDialog
+
+    check_permission_for_operation:
+      signature: "check_permission_for_operation(actor, operation, target) -> permission_result"
+      description: Check whether the actor has permission for the given operation on target
+      output_kind: readonly
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - PermissionHintPanel
+        - CommandPalette
+
+    build_confirmable_operation:
+      signature: "build_confirmable_operation(operation, context) -> confirmable_op"
+      description: Wrap an operation in a confirmable contract with dry_run result and risk summary
+      output_kind: candidate_surface
+      mutation_boundary: candidate_surface
+      note: confirmable_op requires explicit confirm before apply_confirmed_update
+      ui_primitive_consumers:
+        - ApplyConfirmDialog
+        - CommandPalette
+
+    append_operation_audit_log:
+      signature: "append_operation_audit_log(operation, result, actor) -> audit_log_entry"
+      description: Append an operation audit log entry after operation completes
+      output_kind: append_only
+      mutation_boundary: append_only
+      note: Must be called after operation completes; never before
+      ui_primitive_consumers:
+        - OperationAuditLogPanel
+        - AuditDiffDrawer
+
+    validate_rollback_eligibility:
+      signature: "validate_rollback_eligibility(diff_id, context) -> eligibility_result"
+      description: Check whether a diff_log entry is eligible for rollback
+      output_kind: validation_result
+      mutation_boundary: readonly
+      ui_primitive_consumers:
+        - RollbackCandidatePanel
+
+# =============================================================================
+# Summary
+# =============================================================================
+
+registry_summary:
+  total_categories: 6
+  categories:
+    - A: search_suggest (9 functions)
+    - B: normalize_lookup_import (7 functions)
+    - C: candidate_update_audit (7 functions)
+    - D: calculation_topology (12 functions)
+    - E: layout_design_token (7 functions)
+    - F: operation_safety (7 functions)
+  total_functions: 49
+  sql_attention_boundary_note: >
+    Functions marked sql_attention_boundary=observation_surface_only or
+    recommendation_candidate_surface_only must not mutate registry, route,
+    or primitive catalog directly. SQL Attention output is candidate surface only.
+  upper_ssot:
+    - docs/design/ui-ux-primitive-catalog-ssot.yaml
+  lower_surfaces:
+    - frontend runtime abstract functions (hardcoded shapes per runtime-orchestration-ssot.yaml)
+    - backend topology function interface (runtime-orchestration-ssot.yaml abstract_function_contract)

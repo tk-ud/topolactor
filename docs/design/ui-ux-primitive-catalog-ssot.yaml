@@ -1,0 +1,1031 @@
+version: 1
+ssot: ui_ux_primitive_catalog
+purpose: >
+  Define the UI/UX primitive lineup for the topolactor no-code / DB-driven UI /
+  topology operation surface. This SSOT serves as the upper-level catalog for
+  Issue #89 Admin Visual Layout Builder, abstract function registry, frontend
+  component catalog, and runtime adapter/renderer expansion.
+
+  This SSOT owns:
+  - primitive category taxonomy and membership
+  - mutation boundary declaration
+  - external lookup boundary declaration
+  - SQL Attention / recommendation boundary declaration
+  - seed role boundary declaration
+  - design token / layout token boundary declaration
+  - #89 prerequisite primitive lineup
+
+  This SSOT does NOT own:
+  - React implementation (frontend implementation is separate)
+  - runtime adapter/renderer wiring (runtimePrimitiveRenderer/runtimeComponentAdapter)
+  - DB seed values (seed is bootstrap, not authority)
+  - SQL Attention ranking logic
+  - external provider connection details
+
+prerequisite_for:
+  - admin_visual_layout_builder (Issue #89)
+  - no_code_db_driven_ui_operation_surface
+
+# =============================================================================
+# Meaning Boundaries (must be observed across all primitives)
+# =============================================================================
+
+meaning_boundaries:
+  frontend_topology_judgment:
+    rule: frontend does not own topology judgment
+    allowed: candidate / preview / confirm surface only
+    prohibited: frontend computing topology meaning, route direction, or registry authority
+
+  mutation_boundary:
+    rule: mutation must follow the explicit flow
+    sequence:
+      - preview_update_patch
+      - validate_candidate
+      - explicit_confirm_by_user_or_admin
+      - apply_confirmed_update
+      - append_diff_log
+    prohibited:
+      - immediate mutation on calculation result
+      - silent mutation without preview
+      - bypass of validate_candidate before write
+      - mutation without diff_log append
+
+  calculation_boundary:
+    rule: calculation results are candidates not mutations
+    sequence:
+      - preview_computed_field
+      - validate_formula_contract
+      - explicit_confirm
+      - apply_confirmed_update
+    prohibited:
+      - calculation result triggering immediate DB write
+      - frontend computing topology scores authoritatively
+
+  external_lookup_boundary:
+    rule: external lookup is candidate surface not canonical SSOT
+    note: >
+      External lookup primitives (postal code, kana, address, tel) are adapter
+      surfaces that produce candidates. The canonical SSOT is always the registered
+      master / topolactor DB topology. External lookup results must be confirmed
+      before write.
+    lookup_kinds:
+      kana_assist:
+        source: local_text_processing_or_allowed_provider
+        authority: candidate_surface
+      postal_address:
+        source: allowed_postal_provider_or_internal_master
+        authority: candidate_surface
+      address_postal:
+        source: allowed_address_provider_or_internal_master
+        authority: candidate_surface
+      tel_address:
+        source: internal_master_or_registered_data_or_allowed_provider
+        authority: candidate_surface
+        restriction: internal_master_and_registered_data_and_allowed_provider_only
+    prohibited:
+      - external_lookup_result_treated_as_canonical_SSOT
+      - lookup_result_written_without_candidate_confirm
+      - external_provider_bypassing_canonical_route
+
+  sql_attention_boundary:
+    rule: SQL Attention is observation surface not mutation authority
+    sql_attention_role:
+      - observe_logs_pressure_and_hub_vector_evidence
+      - produce_recommendation_candidates
+      - produce_ranking_candidates
+    prohibited:
+      - sql_attention_mutating_registry_directly
+      - sql_attention_auto_promoting_primitives_without_explicit_confirm
+      - sql_attention_overwriting_route_state_automatically
+    recommendation_surface:
+      - candidate_surface_only
+      - ranking_is_candidate_not_registry_authority
+      - promotion_requires_preview_validate_explicit_confirm
+
+  seed_role_boundary:
+    rule: DB seed is bootstrap row not vocabulary authority
+    seed_role:
+      - initial_bootstrap_rows_only
+      - not_canonical_vocabulary_source
+      - not_static_classification_authority
+    yaml_authority:
+      - static_vocabulary
+      - classification_definition
+      - CI_membership_assertion
+    prohibited:
+      - treating_seed_as_static_vocabulary_SSOT
+      - CI_failing_on_seed_value_not_in_seed_but_missing_yaml_definition
+
+  style_token_boundary:
+    rule: style tokens must flow through manifest / registry token, not hardcode
+    prohibited:
+      - hardcoding_font_color_spacing_in_component_code
+      - frontend_deriving_design_token_from_component_props_without_registry
+    allowed:
+      - manifest_driven_style_token_reference
+      - registry_token_resolution_at_render_time
+      - preview_of_token_value_in_token_editor
+
+  yaml_static_vocabulary_boundary:
+    rule: YAML enum / classification vocabulary is static constraint, not DB migration target
+    yaml_role:
+      - static_constraint
+      - CI_auxiliary
+      - classification_definition
+    prohibited:
+      - migrating_yaml_classification_vocabulary_to_DB_as_authority
+      - DB_replacing_yaml_as_classification_membership_source
+
+  layout_builder_reference:
+    rule: "#89 visual layout builder references this catalog as its primitive lineup"
+    note: >
+      This SSOT defines the placement target primitives for Issue #89.
+      The layout builder reads this catalog for available primitive kinds,
+      classification metadata, and boundary rules. The layout builder does not
+      implement drag/drop runtime behavior defined here — this SSOT is the
+      definition layer only.
+
+# =============================================================================
+# Category A: Search / Suggest / Candidate UI
+# =============================================================================
+
+category_a_search_suggest:
+  label: Search / Suggest / Candidate UI
+  purpose: >
+    Search, suggestion, candidate discovery, duplication detection, and
+    relationship exploration. All results are candidate surfaces; they do not
+    directly mutate canonical data.
+  boundary: candidate_surface_only
+  primitives:
+    AutoCompleteInput:
+      key: autocomplete_input.primitive
+      kind: search_suggest/autocomplete_input
+      description: Text input with inline autocomplete from registered candidate sources
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      mutation_boundary: preview_before_apply
+      runtimeConnected: false
+
+    SuggestInput:
+      key: suggest_input.primitive
+      kind: search_suggest/suggest_input
+      description: Input with dropdown suggestion list driven by search function
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      runtimeConnected: false
+
+    SearchCombobox:
+      key: search_combobox.primitive
+      kind: search_suggest/search_combobox
+      description: Combined search input and selectable result combobox for hub/entity lookup
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      runtimeConnected: false
+
+    SelectImportDialog:
+      key: select_import_dialog.primitive
+      kind: search_suggest/select_import_dialog
+      description: Dialog for selecting and importing rows as topology payload candidates
+      semantic_role: admin_operation
+      visual_role: modal
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    RelationCandidatePicker:
+      key: relation_candidate_picker.primitive
+      kind: search_suggest/relation_candidate_picker
+      description: Picker for selecting relation candidates produced by suggest_relation_candidates
+      semantic_role: input
+      visual_role: panel
+      candidate_surface: true
+      runtimeConnected: false
+
+    RecentInputSuggest:
+      key: recent_input_suggest.primitive
+      kind: search_suggest/recent_input_suggest
+      description: Suggest panel showing recently used inputs ranked by recency and frequency
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      runtimeConnected: false
+
+    DuplicateMergeCandidatePanel:
+      key: duplicate_merge_candidate_panel.primitive
+      kind: search_suggest/duplicate_merge_candidate_panel
+      description: Panel presenting near-duplicate candidates with merge confirmation flow
+      semantic_role: diagnostic
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    CandidateConfidenceBadge:
+      key: candidate_confidence_badge.primitive
+      kind: search_suggest/candidate_confidence_badge
+      description: Badge showing confidence score or match quality of a candidate result
+      semantic_role: display
+      visual_role: badge
+      candidate_surface: true
+      runtimeConnected: false
+
+    RelationPathPreview:
+      key: relation_path_preview.primitive
+      kind: search_suggest/relation_path_preview
+      description: Read-only preview of relation path from source hub to target hub
+      semantic_role: display
+      visual_role: panel
+      candidate_surface: true
+      preview_only: true
+      runtimeConnected: false
+
+    FieldResolverInspector:
+      key: field_resolver_inspector.primitive
+      kind: search_suggest/field_resolver_inspector
+      description: Inspector showing how a field value resolves through schema and manifest
+      semantic_role: diagnostic
+      visual_role: panel
+      candidate_surface: true
+      preview_only: true
+      runtimeConnected: false
+
+    SchemaPromotionCandidatePanel:
+      key: schema_promotion_candidate_panel.primitive
+      kind: search_suggest/schema_promotion_candidate_panel
+      description: Panel listing schema promotion candidates with validate/promote flow
+      semantic_role: admin_operation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+# =============================================================================
+# Category B: Inline Edit / Preview Update / Audit UI
+# =============================================================================
+
+category_b_inline_edit_audit:
+  label: Inline Edit / Preview Update / Audit UI
+  purpose: >
+    Support the preview → validate → confirm → write → diff_log mutation sequence
+    for DB record editing without bypassing canonical route.
+  mutation_sequence:
+    - preview_update_patch
+    - validate_candidate
+    - explicit_confirm
+    - apply_confirmed_update
+    - append_diff_log
+  boundary: preview_confirm_write_difflog_only
+  primitives:
+    InlineEditableField:
+      key: inline_editable_field.primitive
+      kind: inline_edit/inline_editable_field
+      description: Field that switches between display and edit mode with preview_update_patch on change
+      semantic_role: input
+      visual_role: field
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    InlineEditableJsonbField:
+      key: inline_editable_jsonb_field.primitive
+      kind: inline_edit/inline_editable_jsonb_field
+      description: JSON editor for jsonb fields with validation and patch preview
+      semantic_role: input
+      visual_role: json_viewer
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    PatchPreviewPanel:
+      key: patch_preview_panel.primitive
+      kind: inline_edit/patch_preview_panel
+      description: Read-only panel showing the diff between current and proposed patch
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    DiffStrikeText:
+      key: diff_strike_text.primitive
+      kind: inline_edit/diff_strike_text
+      description: Inline text diff renderer with strike-through for removed and highlight for added
+      semantic_role: display
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    AuditDiffDrawer:
+      key: audit_diff_drawer.primitive
+      kind: inline_edit/audit_diff_drawer
+      description: Drawer showing before/after diff with actor and timestamp from diff_log
+      semantic_role: diagnostic
+      visual_role: modal
+      preview_only: true
+      runtimeConnected: false
+
+    OptimisticUpdateBoundary:
+      key: optimistic_update_boundary.primitive
+      kind: inline_edit/optimistic_update_boundary
+      description: Boundary wrapper managing optimistic local state before confirmed write
+      semantic_role: validation
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    ConfirmedUpdateButton:
+      key: confirmed_update_button.primitive
+      kind: inline_edit/confirmed_update_button
+      description: Action button that triggers apply_confirmed_update only after explicit user confirmation
+      semantic_role: action
+      visual_role: button
+      mutation_boundary: explicit_confirm_required
+      runtimeConnected: false
+
+    UndoTimeline:
+      key: undo_timeline.primitive
+      kind: inline_edit/undo_timeline
+      description: Timeline of diff_log entries with rollback candidate selection
+      semantic_role: navigation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    ConflictResolutionPanel:
+      key: conflict_resolution_panel.primitive
+      kind: inline_edit/conflict_resolution_panel
+      description: Panel for resolving concurrent edit conflicts with explicit winner selection
+      semantic_role: admin_operation
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+# =============================================================================
+# Category C: Table / List / View Operation UI
+# =============================================================================
+
+category_c_table_list_view:
+  label: Table / List / View Operation UI
+  purpose: >
+    Faceted filtering, column control, sorting, grouping, saved view management,
+    bulk actions, and virtualized data display for no-code DB application surfaces.
+  primitives:
+    FacetedFilterBar:
+      key: faceted_filter_bar.primitive
+      kind: table_op/faceted_filter_bar
+      description: Multi-facet filter bar combining text search and discrete value filters
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    ColumnFilter:
+      key: column_filter.primitive
+      kind: table_op/column_filter
+      description: Per-column filter control for data tables
+      semantic_role: input
+      visual_role: field
+      runtimeConnected: false
+
+    ColumnVisibilityEditor:
+      key: column_visibility_editor.primitive
+      kind: table_op/column_visibility_editor
+      description: Editor for toggling column visibility in data tables
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    SortControl:
+      key: sort_control.primitive
+      kind: table_op/sort_control
+      description: Sort direction and priority control for data table columns
+      semantic_role: input
+      visual_role: field
+      runtimeConnected: false
+
+    GroupByControl:
+      key: group_by_control.primitive
+      kind: table_op/group_by_control
+      description: Group-by axis selector for aggregated data views
+      semantic_role: input
+      visual_role: field
+      runtimeConnected: false
+
+    SavedViewSelector:
+      key: saved_view_selector.primitive
+      kind: table_op/saved_view_selector
+      description: Selector for loading, saving, and managing named view configurations
+      semantic_role: input
+      visual_role: panel
+      candidate_surface: true
+      runtimeConnected: false
+
+    BulkActionPanel:
+      key: bulk_action_panel.primitive
+      kind: table_op/bulk_action_panel
+      description: Panel for applying actions to multiple selected rows
+      semantic_role: action
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    VirtualizedDataTable:
+      key: virtualized_data_table.primitive
+      kind: table_op/virtualized_data_table
+      description: High-performance virtualized table for large result sets
+      semantic_role: data_viewer
+      visual_role: table
+      runtimeConnected: false
+
+    RowDetailDrawer:
+      key: row_detail_drawer.primitive
+      kind: table_op/row_detail_drawer
+      description: Slide-over drawer showing full row details from a data table selection
+      semantic_role: display
+      visual_role: modal
+      runtimeConnected: false
+
+    PaginationControl:
+      key: pagination_control.primitive
+      kind: table_op/pagination_control
+      description: Page navigation control for paginated data tables
+      semantic_role: navigation
+      visual_role: panel
+      runtimeConnected: false
+
+    ExportCandidatePanel:
+      key: export_candidate_panel.primitive
+      kind: table_op/export_candidate_panel
+      description: Panel for previewing and confirming table data export as topology payload candidate
+      semantic_role: admin_operation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+# =============================================================================
+# Category D: Kanban / Tree / Drag-Drop / State Transition UI
+# =============================================================================
+
+category_d_kanban_drag_drop:
+  label: Kanban / Tree / Drag-Drop / State Transition UI
+  purpose: >
+    Primitive lineup for drag-and-drop placement, kanban state transitions,
+    tree reordering, and layout building. This category defines the primitive
+    surface for Issue #89 visual layout builder. Drag/drop runtime behavior
+    implementation is out of scope for this SSOT — this SSOT defines the
+    catalog lineup only.
+  note: "#89 visual layout builder references this category for placement target primitives"
+  boundary: primitive_lineup_definition_only
+  primitives:
+    KanbanBoard:
+      key: kanban_board.primitive
+      kind: kanban_drag/kanban_board
+      description: Kanban board showing topology state as swim lanes with state transition support
+      semantic_role: data_viewer
+      visual_role: panel
+      runtimeConnected: false
+
+    DragDropStateTransition:
+      key: drag_drop_state_transition.primitive
+      kind: kanban_drag/drag_drop_state_transition
+      description: Drag handler that triggers state transition preview via apply_confirmed_update
+      semantic_role: action
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    DragSortList:
+      key: drag_sort_list.primitive
+      kind: kanban_drag/drag_sort_list
+      description: Drag-to-reorder list with order_index persistence
+      semantic_role: data_viewer
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    RelationDropZone:
+      key: relation_drop_zone.primitive
+      kind: kanban_drag/relation_drop_zone
+      description: Drop target accepting relation candidate hub drops for relation creation
+      semantic_role: layout_shell
+      visual_role: panel
+      candidate_surface: true
+      runtimeConnected: false
+
+    TreeReorderDropZone:
+      key: tree_reorder_drop_zone.primitive
+      kind: kanban_drag/tree_reorder_drop_zone
+      description: Drop zone within a tree view for reordering parent/child relations
+      semantic_role: layout_shell
+      visual_role: tree
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    LayoutDropZone:
+      key: layout_drop_zone.primitive
+      kind: kanban_drag/layout_drop_zone
+      description: Drop zone in the layout builder for placing UI component primitives
+      semantic_role: layout_shell
+      visual_role: panel
+      note: "#89 layout builder placement surface"
+      runtimeConnected: false
+
+    ComponentPlacementHandle:
+      key: component_placement_handle.primitive
+      kind: kanban_drag/component_placement_handle
+      description: Drag handle attached to placed components in the layout builder
+      semantic_role: admin_operation
+      visual_role: panel
+      note: "#89 layout builder placement handle"
+      runtimeConnected: false
+
+    SnapGridOverlay:
+      key: snap_grid_overlay.primitive
+      kind: kanban_drag/snap_grid_overlay
+      description: Visual snap grid overlay shown during drag-drop in layout builder
+      semantic_role: layout_shell
+      visual_role: panel
+      note: "#89 layout builder grid reference"
+      runtimeConnected: false
+
+    StateTransitionArrow:
+      key: state_transition_arrow.primitive
+      kind: kanban_drag/state_transition_arrow
+      description: Visual arrow connecting state transition edges in kanban or topology view
+      semantic_role: display
+      visual_role: panel
+      runtimeConnected: false
+
+    SlotPlaceholderPanel:
+      key: slot_placeholder_panel.primitive
+      kind: kanban_drag/slot_placeholder_panel
+      description: Empty slot placeholder shown in layout builder indicating available drop targets
+      semantic_role: layout_shell
+      visual_role: panel
+      note: "#89 layout builder slot indicator"
+      runtimeConnected: false
+
+# =============================================================================
+# Category E: Design Token / Style Token / Layout Token UI
+# =============================================================================
+
+category_e_design_token:
+  label: Design Token / Style Token / Layout Token UI
+  purpose: >
+    Edit, preview, and manage design tokens, style tokens, and layout tokens
+    that feed the manifest/registry-driven style resolution pipeline.
+    Style tokens must not be hardcoded; they flow through manifest/registry.
+  boundary: manifest_registry_token_only
+  note: "#89 admin visual layout builder token management surface"
+  primitives:
+    FontTokenEditor:
+      key: font_token_editor.primitive
+      kind: design_token/font_token_editor
+      description: Editor for font-family, font-size, font-weight, and line-height tokens
+      semantic_role: input
+      visual_role: panel
+      note: "token must resolve through registry; hardcode prohibited"
+      runtimeConnected: false
+
+    BackgroundColorEditor:
+      key: background_color_editor.primitive
+      kind: design_token/background_color_editor
+      description: Color picker and token reference editor for background color tokens
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    TextColorEditor:
+      key: text_color_editor.primitive
+      kind: design_token/text_color_editor
+      description: Color picker and token reference editor for text color tokens
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    SpacingTokenEditor:
+      key: spacing_token_editor.primitive
+      kind: design_token/spacing_token_editor
+      description: Editor for margin, padding, and gap spacing tokens
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    BorderRadiusEditor:
+      key: border_radius_editor.primitive
+      kind: design_token/border_radius_editor
+      description: Editor for border-radius tokens with live preview
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    ThemePreviewPanel:
+      key: theme_preview_panel.primitive
+      kind: design_token/theme_preview_panel
+      description: Read-only preview panel showing resolved theme token values
+      semantic_role: display
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    LayoutGridEditor:
+      key: layout_grid_editor.primitive
+      kind: design_token/layout_grid_editor
+      description: Editor for grid columns, rows, and gap layout tokens
+      semantic_role: admin_operation
+      visual_role: panel
+      note: "#89 layout builder grid configuration"
+      runtimeConnected: false
+
+    ResponsiveRuleEditor:
+      key: responsive_rule_editor.primitive
+      kind: design_token/responsive_rule_editor
+      description: Editor for responsive breakpoint rules referenced by responsive_rule_id
+      semantic_role: admin_operation
+      visual_role: panel
+      note: "#89 responsive rule management"
+      runtimeConnected: false
+
+    StyleTokenPicker:
+      key: style_token_picker.primitive
+      kind: design_token/style_token_picker
+      description: Picker for selecting registered style tokens from the token registry
+      semantic_role: input
+      visual_role: panel
+      candidate_surface: true
+      runtimeConnected: false
+
+    CssVariablePreview:
+      key: css_variable_preview.primitive
+      kind: design_token/css_variable_preview
+      description: Read-only preview of resolved CSS custom property values from token registry
+      semantic_role: display
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    ShadowTokenEditor:
+      key: shadow_token_editor.primitive
+      kind: design_token/shadow_token_editor
+      description: Editor for box-shadow and text-shadow tokens
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+    AnimationTokenEditor:
+      key: animation_token_editor.primitive
+      kind: design_token/animation_token_editor
+      description: Editor for transition-duration, easing, and animation tokens
+      semantic_role: input
+      visual_role: panel
+      runtimeConnected: false
+
+# =============================================================================
+# Category F: Calculation / Topology Computation UI
+# =============================================================================
+
+category_f_calculation_topology:
+  label: Calculation / Topology Computation UI
+  purpose: >
+    Preview computation results, formula building, relation scoring, hub statistics,
+    aggregation, and topology distance estimation. All results are preview/candidate
+    surfaces — they do not immediately mutate state.
+  boundary: preview_candidate_surface_only
+  primitives:
+    CalculationPreviewPanel:
+      key: calculation_preview_panel.primitive
+      kind: calc_topology/calculation_preview_panel
+      description: Panel previewing the output of a formula applied to entity/hub fields
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      runtimeConnected: false
+
+    FormulaBuilder:
+      key: formula_builder.primitive
+      kind: calc_topology/formula_builder
+      description: Interactive formula editor with validate_formula_contract feedback
+      semantic_role: input
+      visual_role: panel
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    ComputedFieldPreview:
+      key: computed_field_preview.primitive
+      kind: calc_topology/computed_field_preview
+      description: Inline preview of a computed field value using preview_computed_field
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    RelationScorePreview:
+      key: relation_score_preview.primitive
+      kind: calc_topology/relation_score_preview
+      description: Preview of calculate_relation_score result between two entities
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      runtimeConnected: false
+
+    HubStatisticsPanel:
+      key: hub_statistics_panel.primitive
+      kind: calc_topology/hub_statistics_panel
+      description: Panel showing calculate_hub_statistics aggregates for a hub
+      semantic_role: data_viewer
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    AggregationPreviewTable:
+      key: aggregation_preview_table.primitive
+      kind: calc_topology/aggregation_preview_table
+      description: Table showing calculate_group_statistics grouped aggregation results
+      semantic_role: data_viewer
+      visual_role: table
+      preview_only: true
+      runtimeConnected: false
+
+    CrossEntityCalculationPanel:
+      key: cross_entity_calculation_panel.primitive
+      kind: calc_topology/cross_entity_calculation_panel
+      description: Panel for cross-entity calculations with formula and entity set selection
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      runtimeConnected: false
+
+    TopologyDistancePreview:
+      key: topology_distance_preview.primitive
+      kind: calc_topology/topology_distance_preview
+      description: Preview of calculate_topology_distance between source and target hubs
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    RouteCostPreview:
+      key: route_cost_preview.primitive
+      kind: calc_topology/route_cost_preview
+      description: Preview of calculate_route_cost for a candidate route
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      runtimeConnected: false
+
+    AttentionWeightPreview:
+      key: attention_weight_preview.primitive
+      kind: calc_topology/attention_weight_preview
+      description: >
+        Preview of calculate_attention_weight result from SQL Attention observation evidence.
+        Attention weight is observation data; it does not directly mutate route or registry.
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      sql_attention_boundary: observation_surface_only
+      runtimeConnected: false
+
+    CooccurrenceMatrixPreview:
+      key: cooccurrence_matrix_preview.primitive
+      kind: calc_topology/cooccurrence_matrix_preview
+      description: Preview of calculate_relation_cooccurrence result as a matrix heatmap
+      semantic_role: data_viewer
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      runtimeConnected: false
+
+    RankScorePreview:
+      key: rank_score_preview.primitive
+      kind: calc_topology/rank_score_preview
+      description: >
+        Preview of calculate_rank_score candidates with policy-ranked ordering.
+        SQL Attention recommendation is candidate surface only; no auto-mutation.
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      candidate_surface: true
+      sql_attention_boundary: recommendation_candidate_surface_only
+      runtimeConnected: false
+
+# =============================================================================
+# Category G: External / Helper Lookup UI
+# =============================================================================
+
+category_g_external_lookup:
+  label: External / Helper Lookup UI
+  purpose: >
+    Candidate-producing surfaces for kana assist, postal/address lookup, and
+    tel/address resolution. External lookup results are candidates only.
+    The canonical SSOT is always the registered master / topolactor DB topology.
+  boundary: candidate_surface_only
+  canonical_authority: topolactor_db_master_registered_data
+  note: >
+    External lookup primitives are adapter / candidate surfaces.
+    They are NOT canonical SSOT. Results must be confirmed through
+    LookupCandidateConfirmPanel before apply_confirmed_update.
+  primitives:
+    KanaAssistInput:
+      key: kana_assist_input.primitive
+      kind: external_lookup/kana_assist_input
+      description: Input with kana reading assistance via extract_kana adapter
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      external_lookup: kana_assist
+      runtimeConnected: false
+
+    PostalAddressLookup:
+      key: postal_address_lookup.primitive
+      kind: external_lookup/postal_address_lookup
+      description: Postal code input that produces address candidate via resolve_postal_address
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      external_lookup: postal_address
+      runtimeConnected: false
+
+    AddressPostalLookup:
+      key: address_postal_lookup.primitive
+      kind: external_lookup/address_postal_lookup
+      description: Address input that produces postal code candidate via resolve_address_postal
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      external_lookup: address_postal
+      runtimeConnected: false
+
+    TelAddressCandidateLookup:
+      key: tel_address_candidate_lookup.primitive
+      kind: external_lookup/tel_address_candidate_lookup
+      description: Tel/address lookup producing candidates via resolve_tel_candidate from internal master only
+      semantic_role: input
+      visual_role: field
+      candidate_surface: true
+      external_lookup: tel_address
+      restriction: internal_master_and_registered_data_only
+      runtimeConnected: false
+
+    NormalizeAddressCandidate:
+      key: normalize_address_candidate.primitive
+      kind: external_lookup/normalize_address_candidate
+      description: Panel showing normalized address candidate from normalize_text adapter
+      semantic_role: diagnostic
+      visual_role: panel
+      candidate_surface: true
+      preview_only: true
+      runtimeConnected: false
+
+    LookupCandidateConfirmPanel:
+      key: lookup_candidate_confirm_panel.primitive
+      kind: external_lookup/lookup_candidate_confirm_panel
+      description: Confirmation panel for external lookup results before apply_confirmed_update
+      semantic_role: validation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: explicit_confirm_required
+      runtimeConnected: false
+
+    BulkImportCandidatePanel:
+      key: bulk_import_candidate_panel.primitive
+      kind: external_lookup/bulk_import_candidate_panel
+      description: Panel for previewing import_rows_to_candidates result before dedup/confirm
+      semantic_role: admin_operation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+# =============================================================================
+# Category H: Safety / Inspector / Operation Guard UI
+# =============================================================================
+
+category_h_safety_guard:
+  label: Safety / Inspector / Operation Guard UI
+  purpose: >
+    Support safe no-code operations with dry-run preview, permission hints,
+    mutation boundary inspection, rollback candidates, and operation confirmation.
+    All primitives in this category are defensive surfaces that protect the
+    canonical route from accidental mutation.
+  primitives:
+    CommandPalette:
+      key: command_palette.primitive
+      kind: safety_guard/command_palette
+      description: Modal command palette for invoking admin operations with dry-run preview
+      semantic_role: navigation
+      visual_role: modal
+      preview_only: false
+      mutation_boundary: dry_run_before_apply
+      runtimeConnected: false
+
+    EmptyStateActionPanel:
+      key: empty_state_action_panel.primitive
+      kind: safety_guard/empty_state_action_panel
+      description: Empty state panel with contextual action suggestions and guard hints
+      semantic_role: feedback
+      visual_role: panel
+      runtimeConnected: false
+
+    OperationGuardBanner:
+      key: operation_guard_banner.primitive
+      kind: safety_guard/operation_guard_banner
+      description: Banner warning about operation risks before confirm flow
+      semantic_role: feedback
+      visual_role: alert
+      runtimeConnected: false
+
+    MutationBoundaryInspector:
+      key: mutation_boundary_inspector.primitive
+      kind: safety_guard/mutation_boundary_inspector
+      description: Inspector showing which mutations an operation will trigger
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    PermissionHintPanel:
+      key: permission_hint_panel.primitive
+      kind: safety_guard/permission_hint_panel
+      description: Panel showing permission requirements for a proposed operation
+      semantic_role: feedback
+      visual_role: panel
+      runtimeConnected: false
+
+    DryRunResultPanel:
+      key: dry_run_result_panel.primitive
+      kind: safety_guard/dry_run_result_panel
+      description: Panel showing dry_run_operation results before actual execution
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    ApplyConfirmDialog:
+      key: apply_confirm_dialog.primitive
+      kind: safety_guard/apply_confirm_dialog
+      description: Confirmation dialog for apply_confirmed_update with diff summary
+      semantic_role: admin_operation
+      visual_role: modal
+      mutation_boundary: explicit_confirm_required
+      runtimeConnected: false
+
+    RollbackCandidatePanel:
+      key: rollback_candidate_panel.primitive
+      kind: safety_guard/rollback_candidate_panel
+      description: Panel for selecting rollback candidates from build_rollback_candidate results
+      semantic_role: admin_operation
+      visual_role: panel
+      candidate_surface: true
+      mutation_boundary: preview_validate_explicit_apply
+      runtimeConnected: false
+
+    OperationAuditLogPanel:
+      key: operation_audit_log_panel.primitive
+      kind: safety_guard/operation_audit_log_panel
+      description: Panel showing append_operation_audit_log history for an operation target
+      semantic_role: diagnostic
+      visual_role: panel
+      preview_only: true
+      runtimeConnected: false
+
+    ValidationErrorPanel:
+      key: validation_error_panel.primitive
+      kind: safety_guard/validation_error_panel
+      description: Structured panel surfacing validate_mutation_boundary and validate_candidate errors
+      semantic_role: validation
+      visual_role: panel
+      runtimeConnected: false
+
+# =============================================================================
+# Summary: all primitive categories
+# =============================================================================
+
+catalog_summary:
+  total_categories: 8
+  categories:
+    - A: search_suggest (11 primitives)
+    - B: inline_edit_audit (9 primitives)
+    - C: table_list_view (11 primitives)
+    - D: kanban_drag_drop (10 primitives)
+    - E: design_token (12 primitives)
+    - F: calculation_topology (12 primitives)
+    - G: external_lookup (7 primitives)
+    - H: safety_guard (10 primitives)
+  total_primitives: 82
+  primary_reference_for:
+    - admin_visual_layout_builder (Issue #89)
+    - no_code_db_driven_ui_operation_surface
+    - abstract_function_primitive_registry_ssot
+    - frontend_component_catalog
+  upper_ssot_for:
+    - frontend/components/catalog.ts
+    - frontend/runtime/runtimeComponentAdapter.ts
+    - frontend/runtime/runtimePrimitiveRenderer.ts
+    - db/seed_empty.sql (bootstrap rows only)
+    - db/demo_seed.sql (bootstrap rows only)
