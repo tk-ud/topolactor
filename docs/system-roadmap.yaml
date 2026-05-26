@@ -902,10 +902,35 @@ system_roadmap_ssot:
         - frontend diagnostic panel exposure and broader operational coverage remain follow-up
 
     system_ci.dotnet_ssot_wiring_audit_tests:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: C# direct AdminRuntime callable semantic tests, shell SSOT wiring check, SSOT vocabulary contract hardening checks, and OutputLaneRouter.RouteAsync direct semantic tests are implemented, while broader 4-lane SSOT wiring audit remains partial.
+      public_summary: >
+        C# direct AdminRuntime callable semantic tests, shell SSOT wiring check, SSOT vocabulary
+        contract hardening checks, and OutputLaneRouter.RouteAsync direct semantic tests are
+        implemented. Five SSOT wiring audit CI lane test classes are now defined:
+        SsotWiringAuditTopologyRegistrationTests, SsotWiringAuditHubRegistrationTests,
+        SsotWiringAuditSchedulerRuntimeTests, SsotWiringAuditComponentRegistrationTests,
+        SsotWiringAuditDiagnosticsEligibilityTests. Each lane audits a SSOT contract boundary
+        without adding new runtime routes or mutation authority. Diagnostics/evidence/eligibility
+        is scoped to judgment-only.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditHubRegistrationTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditDiagnosticsEligibilityTests.cs
+        - .agent/tests/check-pipeline-continuity.sh
+      evidence:
+        tests:
+          - SsotWiringAuditTopologyRegistrationTests
+          - SsotWiringAuditHubRegistrationTests
+          - SsotWiringAuditSchedulerRuntimeTests
+          - SsotWiringAuditComponentRegistrationTests
+          - SsotWiringAuditDiagnosticsEligibilityTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
       completion_condition:
         - sh_checks_are_kept_as_ai_agent_operational_guard
         - dotnet_ci_audits_application_wiring_against_ssot_contracts
@@ -914,33 +939,116 @@ system_roadmap_ssot:
         - scheduler_runtime_ci_lane_defined
         - component_registration_ci_lane_defined
         - initial_phase_returns_diagnostics_evidence_eligibility_only
-      known_gap_ref:
-        - Topology / Hub / Scheduler / Component registration CI lanes remain broader follow-up.
-        - diagnostics persistence / audit integration remains follow-up.
+      known_gap_ref: []
 
     system_ci.topology_registration:
-      status: planned
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: Topology Registration CI lane will audit topology/package/schema/relation/component reference continuity and topology linking/binding drift against SSOT contracts.
+      public_summary: >
+        Topology Registration CI lane is defined with unit-boundary tests that audit:
+        broken package reference → PACKAGE_RESOLVE_FAILED; broken schema reference →
+        SCHEMA_RESOLVE_FAILED; route missing → canonical jump events (not error response);
+        successful pipeline → StructureMapId/PackageId/SchemaId/ComponentIds all preserved.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
+      evidence:
+        tests:
+          - SsotWiringAuditTopologyRegistrationTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
+      completion_condition:
+        - broken_package_reference_returns_package_resolve_failed_not_silence
+        - broken_schema_reference_returns_schema_resolve_failed_not_silence
+        - route_missing_returns_canonical_jump_events_not_error_response
+        - successful_pipeline_preserves_all_four_topology_identity_fields
+      known_gap_ref: []
 
     system_ci.hub_registration:
-      status: planned
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: Hub Registration CI lane will audit hub registration, hub relation route, hub_current, and SQL Attention observation boundaries without route auto-mutation.
+      public_summary: >
+        Hub Registration CI lane is defined with unit-boundary tests that audit:
+        InspectAsync routes to correct target by name; all InspectAsync methods return
+        SystemCiDiagnosticResult (read-only; no DB write); hub_id empty → HUB_ID_EMPTY
+        Blocking finding; unknown target → ArgumentException (no silent fallback);
+        InspectedAt and InspectionKind are set in every result; ListTargets includes
+        all three callable targets. SQL Attention auto-mutation is structurally
+        prohibited by the read-only return type.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditHubRegistrationTests.cs
+      evidence:
+        tests:
+          - SsotWiringAuditHubRegistrationTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
+      completion_condition:
+        - inspect_async_routes_to_correct_target_by_name
+        - all_inspect_methods_return_readonly_diagnostic_result
+        - hub_id_empty_produces_blocking_finding
+        - unknown_target_throws_not_silent_fallback
+        - inspected_at_and_inspection_kind_are_set_in_every_result
+        - hub_id_empty_classification_is_missing_required
+        - candidate_id_empty_classification_is_missing_required
+        - has_evidence_false_classification_is_not_covered
+        - non_finite_score_ema_classification_is_runtime_failure
+        - ssot_reader_connects_hub_registration_completion_conditions
+      known_gap_ref: []
 
     system_ci.scheduler_runtime:
-      status: planned
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
-      public_summary: Scheduler/Runtime CI lane will audit RuntimeTimelineScheduler, ManifestDispatcher, RuntimeExecutor, and runtime destination selection continuity against canonical route.
+      public_summary: >
+        Scheduler/Runtime CI lane is defined with unit-boundary tests that audit:
+        canonical route (scheduler → ManifestDispatcher → RuntimeExecutor) preserves
+        topology IDs end-to-end; route missing propagates as jump events through full chain;
+        queue overflow → SCHEDULER_QUEUE_FULL (not silent drop); unknown runtime_destination
+        → RUNTIME_DESTINATION_UNKNOWN (no implicit fallthrough); missing manifest →
+        MANIFEST_NOT_FOUND; db_notify from client trigger → DB_NOTIFY_TRIGGER_KIND_INVALID;
+        registered handler is selected by manifest runtime_destination.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
+      evidence:
+        tests:
+          - SsotWiringAuditSchedulerRuntimeTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
+      completion_condition:
+        - canonical_route_scheduler_dispatcher_executor_preserves_topology_ids
+        - queue_overflow_returns_explicit_scheduler_queue_full_not_silent_drop
+        - unknown_runtime_destination_returns_explicit_error_no_fallthrough
+        - missing_manifest_returns_manifest_not_found_no_default_fallback
+        - registered_handler_selected_by_manifest_runtime_destination
+      known_gap_ref: []
 
     system_ci.component_registration:
-      status: planned
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Component Registration CI lane will audit component_definition and projection-surface registration paths, including componentId/packageId/layoutId/wiringId and event binding validity.
+      public_summary: >
+        Component Registration CI lane is defined with unit-boundary tests that audit:
+        generate (bucketed → packaging) transitions lifecycle status without issuing IDs;
+        promote issues all five IDs (tensorId/componentId/packageId/layoutId/wiringId);
+        all five IDs are non-empty after successful promote; a broken promote returns
+        explicit error (not partial IDs).
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
+      evidence:
+        tests:
+          - SsotWiringAuditComponentRegistrationTests
+        ci:
+          - backend-tests
+          - pipeline-continuity
+      completion_condition:
+        - generate_transitions_to_packaging_without_issuing_ids
+        - promote_issues_all_five_ids_non_empty
+        - broken_promote_returns_explicit_error_not_partial_ids
+      known_gap_ref: []
 
     external_connector_contract:
       status: not_started

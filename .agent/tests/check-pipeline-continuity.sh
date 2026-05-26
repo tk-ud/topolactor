@@ -197,6 +197,48 @@ if ! grep -q "check-pipeline-continuity.sh" "$SSOT"; then
   fail "[pipeline.component_event_lane] ci_script reference missing"
 fi
 
+# ─── 4. SSOT WIRING AUDIT CI LANES — presence check ──────────────────────────
+# Verifies that the 5 SSOT wiring audit CI lane test files are present.
+# Each lane audits a specific SSOT contract boundary (not execution semantics).
+# Defined in docs/system-roadmap.yaml: system_ci.dotnet_ssot_wiring_audit_tests.
+# Tests must exist in the dotnet test project to satisfy the completion conditions.
+
+echo ""
+echo "=== [ssot.wiring_audit] SSOT wiring audit CI lane presence check ==="
+
+TEST_DIR="$REPO_ROOT/backend/tests/Topolactor.Runtime.Tests"
+
+for lane_file in \
+  "SsotWiringAuditTopologyRegistrationTests.cs" \
+  "SsotWiringAuditHubRegistrationTests.cs" \
+  "SsotWiringAuditSchedulerRuntimeTests.cs" \
+  "SsotWiringAuditComponentRegistrationTests.cs" \
+  "SsotWiringAuditDiagnosticsEligibilityTests.cs"; do
+  if [ -f "$TEST_DIR/$lane_file" ]; then
+    echo "OK  [ssot.wiring_audit] $lane_file present"
+  else
+    fail "[ssot.wiring_audit] $lane_file not found — SSOT wiring audit CI lane missing"
+  fi
+done
+
+# Verify roadmap reflects the completed CI lanes.
+ROADMAP="$REPO_ROOT/docs/system-roadmap.yaml"
+if [ -f "$ROADMAP" ]; then
+  for lane_key in \
+    "system_ci.topology_registration" \
+    "system_ci.hub_registration" \
+    "system_ci.scheduler_runtime" \
+    "system_ci.component_registration"; do
+    if grep -q "^    ${lane_key}:" "$ROADMAP"; then
+      echo "OK  [ssot.wiring_audit] roadmap entry present: $lane_key"
+    else
+      fail "[ssot.wiring_audit] roadmap entry missing: $lane_key"
+    fi
+  done
+else
+  fail "[ssot.wiring_audit] docs/system-roadmap.yaml not found"
+fi
+
 echo "=== [pipeline.gap_status] known gaps (from pipeline-continuity-ssot.yaml) ==="
 if [ -f "$SSOT" ]; then
   sed -n '/^  gap_summary:/,$ { /^ *- "/ p }' "$SSOT" \
