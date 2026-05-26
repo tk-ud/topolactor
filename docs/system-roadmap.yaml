@@ -680,6 +680,9 @@ system_roadmap_ssot:
         - backend_sse_error_states_are_explicit
       known_gap_ref:
         - Gap-7 SSE projection lane
+        - sse_receiver_feeds_frontend_scheduler_as_hook_trigger is not yet closed
+        - receiver_preserves_projection_event_identity is not yet closed
+        - backend_sse_error_states_are_explicit is not yet closed
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/pipeline-continuity-ssot.yaml
@@ -703,6 +706,9 @@ system_roadmap_ssot:
         - projection_event_identity_is_preserved
       known_gap_ref:
         - Gap-7 SSE projection lane
+        - dispatcher_routes_projection_events_into_projection_runtime is not yet closed
+        - unhandled_event_policy_is_explicit is not yet closed
+        - projection_event_identity_is_preserved is not yet closed
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
 
@@ -733,6 +739,7 @@ system_roadmap_ssot:
         - manifest_response_constructor_mapping_end_to_end_route_is_proven
         - frontend_does_not_make_topology_or_sql_attention_judgment
       known_gap_ref:
+        - manifest_response_constructor_mapping_end_to_end_route_is_proven is not yet closed
         - SSE dispatcher wiring for end-to-end projection event route remains outside this implemented boundary
         - Executable UI/UX primitive component slice expansion remains follow-up
       detail_ssot:
