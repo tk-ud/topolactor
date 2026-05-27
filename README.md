@@ -10,7 +10,8 @@ Development started: 2026-05-17 (first repository commit: 79d71f1)
 
 topolactor treats application structure as promoted database identity rather than scattered frontend code.
 
-Users can compose screens, layouts, operations, and state flows, but runtime behavior must pass through canonical dispatch, validation, and CI-audited contracts.
+Users can freely draft screens, layouts, operations, and state flows.
+When a draft is promoted into canonical runtime state, topolactor assigns database identities and routes it through explicit dispatch and audit boundaries.
 
 The core idea:
 
@@ -37,7 +38,7 @@ Examples:
 
 Most no-code tools prioritize free composition.
 
-topolactor prioritizes **composable systems that remain auditable**.
+topolactor keeps that freedom at the draft layer, then adds an explicit promotion boundary so useful structures can become auditable runtime identities without turning every edit into a system lock.
 
 A component is not “real” just because it exists in frontend code. It becomes real when it is promoted into the topology registry and receives database identities such as `componentId`, `packageId`, `layoutId`, `wiringId`, and `tensorId`.
 

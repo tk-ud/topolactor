@@ -8,6 +8,9 @@ framework_policy:
       - ci_attention_includes_user_input_assistance_missing_input_and_valid_candidate_guidance
       - ci_attention_prevents_unbounded_backend_runtime_validation_expansion
       - branch_decisions_should_use_structured_ci_status_rather_than_silent_fallback
+      - ci_attention_fragment_is_read_only_guidance_and_not_frontend_lock_authority
+      - canonical_promotion_gate_may_consume_active_blocking_fragments_as_eligibility_input
+      - promotion_gate_and_apply_fail_close_authority_remain_backend_runtime_boundary_guard
 
   readme_surface_policy:
     role: public_overview_surface_and_external_entry_point

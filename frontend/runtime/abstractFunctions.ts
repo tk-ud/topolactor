@@ -105,7 +105,7 @@ export function projectCiAttentionGuidance(
       : kind === "valid_candidate"
       ? "Review suggested candidate context and choose explicitly."
       : kind === "break_boundary"
-      ? "Stop authoring apply path and resolve boundary violation first."
+      ? "Draft editing remains available; canonical promotion may require resolving active blocking fragments; apply-time validation is backend responsibility."
       : "Fix payload shape/structure before next dispatch.";
     return {
       id: `${f.checkName ?? "finding"}_${index}`,

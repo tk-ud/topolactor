@@ -18,3 +18,16 @@ Deno.test("projectCiAttentionGuidance maps missing_input/valid_candidate/structu
     "break_boundary",
   ]);
 });
+
+Deno.test("projectCiAttentionGuidance break_boundary actionable explains draft/promotion/apply split", () => {
+  const result = projectCiAttentionGuidance({
+    findings: [
+      { checkName: "ATTENTION_SCORE_NOT_FINITE", status: "Blocking", detail: "finite boundary", classification: "RuntimeFailure" },
+    ],
+  });
+  if (!result.ok) throw new Error(result.error);
+  assertEquals(
+    result.data[0]?.actionable,
+    "Draft editing remains available; canonical promotion may require resolving active blocking fragments; apply-time validation is backend responsibility.",
+  );
+});
