@@ -4,6 +4,35 @@ Topolactor is a **data-driven topology runtime** and **AI-Driven Development OS*
 
 Development started: 2026-05-17 (first repository commit: 79d71f1)
 
+## What is topolactor?
+
+topolactor is a full-stack framework for building data-driven no-code applications.
+
+It is designed around a simple idea:
+
+> UI is a projection.  
+> The database stores promoted identities.  
+> Runtime operations must pass through a canonical dispatch route.
+
+This makes it possible to build applications where users can compose screens, data flows, and operations without directly editing code or bypassing the system structure.
+
+topolactor is not limited to business applications.  
+It can also be used for lightweight mobile games and interactive apps where state, events, UI layout, and runtime behavior are data-driven.
+
+Examples include:
+
+- internal business tools
+- admin consoles
+- workflow apps
+- no-code dashboards
+- character/state-based apps
+- simple mobile games
+- idle / simulation / card / narrative games
+
+The core goal is not just “build UI without code,” but:
+
+> let users compose applications while keeping structure, identity, permissions, and runtime behavior auditable.
+
 ## Highlights
 
 - **Data-Driven OS:** Runtime behavior is resolved from persisted topology, registry, manifest, and package definitions rather than ad-hoc surface-by-surface wiring.
