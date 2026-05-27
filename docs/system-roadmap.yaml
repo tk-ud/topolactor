@@ -922,7 +922,6 @@ system_roadmap_ssot:
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
         - Issue #89 mouse-driven layout editor / drag-drop UI island
         - component_operation_event_log PostgreSQL append/idempotency integration test
 
@@ -948,7 +947,7 @@ system_roadmap_ssot:
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
       known_gap_ref:
-        - Issue #89 partial (layoutId issued via package generator; db/runtime persistence hardening + mouse-driven builder pending)
+        - Issue #89 partial (layoutId issued via package generator; mouse-driven builder pending)
 
     backend.context_route_repository:
       status: partial
@@ -1197,7 +1196,6 @@ system_roadmap_ssot:
         - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - Issue #89 layout tensor + cssTokenRefs/responsiveTokenRefs persistence（DB/runtime保存導線）
         - Issue #89 mouse-driven layout editor / drag-drop UI island
         - component_operation_event_log PostgreSQL append/idempotency integration test
 
