@@ -1012,7 +1012,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     semanticRole: "action",
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
-    capabilityTags: ["emits_event", "requires_event_binding"],
+    capabilityTags: ["emits_event"],
     runtimeConnected: true,
     registrationRequired: true,
     notes:
