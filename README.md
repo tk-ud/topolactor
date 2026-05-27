@@ -20,6 +20,19 @@ The core idea:
 > Runtime operations must pass through a canonical dispatch route.  
 > CI checks whether implementation, SSOT, roadmap, and tests still agree.
 
+
+## Authoring UX
+
+The intended workflow starts in the admin UI builder.
+
+1. Draft screens, layouts, components, operations, and state flows freely.
+2. Use SQL Attention to surface dynamic candidates from hub/log/relation/attractor evidence.
+3. Promote useful draft structures into database-backed identities.
+4. Connect promoted structures to runtime behavior through manifests and canonical dispatch.
+5. Use CI Attention guidance to view missing inputs, valid candidates, structural violations, and boundary issues before canonical promotion.
+
+Drafting stays flexible. Strictness appears at the promotion boundary, where structures become auditable runtime identities.
+
 ## What you can build
 
 topolactor is not limited to business applications. It is useful for any app where state, events, UI layout, and runtime behavior are data-driven.
