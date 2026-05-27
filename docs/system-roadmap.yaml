@@ -369,9 +369,11 @@ system_roadmap_ssot:
       public_summary: >-
         Production evidence filling implemented: l2_norm from logs.current, cosine similarity
         scoring (basis_vector_json × attractor_vector_json), vector_json (convergent hit components),
-        and evidence_json (scoring provenance) are now persisted to logs.attention.
-        Scores are 0 until logs.hub_current.attractor_vector_json is populated by hub_current refresh
-        (SQLA-3, separate TODO). phase_vector_json and statistics_json remain {} pending SQLA-5/SQLA-6.
+        evidence_json (scoring provenance), phase_vector_json auxiliary evidence, and scheduler-side
+        statistics_json provenance/statistics are now persisted to logs.attention.
+        logs.hub_current refresh rebuild now populates attractor_vector_json from append-only
+        logs.attention.vector_json evidence within source_set_id/basis_window scope.
+        EmaScore remains null (not implemented) by explicit boundary.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -388,7 +390,8 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-3 logs.hub_current refresh function exists, but attractor_vector_json population/hardening/live verification are incomplete — scores remain 0 until that boundary is completed
+        - SQLA-3 hub_current refresh/scoring/live verification hardening remains partial for production-ready promotion
+        - EMA score integration is not implemented; scheduler writes null with explicit provenance status
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml

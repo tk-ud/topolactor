@@ -547,22 +547,24 @@ public class HubAttractorExplorationRuntime_BoundaryTests
     [Fact]
     public async Task ExploreAsync_OkResult_DoesNotWriteLogsAttention()
     {
-        // Verifies that exploration runtime returns a result without persisting.
-        // The result has Hits but no write is performed (SqlAttentionLogsRepository has no write method).
+        // Responsibility split boundary:
+        // - HubAttractorExplorationRuntime: result generation only (no persistence)
+        // - SqlAttentionScheduler: owns WriteLogsAttentionAsync boundary
+        var logsRepo = new StubSqlAttentionLogsRepository(
+            [],
+            [ExplorationTestFactory.HubCurrent()]);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
-            [ExplorationTestFactory.HubCurrent()]);
+            logsRepo);
 
         var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
-        // Result carries hits for downstream consumption — no write_logs_attention call here.
+        // Result carries hits for downstream consumption — write boundary is not called here.
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
         Assert.NotNull(result.Result);
-        // SqlAttentionLogsRepository has no WriteLogsAttention method — structural boundary proof.
-        Assert.DoesNotContain("WriteLogsAttention",
-            typeof(SqlAttentionLogsRepository).GetMethods().Select(m => m.Name));
+        Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
     }
 
     [Fact]
