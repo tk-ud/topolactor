@@ -326,7 +326,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.hub_current physical table, repository read path, and refresh_hub_current function exist, but attractor-vector population/runtime hardening and live verification are still incomplete.
+      public_summary: logs.hub_current refresh now rebuilds attractor_vector_json/population/axis/phase projection fields from append-only logs.attention evidence; live DB runtime verification remains.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/repository/SqlAttentionLogsRepository.cs
@@ -342,7 +342,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
+      public_summary: scheduler/runtime hub-attractor exploration lane writes phase/evidence/statistics at the logs.attention append boundary; EMA and live DB runtime verification remain.
       known_gap_ref:
         - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
@@ -397,7 +397,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: phase_vector generation helpers and persistence fields exist in DB/runtime paths, but phase_vector evidence quality/completion criteria are not yet fully hardened.
+      public_summary: phase_vector helper/runtime semantics are aligned on w/x/y/z/i/j/k boundaries and non-mutation guarantees; live DB end-to-end verification remains.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs

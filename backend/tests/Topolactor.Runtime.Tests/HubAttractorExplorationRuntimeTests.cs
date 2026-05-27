@@ -116,7 +116,7 @@ internal static class ExplorationTestFactory
             PopulationCount: populationCount,
             PopulationRecordcount: populationRecordcount,
             AxisPopulationJson: """{"x":10,"y":20,"z":30}""",
-            AxisZScoreJson: """{"x":0.1,"y":0.2,"z":0.3}""",
+            AxisZScoreJson: """{"i":0.1,"j":0.2,"k":0.3}""",
             PhaseBasisJson: """{"basis":"hub_current"}""");
 
     public static string ValidPolicyJson(
@@ -1048,8 +1048,15 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             // VectorJson: {} when attractor_vector_json is {} (no shared components until hub refresh)
             Assert.Equal("{}", request.VectorJson);
             Assert.NotEqual("{}", request.PhaseVectorJson);
-            Assert.Equal("{}", request.StatisticsJson);
+            Assert.NotEqual("{}", request.StatisticsJson);
             Assert.Null(request.EmaScore);
+            using (var sdoc = JsonDocument.Parse(request.StatisticsJson))
+            {
+                var s = sdoc.RootElement;
+                Assert.Equal("sql_attention_scheduler", s.GetProperty("generated_by").GetString());
+                Assert.Equal("logs.attention_write", s.GetProperty("statistics_scope").GetString());
+                Assert.Equal("not_implemented_null", s.GetProperty("ema_score_status").GetString());
+            }
             // EvidenceJson now contains scoring provenance (not placeholder {})
             Assert.NotEqual("{}", request.EvidenceJson);
         }
@@ -1156,7 +1163,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
                 // VectorJson is {} when attractor_vector_json is {} (no shared components)
                 Assert.Equal("{}", request.VectorJson);
                 Assert.NotEqual("{}", request.PhaseVectorJson);
-                Assert.Equal("{}", request.StatisticsJson);
+                Assert.NotEqual("{}", request.StatisticsJson);
                 Assert.Null(request.EmaScore);
                 // EvidenceJson contains scoring provenance
                 Assert.NotEqual("{}", request.EvidenceJson);

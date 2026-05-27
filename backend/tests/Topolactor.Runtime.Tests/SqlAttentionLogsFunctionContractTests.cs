@@ -80,4 +80,36 @@ public class SqlAttentionLogsFunctionContractTests
         Assert.Contains("WITH ranked AS", sql);
         Assert.Contains("UPDATE logs.current c", sql);
     }
+
+    [Fact]
+    public void RefreshHubCurrent_UpdatesProjectionBoundaries_AndAvoidsMutation()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.refresh_hub_current", sql);
+        Assert.Contains("population_count", sql);
+        Assert.Contains("population_recordcount", sql);
+        Assert.Contains("axis_population_json", sql);
+        Assert.Contains("axis_z_score_json", sql);
+        Assert.Contains("phase_basis_json", sql);
+        Assert.Contains("attractor_vector_json", sql);
+        Assert.Contains("'i', 0", sql);
+        Assert.DoesNotContain("INSERT INTO topologys", sql);
+        Assert.DoesNotContain("UPDATE topologys", sql);
+    }
+
+    [Fact]
+    public void GenerateAttentionPhaseVector_ContainsWxyzIjkAndNoPolicyCapMovement()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector", sql);
+        Assert.Contains("'w'", sql);
+        Assert.Contains("'x'", sql);
+        Assert.Contains("'y'", sql);
+        Assert.Contains("'z'", sql);
+        Assert.Contains("'i'", sql);
+        Assert.Contains("'j'", sql);
+        Assert.Contains("'k'", sql);
+        Assert.Contains("not_manifest_or_policy_cap", sql);
+        Assert.Contains("no_automatic_topology_mutation", sql);
+    }
 }

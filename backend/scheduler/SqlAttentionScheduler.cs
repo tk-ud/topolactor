@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
@@ -183,7 +184,7 @@ public class SqlAttentionScheduler : BackgroundService
                             L2Norm: hit.L2Norm,
                             VectorJson: hit.VectorJson,
                             PhaseVectorJson: hit.PhaseVectorJson,
-                            StatisticsJson: "{}",
+                            StatisticsJson: BuildStatisticsJson(hit, basisWindow),
                             EmaScore: null,
                             EvidenceJson: hit.EvidenceJson,
                             ArchivePolicy: "required"))
@@ -229,5 +230,51 @@ public class SqlAttentionScheduler : BackgroundService
         return int.TryParse(raw, out var v) && v >= 1 && v <= 86400
             ? TimeSpan.FromSeconds(v)
             : fallback;
+    }
+
+    internal static string BuildStatisticsJson(HubAttractorExplorationHit hit, string basisWindow)
+    {
+        var vectorKeyCount = 0;
+        try
+        {
+            using var vectorDoc = JsonDocument.Parse(hit.VectorJson);
+            if (vectorDoc.RootElement.ValueKind == JsonValueKind.Object)
+                vectorKeyCount = vectorDoc.RootElement.EnumerateObject().Count();
+        }
+        catch (JsonException)
+        {
+            vectorKeyCount = 0;
+        }
+
+        var sharedKeyCount = 0;
+        try
+        {
+            using var evidenceDoc = JsonDocument.Parse(hit.EvidenceJson);
+            if (evidenceDoc.RootElement.TryGetProperty("shared_key_count", out var shared)
+                && shared.TryGetInt32(out var parsed))
+            {
+                sharedKeyCount = parsed;
+            }
+        }
+        catch (JsonException)
+        {
+            sharedKeyCount = 0;
+        }
+
+        return JsonSerializer.Serialize(new
+        {
+            source_set_id = hit.SourceSetId,
+            basis_window = basisWindow,
+            hit_count = 1,
+            hit_rank = hit.HitRank,
+            score_band = hit.ScoreBand,
+            neighbor_score = hit.NeighborScore,
+            l2_norm = hit.L2Norm,
+            vector_key_count = vectorKeyCount,
+            shared_key_count = sharedKeyCount,
+            generated_by = "sql_attention_scheduler",
+            statistics_scope = "logs.attention_write",
+            ema_score_status = "not_implemented_null"
+        });
     }
 }
