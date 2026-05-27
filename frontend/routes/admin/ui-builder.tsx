@@ -57,9 +57,12 @@ type ValidationError = { code: string; message: string };
 
 // Draft state for the visual layout editor.
 // Frontend holds draft projection only — topology authority is DB-side.
+// isDraftOnly: true means the component has no DB-registered identity (code_only_drift /
+// registrationRequired). Draft-only nodes are blocked from layout_patch:apply.
 type DraftNode = {
   nodeId: string;
   componentKey: string;
+  isDraftOnly: boolean;
   slotKey: string;
   orderIndex: number;
   parentNodeId: string | null;
@@ -68,7 +71,7 @@ type DraftNode = {
 };
 
 type DragSrc =
-  | { kind: "palette"; componentKey: string }
+  | { kind: "palette"; componentKey: string; isDraftOnly: boolean }
   | { kind: "canvas"; nodeId: string };
 
 function buildLayoutPatchJson(nodes: DraftNode[]): string {
@@ -78,6 +81,8 @@ function buildLayoutPatchJson(nodes: DraftNode[]): string {
       nodes: nodes.map((n) => ({
         nodeId: n.nodeId,
         componentKey: n.componentKey,
+        // _draftOnly marks nodes with no DB-registered identity — backend must not persist these.
+        ...(n.isDraftOnly ? { _draftOnly: true } : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,
@@ -360,15 +365,21 @@ function CssTokenSelectorSection(): JSX.Element {
   );
 }
 
+// A palette entry is draft-only when it has no DB-registered identity.
+// registrationRequired:true = must go through bucket → package generator before apply.
+function isDraftOnlyEntry(c: { registrationRequired: boolean }): boolean {
+  return c.registrationRequired;
+}
+
 function LayoutPalette({
   onDragStart,
 }: {
-  onDragStart: (componentKey: string) => void;
+  onDragStart: (componentKey: string, isDraftOnly: boolean) => void;
 }): JSX.Element {
   return (
     <div
       style={{
-        width: "160px",
+        width: "175px",
         flexShrink: 0,
         border: "1px solid #ccc",
         borderRadius: "4px",
@@ -378,30 +389,41 @@ function LayoutPalette({
         maxHeight: "340px",
       }}
     >
-      <h4 style={{ margin: "0 0 6px", fontSize: "0.9rem" }}>Palette</h4>
-      <p style={{ fontSize: "0.7rem", color: "#888", margin: "0 0 8px" }}>
-        Drag a component to the canvas
+      <h4 style={{ margin: "0 0 4px", fontSize: "0.9rem" }}>Palette</h4>
+      <p style={{ fontSize: "0.68rem", color: "#888", margin: "0 0 4px" }}>
+        Drag to canvas. <strong style={{ color: "#a06000" }}>(draft)</strong> = unregistered;
+        preview only, apply blocked until promoted via Component Bucket.
       </p>
-      {COMPONENT_CATALOG_ENTRIES.map((c) => (
-        <div
-          key={c.componentKey}
-          draggable={true}
-          onDragStart={() => onDragStart(c.componentKey)}
-          style={{
-            padding: "5px 7px",
-            marginBottom: "3px",
-            border: "1px solid #ddd",
-            borderRadius: "3px",
-            background: "#fff",
-            cursor: "grab",
-            fontFamily: "monospace",
-            fontSize: "0.75rem",
-          }}
-        >
-          <div style={{ fontWeight: "bold" }}>{c.componentKey}</div>
-          <div style={{ color: "#999", fontSize: "0.65rem" }}>{c.componentKind}</div>
-        </div>
-      ))}
+      {COMPONENT_CATALOG_ENTRIES.map((c) => {
+        const draftOnly = isDraftOnlyEntry(c);
+        return (
+          <div
+            key={c.componentKey}
+            draggable={true}
+            onDragStart={() => onDragStart(c.componentKey, draftOnly)}
+            style={{
+              padding: "5px 7px",
+              marginBottom: "3px",
+              border: `1px solid ${draftOnly ? "#e6c97a" : "#bde"}`,
+              borderRadius: "3px",
+              background: draftOnly ? "#fffbe6" : "#f0f7ff",
+              cursor: "grab",
+              fontFamily: "monospace",
+              fontSize: "0.75rem",
+            }}
+          >
+            <div style={{ fontWeight: "bold" }}>
+              {c.componentKey}
+              {draftOnly && (
+                <span style={{ color: "#a06000", fontWeight: "normal", marginLeft: "4px" }}>
+                  (draft)
+                </span>
+              )}
+            </div>
+            <div style={{ color: "#777", fontSize: "0.65rem" }}>{c.componentKind}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -509,6 +531,23 @@ function LayoutBuilderSection(): JSX.Element {
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
     setError(null);
     setResult(null);
+
+    // Apply is blocked if any canvas node has no DB-registered identity.
+    // Draft-only nodes (code_only_drift / registrationRequired) must be promoted via
+    // Component Bucket → Package Generator before they can be persisted to the layout tensor.
+    if (action === "apply") {
+      const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
+      if (draftOnlyNodes.length > 0) {
+        setError(
+          `APPLY_BLOCKED: ${draftOnlyNodes.length} node(s) have no DB-registered identity ` +
+          `(registrationRequired / code_only_drift). ` +
+          `Register via Component Bucket → Package Generator first: ` +
+          draftOnlyNodes.map((n) => n.componentKey).join(", ")
+        );
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const body = await dispatchAdminOp("layout_patch", action, {
@@ -530,8 +569,8 @@ function LayoutBuilderSection(): JSX.Element {
     }
   };
 
-  const handleDragStartPalette = (componentKey: string) => {
-    dragSrc.current = { kind: "palette", componentKey };
+  const handleDragStartPalette = (componentKey: string, isDraftOnly: boolean) => {
+    dragSrc.current = { kind: "palette", componentKey, isDraftOnly };
   };
 
   const handleDragStartCanvas = (nodeId: string) => {
@@ -550,6 +589,7 @@ function LayoutBuilderSection(): JSX.Element {
       const newNode: DraftNode = {
         nodeId: makeNodeId(),
         componentKey: src.componentKey,
+        isDraftOnly: src.isDraftOnly,
         slotKey: "",
         orderIndex: draftNodes.length,
         parentNodeId: null,
@@ -694,9 +734,20 @@ function LayoutBuilderSection(): JSX.Element {
               style={{
                 padding: "7px 10px",
                 marginBottom: "4px",
-                border: `2px solid ${node.nodeId === selectedNodeId ? "#0070f3" : "#ddd"}`,
+                border: `2px solid ${
+                  node.nodeId === selectedNodeId
+                    ? "#0070f3"
+                    : node.isDraftOnly
+                    ? "#e6c97a"
+                    : "#bde"
+                }`,
                 borderRadius: "3px",
-                background: node.nodeId === selectedNodeId ? "#f0f7ff" : "#fff",
+                background:
+                  node.nodeId === selectedNodeId
+                    ? "#f0f7ff"
+                    : node.isDraftOnly
+                    ? "#fffbe6"
+                    : "#fff",
                 cursor: "grab",
                 fontFamily: "monospace",
                 fontSize: "0.82rem",
@@ -708,6 +759,21 @@ function LayoutBuilderSection(): JSX.Element {
             >
               <div>
                 <span style={{ fontWeight: "bold" }}>{node.componentKey}</span>
+                {node.isDraftOnly && (
+                  <span
+                    style={{
+                      marginLeft: "6px",
+                      padding: "1px 5px",
+                      background: "#fffbe6",
+                      border: "1px solid #e6c97a",
+                      borderRadius: "2px",
+                      color: "#a06000",
+                      fontSize: "0.68rem",
+                    }}
+                  >
+                    draft-only — apply blocked
+                  </span>
+                )}
                 {node.slotKey && (
                   <span style={{ color: "#666", marginLeft: "8px" }}>
                     slot:<code>{node.slotKey}</code>
@@ -825,6 +891,26 @@ function LayoutBuilderSection(): JSX.Element {
           {tensorPatchJson}
         </pre>
       </div>
+
+      {/* Apply readiness: warn if any draft-only nodes are present */}
+      {draftNodes.some((n) => n.isDraftOnly) && (
+        <p
+          style={{
+            background: "#fffbe6",
+            border: "1px solid #e6c97a",
+            borderRadius: "3px",
+            padding: "6px 10px",
+            fontSize: "0.8rem",
+            color: "#a06000",
+            marginBottom: "8px",
+          }}
+        >
+          <strong>Apply blocked:</strong>{" "}
+          {draftNodes.filter((n) => n.isDraftOnly).length} node(s) marked (draft-only) have no
+          DB-registered identity. Preview and Validate are allowed. To unlock Apply, promote
+          these components via Component Bucket &rarr; Package Generator above.
+        </p>
+      )}
 
       {/* layout_patch actions — preview/validate route to backend; apply is explicit only */}
       <div style={{ display: "flex", gap: "8px", marginBottom: "10px" }}>

@@ -928,16 +928,18 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        /admin/ui-builder now includes a mouse-driven visual layout editor (Issue #89).
-        LayoutPalette lets admins drag component catalog entries to a canvas drop zone.
-        Canvas nodes support drag-to-reorder and up/down buttons for orderIndex control.
-        LayoutNodeInspector (click a node) edits slotKey, parentNodeId, gridCol, gridRow.
-        buildLayoutPatchJson generates tensorPatchJson from draft state.
-        cssTokenRefs are selected via checkboxes wired to CSS_DICTIONARY_TOKENS (css-dictionary-ssot.yaml).
-        Preview / Validate / Apply route through layout_patch:preview → validate → apply via
-        dispatchAdminOp — no direct DB write. Frontend holds draft projection state only;
-        topology persistence authority is DB-side (ui_layout_registry / ui_topology_tensor).
-        layoutId is issued per PromoteBucketItemAsync (ui_layout_registry row created automatically).
+        /admin/ui-builder includes a mouse-driven visual layout editor (Issue #89).
+        LayoutPalette shows catalog entries; components with registrationRequired:true are
+        labeled (draft) and blocked from layout_patch:apply — only preview/validate allowed.
+        Apply guard checks all canvas nodes: if any isDraftOnly node is present, apply is
+        rejected frontend-side with an explicit APPLY_BLOCKED error listing the unregistered
+        components. buildLayoutPatchJson marks draft-only nodes with _draftOnly:true so the
+        intent is self-documenting in the patch payload.
+        Canvas: drag-to-reorder, up/down buttons, LayoutNodeInspector (click a node) for
+        slotKey/parentNodeId/gridCol/gridRow. cssTokenRefs selected from CSS_DICTIONARY_TOKENS.
+        Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
+        No direct DB write. Frontend holds draft projection state only; topology persistence
+        authority is DB-side (ui_layout_registry / ui_topology_tensor).
       files:
         - frontend/routes/admin/ui-builder.tsx
         - frontend/runtime/cssDictionary.ts
@@ -950,8 +952,10 @@ system_roadmap_ssot:
         - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
+        - code_only_drift_components_blocked_from_layout_patch_apply
       known_gap_ref:
-        - Issue #89 mouse-driven editor implemented; layoutId round-trip from DB and full responsive token rule UI remain follow-up
+        - promoted component/package palette integration (palette source remains catalog-only; DB-registered packageId/componentId as placement identity is follow-up)
+        - layoutId round-trip from DB and full responsive token rule UI remain follow-up
 
     backend.context_route_repository:
       status: partial
