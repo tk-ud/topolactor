@@ -13,7 +13,6 @@ framework_policy:
       - promotion_gate_and_apply_fail_close_authority_remain_backend_runtime_boundary_guard
 
   authority_visibility_promotion_policy:
-    status: implemented
     completion_bundle_required: true
     completion_bundle_closed_as_unit: true
     bundle_items:
