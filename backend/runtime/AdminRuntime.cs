@@ -228,6 +228,25 @@ public class AdminRuntime
         return (JsonSerializer.SerializeToElement(new { target, count = stored.Count, fragments = stored }), null);
     }
     private static bool TryParseSourceKind(string raw, out CiAttentionSourceKind kind){kind=raw switch{"entity_diff"=>CiAttentionSourceKind.EntityDiff,"draft_diff"=>CiAttentionSourceKind.DraftDiff,"runtime_event"=>CiAttentionSourceKind.RuntimeEvent,"manual_check"=>CiAttentionSourceKind.ManualCheck,_=>CiAttentionSourceKind.ManualCheck};return raw is "entity_diff" or "draft_diff" or "runtime_event" or "manual_check";}
+    private const string DefaultAuthoringSurface = "admin_ui_builder";
+
+    private static string ResolveAuthoringSurface(JsonElement payload)
+    {
+        if (payload.TryGetProperty("authoring_surface", out var surfaceEl))
+        {
+            var surface = surfaceEl.GetString();
+            if (!string.IsNullOrWhiteSpace(surface)) return surface;
+        }
+
+        return DefaultAuthoringSurface;
+    }
+
+    private static string ResolveAuthoringSurface(OperationVector vector)
+    {
+        if (vector.Payload is { } payload) return ResolveAuthoringSurface(payload);
+        return DefaultAuthoringSurface;
+    }
+
     private static CiAttentionGuidanceFragmentUpsert MapToFragment(CiAttentionSourceKind sourceKind,string target,SystemCiDiagnosticResult result,SystemCiFinding finding,JsonElement payload)
     {
         var kind = finding.Classification switch { SystemCiFindingClassification.MissingRequired => CiAttentionGuidanceKind.MissingInput, SystemCiFindingClassification.NotCovered=>CiAttentionGuidanceKind.ValidCandidate, SystemCiFindingClassification.InvalidShape=>CiAttentionGuidanceKind.StructuralViolation, _=>CiAttentionGuidanceKind.BreakBoundary};
@@ -236,7 +255,7 @@ public class AdminRuntime
         var targetKind = payload.TryGetProperty("target_kind", out var tk) ? tk.GetString() : null;
         var targetKey = payload.TryGetProperty("target_key", out var tkey) ? tkey.GetString() : null;
         var evidence = JsonSerializer.SerializeToElement(new { check_name = finding.CheckName, detail = finding.Detail, classification = finding.Classification.ToString(), inspection_kind = result.InspectionKind.ToString(), inspected_at = result.InspectedAt });
-        return new CiAttentionGuidanceFragmentUpsert(sourceKind, sourceId ?? target, payload.TryGetProperty("source_table_or_surface", out var sts) ? sts.GetString() ?? "system_ci" : "system_ci", targetKind ?? "authoring_surface", targetKey ?? target, finding.TargetId, "system_ci_diagnostic", "admin_runtime:ci_attention:refresh_fragments", "admin_ui_builder", kind, CiAttentionGuidanceStatus.Active, severity, finding.Status == SystemCiStatus.Blocking, finding.Detail, $"Inspect check {finding.CheckName} for target {target}.", evidence, result.InspectedAt);
+        return new CiAttentionGuidanceFragmentUpsert(sourceKind, sourceId ?? target, payload.TryGetProperty("source_table_or_surface", out var sts) ? sts.GetString() ?? "system_ci" : "system_ci", targetKind ?? "authoring_surface", targetKey ?? target, finding.TargetId, "system_ci_diagnostic", "admin_runtime:ci_attention:refresh_fragments", ResolveAuthoringSurface(payload), kind, CiAttentionGuidanceStatus.Active, severity, finding.Status == SystemCiStatus.Blocking, finding.Detail, $"Inspect check {finding.CheckName} for target {target}.", evidence, result.InspectedAt);
     }
 
     /// <summary>
@@ -550,7 +569,7 @@ public class AdminRuntime
         if (string.IsNullOrWhiteSpace(request.RouteKey))
             return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
 
-        var gateError = await CheckCiAttentionPromotionGateAsync("admin_ui_builder", ct);
+        var gateError = await CheckCiAttentionPromotionGateAsync(ResolveAuthoringSurface(vector), ct);
         if (gateError is not null) return (null, gateError);
 
         var result = await _packageGeneratorRuntime.PromoteBucketItemAsync(bucketItemGuid, request.RouteKey, ct);
@@ -626,7 +645,7 @@ public class AdminRuntime
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchApplyAsync(OperationVector vector, CancellationToken ct)
     {
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
-        var gateError = await CheckCiAttentionPromotionGateAsync("admin_ui_builder", ct);
+        var gateError = await CheckCiAttentionPromotionGateAsync(ResolveAuthoringSurface(vector), ct);
         if (gateError is not null) return (null, gateError);
         var result = await _uiTopologyRepository.ApplyConfirmedLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_APPLY_FAILED", result.Message));

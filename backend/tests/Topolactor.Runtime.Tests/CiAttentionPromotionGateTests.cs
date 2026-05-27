@@ -174,13 +174,50 @@ public class CiAttentionPromotionGateTests
         Assert.NotEqual("CI_ATTENTION_PROMOTION_BLOCKED", error?.Code);
     }
 
+
+    [Fact]
+    public async Task Promote_UsesAuthoringSurfaceFromPayload_ForGateQuery()
+    {
+        var spyRepo = new SpyCiAttentionGuidanceRepository();
+        var runtime = CreateAdminRuntime(spyRepo);
+        var vector = new OperationVector("admin", "package_generator", "promote", null, "admin",
+            JsonSerializer.SerializeToElement(new { bucketItemId = Guid.NewGuid().ToString(), routeKey = "admin:form-builder", authoring_surface = "admin_form_builder" }), null);
+
+        var (_, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.NotNull(error);
+        Assert.Equal("admin_form_builder", spyRepo.LastAuthoringSurface);
+    }
+
+    [Fact]
+    public async Task RefreshFragments_UpsertPersistsPayloadAuthoringSurface()
+    {
+        var spyRepo = new SpyCiAttentionGuidanceRepository();
+        var runtime = CreateAdminRuntime(spyRepo, runner: new StubRunnerWithFinding(["hub_attention_continuity"]));
+        var vector = new OperationVector("admin", "ci_attention", "refresh_fragments", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                target = "hub_attention_continuity",
+                source_kind = "manual_check",
+                authoring_surface = "admin_manifest_editor",
+                target_kind = "authoring_surface",
+                target_key = "admin_manifest_editor"
+            }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.Equal("admin_manifest_editor", spyRepo.LastUpsertAuthoringSurface);
+    }
+
     // ─── system_ci:inspect remains read-only ─────────────────────────────────
 
     [Fact]
     public async Task SystemCiInspect_DoesNotWriteFragments_AndIsNotGated()
     {
         var spyRepo = new SpyCiAttentionGuidanceRepository();
-        var runtime = CreateAdminRuntime(spyRepo, runner: new StubRunner(["hub_attention_continuity"]));
+        var runtime = CreateAdminRuntime(spyRepo, runner: new StubRunnerWithFinding(["hub_attention_continuity"]));
         var vector = new OperationVector("admin", "system_ci", "inspect", null, "admin",
             JsonSerializer.SerializeToElement(new { target = "hub_attention_continuity" }), null);
 
@@ -235,11 +272,14 @@ public class CiAttentionPromotionGateTests
     {
         public int UpsertCalls { get; private set; }
         public int GetActiveBlockingCalls { get; private set; }
+        public string? LastAuthoringSurface { get; private set; }
+        public string? LastUpsertAuthoringSurface { get; private set; }
 
         public override Task<CiAttentionGuidanceFragmentStored> UpsertCurrentAppendHistoryAsync(
             CiAttentionGuidanceFragmentUpsert fragment, CancellationToken ct = default)
         {
             UpsertCalls++;
+            LastUpsertAuthoringSurface = fragment.AuthoringSurface;
             var p = new CiAttentionGuidanceGuidanceEventPayload(Guid.NewGuid(), "missing_input", "active", "warning", fragment.TargetKind, fragment.TargetKey, DateTimeOffset.UtcNow);
             return Task.FromResult(new CiAttentionGuidanceFragmentStored(p.FragmentId, p));
         }
@@ -252,7 +292,10 @@ public class CiAttentionPromotionGateTests
             CancellationToken ct = default)
         {
             GetActiveBlockingCalls++;
-            return Task.FromResult<IReadOnlyList<CiAttentionBlockingFragment>>([]);
+            LastAuthoringSurface = authoringSurface;
+            return Task.FromResult<IReadOnlyList<CiAttentionBlockingFragment>>([
+                new CiAttentionBlockingFragment(Guid.NewGuid(), "break_boundary", "authoring_surface", authoringSurface ?? "unknown", "blocked", "fix")
+            ]);
         }
     }
 
@@ -284,6 +327,29 @@ public class CiAttentionPromotionGateTests
             IReadOnlyList<string> cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>> responsiveTokenRefs,
             CancellationToken ct = default)
             => Task.FromResult(new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, tensorPatchJson ?? "{}", cssTokenRefs ?? [], responsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>(), "preview ok"));
+    }
+
+
+    private sealed class StubRunnerWithFinding : ISystemCiDiagnosticRunner
+    {
+        private readonly IReadOnlyList<string> _targets;
+        public StubRunnerWithFinding(IReadOnlyList<string> targets) => _targets = targets;
+
+        public IReadOnlyList<SystemCiTargetDto> ListTargets() =>
+            _targets.Select(x => new SystemCiTargetDto(x)).ToArray();
+
+        public Task<SystemCiDiagnosticResult> InspectAsync(string target, CancellationToken ct = default)
+        {
+            if (!_targets.Contains(target)) throw new ArgumentException("unknown target", nameof(target));
+            var finding = new SystemCiFinding(
+                "ATTENTION_SCORE_NOT_FINITE",
+                SystemCiStatus.Blocking,
+                "finite boundary",
+                "target-1",
+                SystemCiFindingClassification.RuntimeFailure);
+            return Task.FromResult(new SystemCiDiagnosticResult(
+                target, SystemCiInspectionKind.CronContinuity, SystemCiStatus.Blocking, [finding], DateTimeOffset.UtcNow));
+        }
     }
 
     private sealed class StubRunner : ISystemCiDiagnosticRunner
