@@ -381,6 +381,23 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, patch, css, responsive, "Layout patch normalized.");
     }
 
+    private static bool ContainsDraftOnlyNode(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (!doc.RootElement.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object) continue;
+            if (!node.TryGetProperty("_draftOnly", out var marker)) continue;
+            if (marker.ValueKind == JsonValueKind.True)
+                return true;
+        }
+
+        return false;
+    }
+
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
         => Task.FromResult(NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs));
 
@@ -389,7 +406,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
         try
         {
-            JsonDocument.Parse(normalized.TensorPatchJson);
+            if (ContainsDraftOnlyNode(normalized.TensorPatchJson))
+                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED" });
         }
         catch (JsonException)
         {
