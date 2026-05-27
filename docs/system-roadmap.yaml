@@ -189,7 +189,6 @@ system_roadmap_ssot:
       blocking_gaps:
         - Issue #84 seed import/export runtime
         - Issue #86 frontend UI component system
-        - Issue #89 admin visual layout builder
         - Gap-9 admin route skeletons
 
     M6_external_integration:
@@ -922,7 +921,6 @@ system_roadmap_ssot:
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - Issue #89 mouse-driven layout editor / drag-drop UI island
         - component_operation_event_log PostgreSQL append/idempotency integration test
 
     admin_visual_layout_builder:
@@ -930,13 +928,23 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        /admin/ui-builder enhanced with primitive catalog, bucket listing, and package generator.
-        layoutId is issued per PromoteBucketItemAsync (ui_layout_registry row created automatically).
-        ui_layout_registry table exists in db/ui_topology_tables.sql.
-        Frontend adapter is a stable projection surface (spec changes via registry tensor).
-        Full mouse-driven layout editor and style token management are not yet implemented.
+        /admin/ui-builder includes a mouse-driven visual layout editor (Issue #89).
+        LayoutPalette shows catalog entries; components with registrationRequired:true are
+        labeled (draft) and blocked from layout_patch:apply — only preview/validate allowed.
+        Apply guard checks all canvas nodes: if any isDraftOnly node is present, apply is
+        rejected frontend-side with an explicit APPLY_BLOCKED error listing the unregistered
+        components. buildLayoutPatchJson marks draft-only nodes with _draftOnly:true, and
+        backend layout_patch:validate/apply fail-close with
+        DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED so draft-only
+        payloads cannot persist to ui_layout_registry/ui_topology_tensor via direct API calls.
+        Canvas: drag-to-reorder, up/down buttons, LayoutNodeInspector (click a node) for
+        slotKey/parentNodeId/gridCol/gridRow. cssTokenRefs selected from CSS_DICTIONARY_TOKENS.
+        Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
+        No direct DB write. Frontend holds draft projection state only; topology persistence
+        authority is DB-side (ui_layout_registry / ui_topology_tensor).
       files:
         - frontend/routes/admin/ui-builder.tsx
+        - frontend/runtime/cssDictionary.ts
         - db/ui_topology_tables.sql
         - backend/repository/NpgsqlUiTopologyRepository.cs
       completion_condition:
@@ -946,8 +954,10 @@ system_roadmap_ssot:
         - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
+        - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
       known_gap_ref:
-        - Issue #89 partial (layoutId issued via package generator; mouse-driven builder pending)
+        - promoted component/package palette integration (palette source remains catalog-only; DB-registered packageId/componentId as placement identity is follow-up)
+        - layoutId round-trip from DB and full responsive token rule UI remain follow-up
 
     backend.context_route_repository:
       status: partial
@@ -1196,7 +1206,6 @@ system_roadmap_ssot:
         - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - Issue #89 mouse-driven layout editor / drag-drop UI island
         - component_operation_event_log PostgreSQL append/idempotency integration test
 
 
