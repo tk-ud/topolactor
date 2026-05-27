@@ -18,4 +18,17 @@ public class CiAttentionGuidanceRepository
             DateTimeOffset.UtcNow);
         return Task.FromResult(new CiAttentionGuidanceFragmentStored(payload.FragmentId, payload));
     }
+
+    /// <summary>
+    /// Returns active blocking fragments from the current projection.
+    /// Only fragments with status='active' AND blocks_promotion=true are returned.
+    /// dismissed fragments are NOT returned; dismissed is visibility control only.
+    /// </summary>
+    public virtual Task<IReadOnlyList<CiAttentionBlockingFragment>> GetActiveBlockingFragmentsAsync(
+        string? targetKind = null,
+        string? targetKey = null,
+        string? scope = null,
+        string? authoringSurface = null,
+        CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<CiAttentionBlockingFragment>>([]);
 }

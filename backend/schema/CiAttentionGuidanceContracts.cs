@@ -41,3 +41,12 @@ public record CiAttentionGuidanceGuidanceEventPayload(
     string TargetKey,
     DateTimeOffset UpdatedAt
 );
+
+public record CiAttentionBlockingFragment(
+    Guid FragmentId,
+    string Kind,
+    string TargetKind,
+    string TargetKey,
+    string Message,
+    string ActionableGuidance
+);

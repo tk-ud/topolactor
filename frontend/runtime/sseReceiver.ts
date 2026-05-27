@@ -37,6 +37,46 @@ export type SseErrorState =
 
 export type SseEventHandler = (eventType: string, data: string) => void;
 
+/**
+ * CI Attention fragment projection payload emitted by backend ci_attention:refresh_fragments.
+ * Frontend uses this for read-only live guidance display updates.
+ * Frontend does NOT hold promotion authority from this payload.
+ */
+export type CiAttentionFragmentProjectionPayload = {
+  FragmentId: string;
+  Kind: string;
+  Status: string;
+  Severity: string;
+  TargetKind: string;
+  TargetKey: string;
+  UpdatedAt: string;
+};
+
+/**
+ * Attempts to extract a CiAttentionFragmentProjectionPayload from a raw SSE projection event data string.
+ * Returns the payload if it is a CI Attention fragment event; null otherwise.
+ * Never throws; parse errors return null.
+ */
+export function extractCiAttentionFragmentPayload(
+  rawData: string,
+): CiAttentionFragmentProjectionPayload | null {
+  try {
+    const parsed = JSON.parse(rawData) as Record<string, unknown>;
+    if (typeof parsed.FragmentId !== "string") return null;
+    return {
+      FragmentId: parsed.FragmentId,
+      Kind: typeof parsed.Kind === "string" ? parsed.Kind : "",
+      Status: typeof parsed.Status === "string" ? parsed.Status : "",
+      Severity: typeof parsed.Severity === "string" ? parsed.Severity : "",
+      TargetKind: typeof parsed.TargetKind === "string" ? parsed.TargetKind : "",
+      TargetKey: typeof parsed.TargetKey === "string" ? parsed.TargetKey : "",
+      UpdatedAt: typeof parsed.UpdatedAt === "string" ? parsed.UpdatedAt : "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 export type SseReceiverOptions = {
   /** URL to connect to. Defaults to /api/sse. */
   url?: string;

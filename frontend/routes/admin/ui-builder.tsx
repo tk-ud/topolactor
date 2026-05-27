@@ -6,6 +6,7 @@ import { OperationGuardBanner } from "../../components/OperationGuardBanner.tsx"
 import { ValidationErrorPanel } from "../../components/ValidationErrorPanel.tsx";
 import { CandidateConfidenceBadge } from "../../components/CandidateConfidenceBadge.tsx";
 import { projectCiAttentionGuidance, type CiAttentionGuidanceItem } from "../../runtime/abstractFunctions.ts";
+import { createSseReceiver, extractCiAttentionFragmentPayload, type CiAttentionFragmentProjectionPayload } from "../../runtime/sseReceiver.ts";
 
 /**
  * /admin/ui-builder — UI component system and layout builder.
@@ -137,7 +138,35 @@ function makeNodeId(): string {
 function CiAttentionGuidanceSection(): JSX.Element {
   const [guidance, setGuidance] = useState<CiAttentionGuidanceItem[]>([]);
   const [status, setStatus] = useState("Not loaded.");
+  const [liveFragments, setLiveFragments] = useState<CiAttentionFragmentProjectionPayload[]>([]);
   const [errors, setErrors] = useState<{ message: string; code?: string }[]>([]);
+
+  useEffect(() => {
+    const receiver = createSseReceiver({
+      onProjectionHookTrigger: (trigger) => {
+        const fragment = extractCiAttentionFragmentPayload(trigger.data);
+        if (fragment !== null) {
+          setLiveFragments((prev) => {
+            const idx = prev.findIndex((f) => f.FragmentId === fragment.FragmentId);
+            if (idx >= 0) {
+              const next = [...prev];
+              next[idx] = fragment;
+              return next;
+            }
+            return [...prev, fragment];
+          });
+        }
+      },
+      onError: (state) => {
+        if (state.kind !== "connection_closed") {
+          setErrors((prev) => [...prev, { code: state.kind, message: state.kind === "parse_error" ? state.error : state.kind }]);
+        }
+      },
+    });
+    receiver.connect();
+    return () => receiver.disconnect();
+  }, []);
+
   const loadGuidance = async () => {
     const targetsBody = await dispatchAdminOp("system_ci", "list_targets");
     const targets = targetsBody?.emission?.data;
@@ -162,6 +191,19 @@ function CiAttentionGuidanceSection(): JSX.Element {
         Draft editing remains available regardless of guidance state. Canonical promotion may require
         resolving active blocking fragments, and apply-time validation remains backend responsibility.
       </p>
+      {liveFragments.length > 0 && (
+        <div style={{ background: "#f0f4ff", border: "1px solid #b0c4de", padding: "8px", marginBottom: "8px", fontFamily: "monospace", fontSize: "0.85rem" }}>
+          <strong>Live fragment updates ({liveFragments.length}):</strong>
+          <ul style={{ margin: "4px 0", paddingLeft: "16px" }}>
+            {liveFragments.map((f) => (
+              <li key={f.FragmentId}>
+                [{f.Kind}] {f.TargetKind}/{f.TargetKey} — status:{f.Status}
+              </li>
+            ))}
+          </ul>
+          <span style={{ color: "#888" }}>Live projection only — draft editing is not affected.</span>
+        </div>
+      )}
       <ValidationErrorPanel errors={errors} title="guidance errors" />
       <OperationGuardBanner
         level={byKind("break_boundary").length > 0 ? "error" : "info"}
