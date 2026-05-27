@@ -23,15 +23,26 @@ The core idea:
 
 ## Authoring UX
 
+Build freely in the admin UI builder.  
+SQL Attention suggests candidates.  
+CI Attention shows guidance.  
+Manifests make promoted drafts runnable.
+
 The intended workflow starts in the admin UI builder.
 
 1. Draft screens, layouts, components, operations, and state flows freely.
 2. Use SQL Attention to surface dynamic candidates from hub/log/relation/attractor evidence.
-3. Promote useful draft structures into database-backed identities.
-4. Connect promoted structures to runtime behavior through manifests and canonical dispatch.
-5. Use CI Attention guidance to view missing inputs, valid candidates, structural violations, and boundary issues before canonical promotion.
+3. Use CI Attention guidance to view missing inputs, valid candidates, structural violations, and boundary issues.
+4. Promote useful draft structures into database-backed identities.
+5. Connect promoted structures to runtime behavior through manifests and canonical dispatch.
 
 Drafting stays flexible. Strictness appears at the promotion boundary, where structures become auditable runtime identities.
+
+## Auditability and risk model
+
+Because promoted runtime behavior flows through manifest-backed dispatch instead of scattered hardcoded frontend logic, topolactor helps prevent accidental data exposure caused by miswiring, hidden routes, or untracked structure changes.
+
+It does not replace security review, permission design, or load testing; it narrows a common class of human-error risks by making runtime wiring explicit and auditable.
 
 ## What you can build
 
