@@ -97,3 +97,22 @@ public record UiComponentBucketRecord(
     string ComponentKind,
     string Status
 );
+
+public record LayoutPatchRequestDto(
+    [property: JsonPropertyName("layoutId")] string LayoutId,
+    [property: JsonPropertyName("routeKey")] string RouteKey,
+    [property: JsonPropertyName("tensorPatchJson")] string? TensorPatchJson,
+    [property: JsonPropertyName("cssTokenRefs")] IReadOnlyList<string>? CssTokenRefs,
+    [property: JsonPropertyName("responsiveTokenRefs")] Dictionary<string, IReadOnlyList<string>>? ResponsiveTokenRefs
+);
+
+public record LayoutPatchResult(
+    bool Ok,
+    bool Valid,
+    string LayoutId,
+    string RouteKey,
+    string TensorPatchJson,
+    IReadOnlyList<string> CssTokenRefs,
+    IReadOnlyDictionary<string, IReadOnlyList<string>> ResponsiveTokenRefs,
+    string Message
+);

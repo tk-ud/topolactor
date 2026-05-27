@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using Topolactor.Schema;
 
 namespace Topolactor.Repository;
@@ -14,6 +16,7 @@ namespace Topolactor.Repository;
 /// </summary>
 public class NpgsqlUiTopologyRepository : UiTopologyRepository
 {
+    private static readonly Regex CssTokenYamlRegex = new(@"^\s{4}([a-z0-9_.-]+):\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
     private readonly ILogger<NpgsqlUiTopologyRepository> _npgsqlLogger;
 
     public NpgsqlUiTopologyRepository(
@@ -321,5 +324,126 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 PackageGenerateCode.DbUnavailable, null, null, null, null, null,
                 "DB_UNAVAILABLE", "Repository unavailable during package promotion.");
         }
+    }
+
+    private static HashSet<string> LoadCssTokenVocabulary()
+    {
+        var overridePath = Environment.GetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH");
+        string path;
+        if (!string.IsNullOrWhiteSpace(overridePath))
+        {
+            path = Path.GetFullPath(overridePath!);
+        }
+        else
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            path = "";
+            while (dir is not null)
+            {
+                var candidate = Path.Combine(dir.FullName, "docs", "design", "css-dictionary-ssot.yaml");
+                if (File.Exists(candidate)) { path = candidate; break; }
+                dir = dir.Parent;
+            }
+            if (string.IsNullOrWhiteSpace(path))
+                return [];
+        }
+        if (!File.Exists(path)) return [];
+        var text = File.ReadAllText(path);
+        var lines = text.Split('\n');
+        var inTokens = false;
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in lines)
+        {
+            var line = raw.Replace("\r", "");
+            if (!inTokens)
+            {
+                if (line.Trim() == "tokens:")
+                    inTokens = true;
+                continue;
+            }
+            if (line.StartsWith("  ") && !line.StartsWith("    "))
+                break;
+            var m = CssTokenYamlRegex.Match(line);
+            if (m.Success) tokens.Add(m.Groups[1].Value);
+        }
+        return tokens;
+    }
+
+    private static LayoutPatchResult NormalizeLayoutPatch(
+        Guid layoutId, string routeKey, string? tensorPatchJson,
+        IReadOnlyList<string>? cssTokenRefs,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs)
+    {
+        var patch = string.IsNullOrWhiteSpace(tensorPatchJson) ? "{}" : tensorPatchJson!;
+        var css = (cssTokenRefs ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
+        var responsive = (responsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>())
+            .ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList());
+        return new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, patch, css, responsive, "Layout patch normalized.");
+    }
+
+    public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+        => Task.FromResult(NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs));
+
+    public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+    {
+        var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
+        try
+        {
+            JsonDocument.Parse(normalized.TensorPatchJson);
+        }
+        catch (JsonException)
+        {
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
+        }
+        var vocab = LoadCssTokenVocabulary();
+        if (vocab.Count == 0)
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "CSS_TOKEN_VOCABULARY_UNAVAILABLE" });
+        foreach (var t in normalized.CssTokenRefs)
+            if (!vocab.Contains(t))
+                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"CSS_TOKEN_REF_UNKNOWN:{t}" });
+        foreach (var (_, refs) in normalized.ResponsiveTokenRefs)
+            foreach (var t in refs)
+                if (!vocab.Contains(t))
+                    return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"RESPONSIVE_TOKEN_REF_UNKNOWN:{t}" });
+        return Task.FromResult(normalized with { Message = "Layout patch validation passed." });
+    }
+
+    public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+    {
+        var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
+        if (!valid.Ok || !valid.Valid) return valid;
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var responsiveJson = System.Text.Json.JsonSerializer.Serialize(valid.ResponsiveTokenRefs);
+        var updateLayout = new NpgsqlCommand(
+            "UPDATE ui_layout_registry SET layout_schema_json=@schema::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId", conn, tx);
+        updateLayout.Parameters.AddWithValue("schema", valid.TensorPatchJson);
+        updateLayout.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
+        updateLayout.Parameters.AddWithValue("resp", responsiveJson);
+        updateLayout.Parameters.AddWithValue("layoutId", layoutId);
+        var rows = await updateLayout.ExecuteNonQueryAsync(ct);
+        if (rows != 1)
+        {
+            await tx.RollbackAsync(ct);
+            return valid with { Ok = false, Valid = false, Message = "LAYOUT_NOT_FOUND" };
+        }
+
+        var updateTensor = new NpgsqlCommand(
+            "UPDATE ui_topology_tensor SET layout_patch_json=@patch::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId AND route_key=@routeKey", conn, tx);
+        updateTensor.Parameters.AddWithValue("patch", valid.TensorPatchJson);
+        updateTensor.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
+        updateTensor.Parameters.AddWithValue("resp", responsiveJson);
+        updateTensor.Parameters.AddWithValue("layoutId", layoutId);
+        updateTensor.Parameters.AddWithValue("routeKey", routeKey);
+        var tensorRows = await updateTensor.ExecuteNonQueryAsync(ct);
+        if (tensorRows != 1)
+        {
+            await tx.RollbackAsync(ct);
+            return valid with { Ok = false, Valid = false, Message = "TOPOLOGY_TENSOR_NOT_FOUND" };
+        }
+        await tx.CommitAsync(ct);
+        return valid with { Message = "Layout patch applied." };
     }
 }
