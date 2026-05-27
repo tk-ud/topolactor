@@ -275,6 +275,16 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    (
+        '00000000-0000-0000-0000-00000000005d',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","target":"admin","layer":"ci_attention","action":"refresh_fragments"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -383,6 +393,15 @@ VALUES
         '00000000-0000-0000-0000-000000000042',
         'admin_system_ci_inspect',
         'admin:system_ci:inspect',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-000000000043',
+        'admin_ci_attention_refresh_fragments',
+        'admin:ci_attention:refresh_fragments',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
