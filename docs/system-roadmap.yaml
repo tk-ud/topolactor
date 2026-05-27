@@ -1137,12 +1137,10 @@ system_roadmap_ssot:
         - draft_editing_is_not_locked_by_fragment_state
         - canonical_promotion_boundary_consumes_fragment_state_in_backend_guard
       known_gap_ref:
-        - guidance scope supports payload-defined authoring_surface with ui-builder as default while preserving backend-only promotion judgment authority
-        - authority-boundary hardening tests cover promote gate query and refresh-fragment upsert authoring_surface propagation for regression prevention
         - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
 
     design.ci_attention_guidance_fragment_ssot_and_schema:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1171,8 +1169,7 @@ system_roadmap_ssot:
         ci:
           - backend-tests
           - frontend-types
-      known_gap_ref:
-        - guidance scope supports payload-defined authoring_surface with ui-builder as default while preserving backend-only promotion judgment authority
+      known_gap_ref: []
 
     design.authority_visibility_promotion_policy_ssot:
       status: implemented

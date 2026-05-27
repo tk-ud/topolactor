@@ -23,17 +23,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Non-blocking cleanup / hardening carry-over
 
-- [x] [coverage] Expand CI Attention guidance projection coverage beyond `admin_ui_builder` to additional authoring surfaces
-      → Current scope is intentionally ui-builder-first; authority/visibility/promotion completion bundle is closed, so remaining work is surface-expansion only.
-
-- [x] [hardening] Add deeper manifest-activation and audit-evidence visibility scenario tests for authority boundary regression prevention
-      → Keep backend runtime as exclusive promotion authority and frontend as display-only while expanding negative-case assertions.
+- 現在、引き継ぎが必要な non-blocking TODO はありません。
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
 ## TODO dependency map（execution order）
 
-1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
+1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。
 2. Visual layout builder（Issue #89）— 実装完了（mouse-driven editor / drag-drop / preview-validate-apply 接続 / draft-only apply guard + backend fail-close validation / promoted component-package palette identity projection）。
 
 ---
