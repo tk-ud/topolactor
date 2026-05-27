@@ -239,6 +239,28 @@ public class AdminRuntime
         return new CiAttentionGuidanceFragmentUpsert(sourceKind, sourceId ?? target, payload.TryGetProperty("source_table_or_surface", out var sts) ? sts.GetString() ?? "system_ci" : "system_ci", targetKind ?? "authoring_surface", targetKey ?? target, finding.TargetId, "system_ci_diagnostic", "admin_runtime:ci_attention:refresh_fragments", "admin_ui_builder", kind, CiAttentionGuidanceStatus.Active, severity, finding.Status == SystemCiStatus.Blocking, finding.Detail, $"Inspect check {finding.CheckName} for target {target}.", evidence, result.InspectedAt);
     }
 
+    /// <summary>
+    /// Reads active blocking CI Attention fragments for the given authoring surface.
+    /// Returns a ValidationError if blocking fragments exist; null if the gate is clear.
+    /// dismissed fragments are not included (dismissed is visibility control, not promotion unlock).
+    /// </summary>
+    private async Task<ValidationError?> CheckCiAttentionPromotionGateAsync(string authoringSurface, CancellationToken ct)
+    {
+        var blocking = await _ciAttentionGuidanceRepository.GetActiveBlockingFragmentsAsync(
+            authoringSurface: authoringSurface, ct: ct);
+        if (blocking.Count == 0) return null;
+        var fragments = blocking.Select(f => new
+        {
+            kind = f.Kind,
+            target_kind = f.TargetKind,
+            target_key = f.TargetKey,
+            message = f.Message,
+            actionable_guidance = f.ActionableGuidance,
+        });
+        return new ValidationError("CI_ATTENTION_PROMOTION_BLOCKED",
+            JsonSerializer.Serialize(new { blocking_fragments = fragments }));
+    }
+
     private Task<(JsonElement? data, ValidationError? error)> DataSystemCiListTargetsAsync(CancellationToken ct)
     {
         _ = ct;
@@ -528,6 +550,9 @@ public class AdminRuntime
         if (string.IsNullOrWhiteSpace(request.RouteKey))
             return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
 
+        var gateError = await CheckCiAttentionPromotionGateAsync("admin_ui_builder", ct);
+        if (gateError is not null) return (null, gateError);
+
         var result = await _packageGeneratorRuntime.PromoteBucketItemAsync(bucketItemGuid, request.RouteKey, ct);
         if (result.Code != PackageGenerateCode.Success)
         {
@@ -601,6 +626,8 @@ public class AdminRuntime
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchApplyAsync(OperationVector vector, CancellationToken ct)
     {
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var gateError = await CheckCiAttentionPromotionGateAsync("admin_ui_builder", ct);
+        if (gateError is not null) return (null, gateError);
         var result = await _uiTopologyRepository.ApplyConfirmedLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_APPLY_FAILED", result.Message));
         return (JsonSerializer.SerializeToElement(result), null);

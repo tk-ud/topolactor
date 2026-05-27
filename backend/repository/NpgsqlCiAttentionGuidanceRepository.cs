@@ -60,6 +60,45 @@ RETURNING fragment_id,kind,status,severity,target_kind,target_key,snapshot_at;
         return new CiAttentionGuidanceFragmentStored(fragmentId, payload);
     }
 
+    public override async Task<IReadOnlyList<CiAttentionBlockingFragment>> GetActiveBlockingFragmentsAsync(
+        string? targetKind = null,
+        string? targetKey = null,
+        string? scope = null,
+        string? authoringSurface = null,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var sql = """
+SELECT fragment_id, kind, target_kind, target_key, message, actionable_guidance
+FROM logs.ci_attention_guidance_current
+WHERE status = 'active'
+  AND blocks_promotion = true
+  AND (@target_kind::text IS NULL OR target_kind = @target_kind)
+  AND (@target_key::text IS NULL OR target_key = @target_key)
+  AND (@scope::text IS NULL OR scope = @scope)
+  AND (@authoring_surface::text IS NULL OR authoring_surface = @authoring_surface)
+""";
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("target_kind", (object?)targetKind ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("target_key", (object?)targetKey ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("scope", (object?)scope ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("authoring_surface", (object?)authoringSurface ?? DBNull.Value);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        var result = new List<CiAttentionBlockingFragment>();
+        while (await r.ReadAsync(ct))
+        {
+            result.Add(new CiAttentionBlockingFragment(
+                r.GetGuid(0),
+                r.GetString(1),
+                r.GetString(2),
+                r.GetString(3),
+                r.GetString(4),
+                r.GetString(5)));
+        }
+        return result;
+    }
+
     private static string ToDb(CiAttentionSourceKind v) => v switch { CiAttentionSourceKind.EntityDiff=>"entity_diff",CiAttentionSourceKind.DraftDiff=>"draft_diff",CiAttentionSourceKind.RuntimeEvent=>"runtime_event",_=>"manual_check"};
     private static string ToDb(CiAttentionGuidanceKind v) => v switch { CiAttentionGuidanceKind.MissingInput=>"missing_input",CiAttentionGuidanceKind.ValidCandidate=>"valid_candidate",CiAttentionGuidanceKind.StructuralViolation=>"structural_violation",_=>"break_boundary"};
     private static string ToDb(CiAttentionGuidanceStatus v) => v switch { CiAttentionGuidanceStatus.NotChecked=>"not_checked",CiAttentionGuidanceStatus.Active=>"active",CiAttentionGuidanceStatus.Resolved=>"resolved",_=>"dismissed"};
