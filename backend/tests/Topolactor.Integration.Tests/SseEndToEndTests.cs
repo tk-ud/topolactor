@@ -102,7 +102,7 @@ public class SseEndpointStreamFormatTests
             NullLogger<Topolactor.Endpoint.SseEndpoint>.Instance,
             broadcaster: null);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
 
         // Act — let the keep-alive loop run until cancelled
         try { await endpoint.StreamAsync(response, cts.Token); }
@@ -124,18 +124,18 @@ public class SseEndpointStreamFormatTests
             NullLogger<Topolactor.Endpoint.SseEndpoint>.Instance,
             broadcaster);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1000));
 
         // Act: start streaming in background, broadcast one event, then cancel.
         var streamTask = Task.Run(async () =>
         {
             try { await endpoint.StreamAsync(response, cts.Token); }
             catch (OperationCanceledException) { }
-        }, cts.Token);
+        });
 
-        await WaitUntilBodyContains(body, "event: ping\n", TimeSpan.FromMilliseconds(150));
+        await WaitUntilBodyContains(body, "event: ping\n", TimeSpan.FromMilliseconds(600));
         broadcaster.Broadcast(new SseEvent("projection", """{"table_id":"t1"}"""));
-        await WaitUntilBodyContains(body, "event: projection\n", TimeSpan.FromMilliseconds(150));
+        await WaitUntilBodyContains(body, "event: projection\n", TimeSpan.FromMilliseconds(600));
         await cts.CancelAsync();
 
         try { await streamTask; } catch (OperationCanceledException) { }

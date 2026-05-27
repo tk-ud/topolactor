@@ -447,6 +447,54 @@ public class RuntimeExecutorTests
         Assert.NotEmpty(response.Emission.ComponentIds!);
     }
 
+    [Theory]
+    [InlineData("create")]
+    [InlineData("update")]
+    [InlineData("logical_delete")]
+    [InlineData("restore")]
+    [InlineData("physical_delete")]
+    [InlineData("delete")]
+    public void ShouldAppendLogsDiff_MutationActions_ReturnTrue(string action)
+    {
+        var method = typeof(RuntimeExecutor).GetMethod("ShouldAppendLogsDiff", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var result = (bool)method.Invoke(null, [action])!;
+        Assert.True(result);
+    }
+
+    [Theory]
+    [InlineData("select")]
+    [InlineData("read")]
+    [InlineData("list")]
+    [InlineData("search")]
+    public void ShouldAppendLogsDiff_ReadActions_ReturnFalse(string action)
+    {
+        var method = typeof(RuntimeExecutor).GetMethod("ShouldAppendLogsDiff", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var result = (bool)method.Invoke(null, [action])!;
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void ResolveContextValue_UsesEnvFallbackWhenContextMissing()
+    {
+        var prevSource = Environment.GetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID");
+        var prevWindow = Environment.GetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "env-src");
+        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "env-window");
+        try
+        {
+            var method = typeof(RuntimeExecutor).GetMethod("ResolveContextValue", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            var source = (string)method.Invoke(null, [null, "sql_attention_source_set_id", "SQL_ATTENTION_SOURCE_SET_ID"])!;
+            var basis = (string)method.Invoke(null, [null, "sql_attention_basis_window", "SQL_ATTENTION_BASIS_WINDOW"])!;
+            Assert.Equal("env-src", source);
+            Assert.Equal("env-window", basis);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", prevSource);
+            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", prevWindow);
+        }
+    }
+
 }
 
 public class SchedulerDispatcherChainTests

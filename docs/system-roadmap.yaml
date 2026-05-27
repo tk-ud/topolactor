@@ -262,9 +262,37 @@ system_roadmap_ssot:
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
         - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
         - SQLA-6 topology projection recommendation basis not implemented
-        - SQLA-7 physical table identity mapping for logs.diff not decided
+        - SQLA-7 logs.diff append boundary is implemented, but live DB/runtime verification and broader hardening coverage remain
 
   implementation_registry:
+    backend.sql_attention_logs_diff:
+      status: partial
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: logs.diff append boundary and runtime separation from topology_edit_log are implemented; live runtime-environment verification and broader integration hardening remain.
+      files:
+        - backend/runtime/RuntimeExecutor.cs
+        - backend/repository/SqlAttentionLogsRepository.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/schema/SqlAttentionContracts.cs
+        - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+      evidence:
+        tests:
+          - RuntimeExecutorTests
+        ci:
+          - backend-tests
+          - runtime-semantics
+      completion_condition:
+        - logs_diff_append_boundary_exists_and_writes_required_fields
+        - runtime_executor_separates_topology_edit_log_audit_from_logs_diff_append
+        - mutation_action_filter_excludes_select_read_list_search
+        - source_set_and_basis_window_resolution_is_data_defined_context_or_env
+      known_gap_ref:
+        - SQLA-7 logs.diff append boundary is implemented, but live DB/runtime verification and broader hardening coverage remain
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+
     backend.sql_attention_logs_current:
       status: partial
       production_ready: false
