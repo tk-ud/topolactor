@@ -116,3 +116,14 @@ public record LayoutPatchResult(
     IReadOnlyDictionary<string, IReadOnlyList<string>> ResponsiveTokenRefs,
     string Message
 );
+
+public record PromotedPaletteEntryDto(
+    [property: JsonPropertyName("componentKey")] string ComponentKey,
+    [property: JsonPropertyName("componentKind")] string ComponentKind,
+    [property: JsonPropertyName("componentId")] string ComponentId,
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("layoutId")] string LayoutId,
+    [property: JsonPropertyName("wiringId")] string WiringId,
+    [property: JsonPropertyName("tensorId")] string TensorId,
+    [property: JsonPropertyName("routeKey")] string RouteKey
+);

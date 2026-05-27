@@ -26,7 +26,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 ## TODO dependency map（execution order）
 
 1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
-2. Visual layout builder（Issue #89）— 実装完了（mouse-driven editor / drag-drop / preview-validate-apply 接続 / draft-only apply guard + backend fail-close validation）。promoted component/package palette integration（DB登録済み identity を palette source にする）は follow-up 課題として残す。
+2. Visual layout builder（Issue #89）— 実装完了（mouse-driven editor / drag-drop / preview-validate-apply 接続 / draft-only apply guard + backend fail-close validation / promoted component-package palette identity projection）。
 
 ---
 

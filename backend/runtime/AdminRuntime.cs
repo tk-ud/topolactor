@@ -182,6 +182,7 @@ public class AdminRuntime
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
             "package_generator:promote"        => await DataPromoteAsync(vector, ct),
+            "ui_topology:promoted_palette"     => await DataPromotedPaletteAsync(ct),
             "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
             "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
             "layout_patch:apply"               => await DataLayoutPatchApplyAsync(vector, ct),
@@ -535,6 +536,12 @@ public class AdminRuntime
         if (string.IsNullOrWhiteSpace(request.RouteKey)) { error = new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"); return false; }
         if (!Guid.TryParse(request.LayoutId, out _)) { error = new ValidationError("MALFORMED_LAYOUT_ID", "layoutId must be valid UUID"); return false; }
         return true;
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotedPaletteAsync(CancellationToken ct)
+    {
+        var entries = await _uiTopologyRepository.ListPromotedPaletteEntriesAsync(ct);
+        return (JsonSerializer.SerializeToElement(entries), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchPreviewAsync(OperationVector vector, CancellationToken ct)

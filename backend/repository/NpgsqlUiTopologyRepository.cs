@@ -119,6 +119,39 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
     }
 
+    public override async Task<IReadOnlyList<PromotedPaletteEntryDto>> ListPromotedPaletteEntriesAsync(
+        CancellationToken ct = default)
+    {
+        var records = new List<PromotedPaletteEntryDto>();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT c.component_key, c.component_kind, c.component_id, p.package_id, l.layout_id, w.wiring_id, t.tensor_id, t.route_key " +
+            "FROM ui_topology_tensor t " +
+            "JOIN ui_component_package p ON p.package_id = t.package_id " +
+            "JOIN ui_layout_registry l ON l.layout_id = t.layout_id " +
+            "JOIN ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
+            "JOIN ui_package_component_map m ON m.package_id = p.package_id " +
+            "JOIN ui_component_registry c ON c.component_id = m.component_id " +
+            "ORDER BY t.created_at DESC";
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            records.Add(new PromotedPaletteEntryDto(
+                ComponentKey: reader.GetString(0),
+                ComponentKind: reader.GetString(1),
+                ComponentId: reader.GetGuid(2).ToString(),
+                PackageId: reader.GetGuid(3).ToString(),
+                LayoutId: reader.GetGuid(4).ToString(),
+                WiringId: reader.GetGuid(5).ToString(),
+                TensorId: reader.GetGuid(6).ToString(),
+                RouteKey: reader.GetString(7)
+            ));
+        }
+        return records;
+    }
+
     
 
     public override async Task<PackageGenerateResult> GenerateFromBucketAsync(
