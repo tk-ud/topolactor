@@ -88,11 +88,15 @@ system_ci_admin_runtime_callable_surface_ssot:
       - AdminRuntime_calls_test_execution
       - treating_test_runner_as_product_runtime
       - DB_write_from_diagnostic_surface
+      - frontend_draft_edit_lock_from_diagnostic_surface
       - registry_mutation_from_diagnostic_surface
       - automatic_repair_from_diagnostic_surface
       - automatic_promotion_from_diagnostic_surface
       - silent_fallback_to_pass
       - synthetic_success_when_diagnostic_runtime_fails
+    note:
+      - canonical_promotion_gate_may_consume_fragment_state_in_backend_runtime_guard
+      - fragment_state_consumption_for_promotion_eligibility_does_not_grant_frontend_authority
 
   test_contract:
     - tests_may_construct_the_same_diagnostic_interface_with_fixtures

@@ -1125,15 +1125,30 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Admin UI builder now exposes CI Attention guidance projection from system_ci callable diagnostics
-        and separates missing_input / valid_candidate / structural_violation / break_boundary as
-        actionable authoring hints. Frontend remains projection-only and does not own runtime judgment.
+        Admin UI builder exposes CI Attention guidance projection as read-only authoring hints
+        (missing_input / valid_candidate / structural_violation / break_boundary). Draft editing
+        remains non-blocking on fragment state. Canonical promotion eligibility may still be
+        fail-close in backend/runtime guard when active blocking fragments remain unresolved.
       completion_condition:
-        - ci_attention_guidance_is_exposed_to_end_users_during_authoring
-        - missing_input_valid_candidate_and_breaking_boundary_guidance_are_actionable_in_ui
+        - ci_attention_guidance_is_exposed_to_end_users_during_authoring_as_read_only_projection
+        - draft_editing_is_not_locked_by_fragment_state
+        - canonical_promotion_boundary_consumes_fragment_state_in_backend_guard
       known_gap_ref:
         - guidance scope is currently ui-builder-first and not yet generalized across all authoring surfaces
         - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
+
+    design.ci_attention_guidance_fragment_ssot_and_schema:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        CI Attention guidance fragment SSOT/schema defines read-only evidence fragments plus
+        backend canonical promotion gate consumption boundary (non-frontend authority).
+      known_gap_ref:
+        - backend_promotion_gate_consumer_for_fragment_state_not_yet_implemented
+        - backend_fragment_upsert_runtime_not_yet_implemented
+        - backend_notify_emitter_for_fragment_update_not_yet_implemented
+        - frontend_live_projection_subscription_for_fragment_not_yet_generalized
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: implemented

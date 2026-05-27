@@ -158,6 +158,10 @@ function CiAttentionGuidanceSection(): JSX.Element {
       <h2>CI Attention Guidance (authoring lens)</h2>
       <button type="button" onClick={loadGuidance}>Load guidance</button>
       <p style={{ fontFamily: "monospace", color: "#666" }}>{status}</p>
+      <p style={{ color: "#666", fontSize: "0.9rem" }}>
+        Draft editing remains available regardless of guidance state. Canonical promotion may require
+        resolving active blocking fragments, and apply-time validation remains backend responsibility.
+      </p>
       <ValidationErrorPanel errors={errors} title="guidance errors" />
       <OperationGuardBanner
         level={byKind("break_boundary").length > 0 ? "error" : "info"}

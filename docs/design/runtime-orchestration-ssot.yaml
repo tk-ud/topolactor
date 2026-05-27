@@ -566,6 +566,8 @@ runtime_orchestration_ssot:
       - listen_event_enters_scheduler_before_projection_runtime
       - db_notify_dispatch_requires_manifest_id_resolution_and_db_notify_projection_mapping
       - client_or_request_trigger_cannot_directly_enter_db_notify_projection_runtime
+      - ci_attention_fragment_is_projection_assistance_not_frontend_lock_authority
+      - canonical_promotion_gate_may_consume_fragment_state_in_backend_runtime_guard
 
   minimal_event_shape:
     fields:

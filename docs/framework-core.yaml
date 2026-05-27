@@ -297,6 +297,11 @@ ci_attention_runtime_boundary:
     - canonical_dispatch
     - explicit_failure
     - boundary_guard
+  fragment_and_promotion_split:
+    - fragment_is_read_only_guidance_evidence_projection
+    - draft_authoring_must_not_be_locked_by_fragment
+    - canonical_promotion_gate_may_read_active_blocking_fragment_state
+    - apply_fail_close_authority_remains_backend_runtime_guard
 
 sql_attention_runtime_boundary:
   source_ssot: docs/design/sql-attention-logs-ssot.md

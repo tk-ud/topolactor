@@ -53,6 +53,8 @@ pipeline_continuity_ssot:
     boundary:
       - diagnostics_evidence_eligibility_read_only_surface
       - no_test_runner_or_shell_invocation_in_product_runtime_lane
+      - draft_authoring_must_not_be_blocked_by_ci_attention_fragment_state
+      - canonical_promotion_gate_may_read_active_blocking_fragment_as_backend_guard_input
 
   ci_responsibility_split:
     sh_checks:
