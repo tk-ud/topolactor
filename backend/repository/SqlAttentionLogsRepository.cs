@@ -111,4 +111,27 @@ public class SqlAttentionLogsRepository
             count);
         return Task.FromResult(count);
     }
+
+    public virtual Task AppendLogsDiffAsync(
+        LogsDiffAppendRequest request,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateLogsDiffRequest(request);
+        _logger.LogDebug("SqlAttentionLogsRepository.AppendLogsDiffAsync: no DB connection (test double) — request validated only.");
+        return Task.CompletedTask;
+    }
+
+    protected static void ValidateLogsDiffRequest(LogsDiffAppendRequest request)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.SourceSetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.BasisWindow);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PhysicalTableId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.PhysicalTableName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.RecordId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.OperationKind);
+
+        if (!string.Equals(request.ArchivePolicy, "required", StringComparison.Ordinal))
+            throw new ArgumentException("append_logs_diff: ArchivePolicy must be 'required'.", nameof(request));
+    }
 }

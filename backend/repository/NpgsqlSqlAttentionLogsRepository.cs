@@ -184,4 +184,42 @@ INSERT INTO logs.attention (
 
         return rowsWritten;
     }
+
+    public override async Task AppendLogsDiffAsync(
+        LogsDiffAppendRequest request,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateLogsDiffRequest(request);
+
+        const string sql = @"
+INSERT INTO logs.diff (
+    source_set_id, basis_window, physical_table_id, physical_table_name,
+    record_id, operation_kind, before_state_or_diff_json, after_state_or_diff_json,
+    observed_at, actor_or_source, archive_policy
+) VALUES (
+    @source_set_id, @basis_window, @physical_table_id, @physical_table_name,
+    @record_id, @operation_kind, @before_state_or_diff_json::jsonb, @after_state_or_diff_json::jsonb,
+    @observed_at, @actor_or_source, @archive_policy
+)";
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("source_set_id", request.SourceSetId);
+        cmd.Parameters.AddWithValue("basis_window", request.BasisWindow);
+        cmd.Parameters.AddWithValue("physical_table_id", request.PhysicalTableId);
+        cmd.Parameters.AddWithValue("physical_table_name", request.PhysicalTableName);
+        cmd.Parameters.AddWithValue("record_id", request.RecordId);
+        cmd.Parameters.AddWithValue("operation_kind", request.OperationKind);
+        cmd.Parameters.AddWithValue("before_state_or_diff_json", request.BeforeStateOrDiffJson);
+        cmd.Parameters.AddWithValue("after_state_or_diff_json", request.AfterStateOrDiffJson);
+        cmd.Parameters.AddWithValue("observed_at", request.ObservedAt);
+        cmd.Parameters.AddWithValue("actor_or_source", (object?)request.ActorOrSource ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("archive_policy", request.ArchivePolicy);
+
+        await cmd.ExecuteNonQueryAsync(ct);
+    }
+
 }

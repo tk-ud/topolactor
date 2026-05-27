@@ -142,3 +142,22 @@ public record LogsAttentionWriteRequest(
     string EvidenceJson,
     string ArchivePolicy
 );
+
+
+/// <summary>
+/// Input to logs.diff append boundary for SQL Attention physical mutation pressure.
+/// This boundary is append-only and must not mix topology_edit_log or UI operation events.
+/// </summary>
+public record LogsDiffAppendRequest(
+    string SourceSetId,
+    string BasisWindow,
+    string PhysicalTableId,
+    string PhysicalTableName,
+    string RecordId,
+    string OperationKind,
+    string BeforeStateOrDiffJson,
+    string AfterStateOrDiffJson,
+    DateTimeOffset ObservedAt,
+    string? ActorOrSource,
+    string ArchivePolicy
+);

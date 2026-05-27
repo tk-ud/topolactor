@@ -24,6 +24,7 @@ public class RuntimeExecutor : IDispatchableRuntime
     private readonly EmissionBuilder _emissionBuilder;
     private readonly SemanticMapper _semanticMapper;
     private readonly DiffLogRepository _diffLogRepository;
+    private readonly SqlAttentionLogsRepository _sqlAttentionLogsRepository;
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
     private readonly OutputLaneRouter? _outputLaneRouter;
@@ -38,6 +39,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         EmissionBuilder emissionBuilder,
         SemanticMapper semanticMapper,
         DiffLogRepository diffLogRepository,
+        SqlAttentionLogsRepository sqlAttentionLogsRepository,
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
         OutputLaneRouter? outputLaneRouter = null)
@@ -51,6 +53,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         _emissionBuilder = emissionBuilder ?? throw new ArgumentNullException(nameof(emissionBuilder));
         _semanticMapper = semanticMapper ?? throw new ArgumentNullException(nameof(semanticMapper));
         _diffLogRepository = diffLogRepository ?? throw new ArgumentNullException(nameof(diffLogRepository));
+        _sqlAttentionLogsRepository = sqlAttentionLogsRepository ?? throw new ArgumentNullException(nameof(sqlAttentionLogsRepository));
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
         _outputLaneRouter = outputLaneRouter;
@@ -153,7 +156,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         // Step 7: Map to repository command (semantic mapping, not ORM)
         var repositoryCommand = _semanticMapper.MapToRepositoryCommand(workingShape);
 
-        // Step 8: Append diff log (append-only, non-blocking for response)
+        // Step 8: Append topology edit audit log (topology_edit_log only; not logs.diff physical mutation pressure).
         try
         {
             await _diffLogRepository.AppendEditAsync(
@@ -168,8 +171,34 @@ public class RuntimeExecutor : IDispatchableRuntime
         }
         catch (Exception ex)
         {
-            // Log but do not abort — diff log failure is non-fatal to the emission
-            _logger.LogError(ex, "DiffLogRepository.AppendEditAsync failed. Continuing execution.");
+            _logger.LogError(ex, "DiffLogRepository.AppendEditAsync (topology_edit_log audit) failed. Continuing execution.");
+        }
+
+        if (ShouldAppendLogsDiff(vector.Action))
+        {
+            try
+            {
+                var sourceSetId = ResolveContextValue(request.Context, "sql_attention_source_set_id", "SQL_ATTENTION_SOURCE_SET_ID");
+                var basisWindow = ResolveContextValue(request.Context, "sql_attention_basis_window", "SQL_ATTENTION_BASIS_WINDOW");
+                var recordId = vector.ContextRecordId ?? request.IdOrHubId?.ToString() ?? "unknown";
+
+                await _sqlAttentionLogsRepository.AppendLogsDiffAsync(new LogsDiffAppendRequest(
+                    SourceSetId: sourceSetId,
+                    BasisWindow: basisWindow,
+                    PhysicalTableId: vector.Target ?? vector.AttractorKey ?? "unknown",
+                    PhysicalTableName: vector.Target ?? vector.AttractorKey ?? "unknown",
+                    RecordId: recordId,
+                    OperationKind: vector.Action ?? "unknown",
+                    BeforeStateOrDiffJson: "{}",
+                    AfterStateOrDiffJson: JsonSerializer.Serialize(repositoryCommand),
+                    ObservedAt: DateTimeOffset.UtcNow,
+                    ActorOrSource: vector.ContextUserId ?? vector.TriggerKind,
+                    ArchivePolicy: "required"), ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SqlAttentionLogsRepository.AppendLogsDiffAsync failed. Continuing execution.");
+            }
         }
 
         // Step 9: Context route recommendation (non-fatal — failure yields ExplicitError status)
@@ -211,6 +240,32 @@ public class RuntimeExecutor : IDispatchableRuntime
         _logger.LogInformation("RuntimeExecutor.ExecuteAsync completed successfully.");
 
         return response;
+    }
+
+
+    private static bool ShouldAppendLogsDiff(string? action)
+    {
+        if (string.IsNullOrWhiteSpace(action))
+            return false;
+
+        return action.Trim().ToLowerInvariant() switch
+        {
+            "select" or "read" or "list" or "search" => false,
+            "create" or "update" or "logical_delete" or "restore" or "physical_delete" or "delete" => true,
+            _ => false
+        };
+    }
+
+    private static string ResolveContextValue(Dictionary<string, string>? context, string primaryKey, string fallbackEnvKey)
+    {
+        if (context is not null && context.TryGetValue(primaryKey, out var value) && !string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var env = Environment.GetEnvironmentVariable(fallbackEnvKey);
+        if (!string.IsNullOrWhiteSpace(env))
+            return env;
+
+        throw new InvalidOperationException($"Missing required SQL Attention context value: '{primaryKey}' (or env '{fallbackEnvKey}').");
     }
 
     private static EndpointResponseDto ErrorResponse(string code, string message) =>

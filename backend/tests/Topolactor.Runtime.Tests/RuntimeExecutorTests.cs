@@ -44,6 +44,7 @@ public class RuntimeExecutorTests
             emissionBuilder: new EmissionBuilder(),
             semanticMapper: new SemanticMapper(),
             diffLogRepository: new DiffLogRepository(NullLogger<DiffLogRepository>.Instance),
+            sqlAttentionLogsRepository: new SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "test-double"),
             runtimeGuard: new RuntimeGuard(),
             contextRouteRecommendationResolver: new ContextRouteRecommendationResolver(
                 NullLogger<ContextRouteRecommendationResolver>.Instance,
