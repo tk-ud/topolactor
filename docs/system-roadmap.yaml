@@ -1125,14 +1125,15 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Product capability for user-created flow guidance (missing input, valid candidates,
-        structural-break boundaries) is still under development; current implemented CI surfaces
-        are backend/runtime diagnostics and not full end-user guidance UX.
+        Admin UI builder now exposes CI Attention guidance projection from system_ci callable diagnostics
+        and separates missing_input / valid_candidate / structural_violation / break_boundary as
+        actionable authoring hints. Frontend remains projection-only and does not own runtime judgment.
       completion_condition:
         - ci_attention_guidance_is_exposed_to_end_users_during_authoring
         - missing_input_valid_candidate_and_breaking_boundary_guidance_are_actionable_in_ui
       known_gap_ref:
-        - backend.system_operation_ci_runtime is implemented but product guidance UX is incomplete
+        - guidance scope is currently ui-builder-first and not yet generalized across all authoring surfaces
+        - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: implemented

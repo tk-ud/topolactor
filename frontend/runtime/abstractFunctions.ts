@@ -55,6 +55,70 @@ export type DiffLogEntry = {
   timestamp: string;
 };
 
+export type CiAttentionGuidanceKind =
+  | "missing_input"
+  | "valid_candidate"
+  | "structural_violation"
+  | "break_boundary";
+
+export type CiAttentionGuidanceItem = {
+  id: string;
+  kind: CiAttentionGuidanceKind;
+  title: string;
+  message: string;
+  actionable: string;
+  confidence?: number;
+};
+
+type SystemCiFindingLike = {
+  checkName?: string;
+  status?: string;
+  detail?: string;
+  targetId?: string | null;
+  classification?: string;
+};
+
+// guidance_projection_only: converts read-only diagnostic payload into UI guidance lens.
+// no_topology_authority: frontend never mutates runtime decision or route from this output.
+export function projectCiAttentionGuidance(
+  diagnostic: unknown,
+): AbstractFunctionResult<CiAttentionGuidanceItem[]> {
+  if (typeof diagnostic !== "object" || diagnostic === null) {
+    return { ok: false, error: "ABSTRACT_FUNCTION_INVALID_INPUT: diagnostic object required" };
+  }
+  const obj = diagnostic as Record<string, unknown>;
+  const findingsRaw = obj.findings;
+  if (!Array.isArray(findingsRaw)) {
+    return { ok: false, error: "ABSTRACT_FUNCTION_INVALID_INPUT: findings array required" };
+  }
+  const findings = findingsRaw as SystemCiFindingLike[];
+  const items: CiAttentionGuidanceItem[] = findings.map((f, index) => {
+    const classification = String(f.classification ?? "");
+    const status = String(f.status ?? "");
+    let kind: CiAttentionGuidanceKind = "structural_violation";
+    if (classification === "MissingRequired") kind = "missing_input";
+    else if (classification === "NotCovered") kind = "valid_candidate";
+    else if (classification === "InvalidShape") kind = "structural_violation";
+    else if (status === "Blocking") kind = "break_boundary";
+    const actionable = kind === "missing_input"
+      ? "Fill the required identity/input before applying."
+      : kind === "valid_candidate"
+      ? "Review suggested candidate context and choose explicitly."
+      : kind === "break_boundary"
+      ? "Stop authoring apply path and resolve boundary violation first."
+      : "Fix payload shape/structure before next dispatch.";
+    return {
+      id: `${f.checkName ?? "finding"}_${index}`,
+      kind,
+      title: String(f.checkName ?? "CI_ATTENTION_GUIDANCE"),
+      message: String(f.detail ?? ""),
+      actionable,
+      confidence: kind === "valid_candidate" ? 0.65 : undefined,
+    };
+  });
+  return { ok: true, data: items };
+}
+
 // =============================================================================
 // Category A: Search / Suggest Functions (candidate_surface / readonly)
 // =============================================================================
