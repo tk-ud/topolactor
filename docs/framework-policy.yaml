@@ -12,6 +12,32 @@ framework_policy:
       - canonical_promotion_gate_may_consume_active_blocking_fragments_as_eligibility_input
       - promotion_gate_and_apply_fail_close_authority_remain_backend_runtime_boundary_guard
 
+  authority_visibility_promotion_policy:
+    completion_bundle_required: true
+    bundle_items:
+      - draft_authority
+      - promotion_authority
+      - manifest_activation_authority
+      - ci_attention_refresh_authority
+      - audit_evidence_visibility_authority
+      - frontend_display_only_boundary
+      - backend_runtime_promotion_guard_authority
+    partial_approve_exclusions:
+      - promotion_gate_authority_ownership_when_backend_vs_frontend_boundary_ambiguous
+      - visibility_boundary_between_display_only_and_authority_surfaces
+      - draft_vs_promote_vs_apply_authority_separation_when_any_missing
+      - manifest_activation_authority_and_timing
+      - audit_evidence_access_scope_auditability_is_not_unrestricted_visibility
+      - frontend_authority_promotion_judgment_prohibition_not_declared
+    invariants:
+      - frontend_holds_no_promotion_judgment_or_authority
+      - backend_runtime_is_final_and_exclusive_promotion_authority
+      - ci_attention_fragment_is_not_system_lock_and_not_frontend_authority
+      - draft_editing_is_never_blocked_by_authority_gate_or_fragment_state
+      - audit_evidence_transparency_is_auditability_with_declared_boundary_not_unrestricted_visibility
+      - security_review_permission_design_and_load_testing_are_separate_concerns_not_covered_by_this_policy
+    roadmap_completion_bundle_ref: design.authority_visibility_promotion_policy_ssot
+
   readme_surface_policy:
     role: public_overview_surface_and_external_entry_point
     readme_authority_boundary:

@@ -142,6 +142,50 @@ For worktype `audit`, read top-level semantic baseline SSOT first (mandatory), i
 - Remote CI unavailable to implementation agent is not a TODO item; it is Auditor evidence input for final closure.
 
 
+## security_authority_visibility_promotion_boundary_gate
+
+Security / authority / visibility / promotion boundary surfaces are **not eligible for unconditional partial Approve** by placement in `known_gap_ref` alone.
+
+These boundary surfaces require a closed **completion bundle** before Approve:
+- draft authority — who can author drafts and when
+- promotion authority — who can execute canonical promotion (package_generator:promote, layout_patch:apply)
+- manifest activation authority — who can activate manifests
+- CI Attention refresh authority — who can trigger CI Attention fragment refresh
+- audit / evidence visibility authority — who can view audit logs and evidence (auditability ≠ unrestricted visibility)
+- frontend display-only boundary — frontend holds no promotion judgment or authority
+- backend / runtime promotion guard authority — runtime is the final and exclusive promotion authority
+
+### partial_approve_exclusion_for_authority_boundary
+
+The following cannot unlock Approve by `known_gap_ref` placement alone:
+- promotion gate authority ownership when the backend-vs-frontend boundary is ambiguous or undeclared
+- visibility boundary between display-only surfaces and authority surfaces
+- draft / promote / apply authority separation when any of the three is missing
+- manifest activation authority and timing (who, when, under which conditions)
+- audit evidence access scope (transparency as auditability has a defined boundary; unrestricted visibility is not auditability)
+- frontend authority / promotion judgment prohibition when this is not explicitly declared in the roadmap
+
+**Approve is blocked** when any of these boundary surfaces remain undefined or remain in `known_gap_ref` without an explicit completion bundle referenced in the roadmap (`design.authority_visibility_promotion_policy_ssot` or equivalent implemented-and-closed entry).
+
+### completion_bundle_unit_for_authority_visibility_promotion
+
+Authority / Visibility / Promotion Policy must be closed as a **unit**. The following splits are not valid completion bundles:
+- draft authority only (missing promotion + manifest + visibility)
+- promotion gate implementation only (missing draft + manifest + audit/evidence visibility + frontend boundary declaration)
+- frontend display boundary declaration only (missing backend guard authority + draft + promotion)
+
+Each subset is incomplete without the others; partial coverage does not constitute a valid completion bundle.
+
+### audit_responsibility_for_authority_boundary
+
+Auditor must treat the following as **blocking** (not non-blocker carry-over):
+- security / authority / visibility / promotion boundaries in `known_gap_ref` without a roadmap completion bundle reference
+- partial promotion gate or visibility implementation presented as "progress" without a roadmap completion bundle
+- CI Attention fragment being interpreted as frontend authority or system lock authority
+- draft editing blocked or gated by fragment state or authority gate
+- promotion judgment not exclusively owned by backend runtime boundary guard
+- audit evidence access without explicit auditability boundary (visibility ≠ unrestricted access)
+
 ## non_blocker_carry_over_rule
 - SSOT completion_condition と実装意味整合が成立している PR は、軽微な cleanup / coverage expansion / future integration test が残っていても Approve 可能。
 - Approve可能な非ブロッカー残件は、PR summary/comment だけで閉じず `.agent/tasks/todo.md` の `Non-blocking cleanup / hardening carry-over` ブロックへ carry-over する。

@@ -1173,6 +1173,32 @@ system_roadmap_ssot:
       known_gap_ref:
         - guidance scope is currently ui-builder-first (authoring_surface=admin_ui_builder) and not yet generalized across all authoring surfaces
 
+    design.authority_visibility_promotion_policy_ssot:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        Authority / Visibility / Promotion Policy SSOT defining who can draft, who can
+        promote, who can activate manifests, who can refresh CI Attention fragments, who
+        can view audit/evidence, the frontend-display-only boundary, and the backend/runtime
+        promotion guard authority. This is a completion bundle; it must be closed as a unit.
+        Evidence transparency is auditability with a declared boundary, not unrestricted
+        visibility. Security review, permission design, and load testing are separate
+        concerns outside this SSOT scope.
+      completion_condition:
+        - draft_authority_is_defined_who_can_author_drafts_and_when
+        - promotion_authority_is_defined_who_can_execute_canonical_promotion
+        - manifest_activation_authority_is_defined_who_can_activate_and_when
+        - ci_attention_refresh_authority_is_defined_who_can_trigger_refresh
+        - audit_evidence_visibility_authority_is_defined_as_auditability_not_unrestricted_access
+        - frontend_display_only_boundary_is_explicitly_declared_no_promotion_judgment
+        - backend_runtime_promotion_guard_authority_is_explicitly_declared_as_final_authority
+        - completion_bundle_closed_as_unit_not_split_into_partial_fragments
+      known_gap_ref:
+        - all completion conditions not_started; no security/authority/visibility/promotion partial implementation is approvable without this bundle closed (per audit protocol security_authority_visibility_promotion_boundary_gate)
+      detail_ssot:
+        - docs/framework-policy.yaml (authority_visibility_promotion_policy)
+
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: implemented
       production_ready: false

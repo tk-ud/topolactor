@@ -21,6 +21,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
+## Authority / Visibility / Promotion Policy SSOT (Blocking prerequisite for security-boundary implementation)
+
+- [ ] Define Authority / Visibility / Promotion Policy SSOT before advancing any promotion-gate, visibility-boundary, or authority-related implementation
+      → Completion bundle (must be closed as a unit, not split): draft authority, promotion authority, manifest activation authority, CI Attention refresh authority, audit/evidence visibility authority, frontend display-only boundary declaration, backend/runtime promotion guard authority declaration.
+      → Roadmap entry: design.authority_visibility_promotion_policy_ssot (status: not_started)
+      → Per audit protocol `security_authority_visibility_promotion_boundary_gate`: partial implementation without this bundle closed is not approvable; known_gap_ref alone does not unblock Approve for these boundaries.
+
 ## UI/UX Primitive Catalog and Abstract Function Registry
 
 ## TODO dependency map（execution order）

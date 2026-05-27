@@ -34,6 +34,9 @@ ci_contract_ssot:
         - system_lock
         - frontend_authority
         - apply_validation_authority_by_itself
+        - draft_editing_gate
+        - promotion_judgment_surface
+        - authority_visibility_promotion_policy_substitute
       kinds:
         - missing_input
         - valid_candidate
