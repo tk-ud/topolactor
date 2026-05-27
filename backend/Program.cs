@@ -107,6 +107,7 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<EmissionBuilder>(),
         sp.GetRequiredService<SemanticMapper>(),
         sp.GetRequiredService<DiffLogRepository>(),
+        sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
         sp.GetRequiredService<OutputLaneRouter>()));
