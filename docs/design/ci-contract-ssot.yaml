@@ -7,6 +7,27 @@ ci_contract_ssot:
     - keep_shell_gate_minimal_and_shift_semantic_assertions_to_dotnet_lane_tests
     - preserve_vocabulary_and_ownership_continuity_before_implementation
 
+  ci_attention_boundary:
+    marker: CI_ATTENTION
+    definition:
+      - user_input_guidance
+      - missing_input_guidance
+      - valid_candidate_guidance
+      - structural_violation_guidance
+      - break_boundary_guidance
+    primary_objective:
+      - prevent_unbounded_validation_error_handling_expansion_in_backend_runtime_system
+      - shift_user_assistance_responsibility_to_input_guidance_candidate_guidance_boundary_guidance
+    not:
+      - business_validation_authority
+      - backend_error_handler_authority
+    runtime_backend_boundary:
+      - runtime_backend_preserve_canonical_dispatch
+      - runtime_backend_preserve_explicit_failure
+      - runtime_backend_preserve_boundary_guard
+      - ux_assistance_decision_is_ci_attention_projection
+
+
   grep_index:
     - CI_CONTRACT_SSOT
     - CI_COMPONENT_INDEX
@@ -71,7 +92,7 @@ ci_contract_ssot:
         - style selector が辞書語彙に接続される前提を CI で fail-close する
     - id: ci.component.ci_attention_lane
       grep_marker: CI_ATTENTION
-      role: system event / implementation diff / runtime state / SSOT contract を structured CI status vector に射影する operational checker lane
+      role: user input guidance / missing input guidance / valid candidate guidance / structural violation guidance / break-boundary guidance を担う projection lane（runtime/backend validation expansion prevention）
     - id: ci.component.status_vector_branching
       grep_marker: CI_STATUS_VECTOR
       role: PASS / GAP / BLOCKING / DRIFT / NOT_COVERED などの状態を branchable operational signal として扱う

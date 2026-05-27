@@ -352,3 +352,10 @@ schema contract を前提にする。
 - state transition log と edit diff log を同一テーブルに混在させる
 - edit diff log が未作成のまま「edit diff から Query を生成している」と記述する
 - Registrar を static lookup table として扱う（Key-Value Memory として扱う）
+
+
+## SQL Attention boundary clarification
+
+- context route recommendation current は SQL Attention の child projection/consumer であり、本体の観測・推薦根拠層ではない。
+- SQL Attention は hub/log/relation/attractor evidence から hub構築・接続・候補・projection候補を推薦する。
+- fixed route の自動上書き、registry/topology の自動 mutation は禁止。

@@ -127,3 +127,14 @@ Phase semantics follow:
 - Treating Phase Attention as primary exploration.
 - Collapsing statistics + Attention + Phase Attention into one score.
 - Auto-mutating registry/topology state from `phase_vector` evidence.
+
+
+## SQL Attention Recommendation Boundary (clarified)
+
+SQL Attention は単なる推薦UXラベルではなく、`hub / hub construction / hub relation / attractor current / logs evidence` を根拠として、次の hub 候補・接続候補・導線候補・projection 候補を育てる推薦挙動である。
+
+境界条件:
+- `topology_recommendation_current` は SQL Attention 本体ではなく child projection / consumer。
+- SQL Attention は fixed route を自動上書きしない。
+- SQL Attention は `registry` / `topology` を phase_vector や attention current から自動 mutation しない。
+- runtime/backend の canonical dispatch / explicit failure / boundary guard は維持される。

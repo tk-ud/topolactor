@@ -45,7 +45,7 @@ topolactor は「作れるノーコード」ではなく、**「作っても壊�
 
 ### CI Attention の責務
 
-CI Attention は、**SSOT / YAML / schema / current DB state** に基づいて、以下を案内する層です。
+CI Attention は、**SSOT / YAML / schema / current DB state** に基づくユーザ入力補助層であり、backend/runtime 側の validation/error handling 膨張を防ぐために以下を案内する層です。
 
 - 不足入力
 - 有効候補
@@ -56,7 +56,7 @@ CI Attention は、**SSOT / YAML / schema / current DB state** に基づいて�
 
 ### SQL Attention の責務
 
-SQL Attention は、**hub / logs / relation** から、次の体験に向けた重みと方向性を育てる層です。
+SQL Attention は、**hub / hub construction / hub relation / attractor current / logs evidence** から、次の体験に向けた hub候補・接続候補・導線・projection候補を育てる層です。
 
 - 次に有効になりやすい文脈候補
 - 導線の方向性
