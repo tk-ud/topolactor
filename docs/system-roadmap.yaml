@@ -1146,8 +1146,6 @@ system_roadmap_ssot:
         backend canonical promotion gate consumption boundary (non-frontend authority).
       known_gap_ref:
         - backend_promotion_gate_consumer_for_fragment_state_not_yet_implemented
-        - backend_fragment_upsert_runtime_not_yet_implemented
-        - backend_notify_emitter_for_fragment_update_not_yet_implemented
         - frontend_live_projection_subscription_for_fragment_not_yet_generalized
 
     system_ci.dotnet_ssot_wiring_audit_tests:

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using Topolactor.Repository;
+using Topolactor.Scheduler;
 using Topolactor.Schema;
 
 namespace Topolactor.Runtime;
@@ -19,6 +20,8 @@ public class AdminRuntime
     private readonly PackageGeneratorRuntime _packageGeneratorRuntime;
     private readonly UiTopologyRepository _uiTopologyRepository;
     private readonly ISystemCiDiagnosticRunner? _systemCiDiagnosticRunner;
+    private readonly CiAttentionGuidanceRepository _ciAttentionGuidanceRepository;
+    private readonly SseEventBroadcaster? _sseEventBroadcaster;
     private readonly SeedRuntime? _seedRuntime;
 
     public AdminRuntime(
@@ -28,7 +31,9 @@ public class AdminRuntime
         PackageGeneratorRuntime packageGeneratorRuntime,
         UiTopologyRepository uiTopologyRepository,
         ISystemCiDiagnosticRunner? systemCiDiagnosticRunner = null,
-        SeedRuntime? seedRuntime = null)
+        SeedRuntime? seedRuntime = null,
+        CiAttentionGuidanceRepository? ciAttentionGuidanceRepository = null,
+        SseEventBroadcaster? sseEventBroadcaster = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -37,6 +42,8 @@ public class AdminRuntime
         _uiTopologyRepository = uiTopologyRepository ?? throw new ArgumentNullException(nameof(uiTopologyRepository));
         _systemCiDiagnosticRunner = systemCiDiagnosticRunner;
         _seedRuntime = seedRuntime;
+        _ciAttentionGuidanceRepository = ciAttentionGuidanceRepository ?? new CiAttentionGuidanceRepository();
+        _sseEventBroadcaster = sseEventBroadcaster;
     }
 
     // ---------------------------------------------------------------------------
@@ -193,9 +200,43 @@ public class AdminRuntime
             "seed_runtime:import"              => await DataSeedImportAsync(ct),
             "system_ci:list_targets"           => await DataSystemCiListTargetsAsync(ct),
             "system_ci:inspect"                => await DataSystemCiInspectAsync(vector, ct),
+            "ci_attention:refresh_fragments"   => await DataCiAttentionRefreshFragmentsAsync(vector, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
+    }
+    private async Task<(JsonElement? data, ValidationError? error)> DataCiAttentionRefreshFragmentsAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (_systemCiDiagnosticRunner is null) return (null, new ValidationError("SYSTEM_CI_DIAGNOSTIC_NOT_AVAILABLE", "system_ci diagnostic runner is not registered"));
+        if (vector.Payload is null) return (null, new ValidationError("CI_ATTENTION_PAYLOAD_REQUIRED", "payload is required"));
+        var payload = vector.Payload.Value;
+        var target = payload.TryGetProperty("target", out var t) ? t.GetString() : null;
+        var sourceKindRaw = payload.TryGetProperty("source_kind", out var sk) ? sk.GetString() : null;
+        if (string.IsNullOrWhiteSpace(target) || string.IsNullOrWhiteSpace(sourceKindRaw))
+            return (null, new ValidationError("CI_ATTENTION_TARGET_OR_SOURCE_KIND_REQUIRED", "payload.target and payload.source_kind are required"));
+        if (!TryParseSourceKind(sourceKindRaw!, out var sourceKind))
+            return (null, new ValidationError("CI_ATTENTION_SOURCE_KIND_INVALID", "source_kind must be one of entity_diff,draft_diff,runtime_event,manual_check"));
+        var result = await _systemCiDiagnosticRunner.InspectAsync(target!, ct);
+        var stored = new List<CiAttentionGuidanceGuidanceEventPayload>();
+        foreach (var f in result.Findings)
+        {
+            var upsert = MapToFragment(sourceKind, target!, result, f, payload);
+            var saved = await _ciAttentionGuidanceRepository.UpsertCurrentAppendHistoryAsync(upsert, ct);
+            stored.Add(saved.EventPayload);
+            _sseEventBroadcaster?.Broadcast(new SseEvent("projection", JsonSerializer.Serialize(saved.EventPayload)));
+        }
+        return (JsonSerializer.SerializeToElement(new { target, count = stored.Count, fragments = stored }), null);
+    }
+    private static bool TryParseSourceKind(string raw, out CiAttentionSourceKind kind){kind=raw switch{"entity_diff"=>CiAttentionSourceKind.EntityDiff,"draft_diff"=>CiAttentionSourceKind.DraftDiff,"runtime_event"=>CiAttentionSourceKind.RuntimeEvent,"manual_check"=>CiAttentionSourceKind.ManualCheck,_=>CiAttentionSourceKind.ManualCheck};return raw is "entity_diff" or "draft_diff" or "runtime_event" or "manual_check";}
+    private static CiAttentionGuidanceFragmentUpsert MapToFragment(CiAttentionSourceKind sourceKind,string target,SystemCiDiagnosticResult result,SystemCiFinding finding,JsonElement payload)
+    {
+        var kind = finding.Classification switch { SystemCiFindingClassification.MissingRequired => CiAttentionGuidanceKind.MissingInput, SystemCiFindingClassification.NotCovered=>CiAttentionGuidanceKind.ValidCandidate, SystemCiFindingClassification.InvalidShape=>CiAttentionGuidanceKind.StructuralViolation, _=>CiAttentionGuidanceKind.BreakBoundary};
+        var severity = finding.Status == SystemCiStatus.Blocking ? CiAttentionGuidanceSeverity.Error : CiAttentionGuidanceSeverity.Warning;
+        var sourceId = payload.TryGetProperty("source_id", out var sid) ? sid.GetString() : null;
+        var targetKind = payload.TryGetProperty("target_kind", out var tk) ? tk.GetString() : null;
+        var targetKey = payload.TryGetProperty("target_key", out var tkey) ? tkey.GetString() : null;
+        var evidence = JsonSerializer.SerializeToElement(new { check_name = finding.CheckName, detail = finding.Detail, classification = finding.Classification.ToString(), inspection_kind = result.InspectionKind.ToString(), inspected_at = result.InspectedAt });
+        return new CiAttentionGuidanceFragmentUpsert(sourceKind, sourceId ?? target, payload.TryGetProperty("source_table_or_surface", out var sts) ? sts.GetString() ?? "system_ci" : "system_ci", targetKind ?? "authoring_surface", targetKey ?? target, finding.TargetId, "system_ci_diagnostic", "admin_runtime:ci_attention:refresh_fragments", "admin_ui_builder", kind, CiAttentionGuidanceStatus.Active, severity, finding.Status == SystemCiStatus.Blocking, finding.Detail, $"Inspect check {finding.CheckName} for target {target}.", evidence, result.InspectedAt);
     }
 
     private Task<(JsonElement? data, ValidationError? error)> DataSystemCiListTargetsAsync(CancellationToken ct)
