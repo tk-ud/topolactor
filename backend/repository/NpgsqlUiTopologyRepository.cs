@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Topolactor.Schema;
 
@@ -15,7 +16,7 @@ namespace Topolactor.Repository;
 /// </summary>
 public class NpgsqlUiTopologyRepository : UiTopologyRepository
 {
-    private static readonly Regex CssTokenRegex = new("tokenKey:\\s*\"([^\"]+)\"", RegexOptions.Compiled);
+    private static readonly Regex CssTokenYamlRegex = new(@"^\s{4}([a-z0-9_.-]+):\s*$", RegexOptions.Compiled | RegexOptions.Multiline);
     private readonly ILogger<NpgsqlUiTopologyRepository> _npgsqlLogger;
 
     public NpgsqlUiTopologyRepository(
@@ -327,11 +328,28 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
     private static HashSet<string> LoadCssTokenVocabulary()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "frontend", "runtime", "cssDictionary.ts");
+        var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "docs", "design", "css-dictionary-ssot.yaml");
         path = Path.GetFullPath(path);
         if (!File.Exists(path)) return [];
         var text = File.ReadAllText(path);
-        return CssTokenRegex.Matches(text).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
+        var lines = text.Split('\n');
+        var inTokens = false;
+        var tokens = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in lines)
+        {
+            var line = raw.Replace("\r", "");
+            if (!inTokens)
+            {
+                if (line.Trim() == "tokens:")
+                    inTokens = true;
+                continue;
+            }
+            if (line.StartsWith("  ") && !line.StartsWith("    "))
+                break;
+            var m = CssTokenYamlRegex.Match(line);
+            if (m.Success) tokens.Add(m.Groups[1].Value);
+        }
+        return tokens;
     }
 
     private static LayoutPatchResult NormalizeLayoutPatch(
@@ -352,6 +370,14 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
     public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
     {
         var normalized = NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs);
+        try
+        {
+            JsonDocument.Parse(normalized.TensorPatchJson);
+        }
+        catch (JsonException)
+        {
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
+        }
         var vocab = LoadCssTokenVocabulary();
         foreach (var t in normalized.CssTokenRefs)
             if (!vocab.Contains(t))
@@ -392,7 +418,12 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         updateTensor.Parameters.AddWithValue("resp", responsiveJson);
         updateTensor.Parameters.AddWithValue("layoutId", layoutId);
         updateTensor.Parameters.AddWithValue("routeKey", routeKey);
-        await updateTensor.ExecuteNonQueryAsync(ct);
+        var tensorRows = await updateTensor.ExecuteNonQueryAsync(ct);
+        if (tensorRows != 1)
+        {
+            await tx.RollbackAsync(ct);
+            return valid with { Ok = false, Valid = false, Message = "TOPOLOGY_TENSOR_NOT_FOUND" };
+        }
         await tx.CommitAsync(ct);
         return valid with { Message = "Layout patch applied." };
     }

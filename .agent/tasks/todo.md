@@ -59,6 +59,19 @@ note: representative slice (implemented context): AutoCompleteInput / SearchComb
 
 ## Admin Visual Layout Builder Issue #89
 
+- [ ] [issue-89][db-runtime] layout tensor + css token reference persistence の DB/runtime保存導線を実装する
+      → 対象:
+        - cssTokenRefs
+        - responsiveTokenRefs
+        - layout tensor persistence
+        - ui_layout_registry / ui_wiring_registry / ui_topology_tensor との保存境界
+      → 残課題:
+        - CSS token authority を docs/design/css-dictionary-ssot.yaml 正本で fail-close 検証する
+        - layout patch apply で layout/tensor の両更新 rows=1 を保証し partial commit を許可しない
+        - Npgsql 実体境界テスト（malformed JSON / unknown token / tensor row missing rollback）を維持する
+      → 完了条件:
+        frontend projection は token ref を渡すだけで、DB/topology judgment は backend/runtime/DB 境界で行う。
+
 - [ ] [issue-89][ui] mouse-driven layout editor / drag-drop UI island を実装する
       → selector候補や preview component ではなく、実際の mouse operation UI を作る。
       → drag/drop mutation は direct DB write ではなく、preview / validate / explicit apply route に接続する。
