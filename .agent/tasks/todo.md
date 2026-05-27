@@ -34,12 +34,4 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-## Abstract Function Boundary Tests
-
-実装・テスト完了（2026-05-27）:
-- 実装ファイル: frontend/runtime/abstractFunctions.ts（31関数すべて実装済み）
-- テストファイル: frontend/tests/abstractFunctionBoundary.test.ts（107テスト、全パス）
-- 実装済み31関数: rank_candidate_results / explain_candidate_match / detect_duplicate_candidates / suggest_schema_promotion_candidates / import_rows_to_candidates / deduplicate_import_candidates / resolve_postal_address / resolve_address_postal / resolve_tel_candidate / validate_candidate / preview_update_patch / apply_confirmed_update / append_diff_log / build_rollback_candidate / resolve_conflict_candidate / calculate_attention_weight / calculate_rank_score / calculate_topology_distance / calculate_route_cost / validate_formula_contract / preview_layout_patch / validate_layout_constraint / apply_confirmed_layout_patch / resolve_style_token / preview_responsive_rule / validate_component_placement / dry_run_operation / validate_mutation_boundary / explain_operation_risk / check_permission_for_operation / build_confirmable_operation
-- count note: タスク記載の「32関数」はSSOT実数31関数の誤記（SSOT 7カテゴリ合計31関数で整合）
-- completion_condition: primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries → 達成
 

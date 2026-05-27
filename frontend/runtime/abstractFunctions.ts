@@ -460,14 +460,22 @@ export function previewUpdatePatch(
 }
 
 // mutation_boundary: explicit_confirm_required
-// prerequisite: validate_candidate must pass, confirmed must be true
+// prerequisite: validate_candidate must pass (validationResult.valid===true),
+//               explicit user/admin confirmation must precede call (confirmed===true)
+// Both prerequisites are enforced: neither alone is sufficient to apply.
 export function applyConfirmedUpdate(
   target: unknown,
   payload: unknown,
-  options: { confirmed: boolean },
+  options: { confirmed: boolean; validationResult: ValidationResult | null },
 ): AbstractFunctionResult<MutationResult> {
   if (!options.confirmed) {
     return { ok: false, error: "ABSTRACT_FUNCTION_EXPLICIT_CONFIRM_REQUIRED: confirmed must be true" };
+  }
+  if (!options.validationResult || !options.validationResult.valid) {
+    return {
+      ok: false,
+      error: "ABSTRACT_FUNCTION_VALIDATE_REQUIRED: validate_candidate must pass before apply_confirmed_update",
+    };
   }
   if (typeof target !== "string" || target === "") {
     return { ok: false, error: "ABSTRACT_FUNCTION_INVALID_INPUT: target must be non-empty string" };
@@ -816,16 +824,24 @@ export type LayoutMutationResult = {
 };
 
 // mutation_boundary: explicit_confirm_required
-// prerequisite: validate_layout_constraint must pass, explicit admin confirmation required
+// prerequisite: validate_layout_constraint must pass (validationResult.valid===true),
+//               explicit admin confirmation required (confirmed===true)
+// Both prerequisites are enforced: neither alone is sufficient to apply.
 export function applyConfirmedLayoutPatch(
   layoutId: unknown,
   patch: unknown,
-  options: { confirmed: boolean },
+  options: { confirmed: boolean; validationResult: ValidationResult | null },
 ): AbstractFunctionResult<LayoutMutationResult> {
   if (!options.confirmed) {
     return {
       ok: false,
       error: "ABSTRACT_FUNCTION_EXPLICIT_CONFIRM_REQUIRED: confirmed must be true",
+    };
+  }
+  if (!options.validationResult || !options.validationResult.valid) {
+    return {
+      ok: false,
+      error: "ABSTRACT_FUNCTION_VALIDATE_REQUIRED: validate_layout_constraint must pass before apply_confirmed_layout_patch",
     };
   }
   if (typeof layoutId !== "string" || layoutId === "") {

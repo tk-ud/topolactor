@@ -845,7 +845,7 @@ system_roadmap_ssot:
 
 
     frontend.ui_ux_executable_component_slice:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       files:
@@ -900,7 +900,15 @@ system_roadmap_ssot:
         - frontend/components/RollbackCandidatePanel.tsx
         - frontend/components/OperationAuditLogPanel.tsx
         - frontend/runtime/runtimeComponentFactory.ts
+        - frontend/runtime/abstractFunctions.ts
         - frontend/components/catalog.ts
+        - frontend/tests/abstractFunctionBoundary.test.ts
+      evidence:
+        tests:
+          - abstractFunctionBoundary.test.ts (112 tests; all 31 TODO-selected boundary functions)
+        ci:
+          - frontend-types
+          - Structure Check
       public_summary: >
         Post-PR #275 executable slice alignment is complete for the promoted set: 93 connected
         primitives / 93 factory kinds / 6 aliases are synchronized across
@@ -910,6 +918,13 @@ system_roadmap_ssot:
         runtimeConnected:true means factory/constructor reachability only (not DB topology
         entity registration completion). registrationRequired:true remains for explicit
         DB-side registration/promotion governance.
+        Abstract function primitive boundary coverage added (PR #280): 31 boundary functions
+        across SSOT categories A–F (Search/Suggest, Normalize/Lookup/Import, Candidate
+        Update/Audit, Calculation/Topology, Layout/Design Token, Operation Safety) are unit-tested
+        in frontend/tests/abstractFunctionBoundary.test.ts (112 tests). Mutation chain enforces
+        validate_candidate → apply_confirmed_update → append_diff_log ordering at the function
+        boundary level; SQL Attention functions enforce observation-only (registryMutated:false);
+        external lookups enforce canonical_authority:candidate_surface_not_SSOT.
       completion_condition:
         - representative_ui_ux_slice_has_componentKind_selector_and_factory_interface_registration
         - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
@@ -1169,7 +1184,7 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     ui_ux_primitive_catalog_and_abstract_function_registry:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       prerequisite_for:
@@ -1188,13 +1203,20 @@ system_roadmap_ssot:
         runtimeConnected:true means factory/constructor reachability only (not DB topology
         entity registration completion), and registrationRequired:true remains to preserve
         explicit registration governance.
+        Abstract function boundary unit test coverage is implemented (PR #280): 31 of the
+        TODO-selected boundary functions (SSOT categories A–F) are covered in
+        frontend/tests/abstractFunctionBoundary.test.ts. The SSOT registry defines
+        60 total functions across 7 categories; the 31 tested functions are the
+        implementation-surface-selected subset for this boundary test closure.
       files:
         - docs/design/ui-ux-primitive-catalog-ssot.yaml
         - docs/design/abstract-function-primitive-registry-ssot.yaml
         - frontend/components/catalog.ts
         - frontend/runtime/runtimeComponentFactory.ts
+        - frontend/runtime/abstractFunctions.ts
         - frontend/tests/ssotReaderCatalog.test.ts
         - frontend/tests/catalogSubsetCheck.test.ts
+        - frontend/tests/abstractFunctionBoundary.test.ts
         - db/seed_empty.sql
         - .agent/tests/check-ui-ux-executable-component-slice.sh
       completion_condition:
@@ -1202,8 +1224,7 @@ system_roadmap_ssot:
         - abstract_function_primitive_registry_ssot_defines_7_categories_with_contract
         - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
         - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
-      known_gap_ref:
-        - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
+      known_gap_ref: []
 
 
     external_connector_contract:

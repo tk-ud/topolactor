@@ -388,19 +388,46 @@ Deno.test("previewUpdatePatch: returns preview_only patch — no DB write", () =
 // =============================================================================
 
 Deno.test("applyConfirmedUpdate: confirmed:false is explicit error", () => {
-  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, { confirmed: false });
+  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, {
+    confirmed: false,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(result.ok, false);
   if (!result.ok) assertMatch(result.error, /EXPLICIT_CONFIRM_REQUIRED/);
 });
 
-Deno.test("applyConfirmedUpdate: empty target with confirmed:true is explicit error", () => {
-  const result = applyConfirmedUpdate("", { name: "Alice" }, { confirmed: true });
+Deno.test("applyConfirmedUpdate: no validationResult is explicit VALIDATE_REQUIRED error", () => {
+  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, {
+    confirmed: true,
+    validationResult: null,
+  });
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
+});
+
+Deno.test("applyConfirmedUpdate: validationResult.valid=false is explicit VALIDATE_REQUIRED error", () => {
+  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, {
+    confirmed: true,
+    validationResult: { valid: false, errors: [{ field: "email", message: "required", code: "REQUIRED" }] },
+  });
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
+});
+
+Deno.test("applyConfirmedUpdate: empty target with confirmed:true and valid validationResult is explicit error", () => {
+  const result = applyConfirmedUpdate("", { name: "Alice" }, {
+    confirmed: true,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(result.ok, false);
   if (!result.ok) assertMatch(result.error, /target must be non-empty string/);
 });
 
-Deno.test("applyConfirmedUpdate: confirmed:true with valid input returns mutation result", () => {
-  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, { confirmed: true });
+Deno.test("applyConfirmedUpdate: confirmed:true with validationResult passed returns mutation result", () => {
+  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, {
+    confirmed: true,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(result.ok, true);
   if (!result.ok) return;
   assertEquals(result.data.status, "applied");
@@ -409,12 +436,15 @@ Deno.test("applyConfirmedUpdate: confirmed:true with valid input returns mutatio
   assert(typeof result.data.timestamp === "string");
 });
 
-Deno.test("applyConfirmedUpdate: mutation boundary — validate must precede apply (ordering contract)", () => {
-  // Test that apply does NOT bypass validation contract by checking
-  // that invalid payload structure is rejected
-  const result = applyConfirmedUpdate("entity/1", null, { confirmed: true });
+Deno.test("applyConfirmedUpdate: mutation boundary — validate_candidate must pass before apply", () => {
+  // validate_candidate failure → apply must reject even with confirmed:true
+  const failedValidation = { valid: false, errors: [{ field: "name", message: "required", code: "REQUIRED" }] };
+  const result = applyConfirmedUpdate("entity/1", { name: "Alice" }, {
+    confirmed: true,
+    validationResult: failedValidation,
+  });
   assertEquals(result.ok, false);
-  if (!result.ok) assertMatch(result.error, /payload must be object/);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
 });
 
 // =============================================================================
@@ -757,18 +787,58 @@ Deno.test("validateLayoutConstraint: within constraints returns valid", () => {
 // =============================================================================
 
 Deno.test("applyConfirmedLayoutPatch: confirmed:false is explicit error", () => {
-  const result = applyConfirmedLayoutPatch("layout/main", { columns: 3 }, { confirmed: false });
+  const result = applyConfirmedLayoutPatch("layout/main", { columns: 3 }, {
+    confirmed: false,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(result.ok, false);
   if (!result.ok) assertMatch(result.error, /EXPLICIT_CONFIRM_REQUIRED/);
 });
 
-Deno.test("applyConfirmedLayoutPatch: confirmed:true with valid input returns layout mutation result", () => {
-  const result = applyConfirmedLayoutPatch("layout/main", { columns: 3 }, { confirmed: true });
+Deno.test("applyConfirmedLayoutPatch: no validationResult is explicit VALIDATE_REQUIRED error", () => {
+  const result = applyConfirmedLayoutPatch("layout/main", { columns: 3 }, {
+    confirmed: true,
+    validationResult: null,
+  });
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
+});
+
+Deno.test("applyConfirmedLayoutPatch: validationResult.valid=false is explicit VALIDATE_REQUIRED error", () => {
+  const result = applyConfirmedLayoutPatch("layout/main", { columns: 5 }, {
+    confirmed: true,
+    validationResult: {
+      valid: false,
+      errors: [{ field: "columns", message: "exceeds maxColumns", code: "CONSTRAINT_VIOLATION" }],
+    },
+  });
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
+});
+
+Deno.test("applyConfirmedLayoutPatch: confirmed:true with validationResult passed returns layout mutation result", () => {
+  const result = applyConfirmedLayoutPatch("layout/main", { columns: 3 }, {
+    confirmed: true,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(result.ok, true);
   if (!result.ok) return;
   assertEquals(result.data.status, "applied");
   assertEquals(result.data.layoutId, "layout/main");
   assertEquals(result.data.mutationType, "layout_apply");
+});
+
+Deno.test("applyConfirmedLayoutPatch: mutation boundary — validate_layout_constraint must pass before apply", () => {
+  const failedValidation = {
+    valid: false,
+    errors: [{ field: "columns", message: "exceeds maxColumns", code: "CONSTRAINT_VIOLATION" }],
+  };
+  const result = applyConfirmedLayoutPatch("layout/main", { columns: 5 }, {
+    confirmed: true,
+    validationResult: failedValidation,
+  });
+  assertEquals(result.ok, false);
+  if (!result.ok) assertMatch(result.error, /VALIDATE_REQUIRED/);
 });
 
 // =============================================================================
@@ -1031,27 +1101,56 @@ Deno.test("buildConfirmableOperation: returns candidate requiring explicit confi
 // Cross-boundary invariant tests
 // =============================================================================
 
-Deno.test("[boundary] mutation chain: preview → validate → apply — apply skips validation contract", () => {
-  // Verify that apply_confirmed_update enforces confirmation but not that validate was called
-  // (ordering is the caller's responsibility; boundary test checks the confirm gate)
-  const applyResult = applyConfirmedUpdate("entity/1", { name: "X" }, { confirmed: true });
+Deno.test("[boundary] mutation chain: preview → validate → apply — validate_candidate required before apply", () => {
+  // apply WITHOUT validationResult fails even with confirmed:true
+  const applyNoValidation = applyConfirmedUpdate("entity/1", { name: "X" }, {
+    confirmed: true,
+    validationResult: null,
+  });
+  assertEquals(applyNoValidation.ok, false);
+  if (!applyNoValidation.ok) assertMatch(applyNoValidation.error, /VALIDATE_REQUIRED/);
+
+  // apply WITH valid validationResult AND confirmation succeeds
+  const validationResult = { valid: true, errors: [] };
+  const applyResult = applyConfirmedUpdate("entity/1", { name: "X" }, {
+    confirmed: true,
+    validationResult,
+  });
   assertEquals(applyResult.ok, true);
-  // append_diff_log must NOT be callable without apply result
+
+  // append_diff_log must NOT be callable without prior apply result
   const appendResult = appendDiffLog("entity/1", {}, {}, "e1", { applyResult: null });
   assertEquals(appendResult.ok, false);
   if (!appendResult.ok) assertMatch(appendResult.error, /APPEND_AFTER_APPLY_REQUIRED/);
 });
 
-Deno.test("[boundary] layout mutation chain: preview → validate → apply confirm required", () => {
-  // preview succeeds without confirmation
+Deno.test("[boundary] layout mutation chain: preview → validate → apply — both confirm and validation required", () => {
+  // preview succeeds without confirmation or validation
   const preview = previewLayoutPatch("layout/1", { cols: 2 }, {});
   assertEquals(preview.ok, true);
-  // apply requires explicit confirm
-  const applyNoConfirm = applyConfirmedLayoutPatch("layout/1", { cols: 2 }, { confirmed: false });
+
+  // apply requires explicit confirm — missing confirm fails
+  const applyNoConfirm = applyConfirmedLayoutPatch("layout/1", { cols: 2 }, {
+    confirmed: false,
+    validationResult: { valid: true, errors: [] },
+  });
   assertEquals(applyNoConfirm.ok, false);
   if (!applyNoConfirm.ok) assertMatch(applyNoConfirm.error, /EXPLICIT_CONFIRM_REQUIRED/);
-  const applyWithConfirm = applyConfirmedLayoutPatch("layout/1", { cols: 2 }, { confirmed: true });
-  assertEquals(applyWithConfirm.ok, true);
+
+  // apply requires validate_layout_constraint pass — missing validationResult fails
+  const applyNoValidation = applyConfirmedLayoutPatch("layout/1", { cols: 2 }, {
+    confirmed: true,
+    validationResult: null,
+  });
+  assertEquals(applyNoValidation.ok, false);
+  if (!applyNoValidation.ok) assertMatch(applyNoValidation.error, /VALIDATE_REQUIRED/);
+
+  // apply succeeds only when both are satisfied
+  const applyWithBoth = applyConfirmedLayoutPatch("layout/1", { cols: 2 }, {
+    confirmed: true,
+    validationResult: { valid: true, errors: [] },
+  });
+  assertEquals(applyWithBoth.ok, true);
 });
 
 Deno.test("[boundary] SQL Attention functions do NOT mutate registry, route, or primitive catalog", () => {
