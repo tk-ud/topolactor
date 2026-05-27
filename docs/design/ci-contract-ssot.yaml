@@ -26,6 +26,73 @@ ci_contract_ssot:
       - runtime_backend_preserve_explicit_failure
       - runtime_backend_preserve_boundary_guard
       - ux_assistance_decision_is_ci_attention_projection
+    fragment_contract:
+      role:
+        - internal_audit_result_projection_fragment
+        - user_assistance_fragment
+        - read_only_authoring_guidance
+      not:
+        - system_lock
+        - apply_validation_authority
+        - frontend_judgment_authority
+      kinds:
+        - missing_input
+        - valid_candidate
+        - structural_violation
+        - break_boundary
+      source_identity:
+        - source_kind
+        - source_id
+        - source_table_or_surface
+        - target_kind
+        - target_key
+        - diff_id_or_event_id_or_entity_id
+        - scope
+        - route
+        - authoring_surface
+      state_fields:
+        - status
+        - severity
+        - message
+        - actionable_guidance
+        - evidence_json
+        - created_at
+        - updated_at
+        - checked_at
+        - resolved_at_or_dismissed_at_optional
+      dismissal_boundary:
+        - dismissal_is_user_visibility_control_only
+        - dismissal_is_not_lock_release_semantics
+      update_contract:
+        triggers:
+          - entity_diff
+          - draft_diff
+          - runtime_event
+        audit_execution:
+          - db_trigger_or_backend_event_or_queue_worker_are_allowed
+          - heavy_audit_must_not_block_authoring_write_path_synchronously
+        post_update:
+          - fragment_current_update
+          - append_only_history_record
+          - notify_or_projection_lane_emission
+      notify_projection_contract:
+        payload_shape:
+          - fragment_id
+          - kind
+          - status
+          - severity
+          - source_identity
+          - target_identity
+          - checked_at
+          - updated_at
+        frontend_boundary:
+          - frontend_read_only_projection_only
+          - frontend_must_not_block_draft_create_or_edit
+          - frontend_must_not_mutate_route_or_topology_from_fragment
+      apply_boundary_split:
+        - ci_attention_fragment_is_pre_apply_assistance_only
+        - apply_fail_close_validation_is_backend_runtime_boundary_guard
+        - break_boundary_fragment_is_not_system_lock_by_itself
 
 
   grep_index:

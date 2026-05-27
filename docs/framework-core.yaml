@@ -297,6 +297,20 @@ ci_attention_runtime_boundary:
     - canonical_dispatch
     - explicit_failure
     - boundary_guard
+  fragment_model:
+    role:
+      - internal_audit_projection_fragment_for_authoring_assistance
+    state_vocabulary:
+      kind:
+        - missing_input
+        - valid_candidate
+        - structural_violation
+        - break_boundary
+    boundaries:
+      - fragment_is_read_only_projection
+      - fragment_is_not_system_lock
+      - fragment_is_not_apply_validation
+      - frontend_is_not_fragment_judgment_authority
 
 sql_attention_runtime_boundary:
   source_ssot: docs/design/sql-attention-logs-ssot.md

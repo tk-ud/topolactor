@@ -16,6 +16,9 @@
 \echo '[init.sql] applying sql_attention_logs_tables.sql'
 \i /db/sql_attention_logs_tables.sql
 
+\echo '[init.sql] applying ci_attention_guidance_tables.sql'
+\i /db/ci_attention_guidance_tables.sql
+
 \echo '[init.sql] applying context_route_tables.sql'
 \i /db/context_route_tables.sql
 

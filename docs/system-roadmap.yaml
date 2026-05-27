@@ -1125,15 +1125,42 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Admin UI builder now exposes CI Attention guidance projection from system_ci callable diagnostics
-        and separates missing_input / valid_candidate / structural_violation / break_boundary as
-        actionable authoring hints. Frontend remains projection-only and does not own runtime judgment.
+        Admin UI builder exposes CI Attention as explicit user-triggered authoring support
+        (Load guidance / Run check) from system_ci callable diagnostics. Initial state is
+        not_checked/not_loaded, and guidance is read-only projection (missing_input /
+        valid_candidate / structural_violation / break_boundary). Frontend remains projection-only,
+        does not own runtime judgment, and never blocks draft editing from guidance status.
       completion_condition:
-        - ci_attention_guidance_is_exposed_to_end_users_during_authoring
-        - missing_input_valid_candidate_and_breaking_boundary_guidance_are_actionable_in_ui
+        - ci_attention_guidance_runs_only_on_explicit_user_trigger
+        - initial_state_is_not_checked_and_not_treated_as_warning_or_lock
+        - missing_input_valid_candidate_structural_violation_and_break_boundary_are_read_only_authoring_hints
+        - apply_time_fail_close_validation_remains_backend_responsibility
       known_gap_ref:
         - guidance scope is currently ui-builder-first and not yet generalized across all authoring surfaces
         - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
+
+    design.ci_attention_guidance_fragment_ssot_and_schema:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        CI Attention guidance fragment contract is now SSOT-defined as read-only user assistance
+        (not system lock / not apply validation / not frontend authority), with DB current/history
+        schema and notify/projection payload contract for diff/event-origin audit updates.
+      files:
+        - docs/design/ci-contract-ssot.yaml
+        - docs/design/system-ci-admin-runtime-callable-surface.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+        - db/ci_attention_guidance_tables.sql
+      completion_condition:
+        - ci_attention_guidance_fragment_role_kind_source_identity_state_are_ssot_defined
+        - ci_attention_guidance_fragment_current_and_history_schema_are_defined
+        - diff_or_event_to_audit_to_fragment_update_to_notify_projection_contract_is_defined
+        - non_lock_non_apply_validation_non_frontend_authority_boundary_is_explicit
+      known_gap_ref:
+        - backend_fragment_upsert_and_notify_emitter_runtime_wiring_not_implemented
+        - frontend_fragment_live_projection_subscription_not_yet_generalized
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: implemented

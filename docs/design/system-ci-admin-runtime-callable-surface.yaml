@@ -76,6 +76,7 @@ system_ci_admin_runtime_callable_surface_ssot:
     note:
       - drift_and_not_covered_exist_in_broader_ci_contract_status_vector
       - this_callable_surface_does_not_require_drift_or_not_covered_until_SystemCiStatus_implementation_supports_them
+      - CI Attention guidance fragment is read-only projection and not runtime/apply authority
 
   boundary:
     required:
@@ -88,11 +89,26 @@ system_ci_admin_runtime_callable_surface_ssot:
       - AdminRuntime_calls_test_execution
       - treating_test_runner_as_product_runtime
       - DB_write_from_diagnostic_surface
+      - draft_editing_lock_from_diagnostic_surface
       - registry_mutation_from_diagnostic_surface
       - automatic_repair_from_diagnostic_surface
       - automatic_promotion_from_diagnostic_surface
       - silent_fallback_to_pass
       - synthetic_success_when_diagnostic_runtime_fails
+
+  ci_attention_guidance_fragment_projection:
+    role:
+      - read_only_projection_of_internal_audit_result
+      - user_assistance_for_authoring_surface
+    diagnostic_to_fragment_mapping:
+      - MissingRequired_to_missing_input
+      - NotCovered_to_valid_candidate
+      - InvalidShape_to_structural_violation
+      - Blocking_status_to_break_boundary
+    projection_boundary:
+      - fragment_projection_is_explicit_user_triggered_or_runtime_notify_driven_read
+      - fragment_projection_must_not_block_draft_authoring
+      - fragment_projection_must_not_be_treated_as_apply_validation
 
   test_contract:
     - tests_may_construct_the_same_diagnostic_interface_with_fixtures

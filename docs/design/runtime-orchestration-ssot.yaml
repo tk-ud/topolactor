@@ -550,6 +550,21 @@ runtime_orchestration_ssot:
         - table_id
         - table_registry_id
         - manifest_id
+    ci_attention_guidance_fragment_notify:
+      output_lane: backend_then_sse_projection
+      payload:
+        - fragment_id
+        - fragment_kind
+        - fragment_status
+        - fragment_severity
+        - source_kind
+        - source_id
+        - source_surface
+        - target_kind
+        - target_key
+        - diff_or_event_or_entity_id
+        - checked_at
+        - updated_at
     db_listen:
       trigger_kind: hook
       backend:
@@ -566,6 +581,7 @@ runtime_orchestration_ssot:
       - listen_event_enters_scheduler_before_projection_runtime
       - db_notify_dispatch_requires_manifest_id_resolution_and_db_notify_projection_mapping
       - client_or_request_trigger_cannot_directly_enter_db_notify_projection_runtime
+      - ci_attention_fragment_notify_is_projection_assistance_only_not_apply_authority
 
   minimal_event_shape:
     fields:

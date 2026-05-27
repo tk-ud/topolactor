@@ -18,3 +18,17 @@ Deno.test("projectCiAttentionGuidance maps missing_input/valid_candidate/structu
     "break_boundary",
   ]);
 });
+
+Deno.test("projectCiAttentionGuidance keeps break_boundary as read-only guidance text (no draft lock intent)", () => {
+  const result = projectCiAttentionGuidance({
+    findings: [
+      { checkName: "ATTENTION_SCORE_NOT_FINITE", status: "Blocking", detail: "finite boundary", classification: "RuntimeFailure" },
+    ],
+  });
+  if (!result.ok) throw new Error(result.error);
+  assertEquals(result.data[0]?.kind, "break_boundary");
+  assertEquals(
+    result.data[0]?.actionable,
+    "Review boundary guidance; draft editing remains available and apply-time validation is separate.",
+  );
+});

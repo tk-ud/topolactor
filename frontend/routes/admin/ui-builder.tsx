@@ -136,35 +136,51 @@ function makeNodeId(): string {
 
 function CiAttentionGuidanceSection(): JSX.Element {
   const [guidance, setGuidance] = useState<CiAttentionGuidanceItem[]>([]);
-  const [status, setStatus] = useState("Not loaded.");
+  const [status, setStatus] = useState<"not_checked" | "loading" | "loaded" | "error">("not_checked");
   const [errors, setErrors] = useState<{ message: string; code?: string }[]>([]);
   const loadGuidance = async () => {
+    setStatus("loading");
+    setErrors([]);
     const targetsBody = await dispatchAdminOp("system_ci", "list_targets");
     const targets = targetsBody?.emission?.data;
-    if (!Array.isArray(targets) || targets.length === 0) return setStatus("No system_ci targets.");
+    if (!Array.isArray(targets) || targets.length === 0) {
+      setStatus("error");
+      setErrors([{ code: "NO_SYSTEM_CI_TARGET", message: "No system_ci targets." }]);
+      return;
+    }
     const target = targets[0]?.target;
     const inspectBody = await dispatchAdminOp("system_ci", "inspect", { target });
     const projected = projectCiAttentionGuidance(inspectBody?.emission?.data);
     if (!projected.ok) {
       setErrors([{ code: "GUIDANCE_PROJECTION_FAILED", message: projected.error }]);
-      return setStatus("Guidance projection failed.");
+      setStatus("error");
+      return;
     }
     setGuidance(projected.data);
-    setStatus(`Loaded ${projected.data.length} guidance item(s)`);
+    setStatus("loaded");
   };
   const byKind = (kind: CiAttentionGuidanceItem["kind"]) => guidance.filter((g) => g.kind === kind);
+  const statusText = status === "not_checked"
+    ? "Status: not_checked / not_loaded. CI Attention guidance runs only when you click Load guidance."
+    : status === "loading"
+    ? "Status: running explicit CI Attention check..."
+    : status === "loaded"
+    ? `Status: loaded ${guidance.length} guidance item(s).`
+    : "Status: guidance check failed.";
   return (
     <section style={{ marginBottom: "24px" }}>
       <h2>CI Attention Guidance (authoring lens)</h2>
       <button type="button" onClick={loadGuidance}>Load guidance</button>
-      <p style={{ fontFamily: "monospace", color: "#666" }}>{status}</p>
+      <p style={{ fontFamily: "monospace", color: "#666" }}>{statusText}</p>
       <ValidationErrorPanel errors={errors} title="guidance errors" />
-      <OperationGuardBanner
-        level={byKind("break_boundary").length > 0 ? "error" : "info"}
-        title="break_boundary"
-        message={byKind("break_boundary")[0]?.message ?? "No break boundary guidance."}
-      />
-      {(["missing_input", "valid_candidate", "structural_violation"] as const).map((kind) => (
+      {status === "loaded" && (
+        <OperationGuardBanner
+          level={byKind("break_boundary").length > 0 ? "error" : "info"}
+          title="break_boundary (read-only)"
+          message={byKind("break_boundary")[0]?.message ?? "No break boundary guidance."}
+        />
+      )}
+      {status === "loaded" && (["missing_input", "valid_candidate", "structural_violation"] as const).map((kind) => (
         <div key={kind}>
           <strong>{kind}</strong>
           <ul>

@@ -105,7 +105,7 @@ export function projectCiAttentionGuidance(
       : kind === "valid_candidate"
       ? "Review suggested candidate context and choose explicitly."
       : kind === "break_boundary"
-      ? "Stop authoring apply path and resolve boundary violation first."
+      ? "Review boundary guidance; draft editing remains available and apply-time validation is separate."
       : "Fix payload shape/structure before next dispatch.";
     return {
       id: `${f.checkName ?? "finding"}_${index}`,
