@@ -52,6 +52,8 @@ builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
     new NpgsqlSqlAttentionLogsRepository(
         sp.GetRequiredService<ILogger<NpgsqlSqlAttentionLogsRepository>>(),
         connectionString));
+builder.Services.AddSingleton<CiAttentionGuidanceRepository>(sp =>
+    new NpgsqlCiAttentionGuidanceRepository(connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 
 // ---------------------------------------------------------------------------
@@ -85,7 +87,9 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<PackageGeneratorRuntime>(),
         sp.GetRequiredService<UiTopologyRepository>(),
         sp.GetRequiredService<ISystemCiDiagnosticRunner>(),
-        sp.GetRequiredService<SeedRuntime>()));
+        sp.GetRequiredService<SeedRuntime>(),
+        sp.GetRequiredService<CiAttentionGuidanceRepository>(),
+        sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(

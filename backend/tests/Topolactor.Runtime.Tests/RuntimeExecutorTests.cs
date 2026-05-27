@@ -891,6 +891,36 @@ public class ManifestDispatcherManifestDrivenTests
     }
 
     [Fact]
+    public async Task DispatchAsync_ManifestRepositoryConfigured_CiAttentionRefreshFragments_RoutesToAdminRuntime()
+    {
+        var sentinel = JsonSerializer.SerializeToElement(new { handledBy = "admin_runtime", layer = "ci_attention", action = "refresh_fragments" });
+        var fakeAdminHandler = new FakeDispatchableRuntime(sentinel);
+        var manifestRepo = new AxesFilteredStubManifestRepository(
+            matchTarget: "admin",
+            matchLayer: "ci_attention",
+            matchAction: "refresh_fragments",
+            manifest: new ManifestRecord(
+                Guid.NewGuid(),
+                RelationRegistryId: null,
+                Topology: BuildTopology("admin_runtime"),
+                Status: "active"));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            manifestRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
+
+        var request = new EndpointRequestDto("X", "admin", "ci_attention", "refresh_fragments", null, null, null);
+        var response = await dispatcher.DispatchAsync(request);
+
+        Assert.True(response.Success);
+        Assert.True(fakeAdminHandler.WasCalled);
+        Assert.Equal("admin_runtime", response.Emission!.Data!.Value.GetProperty("handledBy").GetString());
+        Assert.Equal("ci_attention", response.Emission.Data!.Value.GetProperty("layer").GetString());
+        Assert.Equal("refresh_fragments", response.Emission.Data!.Value.GetProperty("action").GetString());
+        Assert.False(response.Errors.Any());
+    }
+
+    [Fact]
     public async Task DispatchAsync_ManifestRepositoryConfigured_TopologyTransformRuntime_DoesNotCallAdminHandler()
     {
         var fakeAdminHandler = new FakeDispatchableRuntime(null);
