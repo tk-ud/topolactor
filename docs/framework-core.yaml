@@ -281,3 +281,29 @@ current_projection_namespace_split:
   direction:
     logs: physical_time_axis_and_evidence
     current: rebuildable_current_relation_projections
+
+
+ci_attention_runtime_boundary:
+  source_ssot: docs/design/ci-contract-ssot.yaml
+  definition:
+    - user_input_assistance_surface
+    - missing_input_valid_candidate_structural_violation_break_boundary_guidance
+  objective:
+    - prevent_validation_error_handling_expansion_into_hidden_backend_runtime_branching
+  not:
+    - business_validation_main_body
+    - backend_error_handler_main_body
+  runtime_backend_invariants:
+    - canonical_dispatch
+    - explicit_failure
+    - boundary_guard
+
+sql_attention_runtime_boundary:
+  source_ssot: docs/design/sql-attention-logs-ssot.md
+  definition:
+    - recommendation_behavior_based_on_hub_logs_relation_attractor_evidence
+    - grows_hub_construction_hub_connection_hub_candidates_projection_candidates
+  boundary:
+    - topology_recommendation_current_is_child_projection_consumer
+    - do_not_auto_overwrite_fixed_route
+    - do_not_auto_mutate_registry_or_topology_from_phase_vector_attention_current

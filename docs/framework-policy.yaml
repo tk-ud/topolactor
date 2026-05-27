@@ -5,6 +5,8 @@ framework_policy:
       - hidden_fallback_is_not_acceptable_as_ci_operational_behavior
       - errors_should_be_exposed_as_explicit_structured_status
       - pass_fail_only_ci_interpretation_is_insufficient_when_gap_blocking_drift_not_covered_are_available
+      - ci_attention_includes_user_input_assistance_missing_input_and_valid_candidate_guidance
+      - ci_attention_prevents_unbounded_backend_runtime_validation_expansion
       - branch_decisions_should_use_structured_ci_status_rather_than_silent_fallback
 
   readme_surface_policy:
@@ -35,6 +37,11 @@ framework_policy:
       - hub_relations_can_be_treated_as_tensor_and_vector
       - vectorized_hub_relations_enable_neighborhood_search
       - attention_is_not_attractor
+      - sql_attention_uses_hub_logs_relation_attractor_evidence_for_hub_construction_and_projection_candidate_recommendation
+      - sql_attention_is_observation_and_recommendation_basis_layer_not_fixed_route_mutation_authority
+      - topology_recommendation_current_is_child_projection_consumer_not_sql_attention_core
+      - fixed_route_must_not_be_auto_overwritten_by_sql_attention
+      - registry_topology_must_not_be_auto_mutated_from_phase_vector_or_attention_current
       - sql_attention_is_observation_layer_not_attractor_generator
       - aggregates_are_attention_weight_observation_not_meaning_sot
       - ui_package_layout_wiring_relations_with_physical_table_record_route_can_be_treated_as_hub_vector_surfaces
