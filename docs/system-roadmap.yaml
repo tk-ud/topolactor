@@ -903,8 +903,8 @@ system_roadmap_ssot:
         - frontend/runtime/runtimeComponentFactory.ts
         - frontend/components/catalog.ts
       public_summary: >
-        Post-PR #272 executable slice alignment is complete for the promoted set: 65 connected
-        primitives / 65 factory kinds / 6 aliases are synchronized across
+        Post-PR #275 executable slice alignment is complete for the promoted set: 93 connected
+        primitives / 93 factory kinds / 6 aliases are synchronized across
         frontend/runtime/runtimeComponentFactory.ts, frontend/components/catalog.ts,
         and db/seed_empty.sql, with slice invariants verified by
         .agent/tests/check-ui-ux-executable-component-slice.sh and runtime-semantics checks.
@@ -1172,12 +1172,12 @@ system_roadmap_ssot:
         UI/UX primitive catalog SSOT (docs/design/ui-ux-primitive-catalog-ssot.yaml)
         and abstract function primitive registry SSOT
         (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined and
-        wired to the current executable slice boundary. Post-PR #272 runtime/catalog/factory
+        wired to the current executable slice boundary. Post-PR #275 runtime/catalog/factory
         semantics are aligned and all green: runtimeConnected:true entries are factory/constructor-reachable,
         and the current slice is synchronized across frontend.runtimeComponentFactory.ts,
         frontend/components/catalog.ts, db/seed_empty.sql, runtime-semantics checks,
         and UI/UX executable component slice checks. Current implementation shape is
-        65 connected primitives / 65 factory kinds / 6 aliases.
+        65 connected primitives / 93 factory kinds / 6 aliases.
         runtimeConnected:true means factory/constructor reachability only (not DB topology
         entity registration completion), and registrationRequired:true remains to preserve
         explicit registration governance.
