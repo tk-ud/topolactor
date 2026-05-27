@@ -100,6 +100,24 @@ Deno.test("frontend SSE receiver can be created with projection hook trigger cal
   assertEquals(received.length, 0);
 });
 
+
+Deno.test("extractCiAttentionFragmentPayload supports non ui-builder authoring surface identity", () => {
+  const raw = JSON.stringify({
+    FragmentId: "def-456",
+    Kind: "missing_input",
+    Status: "active",
+    Severity: "warning",
+    TargetKind: "authoring_surface",
+    TargetKey: "admin_form_builder",
+    UpdatedAt: "2024-01-01T00:00:00Z",
+  });
+
+  const fragment = extractCiAttentionFragmentPayload(raw);
+
+  assertExists(fragment);
+  assertEquals(fragment!.TargetKey, "admin_form_builder");
+});
+
 Deno.test("fragment Kind is read-only guidance — frontend does not derive promotion judgment from it", () => {
   // Frontend reads Kind as display label only.
   // Promotion eligibility is ALWAYS determined by backend runtime boundary guard.

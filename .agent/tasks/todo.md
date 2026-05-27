@@ -23,10 +23,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## Non-blocking cleanup / hardening carry-over
 
-- [ ] [coverage] Expand CI Attention guidance projection coverage beyond `admin_ui_builder` to additional authoring surfaces
+- [x] [coverage] Expand CI Attention guidance projection coverage beyond `admin_ui_builder` to additional authoring surfaces
       → Current scope is intentionally ui-builder-first; authority/visibility/promotion completion bundle is closed, so remaining work is surface-expansion only.
 
-- [ ] [hardening] Add deeper manifest-activation and audit-evidence visibility scenario tests for authority boundary regression prevention
+- [x] [hardening] Add deeper manifest-activation and audit-evidence visibility scenario tests for authority boundary regression prevention
       → Keep backend runtime as exclusive promotion authority and frontend as display-only while expanding negative-case assertions.
 
 ## UI/UX Primitive Catalog and Abstract Function Registry
