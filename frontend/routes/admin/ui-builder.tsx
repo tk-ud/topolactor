@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../../components/catalog.ts";
 import { CSS_DICTIONARY_TOKENS } from "../../runtime/cssDictionary.ts";
+import { OperationGuardBanner } from "../../components/OperationGuardBanner.tsx";
+import { ValidationErrorPanel } from "../../components/ValidationErrorPanel.tsx";
+import { CandidateConfidenceBadge } from "../../components/CandidateConfidenceBadge.tsx";
+import { projectCiAttentionGuidance, type CiAttentionGuidanceItem } from "../../runtime/abstractFunctions.ts";
 
 /**
  * /admin/ui-builder — UI component system and layout builder.
@@ -128,6 +132,53 @@ function buildLayoutPatchJson(nodes: DraftNode[]): string {
 
 function makeNodeId(): string {
   return `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function CiAttentionGuidanceSection(): JSX.Element {
+  const [guidance, setGuidance] = useState<CiAttentionGuidanceItem[]>([]);
+  const [status, setStatus] = useState("Not loaded.");
+  const [errors, setErrors] = useState<{ message: string; code?: string }[]>([]);
+  const loadGuidance = async () => {
+    const targetsBody = await dispatchAdminOp("system_ci", "list_targets");
+    const targets = targetsBody?.emission?.data;
+    if (!Array.isArray(targets) || targets.length === 0) return setStatus("No system_ci targets.");
+    const target = targets[0]?.target;
+    const inspectBody = await dispatchAdminOp("system_ci", "inspect", { target });
+    const projected = projectCiAttentionGuidance(inspectBody?.emission?.data);
+    if (!projected.ok) {
+      setErrors([{ code: "GUIDANCE_PROJECTION_FAILED", message: projected.error }]);
+      return setStatus("Guidance projection failed.");
+    }
+    setGuidance(projected.data);
+    setStatus(`Loaded ${projected.data.length} guidance item(s)`);
+  };
+  const byKind = (kind: CiAttentionGuidanceItem["kind"]) => guidance.filter((g) => g.kind === kind);
+  return (
+    <section style={{ marginBottom: "24px" }}>
+      <h2>CI Attention Guidance (authoring lens)</h2>
+      <button type="button" onClick={loadGuidance}>Load guidance</button>
+      <p style={{ fontFamily: "monospace", color: "#666" }}>{status}</p>
+      <ValidationErrorPanel errors={errors} title="guidance errors" />
+      <OperationGuardBanner
+        level={byKind("break_boundary").length > 0 ? "error" : "info"}
+        title="break_boundary"
+        message={byKind("break_boundary")[0]?.message ?? "No break boundary guidance."}
+      />
+      {(["missing_input", "valid_candidate", "structural_violation"] as const).map((kind) => (
+        <div key={kind}>
+          <strong>{kind}</strong>
+          <ul>
+            {byKind(kind).map((item) => (
+              <li key={item.id}>
+                {item.title}: {item.actionable}
+                {kind === "valid_candidate" && <CandidateConfidenceBadge label="candidate" confidence="medium" score={item.confidence} />}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  );
 }
 
 function PrimitiveCatalog(): JSX.Element {
@@ -1053,6 +1104,7 @@ export default function UiBuilderAdmin(): JSX.Element {
 
       <hr style={{ margin: "16px 0" }} />
 
+      <CiAttentionGuidanceSection />
       <PrimitiveCatalog />
       <BucketSection />
       <CssTokenSelectorSection />
