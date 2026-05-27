@@ -34,26 +34,4 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
 
-## Abstract Function Boundary Tests
-
-- [ ] [abstract-function][unit-tests] function-backed primitive が参照する abstract function boundary tests を追加する
-      → repo 実態分類（2026-05-27確認）:
-        - 実装済み: なし（対象32関数すべて、実コード上の実装/エクスポート未検出）
-        - 未実装: rank_candidate_results / explain_candidate_match / detect_duplicate_candidates / suggest_schema_promotion_candidates / import_rows_to_candidates / deduplicate_import_candidates / resolve_postal_address / resolve_address_postal / resolve_tel_candidate / validate_candidate / preview_update_patch / apply_confirmed_update / append_diff_log / build_rollback_candidate / resolve_conflict_candidate / calculate_attention_weight / calculate_rank_score / calculate_topology_distance / calculate_route_cost / validate_formula_contract / preview_layout_patch / validate_layout_constraint / apply_confirmed_layout_patch / resolve_style_token / preview_responsive_rule / validate_component_placement / dry_run_operation / validate_mutation_boundary / explain_operation_risk / check_permission_for_operation / build_confirmable_operation
-        - stub: なし（同名stub/dummy/pass-through未検出）
-        - scope外: なし（全32関数は本TODOの調査対象として維持）
-      → 残対象・理由・対象ファイル・必要SSOT・次判断点:
-        - 残対象: 上記32関数の実装追加と function boundary unit test 追加
-        - 理由: 実装本体が存在しないため、境界unit testを追加できない（推測実装禁止）
-        - 対象ファイル: docs/design/abstract-function-primitive-registry-ssot.yaml, docs/design/ui-ux-primitive-catalog-ssot.yaml（参照定義）
-        - 必要SSOT: docs/design/abstract-function-primitive-registry-ssot.yaml, docs/design/ui-ux-primitive-catalog-ssot.yaml, docs/system-roadmap.yaml
-        - 次判断点:
-          1) 32関数を frontend runtime helper として実装するか、backend contract 経由で実装するかを決定
-          2) 各関数の I/O 契約を SSOT で確定（入力shape・失敗shape・副作用禁止）
-          3) validate → explicit confirm → apply → append log 境界を破らない test fixture を先に定義
-          4) SQL Attention / external lookup / layout token の各境界を unit test の fail 条件として明文化
-      → 検査境界:
-        SQL Attention functions は observation/candidate surface only。
-        mutation系は validate → explicit confirm → apply → append log の順序を崩さない。
-        external lookup は candidate surface only で、canonical write しない。
 
