@@ -51,6 +51,8 @@ This keeps user-authored apps flexible while preventing hidden routes, silent fa
 - **SSOT-driven development:** Design documents, roadmap state, implementation files, and tests are expected to stay semantically aligned.
 - **CI Attention:** CI is treated as an operational inspection surface, not just a pass/fail gate.
 - **SQL Attention:** Database/runtime observation surfaces track pressure, hub-current state, and attractor evidence without mutating registry or topology definitions directly.
+- **Scope note (CI Attention):** Core runtime inspection surfaces exist, but user-facing guidance UX (missing input / valid candidate guidance) is still under development.
+- **Scope note (SQL Attention):** Observation and evidence surfaces exist, but recommendation feedback into user UX is still under development.
 - **AI-Driven Development OS:** Agent work is routed through repository-local contracts, prompts, protocols, and checks so changes remain auditable.
 
 ## Tech Stack
