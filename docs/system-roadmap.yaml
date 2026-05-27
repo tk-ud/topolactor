@@ -326,7 +326,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.hub_current physical table, repository read path, and refresh_hub_current function exist, but attractor-vector population/runtime hardening and live verification are still incomplete.
+      public_summary: logs.hub_current refresh now rebuilds attractor_vector_json/population/axis/phase projection fields from append-only logs.attention evidence; live DB runtime verification remains.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/repository/SqlAttentionLogsRepository.cs
@@ -342,7 +342,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: scheduler/runtime hub-attractor exploration lane is partially implemented with production DI and DB reads; vector scoring and write boundary remain TODO.
+      public_summary: scheduler/runtime hub-attractor exploration lane writes phase/evidence/statistics at the logs.attention append boundary; EMA and live DB runtime verification remain.
       known_gap_ref:
         - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
@@ -369,9 +369,11 @@ system_roadmap_ssot:
       public_summary: >-
         Production evidence filling implemented: l2_norm from logs.current, cosine similarity
         scoring (basis_vector_json × attractor_vector_json), vector_json (convergent hit components),
-        and evidence_json (scoring provenance) are now persisted to logs.attention.
-        Scores are 0 until logs.hub_current.attractor_vector_json is populated by hub_current refresh
-        (SQLA-3, separate TODO). phase_vector_json and statistics_json remain {} pending SQLA-5/SQLA-6.
+        evidence_json (scoring provenance), phase_vector_json auxiliary evidence, and scheduler-side
+        statistics_json provenance/statistics are now persisted to logs.attention.
+        logs.hub_current refresh rebuild now populates attractor_vector_json from append-only
+        logs.attention.vector_json evidence within source_set_id/basis_window scope.
+        EmaScore remains null (not implemented) by explicit boundary.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -388,7 +390,8 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-3 logs.hub_current refresh function exists, but attractor_vector_json population/hardening/live verification are incomplete — scores remain 0 until that boundary is completed
+        - SQLA-3 hub_current refresh/scoring/live verification hardening remains partial for production-ready promotion
+        - EMA score integration is not implemented; scheduler writes null with explicit provenance status
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -397,7 +400,7 @@ system_roadmap_ssot:
       status: partial
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: phase_vector generation helpers and persistence fields exist in DB/runtime paths, but phase_vector evidence quality/completion criteria are not yet fully hardened.
+      public_summary: phase_vector helper/runtime semantics are aligned on w/x/y/z/i/j/k boundaries and non-mutation guarantees; live DB end-to-end verification remains.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs
@@ -408,6 +411,45 @@ system_roadmap_ssot:
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
+
+    backend.sql_attention_observation_runtime:
+      status: partial
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: >
+        Infrastructure observation runtime is partially implemented across
+        logs.diff append, logs.current watch, logs.hub_current cache, and logs.attention evidence write.
+        This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
+      completion_condition:
+        - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
+      known_gap_ref:
+        - product.sql_attention_recommendation_feedback_ux remains partial
+
+    product.sql_attention_recommendation_feedback_ux:
+      status: partial
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: >
+        Product capability that feeds accumulated SQL Attention evidence back into
+        next-user context candidates, navigation guidance, and UI projection is still under construction.
+      completion_condition:
+        - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
+      known_gap_ref:
+        - SQLA-6 topology projection recommendation basis not implemented
+
+    product.dynamic_support_nocode_loop:
+      status: partial
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        End-to-end dynamic-support no-code loop (authoring guidance + usage-log feedback + operational continuity)
+        remains under construction; implemented infrastructure components do not yet close the full product loop.
+      completion_condition:
+        - ci_attention_user_guidance_ux_and_sql_attention_feedback_ux_are_both_user_visible
+        - non_it_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
+      known_gap_ref:
+        - product.ci_attention_user_guidance_ux incomplete
+        - product.sql_attention_recommendation_feedback_ux incomplete
 
     backend.sql_attention_topology_projection:
       status: not_started
@@ -1060,6 +1102,37 @@ system_roadmap_ssot:
       known_gap_ref:
         - Diagnostic coverage and downstream persistence/audit integration remain partial
         - frontend diagnostic panel exposure and broader operational coverage remain follow-up
+
+    backend.system_operation_ci_runtime:
+      status: implemented
+      production_ready: false
+      milestone: M3_unified_timeline_and_output_lanes
+      public_summary: >
+        Infrastructure subpath for runtime CI inspection is implemented
+        (SystemOperationCiRuntime / SystemOperationCiScheduler callable+cron surfaces).
+        This entry tracks backend diagnostic runtime capability only, not end-user guidance UX completion.
+      files:
+        - backend/runtime/SystemOperationCiRuntime.cs
+        - backend/scheduler/SystemOperationCiScheduler.cs
+      completion_condition:
+        - system_operation_ci_runtime_callable_surface_is_wired
+        - cron_scheduler_invokes_system_ci_runtime
+      known_gap_ref:
+        - product.ci_attention_user_guidance_ux remains partial
+
+    product.ci_attention_user_guidance_ux:
+      status: partial
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        Product capability for user-created flow guidance (missing input, valid candidates,
+        structural-break boundaries) is still under development; current implemented CI surfaces
+        are backend/runtime diagnostics and not full end-user guidance UX.
+      completion_condition:
+        - ci_attention_guidance_is_exposed_to_end_users_during_authoring
+        - missing_input_valid_candidate_and_breaking_boundary_guidance_are_actionable_in_ui
+      known_gap_ref:
+        - backend.system_operation_ci_runtime is implemented but product guidance UX is incomplete
 
     system_ci.dotnet_ssot_wiring_audit_tests:
       status: implemented

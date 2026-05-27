@@ -281,7 +281,7 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- logs.hub_current refresh function
--- Refreshes hub_current population/recordcount basis from logs.attention.
+-- Refreshes hub_current population/recordcount basis from logs.attention append evidence.
 -- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
 -- neighbor_score statistics are not written into i/j/k to avoid movement-semantic masquerade.
 -- ---------------------------------------------------------------------------
@@ -307,12 +307,33 @@ BEGIN
         a.hub_current_id,
         COUNT(*)::BIGINT AS population_count,
         COUNT(DISTINCT a.current_id)::BIGINT AS population_recordcount,
-        COUNT(DISTINCT a.hub_relation_id)::BIGINT AS axis_population_recordcount
+        COUNT(DISTINCT a.hub_relation_id)::BIGINT AS axis_population_recordcount,
+        COALESCE(SUM(a.neighbor_score), 0.0)::DOUBLE PRECISION AS neighbor_score_sum,
+        COALESCE(AVG(a.l2_norm), 0.0)::DOUBLE PRECISION AS l2_norm_avg
       FROM logs.attention a
       JOIN logs.hub_current h ON h.hub_current_id = a.hub_current_id
       WHERE h.source_set_id = p_source_set_id
         AND h.basis_window = p_basis_window
       GROUP BY a.hub_current_id
+    ),
+    vector_terms AS (
+      SELECT
+        a.hub_current_id,
+        e.key,
+        SUM((e.value)::DOUBLE PRECISION) AS v
+      FROM logs.attention a
+      JOIN logs.hub_current h ON h.hub_current_id = a.hub_current_id
+      LEFT JOIN LATERAL jsonb_each_text(COALESCE(a.vector_json, '{}'::jsonb)) e ON TRUE
+      WHERE h.source_set_id = p_source_set_id
+        AND h.basis_window = p_basis_window
+      GROUP BY a.hub_current_id, e.key
+    ),
+    vector_basis AS (
+      SELECT
+        vt.hub_current_id,
+        COALESCE(jsonb_object_agg(vt.key, to_jsonb(vt.v)) FILTER (WHERE vt.key IS NOT NULL), '{}'::jsonb) AS attractor_vector_json
+      FROM vector_terms vt
+      GROUP BY vt.hub_current_id
     ),
     applied AS (
       UPDATE logs.hub_current h
@@ -328,9 +349,18 @@ BEGIN
                 'j', 0,
                 'k', 0
              ),
+             phase_basis_json = jsonb_build_object(
+                'basis_source', 'logs.attention',
+                'phase_movement_source', 'not_manifest_or_policy_cap',
+                'generated_from', 'logs.attention.vector_json',
+                'axis_movement_observed', false,
+                'axis_movement_note', 'i/j/k are zero placeholders until explicit movement observation is implemented'
+             ),
+             attractor_vector_json = COALESCE(vb.attractor_vector_json, '{}'::jsonb),
              evaluated_at = now(),
              updated_at = now()
       FROM attention_axis aa
+      LEFT JOIN vector_basis vb ON vb.hub_current_id = aa.hub_current_id
       WHERE h.hub_current_id = aa.hub_current_id
       RETURNING h.hub_current_id, h.attractor_key, h.population_count, h.population_recordcount,
                 h.axis_population_json, h.axis_z_score_json, h.updated_at

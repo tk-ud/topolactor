@@ -116,7 +116,7 @@ internal static class ExplorationTestFactory
             PopulationCount: populationCount,
             PopulationRecordcount: populationRecordcount,
             AxisPopulationJson: """{"x":10,"y":20,"z":30}""",
-            AxisZScoreJson: """{"x":0.1,"y":0.2,"z":0.3}""",
+            AxisZScoreJson: """{"i":0.1,"j":0.2,"k":0.3}""",
             PhaseBasisJson: """{"basis":"hub_current"}""");
 
     public static string ValidPolicyJson(
@@ -547,22 +547,24 @@ public class HubAttractorExplorationRuntime_BoundaryTests
     [Fact]
     public async Task ExploreAsync_OkResult_DoesNotWriteLogsAttention()
     {
-        // Verifies that exploration runtime returns a result without persisting.
-        // The result has Hits but no write is performed (SqlAttentionLogsRepository has no write method).
+        // Responsibility split boundary:
+        // - HubAttractorExplorationRuntime: result generation only (no persistence)
+        // - SqlAttentionScheduler: owns WriteLogsAttentionAsync boundary
+        var logsRepo = new StubSqlAttentionLogsRepository(
+            [],
+            [ExplorationTestFactory.HubCurrent()]);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
-            [ExplorationTestFactory.HubCurrent()]);
+            logsRepo);
 
         var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
-        // Result carries hits for downstream consumption — no write_logs_attention call here.
+        // Result carries hits for downstream consumption — write boundary is not called here.
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
         Assert.NotNull(result.Result);
-        // SqlAttentionLogsRepository has no WriteLogsAttention method — structural boundary proof.
-        Assert.DoesNotContain("WriteLogsAttention",
-            typeof(SqlAttentionLogsRepository).GetMethods().Select(m => m.Name));
+        Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
     }
 
     [Fact]
@@ -1048,8 +1050,15 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             // VectorJson: {} when attractor_vector_json is {} (no shared components until hub refresh)
             Assert.Equal("{}", request.VectorJson);
             Assert.NotEqual("{}", request.PhaseVectorJson);
-            Assert.Equal("{}", request.StatisticsJson);
+            Assert.NotEqual("{}", request.StatisticsJson);
             Assert.Null(request.EmaScore);
+            using (var sdoc = JsonDocument.Parse(request.StatisticsJson))
+            {
+                var s = sdoc.RootElement;
+                Assert.Equal("sql_attention_scheduler", s.GetProperty("generated_by").GetString());
+                Assert.Equal("logs.attention_write", s.GetProperty("statistics_scope").GetString());
+                Assert.Equal("not_implemented_null", s.GetProperty("ema_score_status").GetString());
+            }
             // EvidenceJson now contains scoring provenance (not placeholder {})
             Assert.NotEqual("{}", request.EvidenceJson);
         }
@@ -1156,7 +1165,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
                 // VectorJson is {} when attractor_vector_json is {} (no shared components)
                 Assert.Equal("{}", request.VectorJson);
                 Assert.NotEqual("{}", request.PhaseVectorJson);
-                Assert.Equal("{}", request.StatisticsJson);
+                Assert.NotEqual("{}", request.StatisticsJson);
                 Assert.Null(request.EmaScore);
                 // EvidenceJson contains scoring provenance
                 Assert.NotEqual("{}", request.EvidenceJson);
