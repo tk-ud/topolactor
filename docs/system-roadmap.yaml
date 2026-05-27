@@ -919,8 +919,7 @@ system_roadmap_ssot:
         - sql_attention_primitives_remain_observation_or_candidate_surface_only
         - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
-      known_gap_ref:
-        - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
+      known_gap_ref: []
 
     admin_visual_layout_builder:
       status: partial
