@@ -328,8 +328,25 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
     private static HashSet<string> LoadCssTokenVocabulary()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "docs", "design", "css-dictionary-ssot.yaml");
-        path = Path.GetFullPath(path);
+        var overridePath = Environment.GetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH");
+        string path;
+        if (!string.IsNullOrWhiteSpace(overridePath))
+        {
+            path = Path.GetFullPath(overridePath!);
+        }
+        else
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            path = "";
+            while (dir is not null)
+            {
+                var candidate = Path.Combine(dir.FullName, "docs", "design", "css-dictionary-ssot.yaml");
+                if (File.Exists(candidate)) { path = candidate; break; }
+                dir = dir.Parent;
+            }
+            if (string.IsNullOrWhiteSpace(path))
+                return [];
+        }
         if (!File.Exists(path)) return [];
         var text = File.ReadAllText(path);
         var lines = text.Split('\n');
@@ -379,6 +396,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
         }
         var vocab = LoadCssTokenVocabulary();
+        if (vocab.Count == 0)
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "CSS_TOKEN_VOCABULARY_UNAVAILABLE" });
         foreach (var t in normalized.CssTokenRefs)
             if (!vocab.Contains(t))
                 return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"CSS_TOKEN_REF_UNKNOWN:{t}" });

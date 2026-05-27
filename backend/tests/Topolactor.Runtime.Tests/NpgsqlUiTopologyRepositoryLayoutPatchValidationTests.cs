@@ -7,6 +7,15 @@ namespace Topolactor.Runtime.Tests;
 public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
 {
     [Fact]
+    public async Task ValidateLayoutPatchAsync_KnownCssToken_PassesFromYamlSsot()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", "{}", ["color.action.primary.background"], null);
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
     public async Task ValidateLayoutPatchAsync_MalformedTensorJson_FailsClose()
     {
         var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
@@ -24,5 +33,23 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.False(result.Ok);
         Assert.False(result.Valid);
         Assert.StartsWith("CSS_TOKEN_REF_UNKNOWN:", result.Message);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_VocabularyUnavailable_IsExplicitError()
+    {
+        Environment.SetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH", "/tmp/not-found-css-dictionary-ssot.yaml");
+        try
+        {
+            var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+            var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", "{}", ["color.action.primary.background"], null);
+            Assert.False(result.Ok);
+            Assert.False(result.Valid);
+            Assert.Equal("CSS_TOKEN_VOCABULARY_UNAVAILABLE", result.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH", null);
+        }
     }
 }
