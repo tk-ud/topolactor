@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using Topolactor.Endpoint;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -179,6 +180,103 @@ public class ComponentEventAppendIntegrationTests
         var result = await skeletonRepo.AppendComponentOperationEventLogAsync(record, CancellationToken.None);
         Assert.True(result); // in-memory skeleton always returns true
         _ = npgsqlRepo;      // proves NpgsqlContextRouteRepository can be constructed with connection string
+    }
+
+
+
+    [Fact]
+    [Trait("Category", "RequiresDatabase")]
+    public async Task AppendBoundary_PostgreSql_AppendAndIdempotency_ArePreserved()
+    {
+        var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+                throw new InvalidOperationException("TOPOLACTOR_TEST_DB_CONNECTION required.");
+            return;
+        }
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var idempotencyKey = $"idem-component-event-{suffix}";
+        var repo = new NpgsqlContextRouteRepository(NullLogger<NpgsqlContextRouteRepository>.Instance, cs);
+
+        var ev = new ComponentOperationEventLogRecord(
+            ComponentId: $"cmp-{suffix}",
+            PackageId: $"pkg-{suffix}",
+            LayoutId: $"layout-{suffix}",
+            WiringId: $"wiring-{suffix}",
+            EventType: "click",
+            PayloadJson: @"{""source"":""integration"",""v"":1}",
+            ActorOrSource: "ComponentEventAppendIntegrationTests",
+            OccurredAt: DateTimeOffset.UtcNow,
+            IdempotencyKey: idempotencyKey);
+
+        var first = await repo.AppendComponentOperationEventLogAsync(ev, CancellationToken.None);
+        var second = await repo.AppendComponentOperationEventLogAsync(ev, CancellationToken.None);
+
+        Assert.True(first);
+        Assert.False(second);
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        await using var countCmd = conn.CreateCommand();
+        countCmd.CommandText =
+            "SELECT COUNT(*) FROM component_operation_event_log WHERE idempotency_key = @idempotencyKey";
+        countCmd.Parameters.AddWithValue("idempotencyKey", idempotencyKey);
+
+        var count = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+        Assert.Equal(1, count);
+    }
+
+    [Fact]
+    [Trait("Category", "RequiresDatabase")]
+    public async Task AppendBoundary_PostgreSql_EndpointDuplicateIdempotency_IsAccepted_AndSingleRow()
+    {
+        var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+                throw new InvalidOperationException("TOPOLACTOR_TEST_DB_CONNECTION required.");
+            return;
+        }
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var idempotencyKey = $"idem-component-endpoint-{suffix}";
+        var endpoint = new ComponentEventAppendEndpoint(
+            new NpgsqlContextRouteRepository(NullLogger<NpgsqlContextRouteRepository>.Instance, cs));
+
+        var req = new ComponentEventAppendRequestDto([
+            new ComponentOperationEventDto(
+                ComponentId: $"cmp-endpoint-{suffix}",
+                PackageId: $"pkg-endpoint-{suffix}",
+                LayoutId: $"layout-endpoint-{suffix}",
+                WiringId: $"wiring-endpoint-{suffix}",
+                EventType: "submit",
+                Payload: new Dictionary<string, object?> { ["path"] = "endpoint" },
+                ActorOrSource: "OperationPanel",
+                OccurredAt: "2026-05-27T00:00:00.000Z",
+                IdempotencyKey: idempotencyKey)
+        ]);
+
+        var first = await endpoint.HandleAsync(req, "OperationPanel", CancellationToken.None);
+        var second = await endpoint.HandleAsync(req, "OperationPanel", CancellationToken.None);
+
+        Assert.True(first.Success);
+        Assert.True(second.Success);
+        Assert.Equal(1, first.Accepted);
+        Assert.Equal(1, second.Accepted);
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        await using var countCmd = conn.CreateCommand();
+        countCmd.CommandText =
+            "SELECT COUNT(*) FROM component_operation_event_log WHERE idempotency_key = @idempotencyKey";
+        countCmd.Parameters.AddWithValue("idempotencyKey", idempotencyKey);
+
+        var count = Convert.ToInt64(await countCmd.ExecuteScalarAsync());
+        Assert.Equal(1, count);
     }
 
     // ─── Surface observation boundary: event log is NOT mutation authority ─────

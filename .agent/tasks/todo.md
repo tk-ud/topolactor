@@ -57,8 +57,3 @@ note: representative slice (implemented context): AutoCompleteInput / SearchComb
         mutation系は validate → explicit confirm → apply → append log の順序を崩さない。
         external lookup は candidate surface only で、canonical write しない。
 
-## Component Operation Event Log Integration
-
-- [ ] [integration-test][component-operation-event-log] PostgreSQL-backed append/idempotency integration test を追加する
-      → backend endpoint / repository boundary tests は実装済み。
-      → 残りは real PostgreSQL-backed component_operation_event_log append/idempotency verification。

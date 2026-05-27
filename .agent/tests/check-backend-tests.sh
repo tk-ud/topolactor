@@ -17,6 +17,6 @@ dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.cspr
 # Integration continuity proof for UI topology registration boundary.
 if [[ -n "${TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY:-}" ]]; then
   dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj \
-    --filter UiTopologyRegistrationContinuityIntegrationTests \
+    --filter "UiTopologyRegistrationContinuityIntegrationTests|ComponentEventAppendIntegrationTests" \
     --nologo --verbosity minimal
 fi
