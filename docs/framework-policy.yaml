@@ -14,6 +14,7 @@ framework_policy:
 
   authority_visibility_promotion_policy:
     completion_bundle_required: true
+    completion_bundle_closed_as_unit: true
     bundle_items:
       - draft_authority
       - promotion_authority
@@ -22,6 +23,45 @@ framework_policy:
       - audit_evidence_visibility_authority
       - frontend_display_only_boundary
       - backend_runtime_promotion_guard_authority
+    authority_contract:
+      draft_authority:
+        authority_owner: admin_draft_authoring_runtime_and_storage_boundaries
+        boundary:
+          - draft_authoring_is_allowed_independent_of_ci_attention_fragment_state
+          - draft_editing_must_not_be_locked_by_promotion_gate_or_fragment_visibility
+      promotion_authority:
+        authority_owner: backend_runtime_adminruntime
+        operations:
+          - package_generator:promote
+          - layout_patch:apply
+        guard:
+          - promotion_is_fail_close_when_active_blocking_fragments_exist
+          - frontend_has_no_promotion_judgment_authority
+      manifest_activation_authority:
+        authority_owner: backend_runtime_manifest_activation_boundary
+        boundary:
+          - manifest_activation_executes_only_through_backend_runtime_route
+          - frontend_is_display_only_and_does_not_activate_manifests
+      ci_attention_refresh_authority:
+        authority_owner: backend_runtime_adminruntime_refresh_surface
+        boundary:
+          - refresh_invocation_and_fragment_state_transition_are_backend_authority
+          - frontend_observes_projection_only
+      audit_evidence_visibility_authority:
+        authority_owner: auditability_scoped_visibility_boundary
+        boundary:
+          - audit_evidence_visibility_is_declared_and_scoped
+          - auditability_is_not_equivalent_to_unrestricted_visibility
+      frontend_display_only_boundary:
+        authority_owner: frontend_projection_surface
+        boundary:
+          - frontend_receives_sse_projection_for_guidance_display_only
+          - frontend_must_not_execute_promotion_judgment_or_system_lock_authority
+      backend_runtime_promotion_guard_authority:
+        authority_owner: backend_runtime_guard
+        boundary:
+          - runtime_is_final_and_exclusive_promotion_authority
+          - canonical_guard_boundary_enforced_in_adminruntime_promotion_paths
     partial_approve_exclusions:
       - promotion_gate_authority_ownership_when_backend_vs_frontend_boundary_ambiguous
       - visibility_boundary_between_display_only_and_authority_surfaces
@@ -36,6 +76,16 @@ framework_policy:
       - draft_editing_is_never_blocked_by_authority_gate_or_fragment_state
       - audit_evidence_transparency_is_auditability_with_declared_boundary_not_unrestricted_visibility
       - security_review_permission_design_and_load_testing_are_separate_concerns_not_covered_by_this_policy
+    completion_evidence:
+      files:
+        - backend/runtime/AdminRuntime.cs
+        - backend/repository/CiAttentionGuidanceRepository.cs
+        - backend/repository/NpgsqlCiAttentionGuidanceRepository.cs
+        - frontend/runtime/sseReceiver.ts
+        - frontend/routes/admin/ui-builder.tsx
+      tests:
+        - backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs
+        - frontend/tests/ciAttentionGuidanceProjection.test.ts
     roadmap_completion_bundle_ref: design.authority_visibility_promotion_policy_ssot
 
   readme_surface_policy:
