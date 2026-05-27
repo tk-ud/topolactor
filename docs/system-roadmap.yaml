@@ -921,7 +921,6 @@ system_roadmap_ssot:
         - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - component_operation_event_log PostgreSQL append/idempotency integration test
 
     admin_visual_layout_builder:
       status: partial
@@ -1206,7 +1205,6 @@ system_roadmap_ssot:
         - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
       known_gap_ref:
         - abstract function boundary unit tests（2026-05-27分類: 対象32関数は実装未着手のため境界unit test未追加。実装追加後に関数境界/入力契約/出力契約/禁止副作用を検査する必要あり）
-        - component_operation_event_log PostgreSQL append/idempotency integration test
 
 
     external_connector_contract:
