@@ -322,6 +322,26 @@ function CssTokenSelectorSection(): JSX.Element {
 }
 
 function LayoutBuilderSection(): JSX.Element {
+  const [layoutId, setLayoutId] = useState("");
+  const [routeKey, setRouteKey] = useState("/admin/ui-builder");
+  const [tensorPatchJson, setTensorPatchJson] = useState("{\"grid\":{\"cols\":12}}");
+  const [cssTokenRefs, setCssTokenRefs] = useState("color.action.primary.background");
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const call = async (action: "preview" | "validate" | "apply") => {
+    setError(null);
+    setResult(null);
+    const refs = cssTokenRefs.split(",").map((s) => s.trim()).filter(Boolean);
+    const body = await dispatchAdminOp("layout_patch", action, {
+      layoutId,
+      routeKey,
+      tensorPatchJson,
+      cssTokenRefs: refs,
+      responsiveTokenRefs: { md: refs },
+    });
+    if (body?.errors?.length) setError(`${body.errors[0].code}: ${body.errors[0].message}`);
+    else setResult(JSON.stringify(body?.emission?.data ?? body, null, 2));
+  };
   return (
     <section style={{ marginBottom: "24px" }}>
       <h2>Visual Layout Builder (Issue #89 — skeleton)</h2>
@@ -331,10 +351,19 @@ function LayoutBuilderSection(): JSX.Element {
         style token / responsive rule management on top of <code>ui_layout_registry</code>.
         Frontend adapter is a stable projection surface; spec changes via registry tensor data.
       </p>
-      <p style={{ color: "#888" }}>
-        Status: <strong>partial</strong> — layout registration wired through package generator
-        (layoutId issued per PromoteBucketItemAsync). Full mouse-driven layout editor pending.
-      </p>
+      <div style={{ display: "grid", gap: "8px", margin: "12px 0" }}>
+        <input value={layoutId} onInput={(e) => setLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId(UUID)" style={{ padding: "6px" }} />
+        <input value={routeKey} onInput={(e) => setRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey" style={{ padding: "6px" }} />
+        <textarea value={tensorPatchJson} onInput={(e) => setTensorPatchJson((e.target as HTMLTextAreaElement).value)} rows={3} />
+        <input value={cssTokenRefs} onInput={(e) => setCssTokenRefs((e.target as HTMLInputElement).value)} placeholder="css token refs (comma separated)" style={{ padding: "6px" }} />
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button onClick={() => call("preview")}>Preview</button>
+          <button onClick={() => call("validate")}>Validate</button>
+          <button onClick={() => call("apply")} style={{ background: "#0a7a33", color: "#fff" }}>Apply (explicit)</button>
+        </div>
+      </div>
+      {error && <p style={{ color: "#c00" }}>{error}</p>}
+      {result && <pre style={{ background: "#f8f8f8", padding: "8px" }}>{result}</pre>}
       <section style={{ background: "#f5f5f5", padding: "12px", borderRadius: "4px" }}>
         <h3 style={{ marginTop: 0 }}>Planned capabilities</h3>
         <ul>

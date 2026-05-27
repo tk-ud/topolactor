@@ -182,6 +182,9 @@ public class AdminRuntime
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
             "package_generator:promote"        => await DataPromoteAsync(vector, ct),
+            "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
+            "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
+            "layout_patch:apply"               => await DataLayoutPatchApplyAsync(vector, ct),
             "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
             "seed_runtime:load"                => await DataSeedLoadAsync(ct),
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
@@ -507,6 +510,52 @@ public class AdminRuntime
             "Package promoted successfully.");
 
         return (JsonSerializer.SerializeToElement(responseDto), null);
+    }
+
+    private static bool TryParseLayoutPatchRequest(OperationVector vector, out LayoutPatchRequestDto? request, out ValidationError? error)
+    {
+        request = null;
+        error = null;
+        if (vector.Payload is null)
+        {
+            error = new ValidationError("PAYLOAD_REQUIRED", "payload is required for layout_patch operation");
+            return false;
+        }
+        try
+        {
+            request = JsonSerializer.Deserialize<LayoutPatchRequestDto>(vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            error = new ValidationError("MALFORMED_PAYLOAD", ex.Message);
+            return false;
+        }
+        if (request is null) { error = new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"); return false; }
+        if (string.IsNullOrWhiteSpace(request.LayoutId)) { error = new ValidationError("LAYOUT_ID_REQUIRED", "layoutId is required"); return false; }
+        if (string.IsNullOrWhiteSpace(request.RouteKey)) { error = new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"); return false; }
+        if (!Guid.TryParse(request.LayoutId, out _)) { error = new ValidationError("MALFORMED_LAYOUT_ID", "layoutId must be valid UUID"); return false; }
+        return true;
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchPreviewAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var result = await _uiTopologyRepository.PreviewLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        return (JsonSerializer.SerializeToElement(result), null);
+    }
+    private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchValidateAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var result = await _uiTopologyRepository.ValidateLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_VALIDATION_FAILED", result.Message));
+        return (JsonSerializer.SerializeToElement(result), null);
+    }
+    private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchApplyAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var result = await _uiTopologyRepository.ApplyConfirmedLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_APPLY_FAILED", result.Message));
+        return (JsonSerializer.SerializeToElement(result), null);
     }
     // ---------------------------------------------------------------------------
     // Seed Runtime operations — Issue #84

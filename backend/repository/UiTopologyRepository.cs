@@ -94,4 +94,37 @@ public class UiTopologyRepository
         throw new NotImplementedException(
             "UiTopologyRepository.PromoteBucketItemAsync must be overridden by a production implementation.");
     }
+
+    public virtual Task<LayoutPatchResult> PreviewLayoutPatchAsync(
+        Guid layoutId,
+        string routeKey,
+        string? tensorPatchJson,
+        IReadOnlyList<string>? cssTokenRefs,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.PreviewLayoutPatchAsync must be overridden by a production implementation.");
+    }
+
+    public virtual Task<LayoutPatchResult> ValidateLayoutPatchAsync(
+        Guid layoutId,
+        string routeKey,
+        string? tensorPatchJson,
+        IReadOnlyList<string>? cssTokenRefs,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ValidateLayoutPatchAsync must be overridden by a production implementation.");
+    }
+
+    public virtual Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
+        Guid layoutId,
+        string routeKey,
+        string? tensorPatchJson,
+        IReadOnlyList<string>? cssTokenRefs,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ApplyConfirmedLayoutPatchAsync must be overridden by a production implementation.");
+    }
 }
