@@ -969,7 +969,6 @@ system_roadmap_ssot:
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
         - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
       known_gap_ref:
-        - promoted component/package palette integration (palette source remains catalog-only; DB-registered packageId/componentId as placement identity is follow-up)
         - layoutId round-trip from DB and full responsive token rule UI remain follow-up
 
     backend.context_route_repository:

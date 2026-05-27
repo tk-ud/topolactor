@@ -68,11 +68,37 @@ type DraftNode = {
   parentNodeId: string | null;
   gridCol: number;
   gridRow: number;
+  componentId?: string;
+  packageId?: string;
+  layoutId?: string;
+  wiringId?: string;
+  tensorId?: string;
 };
 
 type DragSrc =
-  | { kind: "palette"; componentKey: string; isDraftOnly: boolean }
+  | { kind: "palette"; entry: PaletteEntry }
   | { kind: "canvas"; nodeId: string };
+
+type PromotedPaletteEntry = {
+  componentKey: string;
+  componentKind: string;
+  componentId: string;
+  packageId: string;
+  layoutId: string;
+  wiringId: string;
+  tensorId: string;
+  routeKey: string;
+};
+type PaletteEntry = {
+  componentKey: string;
+  componentKind: string;
+  isDraftOnly: boolean;
+  componentId?: string;
+  packageId?: string;
+  layoutId?: string;
+  wiringId?: string;
+  tensorId?: string;
+};
 
 function buildLayoutPatchJson(nodes: DraftNode[]): string {
   return JSON.stringify(
@@ -83,6 +109,11 @@ function buildLayoutPatchJson(nodes: DraftNode[]): string {
         componentKey: n.componentKey,
         // _draftOnly marks nodes with no DB-registered identity — backend must not persist these.
         ...(n.isDraftOnly ? { _draftOnly: true } : {}),
+        ...(n.componentId ? { componentId: n.componentId } : {}),
+        ...(n.packageId ? { packageId: n.packageId } : {}),
+        ...(n.layoutId ? { layoutId: n.layoutId } : {}),
+        ...(n.wiringId ? { wiringId: n.wiringId } : {}),
+        ...(n.tensorId ? { tensorId: n.tensorId } : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,
@@ -373,8 +404,12 @@ function isDraftOnlyEntry(c: { registrationRequired: boolean }): boolean {
 
 function LayoutPalette({
   onDragStart,
+  entries,
+  status,
 }: {
-  onDragStart: (componentKey: string, isDraftOnly: boolean) => void;
+  onDragStart: (entry: PaletteEntry) => void;
+  entries: PaletteEntry[];
+  status: string | null;
 }): JSX.Element {
   return (
     <div
@@ -394,13 +429,14 @@ function LayoutPalette({
         Drag to canvas. <strong style={{ color: "#a06000" }}>(draft)</strong> = unregistered;
         preview only, apply blocked until promoted via Component Bucket.
       </p>
-      {COMPONENT_CATALOG_ENTRIES.map((c) => {
-        const draftOnly = isDraftOnlyEntry(c);
+      {status && <p style={{ fontSize: "0.65rem", color: "#666" }}>{status}</p>}
+      {entries.map((c) => {
+        const draftOnly = c.isDraftOnly;
         return (
           <div
             key={c.componentKey}
             draggable={true}
-            onDragStart={() => onDragStart(c.componentKey, draftOnly)}
+            onDragStart={() => onDragStart(c)}
             style={{
               padding: "5px 7px",
               marginBottom: "3px",
@@ -522,11 +558,37 @@ function LayoutBuilderSection(): JSX.Element {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [paletteEntries, setPaletteEntries] = useState<PaletteEntry[]>([]);
+  const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
 
   // useRef to avoid stale closure issues during drag-and-drop event sequence
   const dragSrc = useRef<DragSrc | null>(null);
 
   const tensorPatchJson = buildLayoutPatchJson(draftNodes);
+  useEffect(() => {
+    const load = async () => {
+      setPaletteStatus("Loading promoted palette...");
+      try {
+        const body = await dispatchAdminOp("ui_topology", "promoted_palette");
+        const promoted = body?.emission?.data as PromotedPaletteEntry[] | undefined;
+        const promotedEntries = Array.isArray(promoted)
+          ? promoted.map((p) => ({ ...p, isDraftOnly: false } satisfies PaletteEntry))
+          : [];
+        const promotedKeys = new Set(promotedEntries.map((p) => p.componentKey));
+        const draftCatalog = COMPONENT_CATALOG_ENTRIES
+          .filter((c) => isDraftOnlyEntry(c) && !promotedKeys.has(c.componentKey))
+          .map((c) => ({ componentKey: c.componentKey, componentKind: c.componentKind, isDraftOnly: true } satisfies PaletteEntry));
+        setPaletteEntries([...promotedEntries, ...draftCatalog]);
+        setPaletteStatus(`Promoted ${promotedEntries.length} / Draft-only ${draftCatalog.length}`);
+      } catch (e) {
+        setPaletteEntries(COMPONENT_CATALOG_ENTRIES
+          .filter((c) => isDraftOnlyEntry(c))
+          .map((c) => ({ componentKey: c.componentKey, componentKind: c.componentKind, isDraftOnly: true })));
+        setPaletteStatus(`Promoted palette load failed: ${e}`);
+      }
+    };
+    load();
+  }, []);
 
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
     setError(null);
@@ -569,8 +631,8 @@ function LayoutBuilderSection(): JSX.Element {
     }
   };
 
-  const handleDragStartPalette = (componentKey: string, isDraftOnly: boolean) => {
-    dragSrc.current = { kind: "palette", componentKey, isDraftOnly };
+  const handleDragStartPalette = (entry: PaletteEntry) => {
+    dragSrc.current = { kind: "palette", entry };
   };
 
   const handleDragStartCanvas = (nodeId: string) => {
@@ -586,10 +648,16 @@ function LayoutBuilderSection(): JSX.Element {
     const src = dragSrc.current;
     if (!src) return;
     if (src.kind === "palette") {
+      if (src.entry.layoutId && !layoutId) setLayoutId(src.entry.layoutId);
       const newNode: DraftNode = {
         nodeId: makeNodeId(),
-        componentKey: src.componentKey,
-        isDraftOnly: src.isDraftOnly,
+        componentKey: src.entry.componentKey,
+        isDraftOnly: src.entry.isDraftOnly,
+        componentId: src.entry.componentId,
+        packageId: src.entry.packageId,
+        layoutId: src.entry.layoutId,
+        wiringId: src.entry.wiringId,
+        tensorId: src.entry.tensorId,
         slotKey: "",
         orderIndex: draftNodes.length,
         parentNodeId: null,
@@ -689,7 +757,7 @@ function LayoutBuilderSection(): JSX.Element {
       <div style={{ display: "flex", gap: "10px", minHeight: "280px", marginBottom: "12px" }}>
 
         {/* LayoutPalette — drag component kinds from catalog */}
-        <LayoutPalette onDragStart={handleDragStartPalette} />
+        <LayoutPalette onDragStart={handleDragStartPalette} entries={paletteEntries} status={paletteStatus} />
 
         {/* LayoutCanvas — drop zone with placed nodes */}
         <div

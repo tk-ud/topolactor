@@ -127,4 +127,10 @@ public class UiTopologyRepository
     {
         throw new NotImplementedException("UiTopologyRepository.ApplyConfirmedLayoutPatchAsync must be overridden by a production implementation.");
     }
+
+    public virtual Task<IReadOnlyList<PromotedPaletteEntryDto>> ListPromotedPaletteEntriesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListPromotedPaletteEntriesAsync must be overridden by a production implementation.");
+    }
 }
