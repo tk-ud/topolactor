@@ -58,6 +58,7 @@ jobs:
       - name: Apply DB schema for continuity integration
         run: |
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/schema.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/context_route_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/ui_topology_tables.sql
 
       - name: Run backend tests
