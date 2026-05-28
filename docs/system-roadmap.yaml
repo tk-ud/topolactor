@@ -191,59 +191,66 @@ system_roadmap_ssot:
         - Gap-9 admin route skeletons
 
     M6_external_integration:
-      title: External integration and non-IT authoring surfaces
+      title: Self-hosted admin authoring loop (MVP)
       status: not_started
       goal: >
-        Connect human-friendly external tools as editing, intake, trigger, and approval
-        surfaces so non-IT users can author business vocabulary, tables, states, actions,
-        workflows, and UI drafts without directly editing code. External tools are never
-        the runtime SSOT; they feed candidates into topolactor's validate/preview/apply
-        route.
+        Establish a self-hosted admin authoring loop where admins can import CSV/JSON,
+        validate-preview-apply candidates, define JSONB label/value manifest and
+        user-defined aggregation/display/binding policy, bind DB/JSONB fields into
+        document canvas templates, render invoice/estimate/delivery-note style documents,
+        and export PDF snapshots with canonical diff/audit linkage.
       primary_entry_surface:
+        - admin_csv_import
+        - admin_json_import
+        - admin_document_canvas
+      future_optional_external_surfaces:
         - Notion
-      secondary_entry_surfaces:
         - Google Sheets
         - Slack
         - GitHub Issues
         - generic webhooks
-        - CSV or JSON file import
         - external REST API connectors
       intended_non_IT_loop:
-        - business_user_edits_external_database_or_form
-        - connector_captures_snapshot
-        - topolactor_maps_input_to_topology_payload_candidate
-        - validation_reports_missing_fields_ambiguous_relations_and_policy_gaps
-        - preview_shows_generated_schema_manifest_projection_and_runtime_effects
-        - human_or_admin_approves_apply
-        - canonical_runtime_route_persists_topology
-        - CI_and_runtime_diagnostics_detect_semantic_breakage
+        - admin_imports_csv_or_json_as_candidate_payload
+        - validate_stage_returns_explicit_mapping_required_field_and_policy_errors
+        - preview_stage_shows_manifest_binding_document_and_runtime_effect_candidates
+        - explicit_apply_enters_canonical_runtime_route_without_direct_db_write
+        - jsonb_label_value_manifest_defines_display_aggregation_and_binding_policy
+        - admin_binds_db_jsonb_fields_into_document_canvas_template
+        - invoice_estimate_delivery_note_documents_render_from_bound_data
+        - pdf_export_persists_export_snapshot_and_applied_diff_audit_linkage
       unlocks:
-        - notion_intake_runtime: skeleton
-        - external_connector_contract: skeleton
-        - topology_payload_import_preview: partial
-        - non_IT_business_app_authoring_loop: partial
-        - external_change_diff_log: partial
-        - approval_workflow: partial
+        - admin_csv_import_validate_preview_apply: not_started
+        - admin_json_import_validate_preview_apply: not_started
+        - jsonb_label_value_manifest_runtime: not_started
+        - user_defined_aggregation_display_binding_policy: not_started
+        - document_canvas_template_runtime: not_started
+        - data_binding_to_document_canvas: not_started
+        - pdf_export_snapshot_runtime: not_started
+        - intake_snapshot_and_applied_diff_log: not_started
       blocking_gaps:
-        - external connector contract SSOT not defined
-        - Notion intake runtime not implemented
-        - external snapshot storage not implemented
-        - import preview and validation are not generalized beyond seed runtime
-        - approval/apply workflow not implemented
-        - external change diff log not implemented
-        - connector auth and permission boundary not defined
+        - admin_csv_import_validate_preview_apply not implemented
+        - jsonb_label_value_manifest not defined
+        - user_defined_aggregation_display_binding_policy not implemented
+        - document_canvas_template_runtime not implemented
+        - data_binding_to_document_canvas not implemented
+        - pdf_export_snapshot not implemented
+        - intake_snapshot_and_applied_diff_log not implemented
       completion_condition:
-        - Notion database can be registered as an external intake source
-        - Notion data is imported only as candidate topology payload not canonical SSOT
-        - validate_preview_apply stages are separated
-        - external change snapshot and applied canonical diff are both recorded
-        - broken mapping or missing required property returns explicit validation error
-        - external webhook events enter runtime scheduler before runtime execution
-        - non_IT_user_can_define_business_vocabulary_state_action_and_table_draft_without_code
+        - admin_can_import_csv_json_as_candidate_payload
+        - validate_preview_apply_stages_are_separated
+        - broken_mapping_or_missing_required_field_returns_explicit_validation_error
+        - imported_data_does_not_bypass_canonical_runtime_route
+        - jsonb_label_value_manifest_defines_display_aggregation_and_binding_policy
+        - user_can_bind_db_jsonb_fields_into_document_canvas_template
+        - invoice_like_document_can_render_from_bound_data
+        - pdf_export_creates_snapshot_export_record
+        - applied_canonical_diff_and_source_intake_snapshot_are_both_recorded
       public_summary: >
-        External integration makes topolactor a business app authoring OS rather than a
-        conventional admin tool. Notion and similar tools are the human editing surface;
-        topolactor remains the semantic runtime and validation authority.
+        M6 MVP focuses on self-hosted admin authoring, not external connectors. CSV/JSON
+        intake, JSONB manifest policy, document canvas binding, and PDF snapshot/diff
+        evidence are the completion boundary. External APIs remain future optional
+        surfaces and are explicitly outside M6 MVP completion judgment.
 
     M7_sql_attention_observation_runtime:
       title: SQL Attention observation runtime
@@ -449,7 +456,7 @@ system_roadmap_ssot:
         remains under construction; implemented infrastructure components do not yet close the full product loop.
       completion_condition:
         - ci_attention_user_guidance_ux_and_sql_attention_feedback_ux_are_both_user_visible
-        - non_it_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
+        - m6_self_hosted_admin_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
       known_gap_ref:
         - product.ci_attention_user_guidance_ux incomplete
 
@@ -1523,7 +1530,9 @@ system_roadmap_ssot:
       status: not_started
       production_ready: false
       milestone: M6_external_integration
-      public_summary: Generic connector contract for Notion, Sheets, Slack, GitHub, webhooks, files, and external APIs is not defined.
+      public_summary: >
+        Future optional external connector contract (Notion/Sheets/Slack/GitHub/webhooks/external APIs)
+        is not defined yet and is explicitly outside M6 MVP completion scope.
       completion_condition:
         - connector_adapter_contract_defines_source_identity_auth_scope_snapshot_and_mapping
         - external_source_identity_is_preserved_through_intake_validate_preview_apply
@@ -1531,13 +1540,15 @@ system_roadmap_ssot:
         - connector_failures_return_structured_errors
         - external_tool_write_permissions_are_never_equivalent_to_runtime_authority
       known_gap_ref:
-        - external connector contract SSOT not defined
+        - future optional external connector contract SSOT not defined (non-blocking for M6 MVP)
 
     notion_intake_runtime:
       status: not_started
       production_ready: false
       milestone: M6_external_integration
-      public_summary: Notion database intake is the first planned non-IT authoring surface, but no connector runtime exists yet.
+      public_summary: >
+        Notion intake runtime remains a future optional external surface and is outside
+        M6 MVP self-hosted admin authoring completion.
       completion_condition:
         - notion_database_can_be_registered_as_external_source
         - notion_pages_and_properties_are_snapshotted_before_mapping
@@ -1545,7 +1556,7 @@ system_roadmap_ssot:
         - validation_reports_ambiguous_property_type_relation_and_required_field_gaps
         - notion_is_never_treated_as_canonical_topolactor_SSOT
       known_gap_ref:
-        - Notion intake runtime not implemented
+        - future optional Notion intake runtime not implemented (non-blocking for M6 MVP)
 
 
 

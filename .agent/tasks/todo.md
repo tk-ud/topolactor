@@ -23,10 +23,12 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 non-IT authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
+- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
 
-## External Integration M6 (Deferred Start)
+## Self-hosted Admin Authoring M6 (Deferred Start)
 
-- [ ] M6 external integration bundle 群は `not_started` を維持する。
-      → Notion / Sheets / Slack / webhook / CSV import は開始時に validate-preview-apply boundary 単位で roadmap/TODO を起票し、implementation atom ではなく completion bundle で管理する。
+- [ ] M6 self-hosted admin authoring completion bundle 群は `not_started` を維持する。
+      → CSV/JSON import validate-preview-apply、JSONB label/value manifest、user-defined aggregation/display/binding policy、document canvas、DB/JSONB data binding、PDF export snapshot、intake snapshot + applied diff log を completion bundle 単位で管理する（implementation atom 分解はしない）。
 
+- [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
+      → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。
