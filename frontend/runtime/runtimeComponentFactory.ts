@@ -86,6 +86,7 @@ import { TelAddressCandidateLookup } from "../components/TelAddressCandidateLook
 import { NormalizeAddressCandidate } from "../components/NormalizeAddressCandidate.tsx";
 import { LookupCandidateConfirmPanel } from "../components/LookupCandidateConfirmPanel.tsx";
 import { BulkImportCandidatePanel } from "../components/BulkImportCandidatePanel.tsx";
+import { DocumentCanvasTemplateEditor } from "../components/DocumentCanvasTemplateEditor.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
@@ -1836,6 +1837,25 @@ function calculationPreviewPanelFactory(spec: RuntimeComponentSpec): RenderResul
 
 
 
+function documentCanvasTemplateEditorFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const backgroundImageUrl = typeof props.backgroundImageUrl === "string"
+    ? props.backgroundImageUrl
+    : undefined;
+  const fields = Array.isArray(props.fields)
+    ? (props.fields as Array<{ key: string; label?: string; x?: number; y?: number; value?: string }>)
+    : undefined;
+  return {
+    ok: true,
+    node: h(DocumentCanvasTemplateEditor, {
+      backgroundImageUrl,
+      fields,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
 function thinPreviewFactory(component: any, requiredBinding?: string): (spec: RuntimeComponentSpec)=>RenderResult {
   return (spec) => {
     if (requiredBinding) { const check = requireBinding(spec, requiredBinding); if (!check.ok) return check; }
@@ -1988,4 +2008,5 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["external_lookup/bulk_import_candidate_panel"], render: thinPreviewFactory(BulkImportCandidatePanel, "submit") },
   { componentKinds: ["design_token/layout_grid_editor"], render: layoutGridEditorFactory },
   { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
+  { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
 ];

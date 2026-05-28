@@ -938,7 +938,7 @@ category_g_document_canvas:
         - advanced_invoice_pagination_planner
         - dot_impact_printer_position_calibration
         - printer_specific_layout_optimization
-      runtimeConnected: false
+      runtimeConnected: true
 
 # =============================================================================
 # Category H: Safety / Inspector / Operation Guard UI

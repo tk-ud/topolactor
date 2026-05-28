@@ -36,7 +36,7 @@ Deno.test("documentCanvasCatalogCheck: entry exists in COMPONENT_CATALOG_ENTRIES
   assertEquals(entry.semanticRole, "admin_operation");
   assertEquals(entry.visualRole, "canvas");
   assertEquals(entry.lifecycleStatus, "code_only_drift");
-  assertEquals(entry.runtimeConnected, false);
+  assertEquals(entry.runtimeConnected, true);
   assertEquals(entry.registrationRequired, true);
   assert(
     entry.capabilityTags.includes("field_binding"),
@@ -112,6 +112,11 @@ Deno.test("documentCanvasCatalogCheck: SSOT contains document_canvas_template_ed
     prim.kind,
     COMPONENT_KIND,
     "SSOT primitive kind must match COMPONENT_KIND",
+  );
+  assertEquals(
+    prim.runtimeConnected,
+    true,
+    "SSOT runtimeConnected must be true after factory/projectionConstructor wiring",
   );
 });
 

@@ -233,3 +233,28 @@ Deno.test("runtimePrimitiveRenderer: UI_UX_PRIMITIVE_CATALOG_IDENTITIES (runtime
     );
   }
 });
+
+Deno.test("runtimePrimitiveRenderer: document_canvas/document_canvas_template_editor renders without event binding", () => {
+  const result = renderRuntimeComponent({
+    componentId: "canvas-1",
+    componentType: "document_canvas/document_canvas_template_editor",
+    props: {
+      backgroundImageUrl: "https://example.com/bg.png",
+      fields: [
+        { key: "name", label: "氏名", x: 10, y: 20, value: "テスト太郎" },
+      ],
+    },
+    eventBinding: {},
+  });
+  assertEquals(result.ok, true);
+});
+
+Deno.test("runtimePrimitiveRenderer: document_canvas/document_canvas_template_editor renders with empty props", () => {
+  const result = renderRuntimeComponent({
+    componentId: "canvas-empty",
+    componentType: "document_canvas/document_canvas_template_editor",
+    props: {},
+    eventBinding: {},
+  });
+  assertEquals(result.ok, true);
+});

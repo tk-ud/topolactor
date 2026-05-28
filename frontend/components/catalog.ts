@@ -1701,7 +1701,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
 
   // Category G (Document Canvas): Document Canvas / Template Projection UI
   // Upper SSOT: docs/design/ui-ux-primitive-catalog-ssot.yaml (category_g_document_canvas)
-  // runtimeConnected:false — no factory wiring; draft palette candidate only.
+  // runtimeConnected:true — factory/projectionConstructor wired; runtime projection surface.
   {
     componentKey: "document_canvas_template_editor.primitive",
     componentKind: "document_canvas/document_canvas_template_editor",
@@ -1718,7 +1718,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "export_snapshot",
       "admin_only",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
     notes:
       "projection_scaffold_only | background_reference_alignment | not_report_layout_engine",
