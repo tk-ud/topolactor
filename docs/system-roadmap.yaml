@@ -1146,12 +1146,16 @@ system_roadmap_ssot:
       public_summary: >
         CI Attention guidance fragment SSOT/schema defines read-only evidence fragments plus
         backend canonical promotion gate consumption boundary (non-frontend authority).
+        Guidance scope supports payload-defined authoring_surface identity with
+        admin_ui_builder fallback in runtime resolution.
         Backend promotion gate consumer is implemented: GetActiveBlockingFragmentsAsync
         queries active blocking fragments and DataPromoteAsync/DataLayoutPatchApplyAsync
         fail-close with CI_ATTENTION_PROMOTION_BLOCKED when blocking fragments exist.
         Frontend live projection subscription is implemented: SSE projection events with
         CiAttentionFragmentProjectionPayload are detected via extractCiAttentionFragmentPayload
-        and update live guidance display in ui-builder without draft editing lock.
+        and update live guidance display without draft editing lock.
+        Representative UI projection surfaces include LayoutDropZone,
+        ComponentPlacementHandle, and SnapGridOverlay.
         dismissed fragments remain visibility control only and do not unlock promotion.
       files:
         - backend/repository/CiAttentionGuidanceRepository.cs
