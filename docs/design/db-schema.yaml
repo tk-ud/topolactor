@@ -10,7 +10,6 @@ db_schema:
     - db/context_route_tables.sql
     - db/ui_topology_tables.sql
     - db/manifest_tables.sql
-    - db/admin_authoring_m6_tables.sql
 
   categories:
     - topology_definition
@@ -20,7 +19,6 @@ db_schema:
     - context_route
     - ui_topology
     - manifest
-    - admin_authoring
 
 
   postgresql_schema_namespaces:
@@ -75,6 +73,14 @@ db_schema:
       logs.hub_current: current.hub_relation
       optional_ui_projection: current.ui_relation
       logs.attention: append_only_evidence_relation
+
+  manifest_topology_integration_boundary:
+    authority:
+      - manifest.topology_defines_physical_table_definition_schema_reference_ui_projection_document_binding_aggregation_target_runtime_apply_action_mapping
+      - topologys.schema_registry.schema_def_defines_records_jsonb_schema_field_type_validation
+      - topologys.structure_maps_connect_attractor_package_schema_component_resolution
+    non_goal:
+      - no_dedicated_admin_authoring_manifest_table
 
   principles:
     - sql_files_are_implementation_not_ssot
@@ -650,27 +656,9 @@ db_schema:
         - sse_projection
 
 
-    admin_authoring_manifest:
-      category: admin_authoring
-      file: db/admin_authoring_m6_tables.sql
-      role: admin_defined_data_manifest_for_import_target_and_field_definition
-      key_columns:
-        - name: manifest_id
-          type: uuid
-          role: pk_manifest_reference_id
-        - name: manifest_key
-          type: text
-          role: unique_manifest_key
-        - name: field_definitions_jsonb
-          type: jsonb
-          role: manifest_field_definition
-        - name: aggregation_rules_jsonb
-          type: jsonb
-          role: selectable_aggregation_rules
-
     admin_import_snapshot:
-      category: admin_authoring
-      file: db/admin_authoring_m6_tables.sql
+      category: manifest
+      file: db/schema.sql
       role: intake_snapshot_for_validate_preview_apply_cycle
       key_columns:
         - name: snapshot_id
@@ -687,8 +675,8 @@ db_schema:
           role: imported_row_snapshot_payload
 
     admin_import_records:
-      category: admin_authoring
-      file: db/admin_authoring_m6_tables.sql
+      category: manifest
+      file: db/schema.sql
       role: per_row_jsonb_record_with_manifest_conformity_status
       key_columns:
         - name: id
@@ -709,8 +697,8 @@ db_schema:
           role: manifest_conformity_status_not_business_or_hub_lifecycle_state
 
     admin_import_apply_log:
-      category: admin_authoring
-      file: db/admin_authoring_m6_tables.sql
+      category: manifest
+      file: db/schema.sql
       role: explicit_apply_boundary_log_with_diff_reference
       key_columns:
         - name: apply_log_id
