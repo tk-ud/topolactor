@@ -912,6 +912,35 @@ category_g_external_lookup:
       mutation_boundary: preview_validate_explicit_apply
       runtimeConnected: false
 
+# Category G: Document Canvas / Template Projection UI
+category_g_document_canvas:
+  label: Document Canvas / Template Projection UI
+  purpose: >
+    Figma-like lightweight canvas for placing bound DB/JSONB fields onto
+    document/template projection surfaces. This is a projection scaffold,
+    not a production report layout engine.
+  boundary: projection_scaffold_only
+  primitives:
+    DocumentCanvasTemplateEditor:
+      key: document_canvas_template_editor.primitive
+      kind: document_canvas/document_canvas_template_editor
+      description: Lightweight canvas for background reference, text placement, field binding, preview, and export snapshot
+      semantic_role: admin_operation
+      visual_role: canvas
+      allowed:
+        - background_image_reference_for_alignment
+        - text_box_field_binding
+        - db_jsonb_field_coordinate_binding
+        - simple_preview_surface
+        - export_or_print_snapshot_boundary
+      prohibited:
+        - full_figma_like_editor
+        - production_grade_report_layout_engine
+        - advanced_invoice_pagination_planner
+        - dot_impact_printer_position_calibration
+        - printer_specific_layout_optimization
+      runtimeConnected: false
+
 # =============================================================================
 # Category H: Safety / Inspector / Operation Guard UI
 # =============================================================================
