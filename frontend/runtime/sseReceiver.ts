@@ -49,6 +49,7 @@ export type CiAttentionFragmentProjectionPayload = {
   Severity: string;
   TargetKind: string;
   TargetKey: string;
+  AuthoringSurface: string;
   UpdatedAt: string;
 };
 
@@ -70,6 +71,7 @@ export function extractCiAttentionFragmentPayload(
       Severity: typeof parsed.Severity === "string" ? parsed.Severity : "",
       TargetKind: typeof parsed.TargetKind === "string" ? parsed.TargetKind : "",
       TargetKey: typeof parsed.TargetKey === "string" ? parsed.TargetKey : "",
+      AuthoringSurface: typeof parsed.AuthoringSurface === "string" ? parsed.AuthoringSurface : "",
       UpdatedAt: typeof parsed.UpdatedAt === "string" ? parsed.UpdatedAt : "",
     };
   } catch {

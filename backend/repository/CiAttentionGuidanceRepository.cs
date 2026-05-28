@@ -15,6 +15,7 @@ public class CiAttentionGuidanceRepository
             fragment.Severity.ToString().ToLowerInvariant(),
             fragment.TargetKind,
             fragment.TargetKey,
+            fragment.AuthoringSurface,
             DateTimeOffset.UtcNow);
         return Task.FromResult(new CiAttentionGuidanceFragmentStored(payload.FragmentId, payload));
     }

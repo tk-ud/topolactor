@@ -133,7 +133,7 @@ public class SystemCiAdminRuntimeTests
         public override Task<CiAttentionGuidanceFragmentStored> UpsertCurrentAppendHistoryAsync(CiAttentionGuidanceFragmentUpsert fragment, CancellationToken ct = default)
         {
             UpsertCalls++;
-            var p = new CiAttentionGuidanceGuidanceEventPayload(Guid.NewGuid(), "missing_input", "active", "warning", fragment.TargetKind, fragment.TargetKey, DateTimeOffset.UtcNow);
+            var p = new CiAttentionGuidanceGuidanceEventPayload(Guid.NewGuid(), "missing_input", "active", "warning", fragment.TargetKind, fragment.TargetKey, "admin_ui_builder", DateTimeOffset.UtcNow);
             return Task.FromResult(new CiAttentionGuidanceFragmentStored(p.FragmentId, p));
         }
     }

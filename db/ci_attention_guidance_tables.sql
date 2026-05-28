@@ -34,7 +34,7 @@ COMMENT ON COLUMN logs.ci_attention_guidance_current.blocks_promotion IS
 'Backend promotion gate input hint only. This column itself is not authority and does not grant frontend lock behavior.';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ci_attention_guidance_current_identity
-ON logs.ci_attention_guidance_current (source_kind, source_id, target_kind, target_key, kind);
+ON logs.ci_attention_guidance_current (source_kind, source_id, target_kind, target_key, authoring_surface, kind);
 
 CREATE TABLE IF NOT EXISTS logs.ci_attention_guidance_history (
   history_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
