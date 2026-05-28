@@ -454,7 +454,6 @@ system_roadmap_ssot:
         - non_it_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
       known_gap_ref:
         - product.ci_attention_user_guidance_ux incomplete
-        - product.sql_attention_recommendation_feedback_ux incomplete
 
     backend.sql_attention_topology_projection:
       status: implemented
