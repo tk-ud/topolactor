@@ -430,7 +430,7 @@ system_roadmap_ssot:
       public_summary: >
         SQL Attention evidence (logs.attention) is now connected to the user-visible
         recommendation feedback surface via SqlAttentionTopologyProjectionRuntime (child projection)
-        and SqlAttentionProjectionPanel (frontend projection-only). Evidence-backed topology
+        and SqlAttentionProjectionPanel (frontend projection-only) via authenticated backend/frontend API boundary. Evidence-backed topology
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
@@ -474,6 +474,10 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
         - frontend/components/SqlAttentionProjectionPanel.tsx
+        - backend/Program.cs
+        - frontend/api/sqlAttentionProjection.ts
+        - frontend/routes/api/sql-attention/topology-projection.ts
+        - frontend/islands/OperationPanel.tsx
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
         - frontend/tests/sqlAttentionProjectionPanel.test.ts
       evidence:
