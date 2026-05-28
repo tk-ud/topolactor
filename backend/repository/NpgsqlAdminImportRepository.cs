@@ -183,4 +183,37 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is not null;
     }
+
+    public override async Task<bool> ManifestExistsAsync(
+        Guid manifestId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM manifest WHERE manifest_id = @mid LIMIT 1";
+        cmd.Parameters.AddWithValue("mid", manifestId);
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is not null;
+    }
+
+    public override async Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(
+        Guid snapshotId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT manifest_id, source_type, file_name " +
+            "FROM topologys.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
+        cmd.Parameters.AddWithValue("sid", snapshotId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (await reader.ReadAsync(ct))
+            return new AdminImportSnapshotMeta(
+                ManifestId: reader.GetGuid(0),
+                SourceType: reader.GetString(1),
+                FileName: reader.GetString(2));
+        return null;
+    }
 }

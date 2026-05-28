@@ -143,3 +143,12 @@ public record AdminImportSchemaSummary(
     Guid SchemaId,
     string Name
 );
+
+/// <summary>
+/// Snapshot metadata loaded from admin_import_snapshot for canonical diff linkage in apply.
+/// </summary>
+public record AdminImportSnapshotMeta(
+    Guid ManifestId,
+    string SourceType,
+    string FileName
+);

@@ -15,7 +15,7 @@ namespace Topolactor.Repository;
 ///   manifest (list query)
 ///   topologys.schema_registry (list query)
 ///
-/// In-memory base: test double only. All write methods are no-ops returning stub results.
+/// In-memory base: test double only. All write methods are no-ops (returns true).
 /// Production: override in NpgsqlAdminImportRepository.
 /// </summary>
 public class AdminImportRepository
@@ -117,5 +117,27 @@ public class AdminImportRepository
         CancellationToken ct = default)
     {
         return Task.FromResult(false);
+    }
+
+    /// <summary>
+    /// Checks whether the given manifest_id exists in the manifest table.
+    /// Returns false when not found — caller emits MANIFEST_NOT_FOUND explicit error.
+    /// </summary>
+    public virtual Task<bool> ManifestExistsAsync(
+        Guid manifestId,
+        CancellationToken ct = default)
+    {
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
+    /// Loads snapshot metadata (manifest_id, source_type, file_name) for canonical diff linkage.
+    /// Returns null when not found — caller may skip linkage or emit explicit error.
+    /// </summary>
+    public virtual Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(
+        Guid snapshotId,
+        CancellationToken ct = default)
+    {
+        return Task.FromResult<AdminImportSnapshotMeta?>(null);
     }
 }

@@ -13,14 +13,14 @@ namespace Topolactor.Runtime;
 /// - CSV/JSON parsing
 /// - Schema-driven validation (manifest/schema conformity only; not business state)
 /// - Snapshot + record persistence (preview only; no canonical mutation)
-/// - Apply log write (staged at MVP; no canonical entity mutation)
+/// - Apply log write with canonical diff linkage (staged at MVP; no canonical entity mutation)
 /// - Manifest and schema list queries for the admin UI selector
 ///
 /// Invariants:
 /// - PreviewAsync MUST NOT mutate canonical entity/hub/topology state.
-/// - ApplyAsync writes apply_log with status='staged' at MVP (partial boundary).
+/// - ApplyAsync writes apply_log with canonical diff linkage (sourceSnapshotId, manifestId).
 /// - admin_import_records.status is conformity status only — not business or hub lifecycle state.
-/// - Broken manifest / schema / malformed file → explicit ValidationError (no silent fallback).
+/// - All failure paths return explicit error codes. No silent fallback.
 /// </summary>
 public class AdminImportRuntime
 {
@@ -55,13 +55,38 @@ public class AdminImportRuntime
         string content,
         CancellationToken ct = default)
     {
+        // Validate sourceType early (free check before any I/O)
+        if (!string.Equals(sourceType, "csv", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(sourceType, "json", StringComparison.OrdinalIgnoreCase))
+            return Error("UNSUPPORTED_FILE_TYPE", $"sourceType must be csv or json; got: {sourceType}");
+
         // Load schema from schema_registry
         var schema = await _topologyRepository.LoadSchemaAsync(schemaId, ct);
         if (schema is null)
             return Error("SCHEMA_NOT_FOUND", $"Schema not found: {schemaId}");
 
+        // Parse schema fields — fail-close; malformed schema_def is an explicit error
+        var schemaFieldsResult = ParseSchemaFields(schema.RawDefinition);
+        if (!schemaFieldsResult.Success)
+            return Error(schemaFieldsResult.ErrorCode!, schemaFieldsResult.ErrorMessage!);
+        var schemaFields = schemaFieldsResult.Fields!;
+
+        // Validate manifest exists before any writes
+        bool manifestExists;
+        try
+        {
+            manifestExists = await _repository.ManifestExistsAsync(manifestId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.PreviewAsync: ManifestExistsAsync failed for manifestId={Mid}", manifestId);
+            return Error("REPOSITORY_UNAVAILABLE", "Failed to check manifest existence.");
+        }
+        if (!manifestExists)
+            return Error("MANIFEST_NOT_FOUND", $"Manifest not found: {manifestId}");
+
         // Parse content
-        List<(Dictionary<string, object?> row, int index)> parsedRows;
+        List<ParsedRow> parsedRows;
         JsonElement rawHeaderJsonb;
 
         if (string.Equals(sourceType, "csv", StringComparison.OrdinalIgnoreCase))
@@ -72,7 +97,7 @@ public class AdminImportRuntime
             parsedRows = parseResult.Rows!;
             rawHeaderJsonb = parseResult.HeaderJsonb;
         }
-        else if (string.Equals(sourceType, "json", StringComparison.OrdinalIgnoreCase))
+        else
         {
             var parseResult = ParseJson(content);
             if (!parseResult.Success)
@@ -80,28 +105,24 @@ public class AdminImportRuntime
             parsedRows = parseResult.Rows!;
             rawHeaderJsonb = JsonSerializer.SerializeToElement(Array.Empty<string>());
         }
-        else
-        {
-            return Error("UNSUPPORTED_FILE_TYPE", $"sourceType must be csv or json; got: {sourceType}");
-        }
 
-        // Parse schema fields
-        var schemaFields = ParseSchemaFields(schema.RawDefinition);
-
-        // Validate each row
+        // Validate each row against schema fields
         var recordDataList = new List<AdminImportRecordData>();
         var rawRowsList = new List<JsonElement>();
 
-        foreach (var (row, index) in parsedRows)
+        foreach (var parsedRow in parsedRows)
         {
-            var errors = ValidateRow(row, schemaFields);
-            var status = errors.Count == 0 ? "valid" : "invalid";
-            rawRowsList.Add(JsonSerializer.SerializeToElement(row));
+            var preErrors = parsedRow.PreParseErrors ?? Array.Empty<string>();
+            var schemaErrors = ValidateRow(parsedRow.Row, schemaFields);
+            var allErrors = preErrors.Concat(schemaErrors).ToList();
+            var status = allErrors.Count == 0 ? "valid" : "invalid";
+
+            rawRowsList.Add(JsonSerializer.SerializeToElement(parsedRow.Row));
             recordDataList.Add(new AdminImportRecordData(
-                RowIndex: index,
-                Records: row,
+                RowIndex: parsedRow.Index,
+                Records: parsedRow.Row,
                 Status: status,
-                ValidationErrors: errors));
+                ValidationErrors: allErrors));
         }
 
         int validCount = recordDataList.Count(r => r.Status == "valid");
@@ -113,24 +134,39 @@ public class AdminImportRuntime
 
         var snapshotId = Guid.NewGuid();
 
-        // Write snapshot
-        var snapshotOk = await _repository.CreateSnapshotAsync(
-            snapshotId, sourceType, fileName, manifestId,
-            rawHeaderJsonb, rawRowsJsonb, validationSummaryJsonb, ct);
-
-        if (!snapshotOk)
+        // Write snapshot — repository exception becomes structured error
+        try
+        {
+            var snapshotOk = await _repository.CreateSnapshotAsync(
+                snapshotId, sourceType, fileName, manifestId,
+                rawHeaderJsonb, rawRowsJsonb, validationSummaryJsonb, ct);
+            if (!snapshotOk)
+                return Error("REPOSITORY_UNAVAILABLE", "Failed to create import snapshot.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.PreviewAsync: CreateSnapshotAsync failed for snapshotId={Sid}", snapshotId);
             return Error("REPOSITORY_UNAVAILABLE", "Failed to create import snapshot.");
+        }
 
-        // Write records
+        // Write records — repository exception becomes structured error
         var recordRows = recordDataList.Select(r => (
             records: JsonSerializer.SerializeToElement(r.Records),
             status: r.Status,
             validationErrors: JsonSerializer.SerializeToElement(r.ValidationErrors)
         )).ToList();
 
-        var recordsOk = await _repository.CreateRecordsAsync(manifestId, snapshotId, recordRows, ct);
-        if (!recordsOk)
+        try
+        {
+            var recordsOk = await _repository.CreateRecordsAsync(manifestId, snapshotId, recordRows, ct);
+            if (!recordsOk)
+                return Error("REPOSITORY_UNAVAILABLE", "Failed to create import records.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.PreviewAsync: CreateRecordsAsync failed for snapshotId={Sid}", snapshotId);
             return Error("REPOSITORY_UNAVAILABLE", "Failed to create import records.");
+        }
 
         _logger.LogInformation(
             "AdminImportRuntime.PreviewAsync: snapshotId={Sid} validCount={V} invalidCount={I}",
@@ -152,33 +188,77 @@ public class AdminImportRuntime
 
     /// <summary>
     /// Applies valid records from the given snapshot.
-    /// At MVP, writes apply_log with status='staged' — no canonical entity mutation.
+    /// Writes apply_log with canonical diff linkage (sourceSnapshotId + manifestId in diff JSONB).
+    /// At MVP, status='staged' — no canonical entity mutation is performed.
     /// </summary>
     public async Task<AdminImportApplyResult> ApplyAsync(
         Guid snapshotId,
         CancellationToken ct = default)
     {
-        var exists = await _repository.SnapshotExistsAsync(snapshotId, ct);
+        bool exists;
+        try
+        {
+            exists = await _repository.SnapshotExistsAsync(snapshotId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.ApplyAsync: SnapshotExistsAsync failed for snapshotId={Sid}", snapshotId);
+            return ApplyError("REPOSITORY_UNAVAILABLE", "Failed to check snapshot existence.");
+        }
         if (!exists)
             return ApplyError("SNAPSHOT_NOT_FOUND", $"Snapshot not found: {snapshotId}");
 
-        var validCount = await _repository.CountValidRecordsAsync(snapshotId, ct);
+        int validCount;
+        try
+        {
+            validCount = await _repository.CountValidRecordsAsync(snapshotId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.ApplyAsync: CountValidRecordsAsync failed for snapshotId={Sid}", snapshotId);
+            return ApplyError("REPOSITORY_UNAVAILABLE", "Failed to count valid records.");
+        }
+
+        // Load snapshot metadata for canonical diff linkage
+        AdminImportSnapshotMeta? meta = null;
+        try
+        {
+            meta = await _repository.GetSnapshotMetaAsync(snapshotId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "AdminImportRuntime.ApplyAsync: GetSnapshotMetaAsync failed for snapshotId={Sid}; proceeding without full linkage", snapshotId);
+        }
 
         var applyLogId = Guid.NewGuid();
+
+        // Canonical diff JSONB: records source intake snapshot + manifest linkage + staged mutation status.
+        // apply_log.snapshot_id FK provides DB-level linkage; this JSONB adds explicit auditability.
         var diff = new
         {
-            snapshotId = snapshotId.ToString(),
-            appliedRecordCount = validCount,
+            sourceSnapshotId = snapshotId.ToString(),
+            manifestId = meta?.ManifestId.ToString(),
+            sourceType = meta?.SourceType,
+            fileName = meta?.FileName,
+            validRecordCount = validCount,
             canonicalMutationStatus = "staged",
-            note = "MVP: valid records counted; canonical entity mutation not yet implemented. Apply log written for audit."
+            canonicalMutationNote = "Valid records staged for canonical mutation. Mutation not yet implemented at MVP.",
+            appliedAt = DateTimeOffset.UtcNow.ToString("O")
         };
         var diffJsonb = JsonSerializer.SerializeToElement(diff);
 
-        var ok = await _repository.CreateApplyLogAsync(
-            applyLogId, snapshotId, validCount, diffJsonb, "staged", ct);
-
-        if (!ok)
+        try
+        {
+            var ok = await _repository.CreateApplyLogAsync(
+                applyLogId, snapshotId, validCount, diffJsonb, "staged", ct);
+            if (!ok)
+                return ApplyError("REPOSITORY_UNAVAILABLE", "Failed to write apply log.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AdminImportRuntime.ApplyAsync: CreateApplyLogAsync failed for applyLogId={Lid}", applyLogId);
             return ApplyError("REPOSITORY_UNAVAILABLE", "Failed to write apply log.");
+        }
 
         _logger.LogInformation(
             "AdminImportRuntime.ApplyAsync: applyLogId={Lid} snapshotId={Sid} validCount={V} status=staged",
@@ -190,7 +270,7 @@ public class AdminImportRuntime
             SnapshotId: snapshotId.ToString(),
             AppliedRecordCount: validCount,
             Status: "staged",
-            Note: "Apply log written. Canonical entity mutation is not yet implemented (MVP partial boundary).",
+            Note: "Apply log written with canonical diff linkage. Canonical entity mutation is not yet implemented (MVP staged boundary).",
             ErrorCode: null,
             ErrorMessage: null);
     }
@@ -224,31 +304,53 @@ public class AdminImportRuntime
         if (lines.Count == 0 || string.IsNullOrWhiteSpace(lines[0]))
             return new ParseResult(false, "MALFORMED_CSV", "CSV has no header line.", null, default);
 
-        var headers = SplitCsvLine(lines[0]);
+        var (headerMalformed, headers) = SplitCsvLine(lines[0]);
+        if (headerMalformed)
+            return new ParseResult(false, "MALFORMED_CSV", "CSV header line has an unclosed quote.", null, default);
         if (headers.Count == 0)
             return new ParseResult(false, "MALFORMED_CSV", "CSV header line is empty.", null, default);
 
         var headerJsonb = JsonSerializer.SerializeToElement(headers);
-        var rows = new List<(Dictionary<string, object?>, int)>();
+        var rows = new List<ParsedRow>();
 
         for (int i = 1; i < lines.Count; i++)
         {
             var line = lines[i];
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            var values = SplitCsvLine(line);
+            var (malformed, values) = SplitCsvLine(line);
+
+            if (malformed)
+            {
+                rows.Add(new ParsedRow(new Dictionary<string, object?>(), i - 1,
+                    new[] { "CSV row has an unclosed quote." }));
+                continue;
+            }
+
+            if (values.Count != headers.Count)
+            {
+                // Build partial row for display; mark invalid
+                var partialRow = new Dictionary<string, object?>();
+                for (int j = 0; j < headers.Count; j++)
+                    partialRow[headers[j]] = j < values.Count ? (object?)values[j] : null;
+                rows.Add(new ParsedRow(partialRow, i - 1,
+                    new[] { $"field count mismatch: expected {headers.Count}, got {values.Count}" }));
+                continue;
+            }
+
             var row = new Dictionary<string, object?>();
             for (int j = 0; j < headers.Count; j++)
-            {
-                row[headers[j]] = j < values.Count ? (object?)values[j] : null;
-            }
-            rows.Add((row, i - 1));
+                row[headers[j]] = values[j];
+            rows.Add(new ParsedRow(row, i - 1));
         }
+
+        if (rows.Count == 0)
+            return new ParseResult(false, "CSV_NO_DATA_ROWS", "CSV has a header but no data rows.", null, default);
 
         return new ParseResult(true, null, null, rows, headerJsonb);
     }
 
-    private static List<string> SplitCsvLine(string line)
+    private static (bool Malformed, List<string> Fields) SplitCsvLine(string line)
     {
         var fields = new List<string>();
         var sb = new StringBuilder();
@@ -279,8 +381,12 @@ public class AdminImportRuntime
                 sb.Append(c);
             }
         }
+
+        if (inQuotes)
+            return (true, fields); // unclosed quote detected
+
         fields.Add(sb.ToString());
-        return fields;
+        return (false, fields);
     }
 
     // ---------------------------------------------------------------------------
@@ -306,7 +412,7 @@ public class AdminImportRuntime
             return new ParseResult(false, "UNSUPPORTED_JSON_SHAPE",
                 "JSON must be an array of objects. Root is not an array.", null, default);
 
-        var rows = new List<(Dictionary<string, object?>, int)>();
+        var rows = new List<ParsedRow>();
         int index = 0;
 
         foreach (var element in doc.RootElement.EnumerateArray())
@@ -328,7 +434,7 @@ public class AdminImportRuntime
                     _                    => prop.Value.GetRawText()
                 };
             }
-            rows.Add((row, index));
+            rows.Add(new ParsedRow(row, index));
             index++;
         }
 
@@ -336,36 +442,48 @@ public class AdminImportRuntime
     }
 
     // ---------------------------------------------------------------------------
-    // Schema validation
+    // Schema validation — fail-close
     // ---------------------------------------------------------------------------
 
-    private static List<SchemaField> ParseSchemaFields(string? rawDefinition)
+    private static ParseSchemaResult ParseSchemaFields(string? rawDefinition)
     {
         if (string.IsNullOrWhiteSpace(rawDefinition))
-            return new List<SchemaField>();
+            return new ParseSchemaResult(false, "SCHEMA_DEF_INVALID", "Schema definition is null or empty.", null);
 
+        JsonDocument doc;
         try
         {
-            var doc = JsonDocument.Parse(rawDefinition);
-            if (!doc.RootElement.TryGetProperty("fields", out var fieldsEl)
-                || fieldsEl.ValueKind != JsonValueKind.Array)
-                return new List<SchemaField>();
-
-            var fields = new List<SchemaField>();
-            foreach (var fieldEl in fieldsEl.EnumerateArray())
-            {
-                var key = fieldEl.TryGetProperty("key", out var k) ? k.GetString() : null;
-                var type = fieldEl.TryGetProperty("type", out var t) ? t.GetString() : "text";
-                var required = fieldEl.TryGetProperty("required", out var r) && r.GetBoolean();
-                if (!string.IsNullOrWhiteSpace(key))
-                    fields.Add(new SchemaField(key!, type ?? "text", required));
-            }
-            return fields;
+            doc = JsonDocument.Parse(rawDefinition);
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
-            return new List<SchemaField>();
+            return new ParseSchemaResult(false, "SCHEMA_DEF_INVALID",
+                $"Schema definition is not valid JSON: {ex.Message}", null);
         }
+
+        if (!doc.RootElement.TryGetProperty("fields", out var fieldsEl))
+            return new ParseSchemaResult(false, "SCHEMA_FIELDS_REQUIRED",
+                "Schema definition is missing required 'fields' property.", null);
+
+        if (fieldsEl.ValueKind != JsonValueKind.Array)
+            return new ParseSchemaResult(false, "SCHEMA_FIELDS_REQUIRED",
+                "Schema definition 'fields' must be a JSON array.", null);
+
+        var fields = new List<SchemaField>();
+        int fieldIndex = 0;
+        foreach (var fieldEl in fieldsEl.EnumerateArray())
+        {
+            var key = fieldEl.TryGetProperty("key", out var k) ? k.GetString() : null;
+            if (string.IsNullOrWhiteSpace(key))
+                return new ParseSchemaResult(false, "SCHEMA_FIELD_KEY_REQUIRED",
+                    $"Schema field at index {fieldIndex} is missing required 'key' property.", null);
+            var type = fieldEl.TryGetProperty("type", out var t) ? t.GetString() : "text";
+            var required = fieldEl.TryGetProperty("required", out var r) && r.GetBoolean();
+            fields.Add(new SchemaField(key!, type ?? "text", required));
+            fieldIndex++;
+        }
+
+        return new ParseSchemaResult(true, null, null, fields);
     }
 
     private static List<string> ValidateRow(
@@ -432,10 +550,21 @@ public class AdminImportRuntime
 
     private sealed record SchemaField(string Key, string Type, bool Required);
 
+    private sealed record ParsedRow(
+        Dictionary<string, object?> Row,
+        int Index,
+        IReadOnlyList<string>? PreParseErrors = null);
+
     private sealed record ParseResult(
         bool Success,
         string? ErrorCode,
         string? ErrorMessage,
-        List<(Dictionary<string, object?> row, int index)>? Rows,
+        List<ParsedRow>? Rows,
         JsonElement HeaderJsonb);
+
+    private sealed record ParseSchemaResult(
+        bool Success,
+        string? ErrorCode,
+        string? ErrorMessage,
+        List<SchemaField>? Fields);
 }
