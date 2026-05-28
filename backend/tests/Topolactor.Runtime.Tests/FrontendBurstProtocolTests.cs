@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
@@ -9,85 +8,88 @@ using Xunit;
 
 namespace Topolactor.Runtime.Tests;
 
-// Load observation tests for RuntimeTimelineScheduler → ManifestDispatcher pipeline.
+// Protocol invariant tests for RuntimeTimelineScheduler under burst / repeated client-lane input.
 //
-// Purpose: observe queue backlog convergence / divergence and explicit rejection behavior
-// under simulated load. These are not precision benchmarks. Timing is measured as an
-// upper bound over a deterministic input batch; no wall-clock rate thresholds are asserted.
+// Purpose: verify that the local application-layer communication protocol holds when
+// a front instance or client lane sends a burst of requests. This is not a performance
+// benchmark. The subject under test is the protocol contract:
+//
+//   - request accepted / rejected is always explicit (no silent drop)
+//   - client completion contract is preserved end-to-end
+//   - queue full surfaces as SCHEDULER_QUEUE_FULL, never as silent fallback
+//   - timeout / cancellation is observable, never swallowed
+//   - backlog (unresolved requests) converges to 0 after burst completes
 //
 // Two scenarios:
-//   steady_load    — input within queue capacity; all requests complete,
-//                    backlog converges to 0, zero silent fallback.
-//   over_capacity  — input exceeds queue capacity; excess is explicitly rejected as
-//                    SCHEDULER_QUEUE_FULL, no response is null, no silent drop.
+//   within_capacity — burst input fits in queue; all client requests complete,
+//                     no protocol break, backlog drains to 0.
+//   over_capacity   — burst input exceeds queue; every overflow request returns
+//                     SCHEDULER_QUEUE_FULL with no silent fallback and no null response.
 //
-// Metrics collected per window (LoadWindowObservation):
-//   input_count, processed_count, rejected_count, timeout_count,
-//   backlog_count (derived), max_latency_ms, avg_latency_ms (batch-level).
-public class SchedulerLoadObservationTests
+// Protocol state is captured per burst in BurstProtocolObservation:
+//   input_count, processed_count, rejected_count, timeout_count, backlog_count.
+public class FrontendBurstProtocolTests
 {
     // ─── Config constants (no magic numbers) ─────────────────────────────
 
-    // Steady load: input well within queue capacity → expect all to complete.
-    private const int SteadyLoad_QueueCapacity = 64;
-    private const int SteadyLoad_InputCount = 16;
+    // Within-capacity burst: input count well below queue capacity.
+    private const int WithinCapacity_QueueCapacity = 64;
+    private const int WithinCapacity_BurstInputCount = 16;
 
-    // Over capacity: queue filled to capacity before client requests arrive.
+    // Over-capacity burst: queue is filled to capacity before client requests arrive.
     private const int OverCapacity_QueueCapacity = 4;
-    private const int OverCapacity_PreFillCount = OverCapacity_QueueCapacity;   // fills queue
-    private const int OverCapacity_ClientInputCount = 6;                        // all overflow
+    private const int OverCapacity_PreFillCount = OverCapacity_QueueCapacity;  // fills queue
+    private const int OverCapacity_BurstInputCount = 6;                        // all overflow
 
-    // ─── Steady load ─────────────────────────────────────────────────────
+    // ─── Within-capacity burst ────────────────────────────────────────────
 
     [Fact]
-    public async Task SteadyLoad_WithinCapacity_AllProcessedBacklogConverges()
+    public async Task FrontendBurst_WithinQueueCapacity_CompletesAllClientRequests()
     {
-        // Verifies that processing-capacity-bounded input:
-        //   - results in processed_count == input_count
-        //   - produces zero rejections (no SCHEDULER_QUEUE_FULL)
-        //   - produces zero timeouts (no CLIENT_TRIGGER_CANCELED)
-        //   - backlog converges to 0 (no divergence)
-        //   - existing invariants (fixed route / topology IDs / recommendation) are not broken
+        // Protocol invariants verified:
+        //   - all accepted requests complete (processed_count == input_count)
+        //   - no request is silently dropped (rejected_count == 0)
+        //   - client completion contract holds (timeout_count == 0)
+        //   - no unresolved communication remains after burst (backlog_count == 0)
+        //   - fixed route / existing dispatch invariants are not broken
 
         var fakeHandler = new ImmediateFakeDispatchableRuntime();
-        var dispatcher = BuildDispatcherWithFakeHandler(fakeHandler, runtimeDestination: "load_test_steady");
+        var dispatcher = BuildDispatcherWithFakeHandler(fakeHandler, runtimeDestination: "burst_protocol_test");
 
         var scheduler = new RuntimeTimelineScheduler(
             NullLogger<RuntimeTimelineScheduler>.Instance,
             dispatcher,
-            queueCapacity: SteadyLoad_QueueCapacity);
+            queueCapacity: WithinCapacity_QueueCapacity);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         await scheduler.StartAsync(cts.Token);
-        var sw = Stopwatch.StartNew();
         try
         {
             var request = new EndpointRequestDto(
                 "Search", "default", "entity", "Search", null, null, null);
 
             var tasks = Enumerable
-                .Range(0, SteadyLoad_InputCount)
+                .Range(0, WithinCapacity_BurstInputCount)
                 .Select(_ => scheduler.AlignAndDispatchAsync(request, cts.Token))
                 .ToArray();
 
             var responses = await Task.WhenAll(tasks);
-            sw.Stop();
 
-            var obs = LoadWindowObservation.Collect(responses, SteadyLoad_InputCount, sw.ElapsedMilliseconds);
+            var obs = BurstProtocolObservation.Collect(responses, WithinCapacity_BurstInputCount);
 
-            // All requests within capacity must be processed
-            Assert.Equal(SteadyLoad_InputCount, obs.InputCount);
-            Assert.Equal(SteadyLoad_InputCount, obs.ProcessedCount);
+            // All burst requests must be processed — no silent drop
+            Assert.Equal(WithinCapacity_BurstInputCount, obs.InputCount);
+            Assert.Equal(WithinCapacity_BurstInputCount, obs.ProcessedCount);
 
-            // No overflow signal — silent fallback is prohibited
+            // No queue-full signal — protocol must not reject within-capacity input
             Assert.Equal(0, obs.RejectedCount);
 
-            // No timeout — client lane completion contract must hold
+            // No timeout — client lane completion contract must not break
             Assert.Equal(0, obs.TimeoutCount);
 
-            // Backlog must converge to 0 (processed + rejected + timeout == input)
+            // Backlog must drain to 0 — no unresolved protocol state after burst
             Assert.True(obs.IsConverged,
-                $"backlog={obs.BacklogCount} must be 0 after all tasks complete " +
+                $"backlog={obs.BacklogCount} must be 0 after burst completes " +
                 $"(input={obs.InputCount} processed={obs.ProcessedCount} " +
                 $"rejected={obs.RejectedCount} timeout={obs.TimeoutCount})");
         }
@@ -97,15 +99,16 @@ public class SchedulerLoadObservationTests
         }
     }
 
-    // ─── Over capacity load ──────────────────────────────────────────────
+    // ─── Over-capacity burst ──────────────────────────────────────────────
 
     [Fact]
-    public async Task OverCapacityLoad_ExceedsQueueCapacity_RejectedExplicitlyNoSilentFallback()
+    public async Task FrontendBurst_ExceedsQueueCapacity_ReturnsExplicitQueueFullWithoutSilentFallback()
     {
-        // Verifies that when the queue is at capacity:
-        //   - every additional client trigger returns SCHEDULER_QUEUE_FULL (explicit error)
-        //   - no response is null or otherwise missing (no silent drop)
-        //   - rejected_count equals the over-capacity client input count
+        // Protocol invariants verified:
+        //   - every request that exceeds capacity returns SCHEDULER_QUEUE_FULL
+        //   - no response is null or missing (silent drop is prohibited)
+        //   - Success is false for every rejected request (no ambiguous state)
+        //   - rejected_count equals the over-capacity input count
         //
         // Background service is intentionally NOT started so pre-filled cron items
         // remain in the channel, holding it at full capacity for the duration of this test.
@@ -131,26 +134,26 @@ public class SchedulerLoadObservationTests
                 "before the queue is full.");
         }
 
-        // All subsequent client requests must overflow with an explicit rejection.
+        // Send burst of client requests — all must overflow with an explicit protocol error.
         // When TryWrite fails (queue full), AlignAndDispatchAsync returns the rejection
-        // response before any async continuation — await still works correctly.
-        var rejectedResponses = new EndpointResponseDto[OverCapacity_ClientInputCount];
-        for (var i = 0; i < OverCapacity_ClientInputCount; i++)
+        // synchronously before any async continuation.
+        var responses = new EndpointResponseDto[OverCapacity_BurstInputCount];
+        for (var i = 0; i < OverCapacity_BurstInputCount; i++)
         {
-            rejectedResponses[i] = await scheduler.AlignAndDispatchAsync(request);
+            responses[i] = await scheduler.AlignAndDispatchAsync(request);
         }
 
-        var obs = LoadWindowObservation.Collect(rejectedResponses, OverCapacity_ClientInputCount, 0);
+        var obs = BurstProtocolObservation.Collect(responses, OverCapacity_BurstInputCount);
 
-        // Every over-capacity client request must produce an explicit rejection
-        Assert.Equal(OverCapacity_ClientInputCount, obs.InputCount);
-        Assert.Equal(OverCapacity_ClientInputCount, obs.RejectedCount);
+        // Every over-capacity request must be explicitly rejected
+        Assert.Equal(OverCapacity_BurstInputCount, obs.InputCount);
+        Assert.Equal(OverCapacity_BurstInputCount, obs.RejectedCount);
         Assert.Equal(0, obs.ProcessedCount);
         Assert.True(obs.RejectedCount > 0,
-            "Over-capacity load must produce at least one explicit rejection.");
+            "Over-capacity burst must surface at least one explicit rejection.");
 
-        // Each rejection must carry SCHEDULER_QUEUE_FULL (no silent fallback, no null error list)
-        Assert.All(rejectedResponses, r =>
+        // Each rejection must carry the protocol error code — null errors list is silent fallback
+        Assert.All(responses, r =>
         {
             Assert.False(r.Success);
             Assert.NotNull(r.Errors);
@@ -186,52 +189,46 @@ public class SchedulerLoadObservationTests
 }
 
 /// <summary>
-/// Per-window load observation. One window = one test batch.
-/// Metrics names align with the load test specification:
-///   input_count_per_sec, processed_count_per_sec, rejected_count, timeout_count,
-///   backlog_count (derived), max_latency_ms (batch upper bound), avg_latency_ms.
+/// Protocol-state snapshot for one burst. Counts each request outcome by
+/// communication result: processed (Success), rejected (SCHEDULER_QUEUE_FULL),
+/// or timed out (CLIENT_TRIGGER_CANCELED). Backlog is derived as the residual
+/// unresolved count; zero means the burst completed without protocol leakage.
 /// </summary>
-internal sealed record LoadWindowObservation(
+internal sealed record BurstProtocolObservation(
     int InputCount,
     int ProcessedCount,
     int RejectedCount,
-    int TimeoutCount,
-    long MaxLatencyMs,
-    long AvgLatencyMs)
+    int TimeoutCount)
 {
     /// <summary>
-    /// Items not yet accounted for (queued but not yet completed/rejected/timed out).
-    /// Zero means backlog has converged.
+    /// Requests not accounted for by any terminal protocol state.
+    /// Zero means no unresolved communication remains after the burst.
     /// </summary>
     public int BacklogCount => InputCount - ProcessedCount - RejectedCount - TimeoutCount;
 
     public bool IsConverged => BacklogCount == 0;
 
-    public static LoadWindowObservation Collect(
+    public static BurstProtocolObservation Collect(
         EndpointResponseDto[] responses,
-        int inputCount,
-        long elapsedMs)
+        int inputCount)
     {
         var processedCount = responses.Count(r => r.Success);
         var rejectedCount = responses.Count(r =>
             !r.Success && r.Errors.Any(e => e.Code == "SCHEDULER_QUEUE_FULL"));
         var timeoutCount = responses.Count(r =>
             !r.Success && r.Errors.Any(e => e.Code == "CLIENT_TRIGGER_CANCELED"));
-        var avgLatencyMs = inputCount > 0 ? elapsedMs / inputCount : 0;
 
-        return new LoadWindowObservation(
+        return new BurstProtocolObservation(
             InputCount: inputCount,
             ProcessedCount: processedCount,
             RejectedCount: rejectedCount,
-            TimeoutCount: timeoutCount,
-            MaxLatencyMs: elapsedMs,
-            AvgLatencyMs: avgLatencyMs);
+            TimeoutCount: timeoutCount);
     }
 }
 
 /// <summary>
 /// Fake dispatcher that completes immediately with a success response.
-/// Used for steady-load tests where dispatch time should not be a variable.
+/// Isolates protocol state transitions from dispatch execution time.
 /// </summary>
 internal sealed class ImmediateFakeDispatchableRuntime : IDispatchableRuntime
 {
