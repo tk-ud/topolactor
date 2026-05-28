@@ -852,7 +852,7 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     seed_import_export_runtime:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
