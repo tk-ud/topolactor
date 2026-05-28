@@ -1189,9 +1189,11 @@ system_roadmap_ssot:
         - backend/runtime/ManifestDispatcher.cs
         - backend/runtime/OperationVectorResolver.cs
         - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/DispatchRoleAuthorityTests.cs
       evidence:
         tests:
           - RuntimeExecutorTests
+          - DispatchRoleAuthorityTests
         ci:
           - backend-tests
       completion_condition:
