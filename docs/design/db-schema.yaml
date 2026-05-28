@@ -658,7 +658,7 @@ db_schema:
 
     admin_import_snapshot:
       category: manifest
-      file: db/schema.sql
+      file: db/manifest_tables.sql
       role: intake_snapshot_for_validate_preview_apply_cycle
       key_columns:
         - name: snapshot_id
@@ -676,7 +676,7 @@ db_schema:
 
     admin_import_records:
       category: manifest
-      file: db/schema.sql
+      file: db/manifest_tables.sql
       role: per_row_jsonb_record_with_manifest_conformity_status
       key_columns:
         - name: id
@@ -698,7 +698,7 @@ db_schema:
 
     admin_import_apply_log:
       category: manifest
-      file: db/schema.sql
+      file: db/manifest_tables.sql
       role: explicit_apply_boundary_log_with_diff_reference
       key_columns:
         - name: apply_log_id
