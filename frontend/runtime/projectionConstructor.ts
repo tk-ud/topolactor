@@ -126,6 +126,40 @@ function normalizeComponentProps(componentKind: string, props: JsonObject): Resu
       if (!Array.isArray(props.columns)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_COLUMNS: columns(array) is required" };
       if (!Array.isArray(props.rows)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_ROWS: rows(array) is required" };
       return { ok: true, value: { ...props, table: props.table ?? { columns: props.columns, rows: props.rows } } };
+    case "document_canvas/document_canvas_template_editor": {
+      if (props.backgroundImageUrl !== undefined && typeof props.backgroundImageUrl !== "string") {
+        return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_BACKGROUND_URL: backgroundImageUrl must be string" };
+      }
+      if (props.fields !== undefined) {
+        if (!Array.isArray(props.fields)) {
+          return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELDS: fields must be array" };
+        }
+        const fieldsArr = props.fields as unknown[];
+        for (let i = 0; i < fieldsArr.length; i++) {
+          const field = fieldsArr[i];
+          if (typeof field !== "object" || field === null || Array.isArray(field)) {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_ITEM: fields[${i}] must be object` };
+          }
+          const f = field as Record<string, unknown>;
+          if (typeof f.key !== "string" || f.key.length === 0) {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_KEY: fields[${i}].key must be non-empty string` };
+          }
+          if (f.label !== undefined && typeof f.label !== "string") {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_LABEL: fields[${i}].label must be string` };
+          }
+          if (f.x !== undefined && typeof f.x !== "number") {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_X: fields[${i}].x must be number` };
+          }
+          if (f.y !== undefined && typeof f.y !== "number") {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_Y: fields[${i}].y must be number` };
+          }
+          if (f.value !== undefined && typeof f.value !== "string") {
+            return { ok: false, error: `PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_VALUE: fields[${i}].value must be string` };
+          }
+        }
+      }
+      return { ok: true, value: { ...props } };
+    }
     default:
       return { ok: false, error: `PROJECTION_CONSTRUCTOR_UNSUPPORTED_COMPONENT_KIND: ${componentKind}` };
   }

@@ -226,15 +226,14 @@ system_roadmap_ssot:
         - jsonb_label_value_manifest_runtime: not_started
         - user_defined_aggregation_display_binding_policy: not_started
         - DocumentCanvasTemplateEditor_primitive_wiring: implemented
-        - document_canvas_runtime_connected_factory_registration: not_started
-        - data_binding_to_document_canvas: not_started
+        - document_canvas_runtime_connected_factory_registration: implemented
+        - data_binding_to_document_canvas: partial
         - pdf_export_snapshot_runtime: not_started
       blocking_gaps:
         - jsonb_label_value_manifest runtime not implemented
         - user_defined_aggregation_display_binding_policy not implemented
         - DocumentCanvasTemplateEditor primitive SSOT/catalog/component/export/seed/CI wiring is implemented as a lightweight projection scaffold and draft palette candidate
-        - document_canvas_runtime_connected_factory_registration not implemented; document_canvas/document_canvas_template_editor is not yet runtimeConnected:true through runtime component factory / projection constructor normalizeComponentProps
-        - data_binding_to_document_canvas not implemented as a DocumentCanvas completion bundle; the generic projection props pipeline exists, but DocumentCanvas runtime factory/render assignment and field coordinate binding policy remain
+        - data_binding_to_document_canvas partial; factory/projectionConstructor/field coordinate binding wired and tested, but full DB/JSONB-to-canvas binding loop requires jsonb_label_value_manifest_runtime (not_started)
         - pdf_export_snapshot_runtime not implemented
       completion_condition:
         - admin_can_import_csv_json_as_candidate_payload

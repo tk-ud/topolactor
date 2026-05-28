@@ -207,6 +207,151 @@ Deno.test("constructProjection: schema type mismatch is explicit error", () => {
   );
 });
 
+// === document_canvas/document_canvas_template_editor ===
+
+Deno.test("constructProjection: document_canvas/document_canvas_template_editor supported with valid fields", () => {
+  const result = constructProjection(
+    {
+      backgroundImageUrl: "https://example.com/bg.png",
+      fields: [
+        { key: "company_name", label: "会社名", x: 10, y: 20, value: "株式会社テスト" },
+        { key: "amount", x: 100, y: 50 },
+      ],
+    },
+    {
+      constructorKey: "k",
+      packageIds: ["p"],
+      outputKind: "component_projection",
+      componentId: "cmp-canvas",
+      componentDefinition: {
+        componentId: "cmp-canvas",
+        component_kind: "document_canvas/document_canvas_template_editor",
+      },
+    },
+  );
+  assertExists(result.projection);
+  if (!result.projection || result.projection.kind !== "component_projection") {
+    throw new Error("expected component_projection");
+  }
+  assertEquals(result.projection.props.backgroundImageUrl, "https://example.com/bg.png");
+  const fields = result.projection.props.fields as Array<Record<string, unknown>>;
+  assertEquals(fields.length, 2);
+  assertEquals(fields[0].key, "company_name");
+  assertEquals(fields[0].label, "会社名");
+  assertEquals(fields[0].x, 10);
+  assertEquals(fields[0].value, "株式会社テスト");
+  assertEquals(fields[1].key, "amount");
+});
+
+Deno.test("constructProjection: document_canvas/document_canvas_template_editor without fields is valid", () => {
+  const result = constructProjection({}, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-canvas-empty",
+    componentDefinition: {
+      componentId: "cmp-canvas-empty",
+      component_kind: "document_canvas/document_canvas_template_editor",
+    },
+  });
+  assertExists(result.projection);
+  assertEquals(result.error, undefined);
+});
+
+Deno.test("constructProjection: document_canvas fields non-array is explicit error", () => {
+  const result = constructProjection({ fields: "bad" }, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-canvas-err",
+    componentDefinition: {
+      componentId: "cmp-canvas-err",
+      component_kind: "document_canvas/document_canvas_template_editor",
+    },
+  });
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELDS: fields must be array",
+  );
+});
+
+Deno.test("constructProjection: document_canvas field missing key is explicit error", () => {
+  const result = constructProjection(
+    { fields: [{ label: "No Key", x: 0, y: 0 }] },
+    {
+      constructorKey: "k",
+      packageIds: ["p"],
+      outputKind: "component_projection",
+      componentId: "cmp-canvas-nokey",
+      componentDefinition: {
+        componentId: "cmp-canvas-nokey",
+        component_kind: "document_canvas/document_canvas_template_editor",
+      },
+    },
+  );
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_KEY: fields[0].key must be non-empty string",
+  );
+});
+
+Deno.test("constructProjection: document_canvas field x non-number is explicit error", () => {
+  const result = constructProjection(
+    { fields: [{ key: "f1", x: "10px" }] },
+    {
+      constructorKey: "k",
+      packageIds: ["p"],
+      outputKind: "component_projection",
+      componentId: "cmp-canvas-badx",
+      componentDefinition: {
+        componentId: "cmp-canvas-badx",
+        component_kind: "document_canvas/document_canvas_template_editor",
+      },
+    },
+  );
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_X: fields[0].x must be number",
+  );
+});
+
+Deno.test("constructProjection: document_canvas field value non-string is explicit error", () => {
+  const result = constructProjection(
+    { fields: [{ key: "f1", value: 42 }] },
+    {
+      constructorKey: "k",
+      packageIds: ["p"],
+      outputKind: "component_projection",
+      componentId: "cmp-canvas-badval",
+      componentDefinition: {
+        componentId: "cmp-canvas-badval",
+        component_kind: "document_canvas/document_canvas_template_editor",
+      },
+    },
+  );
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_VALUE: fields[0].value must be string",
+  );
+});
+
+Deno.test("constructProjection: document_canvas backgroundImageUrl non-string is explicit error", () => {
+  const result = constructProjection({ backgroundImageUrl: 123 }, {
+    constructorKey: "k",
+    packageIds: ["p"],
+    outputKind: "component_projection",
+    componentId: "cmp-canvas-bgurl",
+    componentDefinition: {
+      componentId: "cmp-canvas-bgurl",
+      component_kind: "document_canvas/document_canvas_template_editor",
+    },
+  });
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_BACKGROUND_URL: backgroundImageUrl must be string",
+  );
+});
+
 Deno.test("constructProjection: componentId mismatch returns explicit error", () => {
   const result = constructProjection({}, {
     constructorKey: "k",

@@ -36,12 +36,13 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       Closed bundles: admin_csv_json_import_endpoint_and_upload_ui, manifest_validation_runtime,
         validate_preview_apply_runtime_boundary, canonical_apply_and_diff_log_boundary.
 
-- [ ] M6 remaining completion bundles (roadmap status: not_started/partial each):
-      → DocumentCanvasTemplateEditor primitive wiring is implemented as a projection scaffold primitive
-        and draft palette candidate; this does not mean document canvas as a whole is complete.
-        Generic projection props pipeline exists; DocumentCanvas runtime factory/render assignment remains.
-      - document_canvas_runtime_connected_factory_registration
-      - data_binding_to_document_canvas
+- [ ] M6 remaining completion bundles (roadmap status: partial/not_started each):
+      → document_canvas_runtime_connected_factory_registration: implemented.
+        projectionConstructor supports document_canvas/document_canvas_template_editor with explicit field
+        coordinate validation; runtimeComponentFactory wires DocumentCanvasTemplateEditor; runtimeConnected:true
+        synchronized across catalog/seed/SSOT/test.
+      - data_binding_to_document_canvas (partial: factory/projectionConstructor/field binding wired; full
+        DB/JSONB→canvas binding loop requires jsonb_label_value_manifest_runtime which is not_started)
       - pdf_export_snapshot_runtime
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
