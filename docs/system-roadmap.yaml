@@ -420,8 +420,6 @@ system_roadmap_ssot:
         This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
-      known_gap_ref:
-        - product.sql_attention_recommendation_feedback_ux remains partial
 
     product.sql_attention_recommendation_feedback_ux:
       status: implemented
