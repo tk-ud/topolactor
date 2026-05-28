@@ -912,7 +912,6 @@ category_g_external_lookup:
       mutation_boundary: preview_validate_explicit_apply
       runtimeConnected: false
 
-# Category G: Document Canvas / Template Projection UI
 category_g_document_canvas:
   label: Document Canvas / Template Projection UI
   purpose: >
