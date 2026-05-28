@@ -71,7 +71,11 @@ public class JwtGuard
     /// Extracts JWT subject (sub) from a previously validated token.
     /// Returns null when token/payload is malformed or sub is absent.
     /// </summary>
-    public string? TryGetSubject(string? token)
+    public string? TryGetSubject(string? token) => TryGetStringClaim(token, "sub");
+
+    public string? TryGetRole(string? token) => TryGetStringClaim(token, "role");
+
+    private string? TryGetStringClaim(string? token, string claimName)
     {
         if (string.IsNullOrWhiteSpace(token)) return null;
 
@@ -82,10 +86,10 @@ public class JwtGuard
         {
             var payloadJson = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
             using var doc = JsonDocument.Parse(payloadJson);
-            if (!doc.RootElement.TryGetProperty("sub", out var subProp)) return null;
-            if (subProp.ValueKind != JsonValueKind.String) return null;
-            var sub = subProp.GetString();
-            return string.IsNullOrWhiteSpace(sub) ? null : sub;
+            if (!doc.RootElement.TryGetProperty(claimName, out var prop)) return null;
+            if (prop.ValueKind != JsonValueKind.String) return null;
+            var value = prop.GetString();
+            return string.IsNullOrWhiteSpace(value) ? null : value;
         }
         catch
         {

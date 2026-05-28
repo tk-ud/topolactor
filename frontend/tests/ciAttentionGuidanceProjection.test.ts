@@ -44,6 +44,7 @@ Deno.test("extractCiAttentionFragmentPayload returns payload for valid CI Attent
     Severity: "error",
     TargetKind: "component",
     TargetKey: "my_component",
+    AuthoringSurface: "admin_ui_builder",
     UpdatedAt: "2024-01-01T00:00:00Z",
   });
 
@@ -55,6 +56,7 @@ Deno.test("extractCiAttentionFragmentPayload returns payload for valid CI Attent
   assertEquals(result!.Status, "active");
   assertEquals(result!.TargetKind, "component");
   assertEquals(result!.TargetKey, "my_component");
+  assertEquals(result!.AuthoringSurface, "admin_ui_builder");
 });
 
 Deno.test("extractCiAttentionFragmentPayload returns null for non-fragment projection event (manifest_id payload)", () => {

@@ -104,6 +104,8 @@ pipeline_continuity_ssot:
         - target
         - layer
         - action
+        - role
+        - trigger_kind
         - attractor_key
         - structure_map_id
         - package_id

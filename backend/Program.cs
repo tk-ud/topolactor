@@ -216,7 +216,15 @@ app.MapPost("/dispatch", async (
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
-    var result = await dispatch.HandleAsync(request, ctx.RequestAborted);
+    var role = jwtGuard.TryGetRole(token);
+    if (string.IsNullOrWhiteSpace(role))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_ROLE_MISSING", "Token is missing required role claim.") };
+        return Results.Json(new EndpointResponseDto(false, null, errors), statusCode: 401);
+    }
+
+    var authoritativeRequest = request with { Role = role };
+    var result = await dispatch.HandleAsync(authoritativeRequest, ctx.RequestAborted);
     return Results.Json(result, statusCode: result.Success ? 200 : 422);
 });
 

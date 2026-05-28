@@ -1043,6 +1043,30 @@ public class ManifestDispatcherManifestDrivenTests
         Assert.Contains(response.Errors, e => e.Code == "DB_NOTIFY_PROJECTION_MAPPING_MISSING");
     }
 
+    [Fact]
+    public async Task DispatchAsync_ManifestRoleAxis_UsesRequestRoleForResolution()
+    {
+        var roleRepo = new RoleFilteredManifestRepository("admin", new ManifestRecord(
+            Guid.NewGuid(),
+            RelationRegistryId: null,
+            Topology: BuildTopology("admin_runtime"),
+            Status: "active"));
+        var fakeAdminHandler = new FakeDispatchableRuntime(JsonSerializer.SerializeToElement(new { handledBy = "admin_runtime" }));
+        var dispatcher = RuntimeExecutorTests.CreateDispatcher(
+            new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double"),
+            roleRepo,
+            extraHandlers: new Dictionary<string, IDispatchableRuntime> { ["admin_runtime"] = fakeAdminHandler });
+
+        var request = new EndpointRequestDto("X", "admin", "seed_runtime", "save", null, null, null, Role: "admin");
+        var response = await dispatcher.DispatchAsync(request);
+        Assert.True(response.Success);
+        Assert.True(fakeAdminHandler.WasCalled);
+
+        var fail = await dispatcher.DispatchAsync(request with { Role = "viewer" });
+        Assert.False(fail.Success);
+        Assert.Contains(fail.Errors, e => e.Code == "MANIFEST_NOT_FOUND");
+    }
+
     private static IReadOnlyList<System.Text.Json.JsonElement> BuildTopology(string runtimeDestination)
     {
         var entry = System.Text.Json.JsonSerializer.SerializeToElement(new
@@ -1161,6 +1185,18 @@ internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult<ManifestRecord?>(null);
 }
+
+
+
+internal sealed class RoleFilteredManifestRepository(string expectedRole, ManifestRecord manifest)
+        : ManifestRepository(NullLogger<ManifestRepository>.Instance)
+    {
+        public override Task<ManifestRecord?> ResolveActiveManifestAsync(string? role, string? target, string? layer, string? action, CancellationToken ct = default)
+            => Task.FromResult(role == expectedRole ? manifest : null);
+
+        public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
+            => Task.FromResult<ManifestRecord?>(manifest.ManifestId == manifestId ? manifest : null);
+    }
 
 internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository
 {

@@ -39,6 +39,7 @@ public record CiAttentionGuidanceGuidanceEventPayload(
     string Severity,
     string TargetKind,
     string TargetKey,
+    string AuthoringSurface,
     DateTimeOffset UpdatedAt
 );
 

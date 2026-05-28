@@ -24,7 +24,7 @@ source_kind,source_id,source_table_or_surface,target_kind,target_key,diff_or_eve
 ) VALUES (
 @source_kind,@source_id,@source_table_or_surface,@target_kind,@target_key,@diff_or_event_or_entity_id,@scope,@route,@authoring_surface,@kind,@status,@severity,@blocks_promotion,@message,@actionable_guidance,@evidence_json::jsonb,@checked_at,now()
 )
-ON CONFLICT (source_kind, source_id, target_kind, target_key, kind) DO UPDATE SET
+ON CONFLICT (source_kind, source_id, target_kind, target_key, authoring_surface, kind) DO UPDATE SET
 source_table_or_surface=EXCLUDED.source_table_or_surface,diff_or_event_or_entity_id=EXCLUDED.diff_or_event_or_entity_id,scope=EXCLUDED.scope,route=EXCLUDED.route,authoring_surface=EXCLUDED.authoring_surface,status=EXCLUDED.status,severity=EXCLUDED.severity,blocks_promotion=EXCLUDED.blocks_promotion,message=EXCLUDED.message,actionable_guidance=EXCLUDED.actionable_guidance,evidence_json=EXCLUDED.evidence_json,checked_at=EXCLUDED.checked_at,updated_at=now()
 RETURNING *
 )
@@ -32,7 +32,7 @@ INSERT INTO logs.ci_attention_guidance_history (
 fragment_id,source_kind,source_id,source_table_or_surface,target_kind,target_key,diff_or_event_or_entity_id,scope,route,authoring_surface,kind,status,severity,blocks_promotion,message,actionable_guidance,evidence_json,checked_at,resolved_at,dismissed_at
 )
 SELECT fragment_id,source_kind,source_id,source_table_or_surface,target_kind,target_key,diff_or_event_or_entity_id,scope,route,authoring_surface,kind,status,severity,blocks_promotion,message,actionable_guidance,evidence_json,checked_at,resolved_at,dismissed_at FROM upserted
-RETURNING fragment_id,kind,status,severity,target_kind,target_key,snapshot_at;
+RETURNING fragment_id,kind,status,severity,target_kind,target_key,authoring_surface,snapshot_at;
 """;
         await using var cmd = new NpgsqlCommand(sql, conn, tx);
         cmd.Parameters.AddWithValue("source_kind", ToDb(f.SourceKind));
@@ -55,7 +55,7 @@ RETURNING fragment_id,kind,status,severity,target_kind,target_key,snapshot_at;
         await using var r = await cmd.ExecuteReaderAsync(ct);
         await r.ReadAsync(ct);
         var fragmentId = r.GetGuid(0);
-        var payload = new CiAttentionGuidanceGuidanceEventPayload(fragmentId, r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetFieldValue<DateTimeOffset>(6));
+        var payload = new CiAttentionGuidanceGuidanceEventPayload(fragmentId, r.GetString(1), r.GetString(2), r.GetString(3), r.GetString(4), r.GetString(5), r.GetString(6), r.GetFieldValue<DateTimeOffset>(7));
         await tx.CommitAsync(ct);
         return new CiAttentionGuidanceFragmentStored(fragmentId, payload);
     }
