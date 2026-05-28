@@ -1140,7 +1140,7 @@ system_roadmap_ssot:
         - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
 
     design.ci_attention_guidance_fragment_ssot_and_schema:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1173,7 +1173,9 @@ system_roadmap_ssot:
         ci:
           - backend-tests
           - frontend-types
-      known_gap_ref: []
+      known_gap_ref:
+        - current projection identity/upsert conflict target does not include authoring_surface; surface-specific fragments can be overwritten in logs.ci_attention_guidance_current
+        - SSE guidance projection payload does not include authoring_surface identity; backend RETURNING/contracts/frontend parser/tests are not yet aligned to SSOT source_identity
 
     design.authority_visibility_promotion_policy_ssot:
       status: implemented
