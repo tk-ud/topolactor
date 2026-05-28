@@ -21,25 +21,11 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
-## Frontend Runtime Scheduler Completion (Gap-13)
+## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `frontend.runtime_scheduler` completion bundle を closure する。
-      → `queueClientCommand` は現状 immediate pass-through。ordering / async execution / collision control / rollback boundary を scheduler runtime module 内で完結させ、M1 completion_condition を満たす。
-
-## Topology Repository Production Hardening (Gap-11)
-
-- [ ] `backend.topology_repository` completion bundle を closure する。
-      → `NpgsqlTopologyRepository` には demo shortcut route が残るため、production registry resolution 寄せ・恒久境界化・gap close の検証を完了する。
-
-## Admin Contracts Finalization (Gap-12)
-
-- [ ] `backend.admin_contracts` completion bundle を closure する。
-      → `AdminContracts.cs` temporary placeholder field を validated runtime schema へ寄せ、API/runtime contract の確定と検証を完了する。
-
-## CI Attention User Guidance Feedback Closure
-
-- [ ] `ci_attention_guidance_fragment` completion bundle の残件を closure する。
-      → dynamic support / nocode loop feedback と SQL Attention user-visible loop を結合し、user-guidance feedback loop の残留未完了境界を閉じる。
+- [ ] `product.sql_attention_recommendation_feedback_ux` completion bundle を closure する。
+      → SQLA-6 (topology projection recommendation basis) が未着手。SQL Attention evidence を user-visible recommendation feedback surface (navigation guidance / UI projection candidate) に接続するまで、`product.dynamic_support_nocode_loop` は閉じられない。M7 milestone。
+- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 non-IT authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
 
 ## External Integration M6 (Deferred Start)
 

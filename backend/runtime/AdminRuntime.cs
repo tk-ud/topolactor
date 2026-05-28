@@ -79,8 +79,6 @@ public class AdminRuntime
             CreateTokenCode.Conflict =>
                 new AdminCreateTokenResponseDto(false, null,
                     "A token with this label and group already exists.", "DUPLICATE_LABEL_GROUP"),
-            CreateTokenCode.NotConnected =>
-                new AdminCreateTokenResponseDto(false, null, "Token registry not connected.", "NOT_CONNECTED"),
             _ =>
                 new AdminCreateTokenResponseDto(false, null, "Unexpected error.", "UNEXPECTED_ERROR"),
         };

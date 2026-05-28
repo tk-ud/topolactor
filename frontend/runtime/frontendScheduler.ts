@@ -220,42 +220,76 @@ export function stopComponentEventRuntime(): void {
   schedulerTimer = null;
 }
 
-/**
- * Client-command scheduler skeleton.
- *
- * Owns client_command_order and sse_projection_order boundaries per
- * runtime-orchestration-ssot. Currently executes client commands synchronously
- * (immediate pass-through). Ordering, batching, and rollback boundaries are
- * future scope confined to this module.
- *
- * Lane: api_command_lane in pipeline-continuity-ssot.yaml (frontend.scheduler node).
- */
+// ─── Client-command scheduler — api_command_lane ─────────────────────────────
+// Owns client_command_order and async execution per runtime-orchestration-ssot
+// (scheduler_contract.frontend_scope). sse_projection_order, rollback_boundary,
+// optimistic_update_boundary, and collision_control are separate boundary contracts.
+//
+// Commands are queued in FIFO order and executed serially: a command does not
+// start until the previous command has resolved or rejected. The caller awaits
+// their own result; a failure in one command propagates only to that caller and
+// does not block subsequent commands.
+//
+// Lane: api_command_lane in pipeline-continuity-ssot.yaml (frontend.scheduler node).
 
 export type ScheduledCommandResult = DispatchResponse;
 
+type PendingCommandEntry = {
+  op: UserOperation;
+  token?: string;
+  context?: Record<string, string>;
+  resolve: (result: ScheduledCommandResult) => void;
+  reject: (error: unknown) => void;
+};
+
+const clientCommandQueue: PendingCommandEntry[] = [];
+let clientCommandQueueRunning = false;
+
+async function drainClientCommandQueue(): Promise<void> {
+  if (clientCommandQueueRunning) return;
+  clientCommandQueueRunning = true;
+  try {
+    while (clientCommandQueue.length > 0) {
+      const entry = clientCommandQueue.shift()!;
+      try {
+        const vector = resolveOperationVector(entry.op);
+        const result = await dispatchOperation(
+          {
+            operationType: entry.op.operationType,
+            target: vector.target,
+            layer: vector.layer,
+            action: vector.action,
+            payload: entry.op.payload,
+            context: entry.context && Object.keys(entry.context).length > 0 ? entry.context : undefined,
+          },
+          entry.token,
+        );
+        entry.resolve(result);
+      } catch (err) {
+        entry.reject(err);
+      }
+    }
+  } finally {
+    clientCommandQueueRunning = false;
+  }
+}
+
 /**
  * Queues a client command and dispatches it through the api_client.
- * Skeleton: executes immediately. When scheduler semantics are implemented,
- * ordering and collision control are added here without changing callers.
+ * Commands execute serially in FIFO order. Errors propagate explicitly to the
+ * awaiter of the failed command; subsequent commands are unaffected.
  */
 export async function queueClientCommand(
   op: UserOperation,
   token?: string,
   context?: Record<string, string>,
 ): Promise<ScheduledCommandResult> {
-  const vector = resolveOperationVector(op);
-
-  return dispatchOperation(
-    {
-      operationType: op.operationType,
-      target: vector.target,
-      layer: vector.layer,
-      action: vector.action,
-      payload: op.payload,
-      context: context && Object.keys(context).length > 0 ? context : undefined,
-    },
-    token,
-  );
+  return new Promise<ScheduledCommandResult>((resolve, reject) => {
+    clientCommandQueue.push({ op, token, context, resolve, reject });
+    if (!clientCommandQueueRunning) {
+      void drainClientCommandQueue();
+    }
+  });
 }
 
 
@@ -291,5 +325,15 @@ export const __testOnly = {
   },
   clearMonitorHooks(): void {
     flushMonitorHooks.clear();
+  },
+  getCommandQueueLength(): number {
+    return clientCommandQueue.length;
+  },
+  isCommandQueueRunning(): boolean {
+    return clientCommandQueueRunning;
+  },
+  resetCommandQueue(): void {
+    clientCommandQueue.length = 0;
+    clientCommandQueueRunning = false;
   },
 };
