@@ -220,8 +220,8 @@ system_roadmap_ssot:
         - invoice_estimate_delivery_note_documents_render_from_bound_data
         - pdf_export_persists_export_snapshot_and_applied_diff_audit_linkage
       unlocks:
-        - admin_csv_import_validate_preview_apply: not_started
-        - admin_json_import_validate_preview_apply: not_started
+        - admin_csv_import_validate_preview_apply: partial
+        - admin_json_import_validate_preview_apply: partial
         - jsonb_label_value_manifest_runtime: not_started
         - user_defined_aggregation_display_binding_policy: not_started
         - document_canvas_template_runtime: not_started
