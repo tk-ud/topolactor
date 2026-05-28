@@ -115,7 +115,8 @@ export type ComponentVisualRole =
   | "tabs"
   | "tree"
   | "page_shell"
-  | "json_viewer";
+  | "json_viewer"
+  | "canvas";
 export type ComponentLifecycleStatus =
   | "code_only_drift"
   | "alias_maintained"
@@ -138,7 +139,10 @@ export type ComponentCapabilityTag =
   | "selectable"
   | "controlled_value"
   | "error_display"
-  | "loading_display";
+  | "loading_display"
+  | "field_binding"
+  | "preview_surface"
+  | "export_snapshot";
 
 // runtimeConnected means runtime factory/constructor is reachable via runtime registry.
 // It does NOT mean DB-registered topology entity.

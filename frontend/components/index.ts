@@ -137,3 +137,10 @@ export { TelAddressCandidateLookup } from "./TelAddressCandidateLookup.tsx";
 export { NormalizeAddressCandidate } from "./NormalizeAddressCandidate.tsx";
 export { LookupCandidateConfirmPanel } from "./LookupCandidateConfirmPanel.tsx";
 export { BulkImportCandidatePanel } from "./BulkImportCandidatePanel.tsx";
+
+// document_canvas — projection scaffold only
+export { DocumentCanvasTemplateEditor } from "./DocumentCanvasTemplateEditor.tsx";
+export type {
+  DocumentCanvasTemplateEditorProps,
+  DocumentCanvasTemplateEditorField,
+} from "./DocumentCanvasTemplateEditor.tsx";
