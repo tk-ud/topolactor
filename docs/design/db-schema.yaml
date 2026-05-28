@@ -74,6 +74,14 @@ db_schema:
       optional_ui_projection: current.ui_relation
       logs.attention: append_only_evidence_relation
 
+  manifest_topology_integration_boundary:
+    authority:
+      - manifest.topology_defines_physical_table_definition_schema_reference_ui_projection_document_binding_aggregation_target_runtime_apply_action_mapping
+      - topologys.schema_registry.schema_def_defines_records_jsonb_schema_field_type_validation
+      - topologys.structure_maps_connect_attractor_package_schema_component_resolution
+    non_goal:
+      - no_dedicated_admin_authoring_manifest_table
+
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication
@@ -648,6 +656,64 @@ db_schema:
         - sse_projection
 
 
+    admin_import_snapshot:
+      category: manifest
+      file: db/manifest_tables.sql
+      role: intake_snapshot_for_validate_preview_apply_cycle
+      key_columns:
+        - name: snapshot_id
+          type: uuid
+          role: pk_snapshot_reference_id
+        - name: source_type
+          type: text
+          values: [csv, json]
+        - name: manifest_id
+          type: uuid
+          role: manifest_reference_id
+        - name: raw_rows_jsonb
+          type: jsonb
+          role: imported_row_snapshot_payload
+
+    admin_import_records:
+      category: manifest
+      file: db/manifest_tables.sql
+      role: per_row_jsonb_record_with_manifest_conformity_status
+      key_columns:
+        - name: id
+          type: bigint
+          role: physical_record_pk
+        - name: manifest_id
+          type: uuid
+          role: manifest_reference_id
+        - name: snapshot_id
+          type: uuid
+          role: snapshot_reference_id
+        - name: records
+          type: jsonb
+          role: one_input_row_equals_one_jsonb_record
+        - name: status
+          type: enum_text
+          values: [valid, invalid]
+          role: manifest_conformity_status_not_business_or_hub_lifecycle_state
+
+    admin_import_apply_log:
+      category: manifest
+      file: db/manifest_tables.sql
+      role: explicit_apply_boundary_log_with_diff_reference
+      key_columns:
+        - name: apply_log_id
+          type: uuid
+          role: apply_reference_id
+        - name: snapshot_id
+          type: uuid
+          role: snapshot_reference_id
+        - name: applied_diff_jsonb
+          type: jsonb
+          role: minimal_applied_diff_reference
+        - name: status
+          type: text
+          role: apply_execution_status
+
 sql_attention_target_boundary:
   search_target: hubs
   not_search_target:
@@ -667,3 +733,4 @@ sql_attention_target_note:
     - ema
     - usage_history
     - usage_frequency
+
