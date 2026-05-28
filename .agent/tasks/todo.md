@@ -37,7 +37,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         validate_preview_apply_runtime_boundary, canonical_apply_and_diff_log_boundary.
 
 - [ ] M6 remaining completion bundles (roadmap status: not_started/partial each):
-      - document_canvas_template_runtime
+      → DocumentCanvasTemplateEditor primitive wiring is implemented as a projection scaffold primitive
+        and draft palette candidate; this does not mean document canvas as a whole is complete.
+        Generic projection props pipeline exists; DocumentCanvas runtime factory/render assignment remains.
+      - document_canvas_runtime_connected_factory_registration
       - data_binding_to_document_canvas
       - pdf_export_snapshot_runtime
 
