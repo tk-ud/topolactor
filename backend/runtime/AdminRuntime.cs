@@ -23,6 +23,7 @@ public class AdminRuntime
     private readonly CiAttentionGuidanceRepository _ciAttentionGuidanceRepository;
     private readonly SseEventBroadcaster? _sseEventBroadcaster;
     private readonly SeedRuntime? _seedRuntime;
+    private readonly AdminImportRuntime? _adminImportRuntime;
 
     public AdminRuntime(
         ILogger<AdminRuntime> logger,
@@ -33,7 +34,8 @@ public class AdminRuntime
         ISystemCiDiagnosticRunner? systemCiDiagnosticRunner = null,
         SeedRuntime? seedRuntime = null,
         CiAttentionGuidanceRepository? ciAttentionGuidanceRepository = null,
-        SseEventBroadcaster? sseEventBroadcaster = null)
+        SseEventBroadcaster? sseEventBroadcaster = null,
+        AdminImportRuntime? adminImportRuntime = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -44,6 +46,7 @@ public class AdminRuntime
         _seedRuntime = seedRuntime;
         _ciAttentionGuidanceRepository = ciAttentionGuidanceRepository ?? new CiAttentionGuidanceRepository();
         _sseEventBroadcaster = sseEventBroadcaster;
+        _adminImportRuntime = adminImportRuntime;
     }
 
     // ---------------------------------------------------------------------------
@@ -196,9 +199,13 @@ public class AdminRuntime
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
             "seed_runtime:preview"             => await DataSeedPreviewAsync(ct),
             "seed_runtime:import"              => await DataSeedImportAsync(ct),
-            "system_ci:list_targets"           => await DataSystemCiListTargetsAsync(ct),
-            "system_ci:inspect"                => await DataSystemCiInspectAsync(vector, ct),
-            "ci_attention:refresh_fragments"   => await DataCiAttentionRefreshFragmentsAsync(vector, ct),
+            "system_ci:list_targets"                    => await DataSystemCiListTargetsAsync(ct),
+            "system_ci:inspect"                         => await DataSystemCiInspectAsync(vector, ct),
+            "ci_attention:refresh_fragments"            => await DataCiAttentionRefreshFragmentsAsync(vector, ct),
+            "admin_csv_json_import:upload_preview"      => await DataImportUploadPreviewAsync(vector, ct),
+            "admin_csv_json_import:apply"               => await DataImportApplyAsync(vector, ct),
+            "admin_csv_json_import:list_manifests"      => await DataImportListManifestsAsync(ct),
+            "admin_csv_json_import:list_schemas"        => await DataImportListSchemasAsync(ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
@@ -738,6 +745,129 @@ public class AdminRuntime
 
         return (JsonSerializer.SerializeToElement(
             new SeedPreviewResponseDto(true, result.Data.RuntimeCount, runtimeDtos, [])), null);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Admin CSV/JSON Import operations — M6 validate-preview-apply boundary
+    // ---------------------------------------------------------------------------
+
+    private ValidationError ImportRuntimeNotAvailable() =>
+        new("ADMIN_IMPORT_RUNTIME_NOT_AVAILABLE",
+            "AdminImportRuntime is not configured. Ensure the import repository is registered.");
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataImportUploadPreviewAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for admin_csv_json_import:upload_preview"));
+
+        AdminImportUploadPreviewRequestDto? req;
+        try
+        {
+            req = JsonSerializer.Deserialize<AdminImportUploadPreviewRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (req is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(req.SourceType))
+            return (null, new ValidationError("SOURCE_TYPE_REQUIRED", "sourceType is required"));
+        if (string.IsNullOrWhiteSpace(req.FileName))
+            return (null, new ValidationError("FILE_NAME_REQUIRED", "fileName is required"));
+        if (string.IsNullOrWhiteSpace(req.ManifestId))
+            return (null, new ValidationError("MANIFEST_ID_REQUIRED", "manifestId is required"));
+        if (string.IsNullOrWhiteSpace(req.SchemaId))
+            return (null, new ValidationError("SCHEMA_ID_REQUIRED", "schemaId is required"));
+        if (string.IsNullOrWhiteSpace(req.Content))
+            return (null, new ValidationError("CONTENT_EMPTY", "content must not be empty"));
+        if (!Guid.TryParse(req.ManifestId, out var manifestGuid))
+            return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID"));
+        if (!Guid.TryParse(req.SchemaId, out var schemaGuid))
+            return (null, new ValidationError("MALFORMED_SCHEMA_ID", "schemaId must be a valid UUID"));
+
+        var result = await _adminImportRuntime.PreviewAsync(
+            req.SourceType, req.FileName, manifestGuid, schemaGuid, req.Content, ct);
+
+        if (!result.Success)
+            return (null, new ValidationError(result.ErrorCode!, result.ErrorMessage!));
+
+        var recordDtos = result.Records.Select(r => new AdminImportRecordPreviewDto(
+            r.RowIndex, r.Records, r.Status, r.ValidationErrors)).ToList();
+
+        var response = new AdminImportUploadPreviewResponseDto(
+            Ok: true,
+            SnapshotId: result.SnapshotId!,
+            SourceType: req.SourceType,
+            ManifestId: req.ManifestId,
+            SchemaId: req.SchemaId,
+            ValidCount: result.ValidCount,
+            InvalidCount: result.InvalidCount,
+            Records: recordDtos);
+
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataImportApplyAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for admin_csv_json_import:apply"));
+
+        AdminImportApplyRequestDto? req;
+        try
+        {
+            req = JsonSerializer.Deserialize<AdminImportApplyRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (req is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(req.SnapshotId))
+            return (null, new ValidationError("SNAPSHOT_ID_REQUIRED", "snapshotId is required"));
+        if (!Guid.TryParse(req.SnapshotId, out var snapshotGuid))
+            return (null, new ValidationError("MALFORMED_SNAPSHOT_ID", "snapshotId must be a valid UUID"));
+
+        var result = await _adminImportRuntime.ApplyAsync(snapshotGuid, ct);
+        if (!result.Success)
+            return (null, new ValidationError(result.ErrorCode!, result.ErrorMessage!));
+
+        var response = new AdminImportApplyResponseDto(
+            Ok: true,
+            ApplyLogId: result.ApplyLogId!,
+            SnapshotId: result.SnapshotId!,
+            AppliedRecordCount: result.AppliedRecordCount,
+            Status: result.Status,
+            Note: result.Note ?? "");
+
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataImportListManifestsAsync(
+        CancellationToken ct)
+    {
+        if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
+        var manifests = await _adminImportRuntime.ListManifestsAsync(ct);
+        var dtos = manifests.Select(m => new AdminImportManifestListItemDto(
+            m.ManifestId.ToString(), m.Status, m.CreatedAt.ToString("o"))).ToList();
+        return (JsonSerializer.SerializeToElement(dtos), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataImportListSchemasAsync(
+        CancellationToken ct)
+    {
+        if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
+        var schemas = await _adminImportRuntime.ListSchemasAsync(ct);
+        var dtos = schemas.Select(s => new AdminImportSchemaListItemDto(
+            s.SchemaId.ToString(), s.Name)).ToList();
+        return (JsonSerializer.SerializeToElement(dtos), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataSeedImportAsync(

@@ -220,22 +220,20 @@ system_roadmap_ssot:
         - invoice_estimate_delivery_note_documents_render_from_bound_data
         - pdf_export_persists_export_snapshot_and_applied_diff_audit_linkage
       unlocks:
-        - admin_csv_import_validate_preview_apply: partial
-        - admin_json_import_validate_preview_apply: partial
+        - admin_csv_import_validate_preview_apply: implemented
+        - admin_json_import_validate_preview_apply: implemented
+        - intake_snapshot_and_applied_diff_log: implemented
         - jsonb_label_value_manifest_runtime: not_started
         - user_defined_aggregation_display_binding_policy: not_started
         - document_canvas_template_runtime: not_started
         - data_binding_to_document_canvas: not_started
         - pdf_export_snapshot_runtime: not_started
-        - intake_snapshot_and_applied_diff_log: not_started
       blocking_gaps:
-        - admin_csv_json_import persistence scaffold is implemented; endpoint/admin UI/validate-preview-apply runtime and canonical apply boundary are not implemented
         - jsonb_label_value_manifest runtime not implemented
         - user_defined_aggregation_display_binding_policy not implemented
         - document_canvas_template_runtime not implemented
         - data_binding_to_document_canvas not implemented
         - pdf_export_snapshot not implemented
-        - intake_snapshot_and_applied_diff runtime boundary not fully implemented
       completion_condition:
         - admin_can_import_csv_json_as_candidate_payload
         - validate_preview_apply_stages_are_separated
@@ -1635,6 +1633,52 @@ system_roadmap_ssot:
         - CI_or_runtime_diagnostics_detect_semantic_breakage_before_completion_claim
       known_gap_ref:
         - non-IT business app authoring loop not implemented
+
+    backend.admin_csv_json_import:
+      status: implemented
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        Admin CSV/JSON import validate-preview-apply runtime is implemented as a complete bundle.
+        AdminImportRuntime parses CSV/JSON, validates manifest existence (MANIFEST_NOT_FOUND),
+        validates schema_def fail-close (SCHEMA_DEF_INVALID/SCHEMA_FIELDS_REQUIRED/SCHEMA_FIELD_KEY_REQUIRED),
+        validates rows against schema_def conformity (not business/hub lifecycle state),
+        writes admin_import_snapshot and admin_import_records on preview (no canonical mutation),
+        and writes admin_import_apply_log with canonical diff linkage (sourceSnapshotId+manifestId
+        in applied_diff_jsonb, status='staged') on apply. Repository exceptions return
+        REPOSITORY_UNAVAILABLE structured errors. CSV edge cases (unclosed quote per row,
+        field count mismatch, header-only) are explicit errors. Frontend dispatches via
+        /api/dispatch only. Canonical entity/hub mutation is a separate future bundle
+        (beyond this completion boundary).
+      files:
+        - backend/schema/AdminImportContracts.cs
+        - backend/repository/AdminImportRepository.cs
+        - backend/repository/NpgsqlAdminImportRepository.cs
+        - backend/runtime/AdminImportRuntime.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/Program.cs
+        - frontend/api/adminApi.ts
+        - frontend/routes/admin/import.tsx
+        - frontend/routes/admin/index.tsx
+        - frontend/tests/adminImport.test.ts
+        - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs
+      evidence:
+        tests:
+          - AdminImportRuntimeTests (32 tests: CSV/JSON preview, validation, apply, all explicit error paths, canonical diff linkage, dispatch wiring)
+        ci:
+          - backend-tests
+      completion_condition:
+        - admin_csv_json_import_endpoint_and_upload_ui_wired_through_admin_runtime_dispatch
+        - manifest_existence_validated_before_snapshot_write_manifest_not_found_is_explicit_error
+        - schema_def_validated_fail_close_malformed_def_returns_explicit_error_not_silent_empty_fields
+        - manifest_validation_runtime_marks_rows_valid_or_invalid_per_schema_def_conformity
+        - csv_edge_cases_unclosed_quote_field_count_mismatch_header_only_are_explicit
+        - repository_exception_returns_repository_unavailable_structured_error
+        - validate_preview_apply_stages_are_separated_preview_does_not_mutate_canonical_state
+        - apply_writes_apply_log_with_canonical_diff_linkage_source_snapshot_id_and_manifest_id
+        - frontend_does_not_write_directly_to_db
+        - no_silent_fallback_all_error_paths_return_explicit_error_codes
+      known_gap_ref: []
 
 
 

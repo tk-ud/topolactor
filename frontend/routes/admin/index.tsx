@@ -13,6 +13,13 @@ export default function AdminIndex() {
         <h2>Admin surfaces</h2>
         <ul>
           <li>
+            <a href="/admin/import">import — CSV/JSON Import (M6 validate-preview-apply)</a>
+            <br />
+            <small style={{ color: "#666" }}>
+              CSV/JSON ファイルの upload → manifest/schema 検証 → preview → explicit apply 導線
+            </small>
+          </li>
+          <li style={{ marginTop: "8px" }}>
             <a href="/admin/seed">seed — Seed Runtime (Issue #84)</a>
             <br />
             <small style={{ color: "#666" }}>

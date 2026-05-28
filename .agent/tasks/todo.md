@@ -25,19 +25,21 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 は persistence scaffold 着手済みだが completion bundle は未完了のため partial を維持する。
 
-## Self-hosted Admin Authoring M6 (Partial: persistence scaffold only)
+## Self-hosted Admin Authoring M6 (Partial: CSV/JSON import bundle implemented; remaining bundles open)
 
-- [ ] M6 self-hosted admin authoring completion bundle 群は partial へ遷移。
-      → CSV/JSON import validate-preview-apply、JSONB label/value manifest、user-defined aggregation/display/binding policy、document canvas、DB/JSONB data binding、PDF export snapshot、intake snapshot + applied diff log を completion bundle 単位で管理する（implementation atom 分解はしない）。
+- [x] admin_csv_json_import_validate_preview_apply bundle — implemented
+      → Manifest existence validation, schema_def fail-close validation, CSV edge cases (unclosed quote,
+        field count mismatch, header-only), repository exception → REPOSITORY_UNAVAILABLE,
+        canonical diff linkage in apply_log (sourceSnapshotId + manifestId). 34 tests pass.
+        Completion conditions met: manifest/schema/csv/repo error paths all explicit; preview no canonical
+        mutation; apply writes apply_log with staged canonical diff linkage.
+      Closed bundles: admin_csv_json_import_endpoint_and_upload_ui, manifest_validation_runtime,
+        validate_preview_apply_runtime_boundary, canonical_apply_and_diff_log_boundary.
 
-      remaining completion bundles:
-      - admin_csv_json_import_endpoint_and_upload_ui
-      - manifest_validation_runtime
-      - validate_preview_apply_runtime_boundary
-      - canonical_apply_and_diff_log_boundary
+- [ ] M6 remaining completion bundles (roadmap status: not_started/partial each):
       - document_canvas_template_runtime
       - data_binding_to_document_canvas
-      - pdf_export_minimal_record
+      - pdf_export_snapshot_runtime
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
       → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。

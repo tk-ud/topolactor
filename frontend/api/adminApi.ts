@@ -117,3 +117,98 @@ export async function validateRegistryVector(
   if (emission === null) return null;
   return (emission.data ?? null) as RegistryVectorValidationResult | null;
 }
+
+// ---------------------------------------------------------------------------
+// Admin CSV/JSON Import — M6 validate-preview-apply
+// ---------------------------------------------------------------------------
+
+export type AdminImportManifestItem = {
+  manifestId: string;
+  status: string;
+  createdAt: string;
+};
+
+export type AdminImportSchemaItem = {
+  schemaId: string;
+  name: string;
+};
+
+export type AdminImportRecordPreview = {
+  rowIndex: number;
+  records: Record<string, unknown>;
+  /** manifest/schema conformity status — not business state or hub lifecycle state */
+  status: "valid" | "invalid";
+  validationErrors: string[];
+};
+
+export type AdminImportPreviewResult = {
+  ok: boolean;
+  snapshotId: string;
+  sourceType: string;
+  manifestId: string;
+  schemaId: string;
+  validCount: number;
+  invalidCount: number;
+  records: AdminImportRecordPreview[];
+};
+
+export type AdminImportApplyResult = {
+  ok: boolean;
+  applyLogId: string;
+  snapshotId: string;
+  appliedRecordCount: number;
+  status: string;
+  note: string;
+};
+
+export async function listImportManifests(): Promise<AdminImportManifestItem[] | null> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "admin_csv_json_import",
+    action: "list_manifests",
+  });
+  if (emission === null) return null;
+  return (emission.data ?? null) as AdminImportManifestItem[] | null;
+}
+
+export async function listImportSchemas(): Promise<AdminImportSchemaItem[] | null> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "admin_csv_json_import",
+    action: "list_schemas",
+  });
+  if (emission === null) return null;
+  return (emission.data ?? null) as AdminImportSchemaItem[] | null;
+}
+
+export async function uploadImportPreview(
+  sourceType: "csv" | "json",
+  fileName: string,
+  manifestId: string,
+  schemaId: string,
+  content: string,
+): Promise<AdminImportPreviewResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "admin_csv_json_import",
+    action: "upload_preview",
+    payload: { sourceType, fileName, manifestId, schemaId, content },
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as AdminImportPreviewResult;
+}
+
+export async function applyImport(snapshotId: string): Promise<AdminImportApplyResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "admin_csv_json_import",
+    action: "apply",
+    payload: { snapshotId },
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as AdminImportApplyResult;
+}
