@@ -121,9 +121,11 @@ pipeline_continuity_ssot:
           files:
             - frontend/runtime/frontendScheduler.ts
           implementation_note: >
-            Lane boundary: synchronous pass-through. Wraps resolveOperationVector +
-            dispatchOperation via queueClientCommand. Ordering, batching, and
-            rollback boundaries are separate runtime boundary contracts.
+            Lane boundary: FIFO serial queue via queueClientCommand. Commands execute
+            serially in enqueue order; errors propagate to the failed command's awaiter
+            only; subsequent commands are unaffected. Owns client_command_order and async
+            execution. sse_projection_order, projection_batch_boundary, rollback_boundary,
+            and optimistic_update_boundary are separate runtime boundary contracts.
 
         - node: frontend.api_client
           files:

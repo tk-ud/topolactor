@@ -1062,11 +1062,12 @@ system_roadmap_ssot:
         Production topology resolution (LoadStructureMapAsync, LoadPackageAsync, LoadSchemaAsync,
         LoadFunctionParameterAsync) uses full SQL registry resolution against structure_maps,
         package_registry, schema_registry, function_parameters tables. Demo entity route
-        (LoadDemoEntityListAsync, ApplyDemoTransitionAsync) now resolves hub_id and relation_id
-        via LoadFunctionParameterAsync("demo_entity_defaults", ...) rather than hardcoded UUIDs;
-        explicit warning log on fallback to seeded defaults. Base class demo methods throw
-        TOPOLOGY_REPOSITORY_NOT_CONNECTED explicitly (no placeholder data). Gap-11 closure:
-        skeleton shortcuts removed, registry resolution adopted throughout.
+        (LoadDemoEntityListAsync, ApplyDemoTransitionAsync) resolves hub_id and relation_id
+        exclusively via LoadFunctionParameterAsync("demo_entity_defaults", ...); missing parameter
+        throws DEMO_ENTITY_DEFAULT_HUB_ID_NOT_CONFIGURED or DEMO_ENTITY_DEFAULT_RELATION_ID_NOT_CONFIGURED
+        explicitly — no seeded fallback. Base class demo methods throw TOPOLOGY_REPOSITORY_NOT_CONNECTED
+        explicitly. Gap-11 closure: all hardcoded shortcuts removed, registry resolution adopted throughout,
+        explicit failure boundaries verified by unit tests.
       files:
         - backend/repository/NpgsqlTopologyRepository.cs
         - backend/repository/TopologyRepository.cs
@@ -1074,7 +1075,8 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
       evidence:
         tests:
-          - ProductionHardeningBoundaryTests (explicit failure boundary: all 4 demo methods)
+          - ProductionHardeningBoundaryTests (base class explicit failure: all 4 demo methods)
+          - ProductionHardeningBoundaryTests (NpgsqlTopologyRepository: missing hub_id/relation_id throws explicit)
         ci:
           - backend-tests
       completion_condition:
@@ -1114,8 +1116,10 @@ system_roadmap_ssot:
         Frontend command scheduler implements FIFO serial queue for queueClientCommand.
         Commands enqueue and execute in order; errors propagate explicitly to the failed
         command's awaiter only; subsequent commands are unaffected. Queue length and running
-        state are observable via __testOnly surface. Gap-13 closure: ordering, async execution,
-        and rollback boundary are owned by the scheduler module, not the caller.
+        state are observable via __testOnly surface. Gap-13 closure: client_command_order and
+        async execution are owned by the scheduler module. sse_projection_order, rollback_boundary,
+        optimistic_update_boundary, and collision_control are separate boundary contracts per
+        pipeline-continuity-ssot (frontend.scheduler node).
       files:
         - frontend/runtime/frontendScheduler.ts
         - frontend/tests/frontendScheduler.test.ts

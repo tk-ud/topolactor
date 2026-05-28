@@ -173,21 +173,16 @@ public class NpgsqlTopologyRepository : TopologyRepository
     }
 
     // ─── Demo entity defaults — production registry resolution ───────────────
-    // Resolves default hub_id and relation_id from function_parameters rather than
-    // hardcoding. Falls back to seeded defaults with an explicit warning log.
+    // Resolves hub_id and relation_id exclusively from function_parameters.
+    // Missing parameter is an explicit failure — no seeded fallback.
     // function_name: "demo_entity_defaults", parameter_key: "hub_id" | "relation_id"
-
-    private static readonly Guid DefaultDemoHubId     = new("00000000-0000-0000-0000-000000000010");
-    private static readonly Guid DefaultDemoRelationId = new("00000000-0000-0000-0000-000000000011");
 
     private async Task<Guid> ResolveDemoEntityHubIdAsync(CancellationToken ct)
     {
         var raw = await LoadFunctionParameterAsync("demo_entity_defaults", "hub_id", ct);
         if (raw is not null && Guid.TryParse(raw.Trim('"'), out var resolved))
             return resolved;
-        _npgsqlLogger.LogWarning(
-            "NpgsqlTopologyRepository: demo_entity_defaults.hub_id not found in function_parameters; using seeded default.");
-        return DefaultDemoHubId;
+        throw new InvalidOperationException("DEMO_ENTITY_DEFAULT_HUB_ID_NOT_CONFIGURED");
     }
 
     private async Task<Guid> ResolveDemoEntityRelationIdAsync(CancellationToken ct)
@@ -195,9 +190,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         var raw = await LoadFunctionParameterAsync("demo_entity_defaults", "relation_id", ct);
         if (raw is not null && Guid.TryParse(raw.Trim('"'), out var resolved))
             return resolved;
-        _npgsqlLogger.LogWarning(
-            "NpgsqlTopologyRepository: demo_entity_defaults.relation_id not found in function_parameters; using seeded default.");
-        return DefaultDemoRelationId;
+        throw new InvalidOperationException("DEMO_ENTITY_DEFAULT_RELATION_ID_NOT_CONFIGURED");
     }
 
     public override async Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)

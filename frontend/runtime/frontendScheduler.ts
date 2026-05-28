@@ -221,9 +221,9 @@ export function stopComponentEventRuntime(): void {
 }
 
 // ─── Client-command scheduler — api_command_lane ─────────────────────────────
-// Owns client_command_order, async execution, and rollback boundary per
-// runtime-orchestration-ssot (frontend_scope: client_command_order,
-// rollback_boundary, optimistic_update_boundary).
+// Owns client_command_order and async execution per runtime-orchestration-ssot
+// (scheduler_contract.frontend_scope). sse_projection_order, rollback_boundary,
+// optimistic_update_boundary, and collision_control are separate boundary contracts.
 //
 // Commands are queued in FIFO order and executed serially: a command does not
 // start until the previous command has resolved or rejected. The caller awaits
