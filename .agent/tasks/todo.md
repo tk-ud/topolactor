@@ -23,9 +23,9 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
+- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 は persistence scaffold 着手済みだが completion bundle は未完了のため partial を維持する。
 
-## Self-hosted Admin Authoring M6 (Deferred Start)
+## Self-hosted Admin Authoring M6 (Partial: persistence scaffold only)
 
 - [ ] M6 self-hosted admin authoring completion bundle 群は partial へ遷移。
       → CSV/JSON import validate-preview-apply、JSONB label/value manifest、user-defined aggregation/display/binding policy、document canvas、DB/JSONB data binding、PDF export snapshot、intake snapshot + applied diff log を completion bundle 単位で管理する（implementation atom 分解はしない）。

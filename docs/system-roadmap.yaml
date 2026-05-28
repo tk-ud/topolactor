@@ -192,7 +192,7 @@ system_roadmap_ssot:
 
     M6_external_integration:
       title: Self-hosted admin authoring loop (MVP)
-      status: not_started
+      status: partial
       goal: >
         Establish a self-hosted admin authoring loop where admins can import CSV/JSON,
         validate-preview-apply candidates, define JSONB label/value manifest and
@@ -229,13 +229,13 @@ system_roadmap_ssot:
         - pdf_export_snapshot_runtime: not_started
         - intake_snapshot_and_applied_diff_log: not_started
       blocking_gaps:
-        - admin_csv_import_validate_preview_apply not implemented
-        - jsonb_label_value_manifest not defined
+        - admin_csv_json_import persistence scaffold is implemented; endpoint/admin UI/validate-preview-apply runtime and canonical apply boundary are not implemented
+        - jsonb_label_value_manifest runtime not implemented
         - user_defined_aggregation_display_binding_policy not implemented
         - document_canvas_template_runtime not implemented
         - data_binding_to_document_canvas not implemented
         - pdf_export_snapshot not implemented
-        - intake_snapshot_and_applied_diff_log not implemented
+        - intake_snapshot_and_applied_diff runtime boundary not fully implemented
       completion_condition:
         - admin_can_import_csv_json_as_candidate_payload
         - validate_preview_apply_stages_are_separated
