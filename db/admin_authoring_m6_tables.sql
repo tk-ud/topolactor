@@ -24,11 +24,11 @@ CREATE TABLE IF NOT EXISTS admin_import_snapshot (
 );
 
 CREATE TABLE IF NOT EXISTS admin_import_records (
-  record_id UUID PRIMARY KEY,
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   manifest_id UUID NOT NULL REFERENCES admin_authoring_manifest(manifest_id),
   snapshot_id UUID NOT NULL REFERENCES admin_import_snapshot(snapshot_id),
-  record_jsonb JSONB NOT NULL,
-  validation_status TEXT NOT NULL CHECK (validation_status IN ('valid','invalid')),
+  records JSONB NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('valid','invalid')),
   validation_errors_jsonb JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -46,4 +46,4 @@ CREATE TABLE IF NOT EXISTS admin_import_apply_log (
 CREATE INDEX IF NOT EXISTS idx_admin_import_snapshot_manifest
   ON admin_import_snapshot(manifest_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_import_records_snapshot
-  ON admin_import_records(snapshot_id, validation_status);
+  ON admin_import_records(snapshot_id, status);
