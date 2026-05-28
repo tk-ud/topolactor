@@ -11,7 +11,7 @@
 
 Canonical route:
 
-`AGENTS.md -> .agent/rules/rule.md -> worktype decision -> .agent/README.md -> .agent/prompt/<worktype>.md -> .agent/protocols/<worktype or triggered protocol>.md -> checklist/tests`
+`AGENTS.md -> .agent/rules/rule.md -> (Claude web/remote only: READ_ENTRY triggers .agent/protocols/claude.md) -> worktype decision -> .agent/README.md -> .agent/prompt/<worktype>.md -> .agent/protocols/<worktype or triggered protocol>.md -> checklist/tests`
 
 ## Directory Responsibilities
 

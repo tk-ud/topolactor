@@ -13,6 +13,10 @@
 
 `READ_ENTRY -> READ_TASK_MATERIALS -> READ_TARGET_SURFACES -> DEFINE_SCOPE -> SCENARIO_CONTRACT -> IMPLEMENT -> FILL_CHECKLISTS -> VERIFY_SCENARIO_DIFF -> JUDGMENT -> STRUCTURE_CHECK -> PUSH_OR_PR`
 
+READ_ENTRY environment trigger note:
+- When the executing agent is Claude Code on the web / remote execution environment, READ_ENTRY includes reading `.agent/protocols/claude.md` as a condition-triggered environment prerequisite.
+- This does not make `.agent/protocols/claude.md` always-read for non-Claude agents/environments.
+
 ## Worktype Decision
 
 Choose one canonical worktype id:
