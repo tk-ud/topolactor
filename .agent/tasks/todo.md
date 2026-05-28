@@ -39,7 +39,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] M6 remaining completion bundles (roadmap status: not_started/partial each):
       - document_canvas_template_runtime
       - data_binding_to_document_canvas
-      - pdf_export_minimal_record
+      - pdf_export_snapshot_runtime
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
       → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。

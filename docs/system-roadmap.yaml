@@ -234,7 +234,6 @@ system_roadmap_ssot:
         - document_canvas_template_runtime not implemented
         - data_binding_to_document_canvas not implemented
         - pdf_export_snapshot not implemented
-        - intake_snapshot_and_applied_diff runtime boundary not fully implemented
       completion_condition:
         - admin_can_import_csv_json_as_candidate_payload
         - validate_preview_apply_stages_are_separated

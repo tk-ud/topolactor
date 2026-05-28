@@ -220,15 +220,18 @@ public class AdminImportRuntime
         }
 
         // Load snapshot metadata for canonical diff linkage
-        AdminImportSnapshotMeta? meta = null;
+        AdminImportSnapshotMeta? meta;
         try
         {
             meta = await _repository.GetSnapshotMetaAsync(snapshotId, ct);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "AdminImportRuntime.ApplyAsync: GetSnapshotMetaAsync failed for snapshotId={Sid}; proceeding without full linkage", snapshotId);
+            _logger.LogError(ex, "AdminImportRuntime.ApplyAsync: GetSnapshotMetaAsync failed for snapshotId={Sid}", snapshotId);
+            return ApplyError("REPOSITORY_UNAVAILABLE", "Failed to load snapshot metadata for diff linkage.");
         }
+        if (meta is null)
+            return ApplyError("SNAPSHOT_META_NOT_FOUND", $"Snapshot metadata not found: {snapshotId}");
 
         var applyLogId = Guid.NewGuid();
 
@@ -237,9 +240,9 @@ public class AdminImportRuntime
         var diff = new
         {
             sourceSnapshotId = snapshotId.ToString(),
-            manifestId = meta?.ManifestId.ToString(),
-            sourceType = meta?.SourceType,
-            fileName = meta?.FileName,
+            manifestId = meta.ManifestId.ToString(),
+            sourceType = meta.SourceType,
+            fileName = meta.FileName,
             validRecordCount = validCount,
             canonicalMutationStatus = "staged",
             canonicalMutationNote = "Valid records staged for canonical mutation. Mutation not yet implemented at MVP.",

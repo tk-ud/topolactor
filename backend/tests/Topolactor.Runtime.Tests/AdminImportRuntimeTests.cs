@@ -462,6 +462,36 @@ public class AdminImportRuntimeTests
         // Diff JSONB must include manifestId from snapshot meta
         Assert.True(diff.TryGetProperty("manifestId", out var manifestEl));
         Assert.Equal(TrackingAdminImportRepository.DefaultManifestIdForTest.ToString(), manifestEl.GetString());
+        Assert.True(diff.TryGetProperty("sourceType", out var sourceTypeEl));
+        Assert.Equal("csv", sourceTypeEl.GetString());
+        Assert.True(diff.TryGetProperty("fileName", out var fileNameEl));
+        Assert.Equal("test.csv", fileNameEl.GetString());
+    }
+
+    [Fact]
+    public async Task ApplyAsync_GetSnapshotMetaThrows_ReturnsRepositoryUnavailableAndDoesNotWriteApplyLog()
+    {
+        var repo = new ThrowingAdminImportRepository(throwOnSnapshotMeta: true);
+        var runtime = CreateRuntime(repo);
+
+        var result = await runtime.ApplyAsync(Guid.NewGuid());
+
+        Assert.False(result.Success);
+        Assert.Equal("REPOSITORY_UNAVAILABLE", result.ErrorCode);
+        Assert.False(repo.ApplyLogCreated);
+    }
+
+    [Fact]
+    public async Task ApplyAsync_SnapshotMetaNotFound_ReturnsExplicitErrorAndDoesNotWriteApplyLog()
+    {
+        var repo = new TrackingAdminImportRepository(snapshotExists: true, snapshotMetaExists: false);
+        var runtime = CreateRuntime(repo);
+
+        var result = await runtime.ApplyAsync(Guid.NewGuid());
+
+        Assert.False(result.Success);
+        Assert.Equal("SNAPSHOT_META_NOT_FOUND", result.ErrorCode);
+        Assert.False(repo.ApplyLogCreated);
     }
 
     // -------------------------------------------------------------------------
@@ -571,6 +601,7 @@ public class AdminImportRuntimeTests
         private readonly bool _snapshotExists;
         private readonly int _validCount;
         private readonly bool _manifestExists;
+        private readonly bool _snapshotMetaExists;
 
         public static readonly Guid DefaultManifestIdForTest = new Guid("eeeeeeee-0000-0000-0000-000000000001");
 
@@ -582,12 +613,14 @@ public class AdminImportRuntimeTests
         public TrackingAdminImportRepository(
             bool snapshotExists = true,
             int validCount = 0,
-            bool manifestExists = true)
+            bool manifestExists = true,
+            bool snapshotMetaExists = true)
             : base(NullLogger<AdminImportRepository>.Instance)
         {
             _snapshotExists = snapshotExists;
             _validCount = validCount;
             _manifestExists = manifestExists;
+            _snapshotMetaExists = snapshotMetaExists;
         }
 
         public override Task<bool> ManifestExistsAsync(Guid manifestId, CancellationToken ct = default)
@@ -628,7 +661,7 @@ public class AdminImportRuntimeTests
 
         public override Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(Guid snapshotId, CancellationToken ct = default)
         {
-            if (!_snapshotExists)
+            if (!_snapshotExists || !_snapshotMetaExists)
                 return Task.FromResult<AdminImportSnapshotMeta?>(null);
             return Task.FromResult<AdminImportSnapshotMeta?>(
                 new AdminImportSnapshotMeta(DefaultManifestIdForTest, "csv", "test.csv"));
@@ -644,16 +677,20 @@ public class AdminImportRuntimeTests
         private readonly bool _throwOnSnapshot;
         private readonly bool _throwOnRecords;
         private readonly bool _throwOnApplyLog;
+        private readonly bool _throwOnSnapshotMeta;
+        public bool ApplyLogCreated { get; private set; }
 
         public ThrowingAdminImportRepository(
             bool throwOnSnapshot = false,
             bool throwOnRecords = false,
-            bool throwOnApplyLog = false)
+            bool throwOnApplyLog = false,
+            bool throwOnSnapshotMeta = false)
             : base(NullLogger<AdminImportRepository>.Instance)
         {
             _throwOnSnapshot = throwOnSnapshot;
             _throwOnRecords = throwOnRecords;
             _throwOnApplyLog = throwOnApplyLog;
+            _throwOnSnapshotMeta = throwOnSnapshotMeta;
         }
 
         public override Task<bool> ManifestExistsAsync(Guid manifestId, CancellationToken ct = default)
@@ -668,7 +705,11 @@ public class AdminImportRuntimeTests
             => Task.FromResult(1);
 
         public override Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(Guid snapshotId, CancellationToken ct = default)
-            => Task.FromResult<AdminImportSnapshotMeta?>(null);
+        {
+            if (_throwOnSnapshotMeta) throw new InvalidOperationException("SIMULATED_DB_FAILURE");
+            return Task.FromResult<AdminImportSnapshotMeta?>(
+                new AdminImportSnapshotMeta(TrackingAdminImportRepository.DefaultManifestIdForTest, "csv", "test.csv"));
+        }
 
         public override Task<bool> CreateSnapshotAsync(
             Guid snapshotId, string sourceType, string fileName, Guid manifestId,
@@ -693,6 +734,7 @@ public class AdminImportRuntimeTests
             JsonElement appliedDiffJsonb, string status, CancellationToken ct = default)
         {
             if (_throwOnApplyLog) throw new InvalidOperationException("SIMULATED_DB_FAILURE");
+            ApplyLogCreated = true;
             return Task.FromResult(true);
         }
     }
