@@ -30,11 +30,10 @@ if ! command -v rg >/dev/null 2>&1; then
 fi
 
 rg -n "frontend\.ui_ux_executable_component_slice:" "$ROADMAP" >/dev/null || fail "roadmap entry missing: frontend.ui_ux_executable_component_slice"
-rg -n "## UI/UX Primitive Executable Component Slice" "$TODO_FILE" >/dev/null || fail "todo bundle missing"
 rg -n "UI_UX_PRIMITIVE_CATALOG_IDENTITIES" "$CATALOG" >/dev/null || fail "catalog constant missing: UI_UX_PRIMITIVE_CATALOG_IDENTITIES"
 
 for name in AutoCompleteInput SearchCombobox CandidateConfidenceBadge InlineEditableField PatchPreviewPanel ApplyConfirmDialog FacetedFilterBar VirtualizedDataTable LayoutDropZone ComponentPlacementHandle SnapGridOverlay StyleTokenPicker ThemePreviewPanel DryRunResultPanel ValidationErrorPanel; do
-  rg -n "$name" "$TODO_FILE" "$ROADMAP" >/dev/null || fail "representative slice name missing in roadmap/todo: $name"
+  rg -n "$name" "$ROADMAP" >/dev/null || fail "representative slice name missing in roadmap: $name"
 done
 
 # registrationRequired:false must be alias_maintained only

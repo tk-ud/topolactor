@@ -13,7 +13,7 @@ import { JSX } from "preact";
  *   { "version": "1", "runtimes": [{ "name", "target", "layer", "action" }] }
  *
  * Operations: save, load, validate, preview, import.
- * import is in progress — routing resolved (Gap-1b), canonical DB write not yet implemented.
+ * import apply is implemented via canonical seed apply boundary to manifest wiring.
  * Import failure is explicit (fail-close). No silent fallback.
  */
 
@@ -54,14 +54,12 @@ export default function SeedAdmin(): JSX.Element {
   const [status, setStatus] = useState<string | null>(null);
   const [errors, setErrors] = useState<SeedValidationError[]>([]);
   const [previewRuntimes, setPreviewRuntimes] = useState<SeedRuntime[]>([]);
-  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const clearState = () => {
     setStatus(null);
     setErrors([]);
     setPreviewRuntimes([]);
-    setPendingMessage(null);
   };
 
   const handleLoad = async () => {
@@ -150,18 +148,13 @@ export default function SeedAdmin(): JSX.Element {
     setLoading(true);
     try {
       const body = await dispatchSeedOp("seed_runtime", "import");
-      const pendingError = body?.errors?.find(
-        (e: SeedValidationError) => e.code === "SEED_IMPORT_NOT_IMPLEMENTED",
-      );
-      if (pendingError) {
-        setPendingMessage(
-          `Import not yet implemented — DB write pending. ${pendingError.message}`,
-        );
-      } else if (body?.errors?.length) {
+      if (body?.errors?.length) {
         setErrors(body.errors);
         setStatus("Import failed.");
+      } else if (body?.emission?.data?.importedCount !== undefined) {
+        setStatus(`Import succeeded: ${body.emission.data.importedCount} runtime declaration(s) applied.`);
       } else {
-        setStatus("Import: unexpected response state.");
+        setStatus("Import completed.");
       }
     } catch (e) {
       setStatus(`Error: ${e}`);
@@ -181,7 +174,7 @@ export default function SeedAdmin(): JSX.Element {
         <code>/storage/seed.json</code>.<br />
         Seed file is a UI-managed topology payload candidate. The canonical runtime authority is
         topolactor DB.<br />
-        Import routing is resolved (Gap-1b complete). Canonical DB write not yet implemented.
+        Import apply route is implemented through SeedRuntime → SeedImportApplyRepository boundary.
       </p>
 
       <hr style={{ margin: "16px 0" }} />

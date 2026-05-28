@@ -153,8 +153,7 @@ system_roadmap_ssot:
         - backend.manifest_dispatcher: implemented
         - backend.runtime_timeline_scheduler: partial
         - backend.runtime_executor_dispatch_scope: narrowed
-      blocking_gaps:
-        - Gap-5 minimal_event_shape trigger_kind and role
+      blocking_gaps: []
 
     M3_unified_timeline_and_output_lanes:
       title: Unified trigger timeline and output lanes
@@ -175,8 +174,8 @@ system_roadmap_ssot:
         dispatcher, projection runtime, and UI projection without frontend topology judgment.
       unlocks:
         - backend.sse_emitter: partial
-        - frontend.sse_receiver: skeleton
-        - frontend.sse_dispatcher: skeleton
+        - frontend.sse_receiver: implemented
+        - frontend.sse_dispatcher: implemented
         - frontend.projection_constructor: implemented
       blocking_gaps: []
 
@@ -826,8 +825,7 @@ system_roadmap_ssot:
         - runtime_component_interface_boundary_for_projection_constructor_is_closed
         - manifest_response_constructor_mapping_end_to_end_route_is_proven
         - frontend_does_not_make_topology_or_sql_attention_judgment
-      known_gap_ref:
-        - Executable UI/UX primitive component slice expansion remains follow-up
+      known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -864,9 +862,12 @@ system_roadmap_ssot:
         AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
         docker-compose mounts topolactor_seed_storage volume at /storage.
         Admin UI at /admin/seed provides all 5 operations.
-        Import apply route is implemented (manifest route apply supported in runtime).
-        Remaining external import apply completion is limited to topology/schema/projection/general lanes.
-        Import failure is explicit (fail-close). No silent fallback.
+        SeedRuntime.ImportAsync applies validated declarations through
+        SeedImportApplyRepository.ApplyRuntimeDeclarationAsync and persists
+        active dispatcher/runtime mappings in manifest. Import conflict/failure is
+        explicit (SEED_IMPORT_CONFLICTING_ACTIVE_MAPPING or
+        SEED_IMPORT_RUNTIME_DISPATCH_FAILED), fail-close, and no silent fallback.
+        Remaining scope is generalized external import lanes (M6), not seed route wiring.
       files:
         - backend/repository/SeedJsonRepository.cs
         - backend/runtime/SeedRuntime.cs
@@ -881,8 +882,7 @@ system_roadmap_ssot:
         - backend_reads_and_writes_storage_seed_json_through_canonical_route
         - import_failure_is_explicit_and_fail_close
         - docker_compose_mounts_storage_volume
-      known_gap_ref:
-        - External import apply remains partial for topology/schema/projection/general lanes
+      known_gap_ref: []
 
     frontend_ui_component_system:
       public_summary_addendum: "component catalog classification SSOT / full catalog classification entries / catalog seed registration surface / registration continuity (generate→promote→registry/tensor) are implemented. final completion judgment confirms frontend constructor/interface and DB-driven design/layout/wiring projection closure."
