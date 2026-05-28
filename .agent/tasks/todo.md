@@ -21,25 +21,14 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → <理由・対象ファイル・次の判断点>
 ```
 
-## Non-blocking cleanup / hardening carry-over
+## CI Attention guidance fragment identity residuals
 
-- [x] [coverage] Expand CI Attention guidance projection coverage beyond `admin_ui_builder` to additional authoring surfaces
-      → Current scope is intentionally ui-builder-first; authority/visibility/promotion completion bundle is closed, so remaining work is surface-expansion only.
+- [ ] [schema/runtime] Include `authoring_surface` in CI Attention current projection identity
+      → `logs.ci_attention_guidance_current` unique index / Npgsql upsert conflict target が SSOT `fragment_contract.source_identity` と不一致。surface別 fragment が current projection 上で上書きされないよう、identity を `authoring_surface` 含みに揃える（db/ci_attention_guidance_tables.sql, backend/repository/NpgsqlCiAttentionGuidanceRepository.cs）。
 
-- [x] [hardening] Add deeper manifest-activation and audit-evidence visibility scenario tests for authority boundary regression prevention
-      → Keep backend runtime as exclusive promotion authority and frontend as display-only while expanding negative-case assertions.
-
-## UI/UX Primitive Catalog and Abstract Function Registry
-
-## TODO dependency map（execution order）
-
-1. Frontend Component Event Runtime — canonical route 閉鎖済み（frontend queue / flush / localStorage fallback / `/api/component-events/append` / backend append endpoint / idempotency / frontend・backend tests）。残作業は surface expansion / hardening（non-blocking、上記参照）。
-2. Visual layout builder（Issue #89）— 実装完了（mouse-driven editor / drag-drop / preview-validate-apply 接続 / draft-only apply guard + backend fail-close validation / promoted component-package palette identity projection）。
-
----
+- [ ] [projection] Include `authoring_surface` in CI Attention SSE projection payload
+      → `CiAttentionGuidanceGuidanceEventPayload` / Npgsql RETURNING / frontend parser / tests が source_identity の `authoring_surface` を projection payload として伝搬していない。frontend は read-only 表示境界を維持したまま identity を露出する（backend/schema/CiAttentionGuidanceContracts.cs, backend/repository/NpgsqlCiAttentionGuidanceRepository.cs, frontend/runtime/sseReceiver.ts, frontend/tests/ciAttentionGuidanceProjection.test.ts, backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs）。
 
 ## UI/UX Primitive Executable Component Slice
 
-note: representative slice (implemented context): AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel。
-
-
+運用整合チェック用の代表名（AutoCompleteInput / SearchCombobox / CandidateConfidenceBadge / InlineEditableField / PatchPreviewPanel / ApplyConfirmDialog / FacetedFilterBar / VirtualizedDataTable / LayoutDropZone / ComponentPlacementHandle / SnapGridOverlay / StyleTokenPicker / ThemePreviewPanel / DryRunResultPanel / ValidationErrorPanel）。

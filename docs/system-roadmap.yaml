@@ -1137,8 +1137,6 @@ system_roadmap_ssot:
         - draft_editing_is_not_locked_by_fragment_state
         - canonical_promotion_boundary_consumes_fragment_state_in_backend_guard
       known_gap_ref:
-        - guidance scope supports payload-defined authoring_surface with ui-builder as default while preserving backend-only promotion judgment authority
-        - authority-boundary hardening tests cover promote gate query and refresh-fragment upsert authoring_surface propagation for regression prevention
         - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
 
     design.ci_attention_guidance_fragment_ssot_and_schema:
@@ -1148,12 +1146,16 @@ system_roadmap_ssot:
       public_summary: >
         CI Attention guidance fragment SSOT/schema defines read-only evidence fragments plus
         backend canonical promotion gate consumption boundary (non-frontend authority).
+        Guidance scope supports payload-defined authoring_surface identity with
+        admin_ui_builder fallback in runtime resolution.
         Backend promotion gate consumer is implemented: GetActiveBlockingFragmentsAsync
         queries active blocking fragments and DataPromoteAsync/DataLayoutPatchApplyAsync
         fail-close with CI_ATTENTION_PROMOTION_BLOCKED when blocking fragments exist.
         Frontend live projection subscription is implemented: SSE projection events with
         CiAttentionFragmentProjectionPayload are detected via extractCiAttentionFragmentPayload
-        and update live guidance display in ui-builder without draft editing lock.
+        and update live guidance display without draft editing lock.
+        Representative UI projection surfaces include LayoutDropZone,
+        ComponentPlacementHandle, and SnapGridOverlay.
         dismissed fragments remain visibility control only and do not unlock promotion.
       files:
         - backend/repository/CiAttentionGuidanceRepository.cs
@@ -1172,7 +1174,8 @@ system_roadmap_ssot:
           - backend-tests
           - frontend-types
       known_gap_ref:
-        - guidance scope supports payload-defined authoring_surface with ui-builder as default while preserving backend-only promotion judgment authority
+        - current projection identity/upsert conflict target does not include authoring_surface; surface-specific fragments can be overwritten in logs.ci_attention_guidance_current
+        - SSE guidance projection payload does not include authoring_surface identity; backend RETURNING/contracts/frontend parser/tests are not yet aligned to SSOT source_identity
 
     design.authority_visibility_promotion_policy_ssot:
       status: implemented
