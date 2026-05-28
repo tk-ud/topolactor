@@ -5,6 +5,8 @@ import { resolveOperationVector } from "../runtime/resolveOperationVector.ts";
 import { emitComponentOperationEvent, queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import type { Emission } from "../api/dispatch.ts";
 import { EmissionView } from "../components/EmissionView.tsx";
+import { SqlAttentionProjectionPanel } from "../components/SqlAttentionProjectionPanel.tsx";
+import { fetchSqlAttentionProjection, type SqlAttentionProjectionResult } from "../api/sqlAttentionProjection.ts";
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -44,6 +46,8 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
   const [emission, setEmission] = useState<Emission | null>(null);
   const [loading, setLoading] = useState(false);
   const [vectorPreview, setVectorPreview] = useState<string | null>(null);
+  const [projectionSourceSetId, setProjectionSourceSetId] = useState("");
+  const [projection, setProjection] = useState<SqlAttentionProjectionResult | null>(null);
 
   useEffect(() => {
     startComponentEventRuntime();
@@ -96,6 +100,23 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
         errors: response.errors ?? [{ message: "dispatch: no emission returned" }],
       });
     }
+  }
+
+
+  async function handleLoadProjection(): Promise<void> {
+    const currentToken = sessionStorage.getItem(SESSION_TOKEN_KEY);
+    setToken(currentToken);
+    const response = await fetchSqlAttentionProjection(projectionSourceSetId.trim(), currentToken ?? undefined);
+    if (response.success && response.result) {
+      setProjection(response.result);
+      return;
+    }
+    setProjection({
+      status: "db_unavailable",
+      statusDetail: response.errors?.[0]?.message ?? "projection fetch failed",
+      candidates: [],
+      evaluatedAt: new Date().toISOString(),
+    });
   }
 
   const labelStyle = {
@@ -153,6 +174,16 @@ export default function OperationPanel({ initialOperation }: Props): JSX.Element
             </>
           )}
       </div>
+
+      <div style={{ marginBottom: "16px", border: "1px dashed #bbb", padding: "12px" }}>
+        <h3 style={{ marginTop: 0 }}>Recommendation Feedback Surface</h3>
+        <label style={labelStyle}>SQL Attention sourceSetId
+          <input style={inputStyle} type="text" value={projectionSourceSetId} onInput={(e) => setProjectionSourceSetId((e.target as HTMLInputElement).value)} placeholder="source_set_id" />
+        </label>
+        <button type="button" onClick={handleLoadProjection} disabled={!projectionSourceSetId.trim()}>Load SQL Attention Projection</button>
+      </div>
+
+      {projection && <SqlAttentionProjectionPanel status={projection.status} statusDetail={projection.statusDetail} candidates={projection.candidates} />}
 
       <form onSubmit={handleSubmit}>
         <label style={labelStyle}>

@@ -420,8 +420,6 @@ system_roadmap_ssot:
         This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
-      known_gap_ref:
-        - product.sql_attention_recommendation_feedback_ux remains partial
 
     product.sql_attention_recommendation_feedback_ux:
       status: implemented
@@ -430,7 +428,7 @@ system_roadmap_ssot:
       public_summary: >
         SQL Attention evidence (logs.attention) is now connected to the user-visible
         recommendation feedback surface via SqlAttentionTopologyProjectionRuntime (child projection)
-        and SqlAttentionProjectionPanel (frontend projection-only). Evidence-backed topology
+        and SqlAttentionProjectionPanel (frontend projection-only) via authenticated backend/frontend API boundary. Evidence-backed topology
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
@@ -454,7 +452,6 @@ system_roadmap_ssot:
         - non_it_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
       known_gap_ref:
         - product.ci_attention_user_guidance_ux incomplete
-        - product.sql_attention_recommendation_feedback_ux incomplete
 
     backend.sql_attention_topology_projection:
       status: implemented
@@ -474,6 +471,10 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
         - frontend/components/SqlAttentionProjectionPanel.tsx
+        - backend/Program.cs
+        - frontend/api/sqlAttentionProjection.ts
+        - frontend/routes/api/sql-attention/topology-projection.ts
+        - frontend/islands/OperationPanel.tsx
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
         - frontend/tests/sqlAttentionProjectionPanel.test.ts
       evidence:
