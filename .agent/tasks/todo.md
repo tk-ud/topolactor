@@ -30,7 +30,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [x] admin_csv_json_import_validate_preview_apply bundle — implemented
       → Manifest existence validation, schema_def fail-close validation, CSV edge cases (unclosed quote,
         field count mismatch, header-only), repository exception → REPOSITORY_UNAVAILABLE,
-        canonical diff linkage in apply_log (sourceSnapshotId + manifestId). 32 tests pass.
+        canonical diff linkage in apply_log (sourceSnapshotId + manifestId). 34 tests pass.
         Completion conditions met: manifest/schema/csv/repo error paths all explicit; preview no canonical
         mutation; apply writes apply_log with staged canonical diff linkage.
       Closed bundles: admin_csv_json_import_endpoint_and_upload_ui, manifest_validation_runtime,

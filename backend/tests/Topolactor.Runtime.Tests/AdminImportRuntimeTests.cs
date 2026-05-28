@@ -478,6 +478,7 @@ public class AdminImportRuntimeTests
 
         Assert.False(result.Success);
         Assert.Equal("REPOSITORY_UNAVAILABLE", result.ErrorCode);
+        Assert.True(repo.GetSnapshotMetaCalled);
         Assert.False(repo.ApplyLogCreated);
     }
 
@@ -679,6 +680,7 @@ public class AdminImportRuntimeTests
         private readonly bool _throwOnApplyLog;
         private readonly bool _throwOnSnapshotMeta;
         public bool ApplyLogCreated { get; private set; }
+        public bool GetSnapshotMetaCalled { get; private set; }
 
         public ThrowingAdminImportRepository(
             bool throwOnSnapshot = false,
@@ -697,7 +699,7 @@ public class AdminImportRuntimeTests
             => Task.FromResult(true);
 
         public override Task<bool> SnapshotExistsAsync(Guid snapshotId, CancellationToken ct = default)
-            => _throwOnApplyLog
+            => (_throwOnApplyLog || _throwOnSnapshotMeta)
                 ? Task.FromResult(true)
                 : throw new InvalidOperationException("SIMULATED_DB_FAILURE");
 
@@ -706,6 +708,7 @@ public class AdminImportRuntimeTests
 
         public override Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(Guid snapshotId, CancellationToken ct = default)
         {
+            GetSnapshotMetaCalled = true;
             if (_throwOnSnapshotMeta) throw new InvalidOperationException("SIMULATED_DB_FAILURE");
             return Task.FromResult<AdminImportSnapshotMeta?>(
                 new AdminImportSnapshotMeta(TrackingAdminImportRepository.DefaultManifestIdForTest, "csv", "test.csv"));
