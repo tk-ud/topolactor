@@ -23,8 +23,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.sql_attention_recommendation_feedback_ux` completion bundle を closure する。
-      → SQLA-6 (topology projection recommendation basis) が未着手。SQL Attention evidence を user-visible recommendation feedback surface (navigation guidance / UI projection candidate) に接続するまで、`product.dynamic_support_nocode_loop` は閉じられない。M7 milestone。
 - [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 non-IT authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
 
 ## External Integration M6 (Deferred Start)

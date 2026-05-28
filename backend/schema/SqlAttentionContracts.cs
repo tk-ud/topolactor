@@ -144,6 +144,109 @@ public record LogsAttentionWriteRequest(
 );
 
 
+// =============================================================================
+// SQL Attention Topology Projection contracts (SQLA-6)
+// Child projection boundary: read-only evidence consumption → recommendation candidates.
+// Evidence layer separation per SSOT: statistics / attention / phase_attention.
+// Must never back-propagate into the parent evidence layer.
+// =============================================================================
+
+/// <summary>
+/// A logs.attention evidence row loaded for child projection (read-only).
+/// Evidence layers are preserved separately per SSOT:
+///   StatisticsJson   = convergence confidence / stability / continuity
+///   VectorJson       = current excitation / neighbor hit (attention layer)
+///   PhaseVectorJson  = exploratory variance / shifted candidate direction
+///   EvidenceJson     = scoring provenance
+/// </summary>
+public record AttentionEvidenceRecord(
+    Guid AttentionId,
+    Guid CurrentId,
+    string SourceSetId,
+    Guid? HubId,
+    string AttractorKey,
+    Guid? HubRelationId,
+    Guid? RelationRegistryId,
+    double NeighborScore,
+    int HitRank,
+    string ScoreBand,
+    string PermutationKey,
+    double L2Norm,
+    string VectorJson,
+    string PhaseVectorJson,
+    string StatisticsJson,
+    double? EmaScore,
+    string EvidenceJson,
+    DateTimeOffset CreatedAt
+);
+
+/// <summary>
+/// Status of a topology projection run.
+/// NoEvidence: no recent evidence rows found — expected for cold start; not an error.
+/// MissingPolicy: policy not found in function_parameters — explicit failure.
+/// MalformedPolicy: policy JSON invalid or required keys missing — explicit failure.
+/// DbUnavailable: DB query failed — explicit failure.
+/// Ok: projection candidates are available.
+/// </summary>
+public enum TopologyProjectionStatus
+{
+    Ok,
+    NoEvidence,
+    MissingPolicy,
+    MalformedPolicy,
+    DbUnavailable
+}
+
+/// <summary>
+/// A single child projection candidate derived from SQL Attention evidence.
+/// Evidence layer separation is preserved per SSOT:
+///   statistics layer  : StatisticsJson (convergence confidence / stability / continuity)
+///   attention layer   : VectorJson (current excitation / neighbor hit)
+///   phase_attention   : PhaseVectorJson (exploratory variance / shifted candidate direction)
+/// AttentionScore is a display/ranking score for this candidate and must not
+/// back-propagate into the parent evidence layer.
+/// This is a read-only recommendation candidate; it does not mutate registry / topology / fixed route.
+/// </summary>
+public record TopologyProjectionCandidate(
+    Guid? HubId,
+    string AttractorKey,
+    Guid? RelationRegistryId,
+    double AttentionScore,
+    string ScoreBand,
+    string StatisticsJson,
+    string VectorJson,
+    string PhaseVectorJson,
+    string EvidenceJson,
+    int HitRank
+);
+
+/// <summary>
+/// Result of SqlAttentionTopologyProjectionRuntime.ProjectAsync.
+/// Status is always explicit — no silent fallback.
+/// Candidates is empty when Status is not Ok.
+/// </summary>
+public record SqlAttentionTopologyProjectionResult(
+    TopologyProjectionStatus Status,
+    string? StatusDetail,
+    IReadOnlyList<TopologyProjectionCandidate> Candidates,
+    DateTimeOffset EvaluatedAt
+);
+
+/// <summary>
+/// Policy for SQL Attention topology projection (child projection consumer).
+/// Loaded from function_parameters:
+///   function_name = 'sql_attention_topology_projection'
+///   parameter_key = 'default_policy'
+/// All values originate from the topology data store — no production defaults in runtime code.
+/// Policy-missing → MissingPolicy explicit failure.
+/// Policy malformed → MalformedPolicy explicit failure.
+/// </summary>
+public record SqlAttentionTopologyProjectionPolicy(
+    int TopK,
+    double MinNeighborScore,
+    int RecentWindowDays
+);
+
 /// <summary>
 /// Input to logs.diff append boundary for SQL Attention physical mutation pressure.
 /// This boundary is append-only and must not mix topology_edit_log or UI operation events.

@@ -112,6 +112,29 @@ public class SqlAttentionLogsRepository
         return Task.FromResult(count);
     }
 
+    /// <summary>
+    /// Loads recent logs.attention evidence rows for child projection (read-only).
+    /// Returns evidence ordered by neighbor_score DESC, created_at DESC, limited to topK.
+    /// Evidence layer separation (statistics/attention/phase_attention) is preserved in returned records.
+    /// This boundary never mutates the evidence layer.
+    ///
+    /// Prohibited: INSERT / UPDATE / DELETE on logs.attention.
+    /// In-memory test double: returns empty list.
+    /// Production: override in NpgsqlSqlAttentionLogsRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<AttentionEvidenceRecord>> LoadAttentionEvidenceForProjectionAsync(
+        string sourceSetId,
+        int topK,
+        double minNeighborScore,
+        int recentWindowDays,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "SqlAttentionLogsRepository.LoadAttentionEvidenceForProjectionAsync: no DB connection (test double) — returning empty list for sourceSetId={SourceSetId}.",
+            sourceSetId);
+        return Task.FromResult<IReadOnlyList<AttentionEvidenceRecord>>([]);
+    }
+
     public virtual Task AppendLogsDiffAsync(
         LogsDiffAppendRequest request,
         CancellationToken ct = default)
