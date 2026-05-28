@@ -24,9 +24,9 @@ component_kind:
 
 component_family: [primitive, template, composite, packaged, alias]
 semantic_role: [input, action, display, feedback, validation, diagnostic, layout_shell, navigation, data_viewer, admin_operation]
-visual_role: [field, button, badge, alert, panel, table, card, modal, tabs, tree, page_shell, json_viewer]
+visual_role: [field, button, badge, alert, panel, table, card, modal, tabs, tree, page_shell, json_viewer, canvas]
 lifecycle_status: [code_only_drift, alias_maintained, bucketed, packaging, promoted, registered, deprecated]
-capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display]
+capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display, field_binding, preview_surface, export_snapshot]
 
 catalog_vocabulary_contract:
   source_of_truth: this_ssot_defines_component_catalog_classification_values

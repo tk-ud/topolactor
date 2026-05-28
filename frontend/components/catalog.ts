@@ -1698,6 +1698,31 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     runtimeConnected: true,
     registrationRequired: true,
   },
+
+  // Category G (Document Canvas): Document Canvas / Template Projection UI
+  // Upper SSOT: docs/design/ui-ux-primitive-catalog-ssot.yaml (category_g_document_canvas)
+  // runtimeConnected:false — no factory wiring; draft palette candidate only.
+  {
+    componentKey: "document_canvas_template_editor.primitive",
+    componentKind: "document_canvas/document_canvas_template_editor",
+    sourcePath: "frontend/components/DocumentCanvasTemplateEditor.tsx",
+    componentFamily: "primitive",
+    semanticRole: "admin_operation",
+    visualRole: "canvas",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: [
+      "accepts_design",
+      "accepts_layout",
+      "field_binding",
+      "preview_surface",
+      "export_snapshot",
+      "admin_only",
+    ],
+    runtimeConnected: false,
+    registrationRequired: true,
+    notes:
+      "projection_scaffold_only | background_reference_alignment | not_report_layout_engine",
+  },
 ];
 
 // UI/UX primitive catalog identities are definition-only until executable component slice is implemented.
