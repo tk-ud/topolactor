@@ -1070,6 +1070,7 @@ system_roadmap_ssot:
       files:
         - backend/repository/NpgsqlTopologyRepository.cs
         - backend/repository/TopologyRepository.cs
+        - backend/repository/UiTopologyRepository.cs
         - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
       evidence:
         tests:

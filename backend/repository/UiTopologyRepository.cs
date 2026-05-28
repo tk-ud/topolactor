@@ -7,11 +7,11 @@ namespace Topolactor.Repository;
 /// Repository for ui_topology_tables: ui_component_bucket and the
 /// package-generation pipeline tables defined in db/ui_topology_tables.sql.
 ///
-/// No in-memory skeleton or no-op fallback: both methods throw NotImplementedException
-/// to make unintended injection an explicit failure rather than a silent fake success.
+/// No no-op fallback: all methods throw NotImplementedException to make unintended
+/// injection an explicit failure rather than a silent no-op.
 ///
-/// Production wiring: NpgsqlUiTopologyRepository overrides both methods.
-/// Test stubs: override both methods in the test class.
+/// Production wiring: NpgsqlUiTopologyRepository overrides all methods.
+/// Tests: override the required methods in the test subclass.
 /// </summary>
 public class UiTopologyRepository
 {

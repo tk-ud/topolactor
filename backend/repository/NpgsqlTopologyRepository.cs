@@ -7,7 +7,7 @@ namespace Topolactor.Repository;
 
 /// <summary>
 /// Production Npgsql implementation of TopologyRepository.
-/// Replaces in-memory skeleton reads with real SQL queries against the topology store.
+/// Replaces in-memory placeholder reads with real SQL queries against the topology store.
 ///
 /// Canonical tables:
 ///   structure_maps, package_registry, schema_registry, function_parameters

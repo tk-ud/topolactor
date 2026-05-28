@@ -18,7 +18,7 @@ end
 def detect_duplicate_keys(path)
   duplicates = []
   mapping_stack = [{indent: -1, keys: {}}]
-  File.readlines(path, chomp: true).each_with_index do |line, idx|
+  File.readlines(path, encoding: 'UTF-8', chomp: true).each_with_index do |line, idx|
     next if line.strip.empty? || line.lstrip.start_with?('#')
     indent = line[/\A */].size
     stripped = line.strip
