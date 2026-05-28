@@ -246,6 +246,8 @@ system_roadmap_ssot:
         - invoice_like_document_can_render_from_bound_data
         - pdf_export_creates_snapshot_export_record
         - applied_canonical_diff_and_source_intake_snapshot_are_both_recorded
+      detail_ssot:
+        - docs/design/admin-authoring-m6-ssot.yaml
       public_summary: >
         M6 MVP focuses on self-hosted admin authoring, not external connectors. CSV/JSON
         intake, JSONB manifest policy, document canvas binding, and PDF snapshot/diff
