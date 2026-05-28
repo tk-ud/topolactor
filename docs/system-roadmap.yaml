@@ -222,14 +222,14 @@ system_roadmap_ssot:
       unlocks:
         - admin_csv_import_validate_preview_apply: partial
         - admin_json_import_validate_preview_apply: partial
+        - intake_snapshot_and_applied_diff_log: partial
         - jsonb_label_value_manifest_runtime: not_started
         - user_defined_aggregation_display_binding_policy: not_started
         - document_canvas_template_runtime: not_started
         - data_binding_to_document_canvas: not_started
         - pdf_export_snapshot_runtime: not_started
-        - intake_snapshot_and_applied_diff_log: not_started
       blocking_gaps:
-        - admin_csv_json_import persistence scaffold is implemented; endpoint/admin UI/validate-preview-apply runtime and canonical apply boundary are not implemented
+        - admin_csv_json_import validate-preview-apply runtime is implemented (partial); canonical entity/hub mutation on apply is not yet implemented
         - jsonb_label_value_manifest runtime not implemented
         - user_defined_aggregation_display_binding_policy not implemented
         - document_canvas_template_runtime not implemented
@@ -1635,6 +1635,45 @@ system_roadmap_ssot:
         - CI_or_runtime_diagnostics_detect_semantic_breakage_before_completion_claim
       known_gap_ref:
         - non-IT business app authoring loop not implemented
+
+    backend.admin_csv_json_import:
+      status: partial
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        Admin CSV/JSON import validate-preview-apply runtime is implemented. AdminImportRuntime
+        parses CSV/JSON, validates rows against schema_def conformity (not business/hub lifecycle state),
+        writes admin_import_snapshot and admin_import_records on preview (no canonical mutation),
+        and writes admin_import_apply_log with status='staged' on apply (MVP partial boundary).
+        Canonical entity/hub mutation is not yet implemented. Frontend dispatches via /api/dispatch
+        only; no direct DB write from frontend. All error paths return explicit error codes.
+      files:
+        - backend/schema/AdminImportContracts.cs
+        - backend/repository/AdminImportRepository.cs
+        - backend/repository/NpgsqlAdminImportRepository.cs
+        - backend/runtime/AdminImportRuntime.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/Program.cs
+        - frontend/api/adminApi.ts
+        - frontend/routes/admin/import.tsx
+        - frontend/routes/admin/index.tsx
+        - frontend/tests/adminImport.test.ts
+        - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs
+      evidence:
+        tests:
+          - AdminImportRuntimeTests (17 tests: CSV/JSON preview, validation, apply, error paths, dispatch wiring)
+        ci:
+          - backend-tests
+      completion_condition:
+        - admin_csv_json_import_endpoint_and_upload_ui_wired_through_admin_runtime_dispatch
+        - manifest_validation_runtime_marks_rows_valid_or_invalid_per_schema_def_conformity
+        - validate_preview_apply_stages_are_separated_preview_does_not_mutate_canonical_state
+        - canonical_apply_and_diff_log_boundary_writes_apply_log_with_staged_status
+        - frontend_does_not_write_directly_to_db
+        - no_silent_fallback_all_error_paths_return_explicit_error_codes
+      known_gap_ref:
+        - canonical entity/hub mutation is not yet implemented (apply_log status='staged' at MVP)
+        - admin_import_records.status is conformity-only; business/hub lifecycle state is a separate boundary
 
 
 

@@ -31,10 +31,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → CSV/JSON import validate-preview-apply、JSONB label/value manifest、user-defined aggregation/display/binding policy、document canvas、DB/JSONB data binding、PDF export snapshot、intake snapshot + applied diff log を completion bundle 単位で管理する（implementation atom 分解はしない）。
 
       remaining completion bundles:
-      - admin_csv_json_import_endpoint_and_upload_ui
-      - manifest_validation_runtime
-      - validate_preview_apply_runtime_boundary
-      - canonical_apply_and_diff_log_boundary
+      - [partial] admin_csv_json_import_endpoint_and_upload_ui — implemented (upload UI, preview table, apply button wired through admin_runtime dispatch)
+      - [partial] manifest_validation_runtime — implemented (schema_def conformity validation; conformity only, not business/hub lifecycle state)
+      - [partial] validate_preview_apply_runtime_boundary — implemented (preview writes import tables only, no canonical mutation; apply is explicit)
+      - [partial] canonical_apply_and_diff_log_boundary — staged MVP (apply_log written with status='staged'; canonical entity/hub mutation not yet implemented)
       - document_canvas_template_runtime
       - data_binding_to_document_canvas
       - pdf_export_minimal_record

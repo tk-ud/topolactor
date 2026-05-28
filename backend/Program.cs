@@ -90,7 +90,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<ISystemCiDiagnosticRunner>(),
         sp.GetRequiredService<SeedRuntime>(),
         sp.GetRequiredService<CiAttentionGuidanceRepository>(),
-        sp.GetRequiredService<SseEventBroadcaster>()));
+        sp.GetRequiredService<SseEventBroadcaster>(),
+        sp.GetRequiredService<AdminImportRuntime>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(
@@ -150,6 +151,13 @@ builder.Services.AddSingleton<SeedJsonRepository>(sp =>
 builder.Services.AddSingleton<SeedImportApplyRepository>(sp =>
     new SeedImportApplyRepository(connectionString));
 builder.Services.AddSingleton<SeedRuntime>();
+
+// Admin CSV/JSON Import Runtime — M6 validate-preview-apply boundary.
+builder.Services.AddSingleton<AdminImportRepository>(sp =>
+    new NpgsqlAdminImportRepository(
+        sp.GetRequiredService<ILogger<NpgsqlAdminImportRepository>>(),
+        connectionString));
+builder.Services.AddSingleton<AdminImportRuntime>();
 
 // ---------------------------------------------------------------------------
 // SSE broadcaster — fan-out projection events to all connected SSE clients
