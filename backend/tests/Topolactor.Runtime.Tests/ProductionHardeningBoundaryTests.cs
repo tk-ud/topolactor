@@ -1,0 +1,81 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Topolactor.Repository;
+using Topolactor.Schema;
+using Xunit;
+
+namespace Topolactor.Runtime.Tests;
+
+/// <summary>
+/// Verifies Gap-11 (topology_repository production hardening) and
+/// Gap-12 (admin_contracts finalization) explicit-failure boundaries.
+///
+/// Gap-11: TopologyRepository base class demo methods throw TOPOLOGY_REPOSITORY_NOT_CONNECTED
+///         rather than returning placeholder data. NpgsqlTopologyRepository resolves hub_id via
+///         function_parameters (not hardcoded) — verified by coverage of
+///         ResolveDemoEntityHubIdAsync/ResolveDemoEntityRelationIdAsync helpers.
+///
+/// Gap-12: ContextRouteRepository.CreateContextTokenAsync (base class) throws
+///         CONTEXT_TOKEN_REGISTRY_NOT_CONNECTED instead of returning the removed
+///         CreateTokenCode.NotConnected placeholder. Production contract is
+///         Success | Conflict only.
+/// </summary>
+public class ProductionHardeningBoundaryTests
+{
+    // ─── Gap-11: Topology Repository Explicit Failure Boundary ───────────────
+
+    [Fact]
+    public async Task TopologyRepository_LoadDemoEntityList_ThrowsWhenNotConnected()
+    {
+        var repo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repo.LoadDemoEntityListAsync());
+        Assert.Equal("TOPOLOGY_REPOSITORY_NOT_CONNECTED", ex.Message);
+    }
+
+    [Fact]
+    public async Task TopologyRepository_LoadDemoEntityDetail_ThrowsWhenNotConnected()
+    {
+        var repo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repo.LoadDemoEntityDetailAsync(Guid.NewGuid()));
+        Assert.Equal("TOPOLOGY_REPOSITORY_NOT_CONNECTED", ex.Message);
+    }
+
+    [Fact]
+    public async Task TopologyRepository_ApplyDemoTransition_ThrowsWhenNotConnected()
+    {
+        var repo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repo.ApplyDemoTransitionAsync(Guid.NewGuid(), "create", "title"));
+        Assert.Equal("TOPOLOGY_REPOSITORY_NOT_CONNECTED", ex.Message);
+    }
+
+    [Fact]
+    public async Task TopologyRepository_LoadDemoTransitionHistory_ThrowsWhenNotConnected()
+    {
+        var repo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "dummy");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repo.LoadDemoTransitionHistoryAsync(Guid.NewGuid()));
+        Assert.Equal("TOPOLOGY_REPOSITORY_NOT_CONNECTED", ex.Message);
+    }
+
+    // ─── Gap-12: Admin Contracts — NotConnected Removed ──────────────────────
+
+    [Fact]
+    public async Task ContextRouteRepository_CreateContextToken_ThrowsWhenNotConnected()
+    {
+        var repo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "dummy");
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repo.CreateContextTokenAsync("label", null, 0.5f));
+        Assert.Equal("CONTEXT_TOKEN_REGISTRY_NOT_CONNECTED", ex.Message);
+    }
+
+    [Fact]
+    public void CreateTokenCode_DoesNotContainNotConnected()
+    {
+        var values = Enum.GetValues<CreateTokenCode>();
+        Assert.DoesNotContain(values, v => v.ToString() == "NotConnected");
+        Assert.Contains(CreateTokenCode.Success, values);
+        Assert.Contains(CreateTokenCode.Conflict, values);
+    }
+}

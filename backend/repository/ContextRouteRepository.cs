@@ -172,15 +172,13 @@ public class ContextRouteRepository
     /// <summary>
     /// Inserts a new token into context_token_registry with status='active'.
     /// Returns CreateTokenResult.Success with the new tokenId on success.
-    /// Returns CreateTokenResult.NotConnected in the in-memory skeleton.
     /// Returns CreateTokenResult.Conflict when UNIQUE(label, "group") is violated.
-    /// In-memory skeleton: returns NotConnected. Production: override in NpgsqlContextRouteRepository.
+    /// In-memory skeleton: throws InvalidOperationException — production requires NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<CreateTokenResult> CreateContextTokenAsync(
         string label, string? group, float value, CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.CreateContextTokenAsync: in-memory skeleton — no-op.");
-        return Task.FromResult(new CreateTokenResult(CreateTokenCode.NotConnected, null));
+        throw new InvalidOperationException("CONTEXT_TOKEN_REGISTRY_NOT_CONNECTED");
     }
 
     /// <summary>

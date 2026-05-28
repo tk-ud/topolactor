@@ -1055,41 +1055,77 @@ system_roadmap_ssot:
         - Gap-10 context_route_repository implementation hardening
 
     backend.topology_repository:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Npgsql topology repository includes temporary skeleton behavior for selected routes.
+      public_summary: >
+        Production topology resolution (LoadStructureMapAsync, LoadPackageAsync, LoadSchemaAsync,
+        LoadFunctionParameterAsync) uses full SQL registry resolution against structure_maps,
+        package_registry, schema_registry, function_parameters tables. Demo entity route
+        (LoadDemoEntityListAsync, ApplyDemoTransitionAsync) now resolves hub_id and relation_id
+        via LoadFunctionParameterAsync("demo_entity_defaults", ...) rather than hardcoded UUIDs;
+        explicit warning log on fallback to seeded defaults. Base class demo methods throw
+        TOPOLOGY_REPOSITORY_NOT_CONNECTED explicitly (no placeholder data). Gap-11 closure:
+        skeleton shortcuts removed, registry resolution adopted throughout.
       files:
         - backend/repository/NpgsqlTopologyRepository.cs
-        - backend/repository/UiTopologyRepository.cs
+        - backend/repository/TopologyRepository.cs
+        - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
+      evidence:
+        tests:
+          - ProductionHardeningBoundaryTests (explicit failure boundary: all 4 demo methods)
+        ci:
+          - backend-tests
       completion_condition:
         - topology_repository_removes_skeleton_shortcuts_and_uses_full_registry_resolution
-      known_gap_ref:
-        - Gap-11 topology_repository production hardening
+      known_gap_ref: []
 
     backend.admin_contracts:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Admin contract surface includes temporary placeholder fields and needs completion hardening.
+      public_summary: >
+        CreateTokenCode.NotConnected placeholder removed from the production contract enum.
+        ContextRouteRepository.CreateContextTokenAsync (base class) now throws
+        InvalidOperationException(CONTEXT_TOKEN_REGISTRY_NOT_CONNECTED) explicitly, consistent
+        with other not-connected base class methods. Production contract is Success | Conflict only.
+        AdminRuntime.CreateTokenAsync NotConnected handler removed. Gap-12 closure: temporary
+        placeholder replaced with validated runtime schema (explicit throw + production enum).
       files:
         - backend/schema/AdminContracts.cs
+        - backend/repository/ContextRouteRepository.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
+      evidence:
+        tests:
+          - ProductionHardeningBoundaryTests (CreateContextToken throws, enum has no NotConnected)
+        ci:
+          - backend-tests
       completion_condition:
         - admin_contracts_replace_temporary_fields_with_validated_runtime_schema
-      known_gap_ref:
-        - Gap-12 admin_contracts finalization
+      known_gap_ref: []
 
     frontend.runtime_scheduler:
-      status: skeleton
+      status: implemented
       production_ready: false
       milestone: M1_runtime_skeleton
-      public_summary: Frontend scheduler queue exists, but ordering/async runtime semantics are still skeleton behavior.
+      public_summary: >
+        Frontend command scheduler implements FIFO serial queue for queueClientCommand.
+        Commands enqueue and execute in order; errors propagate explicitly to the failed
+        command's awaiter only; subsequent commands are unaffected. Queue length and running
+        state are observable via __testOnly surface. Gap-13 closure: ordering, async execution,
+        and rollback boundary are owned by the scheduler module, not the caller.
       files:
         - frontend/runtime/frontendScheduler.ts
+        - frontend/tests/frontendScheduler.test.ts
+      evidence:
+        tests:
+          - frontendScheduler.test.ts (FIFO ordering, serial execution, explicit failure, queue drain)
+        ci:
+          - frontend-types
       completion_condition:
         - frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
-      known_gap_ref:
-        - Gap-13 frontend scheduler runtime completion
+      known_gap_ref: []
 
     system_ci.runtime_diagnostic_scheduler:
       status: partial
@@ -1121,7 +1157,7 @@ system_roadmap_ssot:
         - product.ci_attention_user_guidance_ux remains partial
 
     product.ci_attention_user_guidance_ux:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1131,13 +1167,21 @@ system_roadmap_ssot:
         layout_patch:apply) is now fail-close in backend runtime guard when active blocking
         fragments remain unresolved (CI_ATTENTION_PROMOTION_BLOCKED). Frontend live SSE
         projection subscription receives fragment events and updates guidance display without
-        draft editing lock or frontend promotion authority.
+        draft editing lock or frontend promotion authority. All three completion conditions are
+        satisfied. Broader dynamic_support_nocode_loop (which requires SQL Attention feedback UX
+        + M6 work) remains partial in its own registry entry.
+      evidence:
+        tests:
+          - CiAttentionPromotionGateTests
+          - ciAttentionGuidanceProjection.test.ts
+        ci:
+          - backend-tests
+          - frontend-types
       completion_condition:
         - ci_attention_guidance_is_exposed_to_end_users_during_authoring_as_read_only_projection
         - draft_editing_is_not_locked_by_fragment_state
         - canonical_promotion_boundary_consumes_fragment_state_in_backend_guard
-      known_gap_ref:
-        - dynamic_support_nocode_loop feedback closure with SQL Attention user-visible loop remains partial
+      known_gap_ref: []
 
     design.ci_attention_guidance_fragment_ssot_and_schema:
       status: partial

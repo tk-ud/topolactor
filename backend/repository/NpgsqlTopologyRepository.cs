@@ -172,12 +172,42 @@ public class NpgsqlTopologyRepository : TopologyRepository
         return (string)result;
     }
 
+    // ─── Demo entity defaults — production registry resolution ───────────────
+    // Resolves default hub_id and relation_id from function_parameters rather than
+    // hardcoding. Falls back to seeded defaults with an explicit warning log.
+    // function_name: "demo_entity_defaults", parameter_key: "hub_id" | "relation_id"
+
+    private static readonly Guid DefaultDemoHubId     = new("00000000-0000-0000-0000-000000000010");
+    private static readonly Guid DefaultDemoRelationId = new("00000000-0000-0000-0000-000000000011");
+
+    private async Task<Guid> ResolveDemoEntityHubIdAsync(CancellationToken ct)
+    {
+        var raw = await LoadFunctionParameterAsync("demo_entity_defaults", "hub_id", ct);
+        if (raw is not null && Guid.TryParse(raw.Trim('"'), out var resolved))
+            return resolved;
+        _npgsqlLogger.LogWarning(
+            "NpgsqlTopologyRepository: demo_entity_defaults.hub_id not found in function_parameters; using seeded default.");
+        return DefaultDemoHubId;
+    }
+
+    private async Task<Guid> ResolveDemoEntityRelationIdAsync(CancellationToken ct)
+    {
+        var raw = await LoadFunctionParameterAsync("demo_entity_defaults", "relation_id", ct);
+        if (raw is not null && Guid.TryParse(raw.Trim('"'), out var resolved))
+            return resolved;
+        _npgsqlLogger.LogWarning(
+            "NpgsqlTopologyRepository: demo_entity_defaults.relation_id not found in function_parameters; using seeded default.");
+        return DefaultDemoRelationId;
+    }
+
     public override async Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
     {
+        var hubId = await ResolveDemoEntityHubIdAsync(ct);
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM topologys.entities WHERE hub_id='00000000-0000-0000-0000-000000000010' ORDER BY created_at";
+        cmd.CommandText = "SELECT entity_id, COALESCE(entity_jsonb->>'label','Untitled'), COALESCE(entity_jsonb->>'state','unknown') FROM topologys.entities WHERE hub_id=@hubId ORDER BY created_at";
+        cmd.Parameters.AddWithValue("hubId", hubId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         var list = new List<DemoEntityProjection>();
         while (await reader.ReadAsync(ct)) list.Add(new DemoEntityProjection(reader.GetGuid(0), reader.GetString(1), reader.GetString(2)));
@@ -198,6 +228,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
     public override async Task<DemoTransitionResult> ApplyDemoTransitionAsync(Guid entityId, string action, string? title, CancellationToken ct = default)
     {
+        var hubId      = await ResolveDemoEntityHubIdAsync(ct);
+        var relationId = await ResolveDemoEntityRelationIdAsync(ct);
+
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
@@ -214,8 +247,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     return new(false, "STATE_POLICY_NOT_FOUND", "state_registry.active is missing");
                 }
                 var cmd = conn.CreateCommand(); cmd.Transaction = tx;
-                cmd.CommandText = "INSERT INTO topologys.entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,'00000000-0000-0000-0000-000000000010',jsonb_build_object('label',@title,'state','active','hub_id','00000000-0000-0000-0000-000000000010'),ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],(SELECT state_id FROM topologys.state_registry WHERE name='active' LIMIT 1))";
+                cmd.CommandText = "INSERT INTO topologys.entities(entity_id,hub_id,entity_jsonb,relation_ids,state_id) VALUES(@id,@hubId,jsonb_build_object('label',@title,'state','active','hub_id',@hubIdStr),ARRAY[@relationId]::uuid[],(SELECT state_id FROM topologys.state_registry WHERE name='active' LIMIT 1))";
                 cmd.Parameters.AddWithValue("id", entityId); cmd.Parameters.AddWithValue("title", title ?? "Untitled");
+                cmd.Parameters.AddWithValue("hubId", hubId); cmd.Parameters.AddWithValue("hubIdStr", hubId.ToString()); cmd.Parameters.AddWithValue("relationId", relationId);
                 await cmd.ExecuteNonQueryAsync(ct);
                 var createHistoryCmd = conn.CreateCommand(); createHistoryCmd.Transaction = tx;
                 createHistoryCmd.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";

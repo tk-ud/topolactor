@@ -25,11 +25,12 @@ public record AdminCreateTokenRequestDto(
 
 /// <summary>
 /// Result code for CreateContextTokenAsync.
-/// Success:      token inserted, TokenId is set.
-/// NotConnected: in-memory skeleton — no DB wired.
-/// Conflict:     UNIQUE(label, "group") violated.
+/// Success:  token inserted, TokenId is set.
+/// Conflict: UNIQUE(label, "group") violated.
+/// Not-connected behavior is an explicit exception (InvalidOperationException) in the
+/// in-memory skeleton, not a return code. Production always uses NpgsqlContextRouteRepository.
 /// </summary>
-public enum CreateTokenCode { Success, NotConnected, Conflict }
+public enum CreateTokenCode { Success, Conflict }
 
 /// <summary>
 /// Result of CreateContextTokenAsync.
