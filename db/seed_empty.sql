@@ -642,3 +642,27 @@ VALUES (
     true
 )
 ON CONFLICT (function_name, parameter_key) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- sql_attention_topology_projection default_policy
+-- Loaded by SqlAttentionTopologyProjectionRuntime via
+--   TopologyRepository.LoadFunctionParameterAsync(
+--     "sql_attention_topology_projection", "default_policy").
+-- Policy-missing → MissingPolicy explicit failure (no silent fallback).
+-- top_k: maximum number of evidence rows to retrieve from logs.attention.
+-- min_neighbor_score: minimum neighbor_score threshold for evidence inclusion.
+-- recent_window_days: rolling window in days for evidence recency filter.
+-- All three keys are required and must be positive; absence or non-positive value
+-- triggers MalformedPolicy explicit failure.
+-- ---------------------------------------------------------------------------
+INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'sql_attention_topology_projection',
+    'default_policy',
+    '{"top_k":10,"min_neighbor_score":0.85,"recent_window_days":30}',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;

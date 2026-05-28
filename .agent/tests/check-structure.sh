@@ -263,6 +263,8 @@ check_content "db/sql_attention_logs_tables.sql" "logs.hub_current"
 check_content "db/sql_attention_logs_tables.sql" "score_band"
 check_content "db/sql_attention_logs_tables.sql" "neighbor_score"
 check_content "db/sql_attention_logs_tables.sql" "hub_current_id"
+check_content "db/seed_empty.sql" "sql_attention_topology_projection"
+check_content "db/seed_empty.sql" "default_policy"
 
 check_file "backend/endpoint/DispatchEndpoint.cs"
 check_file "backend/endpoint/SseEndpoint.cs"
