@@ -30,7 +30,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [x] admin_csv_json_import_validate_preview_apply bundle — implemented
       → Manifest existence validation, schema_def fail-close validation, CSV edge cases (unclosed quote,
         field count mismatch, header-only), repository exception → REPOSITORY_UNAVAILABLE,
-        canonical diff linkage in apply_log (sourceSnapshotId + manifestId). 32 tests pass.
+        canonical diff linkage in apply_log (sourceSnapshotId + manifestId). 34 tests pass.
         Completion conditions met: manifest/schema/csv/repo error paths all explicit; preview no canonical
         mutation; apply writes apply_log with staged canonical diff linkage.
       Closed bundles: admin_csv_json_import_endpoint_and_upload_ui, manifest_validation_runtime,
@@ -39,7 +39,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] M6 remaining completion bundles (roadmap status: not_started/partial each):
       - document_canvas_template_runtime
       - data_binding_to_document_canvas
-      - pdf_export_minimal_record
+      - pdf_export_snapshot_runtime
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
       → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。
