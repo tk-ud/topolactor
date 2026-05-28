@@ -432,12 +432,12 @@ system_roadmap_ssot:
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
-        Remaining: production function_parameters seed, live DB end-to-end verification, and SQLA-1..5
+        Remaining: live DB end-to-end verification and SQLA-1..5
         parent observation hardening are not yet complete for production_ready promotion.
+        Production function_parameters seed for sql_attention_topology_projection is now present in seed_empty.sql.
       completion_condition:
         - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
       known_gap_ref:
-        - production function_parameters seed for sql_attention_topology_projection missing from seed_empty.sql
         - SQLA-1..5 parent observation hardening/live verification remain (separate registry entries)
 
     product.dynamic_support_nocode_loop:
@@ -477,6 +477,7 @@ system_roadmap_ssot:
         - frontend/islands/OperationPanel.tsx
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
         - frontend/tests/sqlAttentionProjectionPanel.test.ts
+        - db/seed_empty.sql
       evidence:
         tests:
           - SqlAttentionTopologyProjectionRuntimeTests
@@ -494,7 +495,6 @@ system_roadmap_ssot:
         - parent_sql_attention_semantics_not_redefined
       known_gap_ref:
         - SQLA-1..5 parent observation hardening/live verification remain partial
-        - production function_parameters seed for sql_attention_topology_projection not yet added to seed_empty.sql
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
