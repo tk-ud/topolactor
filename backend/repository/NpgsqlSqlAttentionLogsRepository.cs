@@ -185,6 +185,76 @@ INSERT INTO logs.attention (
         return rowsWritten;
     }
 
+    public override async Task<IReadOnlyList<AttentionEvidenceRecord>> LoadAttentionEvidenceForProjectionAsync(
+        string sourceSetId,
+        int topK,
+        double minNeighborScore,
+        int recentWindowDays,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceSetId);
+        if (topK <= 0) throw new ArgumentOutOfRangeException(nameof(topK), "topK must be positive.");
+        if (recentWindowDays <= 0) throw new ArgumentOutOfRangeException(nameof(recentWindowDays), "recentWindowDays must be positive.");
+
+        var rows = new List<AttentionEvidenceRecord>();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        const string sql = @"
+SELECT attention_id, current_id, source_set_id,
+       hub_id, attractor_key, hub_relation_id, relation_registry_id,
+       neighbor_score, hit_rank, score_band, permutation_key,
+       l2_norm,
+       vector_json::text       AS vector_json,
+       phase_vector_json::text AS phase_vector_json,
+       statistics_json::text   AS statistics_json,
+       ema_score,
+       evidence_json::text     AS evidence_json,
+       created_at
+  FROM logs.attention
+ WHERE source_set_id = @p_source_set_id
+   AND neighbor_score >= @p_min_neighbor_score
+   AND created_at >= now() - (@p_recent_window_days || ' days')::interval
+ ORDER BY neighbor_score DESC, created_at DESC
+ LIMIT @p_top_k";
+
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("p_source_set_id", sourceSetId);
+        cmd.Parameters.AddWithValue("p_min_neighbor_score", minNeighborScore);
+        cmd.Parameters.AddWithValue("p_recent_window_days", recentWindowDays);
+        cmd.Parameters.AddWithValue("p_top_k", topK);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            rows.Add(new AttentionEvidenceRecord(
+                AttentionId:       reader.GetGuid(reader.GetOrdinal("attention_id")),
+                CurrentId:         reader.GetGuid(reader.GetOrdinal("current_id")),
+                SourceSetId:       reader.GetString(reader.GetOrdinal("source_set_id")),
+                HubId:             reader.IsDBNull(reader.GetOrdinal("hub_id")) ? null : reader.GetGuid(reader.GetOrdinal("hub_id")),
+                AttractorKey:      reader.GetString(reader.GetOrdinal("attractor_key")),
+                HubRelationId:     reader.IsDBNull(reader.GetOrdinal("hub_relation_id")) ? null : reader.GetGuid(reader.GetOrdinal("hub_relation_id")),
+                RelationRegistryId:reader.IsDBNull(reader.GetOrdinal("relation_registry_id")) ? null : reader.GetGuid(reader.GetOrdinal("relation_registry_id")),
+                NeighborScore:     reader.GetDouble(reader.GetOrdinal("neighbor_score")),
+                HitRank:           reader.IsDBNull(reader.GetOrdinal("hit_rank")) ? 0 : reader.GetInt32(reader.GetOrdinal("hit_rank")),
+                ScoreBand:         reader.GetString(reader.GetOrdinal("score_band")),
+                PermutationKey:    reader.IsDBNull(reader.GetOrdinal("permutation_key")) ? "" : reader.GetString(reader.GetOrdinal("permutation_key")),
+                L2Norm:            reader.GetDouble(reader.GetOrdinal("l2_norm")),
+                VectorJson:        reader.GetString(reader.GetOrdinal("vector_json")),
+                PhaseVectorJson:   reader.GetString(reader.GetOrdinal("phase_vector_json")),
+                StatisticsJson:    reader.GetString(reader.GetOrdinal("statistics_json")),
+                EmaScore:          reader.IsDBNull(reader.GetOrdinal("ema_score")) ? null : reader.GetDouble(reader.GetOrdinal("ema_score")),
+                EvidenceJson:      reader.GetString(reader.GetOrdinal("evidence_json")),
+                CreatedAt:         reader.GetFieldValue<DateTimeOffset>(reader.GetOrdinal("created_at"))
+            ));
+        }
+
+        _npgsqlLogger.LogInformation(
+            "LoadAttentionEvidenceForProjectionAsync: loaded {Count} evidence row(s) for sourceSetId={SourceSetId}.",
+            rows.Count, sourceSetId);
+        return rows;
+    }
+
     public override async Task AppendLogsDiffAsync(
         LogsDiffAppendRequest request,
         CancellationToken ct = default)

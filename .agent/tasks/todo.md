@@ -23,11 +23,14 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.sql_attention_recommendation_feedback_ux` completion bundle を closure する。
-      → SQLA-6 (topology projection recommendation basis) が未着手。SQL Attention evidence を user-visible recommendation feedback surface (navigation guidance / UI projection candidate) に接続するまで、`product.dynamic_support_nocode_loop` は閉じられない。M7 milestone。
 - [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 non-IT authoring loop completion を前提とする。M6 deferred start 維持のため、この bundle は M6 開始まで未着手のまま維持する。
 
 ## External Integration M6 (Deferred Start)
 
 - [ ] M6 external integration bundle 群は `not_started` を維持する。
       → Notion / Sheets / Slack / webhook / CSV import は開始時に validate-preview-apply boundary 単位で roadmap/TODO を起票し、implementation atom ではなく completion bundle で管理する。
+
+## SQL Attention Recommendation Feedback UX
+
+- [ ] SQLA-6 completion bundleのproduction seed境界を閉じる（`sql_attention_topology_projection/default_policy` を seed に追加し、runtime explicit failure/missing policy 境界テストを更新）。
+      → 対象: db/seed_empty.sql, seed関連テスト, docs/system-roadmap.yaml の production_ready 判定根拠。

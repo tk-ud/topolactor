@@ -260,7 +260,6 @@ system_roadmap_ssot:
         - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
         - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
         - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
-        - SQLA-6 topology projection recommendation basis not implemented
         - SQLA-7 logs.diff append boundary is implemented, but live DB/runtime verification and broader hardening coverage remain
 
   implementation_registry:
@@ -421,20 +420,25 @@ system_roadmap_ssot:
         This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
-      known_gap_ref:
-        - product.sql_attention_recommendation_feedback_ux remains partial
 
     product.sql_attention_recommendation_feedback_ux:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        Product capability that feeds accumulated SQL Attention evidence back into
-        next-user context candidates, navigation guidance, and UI projection is still under construction.
+        SQL Attention evidence (logs.attention) is now connected to the user-visible
+        recommendation feedback surface via SqlAttentionTopologyProjectionRuntime (child projection)
+        and SqlAttentionProjectionPanel (frontend projection-only) via authenticated backend/frontend API boundary. Evidence-backed topology
+        projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
+        Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
+        for all policy and DB error cases. Frontend is projection-only.
+        Remaining: production function_parameters seed, live DB end-to-end verification, and SQLA-1..5
+        parent observation hardening are not yet complete for production_ready promotion.
       completion_condition:
         - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
       known_gap_ref:
-        - SQLA-6 topology projection recommendation basis not implemented
+        - production function_parameters seed for sql_attention_topology_projection missing from seed_empty.sql
+        - SQLA-1..5 parent observation hardening/live verification remain (separate registry entries)
 
     product.dynamic_support_nocode_loop:
       status: partial
@@ -448,15 +452,49 @@ system_roadmap_ssot:
         - non_it_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
       known_gap_ref:
         - product.ci_attention_user_guidance_ux incomplete
-        - product.sql_attention_recommendation_feedback_ux incomplete
 
     backend.sql_attention_topology_projection:
-      status: not_started
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: topology recommendation projection basis from SQL Attention evidence is not yet implemented.
+      public_summary: >
+        SqlAttentionTopologyProjectionRuntime reads logs.attention evidence (read-only) and
+        projects it into TopologyProjectionCandidate recommendation candidates for
+        user-visible surfaces. Evidence layer separation (statistics/attention/phase_attention)
+        is preserved per SSOT. Policy is resolved from function_parameters (no magic numbers).
+        Explicit failure on policy missing/invalid/DB unavailable (no silent fallback).
+        No registry/topology/fixed-route mutation. Frontend SqlAttentionProjectionPanel
+        is projection-only.
+      files:
+        - backend/runtime/SqlAttentionTopologyProjectionRuntime.cs
+        - backend/repository/SqlAttentionLogsRepository.cs
+        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/schema/SqlAttentionContracts.cs
+        - frontend/components/SqlAttentionProjectionPanel.tsx
+        - backend/Program.cs
+        - frontend/api/sqlAttentionProjection.ts
+        - frontend/routes/api/sql-attention/topology-projection.ts
+        - frontend/islands/OperationPanel.tsx
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
+        - frontend/tests/sqlAttentionProjectionPanel.test.ts
+      evidence:
+        tests:
+          - SqlAttentionTopologyProjectionRuntimeTests
+          - sqlAttentionProjectionPanel.test.ts
+        ci:
+          - backend-tests
+          - frontend-types
+      completion_condition:
+        - sql_attention_evidence_consumed_by_child_projection_runtime_read_only
+        - evidence_layer_separation_statistics_attention_phase_attention_preserved
+        - policy_resolved_from_function_parameters_no_magic_numbers
+        - explicit_failure_on_policy_missing_invalid_db_unavailable
+        - no_registry_topology_fixed_route_mutation
+        - frontend_is_projection_only_no_cosine_mlp_topology_judgment
+        - parent_sql_attention_semantics_not_redefined
       known_gap_ref:
-        - SQLA-6 topology projection recommendation basis not implemented
+        - SQLA-1..5 parent observation hardening/live verification remain partial
+        - production function_parameters seed for sql_attention_topology_projection not yet added to seed_empty.sql
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
