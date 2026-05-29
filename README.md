@@ -5,7 +5,16 @@ topolactor is a data-driven topology runtime framework.
 Topolactor is a **registry-backed full-stack framework** for building data-driven apps, no-code tools, and lightweight interactive games.
 
 Development started: 2026-05-17 (first repository commit: 79d71f1)  
+
 Production-ready core achieved: 2026-05-29 (M6/M7 core runtime boundaries CI green)
+
+AI development cost to production-ready core: $40/month fixed subscription run-rate  
+- ChatGPT Plus / Codex: $20/month
+- Claude Pro / Claude Code: $20/month
+- API usage billing: $0
+- Pay-as-you-go agent billing: not used
+
+Production-ready core was achieved using only fixed monthly AI subscriptions, with no usage-based API spend.
 
 ## What is topolactor?
 
