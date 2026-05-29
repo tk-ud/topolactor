@@ -1,6 +1,6 @@
 # topolactor
 
-topolactor is a data-driven topology runtime framework.
+topolactor is a production-ready core for data-driven topology runtime.
 
 Topolactor is a **registry-backed full-stack framework** for building data-driven apps, no-code tools, and lightweight interactive games.
 
