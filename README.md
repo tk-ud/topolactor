@@ -88,7 +88,7 @@ This keeps user-authored apps flexible while preventing hidden routes, silent fa
 - **SQL Attention:** Uses hub/log/relation/attractor evidence to grow hub construction, hub connection, and projection candidates.
 
   ```text
-  attention_score = neighbor_score * ||current_basis||_2
+  attention_strength = neighbor_score * ||current_basis||_2
   ```
 
   Phase Attention preserves auxiliary evidence in a quaternion-like phase vector:
