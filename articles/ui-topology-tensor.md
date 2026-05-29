@@ -1,3 +1,11 @@
+---
+title: "UI Topology Tensor and Admin Surface"
+emoji: "🧩"
+type: "tech"
+topics: ["ui", "architecture", "database", "deno", "preact"]
+published: false
+---
+
 # UI Topology Tensor and Admin Surface
 
 ## Summary

@@ -1,3 +1,11 @@
+---
+title: "SQL Attention in topolactor"
+emoji: "🧲"
+type: "tech"
+topics: ["postgresql", "architecture", "ai", "database", "runtime"]
+published: false
+---
+
 # SQL Attention in topolactor
 
 ## Positioning

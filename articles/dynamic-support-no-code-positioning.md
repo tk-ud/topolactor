@@ -1,3 +1,11 @@
+---
+title: "動的サポート付きノーコードという考え方"
+emoji: "🌱"
+type: "tech"
+topics: ["ai", "nocode", "architecture", "postgresql", "ci"]
+published: false
+---
+
 # 動的サポート付きノーコードという考え方
 
 **キャッチ**  

@@ -1,3 +1,11 @@
+---
+title: "Registry Semantic Matrix"
+emoji: "🧬"
+type: "tech"
+topics: ["architecture", "database", "runtime", "ai", "postgresql"]
+published: false
+---
+
 # Registry Semantic Matrix
 
 ## Summary
