@@ -113,7 +113,7 @@ public class PdfExportSnapshotRuntime
             SourceSnapshotId: request.SourceSnapshotId,
             SourceApplyLogId: request.SourceApplyLogId,
             Status: "snapshot_created",
-            Note: "Export snapshot created. PDF generation is not implemented at this boundary " +
+            Note: "Export snapshot created. PDF byte generation is outside this snapshot boundary " +
                   "(snapshot_boundary only). Export record links to source intake snapshot and apply log.",
             ErrorCode: null,
             ErrorMessage: null));
