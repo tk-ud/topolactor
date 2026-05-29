@@ -103,6 +103,187 @@ bundles:
       - full DB/JSONB→canvas binding loop with real DB-sourced field values
       - PDF export snapshot
 
+  - bundle_id: jsonb_label_value_manifest_runtime
+    roadmap_bundle_refs:
+      - jsonb_label_value_manifest_runtime
+      - data_binding_to_document_canvas
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
+      - backend/runtime/JsonbManifestRuntime.cs
+      - backend/schema/JsonbManifestContracts.cs
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
+        cases:
+          - "ResolveFields_SimpleJsonPath_ResolvesFieldValue"
+          - "ResolveFields_NestedJsonPath_ResolvesNestedValue"
+          - "ResolveFields_MissingJsonPath_ResolvesToNull"
+          - "ResolveFields_FormatCurrencyPolicy_FormatsNumber"
+          - "ResolveFields_FormatDatePolicy_FormatsDate"
+          - "ResolveFields_UppercasePolicy_Uppercases"
+          - "ResolveFields_LowercasePolicy_Lowercases"
+          - "ResolveFields_EmptySourceJsonb_ReturnsExplicitError"
+          - "ResolveFields_EmptyFieldManifest_ReturnsExplicitError"
+          - "ResolveFields_InvalidJson_ReturnsExplicitError"
+          - "ResolveFields_UnknownAggregationPolicy_ReturnsExplicitError"
+          - "ResolveFields_UnknownDisplayPolicy_ReturnsExplicitError"
+          - "ResolveFields_MissingFieldKey_ReturnsExplicitError"
+          - "ResolveFields_PreservesXYCoordinates"
+          - "ResolveFields_MultiFieldManifest_ProducesDocumentCanvasReadyFields"
+    proves:
+      - JsonbManifestRuntime resolves label/value fields from JSONB using dot-notation jsonPath
+      - Display policies (as_is, format_currency, format_date, format_number, uppercase, lowercase) apply correctly
+      - Missing JSONB path resolves to null (not error)
+      - empty sourceJsonb returns explicit JSONB_MANIFEST_SOURCE_EMPTY error
+      - empty fieldManifest returns explicit JSONB_MANIFEST_FIELD_MANIFEST_EMPTY error
+      - invalid JSON source returns explicit JSONB_MANIFEST_INVALID_SOURCE_JSON error
+      - unknown aggregation policy returns explicit JSONB_MANIFEST_UNSUPPORTED_AGGREGATION_POLICY error
+      - unknown display policy returns explicit JSONB_MANIFEST_UNSUPPORTED_DISPLAY_POLICY error
+      - missing field key returns explicit JSONB_MANIFEST_FIELD_KEY_REQUIRED error
+      - x/y coordinates are preserved through resolution
+      - multi-field manifest produces DocumentCanvas-ready fields (key, label, x, y, value) at unit boundary
+    does_not_prove:
+      - DB persistence (in-memory resolution only)
+      - frontend rendering of resolved fields (frontend projectionConstructor scope)
+      - PDF generation (PdfExportSnapshotRuntime scope)
+      - live SSE backend push with real DB rows (integration scope)
+
+  - bundle_id: user_defined_aggregation_display_binding_policy
+    roadmap_bundle_refs:
+      - user_defined_aggregation_display_binding_policy
+      - data_binding_to_document_canvas
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
+      - backend/runtime/DocumentCanvasBindingPolicy.cs
+      - backend/schema/DocumentCanvasContracts.cs
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
+        cases:
+          - "Validate_ValidPolicy_IsValid"
+          - "Validate_MissingTemplateKey_ReturnsError"
+          - "Validate_EmptyFields_ReturnsError"
+          - "Validate_DuplicateFieldKeys_ReturnsError"
+          - "Validate_MissingFieldKey_ReturnsError"
+          - "Apply_ValidPolicyAndSource_ReturnsCanvasFields"
+          - "Apply_InvalidPolicy_ReturnsExplicitError"
+          - "Apply_InvalidSourceJsonb_ReturnsExplicitError"
+          - "Apply_DisplayPolicies_ApplyCorrectly"
+          - "Apply_InvoiceDocument_ProducesCompleteCanvasFields"
+    proves:
+      - DocumentCanvasBindingPolicy validates templateKey, fields, duplicate keys, NaN coordinates
+      - Apply delegates to JsonbManifestRuntime and returns canvas-ready fields
+      - AggregationPolicy and DisplayPolicy enum → string conversion is correct
+      - Apply with invalid policy returns explicit CANVAS_BINDING_POLICY_INVALID error
+      - Full DB/JSONB → canvas fields loop via Apply is proven at unit boundary (invoice example)
+      - Display policy variants (as_is, uppercase, lowercase, format_currency, format_number) all apply correctly
+    does_not_prove:
+      - DB persistence (in-memory resolution only)
+      - PDF generation (PdfExportSnapshotRuntime scope)
+      - frontend rendering (frontend projectionConstructor scope)
+
+  - bundle_id: document_canvas_db_binding_loop
+    roadmap_bundle_refs:
+      - data_binding_to_document_canvas
+      - jsonb_label_value_manifest_runtime
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+      - docs/design/ui-ux-primitive-catalog-ssot.yaml
+    test_files:
+      - frontend/tests/documentCanvasDbBinding.test.ts
+      - frontend/runtime/projectionConstructor.ts
+    test_cases:
+      - file: frontend/tests/documentCanvasDbBinding.test.ts
+        cases:
+          - "documentCanvasDbBinding: jsonb manifest → canvas fields → projectionConstructor succeeds"
+          - "documentCanvasDbBinding: empty fields from manifest resolution produce valid empty-fields canvas"
+          - "documentCanvasDbBinding: null value from missing jsonb path resolves to undefined field value"
+          - "documentCanvasDbBinding: display policy uppercase applied before canvas binding"
+          - "documentCanvasDbBinding: backgroundImageUrl is preserved through projection constructor"
+          - "documentCanvasDbBinding: invalid field shape from manifest returns explicit projectionConstructor error"
+    proves:
+      - DB/JSONB manifest resolution → DocumentCanvas fields[key,label,x,y,value] loop is closed at frontend boundary
+      - Resolved fields from JSONB manifest pass projectionConstructor validation without error
+      - Display policy (uppercase) applied before canvas binding produces correct field values
+      - backgroundImageUrl is preserved through the projection pipeline
+      - Missing JSONB path (null value) produces a valid canvas field with undefined value
+      - Invalid field shape (value non-string) returns explicit PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_VALUE error
+    does_not_prove:
+      - Backend DB persistence (backend scope)
+      - Live SSE backend push with real DB rows (integration scope)
+      - PDF generation (PdfExportSnapshotRuntime scope)
+      - Full production JSONB query operators beyond dot-notation paths
+
+  - bundle_id: pdf_export_snapshot_runtime
+    roadmap_bundle_refs:
+      - pdf_export_snapshot_runtime
+    ssot_refs:
+      - docs/design/pipeline-continuity-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
+      - backend/runtime/PdfExportSnapshotRuntime.cs
+      - backend/schema/PdfExportContracts.cs
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
+        cases:
+          - "CreateSnapshot_ValidRequest_ReturnsSuccess"
+          - "CreateSnapshot_WithSourceLinkage_PreservesLinkIds"
+          - "CreateSnapshot_WithoutSourceLinkage_SucceedsWithNullLinks"
+          - "CreateSnapshot_SnapshotLogGrows"
+          - "CreateSnapshot_EachSnapshotHasUniqueId"
+          - "CreateSnapshot_EmptyFields_SucceedsWithZeroFieldCount"
+          - "CreateSnapshot_NullRequest_ReturnsExplicitError"
+          - "CreateSnapshot_EmptyTemplateKey_ReturnsExplicitError"
+          - "CreateSnapshot_NullFields_ReturnsExplicitError"
+          - "CreateSnapshot_FieldWithEmptyKey_ReturnsExplicitError"
+          - "CreateSnapshot_InvalidSourceSnapshotId_ReturnsExplicitError"
+          - "CreateSnapshot_InvalidSourceApplyLogId_ReturnsExplicitError"
+          - "CreateSnapshot_NoteConfirmsSnapshotBoundaryOnly"
+    proves:
+      - PdfExportSnapshotRuntime creates a snapshot record with exportSnapshotId (valid UUID)
+      - templateKey and fieldCount are preserved in the snapshot result
+      - sourceSnapshotId and sourceApplyLogId linkage (canonical diff/audit evidence) is preserved
+      - status is 'snapshot_created' on success
+      - snapshot log grows by one per successful create (evidence of record creation)
+      - each snapshot has a unique exportSnapshotId
+      - null request returns explicit PDF_EXPORT_REQUEST_NULL error
+      - empty templateKey returns explicit PDF_EXPORT_TEMPLATE_KEY_REQUIRED error
+      - null fields returns explicit PDF_EXPORT_FIELDS_REQUIRED error
+      - field with empty key returns explicit PDF_EXPORT_FIELD_KEY_REQUIRED error
+      - invalid UUID sourceSnapshotId returns explicit PDF_EXPORT_INVALID_SOURCE_SNAPSHOT_ID error
+      - invalid UUID sourceApplyLogId returns explicit PDF_EXPORT_INVALID_SOURCE_APPLY_LOG_ID error
+    does_not_prove:
+      - PDF byte generation (out of scope — snapshot boundary only; production PDF layout engine not implemented)
+      - DB persistence (in-memory MVP boundary)
+      - file storage of PDF bytes
+
+  - bundle_id: scheduler_runtime_load_benchmark
+    roadmap_bundle_refs:
+      - scheduler_runtime_load_benchmark
+    ssot_refs:
+      - docs/design/runtime-orchestration-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
+      - backend/scheduler/RuntimeTimelineScheduler.cs
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
+        cases:
+          - "LoadBenchmark_SustainedThroughput_AllProcessedWithinCapacity"
+          - "LoadBenchmark_HighVolumeBurst_MetricsAreCapturedExplicitly"
+    proves:
+      - input_count, processed_count, rejected_count, timeout_count, backlog_count, queue_full_count are all captured
+      - latency summary (min, max, avg, p50, p95, p99 in ms) is captured for processed requests
+      - sustained throughput scenario: all within-capacity requests are processed with backlog_count=0
+      - high-volume burst scenario: processed + rejected + timeout == input_count (no silent drop)
+      - queue_full_count == rejected_count (SCHEDULER_QUEUE_FULL is the only rejection reason)
+      - all load metric fields are positive and finite
+    does_not_prove:
+      - protocol contract invariants (see FrontendBurstProtocolTests for protocol coverage)
+      - real production database throughput (in-memory scheduler boundary)
+      - live SSE pipeline throughput (integration scope)
+
   - bundle_id: document_canvas_catalog_seed_ssot_consistency
     roadmap_bundle_refs:
       - document_canvas_runtime_connected_factory_registration
