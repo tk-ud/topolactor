@@ -91,13 +91,13 @@ This keeps user-authored apps flexible while preventing hidden routes, silent fa
   attention_strength = neighbor_score * ||current_basis||_2
   ```
 
-  Phase Attention lets attention strength influence `w`, then exposes axis movement as a candidate phase:
+  Phase Attention keeps the current norm as `w`, while candidate position and movement are expressed on the `i/j/k` axes:
 
   ```text
-  q_phase(candidate) = w(attention_strength) + x*i + y*j + z*k
+  q_phase(candidate) = w + x*i + y*j + z*k
   ```
 
-  `w` is the attention-weighted current norm basis, and `i/j/k` carry axis movement amounts for the phase candidate.
+  `w` is the current L2 norm / attention pressure, `x/y/z` are hub-side population bases, and `i/j/k` carry axis movement amounts for the phase candidate.
 - **Scope note (CI Attention):** CI Attention is input guidance and boundary guidance; canonical dispatch / explicit failure remain runtime/backend responsibilities.
 - **Scope note (SQL Attention):** Topology recommendation current is a child projection consumer, not SQL Attention itself, and does not auto-mutate fixed routes or registry/topology definitions.
 - **AI-Driven Development OS:** Agent work is routed through repository-local contracts, prompts, protocols, and checks so changes remain auditable.
