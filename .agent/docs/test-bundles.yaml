@@ -87,6 +87,7 @@ bundles:
           - "constructProjection: document_canvas field missing key is explicit error"
           - "constructProjection: document_canvas field x non-number is explicit error"
           - "constructProjection: document_canvas field value non-string is explicit error"
+          - "constructProjection: document_canvas field y non-number is explicit error"
           - "constructProjection: document_canvas backgroundImageUrl non-string is explicit error"
     proves:
       - document_canvas/document_canvas_template_editor props normalization in projectionConstructor
