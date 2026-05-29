@@ -192,7 +192,7 @@ system_roadmap_ssot:
 
     M6_external_integration:
       title: Self-hosted admin authoring loop (MVP)
-      status: partial
+      status: implemented
       goal: >
         Establish a self-hosted admin authoring loop where admins can import CSV/JSON,
         validate-preview-apply candidates, define JSONB label/value manifest and
@@ -223,12 +223,13 @@ system_roadmap_ssot:
         - admin_csv_import_validate_preview_apply: implemented
         - admin_json_import_validate_preview_apply: implemented
         - intake_snapshot_and_applied_diff_log: implemented
-        - jsonb_label_value_manifest_runtime: not_started
-        - user_defined_aggregation_display_binding_policy: not_started
+        - jsonb_label_value_manifest_runtime: implemented
+        - user_defined_aggregation_display_binding_policy: implemented
         - DocumentCanvasTemplateEditor_primitive_wiring: implemented
         - document_canvas_runtime_connected_factory_registration: implemented
-        - data_binding_to_document_canvas: partial
-        - pdf_export_snapshot_runtime: not_started
+        - data_binding_to_document_canvas: implemented
+        - pdf_export_snapshot_runtime: implemented
+        - scheduler_runtime_load_benchmark: implemented
       test_bundle_refs:
         document_canvas_runtime_connected_factory_registration:
           - document_canvas_runtime_factory_registration
@@ -237,12 +238,18 @@ system_roadmap_ssot:
         data_binding_to_document_canvas:
           - projection_runtime_component_props_pipeline
           - document_canvas_projection_constructor_field_validation
-      blocking_gaps:
-        - jsonb_label_value_manifest runtime not implemented
-        - user_defined_aggregation_display_binding_policy not implemented
-        - DocumentCanvasTemplateEditor primitive SSOT/catalog/component/export/seed/CI wiring is implemented as a lightweight projection scaffold and draft palette candidate
-        - data_binding_to_document_canvas partial; factory/projectionConstructor/field coordinate binding wired and tested, but full DB/JSONB-to-canvas binding loop requires jsonb_label_value_manifest_runtime (not_started)
-        - pdf_export_snapshot_runtime not implemented
+          - jsonb_label_value_manifest_runtime
+          - user_defined_aggregation_display_binding_policy
+          - document_canvas_db_binding_loop
+        jsonb_label_value_manifest_runtime:
+          - jsonb_label_value_manifest_runtime
+        user_defined_aggregation_display_binding_policy:
+          - user_defined_aggregation_display_binding_policy
+        pdf_export_snapshot_runtime:
+          - pdf_export_snapshot_runtime
+        scheduler_runtime_load_benchmark:
+          - scheduler_runtime_load_benchmark
+      blocking_gaps: []
       completion_condition:
         - admin_can_import_csv_json_as_candidate_payload
         - validate_preview_apply_stages_are_separated
@@ -1642,6 +1649,122 @@ system_roadmap_ssot:
         - CI_or_runtime_diagnostics_detect_semantic_breakage_before_completion_claim
       known_gap_ref:
         - non-IT business app authoring loop not implemented
+
+    backend.jsonb_manifest_runtime:
+      status: implemented
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        JsonbManifestRuntime resolves label/value field manifests from raw JSONB data using
+        dot-notation JSON paths and user-defined display policies (as_is, format_currency,
+        format_date, format_number, uppercase, lowercase). Aggregation and display policy
+        responsibilities are separated. Explicit failure for empty source, unknown policy,
+        invalid JSON, missing field key. Read-only — no DB mutation.
+      files:
+        - backend/runtime/JsonbManifestRuntime.cs
+        - backend/schema/JsonbManifestContracts.cs
+        - backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
+      evidence:
+        tests:
+          - JsonbManifestRuntimeTests
+        ci:
+          - backend-tests
+      completion_condition:
+        - jsonb_field_manifest_resolves_label_value_from_raw_jsonb_using_json_path
+        - display_policies_applied_as_is_format_currency_format_date_format_number_uppercase_lowercase
+        - missing_path_resolves_to_null_not_error
+        - empty_source_invalid_json_unknown_policy_missing_key_return_explicit_errors
+        - resolution_is_read_only_no_db_mutation
+      known_gap_ref: []
+
+    backend.document_canvas_binding_policy:
+      status: implemented
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        DocumentCanvasBindingPolicy validates and applies user-defined aggregation/display/binding
+        policy documents for DocumentCanvas template fields. Policy document defines templateKey,
+        backgroundImageUrl, and fields with AggregationPolicy + DisplayPolicy per field.
+        Validation is fail-close: duplicate keys, missing templateKey, empty fields, NaN coordinates
+        all return explicit errors. Apply delegates to JsonbManifestRuntime.
+        Full DB/JSONB → canvas fields loop is proven at unit boundary (invoice example).
+      files:
+        - backend/runtime/DocumentCanvasBindingPolicy.cs
+        - backend/schema/DocumentCanvasContracts.cs
+        - backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
+      evidence:
+        tests:
+          - DocumentCanvasBindingPolicyTests
+        ci:
+          - backend-tests
+      completion_condition:
+        - binding_policy_document_validates_template_key_fields_duplicate_keys_nan_coordinates
+        - apply_delegates_to_jsonb_manifest_runtime_and_returns_canvas_ready_fields
+        - aggregation_and_display_policy_enum_conversion_is_correct
+        - invalid_policy_returns_explicit_canvas_binding_policy_invalid_error
+        - full_db_jsonb_to_canvas_fields_loop_proven_at_unit_boundary
+      known_gap_ref: []
+
+    backend.pdf_export_snapshot_runtime:
+      status: implemented
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        PdfExportSnapshotRuntime implements the PDF export snapshot boundary.
+        Creates an export snapshot record capturing DocumentCanvas state (templateKey,
+        backgroundImageUrl, fields with values) at export request time. Links back to
+        sourceSnapshotId (admin_import_snapshot) and sourceApplyLogId (admin_import_apply_log)
+        for canonical diff/audit evidence. Status is 'snapshot_created'. Does NOT generate
+        PDF bytes — production PDF layout engine is explicitly out of scope.
+        All failure paths return explicit error codes. No silent fallback.
+      files:
+        - backend/runtime/PdfExportSnapshotRuntime.cs
+        - backend/schema/PdfExportContracts.cs
+        - backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
+      evidence:
+        tests:
+          - PdfExportSnapshotRuntimeTests
+        ci:
+          - backend-tests
+      completion_condition:
+        - pdf_export_creates_snapshot_export_record_with_unique_id
+        - snapshot_preserves_template_key_field_count_and_source_linkage
+        - source_snapshot_id_and_apply_log_id_linkage_is_preserved
+        - status_is_snapshot_created_on_success
+        - null_request_empty_template_key_null_fields_field_empty_key_return_explicit_errors
+        - invalid_source_id_uuids_return_explicit_errors
+      known_gap_ref:
+        - PDF byte generation is not implemented (snapshot boundary only; production PDF layout engine is out of scope)
+        - DB persistence is in-memory at MVP boundary (topologys.pdf_export_snapshot table is not yet created)
+
+    system_ci.scheduler_runtime_load_benchmark:
+      status: implemented
+      production_ready: false
+      milestone: M6_external_integration
+      public_summary: >
+        Scheduler/runtime load benchmark test provides performance/load evidence with
+        all required production metrics: input_count, processed_count, rejected_count,
+        timeout_count, backlog_count, queue_full_count, and latency summary (min, max,
+        avg, p50, p95, p99 in ms). Two scenarios: sustained_throughput (all within-capacity
+        requests processed, backlog=0) and high_volume_burst (all outcomes accounted for,
+        no silent drop). This is performance/load evidence, not a protocol test.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
+        - backend/scheduler/RuntimeTimelineScheduler.cs
+      evidence:
+        tests:
+          - SchedulerLoadBenchmarkTests
+        ci:
+          - backend-tests
+      completion_condition:
+        - all_required_load_metrics_captured_input_processed_rejected_timeout_backlog_queue_full
+        - latency_summary_min_max_avg_p50_p95_p99_captured_for_processed_requests
+        - sustained_throughput_all_within_capacity_requests_processed_backlog_zero
+        - high_volume_burst_processed_plus_rejected_plus_timeout_equals_input_no_silent_drop
+        - queue_full_count_equals_rejected_count
+      known_gap_ref:
+        - real production database throughput is not measured (in-memory scheduler boundary)
+        - live SSE pipeline throughput is not measured (integration scope)
 
     backend.admin_csv_json_import:
       status: implemented

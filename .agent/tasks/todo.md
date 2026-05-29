@@ -23,7 +23,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 は persistence scaffold 着手済みだが completion bundle は未完了のため partial を維持する。
+- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 completion bundles は全て closed になったが、`product.sql_attention_recommendation_feedback_ux` の live DB end-to-end verification (SQLA-1..5) が未完のため partial を維持する。
 
 ## Self-hosted Admin Authoring M6 (Partial: CSV/JSON import bundle implemented; remaining bundles open)
 
@@ -36,19 +36,32 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       Closed bundles: admin_csv_json_import_endpoint_and_upload_ui, manifest_validation_runtime,
         validate_preview_apply_runtime_boundary, canonical_apply_and_diff_log_boundary.
 
-- [ ] M6 remaining completion bundles (roadmap status: partial/not_started each):
+- [x] M6 remaining completion bundles — all closed:
       → document_canvas_runtime_connected_factory_registration: implemented.
         projectionConstructor supports document_canvas/document_canvas_template_editor with explicit field
         coordinate validation; runtimeComponentFactory wires DocumentCanvasTemplateEditor; runtimeConnected:true
         synchronized across catalog/seed/SSOT/test.
         test evidence indexed in .agent/docs/test-bundles.yaml:
           document_canvas_runtime_factory_registration, document_canvas_catalog_seed_ssot_consistency
-      → data_binding_to_document_canvas: partial.
-        projection_runtime_component_props_pipeline bundle proves props pipeline route wired.
-        Full DB/JSONB→canvas binding loop requires jsonb_label_value_manifest_runtime (not_started).
-        test evidence indexed in .agent/docs/test-bundles.yaml:
-          projection_runtime_component_props_pipeline
-      - pdf_export_snapshot_runtime (not_started)
+      → jsonb_label_value_manifest_runtime: implemented.
+        JsonbManifestRuntime resolves label/value fields from JSONB using dot-notation paths + display policies.
+        All explicit error paths covered. test evidence: jsonb_label_value_manifest_runtime bundle.
+      → user_defined_aggregation_display_binding_policy: implemented.
+        DocumentCanvasBindingPolicy validates and applies user-defined AggregationPolicy + DisplayPolicy.
+        Full DB/JSONB→canvas fields loop proven at unit boundary (invoice example).
+        test evidence: user_defined_aggregation_display_binding_policy bundle.
+      → data_binding_to_document_canvas: implemented.
+        DB/JSONB manifest → DocumentCanvas fields[key,label,x,y,value] loop closed at frontend boundary.
+        test evidence: document_canvas_db_binding_loop bundle (documentCanvasDbBinding.test.ts).
+      → pdf_export_snapshot_runtime: implemented (snapshot boundary).
+        PdfExportSnapshotRuntime creates export snapshot record with diff/audit linkage.
+        Status=snapshot_created. PDF generation is explicitly out of scope (snapshot boundary only).
+        test evidence: pdf_export_snapshot_runtime bundle.
+      → scheduler_runtime_load_benchmark: implemented.
+        SchedulerLoadBenchmarkTests proves all required production metrics:
+        input_count, processed_count, rejected_count, timeout_count, backlog_count,
+        queue_full_count, latency summary (min/max/avg/p50/p95/p99).
+        test evidence: scheduler_runtime_load_benchmark bundle.
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
       → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。
