@@ -1,7 +1,10 @@
 {
+  "nodeModulesDir": "auto",
   "tasks": {
-    "start": "deno run -A frontend/main.ts",
-    "dev": "deno run -A --watch=frontend/routes/,frontend/islands/ frontend/main.ts"
+    "dev": "deno run -A --env-file=frontend/.env --watch=frontend/static/,frontend/routes/,frontend/islands/ frontend/dev.ts",
+    "build": "deno run -A --env-file=frontend/.env frontend/dev.ts build",
+    "start": "deno run -A --env-file=frontend/.env frontend/main.ts",
+    "preview": "deno run -A --env-file=frontend/.env frontend/main.ts"
   },
   "compilerOptions": {
     "jsx": "react-jsx",
@@ -14,7 +17,11 @@
     "preact": "npm:preact@10.25.4",
     "preact/hooks": "npm:preact@10.25.4/hooks",
     "preact/jsx-runtime": "npm:preact@10.25.4/jsx-runtime",
-    "preact/jsx-dev-runtime": "npm:preact@10.25.4/jsx-dev-runtime"
+    "preact/jsx-dev-runtime": "npm:preact@10.25.4/jsx-dev-runtime",
+    "tailwindcss": "npm:tailwindcss@3.4.17",
+    "postcss": "npm:postcss@8.4.35",
+    "autoprefixer": "npm:autoprefixer@10.4.17",
+    "cssnano": "npm:cssnano@6.0.3"
   },
   "exclude": ["backend/**", "db/**"]
 }

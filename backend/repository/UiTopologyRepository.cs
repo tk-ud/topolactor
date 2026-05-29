@@ -133,4 +133,14 @@ public class UiTopologyRepository
     {
         throw new NotImplementedException("UiTopologyRepository.ListPromotedPaletteEntriesAsync must be overridden by a production implementation.");
     }
+
+    /// <summary>
+    /// Lists distinct layout/route candidates with known slot keys for admin UI selectors.
+    /// Production: overridden by NpgsqlUiTopologyRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyList<LayoutCandidateDto>> ListLayoutCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListLayoutCandidatesAsync must be overridden by a production implementation.");
+    }
 }

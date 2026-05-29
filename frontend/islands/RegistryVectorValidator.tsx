@@ -4,22 +4,26 @@ import {
   type RegistryVectorValidationResult,
   validateRegistryVector,
 } from "../api/adminApi.ts";
+import { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 
-/**
- * RegistryVectorValidator — admin island for Registrar draft/promote validation.
- *
- * Validates a candidate registry ID array (UUIDs) against existing registry rows
- * using multi-hot cosine similarity. Policy is loaded from function_parameters
- * on the backend. Requires login (JWT in sessionStorage under demo_jwt_token).
- *
- * validationClass → color mapping:
- *   pass                    → green
- *   related_existing_registry → yellow (warning, non-blocking)
- *   near_duplicate_vector   → orange (blocking)
- *   duplicate_vector        → red (blocking)
- *   zero_vector             → gray (blocking)
- *   explicit_error          → red (blocking, policy/DB issue)
- */
+const CLASS_BADGE: Record<string, string> = {
+  pass: "badge-ok",
+  related_existing_registry: "badge-warn",
+  near_duplicate_vector: "badge-warn",
+  duplicate_vector: "badge-error",
+  zero_vector: "badge-info",
+  explicit_error: "badge-error",
+};
+
+const CLASS_LABEL: Record<string, string> = {
+  pass: "合格",
+  related_existing_registry: "関連既存レジストリ",
+  near_duplicate_vector: "近似重複ベクター",
+  duplicate_vector: "重複ベクター",
+  zero_vector: "ゼロベクター",
+  explicit_error: "明示的エラー",
+};
+
 export default function RegistryVectorValidator(): JSX.Element {
   const [registryTable, setRegistryTable] = useState("relation_registry");
   const [queryIdsText, setQueryIdsText] = useState("");
@@ -31,18 +35,17 @@ export default function RegistryVectorValidator(): JSX.Element {
 
   if (notBound) {
     return (
-      <p style={{ fontFamily: "monospace", color: "#888" }}>
+      <p class="text-muted">
         バックエンド未接続 — DEMO_BACKEND_URL が未設定です (501)。
-        <br />
-        Docker Compose 起動後に <a href="/">ログイン</a> してください。
+        Docker Compose 起動後に <a href="/auth" class="link">ログイン</a> してください。
       </p>
     );
   }
 
   if (notAuthed) {
     return (
-      <p style={{ fontFamily: "monospace", color: "#888" }}>
-        ログインが必要です — <a href="/auth">ログインページ</a> で認証してから再度アクセスしてください。
+      <p class="text-muted">
+        ログインが必要です — <a href="/auth" class="link">ログインページ</a> で認証してから再度アクセスしてください。
       </p>
     );
   }
@@ -81,22 +84,15 @@ export default function RegistryVectorValidator(): JSX.Element {
     setLoading(false);
   }
 
-  const inputStyle = {
-    padding: "4px 6px",
-    fontFamily: "monospace",
-    width: "100%",
-    boxSizing: "border-box" as const,
-  };
-
   return (
-    <div style={{ maxWidth: "760px" }}>
-      <form onSubmit={handleValidate} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+    <div class="max-w-3xl">
+      <form onSubmit={handleValidate} class="flex flex-col gap-4">
         <div>
-          <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "4px" }}>
-            registryTable <span style={{ color: "crimson" }}>*</span>
+          <label class="mb-1 block text-sm font-medium">
+            レジストリテーブル <span class="text-red-600">*</span>
           </label>
           <input
-            style={{ ...inputStyle, width: "280px" }}
+            class="input-mono max-w-xs"
             type="text"
             placeholder="例: relation_registry"
             value={registryTable}
@@ -105,27 +101,31 @@ export default function RegistryVectorValidator(): JSX.Element {
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "4px" }}>
-            queryIds — UUID を改行・カンマ・スペース区切りで入力
+          <label class="mb-1 block text-sm font-medium">
+            クエリ ID — UUID を改行・カンマ・スペース区切りで入力
           </label>
           <textarea
-            style={{ ...inputStyle, height: "100px", resize: "vertical" }}
+            class="input-mono h-24 resize-y"
             placeholder={"例:\na1b2c3d4-...\ne5f6a7b8-..."}
             value={queryIdsText}
             onInput={(e) => setQueryIdsText((e.target as HTMLTextAreaElement).value)}
           />
         </div>
         <div>
-          <button type="submit" disabled={loading}>
-            {loading ? "検証中…" : "レジストリベクター検証"}
+          <button type="submit" disabled={loading} class="btn-primary">
+            {loading ? "検証中..." : "レジストリベクター検証"}
           </button>
+          <AdminActionHint>
+            DB へは書きません。blocking なら neighbors を参照して ID を修正してから Import/UI Builder 等へ。
+          </AdminActionHint>
         </div>
       </form>
 
       {error && (
-        <p style={{ marginTop: "12px", color: "#c00", fontFamily: "monospace", fontSize: "0.85rem" }}>
-          {error}
-        </p>
+        <div class="alert-error mt-4 text-sm">
+          <p>{error}</p>
+          <AdminActionHint>registryTable 必須。UUID 形式の query IDs を改行・カンマ区切りで入力。</AdminActionHint>
+        </div>
       )}
 
       {result && <ValidationResultView result={result} />}
@@ -133,70 +133,50 @@ export default function RegistryVectorValidator(): JSX.Element {
   );
 }
 
-function classColor(cls: string): string {
-  switch (cls) {
-    case "pass": return "#2a7a2a";
-    case "related_existing_registry": return "#a07000";
-    case "near_duplicate_vector": return "#c05000";
-    case "duplicate_vector": return "#c00000";
-    case "zero_vector": return "#666";
-    case "explicit_error": return "#c00000";
-    default: return "#333";
-  }
-}
-
 function ValidationResultView({ result }: { result: RegistryVectorValidationResult }): JSX.Element {
-  const color = classColor(result.validationClass);
-  const blockingLabel = result.isBlocking ? "blocking" : "non-blocking";
+  const badgeClass = CLASS_BADGE[result.validationClass] ?? "badge-info";
+  const label = CLASS_LABEL[result.validationClass] ?? result.validationClass;
+  const blockingLabel = result.isBlocking ? "ブロッキング" : "非ブロッキング";
 
   return (
-    <div style={{ marginTop: "20px", fontFamily: "monospace" }}>
-      <div style={{
-        padding: "10px 14px",
-        border: `2px solid ${color}`,
-        borderRadius: "4px",
-        marginBottom: "16px",
-      }}>
-        <div style={{ color, fontWeight: "bold", fontSize: "1.05rem" }}>
-          {result.validationClass}
-        </div>
-        <div style={{ fontSize: "0.85rem", color: "#444", marginTop: "4px" }}>
+    <div class="mt-5">
+      <div class="card border-2">
+        <div class={`mb-1 inline-block ${badgeClass}`}>{label}</div>
+        <div class="text-sm text-gray-600">
           {blockingLabel}
           {result.statusDetail ? ` — ${result.statusDetail}` : ""}
         </div>
+        {result.isBlocking && (
+          <AdminActionHint>
+            duplicate / near_duplicate — 登録前に query IDs を統合・差別化。pass なら次の登録画面へ。
+          </AdminActionHint>
+        )}
       </div>
 
       {result.neighbors.length > 0 && (
         <>
-          <h4 style={{ marginBottom: "8px" }}>近傍レジストリ ({result.neighbors.length}件)</h4>
-          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: "0.85rem" }}>
-            <thead>
-              <tr style={{ background: "#f4f4f4" }}>
-                {["name", "cosineScore", "matchedIds", "reason"].map((h) => (
-                  <th
-                    key={h}
-                    style={{ border: "1px solid #ccc", padding: "5px 8px", textAlign: "left" }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.neighbors.map((n) => (
-                <tr key={n.registryId}>
-                  <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{n.name}</td>
-                  <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>
-                    {n.cosineScore.toFixed(4)}
-                  </td>
-                  <td style={{ border: "1px solid #ccc", padding: "4px 8px", fontSize: "0.78rem", color: "#555" }}>
-                    {n.matchedIds.join(", ") || "—"}
-                  </td>
-                  <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{n.reason}</td>
+          <h4 class="section-title mt-4">近傍レジストリ ({result.neighbors.length} 件)</h4>
+          <div class="table-wrap">
+            <table class="table text-xs">
+              <thead>
+                <tr>
+                  {["名前", "コサインスコア", "一致 ID", "理由"].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {result.neighbors.map((n) => (
+                  <tr key={n.registryId}>
+                    <td>{n.name}</td>
+                    <td class="font-mono">{n.cosineScore.toFixed(4)}</td>
+                    <td class="text-muted-xs">{n.matchedIds.join(", ") || "—"}</td>
+                    <td>{n.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       )}
     </div>

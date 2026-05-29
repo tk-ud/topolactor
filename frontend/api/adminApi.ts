@@ -212,3 +212,562 @@ export async function applyImport(snapshotId: string): Promise<AdminImportApplyR
   if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   return emission.data as AdminImportApplyResult;
 }
+
+// ---------------------------------------------------------------------------
+// Manifest management — admin manifest editor surface
+// ---------------------------------------------------------------------------
+
+export type AdminManifestListItem = {
+  manifestId: string;
+  status: string;
+  relationRegistryId: string | null;
+  role: string | null;
+  target: string | null;
+  layer: string | null;
+  action: string | null;
+  runtimeDestination: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminManifestTopologySummary = {
+  dispatcherMapping: {
+    role: string;
+    target: string;
+    layer: string;
+    action: string;
+  } | null;
+  runtimeMapping: { runtimeDestination: string } | null;
+  projectionConstructorMapping: { hasProjectionDefinition: boolean } | null;
+  entryTypes: string[];
+};
+
+export type AdminManifestDetail = {
+  manifestId: string;
+  status: string;
+  relationRegistryId: string | null;
+  summary: AdminManifestTopologySummary;
+  topologyRawJson: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminManifestValidationIssue = {
+  code: string;
+  message: string;
+  isBlocking: boolean;
+};
+
+export type AdminManifestValidateResult = {
+  valid: boolean;
+  isBlocking: boolean;
+  issues: AdminManifestValidationIssue[];
+  summary: AdminManifestTopologySummary | null;
+};
+
+export type AdminManifestLifecycleResult = {
+  ok: boolean;
+  manifestId: string;
+  status: string;
+  message: string;
+  errorCode?: string;
+};
+
+export type AdminManifestDraftInput = {
+  relationRegistryId?: string;
+  role: string;
+  target: string;
+  layer: string;
+  action: string;
+  runtimeDestination: string;
+  projectionDefinition?: Record<string, unknown> | null;
+};
+
+const RUNTIME_DESTINATION_OPTIONS = [
+  "topology_transform_runtime",
+  "admin_runtime",
+  "sse_projection_runtime",
+] as const;
+
+export { RUNTIME_DESTINATION_OPTIONS };
+
+async function callAdminManifestOp(
+  action: string,
+  payload?: unknown,
+): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
+  const res = await fetch("/api/dispatch", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      operationType: "admin",
+      target: "admin",
+      layer: "manifest",
+      action,
+      payload: payload ?? null,
+    }),
+  });
+
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
+
+  const body = await res.json();
+  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
+    return null;
+  }
+  return body;
+}
+
+export async function listAdminManifests(status?: string): Promise<AdminManifestListItem[] | null> {
+  const body = await callAdminManifestOp("list", status ? { status } : undefined);
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "manifest list failed";
+    throw new Error(msg);
+  }
+  return (body.emission?.data ?? []) as AdminManifestListItem[];
+}
+
+export async function getAdminManifest(manifestId: string): Promise<AdminManifestDetail | null> {
+  const body = await callAdminManifestOp("get", { manifestId });
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "manifest get failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestDetail;
+}
+
+export async function validateAdminManifest(manifestId: string): Promise<AdminManifestValidateResult | null> {
+  const body = await callAdminManifestOp("validate", { manifestId });
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "manifest validate failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestValidateResult;
+}
+
+export async function createAdminManifestDraft(
+  input: AdminManifestDraftInput,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp("create_draft", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "create draft failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestDetail;
+}
+
+export async function updateAdminManifestDraft(
+  manifestId: string,
+  input: AdminManifestDraftInput,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp("update_draft", { manifestId, ...input });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "update draft failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestDetail;
+}
+
+export async function promoteAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {
+  const body = await callAdminManifestOp("promote", { manifestId });
+  if (body === null) return null;
+  if (!body.success && !body.emission?.data) {
+    const msg = body.errors?.[0]?.message ?? "promote failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestLifecycleResult;
+}
+
+export async function deprecateAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {
+  const body = await callAdminManifestOp("deprecate", { manifestId });
+  if (body === null) return null;
+  if (!body.success && !body.emission?.data) {
+    const msg = body.errors?.[0]?.message ?? "deprecate failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminManifestLifecycleResult;
+}
+
+// ---------------------------------------------------------------------------
+// Promotion manifest metadata — disclosure / campaign intent editor surface
+// ---------------------------------------------------------------------------
+
+export type AdminPromotionManifestListItem = {
+  manifestId: string;
+  status: string;
+  manifestKey: string;
+  versionLabel: string;
+  hasDisclosure: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPromotionManifestMetadata = {
+  manifestKey: string;
+  versionLabel: string;
+  disclosureText: string;
+  disclosureCategoryLabel: string | null;
+  placementKey: string;
+  projectionSurfaceType: string;
+  activationPolicyType: string;
+  activationConditionExpression: string | null;
+  targetTopologyRefs: {
+    packageId: string;
+    schemaId: string;
+    componentId: string;
+  }[];
+};
+
+export type AdminPromotionManifestDetail = {
+  manifestId: string;
+  status: string;
+  metadata: AdminPromotionManifestMetadata | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AdminPromotionManifestValidateResult = {
+  valid: boolean;
+  isBlocking: boolean;
+  issues: AdminManifestValidationIssue[];
+  metadata: AdminPromotionManifestMetadata | null;
+};
+
+export type AdminPromotionManifestUpdateInput = {
+  manifestId: string;
+  manifestKey: string;
+  versionLabel: string;
+  disclosureText: string;
+  disclosureCategoryLabel?: string | null;
+  placementKey: string;
+  projectionSurfaceType: string;
+  activationPolicyType: string;
+  activationConditionExpression?: string | null;
+  targetTopologyRefs: {
+    packageId: string;
+    schemaId: string;
+    componentId: string;
+  }[];
+};
+
+async function callAdminPromotionManifestOp(
+  action: string,
+  payload?: unknown,
+): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
+  const res = await fetch("/api/dispatch", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      operationType: "admin",
+      target: "admin",
+      layer: "promotion_manifest",
+      action,
+      payload: payload ?? null,
+    }),
+  });
+
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
+
+  const body = await res.json();
+  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
+    return null;
+  }
+  return body;
+}
+
+export async function listAdminPromotionManifests(
+  status?: string,
+): Promise<AdminPromotionManifestListItem[] | null> {
+  const body = await callAdminPromotionManifestOp("list", status ? { status } : undefined);
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "promotion manifest list failed";
+    throw new Error(msg);
+  }
+  return (body.emission?.data ?? []) as AdminPromotionManifestListItem[];
+}
+
+export async function getAdminPromotionManifest(
+  manifestId: string,
+): Promise<AdminPromotionManifestDetail | null> {
+  const body = await callAdminPromotionManifestOp("get", { manifestId });
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "promotion manifest get failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminPromotionManifestDetail;
+}
+
+export async function validateAdminPromotionManifest(
+  manifestId: string,
+): Promise<AdminPromotionManifestValidateResult | null> {
+  const body = await callAdminPromotionManifestOp("validate", { manifestId });
+  if (body === null) return null;
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "promotion manifest validate failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminPromotionManifestValidateResult;
+}
+
+export async function updateAdminPromotionManifestDraft(
+  input: AdminPromotionManifestUpdateInput,
+): Promise<AdminPromotionManifestDetail> {
+  const body = await callAdminPromotionManifestOp("update_draft", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) {
+    const msg = body.errors?.[0]?.message ?? "promotion manifest update failed";
+    throw new Error(msg);
+  }
+  return body.emission?.data as AdminPromotionManifestDetail;
+}
+
+// ---------------------------------------------------------------------------
+// Content bundle — admin topology content management surface
+// ---------------------------------------------------------------------------
+
+export type ContentBundleListItem = {
+  id: string;
+  kind: "hub" | "entity" | "relation" | "hub_relation";
+  label: string;
+  state: string;
+  hubId?: string | null;
+  relationIds?: string[] | null;
+  summary: string;
+};
+
+export type ContentBundleHubDetail = {
+  hubId: string;
+  stateName: string;
+  stateId?: string | null;
+  relationRegistryId?: string | null;
+  relationLabel?: string | null;
+  entityCount: number;
+  hubRelationCount: number;
+  entityIds: string[];
+  summary: string;
+};
+
+export type ContentBundleRelationDetail = {
+  relationRegistryId: string;
+  name: string;
+  active: boolean;
+  entityCount: number;
+  hubRelationCount: number;
+  summary: string;
+};
+
+export type ContentBundleEntityDetail = {
+  entityId: string;
+  label: string;
+  stateName: string;
+  stateId?: string | null;
+  hubId: string;
+  hubLabel: string;
+  relationIds: string[];
+  relationLabels: string[];
+  entityJsonb: string;
+  summary: string;
+};
+
+export type ContentBundleStateItem = {
+  stateId: string;
+  name: string;
+  owner?: string | null;
+};
+
+export type ContentBundleDraftDetail = {
+  draftId: string;
+  status: string;
+  hubId: string;
+  entityJsonb: string;
+  relationIds: string[];
+  stateName?: string | null;
+  stateId?: string | null;
+  promotedEntityId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ContentBundleValidationIssue = {
+  code: string;
+  message: string;
+  isBlocking: boolean;
+};
+
+export type ContentBundleValidateResult = {
+  valid: boolean;
+  isBlocking: boolean;
+  issues: ContentBundleValidationIssue[];
+};
+
+export type ContentBundlePreviewResult = {
+  draftId: string;
+  label: string;
+  hubId: string;
+  hubLabel?: string | null;
+  relationIds: string[];
+  relationLabels: string[];
+  stateName?: string | null;
+  entityJsonb: string;
+  validation: ContentBundleValidateResult;
+  canPromote: boolean;
+};
+
+export type ContentBundleLifecycleResult = {
+  ok: boolean;
+  draftId: string;
+  entityId?: string | null;
+  status: string;
+  message: string;
+  readback?: ContentBundleEntityDetail | null;
+  errorCode?: string | null;
+};
+
+export type ContentBundleDraftInput = {
+  hubId: string;
+  entityJsonb: Record<string, unknown>;
+  relationIds: string[];
+  stateName: string;
+};
+
+export type ContentBundleUpdateDraftInput = ContentBundleDraftInput & {
+  draftId: string;
+};
+
+async function callAdminContentBundleOp(
+  action: string,
+  payload?: unknown,
+): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
+  const res = await fetch("/api/dispatch", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      operationType: "admin",
+      target: "admin",
+      layer: "content_bundle",
+      action,
+      payload: payload ?? null,
+    }),
+  });
+
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
+
+  const body = await res.json();
+  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
+    return null;
+  }
+  return body;
+}
+
+export async function listContentHubs(): Promise<ContentBundleListItem[] | null> {
+  const body = await callAdminContentBundleOp("list_hubs");
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list hubs failed");
+  return (body.emission?.data ?? []) as ContentBundleListItem[];
+}
+
+export async function listContentEntities(): Promise<ContentBundleListItem[] | null> {
+  const body = await callAdminContentBundleOp("list_entities");
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list entities failed");
+  return (body.emission?.data ?? []) as ContentBundleListItem[];
+}
+
+export async function listContentRelations(): Promise<ContentBundleListItem[] | null> {
+  const body = await callAdminContentBundleOp("list_relations");
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list relations failed");
+  return (body.emission?.data ?? []) as ContentBundleListItem[];
+}
+
+export async function listContentHubRelations(): Promise<ContentBundleListItem[] | null> {
+  const body = await callAdminContentBundleOp("list_hub_relations");
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list hub relations failed");
+  return (body.emission?.data ?? []) as ContentBundleListItem[];
+}
+
+export async function listContentStates(): Promise<ContentBundleStateItem[] | null> {
+  const body = await callAdminContentBundleOp("list_states");
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "list states failed");
+  return (body.emission?.data ?? []) as ContentBundleStateItem[];
+}
+
+export async function getContentEntity(entityId: string): Promise<ContentBundleEntityDetail | null> {
+  const body = await callAdminContentBundleOp("get_entity", { entityId });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "get entity failed");
+  return body.emission?.data as ContentBundleEntityDetail;
+}
+
+export async function getContentHub(hubId: string): Promise<ContentBundleHubDetail | null> {
+  const body = await callAdminContentBundleOp("get_hub", { hubId });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "get hub failed");
+  return body.emission?.data as ContentBundleHubDetail;
+}
+
+export async function getContentRelation(relationRegistryId: string): Promise<ContentBundleRelationDetail | null> {
+  const body = await callAdminContentBundleOp("get_relation", { relationRegistryId });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "get relation failed");
+  return body.emission?.data as ContentBundleRelationDetail;
+}
+
+export async function searchContentBundle(
+  keyword?: string,
+  kind?: string,
+  state?: string,
+): Promise<ContentBundleListItem[] | null> {
+  const body = await callAdminContentBundleOp("search", { keyword, kind, state });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "search failed");
+  return (body.emission?.data ?? []) as ContentBundleListItem[];
+}
+
+export async function createContentEntityDraft(
+  input: ContentBundleDraftInput,
+): Promise<ContentBundleDraftDetail> {
+  const body = await callAdminContentBundleOp("create_entity_draft", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "create draft failed");
+  return body.emission?.data as ContentBundleDraftDetail;
+}
+
+export async function updateContentEntityDraft(
+  input: ContentBundleUpdateDraftInput,
+): Promise<ContentBundleDraftDetail> {
+  const body = await callAdminContentBundleOp("update_entity_draft", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "update draft failed");
+  return body.emission?.data as ContentBundleDraftDetail;
+}
+
+export async function validateContentDraft(draftId: string): Promise<ContentBundleValidateResult | null> {
+  const body = await callAdminContentBundleOp("validate_draft", { draftId });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "validate draft failed");
+  return body.emission?.data as ContentBundleValidateResult;
+}
+
+export async function previewContentDraft(draftId: string): Promise<ContentBundlePreviewResult | null> {
+  const body = await callAdminContentBundleOp("preview_draft", { draftId });
+  if (body === null) return null;
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "preview draft failed");
+  return body.emission?.data as ContentBundlePreviewResult;
+}
+
+export async function promoteContentDraft(draftId: string): Promise<ContentBundleLifecycleResult | null> {
+  const body = await callAdminContentBundleOp("promote_draft", { draftId });
+  if (body === null) return null;
+  if (!body.success && !body.emission?.data) {
+    throw new Error(body.errors?.[0]?.message ?? "promote draft failed");
+  }
+  return body.emission?.data as ContentBundleLifecycleResult;
+}

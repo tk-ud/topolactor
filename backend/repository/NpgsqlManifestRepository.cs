@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Topolactor.Schema;
 
 namespace Topolactor.Repository;
 
@@ -40,8 +41,6 @@ public class NpgsqlManifestRepository : ManifestRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
-        // Load all active manifests and filter by dispatcher_mapping axes in application code.
-        // When manifest table is small this is acceptable; add DB-side JSONB query when needed.
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT manifest_id, relation_registry_id, topology, status " +
@@ -57,7 +56,6 @@ public class NpgsqlManifestRepository : ManifestRepository
             var relationRegistryId = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
             var topologyRaw = reader.IsDBNull(2) ? null : reader.GetFieldValue<string[]>(2);
             var status = reader.GetString(3);
-
             var topology = ParseTopologyArray(topologyRaw);
 
             if (MatchesAxes(topology, role, target, layer, action))
@@ -85,28 +83,367 @@ public class NpgsqlManifestRepository : ManifestRepository
         Guid manifestId,
         CancellationToken ct = default)
     {
+        var detail = await LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null) return null;
+        return new ManifestRecord(detail.ManifestId, detail.RelationRegistryId, detail.Topology, detail.Status);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(
+        string? statusFilter,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        if (string.IsNullOrWhiteSpace(statusFilter))
+        {
+            cmd.CommandText =
+                "SELECT manifest_id, relation_registry_id, topology, status, created_at, updated_at " +
+                "FROM manifest ORDER BY updated_at DESC";
+        }
+        else
+        {
+            cmd.CommandText =
+                "SELECT manifest_id, relation_registry_id, topology, status, created_at, updated_at " +
+                "FROM manifest WHERE status = @status ORDER BY updated_at DESC";
+            cmd.Parameters.AddWithValue("status", statusFilter.Trim().ToLowerInvariant());
+        }
+
+        var items = new List<ManifestListItem>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var topology = ParseTopologyArray(reader.IsDBNull(2) ? null : reader.GetFieldValue<string[]>(2));
+            var summary = ManifestTopologyValidator.ExtractSummary(topology);
+            items.Add(new ManifestListItem(
+                reader.GetGuid(0),
+                reader.IsDBNull(1) ? null : reader.GetGuid(1),
+                reader.GetString(3),
+                summary.DispatcherMapping?.Role,
+                summary.DispatcherMapping?.Target,
+                summary.DispatcherMapping?.Layer,
+                summary.DispatcherMapping?.Action,
+                summary.RuntimeMapping?.RuntimeDestination,
+                reader.GetFieldValue<DateTimeOffset>(4),
+                reader.GetFieldValue<DateTimeOffset>(5)));
+        }
+
+        return items;
+    }
+
+    /// <inheritdoc/>
+    public override async Task<ManifestDetailRecord?> LoadDetailByIdAsync(
+        Guid manifestId,
+        CancellationToken ct = default)
+    {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT manifest_id, relation_registry_id, topology, status " +
-            "FROM manifest " +
-            "WHERE manifest_id = @id " +
-            "LIMIT 1";
+            "SELECT manifest_id, relation_registry_id, topology, status, created_at, updated_at " +
+            "FROM manifest WHERE manifest_id = @id LIMIT 1";
         cmd.Parameters.AddWithValue("id", manifestId);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
             return null;
 
-        var id = reader.GetGuid(0);
-        var relId = reader.IsDBNull(1) ? (Guid?)null : reader.GetGuid(1);
-        var topologyRaw = reader.IsDBNull(2) ? null : reader.GetFieldValue<string[]>(2);
-        var status = reader.GetString(3);
-
-        return new ManifestRecord(id, relId, ParseTopologyArray(topologyRaw), status);
+        return new ManifestDetailRecord(
+            reader.GetGuid(0),
+            reader.IsDBNull(1) ? null : reader.GetGuid(1),
+            ParseTopologyArray(reader.IsDBNull(2) ? null : reader.GetFieldValue<string[]>(2)),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4),
+            reader.GetFieldValue<DateTimeOffset>(5));
     }
+
+    /// <inheritdoc/>
+    public override async Task<int> CountActiveAxisConflictsAsync(
+        string role,
+        string target,
+        string layer,
+        string action,
+        Guid? excludeManifestId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT manifest_id, topology FROM manifest WHERE status = 'active'";
+
+        var count = 0;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var manifestId = reader.GetGuid(0);
+            if (excludeManifestId.HasValue && manifestId == excludeManifestId.Value)
+                continue;
+
+            var topology = ParseTopologyArray(reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1));
+            if (MatchesAxes(topology, role, target, layer, action))
+                count++;
+        }
+
+        return count;
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+        Guid? relationRegistryId,
+        IReadOnlyList<JsonElement> topology,
+        CancellationToken ct = default)
+    {
+        var manifestId = Guid.NewGuid();
+        var topologyJson = SerializeTopologyArray(topology);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) " +
+            "VALUES (@id, @rel, @topology, 'draft') " +
+            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+        cmd.Parameters.AddWithValue("id", manifestId);
+        cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("topology", topologyJson);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return (null, new ValidationError("MANIFEST_CREATE_FAILED", "Failed to create draft manifest."));
+        }
+
+        return (ReadDetailRecord(reader), null);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+        Guid manifestId,
+        Guid? relationRegistryId,
+        IReadOnlyList<JsonElement> topology,
+        CancellationToken ct = default)
+    {
+        var existing = await LoadDetailByIdAsync(manifestId, ct);
+        if (existing is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+        if (!string.Equals(existing.Status, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, new ValidationError(
+                "MANIFEST_NOT_DRAFT",
+                $"Manifest {manifestId} is status={existing.Status}; only draft manifests can be updated."));
+        }
+
+        var topologyJson = SerializeTopologyArray(topology);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE manifest SET relation_registry_id = @rel, topology = @topology, updated_at = now() " +
+            "WHERE manifest_id = @id AND status = 'draft' " +
+            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+        cmd.Parameters.AddWithValue("id", manifestId);
+        cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("topology", topologyJson);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return (null, new ValidationError("MANIFEST_UPDATE_FAILED", $"Failed to update draft manifest {manifestId}."));
+        }
+
+        return (ReadDetailRecord(reader), null);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+        Guid manifestId,
+        IReadOnlySet<string> allowedRuntimeDestinations,
+        CancellationToken ct = default)
+    {
+        var existing = await LoadDetailByIdAsync(manifestId, ct);
+        if (existing is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+        if (!string.Equals(existing.Status, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, new ValidationError(
+                "MANIFEST_NOT_DRAFT",
+                $"Manifest {manifestId} is status={existing.Status}; only draft manifests can be promoted."));
+        }
+
+        var summary = ManifestTopologyValidator.ExtractSummary(existing.Topology);
+        var axes = summary.DispatcherMapping;
+        var conflictCount = 0;
+        if (axes is not null)
+        {
+            conflictCount = await CountActiveAxisConflictsAsync(
+                axes.Role, axes.Target, axes.Layer, axes.Action, manifestId, ct);
+        }
+
+        var validation = ManifestTopologyValidator.Validate(
+            existing.Topology,
+            allowedRuntimeDestinations,
+            checkActiveAxisConflict: true,
+            activeAxisConflictCount: conflictCount);
+
+        if (validation.IsBlocking)
+        {
+            var first = validation.Errors[0];
+            return (null, first);
+        }
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE manifest SET status = 'active', updated_at = now() " +
+            "WHERE manifest_id = @id AND status = 'draft' " +
+            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+        cmd.Parameters.AddWithValue("id", manifestId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return (null, new ValidationError("MANIFEST_PROMOTE_FAILED", $"Failed to promote manifest {manifestId}."));
+        }
+
+        return (ReadDetailRecord(reader), null);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+        Guid manifestId,
+        CancellationToken ct = default)
+    {
+        var existing = await LoadDetailByIdAsync(manifestId, ct);
+        if (existing is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+        if (!string.Equals(existing.Status, "active", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, new ValidationError(
+                "MANIFEST_NOT_ACTIVE",
+                $"Manifest {manifestId} is status={existing.Status}; only active manifests can be deprecated."));
+        }
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE manifest SET status = 'deprecated', updated_at = now() " +
+            "WHERE manifest_id = @id AND status = 'active' " +
+            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+        cmd.Parameters.AddWithValue("id", manifestId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            return (null, new ValidationError("MANIFEST_DEPRECATE_FAILED", $"Failed to deprecate manifest {manifestId}."));
+        }
+
+        return (ReadDetailRecord(reader), null);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter,
+        CancellationToken ct = default)
+    {
+        var all = await ListManifestsAsync(statusFilter, ct);
+        var items = new List<PromotionManifestListItem>();
+        foreach (var m in all)
+        {
+            var detail = await LoadDetailByIdAsync(m.ManifestId, ct);
+            if (detail is null) continue;
+            var metadata = PromotionManifestValidator.ExtractMetadataDto(detail.Topology);
+            if (metadata is null) continue;
+            items.Add(new PromotionManifestListItem(
+                detail.ManifestId,
+                detail.Status,
+                metadata.ManifestKey,
+                metadata.VersionLabel,
+                !string.IsNullOrWhiteSpace(metadata.DisclosureText),
+                detail.CreatedAt,
+                detail.UpdatedAt));
+        }
+        return items;
+    }
+
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId,
+        JsonElement promotionEntry,
+        CancellationToken ct = default)
+    {
+        var existing = await LoadDetailByIdAsync(manifestId, ct);
+        if (existing is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+        if (!string.Equals(existing.Status, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, new ValidationError(
+                "MANIFEST_NOT_DRAFT",
+                $"Manifest {manifestId} is status={existing.Status}; only draft manifests can be updated."));
+        }
+
+        var merged = PromotionManifestValidator.MergeIntoTopology(existing.Topology, promotionEntry);
+        return await UpdateDraftAsync(manifestId, existing.RelationRegistryId, merged, ct);
+    }
+
+    /// <inheritdoc/>
+    public override async Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey,
+        string versionLabel,
+        Guid? excludeManifestId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT manifest_id, topology FROM manifest WHERE status = 'active'";
+
+        var count = 0;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var manifestId = reader.GetGuid(0);
+            if (excludeManifestId.HasValue && manifestId == excludeManifestId.Value)
+                continue;
+
+            var topology = ParseTopologyArray(reader.IsDBNull(1) ? null : reader.GetFieldValue<string[]>(1));
+            var metadata = PromotionManifestValidator.ExtractMetadataDto(topology);
+            if (metadata is null) continue;
+            if (string.Equals(metadata.ManifestKey, manifestKey, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(metadata.VersionLabel, versionLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static ManifestDetailRecord ReadDetailRecord(NpgsqlDataReader reader)
+    {
+        return new ManifestDetailRecord(
+            reader.GetGuid(0),
+            reader.IsDBNull(1) ? null : reader.GetGuid(1),
+            ParseTopologyArray(reader.IsDBNull(2) ? null : reader.GetFieldValue<string[]>(2)),
+            reader.GetString(3),
+            reader.GetFieldValue<DateTimeOffset>(4),
+            reader.GetFieldValue<DateTimeOffset>(5));
+    }
+
+    private static string[] SerializeTopologyArray(IReadOnlyList<JsonElement> topology) =>
+        topology.Select(e => e.GetRawText()).ToArray();
 
     private static IReadOnlyList<JsonElement> ParseTopologyArray(string[]? raw)
     {
@@ -122,18 +459,12 @@ public class NpgsqlManifestRepository : ManifestRepository
             }
             catch (JsonException)
             {
-                // Malformed JSONB entry — skip silently? No: log and include as null-ish.
-                // Include as string JsonElement to preserve for debugging.
                 result.Add(JsonSerializer.SerializeToElement(item));
             }
         }
         return result;
     }
 
-    /// <summary>
-    /// Returns true when the topology array contains a dispatcher_mapping entry
-    /// matching all provided axes. Null axes are treated as wildcards (match any).
-    /// </summary>
     private static bool MatchesAxes(
         IReadOnlyList<JsonElement> topology,
         string? role,

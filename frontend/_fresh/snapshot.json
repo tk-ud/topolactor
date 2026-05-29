@@ -1,0 +1,54 @@
+{
+  "build_id": "c3294b0d6406a720b4b3c4ca9a9e3faf299695aa",
+  "files": {
+    "island-replypanel.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-seedadmin.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-uibuilderadmin.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "main.js": [
+      "chunk-PBM2TFTG.js"
+    ],
+    "deserializer.js": [],
+    "island-adminauthgate.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-adminimport.js": [
+      "chunk-CU3KUG7Q.js",
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-authpanel.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-contexttokenregistryeditor.js": [
+      "chunk-CU3KUG7Q.js",
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-operationpanel.js": [
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "island-registryvectorvalidator.js": [
+      "chunk-CU3KUG7Q.js",
+      "chunk-N5HMMBC4.js",
+      "chunk-PBM2TFTG.js"
+    ],
+    "chunk-CU3KUG7Q.js": [],
+    "chunk-N5HMMBC4.js": [
+      "chunk-PBM2TFTG.js"
+    ],
+    "chunk-PBM2TFTG.js": [],
+    "metafile.json": []
+  }
+}

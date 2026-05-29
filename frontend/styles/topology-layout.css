@@ -1,0 +1,35 @@
+/**
+ * Topology layout projection CSS — NOT admin UI chrome.
+ * Authority: docs/design/topology-layout-class-ssot.yaml
+ * Prefix: topolactor-topology-
+ */
+
+@layer components {
+  .topolactor-topology-layout-root-grid {
+    @apply grid grid-cols-12 gap-2;
+  }
+
+  .topolactor-topology-layout-section-stack {
+    @apply flex flex-col gap-2;
+  }
+
+  .topolactor-topology-layout-row-flex {
+    @apply flex flex-row flex-wrap items-center gap-2;
+  }
+
+  .topolactor-topology-layout-card-surface {
+    @apply rounded-lg border border-gray-200 bg-white p-2 shadow-sm;
+  }
+
+  .topolactor-topology-layout-node-boundary {
+    @apply rounded border-2 border-blue-200 bg-white;
+  }
+
+  .topolactor-topology-layout-state-selected {
+    @apply border-blue-600 bg-blue-50 ring-1 ring-blue-400;
+  }
+
+  .topolactor-topology-layout-state-blocked {
+    @apply border-yellow-500 bg-yellow-50 opacity-90;
+  }
+}

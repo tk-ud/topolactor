@@ -45,10 +45,16 @@ user_operation
 
 ## How to run
 
+Local dev (Route A — hot reload, backend via Docker or host):
+
 ```sh
-cd frontend
-deno task start
+cp frontend/.env.example frontend/.env   # first time only
+deno task dev                            # repo root; watches routes/ and islands/
 ```
+
+Open http://localhost:8000. Requires backend on http://localhost:5000 (e.g. `docker compose -f infra/docker-compose.yml up -d postgres backend`).
+
+Production-like demo (Route B — full Docker + nginx on port 80): see `docs/demo-walkthrough.md`.
 
 Requires backend running for dispatch operations.
 

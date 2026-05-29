@@ -108,6 +108,25 @@ public class TopologyRepository
     }
 
     /// <summary>
+    /// Loads a component record from component_registry by component_id.
+    /// Returns null when not found — caller must treat as broken reference.
+    /// </summary>
+    public virtual Task<ComponentRecord?> LoadComponentAsync(Guid componentId, CancellationToken ct = default)
+    {
+        if (componentId.ToString() == DefaultComponentId)
+        {
+            return Task.FromResult<ComponentRecord?>(new ComponentRecord(
+                componentId,
+                "default_component",
+                "default",
+                "{}"));
+        }
+
+        _logger.LogDebug("TopologyRepository.LoadComponentAsync: no record found for componentId='{ComponentId}'.", componentId);
+        return Task.FromResult<ComponentRecord?>(null);
+    }
+
+    /// <summary>
     /// Loads a function_parameters row by (function_name, parameter_key) and returns
     /// the parameter_value as a raw JSON string, or null if no active row is found.
     ///
@@ -175,6 +194,13 @@ public record SchemaRecord(
     Guid SchemaId,
     string SchemaName,
     string? Version,
+    string? RawDefinition
+);
+
+public record ComponentRecord(
+    Guid ComponentId,
+    string ComponentName,
+    string ComponentType,
     string? RawDefinition
 );
 

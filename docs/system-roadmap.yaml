@@ -948,10 +948,14 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     frontend.admin_routes:
-      status: skeleton
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Admin skeleton routes exist for /admin/manifests, /admin/contents, /admin/ui-builder. Routes display planned capabilities but are not wired to validated backend registry flows.
+      public_summary: >
+        Admin routes /admin/manifests, /admin/contents, /admin/ui-builder exist.
+        /admin/contents is wired to content_bundle admin runtime (browse, hub/entity/relation/hub_relation detail,
+        draft create/update, validate, preview, promote). Gap-9 content bundle partial follow-up complete.
+        /admin/manifests and /admin/ui-builder have separate registry flows.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx

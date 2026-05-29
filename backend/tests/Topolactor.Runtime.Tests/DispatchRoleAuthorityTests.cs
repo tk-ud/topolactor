@@ -83,5 +83,43 @@ public class DispatchRoleAuthorityTests
             => Task.FromResult(role == expectedRole ? manifest : null);
         public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
             => Task.FromResult(manifestId == manifest.ManifestId ? manifest : null);
+
+        public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ManifestListItem>>([]);
+
+        public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+            Task.FromResult<ManifestDetailRecord?>(null);
+
+        public override Task<int> CountActiveAxisConflictsAsync(
+            string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+            Task.FromResult(0);
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+            Guid? relationRegistryId, IReadOnlyList<System.Text.Json.JsonElement> topology, CancellationToken ct = default) =>
+            Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+            Guid manifestId, Guid? relationRegistryId, IReadOnlyList<System.Text.Json.JsonElement> topology, CancellationToken ct = default) =>
+            Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+            Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+            Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+            Guid manifestId, CancellationToken ct = default) =>
+            Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+        public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+            string? statusFilter, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<PromotionManifestListItem>>([]);
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+            Guid manifestId, System.Text.Json.JsonElement promotionEntry, CancellationToken ct = default) =>
+            Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+        public override Task<int> CountActivePromotionKeyConflictsAsync(
+            string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+            Task.FromResult(0);
     }
 }

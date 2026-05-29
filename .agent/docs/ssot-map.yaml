@@ -307,6 +307,26 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: topology_layout_class_vocabulary
+    change_surfaces:
+      - docs/design/topology-layout-class-ssot.yaml
+      - frontend/styles/topology-layout.css
+      - frontend/runtime/topologyLayoutClassDictionary.ts
+      - frontend/runtime/topologyLayoutClassResolver.ts
+      - ui builder topology layout class selector
+      - runtime projection class ref resolution
+      - layout patch layoutClassRefs validation
+    required_docs:
+      - docs/design/topology-layout-class-ssot.yaml
+      - docs/registrar-admin-ui-specification.md
+      - docs/design/db-schema.yaml
+    supporting_docs:
+      - docs/design/css-dictionary-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit

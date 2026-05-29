@@ -24,6 +24,16 @@ public class AdminRuntime
     private readonly SseEventBroadcaster? _sseEventBroadcaster;
     private readonly SeedRuntime? _seedRuntime;
     private readonly AdminImportRuntime? _adminImportRuntime;
+    private readonly ManifestRepository? _manifestRepository;
+    private readonly ContentBundleRepository? _contentBundleRepository;
+    private readonly TopologyRepository? _topologyRepository;
+
+    private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "topology_transform_runtime",
+        "admin_runtime",
+        "sse_projection_runtime",
+    };
 
     public AdminRuntime(
         ILogger<AdminRuntime> logger,
@@ -35,7 +45,10 @@ public class AdminRuntime
         SeedRuntime? seedRuntime = null,
         CiAttentionGuidanceRepository? ciAttentionGuidanceRepository = null,
         SseEventBroadcaster? sseEventBroadcaster = null,
-        AdminImportRuntime? adminImportRuntime = null)
+        AdminImportRuntime? adminImportRuntime = null,
+        ManifestRepository? manifestRepository = null,
+        ContentBundleRepository? contentBundleRepository = null,
+        TopologyRepository? topologyRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -47,6 +60,9 @@ public class AdminRuntime
         _ciAttentionGuidanceRepository = ciAttentionGuidanceRepository ?? new CiAttentionGuidanceRepository();
         _sseEventBroadcaster = sseEventBroadcaster;
         _adminImportRuntime = adminImportRuntime;
+        _manifestRepository = manifestRepository;
+        _contentBundleRepository = contentBundleRepository;
+        _topologyRepository = topologyRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -191,6 +207,7 @@ public class AdminRuntime
             "package_generator:generate"       => await DataGenerateAsync(vector, ct),
             "package_generator:promote"        => await DataPromoteAsync(vector, ct),
             "ui_topology:promoted_palette"     => await DataPromotedPaletteAsync(ct),
+            "ui_topology:layout_candidates"    => await DataLayoutCandidatesAsync(ct),
             "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
             "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
             "layout_patch:apply"               => await DataLayoutPatchApplyAsync(vector, ct),
@@ -206,6 +223,31 @@ public class AdminRuntime
             "admin_csv_json_import:apply"               => await DataImportApplyAsync(vector, ct),
             "admin_csv_json_import:list_manifests"      => await DataImportListManifestsAsync(ct),
             "admin_csv_json_import:list_schemas"        => await DataImportListSchemasAsync(ct),
+            "manifest:list"                             => await DataManifestListAsync(vector, ct),
+            "manifest:get"                              => await DataManifestGetAsync(vector, ct),
+            "manifest:validate"                         => await DataManifestValidateAsync(vector, ct),
+            "manifest:create_draft"                     => await DataManifestCreateDraftAsync(vector, ct),
+            "manifest:update_draft"                     => await DataManifestUpdateDraftAsync(vector, ct),
+            "manifest:promote"                          => await DataManifestPromoteAsync(vector, ct),
+            "manifest:deprecate"                        => await DataManifestDeprecateAsync(vector, ct),
+            "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
+            "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
+            "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
+            "promotion_manifest:update_draft"           => await DataPromotionManifestUpdateDraftAsync(vector, ct),
+            "content_bundle:list_hubs"                  => await DataContentBundleListHubsAsync(ct),
+            "content_bundle:list_entities"              => await DataContentBundleListEntitiesAsync(ct),
+            "content_bundle:list_relations"             => await DataContentBundleListRelationsAsync(ct),
+            "content_bundle:list_states"                => await DataContentBundleListStatesAsync(ct),
+            "content_bundle:get_entity"                 => await DataContentBundleGetEntityAsync(vector, ct),
+            "content_bundle:search"                     => await DataContentBundleSearchAsync(vector, ct),
+            "content_bundle:create_entity_draft"        => await DataContentBundleCreateDraftAsync(vector, ct),
+            "content_bundle:validate_draft"             => await DataContentBundleValidateDraftAsync(vector, ct),
+            "content_bundle:preview_draft"              => await DataContentBundlePreviewDraftAsync(vector, ct),
+            "content_bundle:promote_draft"              => await DataContentBundlePromoteDraftAsync(vector, ct),
+            "content_bundle:get_hub"                    => await DataContentBundleGetHubAsync(vector, ct),
+            "content_bundle:get_relation"               => await DataContentBundleGetRelationAsync(vector, ct),
+            "content_bundle:update_entity_draft"        => await DataContentBundleUpdateDraftAsync(vector, ct),
+            "content_bundle:list_hub_relations"         => await DataContentBundleListHubRelationsAsync(ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
@@ -630,8 +672,30 @@ public class AdminRuntime
 
     private async Task<(JsonElement? data, ValidationError? error)> DataPromotedPaletteAsync(CancellationToken ct)
     {
-        var entries = await _uiTopologyRepository.ListPromotedPaletteEntriesAsync(ct);
-        return (JsonSerializer.SerializeToElement(entries), null);
+        try
+        {
+            var entries = await _uiTopologyRepository.ListPromotedPaletteEntriesAsync(ct);
+            return (JsonSerializer.SerializeToElement(entries), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataPromotedPaletteAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataLayoutCandidatesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var candidates = await _uiTopologyRepository.ListLayoutCandidatesAsync(ct);
+            return (JsonSerializer.SerializeToElement(candidates), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataLayoutCandidatesAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchPreviewAsync(OperationVector vector, CancellationToken ct)
@@ -868,6 +932,832 @@ public class AdminRuntime
         var dtos = schemas.Select(s => new AdminImportSchemaListItemDto(
             s.SchemaId.ToString(), s.Name)).ToList();
         return (JsonSerializer.SerializeToElement(dtos), null);
+    }
+
+    private ValidationError ManifestRepositoryNotAvailable() =>
+        new("MANIFEST_REPOSITORY_NOT_AVAILABLE", "Manifest repository is not registered.");
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestListAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+
+        string? status = null;
+        if (vector.Payload is { ValueKind: JsonValueKind.Object } payload &&
+            payload.TryGetProperty("status", out var statusEl) &&
+            statusEl.ValueKind == JsonValueKind.String)
+        {
+            status = statusEl.GetString();
+        }
+
+        var items = await _manifestRepository.ListManifestsAsync(status, ct);
+        var dtos = items.Select(m => new AdminManifestListItemDto(
+            m.ManifestId.ToString(),
+            m.Status,
+            m.RelationRegistryId?.ToString(),
+            m.Role,
+            m.Target,
+            m.Layer,
+            m.Action,
+            m.RuntimeDestination,
+            m.CreatedAt.ToString("o"),
+            m.UpdatedAt.ToString("o"))).ToList();
+
+        return (JsonSerializer.SerializeToElement(dtos), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestGetAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(detail)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestValidateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        var summary = ManifestTopologyValidator.ExtractSummary(detail.Topology);
+        var conflictCount = 0;
+        if (summary.DispatcherMapping is not null)
+        {
+            conflictCount = await _manifestRepository.CountActiveAxisConflictsAsync(
+                summary.DispatcherMapping.Role,
+                summary.DispatcherMapping.Target,
+                summary.DispatcherMapping.Layer,
+                summary.DispatcherMapping.Action,
+                detail.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ? detail.ManifestId : null,
+                ct);
+        }
+
+        var checkConflict = !detail.Status.Equals("deprecated", StringComparison.OrdinalIgnoreCase);
+        var validation = ManifestTopologyValidator.Validate(
+            detail.Topology,
+            KnownRuntimeDestinations,
+            checkActiveAxisConflict: checkConflict,
+            activeAxisConflictCount: conflictCount);
+
+        var response = new AdminManifestValidateResponseDto(
+            validation.Valid,
+            validation.IsBlocking,
+            validation.Errors.Select(e => new AdminManifestValidationIssueDto(e.Code, e.Message, true)).ToList(),
+            ManifestTopologyValidator.ToDto(validation.Summary));
+
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestCreateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseDraftRequest(vector, out var request, out var parseError))
+            return (null, parseError);
+
+        var topology = ManifestTopologyValidator.BuildTopology(
+            request!.Role,
+            request.Target,
+            request.Layer,
+            request.Action,
+            request.RuntimeDestination,
+            request.ProjectionDefinition);
+
+        var validation = ManifestTopologyValidator.Validate(topology, KnownRuntimeDestinations);
+        if (validation.IsBlocking)
+            return (null, validation.Errors[0]);
+
+        Guid? relationRegistryId = null;
+        if (!string.IsNullOrWhiteSpace(request.RelationRegistryId))
+        {
+            if (!Guid.TryParse(request.RelationRegistryId, out var relId))
+            {
+                return (null, new ValidationError(
+                    "MALFORMED_RELATION_REGISTRY_ID",
+                    "relationRegistryId must be a valid UUID when provided."));
+            }
+            relationRegistryId = relId;
+        }
+
+        var (manifest, error) = await _manifestRepository.CreateDraftAsync(relationRegistryId, topology, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestUpdateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("MANIFEST_PAYLOAD_REQUIRED", "payload is required."));
+
+        AdminManifestUpdateDraftRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminManifestUpdateDraftRequestDto>(vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || string.IsNullOrWhiteSpace(request.ManifestId))
+            return (null, new ValidationError("MANIFEST_ID_REQUIRED", "manifestId is required."));
+        if (!Guid.TryParse(request.ManifestId, out var manifestId))
+            return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID."));
+        if (string.IsNullOrWhiteSpace(request.Role) || string.IsNullOrWhiteSpace(request.Target) ||
+            string.IsNullOrWhiteSpace(request.Layer) || string.IsNullOrWhiteSpace(request.Action))
+        {
+            return (null, new ValidationError("DISPATCHER_AXES_REQUIRED", "role, target, layer, and action are required."));
+        }
+        if (string.IsNullOrWhiteSpace(request.RuntimeDestination))
+        {
+            return (null, new ValidationError("RUNTIME_DESTINATION_REQUIRED", "runtimeDestination is required."));
+        }
+
+        var topology = ManifestTopologyValidator.BuildTopology(
+            request.Role,
+            request.Target,
+            request.Layer,
+            request.Action,
+            request.RuntimeDestination,
+            request.ProjectionDefinition);
+
+        var existingDetail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        var promotionEntry = existingDetail is not null
+            ? PromotionManifestValidator.ExtractEntry(existingDetail.Topology)
+            : null;
+        if (promotionEntry is not null)
+            topology = PromotionManifestValidator.MergeIntoTopology(topology, promotionEntry.Value);
+
+        var validation = ManifestTopologyValidator.Validate(topology, KnownRuntimeDestinations);
+        if (validation.IsBlocking)
+            return (null, validation.Errors[0]);
+
+        Guid? relationRegistryId = null;
+        if (!string.IsNullOrWhiteSpace(request.RelationRegistryId))
+        {
+            if (!Guid.TryParse(request.RelationRegistryId, out var relId))
+            {
+                return (null, new ValidationError(
+                    "MALFORMED_RELATION_REGISTRY_ID",
+                    "relationRegistryId must be a valid UUID when provided."));
+            }
+            relationRegistryId = relId;
+        }
+
+        var (manifest, error) = await _manifestRepository.UpdateDraftAsync(
+            manifestId, relationRegistryId, topology, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestPromoteAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var existingDetail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (existingDetail is not null &&
+            PromotionManifestValidator.ExtractEntry(existingDetail.Topology) is not null)
+        {
+            if (_topologyRepository is null)
+            {
+                return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+                    false, manifestId.ToString(), "draft", "Topology repository is not registered.",
+                    "TOPOLOGY_REPOSITORY_NOT_AVAILABLE")), null);
+            }
+
+            var metadata = PromotionManifestValidator.ExtractMetadataDto(existingDetail.Topology);
+            var conflictCount = metadata is not null
+                ? await _manifestRepository.CountActivePromotionKeyConflictsAsync(
+                    metadata.ManifestKey, metadata.VersionLabel, manifestId, ct)
+                : 0;
+            var promotionValidation = await PromotionManifestValidator.ValidateAsync(
+                existingDetail.Topology, _topologyRepository, conflictCount, ct);
+            if (promotionValidation.IsBlocking)
+            {
+                var first = promotionValidation.Errors[0];
+                return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+                    false, manifestId.ToString(), "draft", first.Message, first.Code)), null);
+            }
+        }
+
+        var (manifest, error) = await _manifestRepository.PromoteAsync(manifestId, KnownRuntimeDestinations, ct);
+        if (error is not null)
+        {
+            return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+                false, manifestId.ToString(), "draft", error.Message, error.Code)), null);
+        }
+
+        return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+            true, manifest!.ManifestId.ToString(), manifest.Status, "Manifest promoted to active.")), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestDeprecateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var (manifest, error) = await _manifestRepository.DeprecateAsync(manifestId, ct);
+        if (error is not null)
+        {
+            return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+                false, manifestId.ToString(), "active", error.Message, error.Code)), null);
+        }
+
+        return (JsonSerializer.SerializeToElement(new AdminManifestLifecycleResponseDto(
+            true, manifest!.ManifestId.ToString(), manifest.Status, "Manifest deprecated.")), null);
+    }
+
+    private ValidationError TopologyRepositoryNotAvailable() =>
+        new("TOPOLOGY_REPOSITORY_NOT_AVAILABLE", "Topology repository is not registered.");
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotionManifestListAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+
+        string? status = null;
+        if (vector.Payload is { ValueKind: JsonValueKind.Object } payload &&
+            payload.TryGetProperty("status", out var statusEl) &&
+            statusEl.ValueKind == JsonValueKind.String)
+        {
+            status = statusEl.GetString();
+        }
+
+        var items = await _manifestRepository.ListPromotionManifestsAsync(status, ct);
+        var dtos = items.Select(i => new AdminPromotionManifestListItemDto(
+            i.ManifestId.ToString(),
+            i.Status,
+            i.ManifestKey,
+            i.VersionLabel,
+            i.HasDisclosure,
+            i.CreatedAt.ToString("o"),
+            i.UpdatedAt.ToString("o"))).ToList();
+        return (JsonSerializer.SerializeToElement(dtos), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotionManifestGetAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        return (JsonSerializer.SerializeToElement(new AdminPromotionManifestDetailDto(
+            detail.ManifestId.ToString(),
+            detail.Status,
+            PromotionManifestValidator.ExtractMetadataDto(detail.Topology),
+            detail.CreatedAt.ToString("o"),
+            detail.UpdatedAt.ToString("o"))), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotionManifestValidateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (_topologyRepository is null) return (null, TopologyRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        var metadata = PromotionManifestValidator.ExtractMetadataDto(detail.Topology);
+        var conflictCount = metadata is not null
+            ? await _manifestRepository.CountActivePromotionKeyConflictsAsync(
+                metadata.ManifestKey,
+                metadata.VersionLabel,
+                detail.Status.Equals("active", StringComparison.OrdinalIgnoreCase) ? detail.ManifestId : null,
+                ct)
+            : 0;
+
+        var validation = await PromotionManifestValidator.ValidateAsync(
+            detail.Topology, _topologyRepository, conflictCount, ct);
+
+        var response = new AdminPromotionManifestValidateResponseDto(
+            validation.Valid,
+            validation.IsBlocking,
+            validation.Errors.Select(e => new AdminManifestValidationIssueDto(e.Code, e.Message, true)).ToList(),
+            validation.Metadata);
+
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotionManifestUpdateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("PROMOTION_MANIFEST_PAYLOAD_REQUIRED", "payload is required."));
+
+        AdminPromotionManifestUpdateDraftRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminPromotionManifestUpdateDraftRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("PROMOTION_MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || string.IsNullOrWhiteSpace(request.ManifestId))
+            return (null, new ValidationError("MANIFEST_ID_REQUIRED", "manifestId is required."));
+        if (!Guid.TryParse(request.ManifestId, out var manifestId))
+            return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID."));
+
+        var metadata = new AdminPromotionManifestMetadataDto(
+            request.ManifestKey,
+            request.VersionLabel,
+            request.DisclosureText,
+            request.DisclosureCategoryLabel,
+            request.PlacementKey,
+            request.ProjectionSurfaceType,
+            request.ActivationPolicyType,
+            request.ActivationConditionExpression,
+            request.TargetTopologyRefs);
+
+        var entry = PromotionManifestValidator.BuildEntry(metadata);
+        var (manifest, error) = await _manifestRepository.UpdatePromotionMetadataDraftAsync(manifestId, entry, ct);
+        if (error is not null) return (null, error);
+
+        return (JsonSerializer.SerializeToElement(new AdminPromotionManifestDetailDto(
+            manifest!.ManifestId.ToString(),
+            manifest.Status,
+            PromotionManifestValidator.ExtractMetadataDto(manifest.Topology),
+            manifest.CreatedAt.ToString("o"),
+            manifest.UpdatedAt.ToString("o"))), null);
+    }
+
+    private ValidationError ContentBundleRepositoryNotAvailable() =>
+        new("CONTENT_BUNDLE_REPOSITORY_NOT_AVAILABLE", "Content bundle repository is not registered.");
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleListHubsAsync(CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListContentHubsAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleListEntitiesAsync(CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListContentEntitiesAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleListRelationsAsync(CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListContentRelationsAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleListStatesAsync(CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListContentStatesAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleGetEntityAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseEntityId(vector, out var entityId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _contentBundleRepository.LoadContentEntityAsync(entityId, ct);
+        if (detail is null)
+            return (null, new ValidationError("ENTITY_NOT_FOUND", $"Entity {entityId} was not found."));
+
+        return (JsonSerializer.SerializeToElement(detail), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleSearchAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+
+        string? keyword = null;
+        string? kind = null;
+        string? state = null;
+        if (vector.Payload is { ValueKind: JsonValueKind.Object } payload)
+        {
+            if (payload.TryGetProperty("keyword", out var kw) && kw.ValueKind == JsonValueKind.String)
+                keyword = kw.GetString();
+            if (payload.TryGetProperty("kind", out var k) && k.ValueKind == JsonValueKind.String)
+                kind = k.GetString();
+            if (payload.TryGetProperty("state", out var s) && s.ValueKind == JsonValueKind.String)
+                state = s.GetString();
+        }
+
+        var items = await _contentBundleRepository.SearchContentBundleAsync(keyword, kind, state, ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleCreateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload is required."));
+
+        ContentBundleDraftRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ContentBundleDraftRequestDto>(vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("CONTENT_BUNDLE_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || string.IsNullOrWhiteSpace(request.HubId))
+            return (null, new ValidationError("HUB_ID_REQUIRED", "hubId is required."));
+        if (!Guid.TryParse(request.HubId, out var hubId))
+            return (null, new ValidationError("MALFORMED_HUB_ID", "hubId must be a valid UUID."));
+        if (request.RelationIds is null || request.RelationIds.Count == 0)
+            return (null, new ValidationError("RELATION_IDS_REQUIRED", "relationIds must contain at least one id."));
+        if (string.IsNullOrWhiteSpace(request.StateName))
+            return (null, new ValidationError("STATE_NAME_REQUIRED", "stateName is required."));
+
+        var relationIds = new List<Guid>();
+        foreach (var rid in request.RelationIds)
+        {
+            if (!Guid.TryParse(rid, out var relId))
+                return (null, new ValidationError("MALFORMED_RELATION_ID", $"relationId '{rid}' is not a valid UUID."));
+            relationIds.Add(relId);
+        }
+
+        var (draft, error) = await _contentBundleRepository.CreateEntityDraftAsync(
+            hubId, request.EntityJsonb, relationIds, request.StateName, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(draft!), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleValidateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseDraftId(vector, out var draftId, out var parseError))
+            return (null, parseError);
+
+        var draft = await _contentBundleRepository.LoadDraftAsync(draftId, ct);
+        if (draft is null)
+            return (null, new ValidationError("DRAFT_NOT_FOUND", $"Draft {draftId} was not found."));
+
+        var stateName = await ResolveStateNameAsync(draft.StateId, ct);
+        var refs = await _contentBundleRepository.LoadRefContextAsync(draft.HubId, draft.RelationIds, stateName, ct);
+        var validation = ContentBundleValidator.ValidateDraft(draft, refs);
+        return (JsonSerializer.SerializeToElement(ContentBundleValidator.ToResponse(validation)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundlePreviewDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseDraftId(vector, out var draftId, out var parseError))
+            return (null, parseError);
+
+        var draft = await _contentBundleRepository.LoadDraftAsync(draftId, ct);
+        if (draft is null)
+            return (null, new ValidationError("DRAFT_NOT_FOUND", $"Draft {draftId} was not found."));
+
+        var stateName = await ResolveStateNameAsync(draft.StateId, ct);
+        var refs = await _contentBundleRepository.LoadRefContextAsync(draft.HubId, draft.RelationIds, stateName, ct);
+        var validation = ContentBundleValidator.ValidateDraft(draft, refs);
+
+        string label = "Untitled";
+        try
+        {
+            var json = JsonDocument.Parse(draft.EntityJsonb).RootElement;
+            if (json.TryGetProperty("label", out var labelEl) && labelEl.ValueKind == JsonValueKind.String)
+                label = labelEl.GetString() ?? label;
+        }
+        catch (JsonException) { /* validation will report malformed */ }
+
+        var relationLabels = draft.RelationIds
+            .Where(r => refs.RelationNames.ContainsKey(r))
+            .Select(r => refs.RelationNames[r])
+            .ToList();
+
+        var preview = new ContentBundlePreviewResponseDto(
+            draftId.ToString(),
+            label,
+            draft.HubId.ToString(),
+            refs.HubRelationName,
+            draft.RelationIds.Select(r => r.ToString()).ToList(),
+            relationLabels,
+            stateName,
+            draft.EntityJsonb,
+            ContentBundleValidator.ToResponse(validation),
+            validation.Valid);
+
+        return (JsonSerializer.SerializeToElement(preview), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundlePromoteDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseDraftId(vector, out var draftId, out var parseError))
+            return (null, parseError);
+
+        var (response, error) = await _contentBundleRepository.PromoteDraftAsync(draftId, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleGetHubAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseHubId(vector, out var hubId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _contentBundleRepository.LoadContentHubAsync(hubId, ct);
+        if (detail is null)
+            return (null, new ValidationError("HUB_NOT_FOUND", $"Hub {hubId} was not found."));
+
+        return (JsonSerializer.SerializeToElement(detail), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleGetRelationAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (!TryParseRelationRegistryId(vector, out var relationId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _contentBundleRepository.LoadContentRelationAsync(relationId, ct);
+        if (detail is null)
+            return (null, new ValidationError("RELATION_NOT_FOUND", $"Relation {relationId} was not found."));
+
+        return (JsonSerializer.SerializeToElement(detail), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleUpdateDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload is required."));
+
+        ContentBundleUpdateDraftRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ContentBundleUpdateDraftRequestDto>(vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("CONTENT_BUNDLE_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || string.IsNullOrWhiteSpace(request.DraftId))
+            return (null, new ValidationError("DRAFT_ID_REQUIRED", "draftId is required."));
+        if (!Guid.TryParse(request.DraftId, out var draftId))
+            return (null, new ValidationError("MALFORMED_DRAFT_ID", "draftId must be a valid UUID."));
+        if (string.IsNullOrWhiteSpace(request.HubId))
+            return (null, new ValidationError("HUB_ID_REQUIRED", "hubId is required."));
+        if (!Guid.TryParse(request.HubId, out var hubId))
+            return (null, new ValidationError("MALFORMED_HUB_ID", "hubId must be a valid UUID."));
+        if (request.RelationIds is null || request.RelationIds.Count == 0)
+            return (null, new ValidationError("RELATION_IDS_REQUIRED", "relationIds must contain at least one id."));
+        if (string.IsNullOrWhiteSpace(request.StateName))
+            return (null, new ValidationError("STATE_NAME_REQUIRED", "stateName is required."));
+
+        var relationIds = new List<Guid>();
+        foreach (var rid in request.RelationIds)
+        {
+            if (!Guid.TryParse(rid, out var relId))
+                return (null, new ValidationError("MALFORMED_RELATION_ID", $"relationId '{rid}' is not a valid UUID."));
+            relationIds.Add(relId);
+        }
+
+        var (draft, error) = await _contentBundleRepository.UpdateEntityDraftAsync(
+            draftId, hubId, request.EntityJsonb, relationIds, request.StateName, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(draft!), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataContentBundleListHubRelationsAsync(
+        CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListContentHubRelationsAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<string?> ResolveStateNameAsync(Guid? stateId, CancellationToken ct)
+    {
+        if (stateId is null || _contentBundleRepository is null) return null;
+        var states = await _contentBundleRepository.ListContentStatesAsync(ct);
+        return states.FirstOrDefault(s => s.StateId == stateId.Value.ToString())?.Name;
+    }
+
+    private static bool TryParseDraftId(
+        OperationVector vector,
+        out Guid draftId,
+        out ValidationError? error)
+    {
+        draftId = Guid.Empty;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload.draftId is required.");
+            return false;
+        }
+
+        if (!vector.Payload.Value.TryGetProperty("draftId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(idEl.GetString(), out draftId))
+        {
+            error = new ValidationError("MALFORMED_DRAFT_ID", "draftId must be a valid UUID.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseEntityId(
+        OperationVector vector,
+        out Guid entityId,
+        out ValidationError? error)
+    {
+        entityId = Guid.Empty;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload.entityId is required.");
+            return false;
+        }
+
+        if (!vector.Payload.Value.TryGetProperty("entityId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(idEl.GetString(), out entityId))
+        {
+            error = new ValidationError("MALFORMED_ENTITY_ID", "entityId must be a valid UUID.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseHubId(
+        OperationVector vector,
+        out Guid hubId,
+        out ValidationError? error)
+    {
+        hubId = Guid.Empty;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload.hubId is required.");
+            return false;
+        }
+
+        if (!vector.Payload.Value.TryGetProperty("hubId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(idEl.GetString(), out hubId))
+        {
+            error = new ValidationError("MALFORMED_HUB_ID", "hubId must be a valid UUID.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseRelationRegistryId(
+        OperationVector vector,
+        out Guid relationRegistryId,
+        out ValidationError? error)
+    {
+        relationRegistryId = Guid.Empty;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("CONTENT_BUNDLE_PAYLOAD_REQUIRED", "payload.relationRegistryId is required.");
+            return false;
+        }
+
+        if (!vector.Payload.Value.TryGetProperty("relationRegistryId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(idEl.GetString(), out relationRegistryId))
+        {
+            error = new ValidationError("MALFORMED_RELATION_ID", "relationRegistryId must be a valid UUID.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseManifestId(
+        OperationVector vector,
+        out Guid manifestId,
+        out ValidationError? error)
+    {
+        manifestId = Guid.Empty;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("MANIFEST_PAYLOAD_REQUIRED", "payload.manifestId is required.");
+            return false;
+        }
+
+        if (!vector.Payload.Value.TryGetProperty("manifestId", out var idEl) ||
+            idEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(idEl.GetString(), out manifestId))
+        {
+            error = new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseDraftRequest(
+        OperationVector vector,
+        out AdminManifestDraftRequestDto? request,
+        out ValidationError? error)
+    {
+        request = null;
+        error = null;
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            error = new ValidationError("MANIFEST_PAYLOAD_REQUIRED", "payload is required.");
+            return false;
+        }
+
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminManifestDraftRequestDto>(vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            error = new ValidationError("MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed.");
+            return false;
+        }
+
+        if (request is null ||
+            string.IsNullOrWhiteSpace(request.Role) ||
+            string.IsNullOrWhiteSpace(request.Target) ||
+            string.IsNullOrWhiteSpace(request.Layer) ||
+            string.IsNullOrWhiteSpace(request.Action))
+        {
+            error = new ValidationError("DISPATCHER_AXES_REQUIRED", "role, target, layer, and action are required.");
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(request.RuntimeDestination))
+        {
+            error = new ValidationError("RUNTIME_DESTINATION_REQUIRED", "runtimeDestination is required.");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static AdminManifestDetailDto ToManifestDetailDto(ManifestDetailRecord detail)
+    {
+        var summary = ManifestTopologyValidator.ExtractSummary(detail.Topology);
+        return new AdminManifestDetailDto(
+            detail.ManifestId.ToString(),
+            detail.Status,
+            detail.RelationRegistryId?.ToString(),
+            ManifestTopologyValidator.ToDto(summary),
+            JsonSerializer.Serialize(detail.Topology),
+            detail.CreatedAt.ToString("o"),
+            detail.UpdatedAt.ToString("o"));
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataSeedImportAsync(

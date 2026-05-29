@@ -6,19 +6,8 @@ import {
   deprecateContextToken,
   fetchContextTokens,
 } from "../api/adminApi.ts";
+import { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 
-/**
- * ContextTokenRegistryEditor — admin island for context_token_registry.
- *
- * context_token_registry is the hub Registry for discrete topology vocabulary tokens.
- * Each token ID is a topology vocabulary axis; token presence (multi-hot) is the
- * topology observation signal used in recommendation. The value field is a
- * human-assigned ordering reference displayed here for audit — not used in computation.
- *
- * Requires login (JWT in sessionStorage under demo_jwt_token).
- * When the backend is not configured (DEMO_BACKEND_URL unset), shows 501 notice.
- * When no JWT is available, shows a login-required notice.
- */
 export default function ContextTokenRegistryEditor(): JSX.Element {
   const [tokens, setTokens] = useState<ContextToken[]>([]);
   const [notBound, setNotBound] = useState(false);
@@ -48,18 +37,17 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
 
   if (notBound) {
     return (
-      <p style={{ fontFamily: "monospace", color: "#888" }}>
+      <p class="text-muted">
         レジストリ未接続 — DEMO_BACKEND_URL が未設定です (501)。
-        <br />
-        Docker Compose 起動後に <a href="/">ログイン</a> してください。
+        Docker Compose 起動後に <a href="/auth" class="link">ログイン</a> してください。
       </p>
     );
   }
 
   if (notAuthed) {
     return (
-      <p style={{ fontFamily: "monospace", color: "#888" }}>
-        ログインが必要です — <a href="/auth">ログインページ</a> で認証してから再度アクセスしてください。
+      <p class="text-muted">
+        ログインが必要です — <a href="/auth" class="link">ログインページ</a> で認証してから再度アクセスしてください。
       </p>
     );
   }
@@ -68,7 +56,7 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
     e.preventDefault();
     const value = parseFloat(newValue);
     if (!newLabel || isNaN(value) || value < -1 || value > 1) {
-      setStatus("label と value（-1.0〜1.0）は必須です。");
+      setStatus("ラベルと value（-1.0〜1.0）は必須です。");
       return;
     }
     setLoading(true);
@@ -127,117 +115,81 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
     setLoading(false);
   }
 
-  const inputStyle = {
-    padding: "4px 6px",
-    fontFamily: "monospace",
-    marginRight: "8px",
-  };
-
   return (
-    <div style={{ maxWidth: "760px" }}>
-      <h3 style={{ fontFamily: "monospace" }}>アクティブトークン一覧</h3>
-      <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: "24px" }}>
-        <thead>
-          <tr style={{ background: "#f4f4f4" }}>
-            {["label", "group", "value", "status", ""].map((h) => (
-              <th
-                key={h}
-                style={{ border: "1px solid #ccc", padding: "6px 10px", textAlign: "left" }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tokens.map((t) => (
-            <tr key={t.tokenId} style={{ opacity: t.status === "deprecated" ? 0.5 : 1 }}>
-              <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{t.label}</td>
-              <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{t.group ?? "—"}</td>
-              <td style={{ border: "1px solid #ccc", padding: "4px 8px", fontFamily: "monospace" }}>
-                {t.value.toFixed(2)}
-              </td>
-              <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>{t.status}</td>
-              <td style={{ border: "1px solid #ccc", padding: "4px 8px" }}>
-                {t.status === "active" && (
-                  <button
-                    onClick={() => handleDeprecate(t.tokenId)}
-                    disabled={loading}
-                    style={{ color: "#c00", fontSize: "0.8rem" }}
-                  >
-                    非推奨にする
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-          {tokens.length === 0 && (
+    <div class="max-w-3xl">
+      <h3 class="section-title">アクティブトークン一覧</h3>
+      <div class="table-wrap mb-6">
+        <table class="table">
+          <thead>
             <tr>
-              <td colSpan={5} style={{ padding: "8px", color: "#888", textAlign: "center" }}>
-                トークンなし
-              </td>
+              {["ラベル", "グループ", "値", "ステータス", ""].map((h) => (
+                <th key={h}>{h}</th>
+              ))}
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {tokens.map((t) => (
+              <tr key={t.tokenId} class={t.status === "deprecated" ? "opacity-50" : ""}>
+                <td>{t.label}</td>
+                <td>{t.group ?? "—"}</td>
+                <td class="font-mono">{t.value.toFixed(2)}</td>
+                <td>{t.status === "active" ? "有効" : "非推奨"}</td>
+                <td>
+                  {t.status === "active" && (
+                    <button
+                      onClick={() => handleDeprecate(t.tokenId)}
+                      disabled={loading}
+                      class="btn-danger px-2 py-1 text-xs"
+                      title="DB 上 status=deprecated。推薦対象から外す（物理削除ではない）"
+                    >
+                      非推奨にする
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {tokens.length === 0 && (
+              <tr>
+                <td colSpan={5} class="py-4 text-center text-muted">トークンなし</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-      <h3 style={{ fontFamily: "monospace" }}>新規トークン追加</h3>
-      <form onSubmit={handleAdd} style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "flex-end" }}>
+      <h3 class="section-title">新規トークン追加</h3>
+      <form onSubmit={handleAdd} class="flex flex-wrap items-end gap-3">
         <div>
-          <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "2px" }}>
-            label <span style={{ color: "crimson" }}>*</span>
+          <label class="mb-1 block text-xs font-medium">
+            ラベル <span class="text-red-600">*</span>
           </label>
-          <input
-            style={inputStyle}
-            type="text"
-            placeholder="例: 点検中"
-            value={newLabel}
-            onInput={(e) => setNewLabel((e.target as HTMLInputElement).value)}
-            required
-          />
+          <input class="input-mono" type="text" placeholder="例: 点検中" value={newLabel} onInput={(e) => setNewLabel((e.target as HTMLInputElement).value)} required />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "2px" }}>group</label>
-          <input
-            style={inputStyle}
-            type="text"
-            placeholder="例: status"
-            value={newGroup}
-            onInput={(e) => setNewGroup((e.target as HTMLInputElement).value)}
-          />
+          <label class="mb-1 block text-xs font-medium">グループ</label>
+          <input class="input-mono" type="text" placeholder="例: status" value={newGroup} onInput={(e) => setNewGroup((e.target as HTMLInputElement).value)} />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: "0.85rem", marginBottom: "2px" }}>
-            value [-1.0〜1.0]（表示用参照値; 推薦計算には使用しない）<span style={{ color: "crimson" }}>*</span>
+          <label class="mb-1 block text-xs font-medium">
+            値 [-1.0〜1.0] <span class="text-red-600">*</span>
           </label>
-          <input
-            style={{ ...inputStyle, width: "80px" }}
-            type="number"
-            step="0.1"
-            min="-1.0"
-            max="1.0"
-            value={newValue}
-            onInput={(e) => setNewValue((e.target as HTMLInputElement).value)}
-            required
-          />
+          <input class="input-mono w-24" type="number" step="0.1" min="-1.0" max="1.0" value={newValue} onInput={(e) => setNewValue((e.target as HTMLInputElement).value)} required />
         </div>
-        <button type="submit" disabled={loading}>
-          {loading ? "追加中…" : "トークン追加"}
+        <button type="submit" disabled={loading} class="btn-primary">
+          {loading ? "追加中..." : "トークン追加"}
         </button>
       </form>
+      <AdminActionHint>
+        label は表示名、value は [-1,1] の意味方向。backend が範囲検証後 DB に create します。
+      </AdminActionHint>
 
       {status && (
-        <p
-          style={{
-            marginTop: "12px",
-            padding: "8px",
-            background: "#f0f0f0",
-            fontFamily: "monospace",
-            fontSize: "0.85rem",
-          }}
-        >
-          {status}
-        </p>
+        <div class="mt-3">
+          <p class="pre-box">{status}</p>
+          <AdminActionHint>
+            401/501 は /auth と DEMO_BACKEND_URL。value 範囲外はフォームを修正。
+          </AdminActionHint>
+        </div>
       )}
     </div>
   );

@@ -138,6 +138,36 @@ public class NpgsqlTopologyRepository : TopologyRepository
         );
     }
 
+    /// <inheritdoc/>
+    public override async Task<ComponentRecord?> LoadComponentAsync(
+        Guid componentId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT component_id, name, component_type, component_def::text " +
+            "FROM topologys.component_registry " +
+            "WHERE component_id = @id AND active = true " +
+            "LIMIT 1";
+        cmd.Parameters.AddWithValue("id", componentId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
+        {
+            _npgsqlLogger.LogDebug(
+                "NpgsqlTopologyRepository.LoadComponentAsync: no record for componentId='{Id}'.", componentId);
+            return null;
+        }
+
+        return new ComponentRecord(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3));
+    }
+
     /// <summary>
     /// Loads a function_parameter value from the topology store.
     /// Returns null when no active row is found — caller must treat as policy-missing.

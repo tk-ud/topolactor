@@ -197,6 +197,7 @@ check_file ".agent/tests/check-backend-tests.sh"
 check_file ".agent/tests/check-frontend-types.sh"
 check_file ".agent/tests/check-completion-judgment.sh"
 check_file ".agent/tests/check-css-dictionary.sh"
+check_file ".agent/tests/check-topology-layout-class-ssot.sh"
 check_file ".agent/tests/check-ui-ux-executable-component-slice.sh"
 check_file ".agent/tests/check-worktype-routing.sh"
 check_file ".agent/tests/check-local-ci.sh"
@@ -598,6 +599,12 @@ if bash "$REPO_ROOT/.agent/tests/check-css-dictionary.sh"; then
   echo "OK  [subcheck] .agent/tests/check-css-dictionary.sh"
 else
   fail "Subcheck failed: .agent/tests/check-css-dictionary.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-topology-layout-class-ssot.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-topology-layout-class-ssot.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-topology-layout-class-ssot.sh"
 fi
 
 if bash "$REPO_ROOT/.agent/tests/check-ui-ux-executable-component-slice.sh"; then

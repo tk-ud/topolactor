@@ -1,0 +1,175 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "../styles/topology-layout.css";
+
+@layer components {
+  .page-main {
+    @apply mx-auto max-w-5xl px-6 py-8;
+  }
+
+  .page-main-wide {
+    @apply mx-auto max-w-6xl px-6 py-8;
+  }
+
+  .page-title {
+    @apply mb-2 text-2xl font-bold text-gray-900;
+  }
+
+  .section-title {
+    @apply mb-3 text-lg font-semibold text-gray-800;
+  }
+
+  .text-muted {
+    @apply text-sm text-gray-600;
+  }
+
+  .text-muted-xs {
+    @apply text-xs text-gray-500;
+  }
+
+  .link {
+    @apply text-blue-600 hover:text-blue-800 hover:underline;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply btn bg-blue-600 text-white hover:bg-blue-700;
+  }
+
+  .btn-secondary {
+    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
+  }
+
+  .btn-success {
+    @apply btn bg-green-700 text-white hover:bg-green-800;
+  }
+
+  .btn-danger {
+    @apply btn border border-red-200 text-red-600 hover:bg-red-50;
+  }
+
+  .input {
+    @apply w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+  }
+
+  .input-mono {
+    @apply input font-mono;
+  }
+
+  .card {
+    @apply rounded-lg border border-gray-200 bg-white p-4 shadow-sm;
+  }
+
+  .alert-warn {
+    @apply rounded-lg border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900;
+  }
+
+  .alert-info {
+    @apply rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900;
+  }
+
+  .alert-error {
+    @apply rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-900;
+  }
+
+  .alert-success {
+    @apply rounded-lg border border-green-300 bg-green-50 p-4 text-sm text-green-900;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .table th {
+    @apply border-b-2 border-gray-300 bg-gray-100 px-3 py-2 text-left font-semibold whitespace-nowrap;
+  }
+
+  .table td {
+    @apply border-b border-gray-100 px-3 py-2;
+  }
+
+  .tab-bar {
+    @apply mb-6 flex gap-1 overflow-x-auto border-b-2 border-gray-200;
+  }
+
+  .tab-active {
+    @apply whitespace-nowrap border-b-2 border-blue-600 px-4 py-2 text-sm font-bold text-blue-600;
+  }
+
+  .tab-inactive {
+    @apply whitespace-nowrap border-b-2 border-transparent px-4 py-2 text-sm font-bold text-gray-500 transition-colors hover:text-gray-700;
+  }
+
+  .badge {
+    @apply inline-block rounded px-2 py-0.5 font-mono text-xs;
+  }
+
+  .badge-ok {
+    @apply badge border border-green-400 bg-green-50 text-green-800;
+  }
+
+  .badge-warn {
+    @apply badge border border-yellow-400 bg-yellow-50 text-yellow-800;
+  }
+
+  .badge-error {
+    @apply badge border border-red-400 bg-red-50 text-red-800;
+  }
+
+  .badge-info {
+    @apply badge border border-blue-300 bg-blue-50 text-blue-800;
+  }
+
+  .admin-how-to {
+    @apply border-blue-100 bg-white;
+  }
+
+  .admin-help-panel {
+    @apply overflow-hidden rounded-lg border border-gray-200;
+  }
+
+  .admin-help-panel > summary {
+    @apply px-4 py-3 text-sm font-bold text-gray-800 transition-colors hover:bg-gray-100;
+  }
+
+  .admin-help-panel[open] > summary {
+    @apply border-b border-gray-200 bg-blue-50 text-blue-700;
+  }
+
+  .accordion {
+    @apply mb-3 overflow-hidden rounded-lg border border-gray-200;
+  }
+
+  .accordion-trigger {
+    @apply flex w-full items-center justify-between px-4 py-3 text-left text-sm font-bold transition-colors;
+  }
+
+  .accordion-trigger-open {
+    @apply accordion-trigger bg-blue-50 text-blue-700;
+  }
+
+  .accordion-trigger-closed {
+    @apply accordion-trigger bg-gray-50 text-gray-800 hover:bg-gray-100;
+  }
+
+  .accordion-body {
+    @apply bg-white p-4;
+  }
+
+  .nav-footer {
+    @apply mt-8 border-t border-gray-200 pt-4 text-sm text-gray-500;
+  }
+
+  .pre-box {
+    @apply overflow-x-auto rounded bg-gray-100 p-3 font-mono text-xs;
+  }
+}

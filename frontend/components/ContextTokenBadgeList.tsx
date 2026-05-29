@@ -19,27 +19,23 @@ export function ContextTokenBadgeList(props: ContextTokenBadgeListProps): JSX.El
     : props.tokens;
 
   return (
-    <section style={{ marginBottom: "16px" }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+    <section class="mb-4">
+      <div class="flex flex-wrap gap-2">
         {displayed.map((token) => (
           <span
             key={token.tokenId}
             title={`value: ${token.value} | group: ${token.group ?? "—"} | id: ${token.tokenId}`}
-            style={{
-              padding: "3px 10px",
-              borderRadius: "12px",
-              border: "1px solid #aaa",
-              background: token.status === "deprecated" ? "#f5f5f5" : "#e8f4e8",
-              color: token.status === "deprecated" ? "#999" : "#333",
-              fontSize: "0.85em",
-              fontFamily: "monospace",
-            }}
+            class={`rounded-full border px-2.5 py-0.5 font-mono text-xs ${
+              token.status === "deprecated"
+                ? "border-gray-300 bg-gray-100 text-gray-400"
+                : "border-green-300 bg-green-50 text-gray-800"
+            }`}
           >
             {token.label}
-            {token.group && <span style={{ color: "#888", marginLeft: "4px" }}>({token.group})</span>}
+            {token.group && <span class="ml-1 text-gray-500">({token.group})</span>}
           </span>
         ))}
-        {displayed.length === 0 && <span style={{ color: "#888" }}>no tokens</span>}
+        {displayed.length === 0 && <span class="text-muted">トークンなし</span>}
       </div>
     </section>
   );

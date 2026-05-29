@@ -1,5 +1,5 @@
 import { JSX } from "preact";
-import type { ContextRouteRecommendation, Emission, ValidationError } from "../api/dispatch.ts";
+import type { ContextRouteRecommendation, Emission } from "../api/dispatch.ts";
 import { validationErrorText } from "../api/dispatch.ts";
 
 type Props = {
@@ -7,43 +7,45 @@ type Props = {
 };
 
 /**
- * EmissionView surfaces all fields of a backend Emission for inspection.
- * It is intentionally plain and carries no business logic.
+ * EmissionView — バックエンド Emission の全フィールドを表示する。
+ * 意図的にプレーンで、ビジネスロジックは持たない。
  */
 export function EmissionView({ emission }: Props): JSX.Element {
   const errorLines = emission.errors?.map(validationErrorText).join("\n");
 
   return (
-    <div class="emission-view" style={{ fontFamily: "monospace", fontSize: "0.85rem" }}>
-      <h4>Emission</h4>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <tbody>
-          <Row label="structureMapId" value={emission.structureMapId} />
-          <Row label="packageId" value={emission.packageId} />
-          <Row label="schemaId" value={emission.schemaId} />
-          <Row
-            label="componentIds"
-            value={
-              emission.componentIds ? emission.componentIds.join(", ") : undefined
-            }
-          />
-          <Row
-            label="data"
-            value={
-              emission.data ? JSON.stringify(emission.data, null, 2) : undefined
-            }
-            pre
-          />
-          <Row
-            label="errors"
-            value={errorLines}
-            error={Boolean(emission.errors && emission.errors.length > 0)}
-          />
-          {emission.contextRouteRecommendation && (
-            <RecommendationSection rec={emission.contextRouteRecommendation} />
-          )}
-        </tbody>
-      </table>
+    <div class="font-mono text-sm">
+      <h4 class="mb-2 font-semibold">Emission</h4>
+      <div class="table-wrap">
+        <table class="table">
+          <tbody>
+            <Row label="structureMapId" value={emission.structureMapId} />
+            <Row label="packageId" value={emission.packageId} />
+            <Row label="schemaId" value={emission.schemaId} />
+            <Row
+              label="componentIds"
+              value={
+                emission.componentIds ? emission.componentIds.join(", ") : undefined
+              }
+            />
+            <Row
+              label="data"
+              value={
+                emission.data ? JSON.stringify(emission.data, null, 2) : undefined
+              }
+              pre
+            />
+            <Row
+              label="errors"
+              value={errorLines}
+              error={Boolean(emission.errors && emission.errors.length > 0)}
+            />
+            {emission.contextRouteRecommendation && (
+              <RecommendationSection rec={emission.contextRouteRecommendation} />
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -58,37 +60,33 @@ type RowProps = {
 type RecommendationSectionProps = { rec: ContextRouteRecommendation };
 
 function RecommendationSection({ rec }: RecommendationSectionProps): JSX.Element {
-  const cellStyle = {
-    border: "1px solid #ccc",
-    padding: "4px 8px",
-    verticalAlign: "top" as const,
-  };
-
   return (
     <>
       <tr>
-        <td style={{ ...cellStyle, fontWeight: "bold" }} colSpan={2}>
+        <td class="font-bold" colSpan={2}>
           context_route_recommendation
         </td>
       </tr>
       <tr>
-        <td style={{ ...cellStyle, fontWeight: "bold" }}>status</td>
-        <td style={cellStyle}>{rec.status}{rec.statusDetail ? ` — ${rec.statusDetail}` : ""}</td>
-      </tr>
-      <tr>
-        <td style={{ ...cellStyle, fontWeight: "bold" }}>next_operations</td>
-        <td style={cellStyle}>
-          {rec.nextOperations.length === 0
-            ? <em style={{ color: "#999" }}>—</em>
-            : <pre style={{ margin: 0 }}>{JSON.stringify(rec.nextOperations, null, 2)}</pre>}
+        <td class="whitespace-nowrap font-bold">status</td>
+        <td>
+          {rec.status}{rec.statusDetail ? ` — ${rec.statusDetail}` : ""}
         </td>
       </tr>
       <tr>
-        <td style={{ ...cellStyle, fontWeight: "bold" }}>next_tokens</td>
-        <td style={cellStyle}>
+        <td class="whitespace-nowrap align-top font-bold">next_operations</td>
+        <td>
+          {rec.nextOperations.length === 0
+            ? <em class="text-gray-400">—</em>
+            : <pre class="m-0 whitespace-pre-wrap">{JSON.stringify(rec.nextOperations, null, 2)}</pre>}
+        </td>
+      </tr>
+      <tr>
+        <td class="whitespace-nowrap align-top font-bold">next_tokens</td>
+        <td>
           {rec.nextTokens.length === 0
-            ? <em style={{ color: "#999" }}>—</em>
-            : <pre style={{ margin: 0 }}>{JSON.stringify(rec.nextTokens, null, 2)}</pre>}
+            ? <em class="text-gray-400">—</em>
+            : <pre class="m-0 whitespace-pre-wrap">{JSON.stringify(rec.nextTokens, null, 2)}</pre>}
         </td>
       </tr>
     </>
@@ -96,23 +94,16 @@ function RecommendationSection({ rec }: RecommendationSectionProps): JSX.Element
 }
 
 function Row({ label, value, pre, error }: RowProps): JSX.Element {
-  const cellStyle = {
-    border: "1px solid #ccc",
-    padding: "4px 8px",
-    verticalAlign: "top" as const,
-    color: error ? "crimson" : "inherit",
-  };
-
   return (
     <tr>
-      <td style={{ ...cellStyle, fontWeight: "bold", whiteSpace: "nowrap" as const }}>
+      <td class={`whitespace-nowrap font-bold align-top ${error ? "text-red-700" : ""}`}>
         {label}
       </td>
-      <td style={cellStyle}>
+      <td class={error ? "text-red-700" : ""}>
         {value === undefined ? (
-          <em style={{ color: "#999" }}>—</em>
+          <em class="text-gray-400">—</em>
         ) : pre ? (
-          <pre style={{ margin: 0 }}>{value}</pre>
+          <pre class="m-0 whitespace-pre-wrap">{value}</pre>
         ) : (
           value
         )}

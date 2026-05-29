@@ -1,0 +1,135 @@
+topology_layout_class_ssot:
+  name: topolactor_topology_layout_class_dictionary
+  version: 0.1.0
+  status: draft_ssot
+  canonical_path: docs/design/topology-layout-class-ssot.yaml
+
+  purpose:
+    summary: >-
+      Define class vocabulary for topology layout projection only.
+      This SSOT does not style the admin UI itself.
+    goals:
+      - provide_bounded_class_refs_for_topology_layout_projection
+      - prevent_raw_tailwind_or_arbitrary_class_strings_from_becoming_topology_authority
+      - allow_ui_builder_to_select_topology_layout_class_refs
+      - allow_runtime_projection_to_resolve_class_refs_to_current_environment_css
+      - make_class_ref_to_css_drift_ci_checkable
+    non_goals:
+      - admin_screen_visual_redesign
+      - generic_design_system
+      - replacing_css_dictionary_ssot
+      - styling_admin_chrome
+      - controlling_non_topology_component_css
+
+  authority_boundary:
+    yaml_owns:
+      - topology_layout_class_key_vocabulary
+      - topology_layout_class_name_vocabulary
+      - class_ref_allowed_usage
+      - class_ref_projection_scope
+      - class_ref_semantic_role
+    css_file_owns:
+      - concrete_css_for_current_frontend_environment
+    db_owns:
+      - persisted_topology_layout_class_refs
+      - promoted_layout_or_component_design_state
+    frontend_owns:
+      - projection_of_allowed_class_ref_selectors
+      - class_ref_resolution_for_preview
+    prohibited:
+      - treating_raw_tailwind_string_as_topology_authority
+      - treating_admin_ui_styles_as_topology_layout_classes
+      - silent_fallback_to_unknown_class_ref
+      - arbitrary_className_from_db_without_ssot_ref
+      - raw_inline_style_as_normal_topology_layout_path
+
+  class_key_rule:
+    format: dot_separated_lower_snake_case
+    regex: "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9_]*)+$"
+
+  class_name_rule:
+    prefix: topolactor-topology-
+    regex: "^topolactor-topology-[a-z0-9-]+$"
+
+  classes:
+    layout.root.grid:
+      class_name: topolactor-topology-layout-root-grid
+      category: layout
+      projection_scope:
+        - topology_layout
+      semantic_role: root_grid_container
+      allowed_for:
+        - layout_root
+
+    layout.section.stack:
+      class_name: topolactor-topology-layout-section-stack
+      category: layout
+      projection_scope:
+        - topology_layout
+      semantic_role: stacked_section
+      allowed_for:
+        - layout_section
+
+    layout.row.flex:
+      class_name: topolactor-topology-layout-row-flex
+      category: layout
+      projection_scope:
+        - topology_layout
+      semantic_role: row_flex_container
+      allowed_for:
+        - layout_row
+
+    layout.card.surface:
+      class_name: topolactor-topology-layout-card-surface
+      category: surface
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: projected_card_surface
+      allowed_for:
+        - component_wrapper
+
+    layout.node.boundary:
+      class_name: topolactor-topology-layout-node-boundary
+      category: boundary
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: projected_node_boundary
+      allowed_for:
+        - component_wrapper
+
+    layout.state.selected:
+      class_name: topolactor-topology-layout-state-selected
+      category: state
+      projection_scope:
+        - topology_layout_preview
+      semantic_role: selected_projection_node
+      allowed_for:
+        - preview_state
+
+    layout.state.blocked:
+      class_name: topolactor-topology-layout-state-blocked
+      category: state
+      projection_scope:
+        - topology_layout_preview
+      semantic_role: blocked_projection_node
+      allowed_for:
+        - preview_state
+
+  generated_artifacts:
+    - frontend/runtime/topologyLayoutClassDictionary.ts
+
+  concrete_css:
+    canonical_runtime_file: frontend/styles/topology-layout.css
+
+  ci_check_contract:
+    intended_script: .agent/tests/check-topology-layout-class-ssot.sh
+    required_checks:
+      - topology_layout_class_ssot_file_exists
+      - concrete_css_file_exists
+      - class_keys_are_unique
+      - class_names_are_unique
+      - class_keys_match_rule
+      - class_names_match_prefix_rule
+      - every_ssot_class_exists_in_concrete_css
+      - no_unknown_topolactor_topology_class_in_frontend
+      - topologyLayoutClassDictionary_projection_matches_ssot

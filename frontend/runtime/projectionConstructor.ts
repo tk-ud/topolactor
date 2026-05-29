@@ -51,6 +51,7 @@ type RuntimeTopologyComponentProps = JsonObject & {
     style?: string;
     cssTokenRefs?: string[];
     responsiveTokenRefs?: Record<string, string[]>;
+    topologyLayoutClassRefs?: string[];
   };
   designTailwind?: {
     tailwind?: string;

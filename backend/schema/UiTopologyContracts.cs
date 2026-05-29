@@ -127,3 +127,15 @@ public record PromotedPaletteEntryDto(
     [property: JsonPropertyName("tensorId")] string TensorId,
     [property: JsonPropertyName("routeKey")] string RouteKey
 );
+
+/// <summary>
+/// Distinct layout/route projection for admin UI selectors.
+/// Source: ui_topology_tensor JOIN ui_layout_registry (DB projection only).
+/// </summary>
+public record LayoutCandidateDto(
+    [property: JsonPropertyName("layoutId")] string LayoutId,
+    [property: JsonPropertyName("layoutKey")] string LayoutKey,
+    [property: JsonPropertyName("routeKey")] string RouteKey,
+    [property: JsonPropertyName("layoutKind")] string LayoutKind,
+    [property: JsonPropertyName("slotKeys")] IReadOnlyList<string> SlotKeys
+);

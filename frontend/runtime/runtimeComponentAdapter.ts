@@ -4,6 +4,7 @@ import {
   ensureRuntimeComponentRegistryInitialized,
   hasRuntimeComponentFactory,
 } from "./runtimeComponentRegistry.ts";
+import { resolveTopologyLayoutClassRefs } from "./topologyLayoutClassResolver.ts";
 
 type NormalizedDesign = {
   classname?: string;
@@ -11,6 +12,7 @@ type NormalizedDesign = {
   tailwind?: string;
   style?: string;
   state?: "default" | "loading" | "success" | "error";
+  topologyLayoutClassRefs?: string[];
 };
 
 export type RuntimeComponentSpec = {
@@ -30,6 +32,16 @@ type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {
   error: string;
 };
 
+function extractTopologyLayoutClassRefs(
+  value: unknown,
+): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const refs = value.filter((x): x is string =>
+    typeof x === "string" && x.trim().length > 0
+  );
+  return refs.length > 0 ? refs : undefined;
+}
+
 function normalizeDesign(
   value: unknown,
 ): { ok: true; value: NormalizedDesign; className?: string } | {
@@ -41,6 +53,9 @@ function normalizeDesign(
     return { ok: false, error: "RUNTIME_COMPONENT_ADAPTER_INVALID_DESIGN" };
   }
   const raw = value as Record<string, unknown>;
+  const topologyLayoutClassRefs = extractTopologyLayoutClassRefs(
+    raw.topologyLayoutClassRefs,
+  );
   const classname = typeof raw.classname === "string"
     ? raw.classname.trim()
     : undefined;
@@ -62,6 +77,19 @@ function normalizeDesign(
       error: "RUNTIME_COMPONENT_ADAPTER_INVALID_DESIGN_STATE",
     };
   }
+
+  if (topologyLayoutClassRefs) {
+    const resolved = resolveTopologyLayoutClassRefs(topologyLayoutClassRefs);
+    if (!resolved.ok) {
+      return { ok: false, error: resolved.error };
+    }
+    return {
+      ok: true,
+      value: { topologyLayoutClassRefs, style, state },
+      className: resolved.className,
+    };
+  }
+
   const merged = [classname, className, tailwind].filter((v): v is string =>
     Boolean(v && v.length > 0)
   ).join(" ").trim();
@@ -117,7 +145,16 @@ export function adaptComponentDataHub(hub: ComponentDataHub): AdaptResult {
   const normalizedDesign = normalizeDesign(hub.design);
   if (!normalizedDesign.ok) return normalizedDesign;
   const design = normalizedDesign.value;
-  const className = normalizedDesign.className;
+  let className = normalizedDesign.className;
+
+  const props = hub.props as RuntimeTopologyComponentProps;
+  const layoutCssRefs = props.layoutCss?.topologyLayoutClassRefs;
+  if (layoutCssRefs?.length) {
+    const resolved = resolveTopologyLayoutClassRefs(layoutCssRefs);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    className = resolved.className;
+  }
+
   return {
     ok: true,
     value: {

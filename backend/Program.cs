@@ -44,6 +44,10 @@ builder.Services.AddSingleton<ManifestRepository>(sp =>
     new NpgsqlManifestRepository(
         sp.GetRequiredService<ILogger<NpgsqlManifestRepository>>(),
         connectionString));
+builder.Services.AddSingleton<ContentBundleRepository>(sp =>
+    new NpgsqlContentBundleRepository(
+        sp.GetRequiredService<ILogger<NpgsqlContentBundleRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<DbNotifyRepository>(sp =>
     new NpgsqlDbNotifyRepository(
         sp.GetRequiredService<ILogger<NpgsqlDbNotifyRepository>>(),
@@ -91,7 +95,10 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<SeedRuntime>(),
         sp.GetRequiredService<CiAttentionGuidanceRepository>(),
         sp.GetRequiredService<SseEventBroadcaster>(),
-        sp.GetRequiredService<AdminImportRuntime>()));
+        sp.GetRequiredService<AdminImportRuntime>(),
+        sp.GetRequiredService<ManifestRepository>(),
+        sp.GetRequiredService<ContentBundleRepository>(),
+        sp.GetRequiredService<TopologyRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(

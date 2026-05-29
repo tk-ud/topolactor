@@ -1,59 +1,41 @@
 import ReplyPanel from "../islands/ReplyPanel.tsx";
 
 /**
- * Demo article page.
- *
- * Demonstrates two auth guard patterns:
- * 1. Full-page auth guard: /auth redirects the entire page for authenticated-only routes
- * 2. Component-level auth guard: article body is public; reply panel (ReplyPanel island)
- *    shows "login to reply" for unauthenticated users and the reply form for authenticated users.
- *
- * Auth state is determined by demo_jwt_token presence in sessionStorage (island-side).
+ * デモ記事ページ — コンポーネント認証ガードのデモ。
  */
 export default function DemoArticle() {
   return (
-    <main style={{ fontFamily: "serif", maxWidth: "720px", margin: "0 auto", padding: "2rem" }}>
-      <nav style={{ fontFamily: "monospace", marginBottom: "1.5rem" }}>
-        <a href="/">&larr; top</a>
+    <main class="page-main max-w-2xl font-serif">
+      <nav class="mb-6 font-mono text-sm">
+        <a href="/" class="link">&larr; トップ</a>
         {" | "}
-        <a href="/auth">ログイン (/auth)</a>
+        <a href="/auth" class="link">ログイン (/auth)</a>
       </nav>
 
       <article>
-        <h1 style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>
-          demo article — コンポーネント認証ガードのデモ
-        </h1>
-        <p style={{ color: "#666", fontFamily: "monospace", fontSize: "0.85rem", marginBottom: "1.5rem" }}>
-          この記事本文は未認証ユーザーにも表示されます（全面 auth ガードなし）。
-          <br />
-          返信フォームはコンポーネントレベルの auth ガードで制御されています。
+        <h1 class="mb-2 text-3xl font-bold">デモ記事 — コンポーネント認証ガード</h1>
+        <p class="mb-6 font-mono text-sm text-gray-600">
+          記事本文は未認証ユーザーにも表示されます。
+          返信フォームのみコンポーネントレベルの auth ガードで制御されます。
         </p>
 
-        <section style={{ lineHeight: 1.7, marginBottom: "2rem" }}>
-          <p>
-            topolactor は topology ベースのデータドリブン runtime フレームワークです。
-            manifest、registry、schema の三層が連動して、
-            projection と dispatch を制御します。
+        <section class="mb-8 leading-relaxed text-gray-800">
+          <p class="mb-4">
+            topolactor はトポロジーベースのデータドリブン runtime フレームワークです。
+            manifest、registry、schema の三層が連動して projection と dispatch を制御します。
           </p>
-          <p>
-            このデモページは、認証ガードの二つのパターンを示します:
-          </p>
-          <ul>
-            <li>
-              <strong>全面 auth ガード (/auth ページ)</strong>: 認証が必要なページ全体を /auth にリダイレクト
-            </li>
-            <li>
-              <strong>コンポーネント単位 auth ガード (ReplyPanel)</strong>:
-              記事本文は誰でも閲覧可能、返信フォームだけを認証済みユーザーに限定
-            </li>
+          <p class="mb-2">このデモページは認証ガードの二つのパターンを示します:</p>
+          <ul class="list-inside list-disc space-y-1">
+            <li><strong>全面 auth ガード</strong>: 認証が必要なページ全体を /auth にリダイレクト</li>
+            <li><strong>コンポーネント単位 auth ガード (ReplyPanel)</strong>: 本文は公開、返信フォームのみ認証必須</li>
           </ul>
         </section>
 
-        <hr style={{ borderColor: "#eee", marginBottom: "1.5rem" }} />
+        <hr class="mb-6 border-gray-200" />
 
         <section>
-          <h2 style={{ fontFamily: "monospace", fontSize: "1rem" }}>返信</h2>
-          <p style={{ color: "#555", fontSize: "0.9rem", fontFamily: "monospace", marginBottom: "1rem" }}>
+          <h2 class="mb-2 font-mono text-base font-semibold">返信</h2>
+          <p class="mb-4 font-mono text-sm text-gray-600">
             ↓ ReplyPanel island — sessionStorage の demo_jwt_token 有無で認証状態を判定
           </p>
           <ReplyPanel />

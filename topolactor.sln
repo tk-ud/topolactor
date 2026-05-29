@@ -1,0 +1,45 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Topolactor.Host", "backend\Topolactor.Host.csproj", "{08648838-6FD1-006E-04D0-9C747E090A62}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{F57642F3-C37C-D174-720E-6A6AAD5BEE22}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Topolactor.Integration.Tests", "backend\tests\Topolactor.Integration.Tests\Topolactor.Integration.Tests.csproj", "{D0CAD255-3C92-1E0B-E7A9-CB06B470142C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Topolactor.Runtime.Tests", "backend\tests\Topolactor.Runtime.Tests\Topolactor.Runtime.Tests.csproj", "{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{08648838-6FD1-006E-04D0-9C747E090A62}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08648838-6FD1-006E-04D0-9C747E090A62}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08648838-6FD1-006E-04D0-9C747E090A62}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08648838-6FD1-006E-04D0-9C747E090A62}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0CAD255-3C92-1E0B-E7A9-CB06B470142C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0CAD255-3C92-1E0B-E7A9-CB06B470142C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0CAD255-3C92-1E0B-E7A9-CB06B470142C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0CAD255-3C92-1E0B-E7A9-CB06B470142C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F57642F3-C37C-D174-720E-6A6AAD5BEE22} = {1AE8ACA6-933B-BF2A-3671-3E2EAC007D16}
+		{D0CAD255-3C92-1E0B-E7A9-CB06B470142C} = {F57642F3-C37C-D174-720E-6A6AAD5BEE22}
+		{ACA900FA-57D3-F72F-A6B7-7AE3C52F0F5B} = {F57642F3-C37C-D174-720E-6A6AAD5BEE22}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9B5E5539-A468-416E-B3E4-DED9621F00FA}
+	EndGlobalSection
+EndGlobal

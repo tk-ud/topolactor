@@ -152,7 +152,36 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return records;
     }
 
-    
+    public override async Task<IReadOnlyList<LayoutCandidateDto>> ListLayoutCandidatesAsync(
+        CancellationToken ct = default)
+    {
+        var records = new List<LayoutCandidateDto>();
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT l.layout_id, l.layout_key, t.route_key, l.layout_kind, " +
+            "COALESCE(array_agg(DISTINCT t.slot_key) FILTER (WHERE t.slot_key IS NOT NULL AND t.slot_key <> ''), ARRAY[]::text[]) AS slot_keys " +
+            "FROM ui_topology_tensor t " +
+            "JOIN ui_layout_registry l ON l.layout_id = t.layout_id " +
+            "GROUP BY l.layout_id, l.layout_key, t.route_key, l.layout_kind " +
+            "ORDER BY t.route_key, l.layout_key";
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var slotKeys = reader.IsDBNull(4)
+                ? Array.Empty<string>()
+                : reader.GetFieldValue<string[]>(4);
+            records.Add(new LayoutCandidateDto(
+                LayoutId: reader.GetGuid(0).ToString(),
+                LayoutKey: reader.GetString(1),
+                RouteKey: reader.GetString(2),
+                LayoutKind: reader.GetString(3),
+                SlotKeys: slotKeys
+            ));
+        }
+        return records;
+    }
 
     public override async Task<PackageGenerateResult> GenerateFromBucketAsync(
         Guid bucketItemId,
@@ -402,6 +431,75 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return tokens;
     }
 
+    private static readonly Regex TopologyLayoutClassKeyYamlRegex =
+        new(@"^    ([a-z][a-z0-9_.]+):\s*$", RegexOptions.Compiled);
+
+    private static HashSet<string> LoadTopologyLayoutClassVocabulary()
+    {
+        var overridePath = Environment.GetEnvironmentVariable("TOPOLACTOR_TOPOLOGY_LAYOUT_CLASS_SSOT_PATH");
+        string path;
+        if (!string.IsNullOrWhiteSpace(overridePath))
+        {
+            path = Path.GetFullPath(overridePath!);
+        }
+        else
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            path = "";
+            while (dir is not null)
+            {
+                var candidate = Path.Combine(dir.FullName, "docs", "design", "topology-layout-class-ssot.yaml");
+                if (File.Exists(candidate)) { path = candidate; break; }
+                dir = dir.Parent;
+            }
+            if (string.IsNullOrWhiteSpace(path))
+                return [];
+        }
+        if (!File.Exists(path)) return [];
+        var lines = File.ReadAllLines(path);
+        var inClasses = false;
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in lines)
+        {
+            var line = raw.Replace("\r", "");
+            if (line.Trim() == "classes:")
+            {
+                inClasses = true;
+                continue;
+            }
+            if (!inClasses) continue;
+            if (line.StartsWith("  generated_artifacts:") ||
+                line.StartsWith("  concrete_css:") ||
+                line.StartsWith("  ci_check_contract:"))
+            {
+                break;
+            }
+            var m = TopologyLayoutClassKeyYamlRegex.Match(line);
+            if (m.Success) keys.Add(m.Groups[1].Value);
+        }
+        return keys;
+    }
+
+    private static List<string> ExtractLayoutClassRefs(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        var refs = new List<string>();
+        if (!doc.RootElement.TryGetProperty("layoutClassRefs", out var arr) ||
+            arr.ValueKind != JsonValueKind.Array)
+        {
+            return refs;
+        }
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                var value = item.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) refs.Add(value!);
+            }
+        }
+        return refs;
+    }
+
     private static LayoutPatchResult NormalizeLayoutPatch(
         Guid layoutId, string routeKey, string? tensorPatchJson,
         IReadOnlyList<string>? cssTokenRefs,
@@ -456,6 +554,21 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             foreach (var t in refs)
                 if (!vocab.Contains(t))
                     return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"RESPONSIVE_TOKEN_REF_UNKNOWN:{t}" });
+        var layoutClassVocab = LoadTopologyLayoutClassVocabulary();
+        if (layoutClassVocab.Count == 0)
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" });
+        try
+        {
+            foreach (var classRef in ExtractLayoutClassRefs(normalized.TensorPatchJson))
+            {
+                if (!layoutClassVocab.Contains(classRef))
+                    return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"TOPOLOGY_LAYOUT_CLASS_REF_UNKNOWN:{classRef}" });
+            }
+        }
+        catch (JsonException)
+        {
+            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
+        }
         return Task.FromResult(normalized with { Message = "Layout patch validation passed." });
     }
 

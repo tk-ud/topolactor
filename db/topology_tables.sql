@@ -234,3 +234,29 @@ CREATE TABLE IF NOT EXISTS topologys.demo_state_transitions (
 
 CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
     ON topologys.demo_state_transitions (entity_id, created_at DESC);
+
+
+-- ---------------------------------------------------------------------------
+-- content_entity_drafts
+-- Admin registration staging for entity drafts.
+-- Draft rows are NOT visible to runtime browse — promote writes to entities.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topologys.content_entity_drafts (
+    draft_id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    hub_id              UUID        NOT NULL,
+    entity_jsonb        JSONB       NOT NULL DEFAULT '{}',
+    relation_ids        UUID[]      NOT NULL DEFAULT '{}',
+    state_id            UUID,
+    status              TEXT        NOT NULL DEFAULT 'draft'
+                        CHECK (status IN ('draft', 'promoted')),
+    promoted_entity_id  UUID,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE topologys.content_entity_drafts IS
+    'Admin registration staging for entity drafts. Not visible to runtime until promoted to entities.';
+
+CREATE INDEX IF NOT EXISTS idx_content_entity_drafts_status
+    ON topologys.content_entity_drafts (status)
+    WHERE status = 'draft';

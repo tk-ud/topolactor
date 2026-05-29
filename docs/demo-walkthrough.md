@@ -51,7 +51,7 @@ This repository supports three operation routes. Keep them separated to avoid mi
    ```
 
 2. Frontend running: `deno task start` (from repository root)
-3. Open `http://localhost:8000/demo` (runtime dispatch page)
+3. Open `http://localhost:8000/` (runtime scenario launcher) or `http://localhost:8000/demo` (demo-only presets)
 
 > **Note — full stack (Docker Compose):** All five services are defined in
 > `infra/docker-compose.yml`: `postgres`, `adminer`, `backend`, `frontend`, `nginx`.
@@ -107,12 +107,14 @@ To observe the backend canonical flow end-to-end:
 1. **Log in:** Open `/login`, enter demo credentials (seeded by `db/demo_seed.sql`).
    - On success, the JWT token is saved to browser `sessionStorage` under `demo_jwt_token`.
    - A "Go to dispatch panel" link is shown.
-2. **Open `/`** (the dispatch panel). The OperationPanel reads the token from `sessionStorage`
-   and shows "Authenticated." status.
-3. **Submit a dispatch operation** (e.g. target `default`, layer `entity`, action `Search`).
+2. **Open `/`** (runtime scenario launcher) or **`/demo`** (demo topology presets only).
+   OperationPanel reads the token from `sessionStorage` and shows auth status.
+3. **Select a scenario card and run dispatch** (e.g. "Default entity search" on `/`, or
+   "Demo hub overview" on `/demo`). Raw `target`/`layer`/`action` fields are under
+   **Advanced: raw dispatch vector** for developer/debug use only.
    - The panel sends `POST /api/dispatch` with `Authorization: Bearer <token>`.
    - The backend JwtGuard validates the token, RuntimeExecutor runs the canonical flow,
-     and the emission is returned and displayed by EmissionView.
+     and the emission is returned (human-readable summary first; full EmissionView under Debug).
 
 **Routing — two paths depending on how you access the frontend:**
 
@@ -132,9 +134,11 @@ apply when nginx routes the request directly to the backend.
 
 ## What the Demo Shows
 
-The `/demo` route is the **runtime dispatch entrypoint**. It pre-fills the dispatch panel
-with demo defaults (`target=demo`, `layer=hub`, `action=overview`) and dispatches to the
-backend on submit:
+**`/`** is the user-facing **runtime scenario launcher** (default + demo preset cards).
+**`/demo`** is the **demo-topology-focused** dispatch page (demo presets only; same
+`OperationPanel` island, `POST /api/dispatch` canonical route).
+
+Example demo flow (`demo:hub:overview` via the "Demo hub overview" preset):
 
 ```
 login → POST /api/dispatch (JWT) → backend RuntimeExecutor
@@ -244,19 +248,11 @@ Each scenario shows how a single Registry or policy change propagates through th
 single matching prefix is enough to return a recommendation.
 
 1. **Log in** at `/login` with demo credentials.
-2. **Open `/demo`** (runtime dispatch page — pre-filled with target=demo, layer=hub, action=overview).
-   Alternatively use the dispatch panel at `/`.
-3. **Expand "Context fields (optional)"** in the operation form.
-4. Enter the demo session ID in *Context Session ID*:
-   ```
-   00000000-0000-0000-0000-000000000031
-   ```
-5. Enter the demo token ID in *Context Token IDs* (comma-separated):
-   ```
-   00000000-0000-0000-0000-000000000021
-   ```
-6. Submit.
-7. The emission's `context_route_recommendation` section shows:
+2. **Open `/demo`** (or `/` and choose **Demo hub + recommendation context**).
+3. Select the **Demo hub + recommendation context** preset (seed session/token applied automatically).
+   Manual UUID entry is only under **Advanced: context session / token IDs**.
+4. Run dispatch.
+5. The emission summary and Debug details show `context_route_recommendation`:
    - `status: "ok"`
    - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
 
@@ -276,9 +272,9 @@ at candidate read time, prefix_index=1's `last_event_id` has no successor, so it
 and does not vote. The append runs on every path — including cold-start — so that history grows across
 subsequent dispatches and the session eventually reaches `Ok` status.
 
-> **Cold start (no context fields):** Without a `ContextSessionId`, the resolver returns
-> `InsufficientHistory — NO_SESSION_ID`. This is expected when submitting from `/demo` without
-> filling in the context fields — it is a real backend response, not a static placeholder.
+> **Cold start (no context):** Running **Demo hub overview** without the recommendation preset
+> (no `ContextSessionId`) returns `InsufficientHistory — NO_SESSION_ID`. This is a real backend
+> response, not a static placeholder. Use **Demo hub + recommendation context** for Scenario E.
 
 ### Scenario D — structure_map or componentRegistry change → /demo-static projection changes
 
@@ -309,7 +305,9 @@ subsequent dispatches and the session eventually reaches `Ok` status.
 | File | Role in demo |
 |---|---|
 | `db/demo_seed.sql` | Source of all demo topology data (backend/DB scenarios A–C, E) |
-| `frontend/routes/demo.tsx` | Runtime dispatch entrypoint — backend emission via OperationPanel |
+| `frontend/routes/index.tsx` | User-facing runtime scenario launcher (`/`) |
+| `frontend/routes/demo.tsx` | Demo-topology runtime dispatch (`/demo`) — demo presets via OperationPanel |
+| `frontend/runtime/operationPresets.ts` | Preset definitions for OperationPanel (SSOT-aligned attractor keys) |
 | `frontend/routes/demo-static.tsx` | Static structure diagram — frontend-only pipeline, no backend call (Scenario D) |
 | `frontend/structure_map.ts` | `defaultStructureMap` — change entries to change `/demo-static` resolution (Scenario D) |
 | `frontend/registry/componentRegistry.ts` | `defaultComponentRegistry` — change entries to change `/demo-static` ComponentSpecs (Scenario D) |

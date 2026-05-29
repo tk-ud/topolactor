@@ -224,6 +224,26 @@ css-dictionary-ssot.yaml
 - DB persistence stores token refs (`cssTokenRefs` / `responsiveTokenRefs`) preferentially over raw CSS strings.
 - Raw CSS is legacy-only and requires explicit reason (`legacy_allowed` / `no_dictionary_token_exists_yet` / `follow_up_token_addition`).
 
+## 5.6 Topology layout class selector flow
+
+Topology layout projection class vocabulary is separate from CSS property/value tokens and separate from admin UI chrome styling.
+
+```text
+topology-layout-class-ssot.yaml
+→ UI selector candidates (class_key/projection_scope/allowed_for/semantic_role)
+→ local draft (layoutClassRefs / topologyLayoutClassRefs)
+→ preview (resolver → concrete className for current environment)
+→ validate
+→ explicit apply
+→ DB layout promoted state
+```
+
+- Topology layout class authority is `docs/design/topology-layout-class-ssot.yaml`.
+- Concrete CSS for the current frontend environment lives in `frontend/styles/topology-layout.css` (prefix `topolactor-topology-`).
+- CSS dictionary (`css-dictionary-ssot.yaml`) remains property/value token vocabulary only.
+- Frontend projects selector candidates only; unknown class refs must fail explicitly (no silent fallback to raw className/Tailwind).
+- Raw `className` / `tailwind` / inline `style` in design payloads are legacy-only for topology layout paths.
+
 ## 6. Validation Model
 
 The following validation classes apply during the validate-refs stage:

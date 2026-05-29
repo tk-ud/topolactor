@@ -1142,6 +1142,44 @@ internal sealed class StubManifestRepository : ManifestRepository
 
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult(_manifest?.ManifestId == manifestId ? _manifest : null);
+
+    public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyList(statusFilter, ct);
+
+    public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NullDetail(manifestId, ct);
+
+    public override Task<int> CountActiveAxisConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroConflicts(role, target, layer, action, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+        Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+        Guid manifestId, Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+        Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+        Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyPromotionList(statusFilter, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId, JsonElement promotionEntry, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
 }
 
 internal sealed class AmbiguousStubManifestRepository : ManifestRepository
@@ -1155,6 +1193,44 @@ internal sealed class AmbiguousStubManifestRepository : ManifestRepository
 
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult<ManifestRecord?>(null);
+
+    public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyList(statusFilter, ct);
+
+    public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NullDetail(manifestId, ct);
+
+    public override Task<int> CountActiveAxisConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroConflicts(role, target, layer, action, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+        Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+        Guid manifestId, Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+        Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+        Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyPromotionList(statusFilter, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId, JsonElement promotionEntry, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
 }
 
 internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
@@ -1184,6 +1260,44 @@ internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
 
     public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult<ManifestRecord?>(null);
+
+    public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyList(statusFilter, ct);
+
+    public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NullDetail(manifestId, ct);
+
+    public override Task<int> CountActiveAxisConflictsAsync(
+        string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroConflicts(role, target, layer, action, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+        Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+        Guid manifestId, Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+        Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+        Guid manifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+    public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.EmptyPromotionList(statusFilter, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId, JsonElement promotionEntry, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+    public override Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
 }
 
 
@@ -1196,6 +1310,44 @@ internal sealed class RoleFilteredManifestRepository(string expectedRole, Manife
 
         public override Task<ManifestRecord?> LoadByIdAsync(Guid manifestId, CancellationToken ct = default)
             => Task.FromResult<ManifestRecord?>(manifest.ManifestId == manifestId ? manifest : null);
+
+        public override Task<IReadOnlyList<ManifestListItem>> ListManifestsAsync(string? statusFilter, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.EmptyList(statusFilter, ct);
+
+        public override Task<ManifestDetailRecord?> LoadDetailByIdAsync(Guid manifestId, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NullDetail(manifestId, ct);
+
+        public override Task<int> CountActiveAxisConflictsAsync(
+            string role, string target, string layer, string action, Guid? excludeManifestId, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.ZeroConflicts(role, target, layer, action, excludeManifestId, ct);
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> CreateDraftAsync(
+            Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdateDraftAsync(
+            Guid manifestId, Guid? relationRegistryId, IReadOnlyList<JsonElement> topology, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> PromoteAsync(
+            Guid manifestId, IReadOnlySet<string> allowedRuntimeDestinations, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
+            Guid manifestId, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedLifecycle();
+
+        public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+            string? statusFilter, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.EmptyPromotionList(statusFilter, ct);
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+            Guid manifestId, System.Text.Json.JsonElement promotionEntry, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedDraft();
+
+        public override Task<int> CountActivePromotionKeyConflictsAsync(
+            string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
     }
 
 internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository

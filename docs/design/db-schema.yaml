@@ -334,6 +334,33 @@ db_schema:
         - name: relation_registry_id
           type: uuid
 
+    content_entity_drafts:
+      category: topology_definition
+      file: db/topology_tables.sql
+      role: admin_entity_registration_staging
+      notes:
+        - draft rows are not visible to runtime browse
+        - promote writes to topologys.entities
+      key_columns:
+        - name: draft_id
+          type: uuid
+          role: pk
+        - name: hub_id
+          type: uuid
+          role: fk_hubs
+        - name: entity_jsonb
+          type: jsonb
+        - name: relation_ids
+          type: uuid[]
+        - name: state_id
+          type: uuid
+        - name: status
+          type: text
+          role: draft_or_promoted
+        - name: promoted_entity_id
+          type: uuid
+          role: fk_entities_nullable
+
     topology_edit_log:
       category: converged_entity
       file: db/topology_tables.sql

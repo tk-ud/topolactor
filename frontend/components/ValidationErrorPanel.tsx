@@ -26,25 +26,25 @@ export function ValidationErrorPanel({
   design,
 }: ValidationErrorPanelProps): JSX.Element | null {
   if (errors.length === 0) return null;
-  const mergedClassName = mergeDesignClassName(className, design);
-  const mergedStyle = mergeDesignStyle(
-    "border:1px solid #f5c6c4;border-radius:6px;padding:12px;background:#fce8e6;font-family:monospace",
+  const mergedClassName = mergeDesignClassName(
+    "alert-error font-mono",
     design,
-  );
+  ) ?? "alert-error font-mono";
+  const mergedStyle = mergeDesignStyle("", design);
   return (
-    <div role="alert" className={mergedClassName} style={mergedStyle}>
+    <div role="alert" className={mergedClassName} style={mergedStyle || undefined}>
       {title && (
-        <div style="font-weight:600;color:#c5221f;margin-bottom:6px;font-size:0.9rem">
+        <div class="mb-1.5 text-sm font-semibold text-red-800">
           {title}
         </div>
       )}
-      <ul style="margin:0;padding:0 0 0 16px">
+      <ul class="m-0 list-inside list-disc pl-0">
         {errors.map((e, i) => (
           <li
             key={e.code ?? String(i)}
-            style="color:#c5221f;font-size:0.875rem;margin-bottom:2px"
+            class="mb-0.5 text-sm text-red-700"
           >
-            {e.field && <span style="font-weight:600">{e.field}: </span>}
+            {e.field && <span class="font-semibold">{e.field}: </span>}
             {e.message}
           </li>
         ))}
