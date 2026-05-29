@@ -384,7 +384,9 @@ RETURNS TABLE (
     previous_norm_level TEXT,
     norm_level TEXT,
     change_detected BOOLEAN,
-    change_reason TEXT
+    change_reason TEXT,
+    l2_norm DOUBLE PRECISION,
+    basis_vector_json JSONB
 )
 LANGUAGE plpgsql
 AS $$
@@ -436,11 +438,11 @@ BEGIN
         COUNT(DISTINCT d.record_id)::BIGINT AS recordcount_total
       FROM logs.diff d
       JOIN (
-        SELECT source_set_id, basis_window, physical_table_id, operation_kind, COUNT(*) AS op_count
-          FROM logs.diff
-         WHERE source_set_id = p_source_set_id
-           AND basis_window = p_basis_window
-         GROUP BY source_set_id, basis_window, physical_table_id, operation_kind
+        SELECT d2.source_set_id, d2.basis_window, d2.physical_table_id, d2.operation_kind, COUNT(*) AS op_count
+          FROM logs.diff d2
+         WHERE d2.source_set_id = p_source_set_id
+           AND d2.basis_window = p_basis_window
+         GROUP BY d2.source_set_id, d2.basis_window, d2.physical_table_id, d2.operation_kind
       ) op ON op.source_set_id = d.source_set_id
           AND op.basis_window = d.basis_window
           AND op.physical_table_id = d.physical_table_id
@@ -460,7 +462,7 @@ BEGIN
         sqrt(power(a.count_total::DOUBLE PRECISION, 2.0) + power(a.recordcount_total::DOUBLE PRECISION, 2.0)) AS l2_norm,
         true, now(), now()
     FROM aggregated a
-    ON CONFLICT (source_set_id, basis_window, physical_table_id)
+    ON CONFLICT ON CONSTRAINT uq_logs_current_source_table
     DO UPDATE SET
         physical_table_name = EXCLUDED.physical_table_name,
         basis_vector_json = EXCLUDED.basis_vector_json,
@@ -538,11 +540,13 @@ BEGIN
              updated_at = now()
       FROM tmp_logs_current_watch_reasons r
       WHERE c.current_id = r.current_id
-      RETURNING c.current_id, c.physical_table_id, c.norm_rank, c.previous_norm_level, c.norm_level
+      RETURNING c.current_id, c.physical_table_id, c.norm_rank, c.previous_norm_level, c.norm_level,
+                c.l2_norm, c.basis_vector_json
     )
     SELECT ap.current_id, ap.physical_table_id, ap.norm_rank, ap.previous_norm_level, ap.norm_level,
            true AS change_detected,
-           rs.reason AS change_reason
+           rs.reason AS change_reason,
+           ap.l2_norm, ap.basis_vector_json
       FROM applied ap
       JOIN tmp_logs_current_watch_reasons rs ON rs.current_id = ap.current_id
      WHERE rs.reason IS NOT NULL

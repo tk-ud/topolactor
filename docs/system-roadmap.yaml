@@ -276,12 +276,12 @@ system_roadmap_ssot:
         execution alone). Topology/context-route recommendation remains a child projection
         and consumer surface, not the SQL Attention parent observation body.
       blocking_gaps:
-        - SQLA-1 logs.current refresh/watch production hardening or live verification remains
-        - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
-        - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
-        - SQLA-7 logs.diff append boundary is implemented, but live DB/runtime verification and broader hardening coverage remain
+        - SQLA-E2E live DB end-to-end evidence (SqlAttentionLiveDbEndToEndTests) added;
+          production_ready promotion requires CI confirmation of live DB E2E evidence.
+      test_bundle_refs:
+        sql_attention_observation_runtime:
+          - sql_attention_live_db_end_to_end_loop
+          - sql_attention_observation_runtime_production_ready
 
   implementation_registry:
     backend.sql_attention_logs_diff:
@@ -313,21 +313,24 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_logs_current:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        logs.current refresh and l2 norm watch function exists and is read through
-        NpgsqlSqlAttentionLogsRepository.LoadWatchCandidatesAsync. Live DB/runtime
-        hardening and end-to-end verification remain before production-ready promotion.
+        logs.current refresh and l2 norm watch function is implemented and read through
+        NpgsqlSqlAttentionLogsRepository.LoadWatchCandidatesAsync. Live DB end-to-end
+        loop is proven by SqlAttentionLiveDbEndToEndTests. Production_ready promotion
+        pending CI confirmation of live DB E2E evidence.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
       evidence:
         tests:
           - SqlAttentionLogsFunctionContractTests
+          - SqlAttentionLiveDbEndToEndTests
         ci:
           - backend-tests
           - Structure Check
@@ -336,42 +339,65 @@ system_roadmap_ssot:
         - repository_load_watch_candidates_calls_refresh_logs_current_watch
         - logs_current_upsert_computes_l2_norm_and_returns_change_candidates
       known_gap_ref:
-        - SQLA-1 logs.current refresh/watch production hardening or live verification remains
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_hub_current:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.hub_current refresh now rebuilds attractor_vector_json/population/axis/phase projection fields from append-only logs.attention evidence; live DB runtime verification remains.
+      public_summary: >
+        logs.hub_current refresh rebuilds attractor_vector_json/population/axis/phase projection
+        fields from append-only logs.attention evidence. Live DB loop proven by
+        SqlAttentionLiveDbEndToEndTests (population_count updated after refresh_hub_current).
+        Production_ready promotion pending CI confirmation of live DB E2E evidence.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      evidence:
+        tests:
+          - SqlAttentionLiveDbEndToEndTests
+        ci:
+          - backend-tests
+          - Structure Check
       known_gap_ref:
-        - SQLA-2 logs.hub_current attractor current lane is incomplete (hardening/live verification remains)
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_scheduler_exploration:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: scheduler/runtime hub-attractor exploration lane writes phase/evidence/statistics at the logs.attention append boundary; EMA and live DB runtime verification remain.
+      public_summary: >
+        Scheduler/runtime hub-attractor exploration lane is implemented end-to-end:
+        SqlAttentionScheduler registered as hosted service, watch candidates loaded from
+        logs.refresh_logs_current_watch, hub candidates from logs.hub_current,
+        HubAttractorExplorationRuntime.ExploreAsync runs bounded exploration,
+        WriteLogsAttentionAsync appends phase/evidence/statistics to logs.attention.
+        EmaScore remains null by explicit boundary. Live DB loop proven by
+        SqlAttentionLiveDbEndToEndTests. Production_ready promotion pending CI confirmation.
       known_gap_ref:
-        - SQLA-3 scheduler runtime hub-attractor exploration completion criteria not yet satisfied
-        - SQLA-4 logs.attention basic evidence persistence is implemented; remaining hardening/live verification for hub_current/phase/statistics/scoring is incomplete
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
+        - EMA score integration not implemented; scheduler writes null with explicit provenance status
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/runtime/HubAttractorExplorationRuntime.cs
         - backend/scheduler/SqlAttentionScheduler.cs
         - backend/Program.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      evidence:
+        tests:
+          - SqlAttentionLiveDbEndToEndTests
+        ci:
+          - backend-tests
+          - Structure Check
       completion_condition:
         - scheduler is wired as hosted service in production runtime
         - watch candidates are loaded from logs.refresh_logs_current_watch
@@ -393,13 +419,17 @@ system_roadmap_ssot:
         logs.hub_current refresh rebuild now populates attractor_vector_json from append-only
         logs.attention.vector_json evidence within source_set_id/basis_window scope.
         EmaScore remains null (not implemented) by explicit boundary.
+        Live DB loop proven end-to-end by SqlAttentionLiveDbEndToEndTests.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
         - backend/scheduler/SqlAttentionScheduler.cs
         - backend/runtime/HubAttractorExplorationRuntime.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
       evidence:
+        tests:
+          - SqlAttentionLiveDbEndToEndTests
         ci:
           - backend-tests
           - runtime-semantics
@@ -409,36 +439,67 @@ system_roadmap_ssot:
         - logs_attention_persists_production_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
       known_gap_ref:
-        - SQLA-3 hub_current refresh/scoring/live verification hardening remains partial for production-ready promotion
-        - EMA score integration is not implemented; scheduler writes null with explicit provenance status
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
+        - EMA score integration not implemented; scheduler writes null with explicit provenance status
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_phase_vector:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
-      public_summary: phase_vector helper/runtime semantics are aligned on w/x/y/z/i/j/k boundaries and non-mutation guarantees; live DB end-to-end verification remains.
+      public_summary: >
+        phase_vector semantics are implemented with w/x/y/z/i/j/k boundaries and non-mutation
+        guarantees. logs.generate_attention_phase_vector SQL function and
+        HubAttractorExplorationRuntime.BuildPhaseVectorJson generate phase_vector_json
+        with phase_movement_source='not_manifest_or_policy_cap' and
+        no_automatic_topology_mutation=true per SSOT invariant. Live DB loop proven by
+        SqlAttentionLiveDbEndToEndTests (phase_vector_json w/x/y/z/i/j/k verified from DB).
+        Production_ready promotion pending CI confirmation.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      evidence:
+        tests:
+          - SqlAttentionLogsFunctionContractTests
+          - SqlAttentionLiveDbEndToEndTests
+        ci:
+          - backend-tests
+          - Structure Check
       known_gap_ref:
-        - SQLA-5 phase_vector auxiliary evidence transform is incomplete (hardening/verification remains)
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_observation_runtime:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        Infrastructure observation runtime is partially implemented across
-        logs.diff append, logs.current watch, logs.hub_current cache, and logs.attention evidence write.
+        SQL Attention observation runtime is implemented across all boundaries:
+        logs.diff append, logs.current refresh/watch, logs.hub_current candidate cache,
+        HubAttractorExplorationRuntime bounded exploration, logs.attention append-only evidence write,
+        logs.refresh_hub_current projection refresh, and LoadAttentionEvidenceForProjectionAsync
+        read boundary. Live DB closed loop proven end-to-end by SqlAttentionLiveDbEndToEndTests.
         This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
+        Production_ready promotion pending CI confirmation of live DB E2E evidence.
+      files:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
+      evidence:
+        tests:
+          - SqlAttentionLiveDbEndToEndTests
+          - SqlAttentionLogsFunctionContractTests
+        ci:
+          - backend-tests
+          - Structure Check
+      known_gap_ref:
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
 
@@ -453,13 +514,14 @@ system_roadmap_ssot:
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
-        Remaining: live DB end-to-end verification and SQLA-1..5
-        parent observation hardening are not yet complete for production_ready promotion.
-        Production function_parameters seed for sql_attention_topology_projection is now present in seed_empty.sql.
+        Parent observation runtime (SQLA-1..5) implementation boundaries are now all implemented;
+        live DB E2E evidence proven by SqlAttentionLiveDbEndToEndTests.
+        Production function_parameters seed for sql_attention_topology_projection is present in seed_empty.sql.
+        Production_ready promotion pending CI confirmation of live DB E2E evidence.
       completion_condition:
         - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
       known_gap_ref:
-        - SQLA-1..5 parent observation hardening/live verification remain (separate registry entries)
+        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
 
     product.dynamic_support_nocode_loop:
       status: partial

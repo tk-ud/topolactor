@@ -310,3 +310,73 @@ bundles:
       - runtime DB binding completion
       - projection pipeline correctness (classification consistency check only)
       - component behavioral semantics at runtime (renderer boundary not covered here)
+
+  - bundle_id: sql_attention_live_db_end_to_end_loop
+    roadmap_bundle_refs:
+      - sql_attention_observation_runtime
+    ssot_refs:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
+      - backend/runtime/HubAttractorExplorationRuntime.cs
+      - backend/scheduler/SqlAttentionScheduler.cs
+      - db/sql_attention_logs_tables.sql
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+        cases:
+          - "ClosedLoop_DiffAppend_Watch_Explore_WriteAttention_RefreshHubCurrent_ProjectionRead"
+    proves:
+      - logs.diff append is persisted to the physical table
+      - logs.refresh_logs_current_watch returns change candidates with ChangeDetected=true after diff insert
+      - HubAttractorExplorationRuntime.ExploreAsync produces hits from hub_current candidates
+      - NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync persists evidence rows to logs.attention
+      - logs.attention archive_policy is 'required' on all persisted rows (append-only boundary)
+      - phase_vector_json carries w/x/y/z/i/j/k structure with not_manifest_or_policy_cap boundary
+      - meaning_boundary.no_automatic_topology_mutation=true in phase_vector_json per SSOT invariant
+      - logs.refresh_hub_current updates hub_current.population_count from 0 to > 0 (evidence aggregated)
+      - LoadAttentionEvidenceForProjectionAsync returns evidence with StatisticsJson/VectorJson/PhaseVectorJson/EvidenceJson preserved
+      - evidence layer separation (statistics/attention/phase_attention) is maintained through the full loop
+    does_not_prove:
+      - EMA score integration (EmaScore is null by explicit boundary; not a gap)
+      - production scheduler cron timing (cron delay is 60s by default; not tested here)
+      - topology/registry mutation absence at DB level (structural boundary enforced by repository SQL targeting only logs.*)
+      - SSE projection pipeline (separate M4 boundary)
+      - multi-tenant or multi-source-set isolation beyond the single test sourceSetId
+
+  - bundle_id: sql_attention_observation_runtime_production_ready
+    roadmap_bundle_refs:
+      - sql_attention_observation_runtime
+      - sql_attention_live_db_end_to_end_loop
+    ssot_refs:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
+    test_files:
+      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
+    test_cases:
+      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+        cases:
+          - "ClosedLoop_DiffAppend_Watch_Explore_WriteAttention_RefreshHubCurrent_ProjectionRead"
+      - file: backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
+        cases:
+          - "RefreshFunction_IncludesTopNMembershipOrderLevelAndDeltaWatch"
+          - "RefreshFunction_ComputesL2NormAndDoesNotWriteAttentionOrPhaseOrExploration"
+          - "PolicyResolver_FailCloses_WhenPolicyMissingOrIncomplete"
+          - "RefreshFunction_UsesSsotPhysicalIdentityColumns_AndNoSiblingDoubleWriteCte"
+          - "RefreshHubCurrent_UpdatesProjectionBoundaries_AndAvoidsMutation"
+          - "GenerateAttentionPhaseVector_ContainsWxyzIjkAndNoPolicyCapMovement"
+    proves:
+      - SQL Attention observation runtime is closed end-to-end with live PostgreSQL
+      - all SSOT boundaries (logs.current / logs.hub_current / logs.attention) are implemented and functional
+      - phase_vector SSOT invariants (w/x/y/z/i/j/k, not_manifest_or_policy_cap) are enforced in persisted data
+      - evidence layer separation (statistics/attention/phase_attention) is maintained through persistence and projection read
+      - append-only constraint on logs.attention is enforced (archive_policy='required')
+      - no topology/registry mutation is introduced by the SQL Attention pipeline
+      - function contract boundaries (refresh_logs_current_watch, refresh_hub_current, generate_attention_phase_vector) are satisfied
+    does_not_prove:
+      - production_ready promotion (requires CI confirmation of live DB E2E evidence run)
+      - EMA score integration (null by explicit boundary; separate implementation task)
+      - SSE projection pipeline (M4 boundary; separate test surface)
+      - multi-instance horizontal scale behavior
