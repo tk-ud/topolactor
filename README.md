@@ -86,6 +86,18 @@ This keeps user-authored apps flexible while preventing hidden routes, silent fa
 - **SSOT-driven development:** Design documents, roadmap state, implementation files, and tests are expected to stay semantically aligned.
 - **CI Attention:** Guides missing inputs, valid candidates, structural violations, and break boundaries so runtime/backend validation does not expand into hidden branching.
 - **SQL Attention:** Uses hub/log/relation/attractor evidence to grow hub construction, hub connection, and projection candidates.
+
+  ```text
+  attention_score = neighbor_score * ||current_basis||_2
+  ```
+
+  Phase Attention preserves auxiliary evidence in a quaternion-like phase vector:
+
+  ```text
+  q_phase = w + x*i + y*j + z*k
+  ```
+
+  `w` is the current L2 norm, `x/y/z` are hub-side population bases, and `i/j/k` are axis movement amounts.
 - **Scope note (CI Attention):** CI Attention is input guidance and boundary guidance; canonical dispatch / explicit failure remain runtime/backend responsibilities.
 - **Scope note (SQL Attention):** Topology recommendation current is a child projection consumer, not SQL Attention itself, and does not auto-mutate fixed routes or registry/topology definitions.
 - **AI-Driven Development OS:** Agent work is routed through repository-local contracts, prompts, protocols, and checks so changes remain auditable.
