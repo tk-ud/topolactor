@@ -233,8 +233,10 @@ system_roadmap_ssot:
         document_canvas_runtime_connected_factory_registration:
           - document_canvas_runtime_factory_registration
           - document_canvas_catalog_seed_ssot_consistency
+          - document_canvas_projection_constructor_field_validation
         data_binding_to_document_canvas:
           - projection_runtime_component_props_pipeline
+          - document_canvas_projection_constructor_field_validation
       blocking_gaps:
         - jsonb_label_value_manifest runtime not implemented
         - user_defined_aggregation_display_binding_policy not implemented
