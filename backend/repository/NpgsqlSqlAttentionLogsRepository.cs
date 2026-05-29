@@ -29,12 +29,11 @@ public class NpgsqlSqlAttentionLogsRepository : SqlAttentionLogsRepository
         await conn.OpenAsync(ct);
 
         const string watchSql = @"
-SELECT w.current_id, w.physical_table_id, w.norm_rank,
-       w.previous_norm_level, w.norm_level,
-       w.change_detected, w.change_reason,
-       c.l2_norm, c.basis_vector_json::text AS basis_vector_json
-  FROM logs.refresh_logs_current_watch(@p_source_set_id, @p_basis_window) w
-  JOIN logs.current c ON c.current_id = w.current_id";
+SELECT current_id, physical_table_id, norm_rank,
+       previous_norm_level, norm_level,
+       change_detected, change_reason,
+       l2_norm, basis_vector_json::text AS basis_vector_json
+  FROM logs.refresh_logs_current_watch(@p_source_set_id, @p_basis_window)";
         await using var cmd = new NpgsqlCommand(watchSql, conn);
         cmd.Parameters.AddWithValue("p_source_set_id", sourceSetId);
         cmd.Parameters.AddWithValue("p_basis_window", basisWindow);

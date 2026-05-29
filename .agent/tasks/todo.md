@@ -23,7 +23,7 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 ## CI Attention Dynamic Support Nocode Loop (Partial — remaining bundles)
 
-- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 completion bundles は全て closed になったが、`product.sql_attention_recommendation_feedback_ux` の live DB end-to-end verification (SQLA-1..5) が未完のため partial を維持する。
+- [ ] `product.dynamic_support_nocode_loop` completion bundle は `product.sql_attention_recommendation_feedback_ux` の closure と M6 self-hosted admin authoring loop completion を前提とする。M6 completion bundles は全て closed。SQL Attention 実装境界 (SQLA-1..5) はすべて implemented に昇格済みで live DB E2E test (SqlAttentionLiveDbEndToEndTests) が証跡として追加された。`product.sql_attention_recommendation_feedback_ux` は production_ready promotion 待ち (CI confirmation of live DB E2E evidence)。`product.dynamic_support_nocode_loop` 自体は `product.ci_attention_user_guidance_ux` との closure も完了条件に含むため partial を維持する。
 
 ## Self-hosted Admin Authoring M6 (Partial: CSV/JSON import bundle implemented; remaining bundles open)
 

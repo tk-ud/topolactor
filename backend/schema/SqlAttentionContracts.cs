@@ -1,9 +1,9 @@
 namespace Topolactor.Schema;
 
 /// <summary>
-/// Watch change candidate returned by logs.refresh_logs_current_watch JOIN logs.current.
+/// Watch change candidate returned by logs.refresh_logs_current_watch.
 /// Only candidates with ChangeDetected=true are eligible for hub-attractor exploration.
-/// L2Norm and BasisVectorJson are loaded from logs.current at watch time for scoring.
+/// L2Norm and BasisVectorJson are included in the function return set (no separate JOIN needed).
 /// </summary>
 public record WatchChangeCandidate(
     Guid CurrentId,
