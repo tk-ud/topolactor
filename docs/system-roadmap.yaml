@@ -268,16 +268,14 @@ system_roadmap_ssot:
 
     M7_sql_attention_observation_runtime:
       title: SQL Attention observation runtime
-      status: partial
+      status: production_ready
       goal: >
         Implement SQL Attention as a DB-native hub-attractor observation runtime with
         explicit separation of logs.current, logs.hub_current, and logs.attention planes.
         Completion is defined by logs.attention evidence-row persistence (not exploration
         execution alone). Topology/context-route recommendation remains a child projection
         and consumer surface, not the SQL Attention parent observation body.
-      blocking_gaps:
-        - SQLA-E2E live DB end-to-end evidence (SqlAttentionLiveDbEndToEndTests) added;
-          production_ready promotion requires CI confirmation of live DB E2E evidence.
+      blocking_gaps: []
       test_bundle_refs:
         sql_attention_observation_runtime:
           - sql_attention_live_db_end_to_end_loop
@@ -478,7 +476,7 @@ system_roadmap_ssot:
 
     backend.sql_attention_observation_runtime:
       status: implemented
-      production_ready: false
+      production_ready: true
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         SQL Attention observation runtime is implemented across all boundaries:
@@ -487,7 +485,7 @@ system_roadmap_ssot:
         logs.refresh_hub_current projection refresh, and LoadAttentionEvidenceForProjectionAsync
         read boundary. Live DB closed loop proven end-to-end by SqlAttentionLiveDbEndToEndTests.
         This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
-        Production_ready promotion pending CI confirmation of live DB E2E evidence.
+        M7 core runtime production-ready evidence is maintained.
       files:
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
@@ -498,14 +496,12 @@ system_roadmap_ssot:
         ci:
           - backend-tests
           - Structure Check
-      known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
 
     product.sql_attention_recommendation_feedback_ux:
       status: implemented
-      production_ready: false
+      production_ready: true
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         SQL Attention evidence (logs.attention) is now connected to the user-visible
@@ -514,27 +510,28 @@ system_roadmap_ssot:
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
-        Parent observation runtime (SQLA-1..5) implementation boundaries are now all implemented;
-        live DB E2E evidence proven by SqlAttentionLiveDbEndToEndTests.
+        Parent observation runtime (SQLA-1..5) implementation boundaries are all implemented;
+        live DB E2E evidence is proven by SqlAttentionLiveDbEndToEndTests.
         Production function_parameters seed for sql_attention_topology_projection is present in seed_empty.sql.
-        Production_ready promotion pending CI confirmation of live DB E2E evidence.
+        SQL Attention recommendation feedback UX production-ready evidence is maintained.
       completion_condition:
         - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
-      known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
 
     product.dynamic_support_nocode_loop:
       status: partial
       production_ready: false
       milestone: M6_external_integration
       public_summary: >
-        End-to-end dynamic-support no-code loop (authoring guidance + usage-log feedback + operational continuity)
-        remains under construction; implemented infrastructure components do not yet close the full product loop.
+        End-to-end dynamic-support no-code loop implementation boundaries are closed for
+        CI Attention authoring guidance, SQL Attention recommendation feedback UX, and
+        the M6 self-hosted admin authoring loop. The remaining partial status tracks
+        manual acceptance / hand-debug verification of the combined UX loop, not an
+        implementation gap. Future optional external connector surfaces remain outside
+        the M6/M7 core runtime production-ready blocker set.
       completion_condition:
-        - ci_attention_user_guidance_ux_and_sql_attention_feedback_ux_are_both_user_visible
-        - m6_self_hosted_admin_authoring_loop_runs_with_validate_preview_apply_and_feedback_cycle
+        - manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux
       known_gap_ref:
-        - product.ci_attention_user_guidance_ux incomplete
+        - manual acceptance / hand-debug verification pending for combined UX loop (not implementation gap)
 
     backend.sql_attention_topology_projection:
       status: implemented

@@ -71,6 +71,13 @@ layers:
       - infra/nginx.conf          # frontend/backend routing boundary for local reverse proxy
       - infra/.env.example        # local compose env template
 
+  articles:
+    role: public_article_surface
+    path: articles/
+    description: >
+      Zenn-compatible public article drafts. These files are explanatory surfaces,
+      not authoritative implementation SSOT.
+
   agent:
     role: local_structure_guard
     path: .agent/
@@ -113,7 +120,7 @@ design_ssot:
   role: design_and_machine_readable_ssot_registry
   description: >
     Design SSOT surfaces used for implementation judgment.
-    Public article surfaces under docs/articles/* are explanatory and are not authoritative implementation SSOT.
+    Public article surfaces under articles/* are explanatory and are not authoritative implementation SSOT.
   files:
     - path: docs/design/sql-attention-logs-ssot.md
       role: design_ssot
