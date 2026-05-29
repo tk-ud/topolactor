@@ -74,7 +74,7 @@ Most no-code tools prioritize free composition.
 
 topolactor keeps that freedom at the draft layer, then adds an explicit promotion boundary so useful structures can become auditable runtime identities without turning every edit into a system lock.
 
-A component is not “real” just because it exists in frontend code. It becomes real when it is promoted into the topology registry and receives database identities such as `componentId`, `packageId`, `layoutId`, `wiringId`, and `tensorId`.
+A component is not “real” just because it exists in frontend code. It becomes real when it is promoted into the topology registry and receives database identities such as `componentId`, `packageId`, `layoutId`, and `wiringId`.
 
 This keeps user-authored apps flexible while preventing hidden routes, silent fallback, and untracked structure changes.
 
@@ -96,7 +96,7 @@ PostgreSQL / C# / Deno Fresh / Preact
 
 ## Project status
 
-This project is in active development.
+The M6/M7 core runtime is production-ready. Development continues on optional external connectors, broader UX acceptance, and future subsystem expansion.
 
 The repository already contains the core dispatch pipeline, runtime scheduling/dispatch surfaces, admin UI topology registration surfaces, primitive UI/catalog boundaries, abstract runtime function boundaries, SQL Attention research surfaces, and CI governance surfaces.
 
