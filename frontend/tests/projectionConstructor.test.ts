@@ -315,6 +315,26 @@ Deno.test("constructProjection: document_canvas field x non-number is explicit e
   );
 });
 
+Deno.test("constructProjection: document_canvas field y non-number is explicit error", () => {
+  const result = constructProjection(
+    { fields: [{ key: "f1", y: "20px" }] },
+    {
+      constructorKey: "k",
+      packageIds: ["p"],
+      outputKind: "component_projection",
+      componentId: "cmp-canvas-bady",
+      componentDefinition: {
+        componentId: "cmp-canvas-bady",
+        component_kind: "document_canvas/document_canvas_template_editor",
+      },
+    },
+  );
+  assertEquals(
+    result.error,
+    "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_FIELD_Y: fields[0].y must be number",
+  );
+});
+
 Deno.test("constructProjection: document_canvas field value non-string is explicit error", () => {
   const result = constructProjection(
     { fields: [{ key: "f1", value: 42 }] },
