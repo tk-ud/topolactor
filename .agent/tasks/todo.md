@@ -41,9 +41,14 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
         projectionConstructor supports document_canvas/document_canvas_template_editor with explicit field
         coordinate validation; runtimeComponentFactory wires DocumentCanvasTemplateEditor; runtimeConnected:true
         synchronized across catalog/seed/SSOT/test.
-      - data_binding_to_document_canvas (partial: factory/projectionConstructor/field binding wired; full
-        DB/JSONB→canvas binding loop requires jsonb_label_value_manifest_runtime which is not_started)
-      - pdf_export_snapshot_runtime
+        test evidence indexed in .agent/docs/test-bundles.yaml:
+          document_canvas_runtime_factory_registration, document_canvas_catalog_seed_ssot_consistency
+      → data_binding_to_document_canvas: partial.
+        projection_runtime_component_props_pipeline bundle proves props pipeline route wired.
+        Full DB/JSONB→canvas binding loop requires jsonb_label_value_manifest_runtime (not_started).
+        test evidence indexed in .agent/docs/test-bundles.yaml:
+          projection_runtime_component_props_pipeline
+      - pdf_export_snapshot_runtime (not_started)
 
 - [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhook / external REST API connector は future optional external surfaces として扱う。
       → M6 MVP completion condition には含めない。外部API connector contract SSOT 未定義は M6 MVP blocking gap にしない。
