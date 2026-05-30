@@ -137,10 +137,13 @@ CREATE INDEX IF NOT EXISTS idx_topology_manifests_status
 -- Child of hubs.topology_manifests. Manifest-scoped hub sequence / UI transition order.
 -- Source hub is derived through topology_manifest_id -> hubs.topology_manifests.hub_id.
 -- sequence_position is the sequence authority. Not a global hub-to-hub relation graph.
+--
+-- Bootstrap-only: CREATE TABLE IF NOT EXISTS applies on fresh DB only.
+-- Existing DBs with legacy hub_relations (hub_id / target_hub_id / relation_registry_id)
+-- require an explicit data-preserving migration — see .agent/tasks/todo.md
+-- (Hub relations legacy schema migration bundle).
 -- ---------------------------------------------------------------------------
-DROP TABLE IF EXISTS hubs.hub_relations CASCADE;
-
-CREATE TABLE hubs.hub_relations (
+CREATE TABLE IF NOT EXISTS hubs.hub_relations (
     hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     topology_manifest_id  UUID        NOT NULL REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE CASCADE,
     related_hub_id        UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,

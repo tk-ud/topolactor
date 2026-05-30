@@ -102,6 +102,13 @@ query_equals_one() {
   fi
 }
 
+echo "=== Validating topology_tables.sql bootstrap safety ==="
+if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+  fail "db/topology_tables.sql must not contain destructive DROP TABLE ... CASCADE"
+else
+  echo "OK  [sql] topology_tables.sql destructive DROP TABLE CASCADE absent"
+fi
+
 echo "=== Executing schema SQL files ==="
 run_sql_file "db/schema.sql"
 run_sql_file "db/topology_tables.sql"
@@ -163,6 +170,10 @@ query_equals_one "column exists: hubs.hub_relations.related_hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'related_hub_id';"
 query_equals_zero "column absent: hubs.hub_relations.hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'hub_id';"
+query_equals_zero "column absent: hubs.hub_relations.target_hub_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'target_hub_id';"
+query_equals_zero "column absent: hubs.hub_relations.relation_registry_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'relation_registry_id';"
 query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequence_position)" \
   "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
