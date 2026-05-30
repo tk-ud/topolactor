@@ -1443,7 +1443,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Contains("'phase_basis_json'", sql);
 
             var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
-            Assert.Contains("BuildPhaseVectorJson(candidate, hub, scoring.VectorJson)", runtimeCode);
+            Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
+            Assert.Contains("scoring.VectorJson, budgetTier, tierLimits)", runtimeCode);
+            Assert.Contains("exploration_budget_gate", runtimeCode);
             Assert.Contains("string vectorJson", runtimeCode);
         }
         finally
