@@ -40,12 +40,14 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 理由: 単一画面manifest wiring は topology 側、manifest群 grouping は hubs 側。
 - [ ] `hubs.hub_relations` を fixed hub sequence / UI transition order / topology meaning space sequence table として再定義・移行する。
       → 理由: 現 `relation_registry_id` + `weight` は正本ではなく、weight は fixed sequence authority ではない。
-- [ ] SQL Attention target を `hubs.hub` / `hubs.hub_relations` / `logs.current` / `logs.hub_current` / `logs.attention` として維持する。
+- [ ] SQL Attention target を hubs 空間（`hubs.hub` / `hubs.hub_relations` / `hubs.topology_manifests`）と `logs.current` / `logs.hub_current` / `logs.attention` として維持する。
       → 理由: 新規 hub current table は作らず、既存 logs current / hub_current / attention を正本維持する。
 - [ ] Recommend target を `topology.*` / `topology.wiring_physical_to_package` / `topology.components_*` / `context_*` learning surfaces に分離する。
       → 理由: SQL Attention の hubs target と Recommend の topology/context target を混同しない。
-- [ ] Phase Attention の quaternion axis を `w=logs.current l2_norm/physical table heat`、`x=hubs.hub_relations`、`y=hubs.hub`、`z=hubs.topology_manifests` としてSSOT・実装に反映する。
+- [ ] Phase Attention の quaternion axis を `w=logs.current l2_norm/physical table heat`、`x=hubs.hub_relations`、`y=hubs.hub`、`z=hubs.topology_manifests`、`i/j/k=phase movement amount` としてSSOT・実装に反映する。
       → 理由: population_count / recordcount は観測値であり、canonical x/y/z axis ではない。
+- [ ] `w` / `l2_norm` exploration budget gate を実装設計へ反映し、weak=near+narrow topK、mid=normal topK、high=expanded/farther distance band or permutation expansion に分岐する。
+      → 理由: Phase Attention は full-space repeated search ではなく、topN physical heat / topK hub candidates / policy-defined expansion limits で bounded にする。
 - [ ] `context_*` public tables の `topology` schema 配置可否と recommendation 境界を判断する。
       → 理由: public `context_*` は正本配置ではない。
 - [ ] `ui_component_*` public tables と旧 `components` / `design` / `packages` を `topology.components_bucket` / `components_style_design` / `components_layout_design` / `components_package_design` 系へ移行する。

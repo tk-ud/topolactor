@@ -38,9 +38,10 @@ topologys_schema:
 
 ## Target boundaries
 
-SQL Attention target:
+SQL Attention target = hubs space:
 - `hubs.hub`
 - `hubs.hub_relations`
+- `hubs.topology_manifests`
 - `logs.current`
 - `logs.hub_current`
 - `logs.attention`
@@ -61,9 +62,12 @@ Recommend target:
 
 Movement rule:
 - physical_table_id is attended by `w`.
-- `w` strength controls phase movement amount.
+- `w` strength controls exploration budget and phase movement amount.
 - movement direction is based on cosine-neighborhood rate.
-- weak `w` moves toward near neighbors; strong `w` moves toward farther candidates using cosine-neighborhood rate.
+- weak `w` uses near-neighbor search and narrow topK.
+- mid `w` uses normal topK search.
+- high `w` uses expanded / farther candidate search with distance band or permutation expansion.
+- Phase Attention does not perform full-space repeated search; cosine search is bounded by topN physical heat, topK hub candidates, and policy-defined expansion limits.
 
 Boundary:
 - `phase_vector_json` is auxiliary evidence for rotating/exploring `hubs.hub_relations`, `hubs.hub`, and `hubs.topology_manifests`.

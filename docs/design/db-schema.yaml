@@ -48,7 +48,7 @@ db_schema:
       - public_or_unqualified_tables_are_schema_drift_not_canonical
       - topologys_schema_is_naming_drift_and_must_migrate_to_topology
       - physical_spelling_is_canonical
-      - sql_attention_target_hubs_and_logs_current_surfaces
+      - sql_attention_target_hubs_space_and_logs_current_surfaces
       - recommendation_target_topology_and_context_learning_surfaces
 
   postgresql_schema_namespaces:
@@ -200,9 +200,11 @@ db_schema:
         updated_at: timestamptz
 
     sql_attention_targets:
+      target_space: hubs
       targets:
         - hubs.hub
         - hubs.hub_relations
+        - hubs.topology_manifests
         - logs.current
         - logs.hub_current
         - logs.attention
@@ -284,7 +286,7 @@ db_schema:
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
     - hubs_hub_relations_sequence: hubs.hub_relations owns fixed hub order / UI transition order / topology meaning space sequence.
     - logs_current_preserved: logs.current, logs.hub_current, and logs.attention remain canonical SQL Attention current/evidence surfaces.
-    - sql_attention_target: SQL Attention target is hubs.hub, hubs.hub_relations, logs.current, logs.hub_current, and logs.attention.
+    - sql_attention_target: SQL Attention target is hubs space including hubs.hub, hubs.hub_relations, hubs.topology_manifests, logs.current, logs.hub_current, and logs.attention.
     - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
     - topologys_namespace: topologys is migration target to topology, not canonical spelling.
@@ -977,10 +979,18 @@ phase_attention_axis_mapping:
       meaning: phase movement amount / movement vector over hubs space
   movement_rule:
     - physical_table_id_is_attended_by_w
-    - w_strength_controls_phase_movement_amount
+    - w_strength_controls_exploration_budget_and_phase_movement_amount
     - movement_direction_is_based_on_cosine_neighborhood_rate
-    - weak_w_moves_toward_near_neighbors
-    - strong_w_moves_toward_farther_candidates_using_cosine_neighborhood_rate
+    - weak_w_uses_near_neighbor_search_and_narrow_topK
+    - mid_w_uses_normal_topK_search
+    - high_w_uses_expanded_farther_candidate_search_distance_band_or_permutation_expansion
+  exploration_budget_gate:
+    gate: w_l2_norm
+    rule: Phase Attention does not perform full-space repeated search
+    bounded_by:
+      - topN_physical_heat
+      - topK_hub_candidates
+      - policy_defined_expansion_limits
   boundary:
     sql_attention_target: hubs
     phase_attention_role: rotates_and_explores_hubs_space_during_hub_construction
@@ -994,9 +1004,11 @@ phase_attention_axis_mapping:
       - recordcount
 
 sql_attention_target_boundary:
+  target_space: hubs
   target:
     - hubs.hub
     - hubs.hub_relations
+    - hubs.topology_manifests
     - logs.current
     - logs.hub_current
     - logs.attention
