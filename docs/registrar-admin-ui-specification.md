@@ -408,8 +408,10 @@ Authoring uses three canonical schemas: `hubs`, `topology`, and `logs`. Physical
 import registers `topology.physical_tables`. A Manifest Draft creates `hubs.hub` as one
 topology meaning space with JSONB join relation config. `topology.wiring_physical_to_package`
 defines the single-screen manifest wiring, and `hubs.topology_manifests` groups topology
-wiring. `hubs.hub_relations` defines fixed hub/UI transition order. SQL Attention and
-recommendation target `hubs.hub` / `hubs.current`, not public tables.
+wiring. `hubs.hub_relations` defines fixed hub/UI transition order. SQL Attention targets
+`hubs.hub`, `hubs.hub_relations`, `logs.current`, `logs.hub_current`, and `logs.attention`;
+recommendation targets `topology.*`, `topology.wiring_physical_to_package`,
+`topology.components_*`, and `context_*` learning surfaces.
 
 ## 9. Boundary
 

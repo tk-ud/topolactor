@@ -24,12 +24,11 @@ db_schema:
 
   canonical_schema_namespaces:
     hubs:
-      role: topology meaning space, hub manifest grouping, fixed hub sequence, and hub current projection
+      role: topology meaning space, hub manifest grouping, and fixed hub sequence
       canonical_tables:
         hub: hubs.hub
         topology_manifests: hubs.topology_manifests
         hub_relations: hubs.hub_relations
-        current: hubs.current
     topology:
       role: physical table catalog, UI component design/package/layout, and single-screen wiring manifests
       canonical_tables:
@@ -40,17 +39,17 @@ db_schema:
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
     logs:
-      role: diff and attention evidence only
+      role: SQL Attention current, hub current, and attention evidence
       canonical_tables:
-        physical_diff: logs.physical_diff
-        components_diff: logs.components_diff
-        attention_diff: logs.attention_diff
-        hub_diff: logs.hub_diff
+        current: logs.current
+        hub_current: logs.hub_current
+        attention: logs.attention
     namespace_rules:
       - public_or_unqualified_tables_are_schema_drift_not_canonical
       - topologys_schema_is_naming_drift_and_must_migrate_to_topology
       - physical_spelling_is_canonical
-      - sql_attention_cosine_neighborhood_and_recommendation_target_hubs_hub_and_hubs_current
+      - sql_attention_target_hubs_and_logs_current_surfaces
+      - recommendation_target_topology_and_context_learning_surfaces
 
   postgresql_schema_namespaces:
     hubs:
@@ -97,14 +96,12 @@ db_schema:
   current_projection_namespace_contract:
     role: namespace_design_boundary
     intent:
-      hubs_current_namespace: hub_current_aggregate_projection_for_sql_attention_recommendation_cosine_neighborhood
-      logs_namespace: diff_and_attention_evidence_only
+      logs_namespace: SQL Attention physical heat, hub current, and attention evidence
+      recommendation_namespace: topology and context learning surfaces
     canonical_mapping:
-      hubs.current: current aggregate projection for hubs.hub
-      logs.physical_diff: physical table diff evidence
-      logs.components_diff: UI component/design/package diff evidence
-      logs.attention_diff: attention event/evidence diff
-      logs.hub_diff: hub/topology meaning space diff evidence
+      logs.current: physical table heat / physical_table_id excitation strength
+      logs.hub_current: hub current projection for SQL Attention
+      logs.attention: append-only attention evidence and phase_vector_json carrier
 
   manifest_topology_integration_boundary:
     authority:
@@ -139,8 +136,7 @@ db_schema:
       meaning: topology meaning space / pseudo-RDB physical table group / join definition owner
       authority: db
       sql_attention_target: true
-      recommendation_target: true
-      cosine_neighborhood_target: true
+      recommendation_target: false
       expected_shape:
         hub_id: uuid
         status: enum
@@ -203,17 +199,25 @@ db_schema:
         created_at: timestamptz
         updated_at: timestamptz
 
-    hub_current_projection:
-      table: hubs.current
-      current_sources:
-        - logs.hub_current
+    sql_attention_targets:
+      targets:
+        - hubs.hub
+        - hubs.hub_relations
         - logs.current
-      meaning: hub current aggregate projection for SQL Attention / recommendation / cosine neighborhood
-      authority: db
-      not_same_as:
-        - logs.physical_diff
-        - logs.attention_diff
+        - logs.hub_current
+        - logs.attention
+      meaning: SQL Attention rotates/explores hubs space using logs current and attention evidence
+      not_targets:
         - topology registry tables
+        - recommendation learning surfaces
+
+    recommend_targets:
+      targets:
+        - topology.*
+        - topology.wiring_physical_to_package
+        - topology.components_*
+        - context_* learning surfaces
+      meaning: recommendation uses topology and context learning surfaces, not SQL Attention hubs target semantics
 
     topology_ui_design:
       authority_tables:
@@ -234,15 +238,13 @@ db_schema:
         - packages
       meaning: UI component/style/layout/package design authority under topology schema
 
-    logs_diff_evidence:
+    logs_current_attention_evidence:
       authority_tables:
-        - logs.physical_diff
-        - logs.components_diff
-        - logs.attention_diff
-        - logs.hub_diff
-      meaning: diff and attention evidence layer only
+        - logs.current
+        - logs.hub_current
+        - logs.attention
+      meaning: SQL Attention current / hub current / attention evidence surfaces to preserve
       not_same_as:
-        - hubs.current
         - hubs.hub.relation
         - hubs.hub_relations.sequence_index
 
@@ -275,16 +277,15 @@ db_schema:
     - components
     - design
     - packages
-    - logs.current -> hubs.current or logs.physical_diff responsibility split
-    - logs.hub_current -> hubs.current
-    - logs.attention -> logs.attention_diff
+    - logs.current / logs.hub_current / logs.attention remain canonical SQL Attention surfaces
 
   meaning_collision_guardrails:
     - hubs_hub_relation_vs_relation_registry: hubs.hub.relation must be JSONB join config over topology.physical_tables.physical_table_id and must not be relation_registry_id.
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
     - hubs_hub_relations_sequence: hubs.hub_relations owns fixed hub order / UI transition order / topology meaning space sequence.
-    - hubs_current_vs_logs: hubs.current is current aggregate projection; logs.* are diff/evidence only.
-    - sql_attention_target: SQL Attention / cosine neighborhood / recommendation target hubs.hub and hubs.current, not topology registry tables.
+    - logs_current_preserved: logs.current, logs.hub_current, and logs.attention remain canonical SQL Attention current/evidence surfaces.
+    - sql_attention_target: SQL Attention target is hubs.hub, hubs.hub_relations, logs.current, logs.hub_current, and logs.attention.
+    - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
     - topologys_namespace: topologys is migration target to topology, not canonical spelling.
     - manifest_split: unqualified manifest responsibility must split toward topology.wiring_physical_to_package and hubs.topology_manifests.
@@ -961,23 +962,56 @@ db_schema:
           type: text
           role: apply_execution_status
 
+phase_attention_axis_mapping:
+  quaternion_axes:
+    w:
+      meaning: l2_norm / physical table heat / physical_table_id excitation strength from logs.current
+      attended_subject: physical_table_id
+    x:
+      meaning: hubs.hub_relations fixed hub sequence / UI transition axis
+    y:
+      meaning: hubs.hub topology meaning space axis
+    z:
+      meaning: hubs.topology_manifests manifest grouping axis
+    i_j_k:
+      meaning: phase movement amount / movement vector over hubs space
+  movement_rule:
+    - physical_table_id_is_attended_by_w
+    - w_strength_controls_phase_movement_amount
+    - movement_direction_is_based_on_cosine_neighborhood_rate
+    - weak_w_moves_toward_near_neighbors
+    - strong_w_moves_toward_farther_candidates_using_cosine_neighborhood_rate
+  boundary:
+    sql_attention_target: hubs
+    phase_attention_role: rotates_and_explores_hubs_space_during_hub_construction
+    phase_vector_json:
+      is_not:
+        - generic_diff
+        - adopted_topology_state
+      is: auxiliary_evidence_for_rotating_exploring_hubs_hub_relations_hubs_hub_hubs_topology_manifests
+    semantic_axes_not_canonical:
+      - population_count
+      - recordcount
+
 sql_attention_target_boundary:
-  search_target: hubs
-  not_search_target:
-    - topologys
-    - registry
-  interpretation_path: hubs_relation_map_is_interpreted_under_topology_definition
-
-
-sql_attention_target_note:
-  target: hubs_tensor_attractor
+  target:
+    - hubs.hub
+    - hubs.hub_relations
+    - logs.current
+    - logs.hub_current
+    - logs.attention
   not_target:
-    - topologys_direct_search
-    - registry_direct_search
-  interpretation: topology_is_semantic_definition_space_not_hubs_payload
-  topology_recommendation_basis:
-    - statistics
-    - ema
-    - usage_history
-    - usage_frequency
+    - topology_recommendation_surfaces
+    - context_learning_surfaces
+  interpretation_path: logs_current_heat_and_attention_evidence_rotate_explore_hubs_space
+
+recommend_target_boundary:
+  target:
+    - topology.*
+    - topology.wiring_physical_to_package
+    - topology.components_*
+    - context_* learning surfaces
+  not_target:
+    - sql_attention_hubs_rotation_target
+  interpretation: recommendation_uses_topology_and_context_learning_surfaces
 
