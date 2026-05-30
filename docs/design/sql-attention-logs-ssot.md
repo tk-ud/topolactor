@@ -81,11 +81,15 @@ Phase semantics follow:
 
 - `q = w + xi + yj + zk`
 - `q = attractor`
-- `w` = real scalar derived from L2 norm.
-- `x / y / z` = hub-side record-count bases.
-- `i / j / k` = movement amounts on each axis.
+- `w` = l2 norm / physical table heat / physical_table_id excitation strength from logs.current.
+- `x` = hubs.hub_relations — fixed hub sequence / UI transition axis.
+- `y` = hubs.hub — topology meaning space axis.
+- `z` = hubs.topology_manifests — manifest grouping axis.
+- `i / j / k` = phase movement amount / movement vector over hubs space.
 
 `phase_vector` is evidence/candidate data and is not automatic mutation.
+
+`population_count` and `recordcount` are not canonical Phase Attention axes. The canonical axes are the hubs space references defined above.
 
 ## 9. Glossary
 

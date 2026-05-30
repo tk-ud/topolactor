@@ -729,6 +729,11 @@ if rg -n "\btopologys\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$R
 else
   echo "OK  [ssot] topologys naming drift absent from SQL Attention SSOT files"
 fi
+if rg -n "^\s+x_y_z:\s+hub_side_record_count_bases" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "old Phase Attention axis (x_y_z: hub_side_record_count_bases) must not remain as canonical; use hubs.hub_relations/hubs.hub/hubs.topology_manifests per phase_attention_axis_mapping"
+else
+  echo "OK  [ssot] old Phase Attention x_y_z canonical axis removed from SQL Attention SSOT"
+fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

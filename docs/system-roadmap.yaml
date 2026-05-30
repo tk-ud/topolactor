@@ -1875,6 +1875,43 @@ system_roadmap_ssot:
         - no_silent_fallback_all_error_paths_return_explicit_error_codes
       known_gap_ref: []
 
+    design.db_manifest_ui_topology_meaning_split:
+      status: partial
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: >
+        SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
+        Canonical schema namespaces (topology, hubs, logs) and Phase Attention axis mapping
+        (w=l2_norm/heat, x=hubs.hub_relations, y=hubs.hub, z=hubs.topology_manifests, i/j/k=movement)
+        are defined in SSOT and enforced by CI vocabulary checks.
+        Runtime DB/backend migration (topologys→topology, hubs.hubs→hubs.hub, Phase Attention
+        x/y/z axis migration from population count to hubs space) remains incomplete.
+      files:
+        - docs/design/db-schema.yaml
+        - docs/design/sql-attention-logs-ssot.yaml
+        - docs/design/sql-attention-logs-ssot.md
+        - .agent/tests/check-sql-attention-ssot.sh
+        - .agent/tests/check-structure.sh
+        - .agent/tests/check-ssot-vocabulary-contract.sh
+      evidence:
+        tests:
+          - check-sql-attention-ssot.sh
+          - check-structure.sh
+        ci:
+          - structure-check
+      completion_condition:
+        - ssot_canonical_schema_namespaces_match_topology_hubs_logs
+        - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count
+        - topologys_naming_drift_absent_from_sql_attention_ssot_files
+        - old_phase_axis_x_y_z_hub_side_record_count_bases_absent_from_canonical_ssot
+        - ci_vocabulary_checks_enforce_all_of_the_above
+      known_gap_ref:
+        - topologys schema rename migration to topology not executed in DB
+        - hubs.hubs table rename migration to hubs.hub not executed in DB
+        - Phase Attention runtime x/y/z still emits population count; hubs-space axis migration pending
+        - manifest split to topology.wiring_physical_to_package and hubs.topology_manifests not executed
+        - public context_* and ui_component_* table placement not resolved
+
 
 
   ci_expectations:

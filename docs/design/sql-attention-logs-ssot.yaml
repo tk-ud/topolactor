@@ -434,9 +434,18 @@ layers:
       q_role: phase_rotation_or_projection_state_operator
       attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
       boundary: q_is_not_attention_and_not_the_attractor_itself
-      w: real_scalar_from_l2_norm
-      x_y_z: hub_side_record_count_bases
-      i_j_k: movement_amounts_per_axis
+      w: l2_norm_physical_table_heat_physical_table_id_excitation_from_logs_current
+      x: hubs_hub_relations_fixed_hub_sequence_ui_transition_axis
+      y: hubs_hub_topology_meaning_space_axis
+      z: hubs_topology_manifests_manifest_grouping_axis
+      i_j_k: phase_movement_amount_over_hubs_space
+      legacy_runtime_migration:
+        status: migration_required
+        note: current_runtime_emits_population_count_and_recordcount_as_x_y_z_canonical_hubs_axis_migration_pending
+        old_x_y_z: hub_side_record_count_bases
+        semantic_axes_not_canonical:
+          - population_count
+          - recordcount
     invariants:
       - phase_attention_is_post_main_auxiliary_route
       - phase_vector_is_candidate_evidence_not_adopted_topology_state
@@ -622,16 +631,24 @@ phase_attention_function_contract:
   input:
     - logs_attention_vector_json
     - l2_norm
-    - hub_side_record_count_bases_xyz
+    - hubs_hub_relations_axis_as_x
+    - hubs_hub_axis_as_y
+    - hubs_topology_manifests_axis_as_z
     - axis_movement_amounts_i_j_k
+  runtime_migration_note:
+    status: migration_required
+    current_runtime_sends: hub_population_count_and_recordcount_as_x_y_z
+    canonical_target: hubs_hub_relations_hubs_hub_hubs_topology_manifests_per_phase_attention_axis_mapping
   calculation:
     quaternion_equation: q_equals_w_plus_xi_plus_yj_plus_zk
     q_role: phase_rotation_or_projection_state_operator
     attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
     boundary: q_is_not_attention_and_not_the_attractor_itself
-    w: real_scalar_from_l2_norm
-    x_y_z: hub_side_record_count_bases
-    i_j_k: movement_amounts_on_each_axis
+    w: l2_norm_physical_table_heat_physical_table_id_excitation_from_logs_current
+    x: hubs_hub_relations_fixed_hub_sequence_ui_transition_axis
+    y: hubs_hub_topology_meaning_space_axis
+    z: hubs_topology_manifests_manifest_grouping_axis
+    i_j_k: phase_movement_amount_over_hubs_space
   output:
     - logs_attention_phase_vector_json
   invariants:
@@ -669,7 +686,7 @@ implementation_order:
   - implement_logs_current_basis_update_and_norm_level_monitoring
   - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
   - implement_scheduler_runtime_hub_attractor_exploration
-  - implement_phase_attention_vector_distortion_after_attention_strength_hub_record_count_z_score_clamp_semantics_are_fixed
+  - implement_phase_attention_axis_migration_from_population_count_to_hubs_space_canonical_x_y_z
 
 initial_minimal_basis:
   table_pressure: logs.diff
