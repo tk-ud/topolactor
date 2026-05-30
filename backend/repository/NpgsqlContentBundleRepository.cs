@@ -121,11 +121,13 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT hr.hub_relation_id::text, COALESCE(rr.name, hr.hub_relation_id::text), " +
-            "       hr.hub_id::text, hr.relation_registry_id::text, hr.sequence_position::text, hr.status " +
+            "SELECT hr.hub_relation_id::text, " +
+            "       COALESCE(tm.manifest_key, hr.hub_relation_id::text), " +
+            "       tm.hub_id::text, hr.topology_manifest_id::text, hr.related_hub_id::text, " +
+            "       hr.sequence_position::text, hr.status " +
             "FROM hubs.hub_relations hr " +
-            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = hr.relation_registry_id " +
-            "ORDER BY hr.hub_id, hr.sequence_position, hr.created_at DESC";
+            "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
+            "ORDER BY tm.hub_id, hr.topology_manifest_id, hr.sequence_position, hr.created_at DESC";
 
         var items = new List<ContentBundleListItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -133,14 +135,15 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         {
             var id = reader.GetString(0);
             var label = reader.GetString(1);
-            var hubId = reader.GetString(2);
-            var relationId = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var seqPos = reader.GetString(4);
-            var status = reader.GetString(5);
+            var sourceHubId = reader.GetString(2);
+            var manifestId = reader.GetString(3);
+            var relatedHubId = reader.GetString(4);
+            var seqPos = reader.GetString(5);
+            var status = reader.GetString(6);
             items.Add(new ContentBundleListItemDto(
-                id, "hub_relation", label, status, hubId,
-                relationId is null ? null : [relationId],
-                $"hub={hubId}, relation={relationId ?? "—"}, seq={seqPos}"));
+                id, "hub_relation", label, status, sourceHubId,
+                [manifestId, relatedHubId],
+                $"source_hub={sourceHubId}, manifest={manifestId[..Math.Min(8, manifestId.Length)]}…, related_hub={relatedHubId[..Math.Min(8, relatedHubId.Length)]}…, seq={seqPos}"));
         }
         return items;
     }
@@ -181,7 +184,10 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         var hubRelationCount = 0;
         await using (var hrCmd = conn.CreateCommand())
         {
-            hrCmd.CommandText = "SELECT COUNT(*)::int FROM hubs.hub_relations WHERE hub_id = @hubId";
+            hrCmd.CommandText =
+                "SELECT COUNT(*)::int FROM hubs.hub_relations hr " +
+                "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
+                "WHERE tm.hub_id = @hubId";
             hrCmd.Parameters.AddWithValue("hubId", hubId);
             hubRelationCount = (int)(await hrCmd.ExecuteScalarAsync(ct) ?? 0);
         }
@@ -220,13 +226,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         }
 
         var hubRelationCount = 0;
-        await using (var hrCmd = conn.CreateCommand())
-        {
-            hrCmd.CommandText =
-                "SELECT COUNT(*)::int FROM hubs.hub_relations WHERE relation_registry_id = @id";
-            hrCmd.Parameters.AddWithValue("id", relationRegistryId);
-            hubRelationCount = (int)(await hrCmd.ExecuteScalarAsync(ct) ?? 0);
-        }
+        // hub_relations are manifest-scoped; relation_registry is not a direct scoping column.
 
         return new ContentBundleRelationDetailDto(
             idStr, name, active, entityCount, hubRelationCount,

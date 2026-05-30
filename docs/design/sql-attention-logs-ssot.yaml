@@ -9,6 +9,11 @@ ssot_roles:
 postgresql_namespace: logs
 sql_attention_target:
   target_schema: hubs
+  hubs_space_hierarchy:
+    tree: |
+      hubs.hub
+        └─ hubs.topology_manifests
+             └─ hubs.hub_relations
   target_semantics:
     - tensor
     - attractor
@@ -435,7 +440,7 @@ layers:
       attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
       boundary: q_is_not_attention_and_not_the_attractor_itself
       w: l2_norm_physical_table_heat_physical_table_id_excitation_from_logs_current
-      x: hubs_hub_relations_fixed_hub_sequence_ui_transition_axis
+      x: hubs_hub_relations_manifest_scoped_hub_sequence_ui_transition_axis
       y: hubs_hub_topology_meaning_space_axis
       z: hubs_topology_manifests_manifest_grouping_axis
       i_j_k: phase_movement_amount_over_hubs_space

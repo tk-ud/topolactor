@@ -66,6 +66,24 @@ run_sql_file() {
   fi
 }
 
+query_equals_zero() {
+  local label="$1"
+  local sql="$2"
+
+  local result
+  if ! result=$("${PSQL_BASE[@]}" --tuples-only --no-align --command "$sql" 2>/dev/null); then
+    fail "Query failed: $label"
+    return
+  fi
+
+  result="$(echo "$result" | tr -d '[:space:]')"
+  if [ "$result" = "0" ]; then
+    echo "OK  [data] $label"
+  else
+    fail "$label (expected count=0, got: ${result:-empty})"
+  fi
+}
+
 query_equals_one() {
   local label="$1"
   local sql="$2"
@@ -91,6 +109,7 @@ run_sql_file "db/promotion_tables.sql"
 run_sql_file "db/context_route_tables.sql"
 run_sql_file "db/ui_topology_tables.sql"
 run_sql_file "db/manifest_tables.sql"
+run_sql_file "db/sql_attention_logs_tables.sql"
 run_sql_file "db/seed_empty.sql"
 
 echo "=== Validating table existence ==="
@@ -136,6 +155,16 @@ query_equals_one "structure_maps contains attractor_key='admin:registry_vector:v
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:registry_vector:validate';"
 query_equals_one "structure_maps contains attractor_key='admin:package_generator:generate'" \
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:generate';"
+
+echo "=== Validating hubs.hub_relations FK chain ==="
+query_equals_one "column exists: hubs.hub_relations.topology_manifest_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'topology_manifest_id';"
+query_equals_one "column exists: hubs.hub_relations.related_hub_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'related_hub_id';"
+query_equals_zero "column absent: hubs.hub_relations.hub_id" \
+  "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'hub_id';"
+query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequence_position)" \
+  "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== DB schema check passed ==="

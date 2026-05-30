@@ -103,61 +103,8 @@ CREATE INDEX IF NOT EXISTS idx_entities_relation_ids
 
 
 -- ---------------------------------------------------------------------------
--- hub_relations
--- Fixed hub sequence / UI transition order / topology meaning space sequence table.
--- Defines ordered sequence bindings between hubs, establishing fixed hub order
--- and UI transition paths across the topology meaning space.
--- sequence_position is the sequence authority; target_hub_id defines the
--- directed transition relationship. Not a weighted binding table.
--- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS hubs.hub_relations (
-    hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    hub_id                UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
-    target_hub_id         UUID        REFERENCES hubs.hub (hub_id) ON DELETE SET NULL,
-    relation_registry_id  UUID,                          -- which relation definition scopes this sequence entry
-    sequence_position     INTEGER     NOT NULL DEFAULT 0, -- fixed sequence authority: hub order / UI transition order
-    status                TEXT        NOT NULL DEFAULT 'active'
-                          CHECK (status IN ('active', 'deprecated')),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-COMMENT ON TABLE hubs.hub_relations IS
-    'Fixed hub sequence / UI transition order / topology meaning space sequence table. '
-    'Defines directed hub-to-hub sequence entries for canonical flow ordering. '
-    'sequence_position is the sequence authority (not weight). '
-    'Distinct from converged entity data. Counted as Phase Attention x-axis (hub_relations_count).';
-
-COMMENT ON COLUMN hubs.hub_relations.target_hub_id IS
-    'Target hub for the directed sequence entry (source hub_id → target_hub_id). '
-    'NULL allowed for terminal sequence positions.';
-
-COMMENT ON COLUMN hubs.hub_relations.sequence_position IS
-    'Fixed sequence authority. Defines the ordered position of this hub relation '
-    'in the UI transition sequence and topology meaning space ordering. '
-    'Lower value = earlier in sequence.';
-
-COMMENT ON COLUMN hubs.hub_relations.status IS
-    'Lifecycle status of this sequence entry. active = in canonical sequence; '
-    'deprecated = removed from sequence but retained for audit.';
-
-CREATE INDEX IF NOT EXISTS idx_hub_relations_hub_id
-    ON hubs.hub_relations (hub_id);
-
-CREATE INDEX IF NOT EXISTS idx_hub_relations_target_hub_id
-    ON hubs.hub_relations (target_hub_id)
-    WHERE target_hub_id IS NOT NULL;
-
-CREATE INDEX IF NOT EXISTS idx_hub_relations_sequence_position
-    ON hubs.hub_relations (hub_id, sequence_position);
-
-CREATE INDEX IF NOT EXISTS idx_hub_relations_relation_registry_id
-    ON hubs.hub_relations (relation_registry_id);
-
-
--- ---------------------------------------------------------------------------
 -- hubs.topology_manifests
--- Manifest grouping axis for Phase Attention z-axis.
+-- Child of hubs.hub. Manifest grouping axis for Phase Attention z-axis.
 -- Groups topology manifests associated with a hub, providing the canonical
 -- z-axis reference for Phase Attention quaternion semantics.
 -- ---------------------------------------------------------------------------
@@ -173,9 +120,9 @@ CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
 );
 
 COMMENT ON TABLE hubs.topology_manifests IS
-    'Manifest grouping surface for hubs. Canonical z-axis reference for Phase Attention '
+    'Child of hubs.hub. Hub-side manifest grouping surface. Canonical z-axis reference for Phase Attention '
     'quaternion semantics (z = hubs.topology_manifests manifest grouping axis). '
-    'Not a wiring table; topology.wiring_physical_to_package owns package wiring.';
+    'Parent of hubs.hub_relations. Not a wiring table; topology.wiring_physical_to_package owns package wiring.';
 
 CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
     ON hubs.topology_manifests (hub_id);
@@ -183,6 +130,59 @@ CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
 CREATE INDEX IF NOT EXISTS idx_topology_manifests_status
     ON hubs.topology_manifests (status)
     WHERE status = 'active';
+
+
+-- ---------------------------------------------------------------------------
+-- hub_relations
+-- Child of hubs.topology_manifests. Manifest-scoped hub sequence / UI transition order.
+-- Source hub is derived through topology_manifest_id -> hubs.topology_manifests.hub_id.
+-- sequence_position is the sequence authority. Not a global hub-to-hub relation graph.
+-- ---------------------------------------------------------------------------
+DROP TABLE IF EXISTS hubs.hub_relations CASCADE;
+
+CREATE TABLE hubs.hub_relations (
+    hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    topology_manifest_id  UUID        NOT NULL REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE CASCADE,
+    related_hub_id        UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    sequence_position     INTEGER     NOT NULL,
+    relation_config       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    status                TEXT        NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'deprecated')),
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (topology_manifest_id, sequence_position)
+);
+
+COMMENT ON TABLE hubs.hub_relations IS
+    'Child of hubs.topology_manifests. Manifest-scoped hub sequence / UI transition order. '
+    'related_hub_id is the sequenced hub entry. sequence_position is the sequence authority. '
+    'Source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id. '
+    'Counted as Phase Attention x-axis (manifest-scoped hub_relations_count).';
+
+COMMENT ON COLUMN hubs.hub_relations.topology_manifest_id IS
+    'Parent topology manifest scope. Source hub authority flows through topology_manifests.hub_id.';
+
+COMMENT ON COLUMN hubs.hub_relations.related_hub_id IS
+    'Sequenced hub entry within the manifest scope.';
+
+COMMENT ON COLUMN hubs.hub_relations.sequence_position IS
+    'Sequence authority within topology_manifest_id. Lower value = earlier in sequence.';
+
+COMMENT ON COLUMN hubs.hub_relations.relation_config IS
+    'Optional sequence metadata. Not the canonical join definition owner.';
+
+COMMENT ON COLUMN hubs.hub_relations.status IS
+    'Lifecycle status of this sequence entry. active = in canonical sequence; '
+    'deprecated = removed from sequence but retained for audit.';
+
+CREATE INDEX IF NOT EXISTS idx_hub_relations_topology_manifest_id
+    ON hubs.hub_relations (topology_manifest_id);
+
+CREATE INDEX IF NOT EXISTS idx_hub_relations_related_hub_id
+    ON hubs.hub_relations (related_hub_id);
+
+CREATE INDEX IF NOT EXISTS idx_hub_relations_sequence_position
+    ON hubs.hub_relations (topology_manifest_id, sequence_position);
 
 
 -- ---------------------------------------------------------------------------
