@@ -98,14 +98,21 @@ db_schema:
 
     manifest_hub:
       table: hubs.hubs
-      meaning: Manifest Hub / one-screen physical table group
+      meaning: topology meaning space / pseudo-RDB physical table group / Manifest projection unit
       authority: db
       expected_shape:
         hub_id: uuid
         status: enum
-        relation: bigint[]
-      relation_meaning: unordered physical_table_id set
+        relation: jsonb
+        created_at: timestamptz
+        updated_at: timestamptz
+      relation_meaning: physical table relation config jsonb
+      relation_minimum_shape:
+        - id: registrar_entries.physical_table_id
+          relationKey: text
+          joinType: text
       prohibited_meanings:
+        - bigint_array
         - ui_display_order
         - relation_registry_id
         - hub_relation_id
@@ -113,10 +120,35 @@ db_schema:
         - semantic_relation_vocabulary
         - logs_current_pressure
       note: >-
-        hubs.hubs.relation is the unordered set of physical_table_id values included in one
-        screen-level Manifest Hub. It is not UI display order, relation_registry_id,
-        hub_relation_id, semantic relation vocabulary, runtime traversal weight, or
-        logs.current pressure.
+        hubs.hubs groups pseudo-RDB physical tables into one topology meaning space that
+        can be assigned to manifest as a projection unit. hubs.hubs.relation stores
+        JSONB join/config entries such as id, relationKey, and joinType; id points to
+        registrar_entries.physical_table_id. It is not UI display order,
+        relation_registry_id, hub_relation_id, runtime weight, or logs.current pressure.
+
+    manifest_hub_chain:
+      table: hubs.hub_relations
+      meaning: topology sequence / continuous processing order between hubs attached to a manifest
+      authority: db
+      status: redefine_required
+      current_shape_drift:
+        - current SQL uses hub_id plus relation_registry_id plus weight
+        - weight is not topology sequence authority
+        - relation_registry_id is not physical table relation config
+      expected_shape:
+        hub_relation_id: uuid
+        manifest_id: uuid
+        source_hub_id: uuid
+        target_hub_id: uuid
+        sequence_index: integer
+        relation_config: jsonb nullable
+        status: enum
+        created_at: timestamptz
+        updated_at: timestamptz
+      note: >-
+        hubs.hub_relations remains a valid concept, but the current schema must be
+        redefined as the manifest-scoped chain between topology meaning spaces. It is
+        not a simple delete candidate in this SSOT pass.
 
     runtime_manifest:
       table: manifest
@@ -183,15 +215,15 @@ db_schema:
 
   meaning_collision_guardrails:
     - registrar_entries_vs_physical_table_id: registrar_entries is the catalog authority; physical_table_id bigint is the future canonical id required for Manifest Hub membership.
-    - hubs_hubs_relation_vs_relation_registry: hubs.hubs.relation must be physical_table_id bigint[] and must not be treated as relation_registry_id.
-    - hubs_hub_relations_vs_hubs_hubs_relation: hubs.hub_relations is a legacy/transition relation edge table, not the Manifest Hub membership set.
-    - manifest_vs_hubs_hubs: manifest owns runtime dispatch distribution; hubs.hubs owns one-screen physical table grouping.
+    - hubs_hubs_relation_vs_relation_registry: hubs.hubs.relation must be JSONB physical table relation config and must not be treated as relation_registry_id.
+    - hubs_hub_relations_vs_hubs_hubs_relation: hubs.hub_relations is the redefine-required topology sequence / manifest hub chain, not hubs.hubs relation config.
+    - manifest_vs_hubs_hubs: manifest owns runtime dispatch distribution; hubs.hubs owns one topology meaning space / pseudo-RDB physical table grouping.
     - manifest_ui_projection_packageIds_vs_packages_ui_component_package: manifest packageIds currently point at legacy packages semantics and need a decision to align with ui_component_package or ui_topology_tensor.
     - ui_component_registry_vs_components: ui_component_registry is active component authority; components is legacy UI builder catalog.
     - ui_component_package_vs_packages: ui_component_package is active package authority; packages is legacy UI builder package surface.
     - ui_package_component_map_vs_packages_layout: ui_package_component_map is normalized component membership; packages.layout is legacy json binding.
     - design_classname_tailwind_vs_css_dictionary_topology_layout_class: design.classname/tailwind semantics must not bypass css-dictionary/topology-layout-class SSOTs.
-    - hubs_hub_relations_weight_vs_logs_current_hub_current_attention: hub_relations.weight is not dynamic pressure/current/attention evidence.
+    - hubs_hub_relations_weight_vs_sequence_logs_current_hub_current_attention: hub_relations.weight is not topology sequence authority and is not dynamic pressure/current/attention evidence.
     - structure_maps_vs_manifest_dispatch_distribution: structure_maps is legacy/transition attractor resolution and must not be conflated with runtime manifest dispatch distribution.
     - entities_content_entity_drafts_vs_physical_table_records: entities/content_entity_drafts are not the physical table catalog or Manifest Hub membership authority.
   principles:
@@ -434,7 +466,7 @@ db_schema:
     hub_relations:
       category: converged_entity
       file: db/topology_tables.sql
-      role: hub_to_hub_structural_link
+      role: redefine_required_manifest_scoped_topology_sequence_chain
       key_columns:
         - name: hub_relation_id
           type: uuid
@@ -445,6 +477,20 @@ db_schema:
           type: uuid
         - name: relation_registry_id
           type: uuid
+          role: current_shape_drift_not_physical_relation_config
+      target_shape:
+        - name: manifest_id
+          type: uuid
+        - name: source_hub_id
+          type: uuid
+        - name: target_hub_id
+          type: uuid
+        - name: sequence_index
+          type: integer
+        - name: relation_config
+          type: jsonb nullable
+        - name: status
+          type: enum
 
     content_entity_drafts:
       category: topology_definition

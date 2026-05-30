@@ -30,12 +30,14 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] `registrar_entries` に `physical_table_id bigint` 正本を導入する migration / repository / seed 整合を設計・実装する。
       → 理由: `docs/design/db-schema.yaml` では physical table catalog の active path として固定したが、現SQLは `registrar_entry_id uuid` のまま。SQL破壊変更は次工程。
-- [ ] `hubs.hubs` を Manifest Hub schema として移行し、`status` と one-screen physical table group semantics を DB / repository / seed に反映する。
+- [ ] `hubs.hubs` を Manifest Hub schema として移行し、`status` と topology meaning space / pseudo-RDB physical table group semantics を DB / repository / seed に反映する。
       → 理由: 現SQLは `relation_registry_id` 中心で、Manifest Hub の active path と意味がずれている。
-- [ ] `hubs.hubs.relation bigint[]` を追加し、unordered `physical_table_id` set として validate / authoring / seed を接続する。
-      → 理由: `hubs.hubs.relation` は UI表示順・relation_registry_id・hub_relation_id・runtime weight ではないため、明示migrationが必要。
-- [ ] `hubs.hub_relations` を削除するか、Manifest Hub membership とは別概念として再定義するか判断する。
-      → 理由: 現 backend/frontend 接続があり、即削除不可。`weight` と logs current/attention の意味衝突も解消する。
+- [ ] `hubs.hubs.relation` を JSONB relation config として migration し、`id` / `relationKey` / `joinType` required validation を設計・実装する。
+      → 理由: relation は physical table relation config であり、UI表示順・relation_registry_id・hub_relation_id・runtime weight ではない。`id` は `registrar_entries.physical_table_id` を指す。
+- [ ] `hubs.hub_relations` を manifest内 topology sequence / manifest hub chain table として再定義・移行する。
+      → 理由: 現 backend/frontend 接続があり即削除しない。期待shapeは `manifest_id`、`source_hub_id`、`target_hub_id`、`sequence_index`、nullable `relation_config`、`status`、timestamps。
+- [ ] `hubs.hub_relations` の既存 `relation_registry_id` + `weight` semantics の移行/廃止設計を行う。
+      → 理由: `weight` は topology sequence の正本ではなく、`relation_registry_id` は physical table relation config ではない。
 - [ ] `topologys.entities` / `topologys.content_entity_drafts` の責務を content payload cache / draft staging として残すか削除・移行するか再定義する。
       → 理由: physical table records / Manifest Hub membership と混同しない責務境界が未確定。
 - [ ] `topologys.structure_maps` を runtime resolution cache として残すか、`manifest` dispatch distribution に統合するか判断する。
@@ -45,6 +47,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] `manifest` の `ui_projection.packageIds` refs を `ui_component_package` に寄せるか `ui_topology_tensor` に寄せるか判断し、SQLコメント・backend validation・frontend manifest editor・tests を整合する。
       → 理由: 現コメントは legacy `packages.package_id` を指しており、active UI topology authority と衝突する。
 - [ ] `logs.*.physical_table_id` を bigint に寄せるか text互換を残すか判断し、`registrar_entries.physical_table_id` migration と整合する。
-      → 理由: Manifest Hub relation bigint[] と SQL Attention logs の physical table id 型を揃える必要がある。
+      → 理由: Manifest Hub relation config の `id` と SQL Attention logs の physical table id 型を揃える必要がある。
 - [ ] `db/demo_seed.sql` の旧意味追従を修正し、Manifest Hub / runtime manifest / UI topology / logs/context の分離に合わせる。
       → 理由: 現seedは `hubs.hubs.relation_registry_id`、legacy structure/entity/package semantics を含む。

@@ -404,9 +404,12 @@ See `infra/docker-compose.yml` `topolactor_seed_storage` volume.
 
 ## 8.6 Manifest Hub / Runtime Manifest / UI Topology Boundary
 
-Manifest Hub is the parent authoring unit for one-screen physical table groups.
-Runtime manifest is dispatch distribution wiring and is not the same object as Manifest Hub.
-UI topology registry owns component/package/layout/wiring/tensor projection definitions.
+Manifest Draft creates or selects physical tables. Selected physical tables are grouped into
+`hubs.hubs` as one topology meaning space, and `hubs.hubs.relation` stores pseudo-RDB
+join configuration as JSONB. A manifest can attach multiple hubs; `hubs.hub_relations`
+defines the sequence / continuous processing order between attached topology meaning spaces.
+Runtime manifest remains dispatch distribution wiring, and UI topology registry owns
+component/package/layout/wiring/tensor projection definitions.
 
 ## 9. Boundary
 
