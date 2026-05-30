@@ -38,15 +38,40 @@ public record HubCurrentCandidate(
 );
 
 /// <summary>
+/// w / l2_norm exploration budget tier per SSOT phase_attention_axis_mapping.exploration_budget_gate.
+/// weak = near-neighbor + narrow topK; mid = normal topK; high = expanded distance band or permutation.
+/// </summary>
+public enum ExplorationBudgetTier
+{
+    Weak,
+    Mid,
+    High
+}
+
+/// <summary>
+/// Per-tier exploration limits from policy exploration_budget_tiers.{weak,mid,high}.
+/// All numeric values must be positive — no magic number defaults in runtime code.
+/// </summary>
+public record ExplorationBudgetTierLimits(
+    int TopKPerHubKind,
+    int MaxHubTablesPerKind,
+    int PhaseExpansionLimit,
+    string SearchMode
+);
+
+/// <summary>
 /// Exploration policy resolved from topology.function_parameters.
-/// All values must be positive integers — no magic number defaults in runtime code.
+/// w / l2_norm thresholds (norm_level_high/medium) classify budget tier; tier limits
+/// bound topK, hub-table distance band, and permutation expansion — not full-space search.
 /// Policy source: function_name="sql_attention_hub_attractor_exploration" parameter_key="default_policy".
 /// </summary>
 public record HubAttractorExplorationPolicy(
-    int TopKPerHubKind,
+    double NormLevelHigh,
+    double NormLevelMedium,
+    ExplorationBudgetTierLimits WeakTier,
+    ExplorationBudgetTierLimits MidTier,
+    ExplorationBudgetTierLimits HighTier,
     int MaxHubKindsPerCurrent,
-    int MaxHubTablesPerKind,
-    int PhaseExpansionLimit,
     int MaxAttentionRowsSaved
 );
 

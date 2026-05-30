@@ -145,6 +145,13 @@ BEGIN;
 
 ALTER TABLE hubs.hub_relations RENAME TO hub_relations_canonical_sim_backup;
 
+ALTER TABLE hubs.hub_relations_canonical_sim_backup
+    DROP CONSTRAINT IF EXISTS hub_relations_topology_manifest_id_sequence_position_key;
+ALTER TABLE hubs.hub_relations_canonical_sim_backup
+    DROP CONSTRAINT IF EXISTS hub_relations_topology_manifest_id_fkey;
+ALTER TABLE hubs.hub_relations_canonical_sim_backup
+    DROP CONSTRAINT IF EXISTS hub_relations_related_hub_id_fkey;
+
 CREATE TABLE hubs.hub_relations (
     hub_relation_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hub_id                UUID NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,

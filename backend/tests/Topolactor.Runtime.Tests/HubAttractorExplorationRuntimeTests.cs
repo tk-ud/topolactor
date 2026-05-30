@@ -75,13 +75,14 @@ internal static class ExplorationTestFactory
         bool changeDetected = true,
         string changeReason = "level_changed",
         double l2Norm = 10.0,
+        string? normLevel = "high",
         string basisVectorJson = """{"diff_count": 10}""") =>
         new(
             CurrentId: currentId ?? Guid.NewGuid(),
             PhysicalTableId: physicalTableId ?? "table_a",
             NormRank: 1,
             PreviousNormLevel: "medium",
-            NormLevel: "high",
+            NormLevel: normLevel,
             ChangeDetected: changeDetected,
             ChangeReason: changeReason,
             L2Norm: l2Norm,
@@ -120,17 +121,44 @@ internal static class ExplorationTestFactory
             PhaseBasisJson: """{"basis":"hub_current"}""");
 
     public static string ValidPolicyJson(
-        int topK = 3,
+        int weakTopK = 1,
+        int midTopK = 3,
+        int highTopK = 5,
+        int weakMaxTables = 2,
+        int midMaxTables = 5,
+        int highMaxTables = 10,
+        int weakPhaseLimit = 1,
+        int midPhaseLimit = 1,
+        int highPhaseLimit = 3,
         int maxKinds = 5,
-        int maxTables = 10,
-        int phaseLimit = 1,
-        int maxRows = 20) =>
+        int maxRows = 20,
+        double normLevelHigh = 10.0,
+        double normLevelMedium = 1.0) =>
         $$"""
         {
-          "topK_per_hub_kind": {{topK}},
+          "norm_level_high": {{normLevelHigh}},
+          "norm_level_medium": {{normLevelMedium}},
+          "exploration_budget_tiers": {
+            "weak": {
+              "topK_per_hub_kind": {{weakTopK}},
+              "max_hub_tables_per_kind": {{weakMaxTables}},
+              "phase_expansion_limit": {{weakPhaseLimit}},
+              "search_mode": "near_neighbor_narrow_topK"
+            },
+            "mid": {
+              "topK_per_hub_kind": {{midTopK}},
+              "max_hub_tables_per_kind": {{midMaxTables}},
+              "phase_expansion_limit": {{midPhaseLimit}},
+              "search_mode": "normal_topK"
+            },
+            "high": {
+              "topK_per_hub_kind": {{highTopK}},
+              "max_hub_tables_per_kind": {{highMaxTables}},
+              "phase_expansion_limit": {{highPhaseLimit}},
+              "search_mode": "expanded_distance_band_or_permutation"
+            }
+          },
           "max_hub_kinds_per_current": {{maxKinds}},
-          "max_hub_tables_per_kind": {{maxTables}},
-          "phase_expansion_limit": {{phaseLimit}},
           "max_attention_rows_saved": {{maxRows}}
         }
         """;
@@ -170,7 +198,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             logsRepo);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
@@ -202,7 +230,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.NotNull(result.Result);
@@ -220,7 +248,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             [hubCurrent]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(currentId: currentId)],
+            [ExplorationTestFactory.ChangeCandidate(currentId: currentId, normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -338,7 +366,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.MissingPolicy, result.Status);
@@ -350,7 +378,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Null(result.Result);
@@ -362,7 +390,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.MalformedPolicy, result.Status);
@@ -371,30 +399,30 @@ public class HubAttractorExplorationRuntime_PolicyTests
     [Fact]
     public async Task ExploreAsync_PolicyMissingRequiredKey_ReturnsMalformedPolicy()
     {
-        // Missing topK_per_hub_kind
+        // Missing exploration_budget_tiers
         var runtime = ExplorationTestFactory.CreateRuntime(
-            """{ "max_hub_kinds_per_current": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 1, "max_attention_rows_saved": 20 }""",
+            """{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""",
             []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.MalformedPolicy, result.Status);
     }
 
     [Theory]
-    [InlineData("""{ "topK_per_hub_kind": 0, "max_hub_kinds_per_current": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 1, "max_attention_rows_saved": 20 }""")]
-    [InlineData("""{ "topK_per_hub_kind": 3, "max_hub_kinds_per_current": 0, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 1, "max_attention_rows_saved": 20 }""")]
-    [InlineData("""{ "topK_per_hub_kind": 3, "max_hub_kinds_per_current": 5, "max_hub_tables_per_kind": 0, "phase_expansion_limit": 1, "max_attention_rows_saved": 20 }""")]
-    [InlineData("""{ "topK_per_hub_kind": 3, "max_hub_kinds_per_current": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 0, "max_attention_rows_saved": 20 }""")]
-    [InlineData("""{ "topK_per_hub_kind": 3, "max_hub_kinds_per_current": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 1, "max_attention_rows_saved": 0 }""")]
+    [InlineData("""{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 0, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""")]
+    [InlineData("""{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 0, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""")]
+    [InlineData("""{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 0, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""")]
+    [InlineData("""{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 0, "max_attention_rows_saved": 20 }""")]
+    [InlineData("""{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 0 }""")]
     public async Task ExploreAsync_PolicyNonPositiveValue_ReturnsMalformedPolicy(string policyJson)
     {
         var runtime = ExplorationTestFactory.CreateRuntime(policyJson, []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.MalformedPolicy, result.Status);
@@ -406,7 +434,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Null(result.Result);
@@ -431,22 +459,22 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
     [Fact]
     public async Task ExploreAsync_TopKCap_LimitsHitsPerHubKind()
     {
-        // 5 hub current records with same attractor key, topK=2 → at most 2 hits per kind
+        // 5 hub current records with same attractor key, mid topK=2 → at most 2 hits per kind
         var hubs = Enumerable.Range(0, 5)
             .Select(_ => ExplorationTestFactory.HubCurrent("attractor_a", 100, 50))
             .ToList();
 
         var runtime = ExplorationTestFactory.CreateRuntime(
-            ExplorationTestFactory.ValidPolicyJson(topK: 2, maxRows: 100),
+            ExplorationTestFactory.ValidPolicyJson(midTopK: 2, maxRows: 100),
             hubs);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
         Assert.True(result.Result!.Hits.Count <= 2,
-            $"Expected at most 2 hits (topK=2), got {result.Result.Hits.Count}");
+            $"Expected at most 2 hits (mid topK=2), got {result.Result.Hits.Count}");
     }
 
     [Fact]
@@ -461,11 +489,11 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
         };
 
         var runtime = ExplorationTestFactory.CreateRuntime(
-            ExplorationTestFactory.ValidPolicyJson(topK: 5, maxKinds: 10, maxTables: 10, phaseLimit: 1, maxRows: 3),
+            ExplorationTestFactory.ValidPolicyJson(highTopK: 5, maxKinds: 10, highMaxTables: 10, highPhaseLimit: 1, maxRows: 3),
             hubs);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
@@ -486,11 +514,11 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
         };
 
         var runtime = ExplorationTestFactory.CreateRuntime(
-            ExplorationTestFactory.ValidPolicyJson(topK: 1, maxKinds: 2, maxTables: 5, phaseLimit: 1, maxRows: 100),
+            ExplorationTestFactory.ValidPolicyJson(midTopK: 1, maxKinds: 2, midMaxTables: 5, midPhaseLimit: 1, maxRows: 100),
             hubs);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
@@ -507,7 +535,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             []);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
@@ -525,16 +553,133 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
         };
 
         var runtime = ExplorationTestFactory.CreateRuntime(
-            ExplorationTestFactory.ValidPolicyJson(topK: 2),
+            ExplorationTestFactory.ValidPolicyJson(midTopK: 2),
             hubs);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         var ranks = result.Result!.Hits.Select(h => h.HitRank).OrderBy(r => r).ToList();
         Assert.Equal(1, ranks[0]);
         Assert.Equal(2, ranks[1]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — w / l2_norm exploration budget gate (weak / mid / high)
+// ---------------------------------------------------------------------------
+
+public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
+{
+    private static HubAttractorExplorationPolicy TestPolicy() =>
+        new(
+            NormLevelHigh: 10.0,
+            NormLevelMedium: 1.0,
+            WeakTier: new ExplorationBudgetTierLimits(1, 2, 1, "near_neighbor_narrow_topK"),
+            MidTier: new ExplorationBudgetTierLimits(3, 5, 1, "normal_topK"),
+            HighTier: new ExplorationBudgetTierLimits(5, 10, 3, "expanded_distance_band_or_permutation"),
+            MaxHubKindsPerCurrent: 5,
+            MaxAttentionRowsSaved: 20);
+
+    [Theory]
+    [InlineData("low", 0.5, ExplorationBudgetTier.Weak)]
+    [InlineData("medium", 5.0, ExplorationBudgetTier.Mid)]
+    [InlineData("high", 15.0, ExplorationBudgetTier.High)]
+    [InlineData(null, 0.5, ExplorationBudgetTier.Weak)]
+    [InlineData(null, 5.0, ExplorationBudgetTier.Mid)]
+    [InlineData(null, 15.0, ExplorationBudgetTier.High)]
+    public void ClassifyExplorationBudgetTier_MapsNormLevelAndL2Norm(
+        string? normLevel,
+        double l2Norm,
+        ExplorationBudgetTier expected)
+    {
+        var policy = TestPolicy();
+        var candidate = ExplorationTestFactory.ChangeCandidate(normLevel: normLevel, l2Norm: l2Norm);
+        var tier = HubAttractorExplorationRuntime.ClassifyExplorationBudgetTier(candidate, policy);
+        Assert.Equal(expected, tier);
+    }
+
+    [Fact]
+    public async Task ExploreAsync_WeakTier_UsesNarrowTopK()
+    {
+        var hubs = Enumerable.Range(0, 5)
+            .Select(i => ExplorationTestFactory.HubCurrent(
+                "kind_a",
+                populationCount: 100 - i,
+                attractorVectorJson: $$"""{"diff_count": {{10 - i}}}"""))
+            .ToList();
+
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(weakTopK: 1, weakMaxTables: 2),
+            hubs);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "low", l2Norm: 0.5)],
+            "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
+        Assert.True(result.Result!.Hits.Count <= 1,
+            $"weak tier topK=1 must cap hits, got {result.Result.Hits.Count}");
+        var evidence = JsonSerializer.Deserialize<JsonElement>(result.Result.Hits[0].EvidenceJson);
+        Assert.Equal("weak", evidence.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("near_neighbor_narrow_topK", evidence.GetProperty("exploration_search_mode").GetString());
+        Assert.Equal("w_l2_norm", evidence.GetProperty("exploration_budget_gate").GetString());
+    }
+
+    [Fact]
+    public async Task ExploreAsync_HighTier_UsesPermutationExpansion()
+    {
+        var hubs = Enumerable.Range(0, 6)
+            .Select(i => ExplorationTestFactory.HubCurrent(
+                "kind_a",
+                populationCount: 100 - i,
+                attractorVectorJson: $$"""{"diff_count": {{10 - i}}}"""))
+            .ToList();
+
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(
+                highTopK: 2,
+                highMaxTables: 2,
+                highPhaseLimit: 3,
+                maxRows: 100),
+            hubs);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
+            "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
+        Assert.Contains(result.Result!.Hits, h => h.PermutationKey == "default");
+        Assert.Contains(result.Result.Hits, h => h.PermutationKey == "permutation_1");
+        var evidence = JsonSerializer.Deserialize<JsonElement>(result.Result.Hits[0].EvidenceJson);
+        Assert.Equal("high", evidence.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("expanded_distance_band_or_permutation",
+            evidence.GetProperty("exploration_search_mode").GetString());
+    }
+
+    [Fact]
+    public async Task ExploreAsync_MidTier_RecordsNormalTopKMode()
+    {
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(),
+            [ExplorationTestFactory.HubCurrent()]);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
+            "src", "7d");
+
+        var hit = Assert.Single(result.Result!.Hits);
+        var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
+        Assert.Equal("mid", evidence.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("normal_topK", evidence.GetProperty("exploration_search_mode").GetString());
+
+        using var phaseDoc = JsonDocument.Parse(hit.PhaseVectorJson);
+        var boundary = phaseDoc.RootElement.GetProperty("meaning_boundary");
+        Assert.Equal("w_l2_norm", boundary.GetProperty("exploration_budget_gate").GetString());
+        Assert.Equal("mid", boundary.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("normal_topK", boundary.GetProperty("exploration_search_mode").GetString());
+        Assert.True(boundary.GetProperty("no_automatic_topology_mutation").GetBoolean());
     }
 }
 
@@ -558,7 +703,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             logsRepo);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         // Result carries hits for downstream consumption — write boundary is not called here.
@@ -577,7 +722,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
         // Structural check: HubAttractorExplorationHit carries PhaseVectorJson evidence payload.
@@ -628,7 +773,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -656,7 +801,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(l2Norm: 42.5)],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 42.5)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -672,7 +817,10 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
+                l2Norm: 5.0,
+                basisVectorJson: """{"diff_count": 10}""")],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -691,7 +839,10 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [hub]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
+                l2Norm: 5.0,
+                basisVectorJson: """{"diff_count": 10}""")],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -712,6 +863,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
 
         var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
                 l2Norm: 99.0,
                 basisVectorJson: """{"diff_count": 5}""")],
             "src", "7d");
@@ -1026,7 +1178,8 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             logsRepo,
             new HubAttractorExplorationRuntime(
                 NullLogger<HubAttractorExplorationRuntime>.Instance,
-                new StubExplorationPolicyTopologyRepository(ExplorationTestFactory.ValidPolicyJson()),
+                new StubExplorationPolicyTopologyRepository(
+                    ExplorationTestFactory.ValidPolicyJson(highPhaseLimit: 1)),
                 logsRepo));
 
     [Fact]
@@ -1298,7 +1451,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Contains("'phase_basis_json'", sql);
 
             var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
-            Assert.Contains("BuildPhaseVectorJson(candidate, hub, scoring.VectorJson)", runtimeCode);
+            Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
+            Assert.Contains("scoring.VectorJson, budgetTier, tierLimits)", runtimeCode);
+            Assert.Contains("exploration_budget_gate", runtimeCode);
             Assert.Contains("string vectorJson", runtimeCode);
         }
         finally

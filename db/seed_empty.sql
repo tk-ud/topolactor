@@ -919,3 +919,41 @@ VALUES (
 ON CONFLICT (function_name, parameter_key) DO UPDATE
     SET parameter_value = EXCLUDED.parameter_value,
         active          = EXCLUDED.active;
+
+
+-- ---------------------------------------------------------------------------
+-- sql_attention_hub_attractor_exploration default_policy
+-- Loaded by HubAttractorExplorationRuntime via
+--   TopologyRepository.LoadFunctionParameterAsync(
+--     "sql_attention_hub_attractor_exploration", "default_policy").
+-- w / l2_norm gate: norm_level_high/medium classify weak/mid/high tiers;
+-- exploration_budget_tiers.{weak,mid,high} bound topK, hub-table distance band,
+-- and permutation expansion — not full-space search.
+-- Policy-missing → MissingPolicy; malformed/non-positive → MalformedPolicy.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'sql_attention_hub_attractor_exploration',
+    'default_policy',
+    '{"norm_level_high":10.0,"norm_level_medium":1.0,"exploration_budget_tiers":{"weak":{"topK_per_hub_kind":1,"max_hub_tables_per_kind":2,"phase_expansion_limit":1,"search_mode":"near_neighbor_narrow_topK"},"mid":{"topK_per_hub_kind":3,"max_hub_tables_per_kind":5,"phase_expansion_limit":1,"search_mode":"normal_topK"},"high":{"topK_per_hub_kind":5,"max_hub_tables_per_kind":10,"phase_expansion_limit":3,"search_mode":"expanded_distance_band_or_permutation"}},"max_hub_kinds_per_current":5,"max_attention_rows_saved":20}',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;
+
+
+-- ---------------------------------------------------------------------------
+-- sql_attention_logs_watch default_policy
+-- Loaded by logs.refresh_logs_current_watch for topN physical heat and norm-level watch.
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
+VALUES (
+    'sql_attention_logs_watch',
+    'default_policy',
+    '{"top_n":3,"delta_threshold":0.0,"norm_level_high":10.0,"norm_level_medium":1.0}',
+    true
+)
+ON CONFLICT (function_name, parameter_key) DO UPDATE
+    SET parameter_value = EXCLUDED.parameter_value,
+        active          = EXCLUDED.active;

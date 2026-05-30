@@ -15,8 +15,10 @@ namespace Topolactor.Runtime;
 /// Policy source: topology.function_parameters
 ///   function_name = "sql_attention_hub_attractor_exploration"
 ///   parameter_key = "default_policy"
-///   Required keys: topK_per_hub_kind, max_hub_kinds_per_current, max_hub_tables_per_kind,
-///                  phase_expansion_limit, max_attention_rows_saved
+///   Required keys: norm_level_high, norm_level_medium, exploration_budget_tiers.{weak,mid,high},
+///                  max_hub_kinds_per_current, max_attention_rows_saved
+///   w / l2_norm gate: weak=near+narrow topK, mid=normal topK,
+///                     high=expanded distance band or permutation expansion
 ///
 /// Fail-close invariants:
 ///   - Policy missing (no active function_parameters row) → MissingPolicy
@@ -147,10 +149,10 @@ public class HubAttractorExplorationRuntime
     }
 
     /// <summary>
-    /// Runs bounded hub-attractor topK exploration.
-    /// Applies max_hub_kinds_per_current, topK_per_hub_kind, max_hub_tables_per_kind,
-    /// phase_expansion_limit, and max_attention_rows_saved caps.
-    /// Does NOT write to logs.attention.
+    /// Runs bounded hub-attractor topK exploration gated by w / l2_norm budget tier.
+    /// Applies tier-specific topK, hub-table distance band, permutation expansion,
+    /// max_hub_kinds_per_current, and max_attention_rows_saved caps.
+    /// Does NOT write to logs.attention. Does NOT perform full-space repeated search.
     /// </summary>
     private static IReadOnlyList<HubAttractorExplorationHit> RunExploration(
         IReadOnlyList<WatchChangeCandidate> changeCandidates,
@@ -169,16 +171,18 @@ public class HubAttractorExplorationRuntime
             if (hits.Count >= policy.MaxAttentionRowsSaved)
                 break;
 
+            var budgetTier = ClassifyExplorationBudgetTier(candidate, policy);
+            var tierLimits = ResolveTierLimits(policy, budgetTier);
             var kindsProcessed = 0;
 
-            foreach (var (attractorKey, hubsInKind) in hubsByKind)
+            foreach (var (_, hubsInKind) in hubsByKind)
             {
                 if (kindsProcessed >= policy.MaxHubKindsPerCurrent)
                     break;
                 if (hits.Count >= policy.MaxAttentionRowsSaved)
                     break;
 
-                var permutations = policy.PhaseExpansionLimit;
+                var permutations = tierLimits.PhaseExpansionLimit;
                 for (var permIdx = 0; permIdx < permutations; permIdx++)
                 {
                     if (hits.Count >= policy.MaxAttentionRowsSaved)
@@ -186,15 +190,11 @@ public class HubAttractorExplorationRuntime
 
                     var permutationKey = permIdx == 0 ? "default" : $"permutation_{permIdx}";
 
-                    var tablesForKind = hubsInKind
-                        .Take(policy.MaxHubTablesPerKind)
-                        .ToList();
-
-                    var scoredHubs = tablesForKind
-                        .Select(h => (Hub: h, Scoring: ComputeNeighborScore(candidate, h)))
-                        .OrderByDescending(x => x.Scoring.Score)
-                        .Take(policy.TopKPerHubKind)
-                        .ToList();
+                    var scoredHubs = SelectBoundedHubCandidates(
+                        candidate,
+                        hubsInKind,
+                        tierLimits,
+                        permIdx);
 
                     for (var rank = 0; rank < scoredHubs.Count; rank++)
                     {
@@ -202,7 +202,8 @@ public class HubAttractorExplorationRuntime
                             break;
 
                         var (hub, scoring) = scoredHubs[rank];
-                        var phaseVectorJson = BuildPhaseVectorJson(candidate, hub, scoring.VectorJson);
+                        var phaseVectorJson = BuildPhaseVectorJson(
+                            candidate, hub, scoring.VectorJson, budgetTier, tierLimits);
                         hits.Add(new HubAttractorExplorationHit(
                             CurrentId: candidate.CurrentId,
                             HubCurrentId: hub.HubCurrentId,
@@ -218,7 +219,8 @@ public class HubAttractorExplorationRuntime
                             L2Norm: candidate.L2Norm,
                             VectorJson: scoring.VectorJson,
                             PhaseVectorJson: phaseVectorJson,
-                            EvidenceJson: scoring.EvidenceJson
+                            EvidenceJson: AugmentEvidenceWithBudgetGate(
+                                scoring.EvidenceJson, candidate, budgetTier, tierLimits, permIdx)
                         ));
                     }
                 }
@@ -228,6 +230,117 @@ public class HubAttractorExplorationRuntime
         }
 
         return hits;
+    }
+
+    /// <summary>
+    /// Selects bounded hub candidates within policy-defined distance band (max_hub_tables_per_kind)
+    /// and topK. Scores all hubs in kind first so weak tier prefers near-neighbor (highest cosine).
+    /// High-tier permutation rounds rotate the distance-band window without full-space search.
+    /// </summary>
+    private static List<(HubCurrentCandidate Hub, (double Score, string VectorJson, string EvidenceJson) Scoring)>
+        SelectBoundedHubCandidates(
+            WatchChangeCandidate candidate,
+            IReadOnlyList<HubCurrentCandidate> hubsInKind,
+            ExplorationBudgetTierLimits tierLimits,
+            int permutationIndex)
+    {
+        var scoredAll = hubsInKind
+            .Select(h => (Hub: h, Scoring: ComputeNeighborScore(candidate, h)))
+            .OrderByDescending(x => x.Scoring.Score)
+            .ThenBy(x => x.Hub.HubCurrentId)
+            .ToList();
+
+        IEnumerable<(HubCurrentCandidate Hub, (double Score, string VectorJson, string EvidenceJson) Scoring)> window =
+            scoredAll;
+
+        if (tierLimits.MaxHubTablesPerKind < scoredAll.Count)
+        {
+            var offset = permutationIndex * tierLimits.MaxHubTablesPerKind;
+            if (offset >= scoredAll.Count)
+                return [];
+
+            window = scoredAll
+                .Skip(offset)
+                .Take(tierLimits.MaxHubTablesPerKind);
+        }
+
+        return window
+            .Take(tierLimits.TopKPerHubKind)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Classifies w / l2_norm into exploration budget tier.
+    /// Prefers candidate.NormLevel from logs.refresh_logs_current_watch; falls back to policy thresholds.
+    /// </summary>
+    internal static ExplorationBudgetTier ClassifyExplorationBudgetTier(
+        WatchChangeCandidate candidate,
+        HubAttractorExplorationPolicy policy)
+    {
+        var normLevel = candidate.NormLevel?.Trim().ToLowerInvariant();
+        return normLevel switch
+        {
+            "high" => ExplorationBudgetTier.High,
+            "medium" => ExplorationBudgetTier.Mid,
+            "low" => ExplorationBudgetTier.Weak,
+            _ => candidate.L2Norm >= policy.NormLevelHigh
+                ? ExplorationBudgetTier.High
+                : candidate.L2Norm >= policy.NormLevelMedium
+                    ? ExplorationBudgetTier.Mid
+                    : ExplorationBudgetTier.Weak
+        };
+    }
+
+    internal static ExplorationBudgetTierLimits ResolveTierLimits(
+        HubAttractorExplorationPolicy policy,
+        ExplorationBudgetTier tier) =>
+        tier switch
+        {
+            ExplorationBudgetTier.Weak => policy.WeakTier,
+            ExplorationBudgetTier.Mid => policy.MidTier,
+            ExplorationBudgetTier.High => policy.HighTier,
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "Unknown exploration budget tier.")
+        };
+
+    internal static string TierToLabel(ExplorationBudgetTier tier) =>
+        tier switch
+        {
+            ExplorationBudgetTier.Weak => "weak",
+            ExplorationBudgetTier.Mid => "mid",
+            ExplorationBudgetTier.High => "high",
+            _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "Unknown exploration budget tier.")
+        };
+
+    private static string AugmentEvidenceWithBudgetGate(
+        string baseEvidenceJson,
+        WatchChangeCandidate candidate,
+        ExplorationBudgetTier budgetTier,
+        ExplorationBudgetTierLimits tierLimits,
+        int permutationIndex)
+    {
+        using var baseDoc = JsonDocument.Parse(baseEvidenceJson);
+        var augmented = new Dictionary<string, object?>();
+        foreach (var prop in baseDoc.RootElement.EnumerateObject())
+            augmented[prop.Name] = prop.Value.ValueKind switch
+            {
+                JsonValueKind.Number when prop.Value.TryGetDouble(out var d) => d,
+                JsonValueKind.String => prop.Value.GetString(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => prop.Value.GetRawText()
+            };
+
+        augmented["exploration_budget_gate"] = "w_l2_norm";
+        augmented["exploration_budget_tier"] = TierToLabel(budgetTier);
+        augmented["exploration_search_mode"] = tierLimits.SearchMode;
+        augmented["w_l2_norm"] = candidate.L2Norm;
+        augmented["norm_level"] = candidate.NormLevel;
+        augmented["tier_topK_per_hub_kind"] = tierLimits.TopKPerHubKind;
+        augmented["tier_max_hub_tables_per_kind"] = tierLimits.MaxHubTablesPerKind;
+        augmented["tier_phase_expansion_limit"] = tierLimits.PhaseExpansionLimit;
+        augmented["permutation_index"] = permutationIndex;
+
+        return JsonSerializer.Serialize(augmented);
     }
 
     /// <summary>
@@ -352,7 +465,9 @@ public class HubAttractorExplorationRuntime
     private static string BuildPhaseVectorJson(
         WatchChangeCandidate candidate,
         HubCurrentCandidate hub,
-        string vectorJson)
+        string vectorJson,
+        ExplorationBudgetTier budgetTier,
+        ExplorationBudgetTierLimits tierLimits)
     {
         var axisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
         var axisMovement = FlattenVectorJson(hub.AxisZScoreJson);
@@ -382,7 +497,10 @@ public class HubAttractorExplorationRuntime
                 z = "hubs_topology_manifests_count",
                 ijk = "axis movement amounts",
                 phase_movement_source = "not_manifest_or_policy_cap",
-                no_automatic_topology_mutation = true
+                no_automatic_topology_mutation = true,
+                exploration_budget_gate = "w_l2_norm",
+                exploration_budget_tier = TierToLabel(budgetTier),
+                exploration_search_mode = tierLimits.SearchMode
             },
             w = candidate.L2Norm,
             x,
@@ -448,29 +566,96 @@ public class HubAttractorExplorationRuntime
                 $"Required policy key '{key}' is not a valid integer.");
         }
 
+        static double RequireDouble(JsonElement root, string key)
+        {
+            if (!root.TryGetProperty(key, out var el))
+                throw new InvalidOperationException(
+                    $"Required policy key '{key}' is missing.");
+
+            if (el.ValueKind == JsonValueKind.Number && el.TryGetDouble(out var v))
+                return v;
+
+            if (el.ValueKind == JsonValueKind.String &&
+                double.TryParse(el.GetString(), out var sv))
+                return sv;
+
+            throw new InvalidOperationException(
+                $"Required policy key '{key}' is not a valid number.");
+        }
+
+        static ExplorationBudgetTierLimits ParseTierLimits(JsonElement tiersRoot, string tierKey)
+        {
+            if (!tiersRoot.TryGetProperty(tierKey, out var tierEl)
+                || tierEl.ValueKind != JsonValueKind.Object)
+            {
+                throw new InvalidOperationException(
+                    $"Required policy key 'exploration_budget_tiers.{tierKey}' is missing.");
+            }
+
+            if (!tierEl.TryGetProperty("search_mode", out var searchModeEl)
+                || searchModeEl.ValueKind != JsonValueKind.String
+                || string.IsNullOrWhiteSpace(searchModeEl.GetString()))
+            {
+                throw new InvalidOperationException(
+                    $"Required policy key 'exploration_budget_tiers.{tierKey}.search_mode' is missing.");
+            }
+
+            return new ExplorationBudgetTierLimits(
+                TopKPerHubKind: RequireInt(tierEl, "topK_per_hub_kind"),
+                MaxHubTablesPerKind: RequireInt(tierEl, "max_hub_tables_per_kind"),
+                PhaseExpansionLimit: RequireInt(tierEl, "phase_expansion_limit"),
+                SearchMode: searchModeEl.GetString()!
+            );
+        }
+
+        if (!root.TryGetProperty("exploration_budget_tiers", out var tiersRoot)
+            || tiersRoot.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException(
+                "Required policy key 'exploration_budget_tiers' is missing.");
+        }
+
         return new HubAttractorExplorationPolicy(
-            TopKPerHubKind: RequireInt(root, "topK_per_hub_kind"),
+            NormLevelHigh: RequireDouble(root, "norm_level_high"),
+            NormLevelMedium: RequireDouble(root, "norm_level_medium"),
+            WeakTier: ParseTierLimits(tiersRoot, "weak"),
+            MidTier: ParseTierLimits(tiersRoot, "mid"),
+            HighTier: ParseTierLimits(tiersRoot, "high"),
             MaxHubKindsPerCurrent: RequireInt(root, "max_hub_kinds_per_current"),
-            MaxHubTablesPerKind: RequireInt(root, "max_hub_tables_per_kind"),
-            PhaseExpansionLimit: RequireInt(root, "phase_expansion_limit"),
             MaxAttentionRowsSaved: RequireInt(root, "max_attention_rows_saved")
         );
     }
 
     /// <summary>
-    /// Validates policy values. All must be positive integers.
+    /// Validates policy values. Thresholds and tier limits must be positive; search_mode non-empty.
     /// Returns a human-readable error message, or null when valid.
     /// </summary>
     private static string? ValidatePolicy(HubAttractorExplorationPolicy policy)
     {
-        if (policy.TopKPerHubKind <= 0)
-            return $"topK_per_hub_kind={policy.TopKPerHubKind} must be > 0.";
+        if (policy.NormLevelMedium <= 0)
+            return $"norm_level_medium={policy.NormLevelMedium} must be > 0.";
+        if (policy.NormLevelHigh <= policy.NormLevelMedium)
+            return $"norm_level_high={policy.NormLevelHigh} must be > norm_level_medium={policy.NormLevelMedium}.";
+
+        foreach (var (label, tier) in new[]
+                 {
+                     ("weak", policy.WeakTier),
+                     ("mid", policy.MidTier),
+                     ("high", policy.HighTier)
+                 })
+        {
+            if (tier.TopKPerHubKind <= 0)
+                return $"exploration_budget_tiers.{label}.topK_per_hub_kind={tier.TopKPerHubKind} must be > 0.";
+            if (tier.MaxHubTablesPerKind <= 0)
+                return $"exploration_budget_tiers.{label}.max_hub_tables_per_kind={tier.MaxHubTablesPerKind} must be > 0.";
+            if (tier.PhaseExpansionLimit <= 0)
+                return $"exploration_budget_tiers.{label}.phase_expansion_limit={tier.PhaseExpansionLimit} must be > 0.";
+            if (string.IsNullOrWhiteSpace(tier.SearchMode))
+                return $"exploration_budget_tiers.{label}.search_mode must be non-empty.";
+        }
+
         if (policy.MaxHubKindsPerCurrent <= 0)
             return $"max_hub_kinds_per_current={policy.MaxHubKindsPerCurrent} must be > 0.";
-        if (policy.MaxHubTablesPerKind <= 0)
-            return $"max_hub_tables_per_kind={policy.MaxHubTablesPerKind} must be > 0.";
-        if (policy.PhaseExpansionLimit <= 0)
-            return $"phase_expansion_limit={policy.PhaseExpansionLimit} must be > 0.";
         if (policy.MaxAttentionRowsSaved <= 0)
             return $"max_attention_rows_saved={policy.MaxAttentionRowsSaved} must be > 0.";
         return null;

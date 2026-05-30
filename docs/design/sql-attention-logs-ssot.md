@@ -104,6 +104,18 @@ Phase semantics follow:
 
 `population_count` and `recordcount` are not canonical Phase Attention axes. The canonical axes are the hubs space references defined above.
 
+## 9.1 Exploration budget gate (w / l2_norm)
+
+Phase Attention exploration is bounded by `w` (`l2_norm` / physical table heat from `logs.current`), not full-space repeated search.
+
+| Tier | Norm level / w | Search mode |
+|------|----------------|-------------|
+| weak | `low` or below `norm_level_medium` | near-neighbor + narrow topK |
+| mid  | `medium` or between thresholds | normal topK |
+| high | `high` or at/above `norm_level_high` | expanded distance band or permutation expansion |
+
+Policy-defined limits live in `topology.function_parameters` for `sql_attention_hub_attractor_exploration` / `default_policy` (`exploration_budget_tiers`, `norm_level_high`, `norm_level_medium`, `max_hub_kinds_per_current`, `max_attention_rows_saved`). Phase Attention does not auto-mutate topology or registry.
+
 ## 10. Glossary
 
 - `logs.diff`:
