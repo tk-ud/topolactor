@@ -720,11 +720,11 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------
--- ui_component_bucket bootstrap seed (Issue #86 registration closure)
+-- topology.components_bucket bootstrap seed (canonical schema — was: ui_component_bucket)
 -- Canonical bootstrap: seed catalog entries that still require DB registration.
 -- Re-runnable via unique (component_key, source_path).
 -- ---------------------------------------------------------------------------
-INSERT INTO ui_component_bucket (component_key, source_path, component_kind, status, metadata_json)
+INSERT INTO topology.components_bucket (component_key, source_path, component_kind, status, metadata_json)
 VALUES
     ('button.primitive','frontend/components/Button.tsx','action/button','bucketed','{"classification":{"runtimeConnected":true,"registrationRequired":true,"lifecycleStatus":"code_only_drift","componentFamily":"primitive","semanticRole":"action","visualRole":"button","capabilityTags":["emits_event","requires_event_binding","accepts_design"]}}'::jsonb),
     ('input.primitive','frontend/components/Input.tsx','form_input/input','bucketed','{"classification":{"runtimeConnected":true,"registrationRequired":true,"lifecycleStatus":"code_only_drift","componentFamily":"primitive","semanticRole":"input","visualRole":"field","capabilityTags":["controlled_value","emits_event","requires_event_binding","accepts_design"]}}'::jsonb),

@@ -82,13 +82,19 @@ CREATE INDEX IF NOT EXISTS idx_manifest_topology
 -- M6 self-hosted admin authoring persistence scaffold (integrated in schema.sql)
 -- Manifest/schema/table/binding authority remains in existing manifest + schema_registry + structure_maps.
 -- This section only stores intake snapshots, per-row records, and apply logs.
+--
+-- MIGRATION NOTE (admin_import FK retirement):
+--   admin_import_snapshot.topology_manifest_id FK references hubs.topology_manifests (canonical).
+--   admin_import_records.topology_manifest_id is a soft reference (no FK constraint) via snapshot linkage.
+--   manifest(manifest_id) FK has been removed from both tables. Migration DDL:
+--     db/migrations/admin_import_topology_manifest_migration.sql
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS topology.admin_import_snapshot (
     snapshot_id               UUID PRIMARY KEY,
     source_type               TEXT        NOT NULL CHECK (source_type IN ('csv', 'json')),
     file_name                 TEXT        NOT NULL,
-    manifest_id               UUID        NOT NULL REFERENCES manifest(manifest_id),
+    topology_manifest_id      UUID        NOT NULL REFERENCES hubs.topology_manifests(topology_manifest_id),
     raw_header_jsonb          JSONB       NOT NULL DEFAULT '[]'::jsonb,
     raw_rows_jsonb            JSONB       NOT NULL DEFAULT '[]'::jsonb,
     validation_summary_jsonb  JSONB       NOT NULL DEFAULT '{}'::jsonb,
@@ -97,7 +103,7 @@ CREATE TABLE IF NOT EXISTS topology.admin_import_snapshot (
 
 CREATE TABLE IF NOT EXISTS topology.admin_import_records (
     id                        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    manifest_id               UUID        NOT NULL REFERENCES manifest(manifest_id),
+    topology_manifest_id      UUID        NOT NULL,
     snapshot_id               UUID        NOT NULL REFERENCES topology.admin_import_snapshot(snapshot_id),
     records                   JSONB       NOT NULL,
     status                    TEXT        NOT NULL CHECK (status IN ('valid', 'invalid')),
@@ -117,8 +123,8 @@ CREATE TABLE IF NOT EXISTS topology.admin_import_apply_log (
     created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_admin_import_snapshot_manifest
-    ON topology.admin_import_snapshot (manifest_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_import_snapshot_topology_manifest
+    ON topology.admin_import_snapshot (topology_manifest_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_import_records_snapshot
     ON topology.admin_import_records (snapshot_id, status);
 

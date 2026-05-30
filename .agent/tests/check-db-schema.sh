@@ -205,10 +205,10 @@ rm -f "$LEGACY_MIGRATION_SIM_SQL"
 echo "=== Validating table existence ==="
 query_equals_one "table exists: structure_maps" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'structure_maps' AND table_schema = 'topology';"
-query_equals_one "table exists: ui_component_bucket" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_component_bucket' AND table_schema = 'public';"
-query_equals_one "table exists: ui_topology_tensor" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_topology_tensor' AND table_schema = 'public';"
+query_equals_one "table exists: topology.components_bucket" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'components_bucket' AND table_schema = 'topology';"
+query_equals_one "table exists: topology.ui_topology_tensor" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_topology_tensor' AND table_schema = 'topology';"
 query_equals_one "table exists: package_registry" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'package_registry' AND table_schema = 'topology';"
 query_equals_one "table exists: schema_registry" \
@@ -221,12 +221,12 @@ query_equals_one "table exists: manifest" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'manifest' AND table_schema = 'public';"
 query_equals_one "table exists: context_token_registry" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'context_token_registry' AND table_schema = 'public';"
-query_equals_one "table exists: components" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'components' AND table_schema = 'public';"
-query_equals_one "table exists: design" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'design' AND table_schema = 'public';"
-query_equals_one "table exists: packages" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'packages' AND table_schema = 'public';"
+query_equals_one "table exists: topology.ui_builder_components" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_builder_components' AND table_schema = 'topology';"
+query_equals_one "table exists: topology.components_style_design" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'components_style_design' AND table_schema = 'topology';"
+query_equals_one "table exists: topology.components_package_design" \
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'components_package_design' AND table_schema = 'topology';"
 
 echo "=== Validating required default rows ==="
 query_equals_one "structure_maps contains attractor_key='default:entity:search'" \

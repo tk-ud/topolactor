@@ -55,21 +55,34 @@ echo "=== Apply db/init.sql-derived chain to fresh database ==="
 "${PSQL[@]}" -f "${tmp_init}" >/dev/null
 
 echo "=== Verify required bootstrap tables exist ==="
-required_tables=(
+
+required_public_tables=(
   "manifest"
-  "ui_component_bucket"
-  "ui_topology_tensor"
   "context_event"
   "context_hub_recommendation_current"
 )
 
-for table_name in "${required_tables[@]}"; do
+for table_name in "${required_public_tables[@]}"; do
   exists="$(${PSQL[@]} -tA -c "SELECT to_regclass('public.${table_name}') IS NOT NULL;")"
   if [ "${exists}" != "t" ]; then
-    echo "ERROR: required table missing after bootstrap: ${table_name}" >&2
+    echo "ERROR: required public table missing after bootstrap: ${table_name}" >&2
     exit 1
   fi
-  echo "OK  [table] ${table_name}"
+  echo "OK  [public table] ${table_name}"
+done
+
+required_topology_tables=(
+  "components_bucket"
+  "ui_topology_tensor"
+)
+
+for table_name in "${required_topology_tables[@]}"; do
+  exists="$(${PSQL[@]} -tA -c "SELECT to_regclass('topology.${table_name}') IS NOT NULL;")"
+  if [ "${exists}" != "t" ]; then
+    echo "ERROR: required topology table missing after bootstrap: ${table_name}" >&2
+    exit 1
+  fi
+  echo "OK  [topology table] ${table_name}"
 done
 
 echo "=== Bootstrap validation checks passed ==="
