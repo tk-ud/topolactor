@@ -1876,16 +1876,16 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     design.db_manifest_ui_topology_meaning_split:
-      status: partial
-      production_ready: false
+      status: complete
+      production_ready: true
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
-        Canonical schema namespaces (topology, hubs, logs) and Phase Attention axis mapping
-        (w=l2_norm/heat, x=hubs.hub_relations, y=hubs.hub, z=hubs.topology_manifests, i/j/k=movement)
-        are defined in SSOT and enforced by CI vocabulary checks.
-        Runtime DB/backend migration (topologys→topology, hubs.hubs→hubs.hub, Phase Attention
-        x/y/z axis migration from population count to hubs space) remains incomplete.
+        Canonical schema namespaces (topology, hubs, logs) fully migrated in DB, seeds, and backend.
+        Phase Attention axis migration complete: x=hubs.hub_relations count, y=hubs.hub count,
+        z=hubs.topology_manifests count. New canonical tables introduced: topology.physical_tables,
+        topology.wiring_physical_to_package, hubs.topology_manifests.
+        CI vocabulary checks enforce all canonical naming.
       files:
         - docs/design/db-schema.yaml
         - docs/design/sql-attention-logs-ssot.yaml
@@ -1893,6 +1893,13 @@ system_roadmap_ssot:
         - .agent/tests/check-sql-attention-ssot.sh
         - .agent/tests/check-structure.sh
         - .agent/tests/check-ssot-vocabulary-contract.sh
+        - db/schema.sql
+        - db/topology_tables.sql
+        - db/manifest_tables.sql
+        - db/sql_attention_logs_tables.sql
+        - db/seed_empty.sql
+        - db/demo_seed.sql
+        - backend/runtime/HubAttractorExplorationRuntime.cs
       evidence:
         tests:
           - check-sql-attention-ssot.sh
@@ -1905,12 +1912,11 @@ system_roadmap_ssot:
         - topologys_naming_drift_absent_from_sql_attention_ssot_files
         - old_phase_axis_x_y_z_hub_side_record_count_bases_absent_from_canonical_ssot
         - ci_vocabulary_checks_enforce_all_of_the_above
-      known_gap_ref:
-        - topologys schema rename migration to topology not executed in DB
-        - hubs.hubs table rename migration to hubs.hub not executed in DB
-        - Phase Attention runtime x/y/z still emits population count; hubs-space axis migration pending
-        - manifest split to topology.wiring_physical_to_package and hubs.topology_manifests not executed
-        - public context_* and ui_component_* table placement not resolved
+        - db_schema_uses_topology_not_topologys
+        - hubs_hub_table_replaces_hubs_hubs
+        - phase_attention_runtime_uses_hubs_space_axes
+        - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
+      known_gap_ref: []
 
 
 

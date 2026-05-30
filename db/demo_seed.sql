@@ -53,7 +53,7 @@
 -- Changing this relation's weight or manifest_candidate flag alters
 -- how the demo hub is traversed in attractor_resolve.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.relation_registry (
+INSERT INTO topology.relation_registry (
     relation_registry_id,
     name, master_ids, category, type, "order", weight, manifest_candidate, active
 )
@@ -69,7 +69,7 @@ ON CONFLICT (relation_registry_id) DO NOTHING;
 -- Defines the converged entity payload shape for demo entities.
 -- Changing schema_def here changes what fields schema_resolve produces.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.schema_registry (schema_id, name, schema_def, active)
+INSERT INTO topology.schema_registry (schema_id, name, schema_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000012',
     'demo_entity_schema',
@@ -84,7 +84,7 @@ ON CONFLICT (schema_id) DO NOTHING;
 -- Groups the demo hub overview and entity table components.
 -- Changing component membership here changes what component_expand produces.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.package_registry (package_id, name, type, package_def, active)
+INSERT INTO topology.package_registry (package_id, name, type, package_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000013',
     'demo_hub_overview_package',
@@ -98,7 +98,7 @@ ON CONFLICT (package_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- component_registry — demo hub overview component
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topology.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000014',
     'demo_hub_overview',
@@ -112,7 +112,7 @@ ON CONFLICT (component_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- component_registry — demo entity table component
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topology.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000015',
     'demo_entity_table',
@@ -126,7 +126,7 @@ ON CONFLICT (component_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- component_registry — demo recommendation panel component
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topology.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000016',
     'demo_recommendation_panel',
@@ -140,7 +140,7 @@ ON CONFLICT (component_id) DO NOTHING;
 -- ---------------------------------------------------------------------------
 -- component_registry — demo context token badges component
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.component_registry (component_id, name, component_type, component_def, active)
+INSERT INTO topology.component_registry (component_id, name, component_type, component_def, active)
 VALUES (
     '00000000-0000-0000-0000-000000000017',
     'demo_token_badges',
@@ -159,7 +159,7 @@ ON CONFLICT (component_id) DO NOTHING;
 -- instead of default_policy.
 -- Changing context_route_policy_ref → resolver loads a different policy key.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.structure_maps (
+INSERT INTO topology.structure_maps (
     structure_map_id,
     name,
     attractor_key,
@@ -186,7 +186,7 @@ VALUES (
 )
 ON CONFLICT (structure_map_id) DO NOTHING;
 
-INSERT INTO topologys.structure_maps (
+INSERT INTO topology.structure_maps (
     structure_map_id, name, attractor_key, package_id, schema_id, component_ids, state_policy, active
 )
 VALUES
@@ -203,11 +203,11 @@ ON CONFLICT (structure_map_id) DO NOTHING;
 -- state_id references state_registry by name to avoid hard-coding gen_random_uuid().
 -- If 'active' state does not exist (seed_empty.sql not applied), this insert is skipped.
 -- ---------------------------------------------------------------------------
-INSERT INTO hubs.hubs (hub_id, relation_registry_id, state_id)
+INSERT INTO hubs.hub (hub_id, relation_registry_id, state_id)
 VALUES (
     '00000000-0000-0000-0000-000000000010',
     '00000000-0000-0000-0000-000000000011',
-    (SELECT state_id FROM topologys.state_registry WHERE name = 'active' LIMIT 1)
+    (SELECT state_id FROM topology.state_registry WHERE name = 'active' LIMIT 1)
 )
 ON CONFLICT (hub_id) DO NOTHING;
 
@@ -217,28 +217,28 @@ ON CONFLICT (hub_id) DO NOTHING;
 -- entity_jsonb shape matches demo_entity_schema fields.
 -- Changing a field value here changes what the schema_resolve step surfaces.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id)
+INSERT INTO topology.entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id)
 VALUES
     (
         '00000000-0000-0000-0000-000000000041',
         '00000000-0000-0000-0000-000000000010',
         '{"label":"Alpha Entity","state":"active","hub_id":"00000000-0000-0000-0000-000000000010"}',
         ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],
-        (SELECT state_id FROM topologys.state_registry WHERE name = 'active' LIMIT 1)
+        (SELECT state_id FROM topology.state_registry WHERE name = 'active' LIMIT 1)
     ),
     (
         '00000000-0000-0000-0000-000000000042',
         '00000000-0000-0000-0000-000000000010',
         '{"label":"Beta Entity","state":"operating","hub_id":"00000000-0000-0000-0000-000000000010"}',
         ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],
-        (SELECT state_id FROM topologys.state_registry WHERE name = 'operating' LIMIT 1)
+        (SELECT state_id FROM topology.state_registry WHERE name = 'operating' LIMIT 1)
     ),
     (
         '00000000-0000-0000-0000-000000000043',
         '00000000-0000-0000-0000-000000000010',
         '{"label":"Gamma Entity","state":"active","hub_id":"00000000-0000-0000-0000-000000000010"}',
         ARRAY['00000000-0000-0000-0000-000000000011']::uuid[],
-        (SELECT state_id FROM topologys.state_registry WHERE name = 'active' LIMIT 1)
+        (SELECT state_id FROM topology.state_registry WHERE name = 'active' LIMIT 1)
     )
 ON CONFLICT (entity_id) DO NOTHING;
 
@@ -402,7 +402,7 @@ ON CONFLICT (session_id, prefix_index) DO UPDATE
 -- JWT config (not stored here): DEMO_JWT_SECRET / DEMO_JWT_ISSUER / DEMO_JWT_EXPIRY_HOURS
 -- env vars consumed by AuthEndpoint and JwtGuard.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'demo_auth',
     'demo_users',
@@ -419,7 +419,7 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING;
 -- Changing aggregation_limit or prefer_recent here changes the windowed
 -- transition stats scope used when resolving demo route recommendations.
 -- ---------------------------------------------------------------------------
-INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
     'context_route_recommendation_resolve',
     'demo_policy',

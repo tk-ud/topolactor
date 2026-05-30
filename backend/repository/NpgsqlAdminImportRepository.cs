@@ -9,13 +9,13 @@ namespace Topolactor.Repository;
 /// Production Npgsql implementation of AdminImportRepository.
 ///
 /// Writes to:
-///   topologys.admin_import_snapshot
-///   topologys.admin_import_records
-///   topologys.admin_import_apply_log
+///   topology.admin_import_snapshot
+///   topology.admin_import_records
+///   topology.admin_import_apply_log
 ///
 /// Reads from:
 ///   manifest (list)
-///   topologys.schema_registry (list)
+///   topology.schema_registry (list)
 /// </summary>
 public class NpgsqlAdminImportRepository : AdminImportRepository
 {
@@ -43,7 +43,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "INSERT INTO topologys.admin_import_snapshot " +
+            "INSERT INTO topology.admin_import_snapshot " +
             "(snapshot_id, source_type, file_name, manifest_id, raw_header_jsonb, raw_rows_jsonb, validation_summary_jsonb) " +
             "VALUES (@sid, @st, @fn, @mid, @rh::jsonb, @rr::jsonb, @vs::jsonb)";
         cmd.Parameters.AddWithValue("sid", snapshotId);
@@ -72,7 +72,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
             await using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText =
-                "INSERT INTO topologys.admin_import_records " +
+                "INSERT INTO topology.admin_import_records " +
                 "(manifest_id, snapshot_id, records, status, validation_errors_jsonb) " +
                 "VALUES (@mid, @sid, @rec::jsonb, @st, @ve::jsonb)";
             cmd.Parameters.AddWithValue("mid", manifestId);
@@ -98,7 +98,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "INSERT INTO topologys.admin_import_apply_log " +
+            "INSERT INTO topology.admin_import_apply_log " +
             "(apply_log_id, snapshot_id, applied_record_count, applied_diff_jsonb, status) " +
             "VALUES (@lid, @sid, @cnt, @diff::jsonb, @st)";
         cmd.Parameters.AddWithValue("lid", applyLogId);
@@ -118,7 +118,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT COUNT(*)::int FROM topologys.admin_import_records " +
+            "SELECT COUNT(*)::int FROM topology.admin_import_records " +
             "WHERE snapshot_id = @sid AND status = 'valid'";
         cmd.Parameters.AddWithValue("sid", snapshotId);
         var result = await cmd.ExecuteScalarAsync(ct);
@@ -156,7 +156,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT schema_id, name " +
-            "FROM topologys.schema_registry " +
+            "FROM topology.schema_registry " +
             "WHERE active = true " +
             "ORDER BY name";
         var results = new List<AdminImportSchemaSummary>();
@@ -178,7 +178,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT 1 FROM topologys.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
+            "SELECT 1 FROM topology.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
         cmd.Parameters.AddWithValue("sid", snapshotId);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is not null;
@@ -206,7 +206,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT manifest_id, source_type, file_name " +
-            "FROM topologys.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
+            "FROM topology.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
         cmd.Parameters.AddWithValue("sid", snapshotId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (await reader.ReadAsync(ct))

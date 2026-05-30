@@ -12,7 +12,7 @@ namespace Topolactor.Runtime;
 /// bounded hub-attractor topK neighbor exploration. Returns an exploration result that
 /// downstream write_logs_attention can consume — does NOT write to logs.attention here.
 ///
-/// Policy source: topologys.function_parameters
+/// Policy source: topology.function_parameters
 ///   function_name = "sql_attention_hub_attractor_exploration"
 ///   parameter_key = "default_policy"
 ///   Required keys: topK_per_hub_kind, max_hub_kinds_per_current, max_hub_tables_per_kind,
@@ -363,9 +363,9 @@ public class HubAttractorExplorationRuntime
         static double GetAxisValue(Dictionary<string, double> values, string key)
             => values.TryGetValue(key, out var v) ? v : 0.0;
 
-        var x = hub.PopulationCount;
-        var y = hub.PopulationRecordcount;
-        var z = GetAxisValue(axisPopulation, "z");
+        var x = GetAxisValue(axisPopulation, "hub_relations_count");
+        var y = GetAxisValue(axisPopulation, "hub_count");
+        var z = GetAxisValue(axisPopulation, "topology_manifests_count");
 
         var i = GetAxisValue(axisMovement, "i");
         var j = GetAxisValue(axisMovement, "j");
@@ -377,7 +377,9 @@ public class HubAttractorExplorationRuntime
             meaning_boundary = new
             {
                 w = "l2_norm",
-                xyz = "hub-side record-count bases",
+                x = "hubs_hub_relations_count",
+                y = "hubs_hub_count",
+                z = "hubs_topology_manifests_count",
                 ijk = "axis movement amounts",
                 phase_movement_source = "not_manifest_or_policy_cap",
                 no_automatic_topology_mutation = true

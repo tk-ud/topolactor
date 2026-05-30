@@ -28,9 +28,9 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         cmd.CommandText =
             "SELECT h.hub_id::text, COALESCE(rr.name, 'hub'), COALESCE(sr.name, 'unknown'), " +
             "       h.relation_registry_id::text " +
-            "FROM hubs.hubs h " +
-            "LEFT JOIN topologys.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
-            "LEFT JOIN topologys.state_registry sr ON sr.state_id = h.state_id " +
+            "FROM hubs.hub h " +
+            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
+            "LEFT JOIN topology.state_registry sr ON sr.state_id = h.state_id " +
             "ORDER BY h.created_at DESC";
 
         var items = new List<ContentBundleListItemDto>();
@@ -55,8 +55,8 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             "SELECT e.entity_id::text, COALESCE(e.entity_jsonb->>'label', 'Untitled'), " +
             "       COALESCE(sr.name, e.entity_jsonb->>'state', 'unknown'), " +
             "       e.hub_id::text, e.relation_ids " +
-            "FROM topologys.entities e " +
-            "LEFT JOIN topologys.state_registry sr ON sr.state_id = e.state_id " +
+            "FROM topology.entities e " +
+            "LEFT JOIN topology.state_registry sr ON sr.state_id = e.state_id " +
             "ORDER BY e.created_at DESC";
 
         var items = new List<ContentBundleListItemDto>();
@@ -81,7 +81,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT relation_registry_id::text, name, active::text " +
-            "FROM topologys.relation_registry " +
+            "FROM topology.relation_registry " +
             "WHERE active = true ORDER BY name";
 
         var items = new List<ContentBundleListItemDto>();
@@ -102,7 +102,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT state_id::text, name, owner FROM topologys.state_registry ORDER BY name";
+            "SELECT state_id::text, name, owner FROM topology.state_registry ORDER BY name";
 
         var items = new List<ContentBundleStateItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -124,7 +124,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             "SELECT hr.hub_relation_id::text, COALESCE(rr.name, hr.hub_relation_id::text), " +
             "       hr.hub_id::text, hr.relation_registry_id::text, hr.weight::text " +
             "FROM hubs.hub_relations hr " +
-            "LEFT JOIN topologys.relation_registry rr ON rr.relation_registry_id = hr.relation_registry_id " +
+            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = hr.relation_registry_id " +
             "ORDER BY hr.created_at DESC";
 
         var items = new List<ContentBundleListItemDto>();
@@ -151,9 +151,9 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         cmd.CommandText =
             "SELECT h.hub_id::text, COALESCE(sr.name, 'unknown'), h.state_id::text, " +
             "       h.relation_registry_id::text, COALESCE(rr.name, '—') " +
-            "FROM hubs.hubs h " +
-            "LEFT JOIN topologys.state_registry sr ON sr.state_id = h.state_id " +
-            "LEFT JOIN topologys.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
+            "FROM hubs.hub h " +
+            "LEFT JOIN topology.state_registry sr ON sr.state_id = h.state_id " +
+            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
             "WHERE h.hub_id = @id LIMIT 1";
         cmd.Parameters.AddWithValue("id", hubId);
 
@@ -170,7 +170,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         var entityIds = new List<string>();
         await using (var entityCmd = conn.CreateCommand())
         {
-            entityCmd.CommandText = "SELECT entity_id::text FROM topologys.entities WHERE hub_id = @hubId ORDER BY created_at";
+            entityCmd.CommandText = "SELECT entity_id::text FROM topology.entities WHERE hub_id = @hubId ORDER BY created_at";
             entityCmd.Parameters.AddWithValue("hubId", hubId);
             await using var entityReader = await entityCmd.ExecuteReaderAsync(ct);
             while (await entityReader.ReadAsync(ct))
@@ -197,7 +197,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT relation_registry_id::text, name, active FROM topologys.relation_registry " +
+            "SELECT relation_registry_id::text, name, active FROM topology.relation_registry " +
             "WHERE relation_registry_id = @id LIMIT 1";
         cmd.Parameters.AddWithValue("id", relationRegistryId);
 
@@ -213,7 +213,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using (var entityCmd = conn.CreateCommand())
         {
             entityCmd.CommandText =
-                "SELECT COUNT(*)::int FROM topologys.entities WHERE @id = ANY(relation_ids)";
+                "SELECT COUNT(*)::int FROM topology.entities WHERE @id = ANY(relation_ids)";
             entityCmd.Parameters.AddWithValue("id", relationRegistryId);
             entityCount = (int)(await entityCmd.ExecuteScalarAsync(ct) ?? 0);
         }
@@ -240,10 +240,10 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             "SELECT e.entity_id::text, COALESCE(e.entity_jsonb->>'label', 'Untitled'), " +
             "       COALESCE(sr.name, e.entity_jsonb->>'state', 'unknown'), e.state_id::text, " +
             "       e.hub_id::text, COALESCE(rr.name, e.hub_id::text), e.relation_ids, e.entity_jsonb::text " +
-            "FROM topologys.entities e " +
-            "LEFT JOIN topologys.state_registry sr ON sr.state_id = e.state_id " +
-            "LEFT JOIN hubs.hubs h ON h.hub_id = e.hub_id " +
-            "LEFT JOIN topologys.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
+            "FROM topology.entities e " +
+            "LEFT JOIN topology.state_registry sr ON sr.state_id = e.state_id " +
+            "LEFT JOIN hubs.hub h ON h.hub_id = e.hub_id " +
+            "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
             "WHERE e.entity_id = @id LIMIT 1";
         cmd.Parameters.AddWithValue("id", entityId);
 
@@ -330,7 +330,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "INSERT INTO topologys.content_entity_drafts (hub_id, entity_jsonb, relation_ids, state_id) " +
+            "INSERT INTO topology.content_entity_drafts (hub_id, entity_jsonb, relation_ids, state_id) " +
             "VALUES (@hubId, @jsonb::jsonb, @relationIds, @stateId) " +
             "RETURNING draft_id, status, created_at, updated_at";
         cmd.Parameters.AddWithValue("hubId", hubId);
@@ -388,7 +388,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "UPDATE topologys.content_entity_drafts " +
+            "UPDATE topology.content_entity_drafts " +
             "SET hub_id = @hubId, entity_jsonb = @jsonb::jsonb, relation_ids = @relationIds, " +
             "    state_id = @stateId, updated_at = now() " +
             "WHERE draft_id = @draftId AND status = 'draft' " +
@@ -419,7 +419,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         cmd.CommandText =
             "SELECT draft_id, hub_id, entity_jsonb::text, relation_ids, state_id, status, " +
             "       promoted_entity_id, created_at, updated_at " +
-            "FROM topologys.content_entity_drafts WHERE draft_id = @id LIMIT 1";
+            "FROM topology.content_entity_drafts WHERE draft_id = @id LIMIT 1";
         cmd.Parameters.AddWithValue("id", draftId);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -473,7 +473,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             var insert = conn.CreateCommand();
             insert.Transaction = tx;
             insert.CommandText =
-                "INSERT INTO topologys.entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id) " +
+                "INSERT INTO topology.entities (entity_id, hub_id, entity_jsonb, relation_ids, state_id) " +
                 "VALUES (@entityId, @hubId, @jsonb::jsonb, @relationIds, @stateId)";
             insert.Parameters.AddWithValue("entityId", entityId);
             insert.Parameters.AddWithValue("hubId", draft.HubId);
@@ -485,7 +485,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             var update = conn.CreateCommand();
             update.Transaction = tx;
             update.CommandText =
-                "UPDATE topologys.content_entity_drafts " +
+                "UPDATE topology.content_entity_drafts " +
                 "SET status = 'promoted', promoted_entity_id = @entityId, updated_at = now() " +
                 "WHERE draft_id = @draftId AND status = 'draft'";
             update.Parameters.AddWithValue("entityId", entityId);
@@ -502,7 +502,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             var log = conn.CreateCommand();
             log.Transaction = tx;
             log.CommandText =
-                "INSERT INTO topologys.topology_edit_log (target_table, target_id, operation, after_json) " +
+                "INSERT INTO topology.topology_edit_log (target_table, target_id, operation, after_json) " +
                 "VALUES ('content_bundle:entity', @targetId, 'promote', @after::jsonb)";
             log.Parameters.AddWithValue("targetId", entityId.ToString());
             log.Parameters.AddWithValue("after", draft.EntityJsonb);
@@ -544,8 +544,8 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using (var hubCmd = conn.CreateCommand())
         {
             hubCmd.CommandText =
-                "SELECT rr.name FROM hubs.hubs h " +
-                "LEFT JOIN topologys.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
+                "SELECT rr.name FROM hubs.hub h " +
+                "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = h.relation_registry_id " +
                 "WHERE h.hub_id = @hubId LIMIT 1";
             hubCmd.Parameters.AddWithValue("hubId", hubId);
             var result = await hubCmd.ExecuteScalarAsync(ct);
@@ -561,7 +561,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         {
             await using var relCmd = conn.CreateCommand();
             relCmd.CommandText =
-                "SELECT relation_registry_id, name FROM topologys.relation_registry " +
+                "SELECT relation_registry_id, name FROM topology.relation_registry " +
                 "WHERE active = true AND relation_registry_id = ANY(@ids)";
             relCmd.Parameters.AddWithValue("ids", relationIds.ToArray());
             await using var relReader = await relCmd.ExecuteReaderAsync(ct);
@@ -572,7 +572,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         var stateNames = new Dictionary<Guid, string>();
         await using (var stateCmd = conn.CreateCommand())
         {
-            stateCmd.CommandText = "SELECT state_id, name FROM topologys.state_registry";
+            stateCmd.CommandText = "SELECT state_id, name FROM topology.state_registry";
             await using var stateReader = await stateCmd.ExecuteReaderAsync(ct);
             while (await stateReader.ReadAsync(ct))
                 stateNames[stateReader.GetGuid(0)] = stateReader.GetString(1);
@@ -589,7 +589,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         var labels = new List<string>();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT name FROM topologys.relation_registry WHERE relation_registry_id = ANY(@ids)";
+            "SELECT name FROM topology.relation_registry WHERE relation_registry_id = ANY(@ids)";
         cmd.Parameters.AddWithValue("ids", guids);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))

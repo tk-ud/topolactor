@@ -18,7 +18,7 @@ namespace Topolactor.Runtime;
 ///   attention layer   : vector_json      (current excitation / neighbor hit)
 ///   phase_attention   : phase_vector_json (exploratory variance / shifted candidate direction)
 ///
-/// Policy source: topologys.function_parameters
+/// Policy source: topology.function_parameters
 ///   function_name = 'sql_attention_topology_projection'
 ///   parameter_key = 'default_policy'
 ///

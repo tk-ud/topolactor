@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS logs.attention (
 );
 
 COMMENT ON TABLE logs.attention IS
-  'SQL Attention evidence log linking physical pressure current and hub current. SQL Attention target is hubs Tensor/attractor, not direct topologys/registry search. Keeps statistics, attention, and phase-attention meanings separated.';
+  'SQL Attention evidence log linking physical pressure current and hub current. SQL Attention target is hubs Tensor/attractor, not direct topology/registry search. Keeps statistics, attention, and phase-attention meanings separated.';
 
 CREATE INDEX IF NOT EXISTS idx_logs_current_source_table
   ON logs.current (source_set_id, physical_table_id);
@@ -194,7 +194,7 @@ DECLARE
 BEGIN
     SELECT fp.parameter_value
       INTO v_policy
-      FROM topologys.function_parameters fp
+      FROM topology.function_parameters fp
      WHERE fp.function_name = p_policy_function_name
        AND fp.parameter_key = p_policy_parameter_key
        AND fp.active = true
@@ -235,17 +235,19 @@ $$;
 -- ---------------------------------------------------------------------------
 -- phase_vector generation helper
 -- Boundary:
---   w = l2_norm
---   x/y/z = hub-side record-count bases
+--   w = l2_norm (physical_table_id excitation strength from logs.current)
+--   x = hubs.hub_relations count (fixed hub sequence / UI transition axis)
+--   y = hubs.hub count (topology meaning space axis)
+--   z = hubs.topology_manifests count (manifest grouping axis)
 --   i/j/k = axis movement amounts
 -- phase movement is not derived from manifest/policy cap.
 -- No mutation/migration/promotion is triggered from this function.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(
     p_l2_norm DOUBLE PRECISION,
-    p_population_count BIGINT,
-    p_population_recordcount BIGINT,
-    p_axis_population_recordcount BIGINT,
+    p_hub_relations_count BIGINT,
+    p_hub_count BIGINT,
+    p_topology_manifests_count BIGINT,
     p_axis_move_i DOUBLE PRECISION,
     p_axis_move_j DOUBLE PRECISION,
     p_axis_move_k DOUBLE PRECISION,
@@ -260,15 +262,17 @@ AS $$
         'basis_source', 'logs.hub_current',
         'meaning_boundary', jsonb_build_object(
             'w', 'l2_norm',
-            'xyz', 'hub-side record-count bases',
+            'x', 'hubs_hub_relations_count',
+            'y', 'hubs_hub_count',
+            'z', 'hubs_topology_manifests_count',
             'ijk', 'axis movement amounts',
             'phase_movement_source', 'not_manifest_or_policy_cap',
             'no_automatic_topology_mutation', true
         ),
         'w', COALESCE(p_l2_norm, 0),
-        'x', COALESCE(p_population_count, 0),
-        'y', COALESCE(p_population_recordcount, 0),
-        'z', COALESCE(p_axis_population_recordcount, 0),
+        'x', COALESCE(p_hub_relations_count, 0),
+        'y', COALESCE(p_hub_count, 0),
+        'z', COALESCE(p_topology_manifests_count, 0),
         'i', COALESCE(p_axis_move_i, 0),
         'j', COALESCE(p_axis_move_j, 0),
         'k', COALESCE(p_axis_move_k, 0),
@@ -282,6 +286,10 @@ $$;
 -- ---------------------------------------------------------------------------
 -- logs.hub_current refresh function
 -- Refreshes hub_current population/recordcount basis from logs.attention append evidence.
+-- axis_population_json uses canonical hubs space axes:
+--   hub_relations_count = count of hubs.hub_relations for this hub (x-axis)
+--   hub_count = total count of hubs.hub (y-axis)
+--   topology_manifests_count = count of hubs.topology_manifests for this hub (z-axis)
 -- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
 -- neighbor_score statistics are not written into i/j/k to avoid movement-semantic masquerade.
 -- ---------------------------------------------------------------------------
@@ -307,7 +315,6 @@ BEGIN
         a.hub_current_id,
         COUNT(*)::BIGINT AS population_count,
         COUNT(DISTINCT a.current_id)::BIGINT AS population_recordcount,
-        COUNT(DISTINCT a.hub_relation_id)::BIGINT AS axis_population_recordcount,
         COALESCE(SUM(a.neighbor_score), 0.0)::DOUBLE PRECISION AS neighbor_score_sum,
         COALESCE(AVG(a.l2_norm), 0.0)::DOUBLE PRECISION AS l2_norm_avg
       FROM logs.attention a
@@ -315,6 +322,22 @@ BEGIN
       WHERE h.source_set_id = p_source_set_id
         AND h.basis_window = p_basis_window
       GROUP BY a.hub_current_id
+    ),
+    hub_axis AS (
+      SELECT
+        h.hub_current_id,
+        COALESCE(
+          (SELECT COUNT(*)::BIGINT FROM hubs.hub_relations hr WHERE hr.hub_id = h.hub_id),
+          0
+        ) AS hub_relations_count,
+        (SELECT COUNT(*)::BIGINT FROM hubs.hub) AS hub_count,
+        COALESCE(
+          (SELECT COUNT(*)::BIGINT FROM hubs.topology_manifests tm WHERE tm.hub_id = h.hub_id),
+          0
+        ) AS topology_manifests_count
+      FROM logs.hub_current h
+      WHERE h.source_set_id = p_source_set_id
+        AND h.basis_window = p_basis_window
     ),
     vector_terms AS (
       SELECT
@@ -340,9 +363,9 @@ BEGIN
          SET population_count = aa.population_count,
              population_recordcount = aa.population_recordcount,
              axis_population_json = jsonb_build_object(
-                'x', aa.population_count,
-                'y', aa.population_recordcount,
-                'z', aa.axis_population_recordcount
+                'hub_relations_count', COALESCE(ha.hub_relations_count, 0),
+                'hub_count', COALESCE(ha.hub_count, 0),
+                'topology_manifests_count', COALESCE(ha.topology_manifests_count, 0)
              ),
              axis_z_score_json = jsonb_build_object(
                 'i', 0,
@@ -360,6 +383,7 @@ BEGIN
              evaluated_at = now(),
              updated_at = now()
       FROM attention_axis aa
+      LEFT JOIN hub_axis ha ON ha.hub_current_id = aa.hub_current_id
       LEFT JOIN vector_basis vb ON vb.hub_current_id = aa.hub_current_id
       WHERE h.hub_current_id = aa.hub_current_id
       RETURNING h.hub_current_id, h.attractor_key, h.population_count, h.population_recordcount,

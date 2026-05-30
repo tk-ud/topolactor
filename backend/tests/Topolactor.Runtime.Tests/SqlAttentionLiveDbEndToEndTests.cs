@@ -15,7 +15,7 @@ using Xunit;
 ///   → logs.refresh_logs_current_watch → change candidate
 ///   → HubAttractorExplorationRuntime.ExploreAsync → hits
 ///   → NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync → logs.attention persisted
-///   → logs.refresh_hub_current → hub_current population_count / attractor_vector_json updated
+///   → logs.refresh_hub_current → hub_current population_count / axis_population_json / attractor_vector_json updated
 ///   → NpgsqlSqlAttentionLogsRepository.LoadAttentionEvidenceForProjectionAsync → evidence returned
 ///
 /// This test is production_ready evidence for SQL Attention: it proves that the runtime boundary
@@ -70,7 +70,7 @@ public class SqlAttentionLiveDbEndToEndTests
                 await conn.OpenAsync();
 
                 await using (var cmd = new NpgsqlCommand(@"
-INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES ('sql_attention_logs_watch', 'default_policy',
         '{""top_n"":3,""delta_threshold"":0.0,""norm_level_high"":10.0,""norm_level_medium"":1.0}'::jsonb,
         true)
@@ -78,7 +78,7 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING", conn))
                     await cmd.ExecuteNonQueryAsync();
 
                 await using (var cmd = new NpgsqlCommand(@"
-INSERT INTO topologys.function_parameters (function_name, parameter_key, parameter_value, active)
+INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES ('sql_attention_hub_attractor_exploration', 'default_policy',
         '{""topK_per_hub_kind"":3,""max_hub_kinds_per_current"":5,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""max_attention_rows_saved"":10}'::jsonb,
         true)
@@ -190,7 +190,7 @@ INSERT INTO logs.hub_current (
             Assert.True(root.TryGetProperty("w", out _),
                 "phase_vector_json.w (l2_norm basis) must be present per SSOT boundary.");
             Assert.True(root.TryGetProperty("x", out _),
-                "phase_vector_json.x (hub-side record-count base) must be present.");
+                "phase_vector_json.x (hubs.hub_relations count axis) must be present.");
             Assert.True(root.TryGetProperty("y", out _),
                 "phase_vector_json.y must be present.");
             Assert.True(root.TryGetProperty("z", out _),
@@ -256,9 +256,9 @@ INSERT INTO logs.hub_current (
             //   - ExploreAsync prohibited list: no registry mutation, no topology write.
             //   - WriteLogsAttentionAsync SQL: INSERT INTO logs.attention only.
             //   - refresh_hub_current: UPDATE logs.hub_current only.
-            //   - NpgsqlSqlAttentionLogsRepository: no SQL targeting topologys.* or hubs.*.
+            //   - NpgsqlSqlAttentionLogsRepository: no SQL targeting topology.* or hubs.*.
             // Boundary verification is performed by check-sql-attention-ssot.sh (append-only guard).
-            // No topologys.* rows with this test's sourceSetId should exist.
+            // No topology.* rows with this test's sourceSetId should exist.
         }
         finally
         {
