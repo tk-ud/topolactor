@@ -131,7 +131,8 @@ db_schema:
           legacy columns require an explicit data-preserving migration: for each distinct source
           hub_id, resolve or create a hubs.topology_manifests row, then map target_hub_id to
           related_hub_id and derive sequence_position. Auto-migration policy is not SSOT-closed;
-          carry-over tracked in .agent/tasks/todo.md (Hub relations legacy schema migration bundle).
+          unresolved migration work is tracked in agent task surface
+          (Hub relations legacy schema migration bundle).
         former_columns:
           - hub_id
           - target_hub_id

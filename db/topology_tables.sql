@@ -140,7 +140,7 @@ CREATE INDEX IF NOT EXISTS idx_topology_manifests_status
 --
 -- Bootstrap-only: CREATE TABLE IF NOT EXISTS applies on fresh DB only.
 -- Existing DBs with legacy hub_relations (hub_id / target_hub_id / relation_registry_id)
--- require an explicit data-preserving migration — see .agent/tasks/todo.md
+-- require an explicit data-preserving migration — see agent task surface
 -- (Hub relations legacy schema migration bundle).
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hubs.hub_relations (
