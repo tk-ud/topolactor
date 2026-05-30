@@ -22,6 +22,9 @@
 --     demo_component_token_badges: 00000000-0000-0000-0000-000000000017
 --     demo_structure_map:          00000000-0000-0000-0000-000000000018
 --     demo_hub:                    00000000-0000-0000-0000-000000000010
+--     demo_hub_secondary:          00000000-0000-0000-0000-00000000001d
+--     demo_topology_manifest:      00000000-0000-0000-0000-000000000044
+--     demo_hub_relation_primary:   00000000-0000-0000-0000-000000000045
 --     demo_entity_alpha:           00000000-0000-0000-0000-000000000041
 --     demo_entity_beta:            00000000-0000-0000-0000-000000000042
 --     demo_entity_gamma:           00000000-0000-0000-0000-000000000043
@@ -210,6 +213,58 @@ VALUES (
     (SELECT state_id FROM topology.state_registry WHERE name = 'active' LIMIT 1)
 )
 ON CONFLICT (hub_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- hubs — secondary demo hub (related_hub_id target for manifest-scoped sequence)
+-- ---------------------------------------------------------------------------
+INSERT INTO hubs.hub (hub_id, relation_registry_id, state_id)
+VALUES (
+    '00000000-0000-0000-0000-00000000001d',
+    '00000000-0000-0000-0000-000000000011',
+    (SELECT state_id FROM topology.state_registry WHERE name = 'active' LIMIT 1)
+)
+ON CONFLICT (hub_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- hubs.topology_manifests — demo manifest under primary demo hub
+-- ---------------------------------------------------------------------------
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key, status, topology_jsonb)
+VALUES (
+    '00000000-0000-0000-0000-000000000044',
+    '00000000-0000-0000-0000-000000000010',
+    'demo_manifest',
+    'active',
+    '{"demo": true}'::jsonb
+)
+ON CONFLICT (topology_manifest_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- hubs.hub_relations — manifest-scoped sequence entries (no hub_id source authority)
+-- ---------------------------------------------------------------------------
+INSERT INTO hubs.hub_relations (
+    hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config, status
+)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000045',
+        '00000000-0000-0000-0000-000000000044',
+        '00000000-0000-0000-0000-00000000001d',
+        1,
+        '{"transition": "to_secondary_hub"}'::jsonb,
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000046',
+        '00000000-0000-0000-0000-000000000044',
+        '00000000-0000-0000-0000-000000000010',
+        2,
+        '{"transition": "return_to_primary_hub"}'::jsonb,
+        'active'
+    )
+ON CONFLICT (topology_manifest_id, sequence_position) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------

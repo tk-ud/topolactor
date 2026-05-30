@@ -1883,17 +1883,17 @@ system_roadmap_ssot:
         SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
         Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
         introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
-        Phase Attention axis migration complete: x=hubs.hub_relations count, y=hubs.hub count,
-        z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
-        hubs.hub_relations now uses sequence_position + target_hub_id + status (fixed sequence authority).
+        Hubs space hierarchy: hubs.hub -> hubs.topology_manifests -> hubs.hub_relations.
+        Phase Attention axis migration complete: x=hubs.hub_relations manifest-scoped sequence count,
+        y=hubs.hub count, z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
+        hubs.hub_relations uses topology_manifest_id + related_hub_id + sequence_position + relation_config.
         manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
         CI vocabulary checks enforce canonical naming. All execution CI gates fixed: backend-tests
         missing topology_tables.sql in CI DB setup (real migration break fixed); Deno workflows
         using v1.x against nodeModulesDir:auto (stale CI tool expectation fixed); runtime-env
         gate referencing topologys.topology_edit_log and topologys.structure_maps (stale old
         vocabulary in check script fixed to topology.* canonical).
-        Remaining gaps: manifest admin_import_snapshot FK retirement, relation_config jsonb,
-        ui_component_* public tables migration.
+        Remaining gaps: manifest admin_import_snapshot FK retirement, ui_component_* public tables migration.
       files:
         - docs/design/db-schema.yaml
         - docs/design/sql-attention-logs-ssot.yaml
@@ -1933,11 +1933,11 @@ system_roadmap_ssot:
         - phase_attention_runtime_uses_hubs_space_axes
         - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
         - hubs_hub_includes_relation_jsonb_canonical_join_definition
-        - hubs_hub_relations_uses_fixed_sequence_not_weight_authority
+        - hubs_hub_relations_manifest_scoped_sequence_chain_under_topology_manifests
+        - hubs_hub_relations_uses_topology_manifest_id_related_hub_id_sequence_position
         - manifest_split_public_manifest_retired_from_main_path
       known_gap_ref:
         - public.manifest still retained for admin_import_snapshot FK; full retirement to topology.wiring_physical_to_package and hubs.topology_manifests pending
-        - hubs.hub_relations relation_config jsonb not yet added (pending_gap from SSOT expected_shape)
         - ui_component_* public tables not yet migrated to canonical topology schema
 
 

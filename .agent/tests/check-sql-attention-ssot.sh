@@ -200,3 +200,36 @@ for bad in "phase movement is manifest" "phase movement is policy" "phase_moveme
 done
 
 echo "OK: TODO alignment and dangerous phrase checks passed"
+
+HUBS_HIERARCHY_MD="$REPO_ROOT/docs/design/sql-attention-logs-ssot.md"
+if ! grep -qF "hubs.topology_manifests" "$HUBS_HIERARCHY_MD" || ! grep -qF "hubs.hub_relations" "$HUBS_HIERARCHY_MD"; then
+  echo "FAIL: SQL Attention SSOT md must document hubs.hub -> topology_manifests -> hub_relations hierarchy" >&2
+  exit 1
+fi
+if ! grep -qi "manifest-scoped" "$HUBS_HIERARCHY_MD"; then
+  echo "FAIL: SQL Attention SSOT md must describe x-axis as manifest-scoped hub sequence" >&2
+  exit 1
+fi
+echo "OK: hubs space hierarchy and manifest-scoped x-axis documented in SSOT md"
+
+SQL_ATTENTION_SQL="$REPO_ROOT/db/sql_attention_logs_tables.sql"
+if ! grep -qF "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id" "$SQL_ATTENTION_SQL"; then
+  echo "FAIL: refresh_hub_current x-axis count must JOIN hubs.topology_manifests" >&2
+  exit 1
+fi
+if grep -qE "hub_relations hr WHERE hr\.hub_id|WHERE hr\.hub_id = h\.hub_id" "$SQL_ATTENTION_SQL"; then
+  echo "FAIL: refresh_hub_current must not count hub_relations via hr.hub_id source authority" >&2
+  exit 1
+fi
+echo "OK: refresh_hub_current uses manifest-scoped hub_relations count"
+
+CONTENT_BUNDLE_REPO="$REPO_ROOT/backend/repository/NpgsqlContentBundleRepository.cs"
+if grep -qE "hub_relations WHERE hub_id|hr\.hub_id::text" "$CONTENT_BUNDLE_REPO"; then
+  echo "FAIL: NpgsqlContentBundleRepository must not query hub_relations via hub_id source authority" >&2
+  exit 1
+fi
+if ! grep -qF "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id" "$CONTENT_BUNDLE_REPO"; then
+  echo "FAIL: NpgsqlContentBundleRepository must JOIN topology_manifests for hub_relations" >&2
+  exit 1
+fi
+echo "OK: content bundle repository uses manifest-scoped hub_relations queries"

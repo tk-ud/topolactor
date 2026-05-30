@@ -221,25 +221,34 @@ db_schema:
       meaning: hub-side grouping of topology.wiring_physical_to_package records
       authority: db
 
+    hubs_space_hierarchy:
+      tree: |
+        hubs.hub
+          └─ hubs.topology_manifests
+               └─ hubs.hub_relations
+      source_hub_derivation: >-
+        hubs.hub_relations has no hub_id source authority. Source hub is derived through
+        topology_manifest_id -> hubs.topology_manifests.hub_id -> hubs.hub.
+
     manifest_hub_chain:
       table: hubs.hub_relations
-      meaning: fixed hub order / UI transition order / topology meaning space sequence
+      parent: hubs.topology_manifests
+      meaning: manifest-scoped hub sequence / UI transition order inside a topology manifest
       authority: db
-      implemented_shape:
+      shape:
         hub_relation_id: uuid
-        hub_id: uuid
-        target_hub_id: uuid nullable
-        relation_registry_id: uuid nullable
+        topology_manifest_id: uuid
+        related_hub_id: uuid
         sequence_position: integer
+        relation_config: jsonb
         status: enum active/deprecated
         created_at: timestamptz
         updated_at: timestamptz
       sequence_authority: sequence_position
+      unique_constraint: topology_manifest_id + sequence_position
       note: >-
-        weight has been removed as sequence authority. sequence_position is the canonical
-        fixed sequence field. target_hub_id defines source-to-target hub transition.
-        relation_registry_id retained for scoping (non-authority).
-        pending_gap: relation_config jsonb and source_hub_id alias (hub_id IS the source).
+        Child of hubs.topology_manifests. Not a global hub-to-hub relation graph.
+        related_hub_id is the sequenced hub entry. relation_config holds optional sequence metadata.
 
     sql_attention_targets:
       target_space: hubs
@@ -333,7 +342,8 @@ db_schema:
   meaning_collision_guardrails:
     - hubs_hub_relation_vs_relation_registry: hubs.hub.relation must be JSONB join config over topology.physical_tables.physical_table_id and must not be relation_registry_id.
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
-    - hubs_hub_relations_sequence: hubs.hub_relations owns fixed hub order / UI transition order / topology meaning space sequence.
+    - hubs_space_hierarchy: "hubs.hub -> hubs.topology_manifests -> hubs.hub_relations; hub_relations source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id."
+    - hubs_hub_relations_sequence: hubs.hub_relations owns manifest-scoped hub sequence / UI transition order; not a global hub-to-hub relation graph.
     - logs_current_preserved: logs.current, logs.hub_current, and logs.attention remain canonical SQL Attention current/evidence surfaces.
     - sql_attention_target: "SQL Attention target is hubs space only: hubs.hub, hubs.hub_relations, and hubs.topology_manifests."
     - sql_attention_persistence: "logs.current, logs.hub_current, and logs.attention are current/evidence persistence surfaces, not targets."
@@ -582,31 +592,27 @@ db_schema:
     hub_relations:
       category: converged_entity
       file: db/topology_tables.sql
-      role: redefine_required_manifest_scoped_topology_sequence_chain
+      role: manifest_scoped_topology_sequence_chain
+      parent_table: hubs.topology_manifests
       key_columns:
         - name: hub_relation_id
           type: uuid
           role: pk
-        - name: source_hub_id
+        - name: topology_manifest_id
           type: uuid
-        - name: target_hub_id
+          role: fk_topology_manifests
+        - name: related_hub_id
           type: uuid
-        - name: relation_registry_id
-          type: uuid
-          role: current_shape_drift_not_physical_relation_config
-      target_shape:
-        - name: manifest_id
-          type: uuid
-        - name: source_hub_id
-          type: uuid
-        - name: target_hub_id
-          type: uuid
-        - name: sequence_index
+          role: fk_hubs_sequenced_hub_entry
+        - name: sequence_position
           type: integer
+          role: sequence_authority
         - name: relation_config
-          type: jsonb nullable
+          type: jsonb
+          role: optional_sequence_metadata
         - name: status
           type: enum
+          role: active_or_deprecated
 
     content_entity_drafts:
       category: topology_definition
@@ -1021,7 +1027,7 @@ phase_attention_axis_mapping:
       meaning: l2_norm / physical table heat / physical_table_id excitation strength from logs.current
       attended_subject: physical_table_id
     x:
-      meaning: hubs.hub_relations fixed hub sequence / UI transition axis
+      meaning: hubs.hub_relations manifest-scoped hub sequence / UI transition axis; not global hub-to-hub relation graph
     y:
       meaning: hubs.hub topology meaning space axis
     z:
