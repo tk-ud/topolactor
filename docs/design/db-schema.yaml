@@ -39,8 +39,9 @@ db_schema:
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
     logs:
-      role: SQL Attention current, hub current, and attention evidence
+      role: SQL Attention signal, current, hub current, and attention evidence
       canonical_tables:
+        diff: logs.diff
         current: logs.current
         hub_current: logs.hub_current
         attention: logs.attention
@@ -48,7 +49,7 @@ db_schema:
       - public_or_unqualified_tables_are_schema_drift_not_canonical
       - topologys_schema_is_naming_drift_and_must_migrate_to_topology
       - physical_spelling_is_canonical
-      - sql_attention_target_hubs_space_and_logs_current_surfaces
+      - sql_attention_target_hubs_space_with_logs_persistence_and_signal_surfaces
       - recommendation_target_topology_and_context_learning_surfaces
 
   postgresql_schema_namespaces:
@@ -74,6 +75,7 @@ db_schema:
       tables:
         - logs.usage_metrics
         - logs.promotion_candidates
+        - logs.diff
         - logs.current
         - logs.hub_current
         - logs.attention
@@ -96,9 +98,10 @@ db_schema:
   current_projection_namespace_contract:
     role: namespace_design_boundary
     intent:
-      logs_namespace: SQL Attention physical heat, hub current, and attention evidence
+      logs_namespace: SQL Attention physical mutation pressure, physical heat, hub current, and attention evidence
       recommendation_namespace: topology and context learning surfaces
     canonical_mapping:
+      logs.diff: physical table lifecycle mutation pressure source for logs.current and physical_table_id heat / l2_norm basis
       logs.current: physical table heat / physical_table_id excitation strength
       logs.hub_current: hub current projection for SQL Attention
       logs.attention: append-only attention evidence and phase_vector_json carrier
@@ -205,11 +208,19 @@ db_schema:
         - hubs.hub
         - hubs.hub_relations
         - hubs.topology_manifests
+      persistence_surfaces:
         - logs.current
         - logs.hub_current
         - logs.attention
-      meaning: SQL Attention rotates/explores hubs space using logs current and attention evidence
+      signal_sources:
+        - logs.diff
+        - context_event
+      meaning: SQL Attention rotates/explores hubs space; logs current/attention tables are persistence surfaces, not targets
+      signal_meaning:
+        logs.diff: physical table lifecycle mutation pressure source for logs.current and physical_table_id heat / l2_norm basis
+        context_event: UI operation pressure source
       not_targets:
+        - logs current/evidence persistence surfaces
         - topology registry tables
         - recommendation learning surfaces
 
@@ -279,14 +290,17 @@ db_schema:
     - components
     - design
     - packages
-    - logs.current / logs.hub_current / logs.attention remain canonical SQL Attention surfaces
+    - logs.current / logs.hub_current / logs.attention remain canonical SQL Attention persistence surfaces, not targets
+    - logs.diff remains the physical mutation pressure signal source for logs.current
 
   meaning_collision_guardrails:
     - hubs_hub_relation_vs_relation_registry: hubs.hub.relation must be JSONB join config over topology.physical_tables.physical_table_id and must not be relation_registry_id.
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
     - hubs_hub_relations_sequence: hubs.hub_relations owns fixed hub order / UI transition order / topology meaning space sequence.
     - logs_current_preserved: logs.current, logs.hub_current, and logs.attention remain canonical SQL Attention current/evidence surfaces.
-    - sql_attention_target: SQL Attention target is hubs space including hubs.hub, hubs.hub_relations, hubs.topology_manifests, logs.current, logs.hub_current, and logs.attention.
+    - sql_attention_target: "SQL Attention target is hubs space only: hubs.hub, hubs.hub_relations, and hubs.topology_manifests."
+    - sql_attention_persistence: "logs.current, logs.hub_current, and logs.attention are current/evidence persistence surfaces, not targets."
+    - sql_attention_signal_sources: "logs.diff remains the physical mutation pressure source for logs.current; context_event remains the UI operation pressure source."
     - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
     - topologys_namespace: topologys is migration target to topology, not canonical spelling.
@@ -1005,17 +1019,22 @@ phase_attention_axis_mapping:
 
 sql_attention_target_boundary:
   target_space: hubs
-  target:
+  targets:
     - hubs.hub
     - hubs.hub_relations
     - hubs.topology_manifests
+  persistence_surfaces:
     - logs.current
     - logs.hub_current
     - logs.attention
-  not_target:
+  signal_sources:
+    - logs.diff
+    - context_event
+  not_targets:
+    - logs_current_evidence_persistence_surfaces
     - topology_recommendation_surfaces
     - context_learning_surfaces
-  interpretation_path: logs_current_heat_and_attention_evidence_rotate_explore_hubs_space
+  interpretation_path: logs_signal_sources_feed_logs_persistence_surfaces_which_rotate_explore_hubs_space
 
 recommend_target_boundary:
   target:

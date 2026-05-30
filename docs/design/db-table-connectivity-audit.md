@@ -20,9 +20,10 @@ last_updated: 2026-05-30
 | `topology.wiring_physical_to_package` | unqualified `manifest`, UI topology wiring tables | Single-screen manifest wiring; Recommend target. |
 | `topology.components_*` | `ui_component_*`, `components`, `design`, `packages` | UI component/design/package migration target for Recommend. |
 | `context_* learning surfaces` | public `context_*` tables | Recommend learning surfaces; placement still migration decision. |
-| `logs.current` | existing SQL Attention table | Preserve as physical table heat/current and physical_table_id excitation source. |
-| `logs.hub_current` | existing SQL Attention table | Preserve as hub current projection. |
-| `logs.attention` | existing SQL Attention table | Preserve as attention evidence and phase_vector_json carrier. |
+| `logs.current` | existing SQL Attention table | Preserve as physical table heat/current and physical_table_id excitation persistence surface. |
+| `logs.hub_current` | existing SQL Attention table | Preserve as hub current persistence surface. |
+| `logs.attention` | existing SQL Attention table | Preserve as attention evidence persistence surface and phase_vector_json carrier. |
+| `logs.diff` | existing SQL Attention upstream log | Preserve as physical table lifecycle mutation pressure source feeding `logs.current` and physical_table_id heat / l2_norm basis. |
 
 ## Drift classification
 
@@ -38,13 +39,19 @@ topologys_schema:
 
 ## Target boundaries
 
-SQL Attention target = hubs space:
+SQL Attention target = hubs space only:
 - `hubs.hub`
 - `hubs.hub_relations`
 - `hubs.topology_manifests`
+
+SQL Attention persistence surfaces:
 - `logs.current`
 - `logs.hub_current`
 - `logs.attention`
+
+SQL Attention signal sources:
+- `logs.diff` = physical table lifecycle mutation pressure source feeding `logs.current`.
+- `context_event` = UI operation pressure source.
 
 Recommend target:
 - `topology.*`

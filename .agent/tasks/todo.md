@@ -40,8 +40,10 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
       → 理由: 単一画面manifest wiring は topology 側、manifest群 grouping は hubs 側。
 - [ ] `hubs.hub_relations` を fixed hub sequence / UI transition order / topology meaning space sequence table として再定義・移行する。
       → 理由: 現 `relation_registry_id` + `weight` は正本ではなく、weight は fixed sequence authority ではない。
-- [ ] SQL Attention target を hubs 空間（`hubs.hub` / `hubs.hub_relations` / `hubs.topology_manifests`）と `logs.current` / `logs.hub_current` / `logs.attention` として維持する。
-      → 理由: 新規 hub current table は作らず、既存 logs current / hub_current / attention を正本維持する。
+- [ ] SQL Attention target を hubs 空間（`hubs.hub` / `hubs.hub_relations` / `hubs.topology_manifests`）のみに整理する。
+      → 理由: `logs.current` / `logs.hub_current` / `logs.attention` は current/evidence persistence surfaces として維持し、新規 hub current table は作らない。
+- [ ] `logs.diff` を physical table lifecycle mutation pressure source として維持し、`logs.current` および physical_table_id heat / l2_norm basis への接続を設計する。
+      → 理由: physical heat の upstream signal source を落とさない。
 - [ ] Recommend target を `topology.*` / `topology.wiring_physical_to_package` / `topology.components_*` / `context_*` learning surfaces に分離する。
       → 理由: SQL Attention の hubs target と Recommend の topology/context target を混同しない。
 - [ ] Phase Attention の quaternion axis を `w=logs.current l2_norm/physical table heat`、`x=hubs.hub_relations`、`y=hubs.hub`、`z=hubs.topology_manifests`、`i/j/k=phase movement amount` としてSSOT・実装に反映する。

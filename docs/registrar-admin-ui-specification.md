@@ -409,8 +409,10 @@ import registers `topology.physical_tables`. A Manifest Draft creates `hubs.hub`
 topology meaning space with JSONB join relation config. `topology.wiring_physical_to_package`
 defines the single-screen manifest wiring, and `hubs.topology_manifests` groups topology
 wiring. `hubs.hub_relations` defines fixed hub/UI transition order. SQL Attention targets
-`hubs.hub`, `hubs.hub_relations`, `hubs.topology_manifests`, `logs.current`, `logs.hub_current`, and `logs.attention`;
-recommendation targets `topology.*`, `topology.wiring_physical_to_package`,
+hubs space: `hubs.hub`, `hubs.hub_relations`, and `hubs.topology_manifests`.
+`logs.current`, `logs.hub_current`, and `logs.attention` remain SQL Attention current/evidence
+persistence surfaces; `logs.diff` remains the physical mutation pressure source for `logs.current`.
+Recommendation targets `topology.*`, `topology.wiring_physical_to_package`,
 `topology.components_*`, and `context_*` learning surfaces. Phase Attention rotates/explores
 hubs space during hub construction, with `w`/`l2_norm` gating exploration budget.
 
