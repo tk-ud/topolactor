@@ -21,6 +21,37 @@ db_schema:
     - manifest
 
 
+
+  canonical_schema_namespaces:
+    hubs:
+      role: topology meaning space, hub manifest grouping, fixed hub sequence, and hub current projection
+      canonical_tables:
+        hub: hubs.hub
+        topology_manifests: hubs.topology_manifests
+        hub_relations: hubs.hub_relations
+        current: hubs.current
+    topology:
+      role: physical table catalog, UI component design/package/layout, and single-screen wiring manifests
+      canonical_tables:
+        components_bucket: topology.components_bucket
+        components_style_design: topology.components_style_design
+        components_layout_design: topology.components_layout_design
+        components_package_design: topology.components_package_design
+        physical_tables: topology.physical_tables
+        wiring_physical_to_package: topology.wiring_physical_to_package
+    logs:
+      role: diff and attention evidence only
+      canonical_tables:
+        physical_diff: logs.physical_diff
+        components_diff: logs.components_diff
+        attention_diff: logs.attention_diff
+        hub_diff: logs.hub_diff
+    namespace_rules:
+      - public_or_unqualified_tables_are_schema_drift_not_canonical
+      - topologys_schema_is_naming_drift_and_must_migrate_to_topology
+      - physical_spelling_is_canonical
+      - sql_attention_cosine_neighborhood_and_recommendation_target_hubs_hub_and_hubs_current
+
   postgresql_schema_namespaces:
     hubs:
       role: attractor_collapse_convergence_boundary
@@ -66,74 +97,100 @@ db_schema:
   current_projection_namespace_contract:
     role: namespace_design_boundary
     intent:
-      logs_namespace: physical_time_axis_logs_pressure_and_append_only_evidence
-      current_namespace: rebuildable_current_relation_projections
+      hubs_current_namespace: hub_current_aggregate_projection_for_sql_attention_recommendation_cosine_neighborhood
+      logs_namespace: diff_and_attention_evidence_only
     canonical_mapping:
-      logs.current: current.table_relation_or_current.physical_relation
-      logs.hub_current: current.hub_relation
-      optional_ui_projection: current.ui_relation
-      logs.attention: append_only_evidence_relation
+      hubs.current: current aggregate projection for hubs.hub
+      logs.physical_diff: physical table diff evidence
+      logs.components_diff: UI component/design/package diff evidence
+      logs.attention_diff: attention event/evidence diff
+      logs.hub_diff: hub/topology meaning space diff evidence
 
   manifest_topology_integration_boundary:
     authority:
-      - manifest.topology_defines_physical_table_definition_schema_reference_ui_projection_document_binding_aggregation_target_runtime_apply_action_mapping
-      - topologys.schema_registry.schema_def_defines_records_jsonb_schema_field_type_validation
-      - topologys.structure_maps_connect_attractor_package_schema_component_resolution
+      - topology.wiring_physical_to_package_defines_single_screen_manifest_wiring
+      - hubs.topology_manifests_groups_topology_wiring_for_hub_side_manifest_sets
+      - hubs.hub_defines_topology_meaning_space_and_join_definition
+    drift_sources:
+      - manifest_public_table_must_migrate_to_topology_wiring_or_hubs_topology_manifests_responsibility
+      - topologys_schema_must_migrate_to_topology
     non_goal:
-      - no_dedicated_admin_authoring_manifest_table
+      - public_unqualified_table_as_canonical_authority
 
 
   active_db_path:
     physical_table_catalog:
-      table: topologys.registrar_entries
-      meaning: physical table catalog
+      table: topology.physical_tables
+      current_sources:
+        - topologys.registrar_entries
+      meaning: physical table catalog / imported-created-selected physical table id authority
       authority: db
-      future_required_columns:
-        - physical_table_id bigint generated identity
-        - table_ref text
+      expected_shape:
+        physical_table_id: bigint generated identity
+        table_ref: text
       note: >-
-        registrar_entries is the authority for physical table ids registered into Manifest Hub.
-        The current SQL still exposes registrar_entry_id uuid; physical_table_id bigint is an explicit
-        future migration requirement and is not introduced in this document-only change.
+        topology.physical_tables is the canonical physical table catalog. Current
+        topologys.registrar_entries is naming/schema drift and must migrate to topology.
 
     manifest_hub:
-      table: hubs.hubs
-      meaning: topology meaning space / pseudo-RDB physical table group / Manifest projection unit
+      table: hubs.hub
+      current_sources:
+        - hubs.hubs
+      meaning: topology meaning space / pseudo-RDB physical table group / join definition owner
       authority: db
+      sql_attention_target: true
+      recommendation_target: true
+      cosine_neighborhood_target: true
       expected_shape:
         hub_id: uuid
         status: enum
         relation: jsonb
         created_at: timestamptz
         updated_at: timestamptz
-      relation_meaning: physical table relation config jsonb
+      relation_meaning: JSONB join definition over topology.physical_tables.physical_table_id
       relation_minimum_shape:
-        - id: registrar_entries.physical_table_id
+        - id: topology.physical_tables.physical_table_id
           relationKey: text
           joinType: text
       prohibited_meanings:
         - bigint_array
         - ui_display_order
         - relation_registry_id
-        - hub_relation_id
         - runtime_weight
-        - semantic_relation_vocabulary
         - logs_current_pressure
       note: >-
-        hubs.hubs groups pseudo-RDB physical tables into one topology meaning space that
-        can be assigned to manifest as a projection unit. hubs.hubs.relation stores
-        JSONB join/config entries such as id, relationKey, and joinType; id points to
-        registrar_entries.physical_table_id. It is not UI display order,
-        relation_registry_id, hub_relation_id, runtime weight, or logs.current pressure.
+        hubs.hub is the canonical name candidate for one topology meaning space.
+        relation stores JSONB join config and is not UI order, registry vocabulary,
+        runtime weight, or logs pressure.
+
+    topology_manifest_wiring:
+      table: topology.wiring_physical_to_package
+      current_sources:
+        - manifest
+        - ui_component_package
+        - ui_layout_registry
+        - ui_wiring_registry
+        - ui_topology_tensor
+      meaning: single-screen manifest wiring between physical table / hub / package / layout / wiring
+      authority: db
+      note: >-
+        The existing unqualified manifest table is migration target, not canonical namespace.
+
+    topology_manifest_group:
+      table: hubs.topology_manifests
+      current_sources:
+        - manifest
+      meaning: hub-side grouping of topology.wiring_physical_to_package records
+      authority: db
 
     manifest_hub_chain:
       table: hubs.hub_relations
-      meaning: topology sequence / continuous processing order between hubs attached to a manifest
+      meaning: fixed hub order / UI transition order / topology meaning space sequence
       authority: db
       status: redefine_required
       current_shape_drift:
         - current SQL uses hub_id plus relation_registry_id plus weight
-        - weight is not topology sequence authority
+        - weight is not fixed sequence authority
         - relation_registry_id is not physical table relation config
       expected_shape:
         hub_relation_id: uuid
@@ -145,31 +202,26 @@ db_schema:
         status: enum
         created_at: timestamptz
         updated_at: timestamptz
-      note: >-
-        hubs.hub_relations remains a valid concept, but the current schema must be
-        redefined as the manifest-scoped chain between topology meaning spaces. It is
-        not a simple delete candidate in this SSOT pass.
 
-    runtime_manifest:
-      table: manifest
-      meaning: runtime dispatch distribution surface
+    hub_current_projection:
+      table: hubs.current
+      current_sources:
+        - logs.hub_current
+        - logs.current
+      meaning: hub current aggregate projection for SQL Attention / recommendation / cosine neighborhood
       authority: db
-      owns:
-        - dispatcher_mapping
-        - runtime_mapping
-        - ui_projection
-        - projection_constructor_mapping
-        - sse_projection
       not_same_as:
-        - hubs.hubs
-        - physical_table_catalog
-        - ui_component_package
-      note: >-
-        manifest is runtime dispatch distribution wiring. It is not Manifest Hub,
-        the physical table catalog, or a UI component package.
+        - logs.physical_diff
+        - logs.attention_diff
+        - topology registry tables
 
-    ui_topology:
+    topology_ui_design:
       authority_tables:
+        - topology.components_bucket
+        - topology.components_style_design
+        - topology.components_layout_design
+        - topology.components_package_design
+      current_sources:
         - ui_component_bucket
         - ui_component_registry
         - ui_component_package
@@ -177,55 +229,65 @@ db_schema:
         - ui_layout_registry
         - ui_wiring_registry
         - ui_topology_tensor
-      meaning: UI component/package/layout/wiring/projection DB authority
-      display_order_authority: ui_layout_registry / ui_wiring_registry / ui_topology_tensor
+        - components
+        - design
+        - packages
+      meaning: UI component/style/layout/package design authority under topology schema
 
-    pressure_and_evidence:
+    logs_diff_evidence:
       authority_tables:
-        - logs.current
-        - logs.hub_current
-        - logs.attention
-      meaning: physical table pressure / current / hub_current / attention evidence
+        - logs.physical_diff
+        - logs.components_diff
+        - logs.attention_diff
+        - logs.hub_diff
+      meaning: diff and attention evidence layer only
       not_same_as:
-        - hubs.hubs.relation
-        - hubs.hub_relations.weight
+        - hubs.current
+        - hubs.hub.relation
+        - hubs.hub_relations.sequence_index
 
-    context_learning:
-      authority_tables:
-        - context_*
-      meaning: operation log / recommendation learning
+  namespace_drift:
+    public_or_unqualified_tables:
+      status: drift
+      examples:
+        - manifest
+        - context_token_registry
+        - context_event_vector_cache
+        - ui_component_registry
+        - ui_component_package
+        - ui_topology_tensor
+      rule: public/unqualified table names are not canonical SSOT tables
+    topologys_schema:
+      status: naming_drift
+      migration_target: topology
+      examples:
+        - topologys.registrar_entries -> topology.physical_tables
+        - topologys.structure_maps -> topology responsibility to be redefined
+        - topologys.entities -> topology or hub responsibility to be redefined
 
   legacy_transition_candidates:
-    - hubs.hub_relations
-    - topologys.entities
-    - topologys.content_entity_drafts
-    - topologys.structure_maps
+    - hubs.hubs -> hubs.hub
+    - hubs.hub_relations -> hubs.hub_relations fixed sequence schema
+    - topologys.* -> topology.*
+    - manifest -> topology.wiring_physical_to_package / hubs.topology_manifests
+    - public context_* -> topology placement decision
+    - public ui_component_* -> topology.components_*
     - components
     - design
     - packages
-    - topologys.demo_state_transitions
-    - topologys.topology_edit_log
-    - logs.usage_metrics
-    - logs.promotion_candidates
-    - context_record_snapshot_cache
-    - context_event_vector_cache
-    - context_cluster
-    - context_cluster_label
-    - context_drift_signal
+    - logs.current -> hubs.current or logs.physical_diff responsibility split
+    - logs.hub_current -> hubs.current
+    - logs.attention -> logs.attention_diff
 
   meaning_collision_guardrails:
-    - registrar_entries_vs_physical_table_id: registrar_entries is the catalog authority; physical_table_id bigint is the future canonical id required for Manifest Hub membership.
-    - hubs_hubs_relation_vs_relation_registry: hubs.hubs.relation must be JSONB physical table relation config and must not be treated as relation_registry_id.
-    - hubs_hub_relations_vs_hubs_hubs_relation: hubs.hub_relations is the redefine-required topology sequence / manifest hub chain, not hubs.hubs relation config.
-    - manifest_vs_hubs_hubs: manifest owns runtime dispatch distribution; hubs.hubs owns one topology meaning space / pseudo-RDB physical table grouping.
-    - manifest_ui_projection_packageIds_vs_packages_ui_component_package: manifest packageIds currently point at legacy packages semantics and need a decision to align with ui_component_package or ui_topology_tensor.
-    - ui_component_registry_vs_components: ui_component_registry is active component authority; components is legacy UI builder catalog.
-    - ui_component_package_vs_packages: ui_component_package is active package authority; packages is legacy UI builder package surface.
-    - ui_package_component_map_vs_packages_layout: ui_package_component_map is normalized component membership; packages.layout is legacy json binding.
-    - design_classname_tailwind_vs_css_dictionary_topology_layout_class: design.classname/tailwind semantics must not bypass css-dictionary/topology-layout-class SSOTs.
-    - hubs_hub_relations_weight_vs_sequence_logs_current_hub_current_attention: hub_relations.weight is not topology sequence authority and is not dynamic pressure/current/attention evidence.
-    - structure_maps_vs_manifest_dispatch_distribution: structure_maps is legacy/transition attractor resolution and must not be conflated with runtime manifest dispatch distribution.
-    - entities_content_entity_drafts_vs_physical_table_records: entities/content_entity_drafts are not the physical table catalog or Manifest Hub membership authority.
+    - hubs_hub_relation_vs_relation_registry: hubs.hub.relation must be JSONB join config over topology.physical_tables.physical_table_id and must not be relation_registry_id.
+    - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
+    - hubs_hub_relations_sequence: hubs.hub_relations owns fixed hub order / UI transition order / topology meaning space sequence.
+    - hubs_current_vs_logs: hubs.current is current aggregate projection; logs.* are diff/evidence only.
+    - sql_attention_target: SQL Attention / cosine neighborhood / recommendation target hubs.hub and hubs.current, not topology registry tables.
+    - public_namespace: public/unqualified tables are drift, not SSOT authority.
+    - topologys_namespace: topologys is migration target to topology, not canonical spelling.
+    - manifest_split: unqualified manifest responsibility must split toward topology.wiring_physical_to_package and hubs.topology_manifests.
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication

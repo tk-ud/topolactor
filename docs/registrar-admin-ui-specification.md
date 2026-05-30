@@ -404,12 +404,12 @@ See `infra/docker-compose.yml` `topolactor_seed_storage` volume.
 
 ## 8.6 Manifest Hub / Runtime Manifest / UI Topology Boundary
 
-Manifest Draft creates or selects physical tables. Selected physical tables are grouped into
-`hubs.hubs` as one topology meaning space, and `hubs.hubs.relation` stores pseudo-RDB
-join configuration as JSONB. A manifest can attach multiple hubs; `hubs.hub_relations`
-defines the sequence / continuous processing order between attached topology meaning spaces.
-Runtime manifest remains dispatch distribution wiring, and UI topology registry owns
-component/package/layout/wiring/tensor projection definitions.
+Authoring uses three canonical schemas: `hubs`, `topology`, and `logs`. Physical table
+import registers `topology.physical_tables`. A Manifest Draft creates `hubs.hub` as one
+topology meaning space with JSONB join relation config. `topology.wiring_physical_to_package`
+defines the single-screen manifest wiring, and `hubs.topology_manifests` groups topology
+wiring. `hubs.hub_relations` defines fixed hub/UI transition order. SQL Attention and
+recommendation target `hubs.hub` / `hubs.current`, not public tables.
 
 ## 9. Boundary
 
