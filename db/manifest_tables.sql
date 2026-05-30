@@ -2,11 +2,15 @@
 -- manifest_tables.sql
 -- Manifest persistence table.
 --
--- PURPOSE:
---   Manifest is the single source of wiring definitions for dispatcher_mapping,
---   runtime_mapping, ui_projection_definition, projection_constructor_mapping,
---   and sse_projection_definition.
+-- MIGRATION STATUS: compatibility-only surface.
+--   Canonical wiring responsibility has been split:
+--     - topology.wiring_physical_to_package: physical table → package wiring (new canonical path)
+--     - hubs.topology_manifests: hub manifest grouping (new canonical path)
+--   public.manifest is retained for compatibility with admin_import_snapshot FK
+--   and existing admin edit flow. It is NOT the new canonical wiring authority.
+--   Pending retirement once admin import is migrated to canonical tables.
 --
+-- ORIGINAL PURPOSE (compatibility context):
 --   Manifest stores ID references and topology vectors only.
 --   Actual data (package content, component definitions, etc.) lives in the
 --   respective registry tables. Manifest is a wiring diagram, not a data store.
@@ -43,10 +47,12 @@ CREATE TABLE IF NOT EXISTS manifest (
 );
 
 COMMENT ON TABLE manifest IS
-    'Wiring definition table. Stores dispatcher_mapping, runtime_mapping, '
-    'ui_projection_definition, and projection_constructor_mapping as topology '
-    'vectors (ID references only, no actual data). '
-    'Managed by admin: draft -> active -> deprecated lifecycle.';
+    'Compatibility-only wiring table. Retained for admin_import_snapshot FK and '
+    'existing admin edit flow. Canonical wiring path has been split: '
+    'topology.wiring_physical_to_package (physical→package wiring) and '
+    'hubs.topology_manifests (hub manifest grouping) are the new canonical surfaces. '
+    'Pending retirement once admin import migrates to canonical tables. '
+    'Stores dispatcher_mapping / runtime_mapping / ui_projection as topology vectors (ID refs only).';
 
 COMMENT ON COLUMN manifest.relation_registry_id IS
     'The relation_registry entry this manifest applies to. '

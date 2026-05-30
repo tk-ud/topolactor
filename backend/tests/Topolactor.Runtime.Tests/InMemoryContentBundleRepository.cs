@@ -72,7 +72,7 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
         [
             new(DemoHubRelationId.ToString(), "hub_relation", "demo_relation", "active",
                 DemoHubId.ToString(), [DemoRelationId.ToString()],
-                $"hub={DemoHubId}, relation={DemoRelationId}, weight=1.0"),
+                $"hub={DemoHubId}, relation={DemoRelationId}, seq=0"),
         ];
         return Task.FromResult(items);
     }

@@ -143,8 +143,8 @@ db_schema:
         physical_table_id: bigint generated identity
         table_ref: text
       note: >-
-        topology.physical_tables is the canonical physical table catalog. Current
-        topologys.registrar_entries is naming/schema drift and must migrate to topology.
+        topology.physical_tables is the canonical physical table catalog.
+        topologys.registrar_entries naming drift has been migrated to topology schema.
 
     manifest_hub:
       table: hubs.hub
@@ -200,21 +200,21 @@ db_schema:
       table: hubs.hub_relations
       meaning: fixed hub order / UI transition order / topology meaning space sequence
       authority: db
-      status: redefine_required
-      current_shape_drift:
-        - current SQL uses hub_id plus relation_registry_id plus weight
-        - weight is not fixed sequence authority
-        - relation_registry_id is not physical table relation config
-      expected_shape:
+      implemented_shape:
         hub_relation_id: uuid
-        manifest_id: uuid
-        source_hub_id: uuid
-        target_hub_id: uuid
-        sequence_index: integer
-        relation_config: jsonb nullable
-        status: enum
+        hub_id: uuid
+        target_hub_id: uuid nullable
+        relation_registry_id: uuid nullable
+        sequence_position: integer
+        status: enum active/deprecated
         created_at: timestamptz
         updated_at: timestamptz
+      sequence_authority: sequence_position
+      note: >-
+        weight has been removed as sequence authority. sequence_position is the canonical
+        fixed sequence field. target_hub_id defines source-to-target hub transition.
+        relation_registry_id retained for scoping (non-authority).
+        pending_gap: relation_config jsonb and source_hub_id alias (hub_id IS the source).
 
     sql_attention_targets:
       target_space: hubs

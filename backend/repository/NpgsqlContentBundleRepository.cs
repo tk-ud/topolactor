@@ -122,10 +122,10 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT hr.hub_relation_id::text, COALESCE(rr.name, hr.hub_relation_id::text), " +
-            "       hr.hub_id::text, hr.relation_registry_id::text, hr.weight::text " +
+            "       hr.hub_id::text, hr.relation_registry_id::text, hr.sequence_position::text, hr.status " +
             "FROM hubs.hub_relations hr " +
             "LEFT JOIN topology.relation_registry rr ON rr.relation_registry_id = hr.relation_registry_id " +
-            "ORDER BY hr.created_at DESC";
+            "ORDER BY hr.hub_id, hr.sequence_position, hr.created_at DESC";
 
         var items = new List<ContentBundleListItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -135,11 +135,12 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             var label = reader.GetString(1);
             var hubId = reader.GetString(2);
             var relationId = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var weight = reader.GetString(4);
+            var seqPos = reader.GetString(4);
+            var status = reader.GetString(5);
             items.Add(new ContentBundleListItemDto(
-                id, "hub_relation", label, "active", hubId,
+                id, "hub_relation", label, status, hubId,
                 relationId is null ? null : [relationId],
-                $"hub={hubId}, relation={relationId ?? "—"}, weight={weight}"));
+                $"hub={hubId}, relation={relationId ?? "—"}, seq={seqPos}"));
         }
         return items;
     }

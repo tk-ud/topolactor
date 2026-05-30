@@ -1876,16 +1876,17 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     design.db_manifest_ui_topology_meaning_split:
-      status: complete
-      production_ready: true
+      status: partial
+      production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
-        Canonical schema namespaces (topology, hubs, logs) fully migrated in DB, seeds, and backend.
+        Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
+        introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
         Phase Attention axis migration complete: x=hubs.hub_relations count, y=hubs.hub count,
-        z=hubs.topology_manifests count. New canonical tables introduced: topology.physical_tables,
-        topology.wiring_physical_to_package, hubs.topology_manifests.
-        CI vocabulary checks enforce all canonical naming.
+        z=hubs.topology_manifests count. CI vocabulary checks enforce canonical naming.
+        Remaining: hubs.hub semantic shape (relation jsonb), hubs.hub_relations fixed sequence
+        migration, manifest split from public.manifest to canonical topology/hubs tables.
       files:
         - docs/design/db-schema.yaml
         - docs/design/sql-attention-logs-ssot.yaml
@@ -1916,7 +1917,13 @@ system_roadmap_ssot:
         - hubs_hub_table_replaces_hubs_hubs
         - phase_attention_runtime_uses_hubs_space_axes
         - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
-      known_gap_ref: []
+        - hubs_hub_includes_relation_jsonb_canonical_join_definition
+        - hubs_hub_relations_uses_fixed_sequence_not_weight_authority
+        - manifest_split_public_manifest_retired_from_main_path
+      known_gap_ref:
+        - public.manifest still retained for admin_import_snapshot FK; full retirement to topology.wiring_physical_to_package and hubs.topology_manifests pending
+        - hubs.hub_relations relation_config jsonb not yet added (pending_gap from SSOT expected_shape)
+        - ui_component_* public tables not yet migrated to canonical topology schema
 
 
 

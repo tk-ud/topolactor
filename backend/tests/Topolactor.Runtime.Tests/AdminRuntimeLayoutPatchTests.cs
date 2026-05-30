@@ -103,7 +103,7 @@ public class AdminRuntimeLayoutPatchTests
             => Task.FromResult(_candidates);
     }
 
-    private sealed class ThrowingUiRepo : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")
+    private sealed class ThrowingUiRepo() : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")
     {
         public override Task<IReadOnlyList<LayoutCandidateDto>> ListLayoutCandidatesAsync(CancellationToken ct = default)
             => throw new InvalidOperationException("connection refused");

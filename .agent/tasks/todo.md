@@ -42,6 +42,13 @@ roadmap ref: `design.db_manifest_ui_topology_meaning_split`
 - [ ] `context_*` public tables の `topology` schema 配置可否と recommendation 境界を判断し、配置先を確定する。
       → 理由: public `context_*` は正本配置ではない。
 
+## Manifest main-path retirement bundle
+
+roadmap ref: `design.db_manifest_ui_topology_meaning_split`
+
+- [ ] `public.manifest` を compatibility-only に降格し、admin import flow を `topology.wiring_physical_to_package` / `hubs.topology_manifests` canonical tables へ移行する。
+      → 理由: manifest はcompatibility surface として保持中（admin_import_snapshot FK 依存）。新規 wiring は topology.wiring_physical_to_package が正本。manifest の admin import 依存を canonical tables へ移行し、manifest を deprecate または view として残す。
+
 ## UI topology schema migration bundle
 
 roadmap ref: `design.db_manifest_ui_topology_meaning_split`
