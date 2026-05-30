@@ -612,8 +612,11 @@ db_schema:
       file: db/topology_tables.sql
       role: manifest_scoped_topology_sequence_chain
       parent_table: hubs.topology_manifests
+<<<<<<< HEAD
       bootstrap_policy: CREATE TABLE IF NOT EXISTS; no destructive DROP CASCADE in bootstrap DDL
       legacy_migration_ref: compatibility_history.hub_relations_legacy_global_graph
+=======
+>>>>>>> 575cc1326a2dc93196592dc21f67fbe58735f1e7
       key_columns:
         - name: hub_relation_id
           type: uuid

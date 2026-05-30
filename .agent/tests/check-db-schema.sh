@@ -170,10 +170,13 @@ query_equals_one "column exists: hubs.hub_relations.related_hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'related_hub_id';"
 query_equals_zero "column absent: hubs.hub_relations.hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'hub_id';"
+<<<<<<< HEAD
 query_equals_zero "column absent: hubs.hub_relations.target_hub_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'target_hub_id';"
 query_equals_zero "column absent: hubs.hub_relations.relation_registry_id" \
   "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = 'hubs' AND table_name = 'hub_relations' AND column_name = 'relation_registry_id';"
+=======
+>>>>>>> 575cc1326a2dc93196592dc21f67fbe58735f1e7
 query_equals_one "unique constraint: hub_relations(topology_manifest_id, sequence_position)" \
   "SELECT COUNT(*) FROM pg_constraint c JOIN pg_class t ON c.conrelid = t.oid JOIN pg_namespace n ON t.relnamespace = n.oid WHERE n.nspname = 'hubs' AND t.relname = 'hub_relations' AND c.contype = 'u' AND pg_get_constraintdef(c.oid) LIKE '%topology_manifest_id%' AND pg_get_constraintdef(c.oid) LIKE '%sequence_position%';"
 
