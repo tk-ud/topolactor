@@ -1884,9 +1884,12 @@ system_roadmap_ssot:
         Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
         introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
         Phase Attention axis migration complete: x=hubs.hub_relations count, y=hubs.hub count,
-        z=hubs.topology_manifests count. CI vocabulary checks enforce canonical naming.
-        Remaining: hubs.hub semantic shape (relation jsonb), hubs.hub_relations fixed sequence
-        migration, manifest split from public.manifest to canonical topology/hubs tables.
+        z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
+        hubs.hub_relations now uses sequence_position + target_hub_id + status (fixed sequence authority).
+        manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
+        CI vocabulary checks enforce canonical naming. All backend and test layers aligned.
+        Remaining gaps: manifest admin_import_snapshot FK retirement, relation_config jsonb,
+        ui_component_* public tables migration.
       files:
         - docs/design/db-schema.yaml
         - docs/design/sql-attention-logs-ssot.yaml
@@ -1905,8 +1908,16 @@ system_roadmap_ssot:
         tests:
           - check-sql-attention-ssot.sh
           - check-structure.sh
+          - check-backend-tests.sh
+          - check-runtime-semantics.sh
+          - check-default-entity-search.sh
+          - check-unified-test-gate.sh
         ci:
           - structure-check
+          - backend-tests
+          - runtime-semantics
+          - default-entity-search
+          - unified-test-gate
       completion_condition:
         - ssot_canonical_schema_namespaces_match_topology_hubs_logs
         - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count
