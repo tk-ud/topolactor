@@ -55,9 +55,8 @@ db_schema:
   postgresql_schema_namespaces:
     status: canonical_active
     note: >-
-      Physical DB schema names as implemented. topologys schema and hubs.hubs table have been
-      migrated. canonical names match canonical_schema_namespaces. Old vocabulary is in
-      compatibility_history below.
+      Physical DB schema names in active canonical contract. topologys schema and hubs.hubs table
+      migrations are recorded in compatibility_history below.
     hubs:
       status: canonical_active
       role: topology meaning space, hub manifest grouping, and fixed hub sequence
