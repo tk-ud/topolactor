@@ -755,14 +755,11 @@ if awk '/CREATE TABLE hubs\.hub_relations/,/;/' "$REPO_ROOT/db/topology_tables.s
 else
   echo "OK  [db] hub_relations old global graph columns absent"
 fi
-<<<<<<< HEAD
 if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "db/topology_tables.sql must not contain destructive DROP TABLE ... CASCADE (bootstrap-only CREATE TABLE IF NOT EXISTS required)"
 else
   echo "OK  [db] topology_tables.sql destructive DROP TABLE CASCADE absent"
 fi
-=======
->>>>>>> 575cc1326a2dc93196592dc21f67fbe58735f1e7
 if rg -n "weight.*sequence|sequence.*weight" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "weight must not remain as sequence authority in topology_tables.sql"
 else

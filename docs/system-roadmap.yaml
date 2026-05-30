@@ -1887,11 +1887,8 @@ system_roadmap_ssot:
         Phase Attention axis migration complete: x=hubs.hub_relations manifest-scoped sequence count,
         y=hubs.hub count, z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
         hubs.hub_relations uses topology_manifest_id + related_hub_id + sequence_position + relation_config.
-<<<<<<< HEAD
         topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE);
         legacy hub_relations global-graph schema migration is a separate carry-over bundle.
-=======
->>>>>>> 575cc1326a2dc93196592dc21f67fbe58735f1e7
         manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
         CI vocabulary checks enforce canonical naming. All execution CI gates fixed: backend-tests
         missing topology_tables.sql in CI DB setup (real migration break fixed); Deno workflows
