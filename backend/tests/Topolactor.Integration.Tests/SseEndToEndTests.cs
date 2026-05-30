@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Runtime;
+using Topolactor.Schema;
 using Topolactor.Scheduler;
 using Xunit;
 
@@ -512,4 +513,16 @@ internal sealed class StubManifestRepository : Topolactor.Repository.ManifestRep
     public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> DeprecateAsync(
         Guid manifestId, CancellationToken ct = default) =>
         Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+    public override Task<IReadOnlyList<PromotionManifestListItem>> ListPromotionManifestsAsync(
+        string? statusFilter, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<PromotionManifestListItem>>([]);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> UpdatePromotionMetadataDraftAsync(
+        Guid manifestId, JsonElement promotionEntry, CancellationToken ct = default) =>
+        Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
+
+    public override Task<int> CountActivePromotionKeyConflictsAsync(
+        string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
+        Task.FromResult(0);
 }
