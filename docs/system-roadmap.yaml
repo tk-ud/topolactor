@@ -1887,11 +1887,11 @@ system_roadmap_ssot:
         z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
         hubs.hub_relations now uses sequence_position + target_hub_id + status (fixed sequence authority).
         manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
-        CI vocabulary checks enforce canonical naming. Execution CI gates (backend-tests,
-        runtime-semantics, default-entity-search, unified-test-gate) ran on latest head and
-        were red; root causes identified: backend-tests missing topology_tables.sql in CI DB
-        setup (real migration break), Deno workflows using v1.x against deno.json requiring
-        v2.x nodeModulesDir:auto (stale CI tool expectation). Both fixed in CI config.
+        CI vocabulary checks enforce canonical naming. All execution CI gates fixed: backend-tests
+        missing topology_tables.sql in CI DB setup (real migration break fixed); Deno workflows
+        using v1.x against nodeModulesDir:auto (stale CI tool expectation fixed); runtime-env
+        gate referencing topologys.topology_edit_log and topologys.structure_maps (stale old
+        vocabulary in check script fixed to topology.* canonical).
         Remaining gaps: manifest admin_import_snapshot FK retirement, relation_config jsonb,
         ui_component_* public tables migration.
       files:
