@@ -1885,7 +1885,9 @@ system_roadmap_ssot:
         introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
         Hubs space hierarchy: hubs.hub -> hubs.topology_manifests -> hubs.hub_relations.
         Phase Attention axis migration complete: x=hubs.hub_relations manifest-scoped sequence count,
-        y=hubs.hub count, z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
+        y=hubs.hub count, z=hubs.topology_manifests count. w/l2_norm exploration budget gate implemented:
+        weak=near+narrow topK, mid=normal topK, high=expanded distance band or permutation expansion;
+        limits sourced from topology.function_parameters exploration_budget_tiers (not runtime magic numbers).
         hubs.hub_relations uses topology_manifest_id + related_hub_id + sequence_position + relation_config.
         topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE);
         legacy hub_relations global-graph migration DDL available at
@@ -1920,6 +1922,7 @@ system_roadmap_ssot:
           - check-runtime-semantics.sh
           - check-default-entity-search.sh
           - check-unified-test-gate.sh
+          - HubAttractorExplorationRuntime_ExplorationBudgetGateTests
         ci:
           - structure-check
           - backend-tests
@@ -1935,6 +1938,8 @@ system_roadmap_ssot:
         - db_schema_uses_topology_not_topologys
         - hubs_hub_table_replaces_hubs_hubs
         - phase_attention_runtime_uses_hubs_space_axes
+        - phase_attention_exploration_budget_gate_weak_mid_high_from_w_l2_norm
+        - exploration_budget_limits_sourced_from_function_parameters_not_runtime_magic_numbers
         - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
         - hubs_hub_includes_relation_jsonb_canonical_join_definition
         - hubs_hub_relations_manifest_scoped_sequence_chain_under_topology_manifests

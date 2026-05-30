@@ -62,11 +62,45 @@ physical_schema_contract:
     exploratory: "0.90-0.85"
     evidence_only_below: 0.85
   exploration_budget_policy_keys:
+    - norm_level_high
+    - norm_level_medium
+    - exploration_budget_tiers.weak.topK_per_hub_kind
+    - exploration_budget_tiers.weak.max_hub_tables_per_kind
+    - exploration_budget_tiers.weak.phase_expansion_limit
+    - exploration_budget_tiers.weak.search_mode
+    - exploration_budget_tiers.mid.topK_per_hub_kind
+    - exploration_budget_tiers.mid.max_hub_tables_per_kind
+    - exploration_budget_tiers.mid.phase_expansion_limit
+    - exploration_budget_tiers.mid.search_mode
+    - exploration_budget_tiers.high.topK_per_hub_kind
+    - exploration_budget_tiers.high.max_hub_tables_per_kind
+    - exploration_budget_tiers.high.phase_expansion_limit
+    - exploration_budget_tiers.high.search_mode
     - max_hub_kinds_per_current
-    - max_hub_tables_per_kind
-    - topK_per_hub_kind
-    - phase_expansion_limit
     - max_attention_rows_saved
+  exploration_budget_gate:
+    gate: w_l2_norm
+    rule: Phase Attention does not perform full-space repeated search
+    tier_classification:
+      weak:
+        norm_level: low
+        l2_norm: below norm_level_medium
+        search_mode: near_neighbor_narrow_topK
+      mid:
+        norm_level: medium
+        l2_norm: norm_level_medium through norm_level_high
+        search_mode: normal_topK
+      high:
+        norm_level: high
+        l2_norm: at or above norm_level_high
+        search_mode: expanded_distance_band_or_permutation
+    bounded_by:
+      - topN_physical_heat
+      - topK_hub_candidates
+      - policy_defined_expansion_limits
+    prohibited:
+      - full_space_repeated_search
+      - automatic_topology_registry_mutation
   runtime_boundary:
     refresh_current:
       role: current_basis_recalculation

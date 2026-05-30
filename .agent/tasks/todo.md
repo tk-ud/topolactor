@@ -26,13 +26,6 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] `product.dynamic_support_nocode_loop` の manual acceptance / hand-debug verification を実施し、authoring guidance・SQL Attention feedback・M6 self-hosted admin authoring loop が同一UX導線として受入可能か確認する。
       → 残理由は implementation gap ではない。M6 self-hosted admin authoring loop、SQL Attention SQLA-1..5、SQL Attention live DB E2E、roadmap/test-bundles 正規化は完了済みで、M6/M7 core runtime production-ready 判定は維持する。future optional external connector surfaces は M6/M7 blocker ではない。
 
-## Phase Attention exploration budget gate
-
-roadmap ref: `design.db_manifest_ui_topology_meaning_split`
-
-- [ ] `w` / `l2_norm` exploration budget gate を実装設計へ反映し、weak=near+narrow topK、mid=normal topK、high=expanded/farther distance band or permutation expansion に分岐する。
-      → 理由: Phase Attention は full-space repeated search ではなく、topN physical heat / topK hub candidates / policy-defined expansion limits で bounded にする。canonical x/y/z axis migration は完了済み。この item は exploration budget branching の設計・実装タスク。
-
 ## Recommend target migration bundle
 
 roadmap ref: `design.db_manifest_ui_topology_meaning_split`

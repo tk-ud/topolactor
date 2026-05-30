@@ -80,7 +80,7 @@ ON CONFLICT (function_name, parameter_key) DO NOTHING", conn))
                 await using (var cmd = new NpgsqlCommand(@"
 INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES ('sql_attention_hub_attractor_exploration', 'default_policy',
-        '{""topK_per_hub_kind"":3,""max_hub_kinds_per_current"":5,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""max_attention_rows_saved"":10}'::jsonb,
+        '{""norm_level_high"":10.0,""norm_level_medium"":1.0,""exploration_budget_tiers"":{""weak"":{""topK_per_hub_kind"":1,""max_hub_tables_per_kind"":2,""phase_expansion_limit"":1,""search_mode"":""near_neighbor_narrow_topK""},""mid"":{""topK_per_hub_kind"":3,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""search_mode"":""normal_topK""},""high"":{""topK_per_hub_kind"":5,""max_hub_tables_per_kind"":10,""phase_expansion_limit"":3,""search_mode"":""expanded_distance_band_or_permutation""}},""max_hub_kinds_per_current"":5,""max_attention_rows_saved"":10}'::jsonb,
         true)
 ON CONFLICT (function_name, parameter_key) DO NOTHING", conn))
                     await cmd.ExecuteNonQueryAsync();
