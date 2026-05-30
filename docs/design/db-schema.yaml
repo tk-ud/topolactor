@@ -118,6 +118,24 @@ db_schema:
         status: migration_completed
         migration_target: hubs.hub
         note: hubs.hubs renamed to hubs.hub with relation JSONB join definition added.
+      hub_relations_legacy_global_graph:
+        status: migration_pending
+        migration_target: hubs.hub_relations
+        bootstrap_ddl: db/topology_tables.sql
+        bootstrap_policy: CREATE TABLE IF NOT EXISTS only; no DROP TABLE CASCADE
+        note: >-
+          Legacy hub_relations used hub_id / target_hub_id / relation_registry_id as a global
+          hub-to-hub graph. Canonical shape is manifest-scoped under hubs.topology_manifests
+          (topology_manifest_id + related_hub_id + sequence_position + relation_config + status).
+          Fresh DB bootstrap applies the new shape via topology_tables.sql. Existing DBs with
+          legacy columns require an explicit data-preserving migration: for each distinct source
+          hub_id, resolve or create a hubs.topology_manifests row, then map target_hub_id to
+          related_hub_id and derive sequence_position. Auto-migration policy is not SSOT-closed;
+          carry-over tracked in .agent/tasks/todo.md (Hub relations legacy schema migration bundle).
+        former_columns:
+          - hub_id
+          - target_hub_id
+          - relation_registry_id
     registry_schema_policy:
       has_dedicated_schema: false
       rule: registry_is_tensor_map_reference_concept_not_schema_namespace
@@ -594,6 +612,8 @@ db_schema:
       file: db/topology_tables.sql
       role: manifest_scoped_topology_sequence_chain
       parent_table: hubs.topology_manifests
+      bootstrap_policy: CREATE TABLE IF NOT EXISTS; no destructive DROP CASCADE in bootstrap DDL
+      legacy_migration_ref: compatibility_history.hub_relations_legacy_global_graph
       key_columns:
         - name: hub_relation_id
           type: uuid
