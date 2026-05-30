@@ -248,7 +248,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             [hubCurrent]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(currentId: currentId)],
+            [ExplorationTestFactory.ChangeCandidate(currentId: currentId, normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -773,7 +773,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -801,7 +801,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent()]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(l2Norm: 42.5)],
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 42.5)],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -817,7 +817,10 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
+                l2Norm: 5.0,
+                basisVectorJson: """{"diff_count": 10}""")],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -836,7 +839,10 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             [hub]);
 
         var result = await runtime.ExploreAsync(
-            [ExplorationTestFactory.ChangeCandidate(basisVectorJson: """{"diff_count": 10}""")],
+            [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
+                l2Norm: 5.0,
+                basisVectorJson: """{"diff_count": 10}""")],
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
@@ -857,6 +863,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
 
         var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
+                normLevel: "medium",
                 l2Norm: 99.0,
                 basisVectorJson: """{"diff_count": 5}""")],
             "src", "7d");
@@ -1171,7 +1178,8 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             logsRepo,
             new HubAttractorExplorationRuntime(
                 NullLogger<HubAttractorExplorationRuntime>.Instance,
-                new StubExplorationPolicyTopologyRepository(ExplorationTestFactory.ValidPolicyJson()),
+                new StubExplorationPolicyTopologyRepository(
+                    ExplorationTestFactory.ValidPolicyJson(highPhaseLimit: 1)),
                 logsRepo));
 
     [Fact]
