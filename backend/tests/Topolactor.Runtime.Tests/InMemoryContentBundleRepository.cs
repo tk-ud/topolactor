@@ -14,7 +14,9 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     public static readonly Guid DemoHubId = new("00000000-0000-0000-0000-000000000010");
     public static readonly Guid DemoRelationId = new("00000000-0000-0000-0000-000000000011");
     public static readonly Guid DemoEntityAlphaId = new("00000000-0000-0000-0000-000000000041");
-    public static readonly Guid DemoHubRelationId = new("00000000-0000-0000-0000-000000000012");
+    public static readonly Guid DemoHubRelationId = new("00000000-0000-0000-0000-000000000045");
+    public static readonly Guid DemoTopologyManifestId = new("00000000-0000-0000-0000-000000000044");
+    public static readonly Guid DemoRelatedHubId = new("00000000-0000-0000-0000-00000000001d");
     public static readonly Guid ActiveStateId = new("00000000-0000-0000-0000-000000000001");
 
     private readonly List<ContentEntityDraftRecord> _drafts = [];
@@ -70,9 +72,9 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     {
         IReadOnlyList<ContentBundleListItemDto> items =
         [
-            new(DemoHubRelationId.ToString(), "hub_relation", "demo_relation", "active",
-                DemoHubId.ToString(), [DemoRelationId.ToString()],
-                $"hub={DemoHubId}, relation={DemoRelationId}, seq=0"),
+            new(DemoHubRelationId.ToString(), "hub_relation", "demo_manifest", "active",
+                DemoHubId.ToString(), [DemoTopologyManifestId.ToString(), DemoRelatedHubId.ToString()],
+                $"source_hub={DemoHubId}, manifest={DemoTopologyManifestId}, related_hub={DemoRelatedHubId}, seq=1"),
         ];
         return Task.FromResult(items);
     }
@@ -94,8 +96,8 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
         if (relationRegistryId != DemoRelationId) return Task.FromResult<ContentBundleRelationDetailDto?>(null);
         var entityCount = _entities.Count(e => e.RelationIds.Contains(DemoRelationId));
         return Task.FromResult<ContentBundleRelationDetailDto?>(new ContentBundleRelationDetailDto(
-            DemoRelationId.ToString(), "demo_relation", true, entityCount, 1,
-            $"relation demo_relation — {entityCount} entity(ies), 1 hub_relation(s)"));
+            DemoRelationId.ToString(), "demo_relation", true, entityCount, 0,
+            $"relation demo_relation — {entityCount} entity(ies), 0 hub_relation(s)"));
     }
 
     public override Task<ContentBundleEntityDetailDto?> LoadContentEntityAsync(Guid entityId, CancellationToken ct = default)

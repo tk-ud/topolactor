@@ -15,7 +15,7 @@ last_updated: 2026-05-30
 |---|---|---|
 | `hubs.hub` | `hubs.hubs` | Canonical topology meaning space / pseudo-RDB physical table group / JSONB join definition owner; SQL Attention target. |
 | `hubs.topology_manifests` | unqualified `manifest` responsibility subset | Hub-side grouping of `topology.wiring_physical_to_package`; SQL Attention z axis. |
-| `hubs.hub_relations` | current `hub_id + relation_registry_id + weight` shape | Keep concept; redefine as fixed hub order / UI transition order / topology meaning space sequence; SQL Attention x axis. |
+| `hubs.hub_relations` | child of `hubs.topology_manifests` | Manifest-scoped hub sequence / UI transition order; SQL Attention x axis; not global hub-to-hub graph. |
 | `topology.physical_tables` | `topologys.registrar_entries` | Physical table catalog and physical table id authority. |
 | `topology.wiring_physical_to_package` | unqualified `manifest`, UI topology wiring tables | Single-screen manifest wiring; Recommend target. |
 | `topology.components_*` | `ui_component_*`, `components`, `design`, `packages` | UI component/design/package migration target for Recommend. |
@@ -59,10 +59,18 @@ Recommend target:
 - `topology.components_*`
 - `context_* learning surfaces`
 
+## Hubs space hierarchy
+
+```text
+hubs.hub
+  └─ hubs.topology_manifests
+       └─ hubs.hub_relations
+```
+
 ## Phase Attention axis mapping
 
 - `w = l2_norm = physical table heat = physical_table_id excitation strength from logs.current`.
-- `x = hubs.hub_relations` fixed hub sequence / UI transition axis.
+- `x = hubs.hub_relations` manifest-scoped hub sequence / UI transition axis; not global hub-to-hub relation graph.
 - `y = hubs.hub` topology meaning space axis.
 - `z = hubs.topology_manifests` manifest grouping axis.
 - `i/j/k = phase movement amount`, the movement vector over hubs space.

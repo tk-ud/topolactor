@@ -88,7 +88,7 @@ here alter topology behaviour for all future canonical flow traversals.
 - `schema_registry` — schema definitions governing converged entity shape (resolved in `schema_resolve`)
 - `component_registry` — discrete reusable behaviour units (expanded in `component_expand`)
 - `structure_maps` — binds `attractor_key` → package → schema → components; the central topology definition artifact
-- `hub_relations` — weighted relation bindings between hubs and `relation_registry` entries
+- `hub_relations` — manifest-scoped hub sequence entries under `hubs.topology_manifests`
 - `function_parameters` — data-driven configuration parameters for canonical flow functions
 
 ### Converged entity data tables

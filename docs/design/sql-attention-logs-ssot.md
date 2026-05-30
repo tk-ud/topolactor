@@ -75,14 +75,27 @@ Phase Attention = exploratory variance / shifted candidate direction
 
 `statistics`, `Attention`, and `Phase Attention` each preserve different evidence meaning.
 
-## 8. Quaternion / Attractor Semantics
+## 8. Hubs Space Hierarchy
+
+```text
+hubs.hub
+  └─ hubs.topology_manifests
+       └─ hubs.hub_relations
+```
+
+- `hubs.hub` owns topology meaning space and join definition (`relation` JSONB).
+- `hubs.topology_manifests` belongs to one `hubs.hub` and groups hub-side manifest sets.
+- `hubs.hub_relations` belongs to one topology manifest; source hub is derived through
+  `topology_manifest_id -> hubs.topology_manifests.hub_id`, not through `hub_relations.hub_id`.
+
+## 9. Quaternion / Attractor Semantics
 
 Phase semantics follow:
 
 - `q = w + xi + yj + zk`
 - `q = attractor`
 - `w` = l2 norm / physical table heat / physical_table_id excitation strength from logs.current.
-- `x` = hubs.hub_relations — fixed hub sequence / UI transition axis.
+- `x` = hubs.hub_relations — manifest-scoped hub sequence / UI transition axis; not a global hub-to-hub relation graph.
 - `y` = hubs.hub — topology meaning space axis.
 - `z` = hubs.topology_manifests — manifest grouping axis.
 - `i / j / k` = phase movement amount / movement vector over hubs space.
@@ -91,7 +104,7 @@ Phase semantics follow:
 
 `population_count` and `recordcount` are not canonical Phase Attention axes. The canonical axes are the hubs space references defined above.
 
-## 9. Glossary
+## 10. Glossary
 
 - `logs.diff`:
   - physical mutation pressure source on time axis.
@@ -113,19 +126,19 @@ Phase semantics follow:
 - `topology projection recommendation`:
   - consumer projection surface derived from evidence; not SQL Attention body.
 
-## 10. Write/Mutation Boundary
+## 11. Write/Mutation Boundary
 
 - `logs.attention` is append-only evidence storage.
 - Refresh and watch boundaries are current-basis and level-detection semantics.
 - Topology/registry mutation is outside SQL Attention evidence writing route.
 
-## 11. Target Boundary
+## 12. Target Boundary
 
 - Primary target: `hubs.*` Tensor / attractor semantics.
 - Not primary target: direct `topology.*` / registry search as SQL Attention body.
 - `topology.*` and registry are projection/support layers consuming evidence.
 
-## 12. Non-goals
+## 13. Non-goals
 
 - Reproducing Transformer QK Attention in SQL.
 - Treating Phase Attention as primary exploration.

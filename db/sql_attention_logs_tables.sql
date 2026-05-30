@@ -236,7 +236,7 @@ $$;
 -- phase_vector generation helper
 -- Boundary:
 --   w = l2_norm (physical_table_id excitation strength from logs.current)
---   x = hubs.hub_relations count (fixed hub sequence / UI transition axis)
+--   x = hubs.hub_relations count (manifest-scoped hub sequence / UI transition axis)
 --   y = hubs.hub count (topology meaning space axis)
 --   z = hubs.topology_manifests count (manifest grouping axis)
 --   i/j/k = axis movement amounts
@@ -287,7 +287,7 @@ $$;
 -- logs.hub_current refresh function
 -- Refreshes hub_current population/recordcount basis from logs.attention append evidence.
 -- axis_population_json uses canonical hubs space axes:
---   hub_relations_count = count of hubs.hub_relations for this hub (x-axis)
+--   hub_relations_count = manifest-scoped count of hubs.hub_relations for this hub (x-axis)
 --   hub_count = total count of hubs.hub (y-axis)
 --   topology_manifests_count = count of hubs.topology_manifests for this hub (z-axis)
 -- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
@@ -327,7 +327,10 @@ BEGIN
       SELECT
         h.hub_current_id,
         COALESCE(
-          (SELECT COUNT(*)::BIGINT FROM hubs.hub_relations hr WHERE hr.hub_id = h.hub_id),
+          (SELECT COUNT(*)::BIGINT
+           FROM hubs.hub_relations hr
+           JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id
+           WHERE tm.hub_id = h.hub_id),
           0
         ) AS hub_relations_count,
         (SELECT COUNT(*)::BIGINT FROM hubs.hub) AS hub_count,

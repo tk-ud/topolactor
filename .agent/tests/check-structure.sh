@@ -735,6 +735,37 @@ else
   echo "OK  [ssot] old Phase Attention x_y_z canonical axis removed from SQL Attention SSOT"
 fi
 
+if ! rg -q "topology_manifest_id" "$REPO_ROOT/db/topology_tables.sql"; then
+  fail "hubs.hub_relations must reference topology_manifest_id in db/topology_tables.sql"
+else
+  echo "OK  [db] hub_relations includes topology_manifest_id FK"
+fi
+if ! rg -q "UNIQUE \\(topology_manifest_id, sequence_position\\)" "$REPO_ROOT/db/topology_tables.sql"; then
+  fail "hubs.hub_relations must enforce UNIQUE(topology_manifest_id, sequence_position)"
+else
+  echo "OK  [db] hub_relations unique constraint on topology_manifest_id + sequence_position"
+fi
+if rg -n "hub_relations.*hub_id.*REFERENCES hubs\\.hub \\(hub_id\\)" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+  fail "hubs.hub_relations must not use hub_id as source authority column"
+else
+  echo "OK  [db] hub_relations hub_id source authority column absent"
+fi
+if awk '/CREATE TABLE hubs\.hub_relations/,/;/' "$REPO_ROOT/db/topology_tables.sql" | rg -n "target_hub_id|relation_registry_id|^\s+hub_id\s" >/dev/null; then
+  fail "hubs.hub_relations must not retain hub_id, target_hub_id, or relation_registry_id columns"
+else
+  echo "OK  [db] hub_relations old global graph columns absent"
+fi
+if rg -n "weight.*sequence|sequence.*weight" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+  fail "weight must not remain as sequence authority in topology_tables.sql"
+else
+  echo "OK  [db] weight is not sequence authority in topology_tables.sql"
+fi
+if rg -n "hubs\\.hubs|topologys\\." "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
+  fail "non-canonical schema names (hubs.hubs, topologys.*) must not appear in topology_tables.sql"
+else
+  echo "OK  [db] canonical schema names in topology_tables.sql"
+fi
+
 # ─── Result ───────────────────────────────────────────────────────────────────
 
 echo ""

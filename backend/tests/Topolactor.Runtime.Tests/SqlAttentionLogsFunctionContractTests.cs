@@ -82,6 +82,14 @@ public class SqlAttentionLogsFunctionContractTests
     }
 
     [Fact]
+    public void RefreshHubCurrent_UsesManifestScopedHubRelationsCount()
+    {
+        var sql = LoadSql();
+        Assert.Contains("JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id", sql);
+        Assert.DoesNotContain("FROM hubs.hub_relations hr WHERE hr.hub_id", sql);
+    }
+
+    [Fact]
     public void RefreshHubCurrent_UpdatesProjectionBoundaries_AndAvoidsMutation()
     {
         var sql = LoadSql();
