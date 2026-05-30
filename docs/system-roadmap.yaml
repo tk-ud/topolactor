@@ -1887,7 +1887,9 @@ system_roadmap_ssot:
         z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
         hubs.hub_relations now uses sequence_position + target_hub_id + status (fixed sequence authority).
         manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
-        CI vocabulary checks enforce canonical naming. All backend and test layers aligned.
+        CI vocabulary checks enforce canonical naming. Backend and test layers verified locally;
+        execution CI gates (backend-tests, runtime-semantics, default-entity-search,
+        unified-test-gate) pending fresh run after vocabulary-only commits did not re-trigger them.
         Remaining gaps: manifest admin_import_snapshot FK retirement, relation_config jsonb,
         ui_component_* public tables migration.
       files:

@@ -27,6 +27,6 @@ echo "=== Backend integration semantics (default route path) ==="
 dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo --verbosity minimal
 
 echo "=== Frontend API proxy semantics ==="
-deno test frontend/tests/adminApi.test.ts frontend/tests/defaultEntitySearch.test.ts --allow-read
+deno test frontend/tests/adminApi.test.ts frontend/tests/defaultEntitySearch.test.ts frontend/tests/pipelineContinuity.test.ts --allow-read
 
 echo "=== Runtime semantics checks passed ==="
