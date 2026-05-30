@@ -109,6 +109,18 @@ else
   echo "OK  [sql] topology_tables.sql destructive DROP TABLE CASCADE absent"
 fi
 
+HUB_REL_MIGRATION="$REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+if [ ! -f "$HUB_REL_MIGRATION" ]; then
+  fail "hub_relations legacy migration SQL missing: db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+else
+  echo "OK  [sql] hub_relations legacy migration SQL present"
+fi
+if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" >/dev/null; then
+  fail "hub_relations migration must not use DROP TABLE ... CASCADE"
+else
+  echo "OK  [sql] hub_relations migration destructive DROP TABLE CASCADE absent"
+fi
+
 echo "=== Executing schema SQL files ==="
 run_sql_file "db/schema.sql"
 run_sql_file "db/topology_tables.sql"
@@ -118,6 +130,70 @@ run_sql_file "db/ui_topology_tables.sql"
 run_sql_file "db/manifest_tables.sql"
 run_sql_file "db/sql_attention_logs_tables.sql"
 run_sql_file "db/seed_empty.sql"
+
+echo "=== Validating hub_relations legacy migration idempotency ==="
+run_sql_file "db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+query_equals_one "hub_relations legacy shape detection function present" \
+  "SELECT COUNT(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'hubs' AND p.proname = 'hub_relations_has_legacy_shape';"
+query_equals_one "hub_relations canonical shape after idempotent migration pass" \
+  "SELECT CASE WHEN hubs.hub_relations_has_canonical_shape() AND hubs.hub_relations_legacy_columns_absent() THEN 1 ELSE 0 END;"
+
+echo "=== Simulating legacy hub_relations shape and re-migrating (transaction rollback) ==="
+LEGACY_MIGRATION_SIM_SQL="$(mktemp)"
+cat > "$LEGACY_MIGRATION_SIM_SQL" <<EOF
+BEGIN;
+
+ALTER TABLE hubs.hub_relations RENAME TO hub_relations_canonical_sim_backup;
+
+CREATE TABLE hubs.hub_relations (
+    hub_relation_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hub_id                UUID NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    target_hub_id         UUID NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    relation_registry_id  UUID,
+    sequence_position     INTEGER NOT NULL DEFAULT 0,
+    status                TEXT NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'deprecated')),
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO hubs.hub_relations (hub_id, target_hub_id, relation_registry_id, sequence_position, status)
+SELECT
+    tm.hub_id,
+    hr.related_hub_id,
+    NULLIF(hr.relation_config -> 'legacy' ->> 'relation_registry_id', '')::uuid,
+    hr.sequence_position,
+    hr.status
+FROM hubs.hub_relations_canonical_sim_backup hr
+JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id;
+
+DO \$\$
+BEGIN
+    IF NOT hubs.hub_relations_has_legacy_shape() THEN
+        RAISE EXCEPTION 'legacy simulation failed: legacy shape not detected';
+    END IF;
+END;
+\$\$;
+
+\\i $REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql
+
+DO \$\$
+BEGIN
+    IF NOT (hubs.hub_relations_has_canonical_shape() AND hubs.hub_relations_legacy_columns_absent()) THEN
+        RAISE EXCEPTION 'legacy simulation failed: canonical shape not restored';
+    END IF;
+END;
+\$\$;
+
+ROLLBACK;
+EOF
+
+if "${PSQL_BASE[@]}" --file "$LEGACY_MIGRATION_SIM_SQL" >/dev/null; then
+  echo "OK  [sql] hub_relations legacy migration simulation passed (rolled back)"
+else
+  fail "hub_relations legacy migration simulation failed"
+fi
+rm -f "$LEGACY_MIGRATION_SIM_SQL"
 
 echo "=== Validating table existence ==="
 query_equals_one "table exists: structure_maps" \

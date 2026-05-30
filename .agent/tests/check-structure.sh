@@ -760,6 +760,37 @@ if rg -n "DROP TABLE IF EXISTS.*CASCADE" "$REPO_ROOT/db/topology_tables.sql" >/d
 else
   echo "OK  [db] topology_tables.sql destructive DROP TABLE CASCADE absent"
 fi
+HUB_REL_MIGRATION="$REPO_ROOT/db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+if [ ! -f "$HUB_REL_MIGRATION" ]; then
+  fail "hub_relations legacy migration SQL missing: db/migrations/hub_relations_legacy_to_manifest_scoped.sql"
+else
+  echo "OK  [db] hub_relations legacy migration SQL present"
+fi
+if rg -n "DROP TABLE IF EXISTS.*CASCADE|DROP TABLE .* CASCADE" "$HUB_REL_MIGRATION" >/dev/null; then
+  fail "hub_relations migration must not use DROP TABLE ... CASCADE"
+else
+  echo "OK  [db] hub_relations migration destructive DROP TABLE CASCADE absent"
+fi
+if ! rg -q "hub_relations_has_legacy_shape" "$HUB_REL_MIGRATION"; then
+  fail "hub_relations migration must expose legacy shape detection (hub_relations_has_legacy_shape)"
+else
+  echo "OK  [db] hub_relations legacy shape detection present"
+fi
+if ! rg -q "RAISE EXCEPTION" "$HUB_REL_MIGRATION"; then
+  fail "hub_relations migration must fail explicitly on ambiguous/unmigratable cases"
+else
+  echo "OK  [db] hub_relations migration explicit failure paths present"
+fi
+if ! rg -q "hub_relations_legacy_columns_absent|DROP COLUMN IF EXISTS hub_id" "$HUB_REL_MIGRATION"; then
+  fail "hub_relations migration must remove legacy columns and validate absence"
+else
+  echo "OK  [db] hub_relations migration legacy column removal validated"
+fi
+if ! rg -q "db/migrations/hub_relations_legacy_to_manifest_scoped.sql" "$REPO_ROOT/db/topology_tables.sql"; then
+  fail "db/topology_tables.sql must reference db/migrations/hub_relations_legacy_to_manifest_scoped.sql for legacy DB migration"
+else
+  echo "OK  [db] topology_tables.sql references hub_relations legacy migration path"
+fi
 if rg -n "weight.*sequence|sequence.*weight" "$REPO_ROOT/db/topology_tables.sql" >/dev/null; then
   fail "weight must not remain as sequence authority in topology_tables.sql"
 else

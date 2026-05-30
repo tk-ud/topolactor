@@ -55,10 +55,3 @@ roadmap ref: `design.db_manifest_ui_topology_meaning_split`
 
 - [ ] `ui_component_*` public tables と旧 `components` / `design` / `packages` を `topology.components_bucket` / `components_style_design` / `components_layout_design` / `components_package_design` 系へ移行する。
       → 理由: 旧 UI builder 系と public UI topology tables は canonical topology schema へ寄せる。DB namespace migration (topologys→topology, hubs.hubs→hubs.hub, seed 更新) は完了済み。この item は public UI builder tables の canonical topology schema 配置タスク。
-
-## Hub relations legacy schema migration bundle
-
-roadmap ref: `design.db_manifest_ui_topology_meaning_split`
-
-- [ ] 既存 DB の legacy `hubs.hub_relations`（`hub_id` / `target_hub_id` / `relation_registry_id` グローバルグラフ形）から manifest-scoped 正本形（`topology_manifest_id` + `related_hub_id` + `sequence_position` + `relation_config` + `status`）への data-preserving migration DDL を設計・実装する。
-      → 理由: PR #315 follow-up で bootstrap DDL は `CREATE TABLE IF NOT EXISTS` のみに修正済み（破壊的 DROP CASCADE 除去）。既存 DB 向け移行方針: 各 source `hub_id` に対応する `hubs.topology_manifests` を決定または作成し、`target_hub_id` → `related_hub_id`、`sequence_position` を導出する。自動移行ポリシーは SSOT 未確定のため本 PR では実装しない。SSOT: `docs/design/db-schema.yaml` compatibility_history.hub_relations_legacy_global_graph。

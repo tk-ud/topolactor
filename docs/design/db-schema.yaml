@@ -119,20 +119,20 @@ db_schema:
         migration_target: hubs.hub
         note: hubs.hubs renamed to hubs.hub with relation JSONB join definition added.
       hub_relations_legacy_global_graph:
-        status: migration_pending
+        status: migration_ddl_available
         migration_target: hubs.hub_relations
         bootstrap_ddl: db/topology_tables.sql
+        migration_ddl: db/migrations/hub_relations_legacy_to_manifest_scoped.sql
         bootstrap_policy: CREATE TABLE IF NOT EXISTS only; no DROP TABLE CASCADE
         note: >-
           Legacy hub_relations used hub_id / target_hub_id / relation_registry_id as a global
           hub-to-hub graph. Canonical shape is manifest-scoped under hubs.topology_manifests
           (topology_manifest_id + related_hub_id + sequence_position + relation_config + status).
           Fresh DB bootstrap applies the new shape via topology_tables.sql. Existing DBs with
-          legacy columns require an explicit data-preserving migration: for each distinct source
-          hub_id, resolve or create a hubs.topology_manifests row, then map target_hub_id to
-          related_hub_id and derive sequence_position. Auto-migration policy is not SSOT-closed;
-          unresolved migration work is tracked in agent task surface
-          (Hub relations legacy schema migration bundle).
+          legacy columns run db/migrations/hub_relations_legacy_to_manifest_scoped.sql:
+          resolve or create one active topology_manifest per source hub_id, map target_hub_id to
+          related_hub_id, preserve sequence_position, store relation_registry_id under
+          relation_config.legacy. Ambiguous cases fail explicitly (no silent fallback).
         former_columns:
           - hub_id
           - target_hub_id
@@ -614,6 +614,7 @@ db_schema:
       role: manifest_scoped_topology_sequence_chain
       parent_table: hubs.topology_manifests
       bootstrap_policy: CREATE TABLE IF NOT EXISTS; no destructive DROP CASCADE in bootstrap DDL
+      legacy_migration_ddl: db/migrations/hub_relations_legacy_to_manifest_scoped.sql
       legacy_migration_ref: compatibility_history.hub_relations_legacy_global_graph
       key_columns:
         - name: hub_relation_id
