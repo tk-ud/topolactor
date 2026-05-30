@@ -82,6 +82,118 @@ db_schema:
     non_goal:
       - no_dedicated_admin_authoring_manifest_table
 
+
+  active_db_path:
+    physical_table_catalog:
+      table: topologys.registrar_entries
+      meaning: physical table catalog
+      authority: db
+      future_required_columns:
+        - physical_table_id bigint generated identity
+        - table_ref text
+      note: >-
+        registrar_entries is the authority for physical table ids registered into Manifest Hub.
+        The current SQL still exposes registrar_entry_id uuid; physical_table_id bigint is an explicit
+        future migration requirement and is not introduced in this document-only change.
+
+    manifest_hub:
+      table: hubs.hubs
+      meaning: Manifest Hub / one-screen physical table group
+      authority: db
+      expected_shape:
+        hub_id: uuid
+        status: enum
+        relation: bigint[]
+      relation_meaning: unordered physical_table_id set
+      prohibited_meanings:
+        - ui_display_order
+        - relation_registry_id
+        - hub_relation_id
+        - runtime_weight
+        - semantic_relation_vocabulary
+        - logs_current_pressure
+      note: >-
+        hubs.hubs.relation is the unordered set of physical_table_id values included in one
+        screen-level Manifest Hub. It is not UI display order, relation_registry_id,
+        hub_relation_id, semantic relation vocabulary, runtime traversal weight, or
+        logs.current pressure.
+
+    runtime_manifest:
+      table: manifest
+      meaning: runtime dispatch distribution surface
+      authority: db
+      owns:
+        - dispatcher_mapping
+        - runtime_mapping
+        - ui_projection
+        - projection_constructor_mapping
+        - sse_projection
+      not_same_as:
+        - hubs.hubs
+        - physical_table_catalog
+        - ui_component_package
+      note: >-
+        manifest is runtime dispatch distribution wiring. It is not Manifest Hub,
+        the physical table catalog, or a UI component package.
+
+    ui_topology:
+      authority_tables:
+        - ui_component_bucket
+        - ui_component_registry
+        - ui_component_package
+        - ui_package_component_map
+        - ui_layout_registry
+        - ui_wiring_registry
+        - ui_topology_tensor
+      meaning: UI component/package/layout/wiring/projection DB authority
+      display_order_authority: ui_layout_registry / ui_wiring_registry / ui_topology_tensor
+
+    pressure_and_evidence:
+      authority_tables:
+        - logs.current
+        - logs.hub_current
+        - logs.attention
+      meaning: physical table pressure / current / hub_current / attention evidence
+      not_same_as:
+        - hubs.hubs.relation
+        - hubs.hub_relations.weight
+
+    context_learning:
+      authority_tables:
+        - context_*
+      meaning: operation log / recommendation learning
+
+  legacy_transition_candidates:
+    - hubs.hub_relations
+    - topologys.entities
+    - topologys.content_entity_drafts
+    - topologys.structure_maps
+    - components
+    - design
+    - packages
+    - topologys.demo_state_transitions
+    - topologys.topology_edit_log
+    - logs.usage_metrics
+    - logs.promotion_candidates
+    - context_record_snapshot_cache
+    - context_event_vector_cache
+    - context_cluster
+    - context_cluster_label
+    - context_drift_signal
+
+  meaning_collision_guardrails:
+    - registrar_entries_vs_physical_table_id: registrar_entries is the catalog authority; physical_table_id bigint is the future canonical id required for Manifest Hub membership.
+    - hubs_hubs_relation_vs_relation_registry: hubs.hubs.relation must be physical_table_id bigint[] and must not be treated as relation_registry_id.
+    - hubs_hub_relations_vs_hubs_hubs_relation: hubs.hub_relations is a legacy/transition relation edge table, not the Manifest Hub membership set.
+    - manifest_vs_hubs_hubs: manifest owns runtime dispatch distribution; hubs.hubs owns one-screen physical table grouping.
+    - manifest_ui_projection_packageIds_vs_packages_ui_component_package: manifest packageIds currently point at legacy packages semantics and need a decision to align with ui_component_package or ui_topology_tensor.
+    - ui_component_registry_vs_components: ui_component_registry is active component authority; components is legacy UI builder catalog.
+    - ui_component_package_vs_packages: ui_component_package is active package authority; packages is legacy UI builder package surface.
+    - ui_package_component_map_vs_packages_layout: ui_package_component_map is normalized component membership; packages.layout is legacy json binding.
+    - design_classname_tailwind_vs_css_dictionary_topology_layout_class: design.classname/tailwind semantics must not bypass css-dictionary/topology-layout-class SSOTs.
+    - hubs_hub_relations_weight_vs_logs_current_hub_current_attention: hub_relations.weight is not dynamic pressure/current/attention evidence.
+    - structure_maps_vs_manifest_dispatch_distribution: structure_maps is legacy/transition attractor resolution and must not be conflated with runtime manifest dispatch distribution.
+    - entities_content_entity_drafts_vs_physical_table_records: entities/content_entity_drafts are not the physical table catalog or Manifest Hub membership authority.
   principles:
     - sql_files_are_implementation_not_ssot
     - tensor_or_json_key_value_only_in_communication

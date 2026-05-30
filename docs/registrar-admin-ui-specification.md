@@ -401,6 +401,13 @@ The Seed Runtime is NOT:
 `/storage` must be mounted as a named volume in docker-compose.yml for the backend container.
 See `infra/docker-compose.yml` `topolactor_seed_storage` volume.
 
+
+## 8.6 Manifest Hub / Runtime Manifest / UI Topology Boundary
+
+Manifest Hub is the parent authoring unit for one-screen physical table groups.
+Runtime manifest is dispatch distribution wiring and is not the same object as Manifest Hub.
+UI topology registry owns component/package/layout/wiring/tensor projection definitions.
+
 ## 9. Boundary
 
 This specification defines controlled registration and import boundaries.
