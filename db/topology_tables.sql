@@ -1,15 +1,22 @@
 -- =============================================================================
 -- topology_tables.sql
--- Topology definition tables and converged entity data tables.
+-- Topology meaning space tables and converged entity data tables.
 --
 -- TABLE CATEGORIES:
---   Topology definition tables: structure_maps, hub_relations
---     These define the shape of the topology space — how entities relate,
---     which attractors map to which packages/schemas/components, and the
---     weight/policy configuration that governs resolution.
+--   Topology meaning space tables: hubs.hub, hubs.hub_relations
+--     hubs.hub: topology meaning space / pseudo-RDB physical table group / join
+--       definition owner. Each hub defines one meaning space with a canonical
+--       relation jsonb join definition payload.
+--     hubs.hub_relations: fixed hub sequence / UI transition order / topology
+--       meaning space sequence. sequence_position is the sequence authority.
+--       Not a weighted binding table.
 --
---   Converged entity data tables: hubs, entities
---     These hold the runtime-converged state of entities in the topology.
+--   Topology definition tables: structure_maps
+--     Binds attractor_keys to resolution chains (package → schema → components).
+--     The canonical flow traverses structure_maps to resolve operation vectors.
+--
+--   Converged entity data tables: entities
+--     Hold the runtime-converged state of entities in the topology.
 --     Data here is the result of attractor resolution + structure_map
 --     resolution applied to raw operation vectors. It is NOT source-of-truth
 --     business data — it is the converged projection of topology traversal.
@@ -18,29 +25,38 @@
 
 -- ---------------------------------------------------------------------------
 -- hubs
--- Converged entity data table.
--- A hub is a resolved grouping point in the topology space. Each hub is
--- anchored to a relation_registry entry and carries a state reference.
--- Hubs are populated by the attractor_resolve step in the canonical flow.
+-- Topology meaning space / pseudo-RDB physical table group / join definition owner.
+-- A hub defines one topology meaning space — a grouping point that owns the
+-- canonical join definition for its attractor resolution space. Each hub carries
+-- a relation_registry anchor, a state reference, and the join definition payload
+-- in relation jsonb. Hubs are populated by the attractor_resolve step.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS hubs.hubs (
+CREATE TABLE IF NOT EXISTS hubs.hub (
     hub_id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     relation_registry_id  UUID,                          -- which relation definition this hub belongs to
     state_id              UUID,                          -- current state from state_registry
+    relation              JSONB       NOT NULL DEFAULT '{}',  -- canonical join definition payload
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE hubs.hubs IS
-    'Converged entity data. Hubs are Tensor/attractor/collapse points resolved in the topology '
-    'space, populated during attractor_resolve. Not source-of-truth business data.';
+COMMENT ON TABLE hubs.hub IS
+    'Topology meaning space / pseudo-RDB physical table group / join definition owner. '
+    'Each hub defines one topology meaning space: relation_registry anchor + state + '
+    'relation jsonb join definition. Populated by attractor_resolve. '
+    'Not source-of-truth business data.';
 
-COMMENT ON COLUMN hubs.hubs.relation_registry_id IS
+COMMENT ON COLUMN hubs.hub.relation_registry_id IS
     'References relation_registry.relation_registry_id — the relation definition '
     'this hub is anchored to. FK not enforced here; registry is the authority.';
 
-COMMENT ON COLUMN hubs.hubs.state_id IS
+COMMENT ON COLUMN hubs.hub.state_id IS
     'References state_registry.state_id — the current operational state of this hub.';
+
+COMMENT ON COLUMN hubs.hub.relation IS
+    'Canonical join definition payload for this hub. Shape: '
+    '{ "id": "...", "relationKey": "...", "joinType": "inner|left|...", "conditions": [...] }. '
+    'This column makes hubs.hub the join definition owner in the topology meaning space.';
 
 
 -- ---------------------------------------------------------------------------
@@ -50,9 +66,9 @@ COMMENT ON COLUMN hubs.hubs.state_id IS
 -- converged payload produced by schema_resolve + component_expand.
 -- relation_ids tracks which relation_registry entries this entity participates in.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS topologys.entities (
+CREATE TABLE IF NOT EXISTS topology.entities (
     entity_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    hub_id        UUID        NOT NULL REFERENCES hubs.hubs (hub_id) ON DELETE CASCADE,
+    hub_id        UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
     entity_jsonb  JSONB       NOT NULL DEFAULT '{}',     -- converged payload
     relation_ids  UUID[]      NOT NULL DEFAULT '{}',     -- participating relation_registry ids
     state_id      UUID,                                  -- current state from state_registry
@@ -60,61 +76,113 @@ CREATE TABLE IF NOT EXISTS topologys.entities (
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE topologys.entities IS
+COMMENT ON TABLE topology.entities IS
     'Converged entity data. Each entity is a resolved data node within a hub and meaning/projection payload surface, '
     'populated by schema_resolve + component_expand in the canonical flow. '
     'entity_jsonb is the converged projection — not raw business input.';
 
-COMMENT ON COLUMN topologys.entities.entity_jsonb IS
+COMMENT ON COLUMN topology.entities.entity_jsonb IS
     'Converged payload produced by schema_resolve and component_expand steps. '
     'Structure is governed by the schema_registry entry resolved for this entity.';
 
-COMMENT ON COLUMN topologys.entities.relation_ids IS
+COMMENT ON COLUMN topology.entities.relation_ids IS
     'Array of relation_registry_ids this entity participates in. Maintained by '
     'the attractor_resolve step; used for hub linkage and manifest resolution.';
 
 CREATE INDEX IF NOT EXISTS idx_entities_hub_id
-    ON topologys.entities (hub_id);
+    ON topology.entities (hub_id);
 
 CREATE INDEX IF NOT EXISTS idx_entities_state_id
-    ON topologys.entities (state_id);
+    ON topology.entities (state_id);
 
 CREATE INDEX IF NOT EXISTS idx_entities_entity_jsonb
-    ON topologys.entities USING GIN (entity_jsonb);
+    ON topology.entities USING GIN (entity_jsonb);
 
 CREATE INDEX IF NOT EXISTS idx_entities_relation_ids
-    ON topologys.entities USING GIN (relation_ids);
+    ON topology.entities USING GIN (relation_ids);
 
 
 -- ---------------------------------------------------------------------------
 -- hub_relations
--- Topology definition table.
--- Defines weighted relation bindings between hubs and relation_registry entries.
--- This is part of the topology definition — it configures how hubs connect
--- through the relation graph, not the converged data itself.
+-- Fixed hub sequence / UI transition order / topology meaning space sequence table.
+-- Defines ordered sequence bindings between hubs, establishing fixed hub order
+-- and UI transition paths across the topology meaning space.
+-- sequence_position is the sequence authority; target_hub_id defines the
+-- directed transition relationship. Not a weighted binding table.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hubs.hub_relations (
     hub_relation_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    hub_id                UUID        NOT NULL REFERENCES hubs.hubs (hub_id) ON DELETE CASCADE,
-    relation_registry_id  UUID,                          -- which relation definition applies
-    weight                NUMERIC     NOT NULL DEFAULT 1.0,  -- traversal weight for attractor resolution
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+    hub_id                UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    target_hub_id         UUID        REFERENCES hubs.hub (hub_id) ON DELETE SET NULL,
+    relation_registry_id  UUID,                          -- which relation definition scopes this sequence entry
+    sequence_position     INTEGER     NOT NULL DEFAULT 0, -- fixed sequence authority: hub order / UI transition order
+    status                TEXT        NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'deprecated')),
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 COMMENT ON TABLE hubs.hub_relations IS
-    'Topology definition table. Configures weighted hub Tensor relation bindings between '
-    'hubs and relation_registry entries. Governs attractor resolution traversal '
-    'weights. Distinct from converged entity data. Not a direct SQL Attention registry-search target.';
+    'Fixed hub sequence / UI transition order / topology meaning space sequence table. '
+    'Defines directed hub-to-hub sequence entries for canonical flow ordering. '
+    'sequence_position is the sequence authority (not weight). '
+    'Distinct from converged entity data. Counted as Phase Attention x-axis (hub_relations_count).';
 
-COMMENT ON COLUMN hubs.hub_relations.weight IS
-    'Traversal weight used during attractor_resolve. Higher weight increases '
-    'priority of this relation binding when resolving structure_maps.';
+COMMENT ON COLUMN hubs.hub_relations.target_hub_id IS
+    'Target hub for the directed sequence entry (source hub_id → target_hub_id). '
+    'NULL allowed for terminal sequence positions.';
+
+COMMENT ON COLUMN hubs.hub_relations.sequence_position IS
+    'Fixed sequence authority. Defines the ordered position of this hub relation '
+    'in the UI transition sequence and topology meaning space ordering. '
+    'Lower value = earlier in sequence.';
+
+COMMENT ON COLUMN hubs.hub_relations.status IS
+    'Lifecycle status of this sequence entry. active = in canonical sequence; '
+    'deprecated = removed from sequence but retained for audit.';
 
 CREATE INDEX IF NOT EXISTS idx_hub_relations_hub_id
     ON hubs.hub_relations (hub_id);
 
+CREATE INDEX IF NOT EXISTS idx_hub_relations_target_hub_id
+    ON hubs.hub_relations (target_hub_id)
+    WHERE target_hub_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_hub_relations_sequence_position
+    ON hubs.hub_relations (hub_id, sequence_position);
+
 CREATE INDEX IF NOT EXISTS idx_hub_relations_relation_registry_id
     ON hubs.hub_relations (relation_registry_id);
+
+
+-- ---------------------------------------------------------------------------
+-- hubs.topology_manifests
+-- Manifest grouping axis for Phase Attention z-axis.
+-- Groups topology manifests associated with a hub, providing the canonical
+-- z-axis reference for Phase Attention quaternion semantics.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
+    topology_manifest_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    hub_id                UUID        NOT NULL REFERENCES hubs.hub (hub_id) ON DELETE CASCADE,
+    manifest_key          TEXT        NOT NULL,
+    status                TEXT        NOT NULL DEFAULT 'active'
+                          CHECK (status IN ('active', 'deprecated')),
+    topology_jsonb        JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE hubs.topology_manifests IS
+    'Manifest grouping surface for hubs. Canonical z-axis reference for Phase Attention '
+    'quaternion semantics (z = hubs.topology_manifests manifest grouping axis). '
+    'Not a wiring table; topology.wiring_physical_to_package owns package wiring.';
+
+CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
+    ON hubs.topology_manifests (hub_id);
+
+CREATE INDEX IF NOT EXISTS idx_topology_manifests_status
+    ON hubs.topology_manifests (status)
+    WHERE status = 'active';
 
 
 -- ---------------------------------------------------------------------------
@@ -127,7 +195,7 @@ CREATE INDEX IF NOT EXISTS idx_hub_relations_relation_registry_id
 -- resolved into an emission or projection.
 -- state_policy is a jsonb policy blob that governs state-dependent behavior.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS topologys.structure_maps (
+CREATE TABLE IF NOT EXISTS topology.structure_maps (
     structure_map_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name                  TEXT        NOT NULL,
     attractor_key         TEXT        NOT NULL,           -- key matched during attractor_resolve
@@ -141,42 +209,42 @@ CREATE TABLE IF NOT EXISTS topologys.structure_maps (
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE topologys.structure_maps IS
+COMMENT ON TABLE topology.structure_maps IS
     'Topology definition table. Binds attractor_keys to resolution chains '
     '(package → schema → components). The canonical flow traverses structure_maps '
     'to convert operation vectors into emissions or projections. '
     'This is topology definition, not converged entity data.';
 
-COMMENT ON COLUMN topologys.structure_maps.attractor_key IS
+COMMENT ON COLUMN topology.structure_maps.attractor_key IS
     'The key matched during the attractor_resolve step. Should correspond to '
     'entries in the relation_registry or a domain-defined attractor namespace.';
 
-COMMENT ON COLUMN topologys.structure_maps.state_policy IS
+COMMENT ON COLUMN topology.structure_maps.state_policy IS
     'JSONB policy blob. Encodes state-conditional resolution rules, e.g. '
     'which schema_id applies under a given state_id, or component overrides.';
 
-COMMENT ON COLUMN topologys.structure_maps.component_ids IS
+COMMENT ON COLUMN topology.structure_maps.component_ids IS
     'Ordered array of component_registry ids to expand during component_expand. '
     'Order determines expansion sequence in the canonical flow.';
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_attractor_key
-    ON topologys.structure_maps (attractor_key);
+    ON topology.structure_maps (attractor_key);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_package_id
-    ON topologys.structure_maps (package_id);
+    ON topology.structure_maps (package_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_schema_id
-    ON topologys.structure_maps (schema_id);
+    ON topology.structure_maps (schema_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_relation_registry_id
-    ON topologys.structure_maps (relation_registry_id);
+    ON topology.structure_maps (relation_registry_id);
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_active
-    ON topologys.structure_maps (active)
+    ON topology.structure_maps (active)
     WHERE active = true;
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
-    ON topologys.structure_maps USING GIN (component_ids);
+    ON topology.structure_maps USING GIN (component_ids);
 
 -- ---------------------------------------------------------------------------
 -- topology_edit_log
@@ -185,7 +253,7 @@ CREATE INDEX IF NOT EXISTS idx_structure_maps_component_ids
 -- Distinct from demo_state_transitions (which records state machine transitions).
 -- Used for runtime audit, recommendation feedback, and persistence tracing.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS topologys.topology_edit_log (
+CREATE TABLE IF NOT EXISTS topology.topology_edit_log (
     log_id       UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     target_table TEXT        NOT NULL,   -- attractor_key or domain scope identifier
     target_id    TEXT,                   -- record primary key being edited (nullable for creates/lists)
@@ -197,7 +265,7 @@ CREATE TABLE IF NOT EXISTS topologys.topology_edit_log (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE topologys.topology_edit_log IS
+COMMENT ON TABLE topology.topology_edit_log IS
     'Append-only audit log for topology mutations. Distinct from demo_state_transitions '
     'which records state machine transitions. Each row is immutable once inserted. '
     'Used for runtime audit, recommendation feedback, and persistence tracing. '
@@ -205,25 +273,25 @@ COMMENT ON TABLE topologys.topology_edit_log IS
     'is currently an attractor/domain scope identifier, not a physical table identity (tableid). '
     'logs.diff reuse requires explicit physical table identity mapping/column.';
 
-COMMENT ON COLUMN topologys.topology_edit_log.target_table IS
+COMMENT ON COLUMN topology.topology_edit_log.target_table IS
     'Attractor key or domain scope identifier (e.g. default:entity:create). '
     'Not a literal DB table name; identifies the topology operation scope. '
     'Therefore this column does not satisfy logs.diff.tableid (physical table identity) semantics by itself.';
 
-COMMENT ON COLUMN topologys.topology_edit_log.diff_json IS
+COMMENT ON COLUMN topology.topology_edit_log.diff_json IS
     'JSON diff between before_json and after_json. Null when not computed '
     '(e.g. on first-version logging before before-state capture is available under runtime contract).';
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_target
-    ON topologys.topology_edit_log (target_table, target_id);
+    ON topology.topology_edit_log (target_table, target_id);
 
 CREATE INDEX IF NOT EXISTS idx_topology_edit_log_created_at
-    ON topologys.topology_edit_log (created_at DESC);
+    ON topology.topology_edit_log (created_at DESC);
 
 
-CREATE TABLE IF NOT EXISTS topologys.demo_state_transitions (
+CREATE TABLE IF NOT EXISTS topology.demo_state_transitions (
     transition_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    entity_id UUID NOT NULL REFERENCES topologys.entities(entity_id) ON DELETE CASCADE,
+    entity_id UUID NOT NULL REFERENCES topology.entities(entity_id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     before_state TEXT,
     after_state TEXT,
@@ -233,7 +301,7 @@ CREATE TABLE IF NOT EXISTS topologys.demo_state_transitions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
-    ON topologys.demo_state_transitions (entity_id, created_at DESC);
+    ON topology.demo_state_transitions (entity_id, created_at DESC);
 
 
 -- ---------------------------------------------------------------------------
@@ -241,7 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_demo_state_transitions_entity_created
 -- Admin registration staging for entity drafts.
 -- Draft rows are NOT visible to runtime browse — promote writes to entities.
 -- ---------------------------------------------------------------------------
-CREATE TABLE IF NOT EXISTS topologys.content_entity_drafts (
+CREATE TABLE IF NOT EXISTS topology.content_entity_drafts (
     draft_id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     hub_id              UUID        NOT NULL,
     entity_jsonb        JSONB       NOT NULL DEFAULT '{}',
@@ -254,9 +322,9 @@ CREATE TABLE IF NOT EXISTS topologys.content_entity_drafts (
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-COMMENT ON TABLE topologys.content_entity_drafts IS
+COMMENT ON TABLE topology.content_entity_drafts IS
     'Admin registration staging for entity drafts. Not visible to runtime until promoted to entities.';
 
 CREATE INDEX IF NOT EXISTS idx_content_entity_drafts_status
-    ON topologys.content_entity_drafts (status)
+    ON topology.content_entity_drafts (status)
     WHERE status = 'draft';

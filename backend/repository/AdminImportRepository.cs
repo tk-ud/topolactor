@@ -9,11 +9,11 @@ namespace Topolactor.Repository;
 /// Owns snapshot creation, record persistence, apply log writing, and list queries.
 ///
 /// DB tables (db/manifest_tables.sql, integrated in manifest topology boundary):
-///   topologys.admin_import_snapshot
-///   topologys.admin_import_records
-///   topologys.admin_import_apply_log
+///   topology.admin_import_snapshot
+///   topology.admin_import_records
+///   topology.admin_import_apply_log
 ///   manifest (list query)
-///   topologys.schema_registry (list query)
+///   topology.schema_registry (list query)
 ///
 /// In-memory base: test double only. All write methods are no-ops (returns true).
 /// Production: override in NpgsqlAdminImportRepository.

@@ -33,7 +33,7 @@ public class PdfExportSnapshotRuntime
     private readonly ILogger<PdfExportSnapshotRuntime> _logger;
 
     // In-memory snapshot log for MVP boundary. At production, replace with
-    // NpgsqlPdfExportSnapshotRepository writing to topologys.pdf_export_snapshot.
+    // NpgsqlPdfExportSnapshotRepository writing to topology.pdf_export_snapshot.
     private readonly List<PdfExportSnapshotRecord> _snapshotLog = [];
 
     public PdfExportSnapshotRuntime(ILogger<PdfExportSnapshotRuntime> logger)

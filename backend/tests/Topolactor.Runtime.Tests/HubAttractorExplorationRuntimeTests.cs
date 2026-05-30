@@ -1230,7 +1230,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Equal("logs.hub_current", root.GetProperty("basis_source").GetString());
             var boundary = root.GetProperty("meaning_boundary");
             Assert.Equal("l2_norm", boundary.GetProperty("w").GetString());
-            Assert.Equal("hub-side record-count bases", boundary.GetProperty("xyz").GetString());
+            Assert.Equal("hubs_hub_relations_count", boundary.GetProperty("x").GetString());
+            Assert.Equal("hubs_hub_count", boundary.GetProperty("y").GetString());
+            Assert.Equal("hubs_topology_manifests_count", boundary.GetProperty("z").GetString());
             Assert.Equal("axis movement amounts", boundary.GetProperty("ijk").GetString());
             Assert.Equal("not_manifest_or_policy_cap", boundary.GetProperty("phase_movement_source").GetString());
             Assert.True(boundary.GetProperty("no_automatic_topology_mutation").GetBoolean());
@@ -1278,7 +1280,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             Assert.Contains("'basis_source'", sql);
             Assert.Contains("'meaning_boundary'", sql);
             Assert.Contains("'w'", sql);
-            Assert.Contains("'xyz'", sql);
+            Assert.Contains("'hubs_hub_relations_count'", sql);
+            Assert.Contains("'hubs_hub_count'", sql);
+            Assert.Contains("'hubs_topology_manifests_count'", sql);
             Assert.Contains("'ijk'", sql);
             Assert.Contains("'phase_movement_source'", sql);
             Assert.Contains("'no_automatic_topology_mutation'", sql);

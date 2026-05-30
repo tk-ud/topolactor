@@ -95,19 +95,19 @@ run_sql_file "db/seed_empty.sql"
 
 echo "=== Validating table existence ==="
 query_equals_one "table exists: structure_maps" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'structure_maps' AND table_schema = 'topologys';"
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'structure_maps' AND table_schema = 'topology';"
 query_equals_one "table exists: ui_component_bucket" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_component_bucket' AND table_schema = 'public';"
 query_equals_one "table exists: ui_topology_tensor" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'ui_topology_tensor' AND table_schema = 'public';"
 query_equals_one "table exists: package_registry" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'package_registry' AND table_schema = 'topologys';"
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'package_registry' AND table_schema = 'topology';"
 query_equals_one "table exists: schema_registry" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'schema_registry' AND table_schema = 'topologys';"
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'schema_registry' AND table_schema = 'topology';"
 query_equals_one "table exists: relation_registry" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'relation_registry' AND table_schema = 'topologys';"
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'relation_registry' AND table_schema = 'topology';"
 query_equals_one "table exists: state_registry" \
-  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'state_registry' AND table_schema = 'topologys';"
+  "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'state_registry' AND table_schema = 'topology';"
 query_equals_one "table exists: manifest" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'manifest' AND table_schema = 'public';"
 query_equals_one "table exists: context_token_registry" \
@@ -121,21 +121,21 @@ query_equals_one "table exists: packages" \
 
 echo "=== Validating required default rows ==="
 query_equals_one "structure_maps contains attractor_key='default:entity:search'" \
-  "SELECT COUNT(*) FROM topologys.structure_maps WHERE attractor_key = 'default:entity:search';"
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'default:entity:search';"
 query_equals_one "package_registry contains name='default_package'" \
-  "SELECT COUNT(*) FROM topologys.package_registry WHERE name = 'default_package';"
+  "SELECT COUNT(*) FROM topology.package_registry WHERE name = 'default_package';"
 query_equals_one "schema_registry contains name='default_schema'" \
-  "SELECT COUNT(*) FROM topologys.schema_registry WHERE name = 'default_schema';"
+  "SELECT COUNT(*) FROM topology.schema_registry WHERE name = 'default_schema';"
 
 echo "=== Validating admin attractor keys ==="
 query_equals_one "structure_maps contains attractor_key='admin:context_token_registry:list'" \
-  "SELECT COUNT(*) FROM topologys.structure_maps WHERE attractor_key = 'admin:context_token_registry:list';"
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:context_token_registry:list';"
 query_equals_one "structure_maps contains attractor_key='admin:ui_component_bucket:list'" \
-  "SELECT COUNT(*) FROM topologys.structure_maps WHERE attractor_key = 'admin:ui_component_bucket:list';"
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:ui_component_bucket:list';"
 query_equals_one "structure_maps contains attractor_key='admin:registry_vector:validate'" \
-  "SELECT COUNT(*) FROM topologys.structure_maps WHERE attractor_key = 'admin:registry_vector:validate';"
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:registry_vector:validate';"
 query_equals_one "structure_maps contains attractor_key='admin:package_generator:generate'" \
-  "SELECT COUNT(*) FROM topologys.structure_maps WHERE attractor_key = 'admin:package_generator:generate';"
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:generate';"
 
 if [ "$FAILURES" -eq 0 ]; then
   echo "=== DB schema check passed ==="

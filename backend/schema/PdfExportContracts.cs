@@ -60,7 +60,7 @@ public record PdfExportSnapshotResult(
 
 /// <summary>
 /// Internal export snapshot record written to the in-memory log at MVP.
-/// At production, this would be persisted to topologys.pdf_export_snapshot.
+/// At production, this would be persisted to topology.pdf_export_snapshot.
 /// </summary>
 public record PdfExportSnapshotRecord(
     Guid ExportSnapshotId,

@@ -1798,7 +1798,7 @@ system_roadmap_ssot:
         - invalid_source_id_uuids_return_explicit_errors
       known_gap_ref:
         - PDF byte generation is not implemented (snapshot boundary only; production PDF layout engine is out of scope)
-        - DB persistence is in-memory at MVP boundary (topologys.pdf_export_snapshot table is not yet created)
+        - DB persistence is in-memory at MVP boundary (topology.pdf_export_snapshot table is not yet created)
 
     system_ci.scheduler_runtime_load_benchmark:
       status: implemented
@@ -1874,6 +1874,71 @@ system_roadmap_ssot:
         - frontend_does_not_write_directly_to_db
         - no_silent_fallback_all_error_paths_return_explicit_error_codes
       known_gap_ref: []
+
+    design.db_manifest_ui_topology_meaning_split:
+      status: partial
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: >
+        SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
+        Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
+        introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
+        Phase Attention axis migration complete: x=hubs.hub_relations count, y=hubs.hub count,
+        z=hubs.topology_manifests count. hubs.hub now has relation JSONB canonical join definition.
+        hubs.hub_relations now uses sequence_position + target_hub_id + status (fixed sequence authority).
+        manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
+        CI vocabulary checks enforce canonical naming. All execution CI gates fixed: backend-tests
+        missing topology_tables.sql in CI DB setup (real migration break fixed); Deno workflows
+        using v1.x against nodeModulesDir:auto (stale CI tool expectation fixed); runtime-env
+        gate referencing topologys.topology_edit_log and topologys.structure_maps (stale old
+        vocabulary in check script fixed to topology.* canonical).
+        Remaining gaps: manifest admin_import_snapshot FK retirement, relation_config jsonb,
+        ui_component_* public tables migration.
+      files:
+        - docs/design/db-schema.yaml
+        - docs/design/sql-attention-logs-ssot.yaml
+        - docs/design/sql-attention-logs-ssot.md
+        - .agent/tests/check-sql-attention-ssot.sh
+        - .agent/tests/check-structure.sh
+        - .agent/tests/check-ssot-vocabulary-contract.sh
+        - db/schema.sql
+        - db/topology_tables.sql
+        - db/manifest_tables.sql
+        - db/sql_attention_logs_tables.sql
+        - db/seed_empty.sql
+        - db/demo_seed.sql
+        - backend/runtime/HubAttractorExplorationRuntime.cs
+      evidence:
+        tests:
+          - check-sql-attention-ssot.sh
+          - check-structure.sh
+          - check-backend-tests.sh
+          - check-runtime-semantics.sh
+          - check-default-entity-search.sh
+          - check-unified-test-gate.sh
+        ci:
+          - structure-check
+          - backend-tests
+          - runtime-semantics
+          - default-entity-search
+          - unified-test-gate
+      completion_condition:
+        - ssot_canonical_schema_namespaces_match_topology_hubs_logs
+        - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count
+        - topologys_naming_drift_absent_from_sql_attention_ssot_files
+        - old_phase_axis_x_y_z_hub_side_record_count_bases_absent_from_canonical_ssot
+        - ci_vocabulary_checks_enforce_all_of_the_above
+        - db_schema_uses_topology_not_topologys
+        - hubs_hub_table_replaces_hubs_hubs
+        - phase_attention_runtime_uses_hubs_space_axes
+        - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
+        - hubs_hub_includes_relation_jsonb_canonical_join_definition
+        - hubs_hub_relations_uses_fixed_sequence_not_weight_authority
+        - manifest_split_public_manifest_retired_from_main_path
+      known_gap_ref:
+        - public.manifest still retained for admin_import_snapshot FK; full retirement to topology.wiring_physical_to_package and hubs.topology_manifests pending
+        - hubs.hub_relations relation_config jsonb not yet added (pending_gap from SSOT expected_shape)
+        - ui_component_* public tables not yet migrated to canonical topology schema
 
 
 

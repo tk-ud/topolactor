@@ -11,9 +11,8 @@
 #                         dispatcher / executor / override)
 #   FRONTEND_CONTRACT   — adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts
 #
-# NOT_COVERED (remaining todo):
-#
-# docker-compose / DB / migration verification is covered in check-runtime-environment.sh.
+# NOT_COVERED: OutputLaneRouter.RouteAsync / AdminRuntime.ExecuteDataAsync / db_notify output lane.
+#   docker-compose / DB / migration verification is covered in check-runtime-environment.sh.
 # Missing tool is an explicit failure, not a pass.
 
 set -euo pipefail

@@ -36,7 +36,7 @@ assert_eq(ssot.dig('ssot_roles', 'yaml'), 'structural_policy_schema_runtime_cont
 
 assert_eq(ssot.dig('sql_attention_target', 'target_schema'), 'hubs', 'sql_attention_target.target_schema')
 %w[tensor attractor collapse_point].each { |v| assert_includes(ssot.dig('sql_attention_target', 'target_semantics'), v, 'sql_attention_target.target_semantics') }
-%w[topologys registry].each { |v| assert_includes(ssot.dig('sql_attention_target', 'not_target'), v, 'sql_attention_target.not_target') }
+%w[topology registry].each { |v| assert_includes(ssot.dig('sql_attention_target', 'not_target'), v, 'sql_attention_target.not_target') }
 %w[logs_current logs_attention phase_attention].each do |k|
   fail!("layers.#{k} missing") unless ssot.dig('layers', k).is_a?(Hash)
 end
@@ -67,6 +67,19 @@ phase_invariants = (ssot.dig('layers', 'phase_attention', 'invariants') || []) +
   no_automatic_column_promotion
   phase_movement_is_not_manifest_or_policy_cap_derived
 ].each { |v| fail!("phase invariants missing #{v}") unless phase_invariants.include?(v) }
+
+# Phase Attention canonical axis checks
+pa_quat = ssot.dig('layers', 'phase_attention', 'quaternion_semantics')
+fail!('layers.phase_attention.quaternion_semantics missing') unless pa_quat.is_a?(Hash)
+fail!('phase_attention.quaternion_semantics must not use x_y_z key (canonical is separate x, y, z)') if pa_quat.key?('x_y_z')
+fail!('phase_attention.quaternion_semantics.x must reference hubs_hub_relations') unless pa_quat['x'].to_s.include?('hubs_hub_relations')
+fail!('phase_attention.quaternion_semantics.y must reference hubs_hub') unless pa_quat['y'].to_s.include?('hubs_hub')
+fail!('phase_attention.quaternion_semantics.z must reference hubs_topology_manifests') unless pa_quat['z'].to_s.include?('hubs_topology_manifests')
+pa_calc = ssot.dig('phase_attention_function_contract', 'calculation')
+fail!('phase_attention_function_contract.calculation missing') unless pa_calc.is_a?(Hash)
+fail!('phase_attention_function_contract.calculation must not use x_y_z key') if pa_calc.key?('x_y_z')
+fail!('phase_attention_function_contract.calculation.x must reference hubs_hub_relations') unless pa_calc['x'].to_s.include?('hubs_hub_relations')
+puts 'OK: phase_attention canonical axis checks passed'
 
 detailed = roadmap.dig('system_roadmap_ssot', 'related_surfaces', 'detailed_design_ssot')
 %w[docs/design/sql-attention-logs-ssot.md docs/design/sql-attention-logs-ssot.yaml].each { |v| assert_includes(detailed, v, 'roadmap.related_surfaces.detailed_design_ssot') }

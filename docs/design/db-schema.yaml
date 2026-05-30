@@ -53,32 +53,71 @@ db_schema:
       - recommendation_target_topology_and_context_learning_surfaces
 
   postgresql_schema_namespaces:
+    status: canonical_active
+    note: >-
+      Physical DB schema names in active canonical contract. topologys schema and hubs.hubs table
+      migrations are recorded in compatibility_history below.
     hubs:
-      role: attractor_collapse_convergence_boundary
+      status: canonical_active
+      role: topology meaning space, hub manifest grouping, and fixed hub sequence
       tables:
-        - hubs.hubs
+        - hubs.hub
         - hubs.hub_relations
-    topologys:
-      role: meaning_space_with_payload_definition_jsonb
+        - hubs.topology_manifests
+    topology:
+      status: canonical_active
+      role: physical table catalog, registry tables, topology definition, wiring
       tables:
-        - topologys.master_registry
-        - topologys.state_registry
-        - topologys.package_registry
-        - topologys.schema_registry
-        - topologys.component_registry
-        - topologys.structure_maps
-        - topologys.entities
-        - topologys.topology_edit_log
-        - topologys.demo_state_transitions
+        - topology.physical_tables
+        - topology.wiring_physical_to_package
+        - topology.master_registry
+        - topology.state_registry
+        - topology.relation_registry
+        - topology.package_registry
+        - topology.schema_registry
+        - topology.component_registry
+        - topology.function_parameters
+        - topology.structure_maps
+        - topology.entities
+        - topology.topology_edit_log
+        - topology.demo_state_transitions
+        - topology.content_entity_drafts
+        - topology.admin_import_snapshot
+        - topology.admin_import_records
+        - topology.admin_import_apply_log
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:
-        - logs.usage_metrics
-        - logs.promotion_candidates
         - logs.diff
         - logs.current
         - logs.hub_current
         - logs.attention
+    compatibility_history:
+      topologys_schema:
+        status: migration_completed
+        migration_target: topology
+        note: All topologys.* tables migrated to topology.* schema. topologys schema deprecated.
+        former_tables:
+          - topologys.registrar_entries
+          - topologys.master_registry
+          - topologys.state_registry
+          - topologys.relation_registry
+          - topologys.package_registry
+          - topologys.schema_registry
+          - topologys.component_registry
+          - topologys.function_parameters
+          - topologys.structure_maps
+          - topologys.entities
+          - topologys.topology_edit_log
+          - topologys.demo_state_transitions
+          - topologys.content_entity_drafts
+          - topologys.admin_import_snapshot
+          - topologys.admin_import_records
+          - topologys.admin_import_apply_log
+      hubs_hubs_table:
+        status: migration_completed
+        migration_target: hubs.hub
+        note: hubs.hubs renamed to hubs.hub with relation JSONB join definition added.
     registry_schema_policy:
       has_dedicated_schema: false
       rule: registry_is_tensor_map_reference_concept_not_schema_namespace
@@ -129,8 +168,8 @@ db_schema:
         physical_table_id: bigint generated identity
         table_ref: text
       note: >-
-        topology.physical_tables is the canonical physical table catalog. Current
-        topologys.registrar_entries is naming/schema drift and must migrate to topology.
+        topology.physical_tables is the canonical physical table catalog.
+        topologys.registrar_entries naming drift has been migrated to topology schema.
 
     manifest_hub:
       table: hubs.hub
@@ -186,21 +225,21 @@ db_schema:
       table: hubs.hub_relations
       meaning: fixed hub order / UI transition order / topology meaning space sequence
       authority: db
-      status: redefine_required
-      current_shape_drift:
-        - current SQL uses hub_id plus relation_registry_id plus weight
-        - weight is not fixed sequence authority
-        - relation_registry_id is not physical table relation config
-      expected_shape:
+      implemented_shape:
         hub_relation_id: uuid
-        manifest_id: uuid
-        source_hub_id: uuid
-        target_hub_id: uuid
-        sequence_index: integer
-        relation_config: jsonb nullable
-        status: enum
+        hub_id: uuid
+        target_hub_id: uuid nullable
+        relation_registry_id: uuid nullable
+        sequence_position: integer
+        status: enum active/deprecated
         created_at: timestamptz
         updated_at: timestamptz
+      sequence_authority: sequence_position
+      note: >-
+        weight has been removed as sequence authority. sequence_position is the canonical
+        fixed sequence field. target_hub_id defines source-to-target hub transition.
+        relation_registry_id retained for scoping (non-authority).
+        pending_gap: relation_config jsonb and source_hub_id alias (hub_id IS the source).
 
     sql_attention_targets:
       target_space: hubs
@@ -259,7 +298,7 @@ db_schema:
       meaning: SQL Attention current / hub current / attention evidence surfaces to preserve
       not_same_as:
         - hubs.hub.relation
-        - hubs.hub_relations.sequence_index
+        - hubs.hub_relations.sequence_position
 
   namespace_drift:
     public_or_unqualified_tables:
@@ -273,18 +312,16 @@ db_schema:
         - ui_topology_tensor
       rule: public/unqualified table names are not canonical SSOT tables
     topologys_schema:
-      status: naming_drift
+      status: migration_completed
       migration_target: topology
-      examples:
-        - topologys.registrar_entries -> topology.physical_tables
-        - topologys.structure_maps -> topology responsibility to be redefined
-        - topologys.entities -> topology or hub responsibility to be redefined
+      note: topologys schema migrated to topology. All topologys.* references removed from DB SQL files and backend.
+      former_examples:
+        - topologys.registrar_entries -> topology.physical_tables (done)
+        - topologys.structure_maps -> topology.structure_maps (done)
+        - topologys.entities -> topology.entities (done)
 
   legacy_transition_candidates:
-    - hubs.hubs -> hubs.hub
-    - hubs.hub_relations -> hubs.hub_relations fixed sequence schema
-    - topologys.* -> topology.*
-    - manifest -> topology.wiring_physical_to_package / hubs.topology_manifests
+    - manifest -> topology.wiring_physical_to_package / hubs.topology_manifests (compatibility-only, admin_import_snapshot FK pending)
     - public context_* -> topology placement decision
     - public ui_component_* -> topology.components_*
     - components
@@ -303,7 +340,7 @@ db_schema:
     - sql_attention_signal_sources: "logs.diff remains the physical mutation pressure source for logs.current; context_event remains the UI operation pressure source."
     - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
-    - topologys_namespace: topologys is migration target to topology, not canonical spelling.
+    - topologys_namespace: topologys schema has been migrated to topology. All DB SQL and backend use topology.* canonical spelling.
     - manifest_split: unqualified manifest responsibility must split toward topology.wiring_physical_to_package and hubs.topology_manifests.
   principles:
     - sql_files_are_implementation_not_ssot

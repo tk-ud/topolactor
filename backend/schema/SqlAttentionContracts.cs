@@ -38,7 +38,7 @@ public record HubCurrentCandidate(
 );
 
 /// <summary>
-/// Exploration policy resolved from topologys.function_parameters.
+/// Exploration policy resolved from topology.function_parameters.
 /// All values must be positive integers — no magic number defaults in runtime code.
 /// Policy source: function_name="sql_attention_hub_attractor_exploration" parameter_key="default_policy".
 /// </summary>

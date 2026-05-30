@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # check-default-entity-search.sh — local CI gate for default:entity:search integration test
-# Runs backend integration tests and frontend Deno contract test.
+# Runs backend integration tests and frontend Deno contract tests (entity search, admin API, pipeline continuity).
 # Fails loudly on missing tools or test failures.
 # No DB credentials, no production HTTP host, no real business data required.
 
