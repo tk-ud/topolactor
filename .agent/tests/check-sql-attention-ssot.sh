@@ -36,7 +36,7 @@ assert_eq(ssot.dig('ssot_roles', 'yaml'), 'structural_policy_schema_runtime_cont
 
 assert_eq(ssot.dig('sql_attention_target', 'target_schema'), 'hubs', 'sql_attention_target.target_schema')
 %w[tensor attractor collapse_point].each { |v| assert_includes(ssot.dig('sql_attention_target', 'target_semantics'), v, 'sql_attention_target.target_semantics') }
-%w[topologys registry].each { |v| assert_includes(ssot.dig('sql_attention_target', 'not_target'), v, 'sql_attention_target.not_target') }
+%w[topology registry].each { |v| assert_includes(ssot.dig('sql_attention_target', 'not_target'), v, 'sql_attention_target.not_target') }
 %w[logs_current logs_attention phase_attention].each do |k|
   fail!("layers.#{k} missing") unless ssot.dig('layers', k).is_a?(Hash)
 end

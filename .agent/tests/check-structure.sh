@@ -724,6 +724,11 @@ if rg -n "\bregistry_table\b|\bregistry_id\b" "$REPO_ROOT/docs/design/sql-attent
 else
   echo "OK  [ssot] registry_table/registry_id removed from SQL Attention attention contract"
 fi
+if rg -n "\btopologys\b" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.md" "$REPO_ROOT/docs/design/sql-attention-logs-ssot.yaml" >/dev/null; then
+  fail "topologys (naming drift) must not appear in SQL Attention SSOT files; use topology (canonical)"
+else
+  echo "OK  [ssot] topologys naming drift absent from SQL Attention SSOT files"
+fi
 
 # ─── Result ───────────────────────────────────────────────────────────────────
 

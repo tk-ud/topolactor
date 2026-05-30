@@ -1798,7 +1798,7 @@ system_roadmap_ssot:
         - invalid_source_id_uuids_return_explicit_errors
       known_gap_ref:
         - PDF byte generation is not implemented (snapshot boundary only; production PDF layout engine is out of scope)
-        - DB persistence is in-memory at MVP boundary (topologys.pdf_export_snapshot table is not yet created)
+        - DB persistence is in-memory at MVP boundary (topology.pdf_export_snapshot table is not yet created)
 
     system_ci.scheduler_runtime_load_benchmark:
       status: implemented

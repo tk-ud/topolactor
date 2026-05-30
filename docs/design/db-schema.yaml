@@ -53,23 +53,37 @@ db_schema:
       - recommendation_target_topology_and_context_learning_surfaces
 
   postgresql_schema_namespaces:
+    status: legacy_runtime_current
+    note: physical DB schema names as of current runtime; canonical names are in canonical_schema_namespaces; migration targets are in legacy_transition_candidates
     hubs:
+      status: legacy_runtime_current
       role: attractor_collapse_convergence_boundary
       tables:
         - hubs.hubs
         - hubs.hub_relations
+      migration_targets:
+        hubs.hubs: hubs.hub
     topologys:
+      status: legacy_runtime_current
       role: meaning_space_with_payload_definition_jsonb
+      migration_target_schema: topology
       tables:
+        - topologys.registrar_entries
         - topologys.master_registry
         - topologys.state_registry
+        - topologys.relation_registry
         - topologys.package_registry
         - topologys.schema_registry
         - topologys.component_registry
+        - topologys.function_parameters
         - topologys.structure_maps
         - topologys.entities
         - topologys.topology_edit_log
         - topologys.demo_state_transitions
+        - topologys.content_entity_drafts
+        - topologys.admin_import_snapshot
+        - topologys.admin_import_records
+        - topologys.admin_import_apply_log
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:

@@ -26,6 +26,11 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 - [ ] `product.dynamic_support_nocode_loop` の manual acceptance / hand-debug verification を実施し、authoring guidance・SQL Attention feedback・M6 self-hosted admin authoring loop が同一UX導線として受入可能か確認する。
       → 残理由は implementation gap ではない。M6 self-hosted admin authoring loop、SQL Attention SQLA-1..5、SQL Attention live DB E2E、roadmap/test-bundles 正規化は完了済みで、M6/M7 core runtime production-ready 判定は維持する。future optional external connector surfaces は M6/M7 blocker ではない。
 
+## SSOT Vocabulary Drift (CI enforcement)
+
+- [ ] `check-ssot-vocabulary-contract.sh` のエンコーディング修正の影響がないか、CI上でも確認する。
+      → 理由: `File.read` に `encoding: 'UTF-8'` を追加した。local で pass 確認済み。
+
 ## DB / Manifest Hub / UI Topology meaning split
 
 - [ ] public/unqualified table namespace migration を設計し、`manifest` / `context_*` / `ui_component_*` などを `hubs` / `topology` / `logs` のいずれかへ責務移行する。

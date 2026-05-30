@@ -13,7 +13,7 @@ SQL Attention is a DB-native hub-attractor observation model.
 
 - SQL Attention is **not** SQL-side Transformer QK dot-product reproduction.
 - SQL Attention target is `hubs.*` Tensor / attractor (for example attractor_key-aligned hub-side semantics).
-- `topologys.*` and registry surfaces are projection/support layers, not the SQL Attention target itself.
+- `topology.*` and registry surfaces are projection/support layers, not the SQL Attention target itself.
 - SQL Attention is not topology search.
 - SQL Attention is not registry search.
 
@@ -118,8 +118,8 @@ Phase semantics follow:
 ## 11. Target Boundary
 
 - Primary target: `hubs.*` Tensor / attractor semantics.
-- Not primary target: direct `topologys.*` / registry search as SQL Attention body.
-- `topologys.*` and registry are projection/support layers consuming evidence.
+- Not primary target: direct `topology.*` / registry search as SQL Attention body.
+- `topology.*` and registry are projection/support layers consuming evidence.
 
 ## 12. Non-goals
 

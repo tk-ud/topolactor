@@ -12,7 +12,7 @@ pipe=YAML.load_file(File.join(root,'docs/design/pipeline-continuity-ssot.yaml'))
 runtime=YAML.load_file(File.join(root,'docs/design/runtime-orchestration-ssot.yaml'))
 sysci=YAML.load_file(File.join(root,'docs/design/system-ci-admin-runtime-callable-surface.yaml'))
 
-catalog=File.read(File.join(root,'frontend/components/catalog.ts'))
+catalog=File.read(File.join(root,'frontend/components/catalog.ts'), encoding: 'UTF-8')
 cap = catalog.scan(/capabilityTags:\s*\[([^\]]+)\]/m).flat_map{|m| m[0].scan(/"([^"]+)"/).flatten}.to_set
 fields={
  'componentFamily'=>catalog.scan(/componentFamily:\s*"([^"]+)"/).flatten.to_set,
@@ -68,7 +68,7 @@ rv=req(runtime,'runtime_orchestration_ssot','runtime_vocabulary_contract')
 map_types=Array(req(rv,'mapping_types')).map(&:to_s).to_set
 rtd=Array(req(rv,'backend_runtime_destinations')).map(&:to_s).to_set
 fail!('runtime mapping_types empty') if map_types.empty?; fail!('runtime destinations empty') if rtd.empty?
-seed=File.read(File.join(root,'db/seed_empty.sql'))+"\n"+File.read(File.join(root,'db/demo_seed.sql'))
+seed=File.read(File.join(root,'db/seed_empty.sql'), encoding: 'UTF-8')+"\n"+File.read(File.join(root,'db/demo_seed.sql'), encoding: 'UTF-8')
 seed_dests=seed.scan(/"runtime_destination"\s*:\s*"([a-z_]+)"/).flatten.to_set
 seed_types=seed.scan(/"type"\s*:\s*"([a-z_]+)"\s*,\s*"runtime_destination"/).flatten.to_set
 fail!('seed runtime_destination extraction empty') if seed_dests.empty?

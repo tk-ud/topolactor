@@ -14,11 +14,11 @@ sql_attention_target:
     - attractor
     - collapse_point
   not_target:
-    - topologys
+    - topology
     - registry
 projection_boundary:
   attention_hit: hubs
-  projected_meaning_space: topologys
+  projected_meaning_space: topology
   topology_recommendation_basis:
     - statistics
     - ema
@@ -80,7 +80,7 @@ physical_schema_contract:
       prohibited:
         - writes_logs_attention
         - mutates_hubs
-        - mutates_topologys
+        - mutates_topology
     exploration_runtime:
       role: hub_attractor_neighbor_observation
       side_effect_scope:
@@ -89,7 +89,7 @@ physical_schema_contract:
         - appends_logs_attention_evidence
       prohibited:
         - mutates_registry
-        - mutates_topologys
+        - mutates_topology
     phase_vector_transform:
       role: auxiliary_evidence_transform
       side_effect_scope:
@@ -448,7 +448,7 @@ layers:
 physical_table_pressure:
   tableid_semantics: physical_table_identity
   aggregation_target: physical_side
-  not_target: topologys_or_registry_direct_search
+  not_target: topology_or_registry_direct_search
   observes:
     - physical_table_mutation_pressure
     - physical_column_candidate_pressure
