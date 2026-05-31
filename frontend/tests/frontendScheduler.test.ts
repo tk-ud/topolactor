@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { __testOnly, queueClientCommand } from "../runtime/frontendScheduler.ts";
 
 // ─── frontend.runtime_scheduler — Gap-13 closure tests ───────────────────────
@@ -76,7 +76,11 @@ Deno.test("scheduler: explicit failure propagates to the failed command's awaite
     const p1 = queueClientCommand({ operationType: "Search", target: "t", layer: "entity", action: "Search" });
     const p2 = queueClientCommand({ operationType: "Search", target: "t", layer: "entity", action: "Search" });
 
-    await assertRejects(() => p1, Error, "DISPATCH_NETWORK_FAIL");
+    // dispatchOperation wraps network errors as { success: false, errors } rather than re-throwing,
+    // so p1 resolves (not rejects) with success:false carrying the error message.
+    const result1 = await p1;
+    assertEquals(result1.success, false, "p1 must resolve as failed (network error wrapped by dispatchOperation)");
+    assertEquals(result1.errors?.[0]?.message, "DISPATCH_NETWORK_FAIL", "error message must be preserved");
 
     const result2 = await p2;
     assertEquals(result2.success, true, "second command must succeed independently after first fails");

@@ -691,9 +691,17 @@ export default function ManifestsAdmin(): JSX.Element {
           )}
 
           {lifecycleResult && (
-            <p class={`mt-4 text-sm ${lifecycleResult.ok ? "text-emerald-700" : "text-red-700"}`}>
-              {lifecycleResult.message} (status={lifecycleResult.status})
-            </p>
+            <div class="mt-4">
+              <p class={`text-sm ${lifecycleResult.ok ? "text-emerald-700" : "text-red-700"}`}>
+                {lifecycleResult.message} (status={lifecycleResult.status})
+              </p>
+              {lifecycleResult.ok && (
+                <p class="mt-2 text-xs text-muted-xs">
+                  次のステップ:{" "}
+                  <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch 経路を検証してください。
+                </p>
+              )}
+            </div>
           )}
         </section>
       )}

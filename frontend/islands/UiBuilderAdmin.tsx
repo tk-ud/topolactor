@@ -103,6 +103,7 @@ type PaletteEntry = {
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
+  routeKey?: string;
 };
 
 type TabId = "ci" | "catalog" | "bucket" | "css" | "layout";
@@ -160,22 +161,30 @@ function TabBar({
   activeTab,
   onSelect,
 }: {
-  tabs: { id: TabId; label: string }[];
+  tabs: { id: TabId; label: string; hint?: string }[];
   activeTab: TabId;
   onSelect: (id: TabId) => void;
 }): JSX.Element {
   return (
-    <div class="tab-bar">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onSelect(tab.id)}
-          class={activeTab === tab.id ? "tab-active" : "tab-inactive"}
-        >
-          {tab.label}
-        </button>
-      ))}
+    <div>
+      <div class="tab-bar">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onSelect(tab.id)}
+            class={activeTab === tab.id ? "tab-active" : "tab-inactive"}
+            title={tab.hint}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {tabs.find((t) => t.id === activeTab)?.hint && (
+        <p class="text-muted-xs mt-1 mb-2">
+          {tabs.find((t) => t.id === activeTab)!.hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -402,6 +411,70 @@ function AdvancedManualOverride({
       </p>
       {children}
     </details>
+  );
+}
+
+function ApplyReadinessPanel({
+  canPatch,
+  effectiveRouteKey,
+  effectiveLayoutId,
+  draftNodes,
+  selectedTokenRefs,
+  layoutClassRefError,
+}: {
+  canPatch: boolean;
+  effectiveRouteKey: string;
+  effectiveLayoutId: string;
+  draftNodes: DraftNode[];
+  selectedTokenRefs: string[];
+  layoutClassRefError: string | null;
+}): JSX.Element {
+  const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
+  const allClear = canPatch && draftOnlyCount === 0 && !layoutClassRefError;
+
+  return (
+    <div class={`mb-3 rounded border p-3 text-sm ${allClear ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+      <strong class="block mb-2">Apply 前チェック</strong>
+      <ul class="space-y-1 pl-1">
+        <li class="flex items-start gap-2">
+          <span class={canPatch ? "text-green-700" : "text-red-600"}>{canPatch ? "✓" : "✗"}</span>
+          <span>
+            ルート / レイアウト選択:{" "}
+            {canPatch
+              ? <><code class="text-xs">{effectiveRouteKey}</code> / <code class="text-xs">{shortId(effectiveLayoutId)}</code></>
+              : "未選択 — ルートとレイアウトを選択してください"}
+          </span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class={draftOnlyCount === 0 ? "text-green-700" : "text-red-600"}>{draftOnlyCount === 0 ? "✓" : "✗"}</span>
+          <span>
+            未プロモートノード:{" "}
+            {draftOnlyCount === 0
+              ? "なし"
+              : <>{draftOnlyCount} 件 — バケット → プロモートを先に完了してください（適用はブロック）</>}
+          </span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class={!layoutClassRefError ? "text-green-700" : "text-red-600"}>{!layoutClassRefError ? "✓" : "✗"}</span>
+          <span>
+            layout class ref 解決:{" "}
+            {layoutClassRefError ? layoutClassRefError : "OK"}
+          </span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="text-muted-xs">i</span>
+          <span class="text-muted-xs">
+            CSS トークン: {selectedTokenRefs.length} 件選択済み。
+            ref エラーは backend validate 結果に表示されます。
+          </span>
+        </li>
+      </ul>
+      {allClear && (
+        <p class="mt-2 text-green-700 font-semibold text-xs">
+          すべてのローカルチェック通過。preview → validate → apply の順で実行してください。
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -1914,12 +1987,14 @@ function LayoutBuilderSection(): JSX.Element {
         <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
       </Accordion>
 
-      {draftNodes.some((n) => n.isDraftOnly) && (
-        <div class="alert-warn mb-2.5">
-          <strong>適用ブロック:</strong>{" "}
-          {draftNodes.filter((n) => n.isDraftOnly).length} 件がドラフトのみ。プレビュー・バリデートは可能、適用はブロック。
-        </div>
-      )}
+      <ApplyReadinessPanel
+        canPatch={canPatch}
+        effectiveRouteKey={effectiveRouteKey}
+        effectiveLayoutId={effectiveLayoutId}
+        draftNodes={draftNodes}
+        selectedTokenRefs={selectedTokenRefs}
+        layoutClassRefError={layoutClassRefError}
+      />
 
       <div class="mb-2.5 flex flex-wrap gap-2">
         <button onClick={() => callLayoutPatch("preview")} disabled={loading || !canPatch} class="btn-secondary">1. プレビュー</button>
@@ -1957,18 +2032,18 @@ function LayoutBuilderSection(): JSX.Element {
 
 // ─── タブナビゲーション ───────────────────────────────────────────────────────
 
-const TABS: { id: TabId; label: string }[] = [
-  { id: "ci", label: "CI ガイダンス" },
+const TABS: { id: TabId; label: string; hint?: string }[] = [
+  { id: "bucket", label: "バケット管理", hint: "Step 1: bucket → generate → promote" },
+  { id: "layout", label: "レイアウトビルダー", hint: "Step 2: canvas 配置 → preview → validate → apply" },
   { id: "catalog", label: "コンポーネントカタログ" },
-  { id: "bucket", label: "バケット管理" },
   { id: "css", label: "CSS トークン" },
-  { id: "layout", label: "レイアウトビルダー" },
+  { id: "ci", label: "CI ガイダンス" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
 
 export default function UiBuilderAdmin(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<TabId>("ci");
+  const [activeTab, setActiveTab] = useState<TabId>("bucket");
 
   return (
     <main class="page-main-wide">

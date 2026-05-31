@@ -36,12 +36,14 @@ Deno.test("component event runtime: start hook is callable and flush success dra
   });
 
   const originalFetch = globalThis.fetch;
+  sessionStorage.setItem("demo_jwt_token", "test-token");
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true, accepted: 1 }), { status: 202 });
   try {
     await flushComponentEvents();
     assertEquals(__testOnly.getQueueLength(), 0);
   } finally {
     globalThis.fetch = originalFetch;
+    sessionStorage.removeItem("demo_jwt_token");
     stopComponentEventRuntime();
   }
 });
@@ -169,6 +171,7 @@ Deno.test("hardening: flush failure increments retryCount and keeps event in que
   emitComponentOperationEvent({ componentId: "hard-001", eventType: "submit", actorOrSource: "test", payload: {} });
 
   const originalFetch = globalThis.fetch;
+  sessionStorage.setItem("demo_jwt_token", "test-token");
   globalThis.fetch = async () => { throw new Error("NETWORK_FAIL"); };
   try {
     await flushComponentEvents();
@@ -177,6 +180,7 @@ Deno.test("hardening: flush failure increments retryCount and keeps event in que
     assertEquals(snapshot[0].retryCount, 1, "retryCount must be incremented on flush failure");
   } finally {
     globalThis.fetch = originalFetch;
+    sessionStorage.removeItem("demo_jwt_token");
     __testOnly.resetQueue();
   }
 });
@@ -187,6 +191,7 @@ Deno.test("hardening: event is dropped from queue after maxRetry exhausted", asy
 
   // Exhaust all retries (maxRetry=3 means 3 failures, then dropped on the 4th attempt).
   const originalFetch = globalThis.fetch;
+  sessionStorage.setItem("demo_jwt_token", "test-token");
   globalThis.fetch = async () => { throw new Error("NETWORK_FAIL"); };
   try {
     await flushComponentEvents(); // retryCount -> 1
@@ -197,6 +202,7 @@ Deno.test("hardening: event is dropped from queue after maxRetry exhausted", asy
     assertEquals(__testOnly.getQueueLength(), 0, "event must be dropped after maxRetry is exhausted");
   } finally {
     globalThis.fetch = originalFetch;
+    sessionStorage.removeItem("demo_jwt_token");
     __testOnly.resetQueue();
   }
 });
