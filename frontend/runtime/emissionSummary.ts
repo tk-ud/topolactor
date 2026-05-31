@@ -40,15 +40,17 @@ export type UserFacingResult = {
 export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
   if (!summary.ok) {
     const firstMsg = summary.errorMessages[0] ?? "";
-    const headline = firstMsg.includes("AUTH_TOKEN_MISSING")
-      ? "ログインが必要です"
-      : "エラーが発生しました";
-    const detail = summary.errorMessages.length > 0
-      ? summary.errorMessages.join(" / ")
-      : undefined;
+    const isAuthError = firstMsg.includes("AUTH_TOKEN_MISSING");
+    const headline = isAuthError ? "ログインが必要です" : "エラーが発生しました";
+    // Raw backend validation codes are not surfaced on the /demo preview face.
+    // Raw details are available in /demo/debug.
+    const detail = isAuthError
+      ? "ログイン後に再試行してください。"
+      : "処理に失敗しました。詳細はデバッグ画面で確認してください。";
     return { status: "error", headline, detail, itemCount: 0, hasRecommendation: false };
   }
 
+  // explicit_error recommendation is not surfaced on the /demo preview face.
   const hasRec = summary.recommendationStatus === "ok";
   const count = summary.componentCount;
   const headline = count > 0 ? `${count} 件のデータが取得できました` : "データを取得しました";

@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   buildDispatchContext,
+  demoPreviewOptions,
   presetById,
 } from "../runtime/operationPresets.ts";
 import {
@@ -20,34 +21,10 @@ const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 type Step = 1 | 2 | 3;
 
-type ScenarioOption = {
-  id: string;
-  title: string;
-  description: string;
-};
-
-const DEMO_SCENARIOS: ScenarioOption[] = [
-  {
-    id: "demo_hub_overview",
-    title: "全体を見る",
-    description: "デモのトップ画面を表示します。",
-  },
-  {
-    id: "demo_entity_list",
-    title: "候補を選ぶ",
-    description: "一覧から候補を探します。",
-  },
-  {
-    id: "demo_hub_recommendation",
-    title: "おすすめを見る",
-    description: "あなたの履歴に基づいたレコメンドを確認します。",
-  },
-];
-
 const STEP_LABELS: Record<Step, string> = {
-  1: "目的を選ぶ",
+  1: "投影を選ぶ",
   2: "結果を見る",
-  3: "次にすること",
+  3: "次の確認へ",
 };
 
 function StepBar({ current }: { current: Step }): JSX.Element {
@@ -89,12 +66,25 @@ function StepBar({ current }: { current: Step }): JSX.Element {
   );
 }
 
+/**
+ * /demo preview surface の audit navigation wrapper。
+ *
+ * UX 定義 authority は持たない。選択肢は operationPresets.ts の demo group preset
+ * (previewLabel を持つエントリ) から取得する。admin で構築・seed 済みの project
+ * projection を選択・実行・監査するだけであり、topology / manifest / projection
+ * の構築・変更は行わない。
+ *
+ * raw runtime 検証は /demo/debug、admin 構築面は /admin を利用。
+ */
 export default function UserDemoStepper(): JSX.Element {
   const [step, setStep] = useState<Step>(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emission, setEmission] = useState<Emission | null>(null);
   const [token, setToken] = useState<string | null>(null);
+
+  // Preview options are derived from operationPresets; not defined here.
+  const previewOptions = demoPreviewOptions();
 
   useEffect(() => {
     startComponentEventRuntime();
@@ -148,10 +138,10 @@ export default function UserDemoStepper(): JSX.Element {
       {step === 1 && (
         <section>
           <h2 class="mb-2 text-lg font-semibold text-gray-900">
-            何を見たいですか？
+            確認する投影を選んでください
           </h2>
           <p class="mb-5 text-sm text-gray-500">
-            シナリオカードを選んでください。
+            admin で構築した demo project の各 projection を選んで確認できます。
           </p>
           {!token && (
             <div class="alert-warn mb-5">
@@ -164,15 +154,15 @@ export default function UserDemoStepper(): JSX.Element {
             </div>
           )}
           <div class="space-y-3">
-            {DEMO_SCENARIOS.map((s) => (
+            {previewOptions.map((opt) => (
               <button
-                key={s.id}
+                key={opt.id}
                 type="button"
-                onClick={() => runScenario(s.id)}
+                onClick={() => runScenario(opt.id)}
                 class="w-full rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <p class="font-semibold text-gray-900">{s.title}</p>
-                <p class="mt-1 text-sm text-gray-500">{s.description}</p>
+                <p class="font-semibold text-gray-900">{opt.previewLabel}</p>
+                <p class="mt-1 text-sm text-gray-500">{opt.previewDescription}</p>
               </button>
             ))}
           </div>
@@ -191,7 +181,7 @@ export default function UserDemoStepper(): JSX.Element {
 
       {step === 3 && userResult && !loading && (
         <section>
-          <h2 class="mb-4 text-lg font-semibold text-gray-900">結果</h2>
+          <h2 class="mb-4 text-lg font-semibold text-gray-900">投影結果</h2>
           <UserDemoResultCard result={userResult} />
           <UserDemoNextActions
             result={userResult}

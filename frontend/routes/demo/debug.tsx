@@ -2,19 +2,22 @@ import { JSX } from "preact";
 import OperationPanel from "../../islands/OperationPanel.tsx";
 
 /**
- * /demo/debug — 開発者 / 検証向けデバッグ画面。
+ * /demo/debug — demo project の raw runtime 検証面。
  * raw dispatch vector・emission JSON・SQL Attention 投影など内部情報を確認できる。
- * 一般ユーザー向けデモは /demo を利用。
+ * project construction authority はなく、admin構築済み projection の raw 検証が目的。
+ * 通常の preview 監査は /demo を利用。
  */
 export default function DemoDebug(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — デモ / デバッグ</h1>
+      <h1 class="page-title">topolactor — Demo / raw runtime 検証</h1>
 
       <div class="alert-info mb-6">
-        <strong>開発者 / 検証向けページ:</strong> raw dispatch vector・emission JSON・SQL Attention
-        投影など内部情報を確認できます。一般ユーザー向けデモは{" "}
-        <a href="/demo" class="link">/demo</a> をご利用ください。
+        <strong>raw runtime 検証面:</strong> admin構築済み demo project projection の
+        raw dispatch vector・emission JSON・SQL Attention 投影を確認します。
+        project construction authority はありません。構築・編集は{" "}
+        <a href="/admin" class="link">/admin</a> で行ってください。
+        通常の preview 監査は <a href="/demo" class="link">/demo</a> をご利用ください。
       </div>
 
       <section class="mb-8">
@@ -22,13 +25,13 @@ export default function DemoDebug(): JSX.Element {
       </section>
 
       <div class="nav-footer">
-        <a href="/demo" class="link">← デモ</a>
+        <a href="/demo" class="link">← demo preview</a>
         {" · "}
-        <a href="/admin/runtime" class="link">ランタイム検証</a>
+        <a href="/admin/runtime" class="link">admin runtime 検証</a>
         {" · "}
         <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}
-        <a href="/admin" class="link">管理画面</a>
+        <a href="/admin" class="link">admin</a>
       </div>
     </main>
   );

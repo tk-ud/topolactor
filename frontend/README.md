@@ -9,6 +9,17 @@ selects, table clicks, route transitions) become operation inputs. These are con
 into operation vectors internally. UI is projected from component packages, schemas,
 and resume context.
 
+## Surface responsibilities
+
+| Surface | Role |
+|---------|------|
+| `/admin` | Project / topology / layout / manifest construction, validation, and registry operations |
+| `/demo` | Preview and audit of admin-constructed demo project projections (read-only) |
+| `/demo/debug` | Raw runtime inspection of demo project dispatch / emission (developer / validator) |
+| `/` (top) | Public display of adopted/published projections — publish adoption pipeline not yet implemented |
+
+Construction and authority: `/admin` owns topology/manifest/registry writes. `/demo` and `/demo/debug` are read-only projection surfaces with no construction authority.
+
 ## Tech stack
 
 - **Framework**: Fresh (Deno)
