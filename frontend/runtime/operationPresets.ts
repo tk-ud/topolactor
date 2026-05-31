@@ -21,6 +21,13 @@ export type OperationPreset = {
   expectedObservation: string;
   operation: UserOperation;
   context?: OperationPresetContext;
+  /**
+   * User-facing preview label for /demo preview surface.
+   * Defined only on demo-group presets. Admin/developer label is `label`.
+   */
+  previewLabel?: string;
+  /** User-facing preview description for /demo preview surface. */
+  previewDescription?: string;
 };
 
 export const OPERATION_PRESETS: OperationPreset[] = [
@@ -51,6 +58,8 @@ export const OPERATION_PRESETS: OperationPreset[] = [
       layer: "hub",
       action: "overview",
     },
+    previewLabel: "全体を確認する",
+    previewDescription: "demo project の概要 projection を確認します。",
   },
   {
     id: "demo_entity_list",
@@ -64,6 +73,8 @@ export const OPERATION_PRESETS: OperationPreset[] = [
       layer: "entity",
       action: "list",
     },
+    previewLabel: "一覧を確認する",
+    previewDescription: "エンティティ一覧 projection を確認します。",
   },
   {
     id: "demo_hub_recommendation",
@@ -83,6 +94,8 @@ export const OPERATION_PRESETS: OperationPreset[] = [
       ContextSessionId: DEMO_CONTEXT_SESSION_ID,
       ContextTokenIds: DEMO_CONTEXT_TOKEN_ID_ACTIVE,
     },
+    previewLabel: "レコメンドを確認する",
+    previewDescription: "推薦候補 projection を確認します（seed context 使用）。",
   },
 ];
 
@@ -115,6 +128,33 @@ export function buildDispatchContext(
   if (session) context["ContextSessionId"] = session;
   if (tokens) context["ContextTokenIds"] = tokens;
   return context;
+}
+
+/**
+ * User-facing preview option for the /demo preview surface.
+ * Derived from OperationPreset entries that carry previewLabel.
+ * Authority: admin/manifest/seed — not a /demo-side UX definition.
+ */
+export type DemoPreviewOption = {
+  id: string;
+  previewLabel: string;
+  previewDescription: string;
+};
+
+/**
+ * Returns the ordered list of demo preview options for the /demo surface.
+ * Source of truth is OPERATION_PRESETS demo group entries; /demo reads, not defines.
+ */
+export function demoPreviewOptions(): DemoPreviewOption[] {
+  return presetsForGroups(["demo"])
+    .filter((p): p is OperationPreset & { previewLabel: string } =>
+      p.previewLabel !== undefined
+    )
+    .map((p) => ({
+      id: p.id,
+      previewLabel: p.previewLabel,
+      previewDescription: p.previewDescription ?? "",
+    }));
 }
 
 /** Match initial route defaults to a preset when no explicit preset id is passed. */

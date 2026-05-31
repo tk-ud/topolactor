@@ -1,44 +1,39 @@
 import { JSX } from "preact";
-import OperationPanel from "../islands/OperationPanel.tsx";
+import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 
 /**
- * /demo — demo topology 向け runtime dispatch（preset 特化）。
+ * /demo — admin構築済み demo project projection の体験監査 preview 面。
+ * UX構築 authority は持たない。構築・編集は /admin で行う。
+ * raw runtime 検証は /demo/debug または /admin/runtime を利用。
  */
 export default function Demo(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — Demo runtime</h1>
+      <h1 class="page-title">topolactor — Demo preview</h1>
 
       <div class="alert-info mb-6">
-        <strong>Demo ランタイムページ:</strong> seed 済み demo トポロジへの dispatch 専用です。
-        emission は <code class="rounded bg-blue-100 px-1">RuntimeExecutor → DB</code> の実レスポンスです（合成表示なし）。
-        先に <a href="/auth" class="link">ログイン</a>。
-        汎用シナリオ（default search 等）は <a href="/admin/runtime" class="link">/admin/runtime</a> を利用してください。
-        静的構造図のみは <a href="/demo-static" class="link">/demo-static</a>。
+        <strong>Demo preview:</strong> admin で構築した demo project projection を確認できます。
+        先に <a href="/auth" class="link">ログイン</a> してください。
+        raw runtime 検証は{" "}
+        <a href="/demo/debug" class="link">/demo/debug</a> または{" "}
+        <a href="/admin/runtime" class="link">/admin/runtime</a>、
+        構築・編集は <a href="/admin" class="link">/admin</a> をご利用ください。
       </div>
 
       <section class="mb-8">
-        <h2 class="section-title">Demo シナリオ</h2>
-        <p class="mb-4 text-muted">
-          カードを選んで実行してください。レコメンド確認は
-          <strong> Demo hub + recommendation context</strong> preset が
-          <code class="rounded bg-gray-100 px-1">docs/demo-walkthrough.md</code> シナリオ E と同じ seed
-          session/token を自動付与します。UUID の手入力は Advanced にあります。
-        </p>
-
-        <OperationPanel mode="demo" initialPresetId="demo_hub_overview" />
+        <UserDemoStepper />
       </section>
 
       <div class="nav-footer">
         <a href="/" class="link">トップ</a>
         {" · "}
-        <a href="/admin/runtime" class="link">ランタイム検証</a>
+        <a href="/demo/debug" class="link">raw 検証</a>
+        {" · "}
+        <a href="/admin/runtime" class="link">admin runtime</a>
         {" · "}
         <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}
-        <a href="/admin" class="link">管理画面</a>
-        {" · "}
-        <a href="/runtime-status" class="link">ランタイムステータス</a>
+        <a href="/admin" class="link">admin</a>
       </div>
     </main>
   );

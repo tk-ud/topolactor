@@ -9,6 +9,17 @@ selects, table clicks, route transitions) become operation inputs. These are con
 into operation vectors internally. UI is projected from component packages, schemas,
 and resume context.
 
+## Surface responsibilities
+
+| Surface | Role |
+|---------|------|
+| `/admin` | Project / topology / layout / manifest construction, validation, and registry operations |
+| `/demo` | Preview and audit of admin-constructed demo project projections (read-only) |
+| `/demo/debug` | Raw runtime inspection of demo project dispatch / emission (developer / validator) |
+| `/` (top) | Public display of adopted/published projections — publish adoption pipeline not yet implemented |
+
+Construction and authority: `/admin` owns topology/manifest/registry writes. `/demo` and `/demo/debug` are read-only projection surfaces with no construction authority.
+
 ## Tech stack
 
 - **Framework**: Fresh (Deno)
@@ -60,7 +71,7 @@ Requires backend running for dispatch operations.
 
 ## Implementation Status
 
-Routes, islands, components, and runtime files are substantially implemented. Admin routes (`/admin/*`) are wired to backend registry flows for seed, bucket, and package operations; SSE receiver / dispatcher / projection runtime are partial (see `docs/system-roadmap.yaml` M4). Visual layout builder drag/drop UI is not yet implemented.
+Routes, islands, components, and runtime files are substantially implemented. Admin routes (`/admin/*`) are wired to backend registry flows for seed, bucket, and package operations; SSE receiver / dispatcher / projection runtime are partial (see `docs/system-roadmap.yaml` M4). Visual layout builder is implemented in `/admin/ui-builder` with lifecycle state visibility, undo/redo history, actionable validation errors, keyboard/non-pointer operation, and CSS token preview; manual accessibility first-run check is pending.
 
 ## Local type check
 
