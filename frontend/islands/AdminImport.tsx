@@ -56,11 +56,23 @@ export default function AdminImport(): JSX.Element {
     reader.readAsText(file);
   };
 
+  const manifestsEmpty = !loadingSelectors && manifests.length === 0;
+  const schemasEmpty = !loadingSelectors && schemas.length === 0;
+  const canSelectInputs = !manifestsEmpty && !schemasEmpty;
+
   const handlePreview = async () => {
     setError(null);
     setPreview(null);
     setApplyResult(null);
 
+    if (manifestsEmpty) {
+      setError("インポートには先にマニフェストが必要です。管理 / マニフェストで作成してください。");
+      return;
+    }
+    if (schemasEmpty) {
+      setError("取り込み用のスキーマが登録されていません。マニフェスト画面で前提を整えてください。");
+      return;
+    }
     if (!selectedManifestId) { setError("マニフェストを選択してください。"); return; }
     if (!selectedSchemaId) { setError("スキーマを選択してください。"); return; }
     if (!fileContent) { setError("ファイルが選択されていません。"); return; }
@@ -109,10 +121,35 @@ export default function AdminImport(): JSX.Element {
       <section class="mb-6">
         <h2 class="section-title">1. マニフェストとスキーマを選択</h2>
         <AdminActionHint>
-          マニフェストは「何をどこへ取り込むか」、スキーマは「各行のフィールド契約」です。DB に登録済みの定義のみ選択できます。
+          マニフェストは「何をどこへ取り込むか」、スキーマは「各行の形」です。
+          どちらも先に登録されている必要があります（未登録の場合は下の案内に従ってください）。
         </AdminActionHint>
         {loadingSelectors ? (
           <p class="text-muted">選択肢をロード中...</p>
+        ) : manifestsEmpty ? (
+          <div class="alert-info">
+            <p class="text-sm font-medium">
+              インポートには先にマニフェストが必要です。まず管理 / マニフェストで作成してください。
+            </p>
+            <p class="text-muted-xs mt-2">
+              マニフェストは取り込みルールと実行先の定義です。作成・有効化後、この画面に戻ると選択できるようになります。
+            </p>
+            <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
+              マニフェスト画面へ
+            </a>
+          </div>
+        ) : schemasEmpty ? (
+          <div class="alert-info">
+            <p class="text-sm font-medium">
+              取り込み用のスキーマがまだ登録されていません。マニフェスト画面で前提を整えてください。
+            </p>
+            <p class="text-muted-xs mt-2">
+              スキーマは CSV/JSON の各行のフィールド形を決めます。プレビューにはマニフェストとスキーマの両方が必要です。
+            </p>
+            <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
+              マニフェスト画面へ
+            </a>
+          </div>
         ) : (
           <div class="flex flex-wrap items-end gap-4">
             <label class="text-sm">
@@ -151,20 +188,33 @@ export default function AdminImport(): JSX.Element {
 
       <section class="mb-6">
         <h2 class="section-title">2. CSV または JSON ファイルをアップロード</h2>
-        <div class="flex flex-wrap items-center gap-3">
-          <input type="file" accept=".csv,.json" onChange={handleFileChange} class="text-sm" />
-          {fileName && <span class="text-muted">{fileName} ({sourceType.toUpperCase()})</span>}
-        </div>
+        {!canSelectInputs ? (
+          <p class="text-muted text-sm">マニフェストとスキーマを用意してからファイルを選べます。</p>
+        ) : (
+          <div class="flex flex-wrap items-center gap-3">
+            <input type="file" accept=".csv,.json" onChange={handleFileChange} class="text-sm" />
+            {fileName && <span class="text-muted">{fileName} ({sourceType.toUpperCase()})</span>}
+          </div>
+        )}
       </section>
 
       <section class="mb-6">
-        <h2 class="section-title">3. バリデート &amp; プレビュー</h2>
-        <button onClick={handlePreview} disabled={loading} class="btn-secondary mr-2">
-          プレビュー（バリデート）
+        <h2 class="section-title">3. プレビュー（内容確認）</h2>
+        <button
+          onClick={handlePreview}
+          disabled={loading || !canSelectInputs}
+          class="btn-secondary mr-2"
+        >
+          プレビュー
         </button>
         <AdminActionHint>
-          DB には書きません。backend が manifest+schema に照合し、snapshotId と valid/invalid 行を返します。
+          まだ DB には書きません。マニフェストとスキーマに沿って各行を検証し、有効/無効の件数を表示します。
         </AdminActionHint>
+        {!canSelectInputs && (
+          <p class="text-muted-xs mt-2">
+            プレビューできない理由: {manifestsEmpty ? "マニフェストが未登録" : "スキーマが未登録"}です。
+          </p>
+        )}
         {loading && <span class="text-muted">処理中...</span>}
       </section>
 
@@ -172,9 +222,13 @@ export default function AdminImport(): JSX.Element {
         <div class="alert-error mb-4">
           <p><strong>エラー:</strong> {error}</p>
           <p class="text-muted-xs mt-2">
-            malformed 入力・未選択 manifest/schema はここ。backend 未接続は DEMO_BACKEND_URL と /auth を確認。
-            invalid 行はプレビュー表の validationErrors 列を修正してから再プレビュー。
+            ファイル形式の誤り・マニフェスト/スキーマ未選択はここに表示されます。
+            無効行はプレビュー表を修正してから再プレビューしてください。
           </p>
+          <details class="text-muted-xs mt-1">
+            <summary class="cursor-pointer">技術情報</summary>
+            <p class="mt-1">backend 未接続時は DEMO_BACKEND_URL と /auth を確認。API は manifest+schema 照合後に snapshotId を返します。</p>
+          </details>
         </div>
       )}
 
