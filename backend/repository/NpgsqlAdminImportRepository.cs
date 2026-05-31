@@ -14,7 +14,7 @@ namespace Topolactor.Repository;
 ///   topology.admin_import_apply_log
 ///
 /// Reads from:
-///   manifest (list)
+///   hubs.topology_manifests (list — canonical, replaced public.manifest FK)
 ///   topology.schema_registry (list)
 /// </summary>
 public class NpgsqlAdminImportRepository : AdminImportRepository
@@ -33,7 +33,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         Guid snapshotId,
         string sourceType,
         string fileName,
-        Guid manifestId,
+        Guid topologyManifestId,
         JsonElement rawHeaderJsonb,
         JsonElement rawRowsJsonb,
         JsonElement validationSummaryJsonb,
@@ -44,12 +44,12 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "INSERT INTO topology.admin_import_snapshot " +
-            "(snapshot_id, source_type, file_name, manifest_id, raw_header_jsonb, raw_rows_jsonb, validation_summary_jsonb) " +
+            "(snapshot_id, source_type, file_name, topology_manifest_id, raw_header_jsonb, raw_rows_jsonb, validation_summary_jsonb) " +
             "VALUES (@sid, @st, @fn, @mid, @rh::jsonb, @rr::jsonb, @vs::jsonb)";
         cmd.Parameters.AddWithValue("sid", snapshotId);
         cmd.Parameters.AddWithValue("st", sourceType);
         cmd.Parameters.AddWithValue("fn", fileName);
-        cmd.Parameters.AddWithValue("mid", manifestId);
+        cmd.Parameters.AddWithValue("mid", topologyManifestId);
         cmd.Parameters.AddWithValue("rh", rawHeaderJsonb.GetRawText());
         cmd.Parameters.AddWithValue("rr", rawRowsJsonb.GetRawText());
         cmd.Parameters.AddWithValue("vs", validationSummaryJsonb.GetRawText());
@@ -58,7 +58,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
     }
 
     public override async Task<bool> CreateRecordsAsync(
-        Guid manifestId,
+        Guid topologyManifestId,
         Guid snapshotId,
         IReadOnlyList<(JsonElement records, string status, JsonElement validationErrors)> rows,
         CancellationToken ct = default)
@@ -73,9 +73,9 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
             cmd.Transaction = tx;
             cmd.CommandText =
                 "INSERT INTO topology.admin_import_records " +
-                "(manifest_id, snapshot_id, records, status, validation_errors_jsonb) " +
+                "(topology_manifest_id, snapshot_id, records, status, validation_errors_jsonb) " +
                 "VALUES (@mid, @sid, @rec::jsonb, @st, @ve::jsonb)";
-            cmd.Parameters.AddWithValue("mid", manifestId);
+            cmd.Parameters.AddWithValue("mid", topologyManifestId);
             cmd.Parameters.AddWithValue("sid", snapshotId);
             cmd.Parameters.AddWithValue("rec", records.GetRawText());
             cmd.Parameters.AddWithValue("st", status);
@@ -132,8 +132,8 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT manifest_id, status, created_at " +
-            "FROM manifest " +
+            "SELECT topology_manifest_id, status, created_at " +
+            "FROM hubs.topology_manifests " +
             "ORDER BY created_at DESC " +
             "LIMIT 200";
         var results = new List<AdminImportManifestSummary>();
@@ -185,14 +185,14 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
     }
 
     public override async Task<bool> ManifestExistsAsync(
-        Guid manifestId,
+        Guid topologyManifestId,
         CancellationToken ct = default)
     {
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT 1 FROM manifest WHERE manifest_id = @mid LIMIT 1";
-        cmd.Parameters.AddWithValue("mid", manifestId);
+        cmd.CommandText = "SELECT 1 FROM hubs.topology_manifests WHERE topology_manifest_id = @mid LIMIT 1";
+        cmd.Parameters.AddWithValue("mid", topologyManifestId);
         var result = await cmd.ExecuteScalarAsync(ct);
         return result is not null;
     }
@@ -205,7 +205,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT manifest_id, source_type, file_name " +
+            "SELECT topology_manifest_id, source_type, file_name " +
             "FROM topology.admin_import_snapshot WHERE snapshot_id = @sid LIMIT 1";
         cmd.Parameters.AddWithValue("sid", snapshotId);
         await using var reader = await cmd.ExecuteReaderAsync(ct);

@@ -1021,7 +1021,7 @@ system_roadmap_ssot:
         Completed sub-scope includes runtime alias coverage, projection constructor/adapter continuity, primitive renderer emit continuity, wiringId continuity, and generate/promote contract separation.
         Completed sub-scope now also includes catalog registration seed surface (ui_component_bucket bootstrap seed from catalog registrationRequired entries) and registration continuity (`ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor`).
         Remaining scope is limited to roadmap completion bundle closure for frontend component constructor/interface and DB-driven design/layout/wiring projection (including final frontend projection/component interface alignment judgment).
-        Design/layout/wiring authority remains DB-side (`design.classname`/`design.tailwind`, package layout mapping, `ui_layout_registry`, `ui_wiring_registry`, `ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
+        Design/layout/wiring authority remains DB-side (`topology.components_style_design.design` classname/tailwind, package layout mapping, `topology.components_layout_design`, `topology.ui_wiring_registry`, `topology.ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
       files:
         - frontend/components/Button.tsx
         - frontend/components/Input.tsx
@@ -1141,12 +1141,12 @@ system_roadmap_ssot:
         components. buildLayoutPatchJson marks draft-only nodes with _draftOnly:true, and
         backend layout_patch:validate/apply fail-close with
         DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED so draft-only
-        payloads cannot persist to ui_layout_registry/ui_topology_tensor via direct API calls.
+        payloads cannot persist to topology.components_layout_design/topology.ui_topology_tensor via direct API calls.
         Canvas: drag-to-reorder, up/down buttons, LayoutNodeInspector (click a node) for
         slotKey/parentNodeId/gridCol/gridRow. cssTokenRefs selected from CSS_DICTIONARY_TOKENS.
         Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
         No direct DB write. Frontend holds draft projection state only; topology persistence
-        authority is DB-side (ui_layout_registry / ui_topology_tensor).
+        authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
       files:
         - frontend/routes/admin/ui-builder.tsx
         - frontend/runtime/cssDictionary.ts
@@ -1876,7 +1876,7 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     design.db_manifest_ui_topology_meaning_split:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
@@ -1884,51 +1884,67 @@ system_roadmap_ssot:
         Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
         introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
         Hubs space hierarchy: hubs.hub -> hubs.topology_manifests -> hubs.hub_relations.
-        Phase Attention axis migration complete: x=hubs.hub_relations manifest-scoped sequence count,
-        y=hubs.hub count, z=hubs.topology_manifests count. w/l2_norm exploration budget gate implemented:
-        weak=near+narrow topK, mid=normal topK, high=expanded distance band or permutation expansion;
-        limits sourced from topology.function_parameters exploration_budget_tiers (not runtime magic numbers).
-        hubs.hub_relations uses topology_manifest_id + related_hub_id + sequence_position + relation_config.
-        topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE);
-        legacy hub_relations global-graph migration DDL available at
-        db/migrations/hub_relations_legacy_to_manifest_scoped.sql.
-        manifest marked compatibility-only; canonical path is topology.wiring_physical_to_package.
-        CI vocabulary checks enforce canonical naming. All execution CI gates fixed: backend-tests
-        missing topology_tables.sql in CI DB setup (real migration break fixed); Deno workflows
-        using v1.x against nodeModulesDir:auto (stale CI tool expectation fixed); runtime-env
-        gate referencing topologys.topology_edit_log and topologys.structure_maps (stale old
-        vocabulary in check script fixed to topology.* canonical).
-        Remaining gaps: manifest admin_import_snapshot FK retirement, ui_component_* public tables migration.
+        Phase Attention axis migration complete. hubs.hub_relations manifest-scoped sequence chain.
+        topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE).
+        manifest marked compatibility-only for runtime routing; canonical wiring path is topology.wiring_physical_to_package.
+        CI vocabulary checks enforce canonical naming.
+        admin_import_snapshot FK retired from public.manifest: column renamed to topology_manifest_id,
+        FK now references hubs.topology_manifests. Orphaned existing rows remapped to oldest
+        hubs.topology_manifests row; explicit RAISE EXCEPTION if no topology_manifest exists.
+        admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, linked via snapshot_id).
+        Migration DDL: db/migrations/admin_import_topology_manifest_migration.sql.
+        All public UI component/design/layout/package tables migrated to topology.* canonical schema
+        and retired (DROPped in reverse dependency order): topology.components_bucket,
+        topology.ui_component_registry, topology.ui_component_package, topology.ui_package_component_map,
+        topology.components_layout_design, topology.ui_wiring_registry, topology.ui_topology_tensor,
+        topology.ui_builder_components, topology.components_style_design, topology.components_package_design.
+        Upsert policy: ON CONFLICT (business_key) DO NOTHING; canonical rows take precedence.
+        Migration DDL: db/migrations/ui_topology_to_canonical_schema.sql. Tensor parent self-references
+        are remapped through canonical logical tuples; dangling legacy parent references fail explicitly.
+        DB-backed migration regression runs in runtime-environment-gate; without DB env the same script
+        intentionally provides static-only evidence and must not be treated as DB-backed completion evidence.
+        context_* tables placement decision: stays in public schema as recommendation learning surfaces.
       files:
         - docs/design/db-schema.yaml
         - docs/design/sql-attention-logs-ssot.yaml
         - docs/design/sql-attention-logs-ssot.md
         - .agent/tests/check-sql-attention-ssot.sh
         - .agent/tests/check-structure.sh
+        - .agent/tests/check-migration-ui-topology.sh
+        - .agent/tests/check-runtime-environment.sh
         - .agent/tests/check-ssot-vocabulary-contract.sh
         - db/schema.sql
         - db/topology_tables.sql
         - db/migrations/hub_relations_legacy_to_manifest_scoped.sql
+        - db/migrations/admin_import_topology_manifest_migration.sql
+        - db/migrations/ui_topology_to_canonical_schema.sql
         - db/manifest_tables.sql
+        - db/ui_topology_tables.sql
         - db/sql_attention_logs_tables.sql
         - db/seed_empty.sql
         - db/demo_seed.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs
+        - backend/repository/NpgsqlAdminImportRepository.cs
+        - backend/repository/AdminImportRepository.cs
+        - backend/repository/NpgsqlUiTopologyRepository.cs
       evidence:
         tests:
           - check-sql-attention-ssot.sh
           - check-structure.sh
+          - check-migration-ui-topology.sh
           - check-backend-tests.sh
           - check-runtime-semantics.sh
           - check-default-entity-search.sh
           - check-unified-test-gate.sh
           - HubAttractorExplorationRuntime_ExplorationBudgetGateTests
+          - UiTopologyRegistrationContinuityIntegrationTests
         ci:
           - structure-check
           - backend-tests
           - runtime-semantics
           - default-entity-search
           - unified-test-gate
+          - runtime-environment-gate
       completion_condition:
         - ssot_canonical_schema_namespaces_match_topology_hubs_logs
         - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count
@@ -1945,9 +1961,10 @@ system_roadmap_ssot:
         - hubs_hub_relations_manifest_scoped_sequence_chain_under_topology_manifests
         - hubs_hub_relations_uses_topology_manifest_id_related_hub_id_sequence_position
         - manifest_split_public_manifest_retired_from_main_path
+        - admin_import_snapshot_fk_migrated_to_hubs_topology_manifests
+        - ui_topology_public_tables_migrated_to_topology_canonical_schema
+        - context_tables_placement_decision_documented
       known_gap_ref:
-        - public.manifest still retained for admin_import_snapshot FK; full retirement to topology.wiring_physical_to_package and hubs.topology_manifests pending
-        - ui_component_* public tables not yet migrated to canonical topology schema
         - hubs_hub_relations_legacy_global_graph_data_preserving_migration_ddl_available
 
 

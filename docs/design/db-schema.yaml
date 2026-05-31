@@ -66,7 +66,7 @@ db_schema:
         - hubs.topology_manifests
     topology:
       status: canonical_active
-      role: physical table catalog, registry tables, topology definition, wiring
+      role: physical table catalog, registry tables, topology definition, wiring, UI component design/package/layout
       tables:
         - topology.physical_tables
         - topology.wiring_physical_to_package
@@ -85,6 +85,16 @@ db_schema:
         - topology.admin_import_snapshot
         - topology.admin_import_records
         - topology.admin_import_apply_log
+        - topology.components_bucket
+        - topology.ui_component_registry
+        - topology.ui_component_package
+        - topology.ui_package_component_map
+        - topology.components_layout_design
+        - topology.ui_wiring_registry
+        - topology.ui_topology_tensor
+        - topology.ui_builder_components
+        - topology.components_style_design
+        - topology.components_package_design
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:
@@ -118,6 +128,63 @@ db_schema:
         status: migration_completed
         migration_target: hubs.hub
         note: hubs.hubs renamed to hubs.hub with relation JSONB join definition added.
+      admin_import_manifest_fk:
+        status: migration_ddl_available
+        migration_target: hubs.topology_manifests
+        bootstrap_ddl: db/manifest_tables.sql
+        migration_ddl: db/migrations/admin_import_topology_manifest_migration.sql
+        remap_policy: >-
+          Existing admin_import_snapshot rows hold old manifest_id UUIDs from public.manifest,
+          which are not valid hubs.topology_manifests IDs. Before adding the FK constraint,
+          orphaned rows are remapped to the oldest hubs.topology_manifests row (by created_at).
+          Explicit RAISE EXCEPTION if no topology_manifests row exists and orphaned rows are present.
+          admin_import_records topology_manifest_id remains a soft reference (no FK); linked via snapshot_id.
+        note: >-
+          admin_import_snapshot.manifest_id FK to public.manifest retired.
+          Column renamed to topology_manifest_id, FK now references hubs.topology_manifests.
+          admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, no FK).
+          public.manifest retained as compatibility-only for SeedImportApplyRepository runtime routing.
+        former_columns:
+          - admin_import_snapshot.manifest_id (FK to public.manifest)
+          - admin_import_records.manifest_id (FK to public.manifest)
+      ui_topology_to_canonical_schema:
+        status: migration_ddl_available
+        migration_target: topology schema
+        bootstrap_ddl: db/ui_topology_tables.sql
+        migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql
+        upsert_policy: >-
+          Each INSERT uses ON CONFLICT (business_key) DO NOTHING. Canonical-table rows
+          take precedence over old public rows with the same business key. Child FKs
+          are remapped through canonical business keys. ui_topology_tensor.parent_tensor_id
+          is restored through the canonical logical parent tuple, not direct UUID match.
+          Non-NULL legacy parent references fail explicitly when the old parent row is
+          dangling or its canonical logical tuple cannot be resolved; no silent NULL
+          fallback is allowed. Idempotent on re-runs. DROP IF EXISTS is safe on fresh
+          DBs (old tables never existed).
+        note: >-
+          All public UI component/design/layout/package tables migrated to topology.* canonical schema
+          and then retired (DROPped in reverse dependency order with CASCADE).
+          public.ui_component_bucket -> topology.components_bucket,
+          public.ui_component_registry -> topology.ui_component_registry,
+          public.ui_component_package -> topology.ui_component_package,
+          public.ui_package_component_map -> topology.ui_package_component_map,
+          public.ui_layout_registry -> topology.components_layout_design,
+          public.ui_wiring_registry -> topology.ui_wiring_registry,
+          public.ui_topology_tensor -> topology.ui_topology_tensor,
+          public.components -> topology.ui_builder_components,
+          public.design -> topology.components_style_design,
+          public.packages -> topology.components_package_design.
+        former_tables:
+          - public.ui_component_bucket
+          - public.ui_component_registry
+          - public.ui_component_package
+          - public.ui_package_component_map
+          - public.ui_layout_registry
+          - public.ui_wiring_registry
+          - public.ui_topology_tensor
+          - public.components
+          - public.design
+          - public.packages
       hub_relations_legacy_global_graph:
         status: migration_ddl_available
         migration_target: hubs.hub_relations
@@ -302,21 +369,29 @@ db_schema:
     topology_ui_design:
       authority_tables:
         - topology.components_bucket
-        - topology.components_style_design
+        - topology.ui_component_registry
+        - topology.ui_component_package
+        - topology.ui_package_component_map
         - topology.components_layout_design
+        - topology.ui_wiring_registry
+        - topology.ui_topology_tensor
+        - topology.ui_builder_components
+        - topology.components_style_design
         - topology.components_package_design
-      current_sources:
-        - ui_component_bucket
-        - ui_component_registry
-        - ui_component_package
-        - ui_package_component_map
-        - ui_layout_registry
-        - ui_wiring_registry
-        - ui_topology_tensor
-        - components
-        - design
-        - packages
-      meaning: UI component/style/layout/package design authority under topology schema
+      migration_status: complete
+      migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql
+      former_sources:
+        - public.ui_component_bucket
+        - public.ui_component_registry
+        - public.ui_component_package
+        - public.ui_package_component_map
+        - public.ui_layout_registry
+        - public.ui_wiring_registry
+        - public.ui_topology_tensor
+        - public.components
+        - public.design
+        - public.packages
+      meaning: UI component/style/layout/package design authority under topology schema (migration complete)
 
     logs_current_attention_evidence:
       authority_tables:
@@ -332,13 +407,16 @@ db_schema:
     public_or_unqualified_tables:
       status: drift
       examples:
-        - manifest
-        - context_token_registry
-        - context_event_vector_cache
-        - ui_component_registry
-        - ui_component_package
-        - ui_topology_tensor
+        - manifest (compatibility-only for runtime routing; wiring canonical path is topology.wiring_physical_to_package)
+        - context_token_registry (recommendation learning surface; stays in public by placement decision)
+        - context_event_vector_cache (recommendation learning surface; stays in public by placement decision)
       rule: public/unqualified table names are not canonical SSOT tables
+      placement_decisions:
+        context_tables: >-
+          public context_* tables (context_token_registry, context_event, context_event_vector_cache, etc.)
+          are recommendation learning surfaces. Placement decision: stays in public schema.
+          Rationale: these are recommendation child projection surfaces, not topology definition tables.
+          They are listed as recommend_target context_* learning surfaces in recommend_target_boundary.
     topologys_schema:
       status: migration_completed
       migration_target: topology
@@ -349,12 +427,9 @@ db_schema:
         - topologys.entities -> topology.entities (done)
 
   legacy_transition_candidates:
-    - manifest -> topology.wiring_physical_to_package / hubs.topology_manifests (compatibility-only, admin_import_snapshot FK pending)
-    - public context_* -> topology placement decision
-    - public ui_component_* -> topology.components_*
-    - components
-    - design
-    - packages
+    - manifest: compatibility-only retained for SeedImportApplyRepository runtime routing; admin_import FK migrated to hubs.topology_manifests (complete); canonical wiring path is topology.wiring_physical_to_package
+    - public context_*: placement decision resolved — stays in public schema (recommendation learning surfaces, not topology definition tables)
+    - "public ui_component_* / components / design / packages: migrated to topology.* canonical schema (migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql) — complete"
     - logs.current / logs.hub_current / logs.attention remain canonical SQL Attention persistence surfaces, not targets
     - logs.diff remains the physical mutation pressure signal source for logs.current
 
@@ -996,9 +1071,10 @@ db_schema:
         - name: source_type
           type: text
           values: [csv, json]
-        - name: manifest_id
+        - name: topology_manifest_id
           type: uuid
-          role: manifest_reference_id
+          role: fk_hubs_topology_manifests
+          note: formerly manifest_id FK to public.manifest; migrated to hubs.topology_manifests FK
         - name: raw_rows_jsonb
           type: jsonb
           role: imported_row_snapshot_payload
@@ -1011,9 +1087,10 @@ db_schema:
         - name: id
           type: bigint
           role: physical_record_pk
-        - name: manifest_id
+        - name: topology_manifest_id
           type: uuid
-          role: manifest_reference_id
+          role: soft_reference_hubs_topology_manifests
+          note: formerly manifest_id FK to public.manifest; migrated to topology_manifest_id soft reference (no FK constraint)
         - name: snapshot_id
           type: uuid
           role: snapshot_reference_id

@@ -77,9 +77,9 @@ fail!("seed runtime_destination not in SSOT: #{(seed_dests-rtd).to_a.sort.join('
 fail!("seed mapping type not in SSOT: #{(seed_types-map_types).to_a.sort.join(', ')}") unless (seed_types-map_types).empty?
 puts 'OK  DB seed runtime_destination/type vocabulary subset check'
 
-# ui_component_bucket seed classification subset (seed instance -> YAML authority)
+# topology.components_bucket seed classification subset (seed instance -> YAML authority)
 seed_class_rows = seed.scan(/"classification"\s*:\s*\{([^\}]*)\}/m).flatten
-fail!('ui_component_bucket classification extraction empty from seed SQL') if seed_class_rows.empty?
+fail!('components_bucket classification extraction empty from seed SQL') if seed_class_rows.empty?
 seed_component_family = seed_class_rows.flat_map { |r| r.scan(/"componentFamily"\s*:\s*"([^"]+)"/).flatten }.to_set
 seed_semantic_role = seed_class_rows.flat_map { |r| r.scan(/"semanticRole"\s*:\s*"([^"]+)"/).flatten }.to_set
 seed_visual_role = seed_class_rows.flat_map { |r| r.scan(/"visualRole"\s*:\s*"([^"]+)"/).flatten }.to_set
@@ -97,7 +97,7 @@ seed_capability_tags = seed_class_rows.flat_map { |r| r.scan(/"capabilityTags"\s
   bad = vals - allowed[k]
   fail!("seed classification #{k} not in SSOT: #{bad.to_a.sort.join(', ')}") unless bad.empty?
 end
-puts 'OK  ui_component_bucket seed classification vocabulary subset check'
+puts 'OK  topology.components_bucket seed classification vocabulary subset check'
 RUBY
 
 echo "=== SSOT vocabulary contract check passed ==="

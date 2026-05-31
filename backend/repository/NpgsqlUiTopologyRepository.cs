@@ -9,7 +9,8 @@ namespace Topolactor.Repository;
 
 /// <summary>
 /// Production Npgsql implementation of UiTopologyRepository.
-/// Operates against the tables defined in db/ui_topology_tables.sql.
+/// Operates against the canonical topology.* tables defined in db/ui_topology_tables.sql.
+/// All table references use topology schema prefix (topology.components_bucket, etc.).
 ///
 /// PromoteBucketItemAsync wraps the entire promotion pipeline in a single
 /// NpgsqlConnection + NpgsqlTransaction so no partial state can remain on failure.
@@ -37,7 +38,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT bucket_item_id, component_key, source_path, component_kind, status " +
-            "FROM ui_component_bucket " +
+            "FROM topology.components_bucket " +
             "WHERE status = @status " +
             "ORDER BY created_at ASC";
         cmd.Parameters.AddWithValue("status", status);
@@ -71,7 +72,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             await conn.OpenAsync(ct);
             await using var cmd = conn.CreateCommand();
             cmd.CommandText =
-                "INSERT INTO ui_component_bucket (component_key, source_path, component_kind, metadata_json) " +
+                "INSERT INTO topology.components_bucket (component_key, source_path, component_kind, metadata_json) " +
                 "VALUES (@key, @path, @kind, @metadata::jsonb) " +
                 "RETURNING bucket_item_id, component_key, source_path, component_kind, status";
             cmd.Parameters.AddWithValue("key", componentKey);
@@ -128,12 +129,12 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT c.component_key, c.component_kind, c.component_id, p.package_id, l.layout_id, w.wiring_id, t.tensor_id, t.route_key " +
-            "FROM ui_topology_tensor t " +
-            "JOIN ui_component_package p ON p.package_id = t.package_id " +
-            "JOIN ui_layout_registry l ON l.layout_id = t.layout_id " +
-            "JOIN ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
-            "JOIN ui_package_component_map m ON m.package_id = p.package_id " +
-            "JOIN ui_component_registry c ON c.component_id = m.component_id " +
+            "FROM topology.ui_topology_tensor t " +
+            "JOIN topology.ui_component_package p ON p.package_id = t.package_id " +
+            "JOIN topology.components_layout_design l ON l.layout_id = t.layout_id " +
+            "JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
+            "JOIN topology.ui_package_component_map m ON m.package_id = p.package_id " +
+            "JOIN topology.ui_component_registry c ON c.component_id = m.component_id " +
             "ORDER BY t.created_at DESC";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -162,8 +163,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         cmd.CommandText =
             "SELECT l.layout_id, l.layout_key, t.route_key, l.layout_kind, " +
             "COALESCE(array_agg(DISTINCT t.slot_key) FILTER (WHERE t.slot_key IS NOT NULL AND t.slot_key <> ''), ARRAY[]::text[]) AS slot_keys " +
-            "FROM ui_topology_tensor t " +
-            "JOIN ui_layout_registry l ON l.layout_id = t.layout_id " +
+            "FROM topology.ui_topology_tensor t " +
+            "JOIN topology.components_layout_design l ON l.layout_id = t.layout_id " +
             "GROUP BY l.layout_id, l.layout_key, t.route_key, l.layout_kind " +
             "ORDER BY t.route_key, l.layout_key";
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -193,7 +194,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "UPDATE ui_component_bucket SET status = 'packaging', updated_at = now() " +
+            "UPDATE topology.components_bucket SET status = 'packaging', updated_at = now() " +
             "WHERE bucket_item_id = @id AND status = 'bucketed' RETURNING bucket_item_id";
         cmd.Parameters.AddWithValue("id", bucketItemId);
 
@@ -201,7 +202,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         if (updated is null)
         {
             await using var checkCmd = conn.CreateCommand();
-            checkCmd.CommandText = "SELECT status FROM ui_component_bucket WHERE bucket_item_id = @id";
+            checkCmd.CommandText = "SELECT status FROM topology.components_bucket WHERE bucket_item_id = @id";
             checkCmd.Parameters.AddWithValue("id", bucketItemId);
             var existing = await checkCmd.ExecuteScalarAsync(ct);
             return existing is null
@@ -231,7 +232,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             await using var transitionCmd = conn.CreateCommand();
             transitionCmd.Transaction = tx;
             transitionCmd.CommandText =
-                "SELECT component_key, source_path, component_kind FROM ui_component_bucket " +
+                "SELECT component_key, source_path, component_kind FROM topology.components_bucket " +
                 "WHERE bucket_item_id = @id AND status = 'packaging'";
             transitionCmd.Parameters.AddWithValue("id", bucketItemId);
 
@@ -255,7 +256,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 await using var checkCmd = conn.CreateCommand();
                 checkCmd.Transaction = tx;
                 checkCmd.CommandText =
-                    "SELECT status FROM ui_component_bucket WHERE bucket_item_id = @id";
+                    "SELECT status FROM topology.components_bucket WHERE bucket_item_id = @id";
                 checkCmd.Parameters.AddWithValue("id", bucketItemId);
 
                 var existing = await checkCmd.ExecuteScalarAsync(ct);
@@ -269,65 +270,65 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                         $"Bucket item {bucketItemId} is in status '{existing}', expected 'packaging'.");
             }
 
-            // 2. INSERT ui_component_registry
+            // 2. INSERT topology.ui_component_registry
             await using var compCmd = conn.CreateCommand();
             compCmd.Transaction = tx;
             compCmd.CommandText =
-                "INSERT INTO ui_component_registry (component_key, component_kind, source_path) " +
+                "INSERT INTO topology.ui_component_registry (component_key, component_kind, source_path) " +
                 "VALUES (@key, @kind, @path) RETURNING component_id";
             compCmd.Parameters.AddWithValue("key", componentKey);
             compCmd.Parameters.AddWithValue("kind", componentKind!);
             compCmd.Parameters.AddWithValue("path", sourcePath!);
             var componentId = (Guid)(await compCmd.ExecuteScalarAsync(ct))!;
 
-            // 3. INSERT ui_component_package
+            // 3. INSERT topology.ui_component_package
             var packageKey = $"{routeKey}:{componentKey}:pkg";
             await using var pkgCmd = conn.CreateCommand();
             pkgCmd.Transaction = tx;
             pkgCmd.CommandText =
-                "INSERT INTO ui_component_package (package_key, package_kind) " +
+                "INSERT INTO topology.ui_component_package (package_key, package_kind) " +
                 "VALUES (@key, @kind) RETURNING package_id";
             pkgCmd.Parameters.AddWithValue("key", packageKey);
             pkgCmd.Parameters.AddWithValue("kind", componentKind!);
             var packageId = (Guid)(await pkgCmd.ExecuteScalarAsync(ct))!;
 
-            // 4. INSERT ui_package_component_map
+            // 4. INSERT topology.ui_package_component_map
             await using var mapCmd = conn.CreateCommand();
             mapCmd.Transaction = tx;
             mapCmd.CommandText =
-                "INSERT INTO ui_package_component_map (package_id, component_id) " +
+                "INSERT INTO topology.ui_package_component_map (package_id, component_id) " +
                 "VALUES (@packageId, @componentId)";
             mapCmd.Parameters.AddWithValue("packageId", packageId);
             mapCmd.Parameters.AddWithValue("componentId", componentId);
             await mapCmd.ExecuteNonQueryAsync(ct);
 
-            // 5. INSERT ui_layout_registry
+            // 5. INSERT topology.components_layout_design
             var layoutKey = $"{routeKey}:{componentKey}:layout";
             await using var layoutCmd = conn.CreateCommand();
             layoutCmd.Transaction = tx;
             layoutCmd.CommandText =
-                "INSERT INTO ui_layout_registry (layout_key, layout_kind) " +
+                "INSERT INTO topology.components_layout_design (layout_key, layout_kind) " +
                 "VALUES (@key, @kind) RETURNING layout_id";
             layoutCmd.Parameters.AddWithValue("key", layoutKey);
             layoutCmd.Parameters.AddWithValue("kind", componentKind!);
             var layoutId = (Guid)(await layoutCmd.ExecuteScalarAsync(ct))!;
 
-            // 6. INSERT ui_wiring_registry
+            // 6. INSERT topology.ui_wiring_registry
             var wiringKey = $"{routeKey}:{componentKey}:wiring";
             await using var wiringCmd = conn.CreateCommand();
             wiringCmd.Transaction = tx;
             wiringCmd.CommandText =
-                "INSERT INTO ui_wiring_registry (wiring_key, wiring_kind, target_surface) " +
+                "INSERT INTO topology.ui_wiring_registry (wiring_key, wiring_kind, target_surface) " +
                 "VALUES (@key, @kind, 'route') RETURNING wiring_id";
             wiringCmd.Parameters.AddWithValue("key", wiringKey);
             wiringCmd.Parameters.AddWithValue("kind", componentKind!);
             var wiringId = (Guid)(await wiringCmd.ExecuteScalarAsync(ct))!;
 
-            // 7. INSERT ui_topology_tensor
+            // 7. INSERT topology.ui_topology_tensor
             await using var tensorCmd = conn.CreateCommand();
             tensorCmd.Transaction = tx;
             tensorCmd.CommandText =
-                "INSERT INTO ui_topology_tensor (route_key, package_id, layout_id, wiring_id) " +
+                "INSERT INTO topology.ui_topology_tensor (route_key, package_id, layout_id, wiring_id) " +
                 "VALUES (@routeKey, @packageId, @layoutId, @wiringId) RETURNING tensor_id";
             tensorCmd.Parameters.AddWithValue("routeKey", routeKey);
             tensorCmd.Parameters.AddWithValue("packageId", packageId);
@@ -339,7 +340,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             await using var promoteCmd = conn.CreateCommand();
             promoteCmd.Transaction = tx;
             promoteCmd.CommandText =
-                "UPDATE ui_component_bucket " +
+                "UPDATE topology.components_bucket " +
                 "SET status = 'promoted', updated_at = now() " +
                 "WHERE bucket_item_id = @id AND status = 'packaging'";
             promoteCmd.Parameters.AddWithValue("id", bucketItemId);
@@ -582,7 +583,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var tx = await conn.BeginTransactionAsync(ct);
         var responsiveJson = System.Text.Json.JsonSerializer.Serialize(valid.ResponsiveTokenRefs);
         var updateLayout = new NpgsqlCommand(
-            "UPDATE ui_layout_registry SET layout_schema_json=@schema::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId", conn, tx);
+            "UPDATE topology.components_layout_design SET layout_schema_json=@schema::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId", conn, tx);
         updateLayout.Parameters.AddWithValue("schema", valid.TensorPatchJson);
         updateLayout.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
         updateLayout.Parameters.AddWithValue("resp", responsiveJson);
@@ -595,7 +596,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
 
         var updateTensor = new NpgsqlCommand(
-            "UPDATE ui_topology_tensor SET layout_patch_json=@patch::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId AND route_key=@routeKey", conn, tx);
+            "UPDATE topology.ui_topology_tensor SET layout_patch_json=@patch::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId AND route_key=@routeKey", conn, tx);
         updateTensor.Parameters.AddWithValue("patch", valid.TensorPatchJson);
         updateTensor.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
         updateTensor.Parameters.AddWithValue("resp", responsiveJson);

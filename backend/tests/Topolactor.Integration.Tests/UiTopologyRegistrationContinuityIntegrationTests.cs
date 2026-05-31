@@ -73,27 +73,27 @@ public class UiTopologyRegistrationContinuityIntegrationTests
 
         Assert.Equal("promoted", await ScalarAsync<string>(
             conn,
-            "SELECT status FROM ui_component_bucket WHERE bucket_item_id=@id",
+            "SELECT status FROM topology.components_bucket WHERE bucket_item_id=@id",
             ("id", create.Record.BucketItemId)));
 
         Assert.Equal(componentId, await ScalarAsync<Guid>(
             conn,
-            "SELECT component_id FROM ui_component_registry WHERE component_key=@key",
+            "SELECT component_id FROM topology.ui_component_registry WHERE component_key=@key",
             ("key", componentKey)));
 
         Assert.Equal(packageId, await ScalarAsync<Guid>(
             conn,
-            "SELECT package_id FROM ui_component_package WHERE package_key=@key",
+            "SELECT package_id FROM topology.ui_component_package WHERE package_key=@key",
             ("key", $"{routeKey}:{componentKey}:pkg")));
 
         Assert.Equal(layoutId, await ScalarAsync<Guid>(
             conn,
-            "SELECT layout_id FROM ui_layout_registry WHERE layout_key=@key",
+            "SELECT layout_id FROM topology.components_layout_design WHERE layout_key=@key",
             ("key", $"{routeKey}:{componentKey}:layout")));
 
         Assert.Equal(wiringId, await ScalarAsync<Guid>(
             conn,
-            "SELECT wiring_id FROM ui_wiring_registry WHERE wiring_key=@key",
+            "SELECT wiring_id FROM topology.ui_wiring_registry WHERE wiring_key=@key",
             ("key", $"{routeKey}:{componentKey}:wiring")));
 
         var tensor = await QueryTensorAsync(conn, routeKey);
@@ -147,7 +147,7 @@ public class UiTopologyRegistrationContinuityIntegrationTests
     private static async Task<(Guid PackageId, Guid LayoutId, Guid WiringId)> QueryTensorAsync(NpgsqlConnection conn, string routeKey)
     {
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT package_id, layout_id, wiring_id FROM ui_topology_tensor WHERE route_key=@routeKey ORDER BY created_at DESC LIMIT 1";
+        cmd.CommandText = "SELECT package_id, layout_id, wiring_id FROM topology.ui_topology_tensor WHERE route_key=@routeKey ORDER BY created_at DESC LIMIT 1";
         cmd.Parameters.AddWithValue("routeKey", routeKey);
         await using var reader = await cmd.ExecuteReaderAsync();
         Assert.True(await reader.ReadAsync());

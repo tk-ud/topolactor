@@ -9,10 +9,10 @@ namespace Topolactor.Repository;
 /// Owns snapshot creation, record persistence, apply log writing, and list queries.
 ///
 /// DB tables (db/manifest_tables.sql, integrated in manifest topology boundary):
-///   topology.admin_import_snapshot
+///   topology.admin_import_snapshot (topology_manifest_id FK -> hubs.topology_manifests)
 ///   topology.admin_import_records
 ///   topology.admin_import_apply_log
-///   manifest (list query)
+///   hubs.topology_manifests (list query — canonical, replaced manifest FK)
 ///   topology.schema_registry (list query)
 ///
 /// In-memory base: test double only. All write methods are no-ops (returns true).
@@ -29,13 +29,14 @@ public class AdminImportRepository
 
     /// <summary>
     /// Creates a new admin_import_snapshot row.
+    /// topologyManifestId references hubs.topology_manifests (canonical).
     /// Returns true on success.
     /// </summary>
     public virtual Task<bool> CreateSnapshotAsync(
         Guid snapshotId,
         string sourceType,
         string fileName,
-        Guid manifestId,
+        Guid topologyManifestId,
         JsonElement rawHeaderJsonb,
         JsonElement rawRowsJsonb,
         JsonElement validationSummaryJsonb,
@@ -47,11 +48,11 @@ public class AdminImportRepository
 
     /// <summary>
     /// Inserts admin_import_records rows for the given snapshot.
-    /// Each record includes its JSONB payload, conformity status (valid/invalid), and errors.
+    /// topologyManifestId is a soft reference (no FK constraint on records table).
     /// status is manifest/schema conformity — not business state or hub lifecycle state.
     /// </summary>
     public virtual Task<bool> CreateRecordsAsync(
-        Guid manifestId,
+        Guid topologyManifestId,
         Guid snapshotId,
         IReadOnlyList<(JsonElement records, string status, JsonElement validationErrors)> rows,
         CancellationToken ct = default)
@@ -120,18 +121,18 @@ public class AdminImportRepository
     }
 
     /// <summary>
-    /// Checks whether the given manifest_id exists in the manifest table.
+    /// Checks whether the given topology_manifest_id exists in hubs.topology_manifests.
     /// Returns false when not found — caller emits MANIFEST_NOT_FOUND explicit error.
     /// </summary>
     public virtual Task<bool> ManifestExistsAsync(
-        Guid manifestId,
+        Guid topologyManifestId,
         CancellationToken ct = default)
     {
         return Task.FromResult(false);
     }
 
     /// <summary>
-    /// Loads snapshot metadata (manifest_id, source_type, file_name) for canonical diff linkage.
+    /// Loads snapshot metadata (topology_manifest_id as ManifestId, source_type, file_name) for diff linkage.
     /// Returns null when not found — caller may skip linkage or emit explicit error.
     /// </summary>
     public virtual Task<AdminImportSnapshotMeta?> GetSnapshotMetaAsync(

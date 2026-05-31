@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Topolactor.Schema;
 
 /// <summary>
-/// A single row from ui_component_bucket.
+/// A single row from topology.components_bucket.
 /// </summary>
 public record UiComponentBucketItemDto(
     [property: JsonPropertyName("bucketItemId")]   string BucketItemId,

@@ -6,9 +6,10 @@
 --   Canonical wiring responsibility has been split:
 --     - topology.wiring_physical_to_package: physical table → package wiring (new canonical path)
 --     - hubs.topology_manifests: hub manifest grouping (new canonical path)
---   public.manifest is retained for compatibility with admin_import_snapshot FK
---   and existing admin edit flow. It is NOT the new canonical wiring authority.
---   Pending retirement once admin import is migrated to canonical tables.
+--   public.manifest is retained for the admin edit flow only. It is NOT the new
+--   canonical wiring authority.
+--   admin_import_snapshot FK has been migrated to hubs.topology_manifests
+--   (see db/migrations/admin_import_topology_manifest_migration.sql).
 --
 -- ORIGINAL PURPOSE (compatibility context):
 --   Manifest stores ID references and topology vectors only.
@@ -47,11 +48,10 @@ CREATE TABLE IF NOT EXISTS manifest (
 );
 
 COMMENT ON TABLE manifest IS
-    'Compatibility-only wiring table. Retained for admin_import_snapshot FK and '
-    'existing admin edit flow. Canonical wiring path has been split: '
-    'topology.wiring_physical_to_package (physical→package wiring) and '
-    'hubs.topology_manifests (hub manifest grouping) are the new canonical surfaces. '
-    'Pending retirement once admin import migrates to canonical tables. '
+    'Compatibility-only wiring table. Retained for admin edit flow only. '
+    'admin_import_snapshot FK has been migrated to hubs.topology_manifests. '
+    'Canonical wiring path: topology.wiring_physical_to_package (physical→package) '
+    'and hubs.topology_manifests (hub manifest grouping). '
     'Stores dispatcher_mapping / runtime_mapping / ui_projection as topology vectors (ID refs only).';
 
 COMMENT ON COLUMN manifest.relation_registry_id IS
@@ -82,13 +82,19 @@ CREATE INDEX IF NOT EXISTS idx_manifest_topology
 -- M6 self-hosted admin authoring persistence scaffold (integrated in schema.sql)
 -- Manifest/schema/table/binding authority remains in existing manifest + schema_registry + structure_maps.
 -- This section only stores intake snapshots, per-row records, and apply logs.
+--
+-- MIGRATION COMPLETED (admin_import FK retirement):
+--   admin_import_snapshot.topology_manifest_id FK references hubs.topology_manifests (canonical).
+--   admin_import_records.topology_manifest_id is a soft reference (no FK constraint) via snapshot linkage.
+--   manifest(manifest_id) FK has been removed from both tables.
+--   Migration DDL: db/migrations/admin_import_topology_manifest_migration.sql
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS topology.admin_import_snapshot (
     snapshot_id               UUID PRIMARY KEY,
     source_type               TEXT        NOT NULL CHECK (source_type IN ('csv', 'json')),
     file_name                 TEXT        NOT NULL,
-    manifest_id               UUID        NOT NULL REFERENCES manifest(manifest_id),
+    topology_manifest_id      UUID        NOT NULL REFERENCES hubs.topology_manifests(topology_manifest_id),
     raw_header_jsonb          JSONB       NOT NULL DEFAULT '[]'::jsonb,
     raw_rows_jsonb            JSONB       NOT NULL DEFAULT '[]'::jsonb,
     validation_summary_jsonb  JSONB       NOT NULL DEFAULT '{}'::jsonb,
@@ -97,7 +103,7 @@ CREATE TABLE IF NOT EXISTS topology.admin_import_snapshot (
 
 CREATE TABLE IF NOT EXISTS topology.admin_import_records (
     id                        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    manifest_id               UUID        NOT NULL REFERENCES manifest(manifest_id),
+    topology_manifest_id      UUID        NOT NULL,
     snapshot_id               UUID        NOT NULL REFERENCES topology.admin_import_snapshot(snapshot_id),
     records                   JSONB       NOT NULL,
     status                    TEXT        NOT NULL CHECK (status IN ('valid', 'invalid')),
@@ -117,8 +123,8 @@ CREATE TABLE IF NOT EXISTS topology.admin_import_apply_log (
     created_at                TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_admin_import_snapshot_manifest
-    ON topology.admin_import_snapshot (manifest_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_import_snapshot_topology_manifest
+    ON topology.admin_import_snapshot (topology_manifest_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_admin_import_records_snapshot
     ON topology.admin_import_records (snapshot_id, status);
 

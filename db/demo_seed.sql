@@ -493,7 +493,7 @@ ON CONFLICT (function_name, parameter_key) DO UPDATE
 -- Included here so demo_seed.sql is self-contained when run in isolation.
 -- ON CONFLICT DO NOTHING: seed_empty.sql rows take precedence.
 -- ---------------------------------------------------------------------------
-INSERT INTO ui_component_bucket (component_key, source_path, component_kind, status, metadata_json)
+INSERT INTO topology.components_bucket (component_key, source_path, component_kind, status, metadata_json)
 VALUES
     ('autocomplete_input.primitive','docs/design/ui-ux-primitive-catalog-ssot.yaml','search_suggest/autocomplete_input','bucketed','{"classification":{"runtimeConnected":false,"registrationRequired":true,"lifecycleStatus":"code_only_drift","componentFamily":"primitive","semanticRole":"input","visualRole":"field","capabilityTags":["controlled_value","emits_event","accepts_design"]}}'::jsonb),
     ('suggest_input.primitive','docs/design/ui-ux-primitive-catalog-ssot.yaml','search_suggest/suggest_input','bucketed','{"classification":{"runtimeConnected":false,"registrationRequired":true,"lifecycleStatus":"code_only_drift","componentFamily":"primitive","semanticRole":"input","visualRole":"field","capabilityTags":["controlled_value","emits_event","accepts_design"]}}'::jsonb),
