@@ -108,14 +108,14 @@ Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で�
 - `frontend/components/AdminMainFlowStepper.tsx` — メインフロー表示
 - `frontend/content/adminGuides.ts` — `ADMIN_MAIN_FLOW_STEPS`
 - `frontend/routes/admin/` — 各管理ページルート
-- `frontend/islands/HubNavigationAdmin.tsx` — hub_relation 順序設定 Island（未実装）
+- `frontend/islands/HubNavigationAdmin.tsx` — hub_relation 順序設定 Island（実装済み: list/create/update/deprecate/reorder）
 - `hubs.hub_relations` / `hubs.topology_manifests` — DB binding
 
 **参照すべき場面**:
 - 管理コンソールのページ責務分割を変更するとき
 - ワークフロー順序（6ステップ）を変更するとき
 - `AdminMainFlowStepper` のステップ定義を変更するとき
-- `admin/hub-navigation` コンポーネントを実装するとき
+- `admin/hub-navigation` コンポーネントの仕様・設計判断を確認するとき
 - wiring 設定の位置（どのページで行うか）を確認するとき
 
 ---
