@@ -1328,8 +1328,8 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
         setItems(combined);
         setStatus(`${combined.length} 件の部品をロードしました。`);
       } else {
-        setErrors(bucketedBody?.errors ?? packagingBody?.errors ?? [{ code: "BUCKET_LOAD_FAILED", message: "バケットのロードに失敗しました。" }]);
-        setStatus("バケットのロードに失敗しました。");
+        setErrors(bucketedBody?.errors ?? packagingBody?.errors ?? [{ code: "BUCKET_LOAD_FAILED", message: "登録済み部品の読み込みに失敗しました。" }]);
+        setStatus("登録済み部品の読み込みに失敗しました。");
       }
     } catch (e) {
       setStatus(`エラー: ${e}`);
