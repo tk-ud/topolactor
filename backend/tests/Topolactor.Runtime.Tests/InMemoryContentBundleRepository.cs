@@ -362,11 +362,10 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     }
 
     public override Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
-        Guid hubId, CancellationToken ct = default)
+        Guid topologyManifestId, CancellationToken ct = default)
     {
         var items = _hubRelations
-            .Where(hr => hr.Status == "active" &&
-                _manifestSourceHubMap.TryGetValue(hr.TopologyManifestId, out var srcHub) && srcHub == hubId)
+            .Where(hr => hr.Status == "active" && hr.TopologyManifestId == topologyManifestId)
             .OrderBy(hr => hr.SequencePosition)
             .Select(hr => new HubNavigationSequenceItemDto(
                 hr.RelatedHubId.ToString(),

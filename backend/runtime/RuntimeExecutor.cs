@@ -230,19 +230,19 @@ public class RuntimeExecutor : IDispatchableRuntime
         // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
 
-        // Step 11: Hub navigation sequence — enrich emission with ordered hub_relations
-        // when the dispatch carries a hub context (IdOrHubId). Non-fatal: failure yields
-        // null NavigationSequence without affecting the rest of the emission.
-        if (_hubNavigationResolver is not null && vector.IdOrHubId is Guid hubId)
+        // Step 11: Hub navigation sequence — enrich emission with manifest-scoped hub_relations.
+        // Uses the dispatcher-resolved manifestId so a hub with multiple manifests returns
+        // the correct per-manifest sequence. Non-fatal: failure yields null NavigationSequence.
+        if (_hubNavigationResolver is not null && manifestId is Guid resolvedManifestId)
         {
             try
             {
-                var navSeq = await _hubNavigationResolver.ResolveAsync(hubId, ct);
+                var navSeq = await _hubNavigationResolver.ResolveAsync(resolvedManifestId, ct);
                 emission = emission with { NavigationSequence = navSeq };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "HubNavigationResolver.ResolveAsync failed for hub '{HubId}'.", hubId);
+                _logger.LogError(ex, "HubNavigationResolver.ResolveAsync failed for manifest '{ManifestId}'.", resolvedManifestId);
             }
         }
 

@@ -787,17 +787,16 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     }
 
     public override async Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
-        Guid hubId, CancellationToken ct = default)
+        Guid topologyManifestId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT hr.related_hub_id::text, hr.related_hub_id::text, hr.sequence_position " +
             "FROM hubs.hub_relations hr " +
-            "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
-            "WHERE tm.hub_id = @hid AND hr.status = 'active' " +
+            "WHERE hr.topology_manifest_id = @mid AND hr.status = 'active' " +
             "ORDER BY hr.sequence_position";
-        cmd.Parameters.AddWithValue("hid", hubId);
+        cmd.Parameters.AddWithValue("mid", topologyManifestId);
 
         var items = new List<HubNavigationSequenceItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
