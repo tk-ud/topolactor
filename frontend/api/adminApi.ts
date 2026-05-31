@@ -1,6 +1,6 @@
 import type { DispatchRequest, Emission, ValidationError } from "./dispatch.ts";
 
-const SESSION_TOKEN_KEY = "demo_jwt_token";
+import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
 
 function getAuthHeaders(): Record<string, string> {
   const token =

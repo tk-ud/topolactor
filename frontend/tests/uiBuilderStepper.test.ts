@@ -80,19 +80,21 @@ Deno.test("all steps have non-empty label and detail", () => {
 
 // ─── step 4 includes preview/validate/apply terms ────────────────────────────
 
-Deno.test("step 4 detail mentions preview, validate, and apply", () => {
+Deno.test("step 4 detail mentions preview, validate, and save-apply flow", () => {
   const s4 = UI_BUILDER_FLOW_STEPS.find((s) => s.id === 4)!;
-  assertEquals(s4.detail.includes("preview"), true, "step 4 must mention preview");
-  assertEquals(s4.detail.includes("validate"), true, "step 4 must mention validate");
-  assertEquals(s4.detail.includes("apply"), true, "step 4 must mention apply");
+  assertEquals(s4.detail.includes("プレビュー"), true, "step 4 must mention プレビュー");
+  assertEquals(s4.detail.includes("検証"), true, "step 4 must mention 検証");
+  assertEquals(s4.detail.includes("保存反映"), true, "step 4 must mention 保存反映");
+  assertEquals(s4.label, "確認して保存反映");
 });
 
-// ─── step 2 mentions generate and promote ────────────────────────────────────
+// ─── step 2 mentions placement-ready flow ────────────────────────────────────
 
-Deno.test("step 2 detail mentions generate and promote ordering", () => {
+Deno.test("step 2 label and detail describe placement-ready state", () => {
   const s2 = UI_BUILDER_FLOW_STEPS.find((s) => s.id === 2)!;
-  assertEquals(s2.detail.includes("generate"), true, "step 2 must mention generate");
-  assertEquals(s2.detail.includes("promote"), true, "step 2 must mention promote");
+  assertEquals(s2.label, "配置できる状態にする");
+  assertEquals(s2.detail.includes("generate"), true, "step 2 technical note mentions generate");
+  assertEquals(s2.detail.includes("promote"), true, "step 2 technical note mentions promote");
 });
 
 // ─── no step has both tabTarget and externalHref ─────────────────────────────

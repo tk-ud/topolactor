@@ -15,38 +15,38 @@ type StepSpec = {
 export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
   {
     id: 1,
-    label: "コンポーネントを登録する",
+    label: "部品を登録する",
     detail:
-      "カタログからコンポーネントを選んでバケット登録。未登録 / bucketed / packaging / promoted の状態を確認。",
+      "カタログから部品を選んで登録します。未登録・登録中・配置可能などの状態を確認します。",
     tabTarget: "bucket",
   },
   {
     id: 2,
-    label: "パッケージ化してプロモートする",
+    label: "配置できる状態にする",
     detail:
-      "bucketed → generate（packaging）→ promote の順で実行。promoted になって初めてレイアウトパレットに出せます。",
+      "登録済みの部品を順に処理し、レイアウト用パレットに出せる状態にします（内部: generate → promote）。",
     tabTarget: "bucket",
   },
   {
     id: 3,
     label: "レイアウトを組む",
     detail:
-      "パレットから「追加」ボタン・ドラッグ・キーボード操作でキャンバスに配置。empty state のテンプレートボタンも使えます。",
-    note: "⚠ ドラフトのみノード（未登録）は apply 不可 — 先にプロモートしてください",
+      "パレットから追加・ドラッグでキャンバスに配置します。テンプレートボタンも利用できます。",
+    note: "⚠ 未登録のみの配置は保存反映できません — 先に「配置できる状態にする」を完了してください",
     tabTarget: "layout",
   },
   {
     id: 4,
-    label: "確認して適用する",
+    label: "確認して保存反映",
     detail:
-      "preview（DB不変）→ validate（ref整合）→ apply の順で実行。ApplyReadinessPanel でドラフトのみノードがゼロであることを確認してから apply。",
+      "プレビュー（DBは変更しない）→ 検証（整合性）→ 保存反映 の順で実行します。未登録のみの配置がないことを確認してください。",
     tabTarget: "layout",
   },
   {
     id: 5,
-    label: "次に確認する",
+    label: "動作確認",
     detail:
-      "apply 後は /admin/runtime で dispatch → emission を検証。登録不足なら対応する画面へ戻る。",
+      "保存反映後は Runtime確認 で登録結果を試します。不足があれば該当画面へ戻ります。",
     externalHref: "/admin/runtime",
   },
 ];
@@ -61,7 +61,7 @@ export function getActiveStepIds(activeTab: UiBuilderTabId): number[] {
 /**
  * Compact Stepper for /admin/ui-builder admin flow.
  *
- * Shows the 5-step flow (bucket → generate → promote → layout → preview → validate → apply → runtime).
+ * Shows the 5-step flow (register → ready → layout → preview → validate → apply → runtime).
  * Highlights the steps relevant to the current active tab.
  * Navigation buttons switch to the relevant tab via the onNavigate callback.
  *
@@ -84,13 +84,12 @@ export default function UiBuilderFlowStepper({
       aria-label="UI ビルダー作業フロー"
     >
       <div class="mb-2.5 flex items-center gap-2">
-        <span class="text-xs font-semibold text-blue-900">作業フロー</span>
+        <span class="text-xs font-semibold text-blue-900">UI Builder 内の作業フロー</span>
         <span class="text-[0.65rem] text-blue-600">
           — 現在のタブ: <strong>{activeTab}</strong>
         </span>
       </div>
 
-      {/* Step indicators row */}
       <div class="flex items-start overflow-x-auto pb-1" role="list" aria-label="フローステップ">
         {UI_BUILDER_FLOW_STEPS.map((step, i) => {
           const isActive = activeStepIds.includes(step.id);
@@ -103,7 +102,6 @@ export default function UiBuilderFlowStepper({
                 />
               )}
               <div class="flex min-w-[72px] max-w-[120px] flex-col items-center">
-                {/* circle indicator */}
                 <div
                   class={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                     isActive
@@ -116,7 +114,6 @@ export default function UiBuilderFlowStepper({
                   {step.id}
                 </div>
 
-                {/* label */}
                 <div
                   class={`mt-1 text-center text-[0.63rem] font-medium leading-snug ${
                     isActive ? "text-blue-800" : "text-gray-500"
@@ -125,7 +122,6 @@ export default function UiBuilderFlowStepper({
                   {step.label}
                 </div>
 
-                {/* navigation button or external link */}
                 {step.tabTarget && (
                   <button
                     type="button"
@@ -148,7 +144,7 @@ export default function UiBuilderFlowStepper({
                         ? "bg-green-600 text-white hover:bg-green-700"
                         : "border border-gray-300 bg-white text-gray-500 hover:border-green-400 hover:text-green-700"
                     }`}
-                    aria-label="runtime 確認へ"
+                    aria-label="動作確認へ"
                   >
                     確認 →
                   </a>
@@ -159,7 +155,6 @@ export default function UiBuilderFlowStepper({
         })}
       </div>
 
-      {/* Active step detail panel */}
       {activeDetails.length > 0 && (
         <div class="mt-3 space-y-2">
           {activeDetails.map((step) => (
@@ -183,8 +178,10 @@ export default function UiBuilderFlowStepper({
 
       {activeDetails.length === 0 && (
         <p class="mt-2 text-[0.65rem] text-gray-500">
-          「バケット管理」タブで Step 1-2、「レイアウトビルダー」タブで Step 3-4 の作業を行ってください。
-          完了後は Step 5 の <a href="/admin/runtime" class="text-blue-600 underline hover:text-blue-800">/admin/runtime</a> で検証。
+          「バケット管理」タブで Step 1–2、「レイアウトビルダー」タブで Step 3–4 の作業を行ってください。
+          完了後は Step 5 の{" "}
+          <a href="/admin/runtime" class="text-blue-600 underline hover:text-blue-800">Runtime確認</a>{" "}
+          で動作を確認してください。
         </p>
       )}
     </div>

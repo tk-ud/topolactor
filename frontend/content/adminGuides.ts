@@ -1,5 +1,13 @@
 /** Static copy for /admin help panels — aligned with docs/registrar-admin-ui-specification.md */
 
+import {
+  UX_DATA_SHAPE,
+  UX_IMPORT_SETTINGS,
+  UX_IMPORT_SETTINGS_PAGE,
+  UX_RUNTIME_CHECK,
+  UX_UI_BUILDER,
+} from "./adminUxTerms.ts";
+
 export type AdminGuide = {
   title: string;
   purpose: string;
@@ -15,22 +23,21 @@ export type AdminGuide = {
 };
 
 export const ADMIN_INDEX_GUIDE: AdminGuide = {
-  title: "Registrar 管理 UI（入口）",
+  title: "管理 UI（入口）",
   purpose:
-    "トポロジー登録の意図を backend 経由で送る controlled registration boundary です。ランタイム実行画面・汎用 CRUD・直接 DB エディタではありません。",
+    `${UX_IMPORT_SETTINGS}の作成 → データ取り込み → 画面準備 → ${UX_RUNTIME_CHECK}まで進める管理デモの入口です。直接 DB を編集する画面ではありません。`,
   prerequisites: [
-    "デモで DB 永続化する場合: infra を起動し DATABASE_URL / DEMO_BACKEND_URL を設定",
-    "/auth でログインし JWT を取得（sessionStorage に demo_jwt_token）",
-    "ランタイム dispatch は /admin/runtime（本インデックスは登録専用）。demo preset は /demo",
+    "/auth でログイン（管理画面利用の前提）",
+    "DB 永続化する場合: infra 起動と DATABASE_URL / DEMO_BACKEND_URL の設定",
+    `推奨順: ${UX_IMPORT_SETTINGS} → インポート → ${UX_UI_BUILDER} → ${UX_RUNTIME_CHECK}`,
   ],
   howToSteps: [
-    "管理トップ（このページ）で全体の流れと各画面の役割を確認する",
-    "初回データ取り込みなら /admin/import で CSV/JSON を preview → apply する",
-    "デモ用 runtime 宣言なら /admin/seed で seed.json を validate → preview → import する",
-    "UI コンポーネント・レイアウト登録は /admin/ui-builder で bucket → promote → layout patch（preview → validate → apply）",
-    "推薦トークン追加は /admin/context-token-registry。登録前の重複確認は /admin/registry-vector-validate",
-    "各画面で DB 書き込み（apply / promote / import）の前に必ず preview または validate を通す",
-    "登録後は /admin/runtime で dispatch・emission を確認（demo 専用は /demo）",
+    `上の「作業の流れ」に沿って進める（まず${UX_IMPORT_SETTINGS}、次にインポート）`,
+    `/admin/manifests で取り込み・表示・実行先の定義（${UX_IMPORT_SETTINGS}）を作成する`,
+    "/admin/import で CSV/JSON をプレビューしてから取り込む",
+    "/admin/ui-builder で部品登録・レイアウトを準備し、保存反映する",
+    "/admin/runtime で登録済み設定の動作を確認する",
+    "（任意）/admin/seed — デモ用 seed.json、/admin/contents — コンテンツ登録、トークン辞書は別画面",
   ],
   inputs: [
     "各画面で説明される manifest / schema / seed / bucket / layout / token などの登録対象",
@@ -44,8 +51,8 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     "失敗時: 画面のエラーパネルに code / message — silent fallback はしません",
   ],
   nextSteps: [
-    "推奨受入フロー: Auth → Import または Contents → UI Builder → Runtime確認",
-    "全画面共通: preview / validate を必ず通してから apply / promote / import を実行する",
+    `推奨順: ログイン → ${UX_IMPORT_SETTINGS} → インポート → ${UX_UI_BUILDER} → ${UX_RUNTIME_CHECK}`,
+    "書き込み操作の前に、各画面のプレビューまたは検証を必ず通す",
   ],
   boundaryNotes: [
     "Frontend = projection / intent submission。意味判断・永続化の正本は DB + backend runtime",
@@ -56,13 +63,14 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
 export const ADMIN_IMPORT_GUIDE: AdminGuide = {
   title: "インポート（CSV/JSON）",
   purpose:
-    "外部ファイルのレコードを、選択した import manifest と schema に沿って topology 登録データへ取り込むための画面です。",
+    `CSV/JSON ファイルを、選択した${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}に沿って取り込む画面です。`,
   prerequisites: [
-    "/auth 済み、DEMO_BACKEND_URL 設定済み",
-    "取り込み先の import manifest と schema が DB に既に登録されていること",
+    "/auth でログイン済みであること",
+    `先に /admin/manifests で${UX_IMPORT_SETTINGS}を作成・有効化していること`,
+    `取り込み用の${UX_DATA_SHAPE}が登録されていること（未登録なら${UX_IMPORT_SETTINGS_PAGE}で整える）`,
   ],
   howToSteps: [
-    "「1. マニフェストとスキーマを選択」で、取り込みルール（manifest）と行の形（schema）を選ぶ",
+    `「1. ${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}を選択」で、取り込みルールと各行の形を選ぶ`,
     "「2. CSV または JSON ファイルをアップロード」でファイルを選ぶ（拡張子で csv/json を自動判定）",
     "「3. プレビュー（バリデート）」を押す — backend が各行を検証し、DB にはまだ書かない",
     "プレビュー表で invalid 行があれば validationErrors を直し、ファイルを差し替えて再プレビュー",
@@ -70,8 +78,8 @@ export const ADMIN_IMPORT_GUIDE: AdminGuide = {
     "applyLogId が表示されたら /admin/runtime または /demo で取り込み結果を確認する",
   ],
   inputs: [
-    "マニフェスト — 取り込みルール・ターゲットの定義（DB 登録済み一覧から選択）",
-    "スキーマ — 各行/オブジェクトのフィールド型・必須 ref の契約",
+    `${UX_IMPORT_SETTINGS} — 何をどこへ取り込むかのルール（登録済み一覧から選択）`,
+    `${UX_DATA_SHAPE} — CSV/JSON の各行に必要な項目の定義`,
     "CSV または JSON ファイル — 1 行または 1 オブジェクト = 1 レコード想定",
   ],
   actions: [
@@ -354,25 +362,23 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
-  title: "マニフェスト管理",
+  title: `${UX_IMPORT_SETTINGS}（取り込み・表示・実行先）`,
   purpose:
-    "DB 上の manifest を管理する画面です。Runtime wiring（dispatcher_mapping / runtime_mapping / projection_constructor_mapping）と、別 boundary の promotion metadata（disclosure / campaign intent）を typed sub-mode で編集します。runtime dispatch の意味判断は backend が行います。",
+    `CSV/JSON の取り込み方、画面への反映、実行先を登録・有効化する画面です。データの流れと公開・案内の設定をタブで分けて編集します。内容の正しさはサーバー側で確認します。`,
   prerequisites: [
-    "/auth 済み、DATABASE_URL / DEMO_BACKEND_URL 設定済み",
-    "seed に manifest 管理用 admin route（layer=manifest / promotion_manifest）が active 登録されていること",
+    "/auth でログイン済みであること",
+    "デモ環境では DATABASE_URL / DEMO_BACKEND_URL が設定されていること",
   ],
   howToSteps: [
-    "「Runtime wiring」タブで DB から active / draft / deprecated manifest を一覧する",
-    "行をクリックして wiring detail — dispatcher axes と runtime_destination を確認する",
-    "draft の場合は axes + runtime_destination を編集して「ドラフト更新」",
-    "新規 wiring は「新規ドラフト」→ axes 入力 → 「ドラフト作成」（status=draft のみ）",
-    "「バリデート」で backend 検証 — missing mapping / unknown destination / duplicate active axes は explicit error",
-    "optional advanced: projection_constructor_mapping（constructorKey / outputKind / packageIds + nested JSON）",
-    "valid な draft のみ「プロモート (draft → active)」— 自動昇格なし",
-    "「Promotion metadata」タブで promotion_metadata_mapping 付き manifest を一覧・編集",
-    "promotion 新規: wiring タブで draft 作成 → promotion タブで manifest_id を指定して metadata 追加",
-    "promotion「バリデート」— disclosure / refs / placementKey 解決は backend 正本",
-    "promotion 付き manifest の lifecycle promote は wiring タブの「プロモート」（promotion validate も promote 前に実行）",
+    "「データの流れ」タブで登録済みの設定一覧を確認する",
+    "行を選び、取り込み先・実行のつながりを確認・編集する",
+    "下書きの場合は内容を直して「下書きを保存」",
+    "新規は「新規下書き」→ 必要項目を入力 → 「下書きを作成」",
+    "「内容を確認」でサーバー検証 — 不足や重複はエラー表示（黙って通過しない）",
+    "問題なければ下書きのみ「有効化」— 自動では有効になりません",
+    "「公開・案内」タブで、案内文やキャンペーン情報を編集する（必要な場合）",
+    "公開・案内を付ける場合: 先にデータの流れで下書き作成 → 公開・案内タブで対象を指定",
+    "取り込みへ進む前に /admin/import で設定を選べることを確認する",
   ],
   inputs: [
     "wiring: dispatcher axes role, target, layer, action + runtime_destination",
@@ -410,51 +416,63 @@ export const ADMIN_ROUTE_CARDS: {
   caution?: string;
 }[] = [
   {
-    href: "/admin/runtime",
-    label: "ランタイム検証",
-    purpose: "user dispatch → emission 投影（登録後の動作確認）",
-    relation: "canonical runtime route / 開発者検証",
+    href: "/admin/manifests",
+    label: UX_IMPORT_SETTINGS,
+    purpose: "取り込み・表示・実行先の定義を作成する（インポートの前提）",
+    relation: "推奨フロー Step 1",
     howToSummary: [
-      "ログイン済みを確認",
-      "preset を選んで実行",
-      "emission / エラーを確認",
+      "一覧で既存の設定を確認",
+      "新規下書き → 内容編集",
+      "内容確認 → 有効化",
     ],
+    caution: "有効化で DB の状態が変わります",
   },
   {
     href: "/admin/import",
     label: "インポート",
-    purpose: "CSV/JSON → manifest+schema で validate → preview → apply",
-    relation: "topology データ一括登録 / M6",
+    purpose: "CSV/JSON をプレビューしてから取り込む",
+    relation: `推奨フロー Step 2 — ${UX_IMPORT_SETTINGS}登録後`,
     howToSummary: [
-      "manifest + schema を選択 → ファイル選択",
-      "プレビューで invalid 行をゼロに",
-      "適用で DB 反映",
+      `${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}を選択`,
+      "ファイルを選びプレビュー",
+      "問題なければ適用",
     ],
-    caution: "Apply で DB 書き込み",
+    caution: "適用で DB に書き込みます",
+  },
+  {
+    href: "/admin/ui-builder",
+    label: UX_UI_BUILDER,
+    purpose: "画面部品の登録とレイアウトの準備",
+    relation: "推奨フロー Step 3",
+    howToSummary: [
+      "部品を登録 → 配置できる状態にする",
+      "レイアウトタブで配置",
+      "プレビュー → 検証 → 保存反映",
+    ],
+    caution: "保存反映で DB に書き込みます",
+  },
+  {
+    href: "/admin/runtime",
+    label: UX_RUNTIME_CHECK,
+    purpose: "登録済み設定の動作確認",
+    relation: "推奨フロー Step 4",
+    howToSummary: [
+      "ログイン済みを確認",
+      "シナリオを選んで実行",
+      "結果を確認",
+    ],
   },
   {
     href: "/admin/seed",
-    label: "シード",
-    purpose: "/storage/seed.json の save/load/validate/preview/import",
-    relation: "demo runtime 宣言候補 → DB",
+    label: "シード（任意）",
+    purpose: "デモ用 seed.json の編集と取り込み",
+    relation: "デモ runtime 宣言 — 通常フローとは別",
     howToSummary: [
       "JSON 編集 or ロード",
       "バリデート → プレビュー",
       "インポート",
     ],
-    caution: "Import で DB 書き込み",
-  },
-  {
-    href: "/admin/ui-builder",
-    label: "UI ビルダー",
-    purpose: "bucket → generate → promote → layout patch",
-    relation: "UI topology DB / Issue #86/#89",
-    howToSummary: [
-      "バケット登録 → プロモート",
-      "レイアウトタブで配置",
-      "preview → validate → apply",
-    ],
-    caution: "Promote・layout Apply で DB 書き込み",
+    caution: "インポートで DB に書き込みます",
   },
   {
     href: "/admin/context-token-registry",
@@ -489,18 +507,6 @@ export const ADMIN_ROUTE_CARDS: {
       "Promote で active entity として DB 登録",
     ],
   },
-  {
-    href: "/admin/manifests",
-    label: "マニフェスト",
-    purpose: "manifest wiring の一覧・detail・validate・promote/deprecate",
-    relation: "M2 manifest admin management surface",
-    howToSummary: [
-      "一覧 → detail → validate",
-      "draft 編集 → promote（明示）",
-      "active → deprecate",
-    ],
-    caution: "Promote / Deprecate で DB status 変更",
-  },
 ];
 
 /** 推奨受入フロー — admin index の "推奨受入フロー" セクションで使用 */
@@ -514,49 +520,92 @@ export type AcceptanceFlowStep = {
   boundaryNote?: string;
 };
 
-export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
+/** 管理トップのコンパクトステッパー — / と同じ推奨順 */
+export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
   {
     step: 1,
-    label: "認証 (Auth)",
+    label: "ログイン",
     href: "/auth",
-    purpose: "JWT を取得し sessionStorage に demo_jwt_token を保存する。バックエンド API を叩く画面はすべて事前ログインが必要。",
-    completionSign: "ログイン済み表示。sessionStorage に demo_jwt_token が存在すること。",
-    nextLabel: "Import または Contents へ",
+    purpose: "管理画面利用の前提",
+    completionSign: "ログイン済みであること",
+    nextLabel: `${UX_IMPORT_SETTINGS}へ`,
   },
   {
     step: 2,
-    label: "インポート (Import)",
-    href: "/admin/import",
-    purpose: "CSV/JSON ファイルを manifest+schema に照合し topology データとして DB へ取り込む。プレビューで valid 件数を確認してから適用する。",
-    completionSign: "適用成功後に applyLogId が表示されること。invalidCount = 0 が理想。",
-    nextLabel: "Contents またはUI Builder へ",
-    boundaryNote: "preview/apply の正本は backend。frontend はファイル送信と結果表示のみ。",
+    label: UX_IMPORT_SETTINGS,
+    href: "/admin/manifests",
+    purpose: "取り込み・表示・実行先の定義を作る",
+    completionSign: `インポート画面で選べる${UX_IMPORT_SETTINGS}が 1 件以上あること`,
+    nextLabel: "インポートへ",
   },
   {
     step: 3,
-    label: "コンテンツ (Contents)",
-    href: "/admin/contents",
-    purpose: "hub / entity / relation を browse で確認し、entity draft → validate → preview → promote の流れで active content として登録する。",
-    completionSign: "promote 成功後の readback に entity_id が返ること。Browse に新規エンティティが現れること。",
-    nextLabel: "UI Builder または Runtime確認へ",
-    boundaryNote: "promote 可否判定は backend。frontend は draft 状態の表示と intent 送信のみ。",
+    label: "インポート",
+    href: "/admin/import",
+    purpose: "CSV/JSON をプレビューして取り込む",
+    completionSign: "適用成功（applyLogId 表示）",
+    nextLabel: `${UX_UI_BUILDER}へ`,
   },
   {
     step: 4,
-    label: "UI ビルダー (UI Builder)",
+    label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "コンポーネントを bucket → generate → promote し、layout canvas に配置して preview → validate → apply する。",
-    completionSign: "パレットにプロモート済みコンポーネントが現れ、layout apply が valid 完了すること。ドラフトのみノードが 0 件であること。",
-    nextLabel: "Runtime確認へ",
-    boundaryNote: "topology 意味判断は backend。frontend はドラフト状態の表示と intent 送信のみ。",
+    purpose: "画面部品とレイアウトを準備する",
+    completionSign: "レイアウトの保存反映が完了していること",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
   },
   {
     step: 5,
-    label: "Runtime確認 (Runtime)",
+    label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
-    purpose: "promoted topology に対して dispatch を発行し emission を確認する。登録不足なら対応する画面へ戻る。",
-    completionSign: "dispatch が成功し emission が返ること。ATTRACTOR_RESOLVE_FAILED などのエラーが解消されること。",
-    boundaryNote: "dispatch 経路・emission は backend / DB が正本。frontend は projection のみ。",
+    purpose: "登録済み設定が動くか確認する",
+    completionSign: "実行が成功し結果が返ること",
+  },
+];
+
+export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
+  {
+    step: 1,
+    label: "ログイン",
+    href: "/auth",
+    purpose: "管理画面を使う前に認証します。未ログインでは各 /admin/* 画面は利用できません。",
+    completionSign: "ログイン済み表示。管理トップ以降の画面に進めること。",
+    nextLabel: `${UX_IMPORT_SETTINGS}へ`,
+  },
+  {
+    step: 2,
+    label: UX_IMPORT_SETTINGS,
+    href: "/admin/manifests",
+    purpose: `取り込み・表示・実行先の定義を作成します。インポートにはこの${UX_IMPORT_SETTINGS}が先に必要です。`,
+    completionSign: `有効な${UX_IMPORT_SETTINGS}が 1 件以上あり、/admin/import の選択肢に現れること。`,
+    nextLabel: "インポートへ",
+    boundaryNote: "検証・有効化の正本は backend。frontend は入力と結果表示のみ。",
+  },
+  {
+    step: 3,
+    label: "インポート",
+    href: "/admin/import",
+    purpose: `CSV/JSON を${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}に沿ってプレビューし、問題なければ取り込みます。`,
+    completionSign: "適用成功後に applyLogId が表示されること。無効行が 0 件であることが理想。",
+    nextLabel: `${UX_UI_BUILDER}へ`,
+    boundaryNote: "プレビュー・適用の正本は backend。frontend はファイル送信と結果表示のみ。",
+  },
+  {
+    step: 4,
+    label: UX_UI_BUILDER,
+    href: "/admin/ui-builder",
+    purpose: "部品を登録し、レイアウトを組んで保存反映します。",
+    completionSign: "配置用パレットに部品が表示され、レイアウトの保存反映が完了すること。未登録のみの配置が残っていないこと。",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    boundaryNote: "topology 意味判断は backend。frontend はドラフト表示と操作送信のみ。",
+  },
+  {
+    step: 5,
+    label: UX_RUNTIME_CHECK,
+    href: "/admin/runtime",
+    purpose: "登録済み設定に対して操作を実行し、結果を確認します。不足があれば該当画面へ戻ります。",
+    completionSign: "実行が成功し結果が返ること。登録不足エラーが解消されていること。",
+    boundaryNote: "dispatch / emission の正本は backend + DB。frontend は結果の表示のみ。",
   },
 ];
 
@@ -569,41 +618,47 @@ export type AcceptanceCheckItem = {
 
 export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
   {
-    label: "Import preview/apply",
+    label: `${UX_IMPORT_SETTINGS}の作成`,
+    href: "/admin/manifests",
+    checks: [
+      `${UX_IMPORT_SETTINGS}の一覧が表示されること`,
+      "下書き作成 → 内容確認 → 有効化ができること",
+      `インポート画面で${UX_IMPORT_SETTINGS}を選べること`,
+    ],
+  },
+  {
+    label: "インポート（プレビュー・適用）",
     href: "/admin/import",
     checks: [
-      "manifest と schema を選択できること",
-      "プレビューで validCount > 0 になること",
+      `${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}を選択できること`,
+      "プレビューで有効件数 > 0 になること",
       "適用で applyLogId が返ること",
     ],
   },
   {
-    label: "Content draft/validate/preview/promote",
+    label: "コンテンツ（任意）",
     href: "/admin/contents",
     checks: [
-      "Browse で hub / entity / relation 一覧が表示されること",
-      "ドラフト作成 → Validate で blocking issues なしになること",
-      "Preview で canPromote: true になること",
-      "Promote 後 readback に entity_id が返ること",
+      "hub / entity / relation の一覧が表示されること",
+      "ドラフト → 検証 → プレビュー → 登録の流れが通ること",
     ],
   },
   {
-    label: "UI Builder bucket/promote/layout apply",
+    label: "UI Builder（部品・レイアウト）",
     href: "/admin/ui-builder",
     checks: [
-      "バケットにコンポーネントを登録できること",
-      "generate → promote でパレットに追加されること",
-      "layout preview が valid になること",
-      "layout validate が通ること",
-      "draft-only ノードなしで layout apply が成功すること",
+      "部品を登録できること",
+      "配置用パレットに部品が現れること",
+      "レイアウトのプレビュー・検証が通ること",
+      "未登録のみの配置がなく保存反映できること",
     ],
   },
   {
-    label: "Runtime dispatch確認",
+    label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
     checks: [
-      "preset を選択して dispatch が成功すること",
-      "emission が返ること（ATTRACTOR_RESOLVE_FAILED なし）",
+      "シナリオを選んで実行が成功すること",
+      "結果が返ること（登録不足エラーがないこと）",
     ],
   },
 ];
