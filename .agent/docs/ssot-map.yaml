@@ -327,32 +327,6 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
-  - work_type: admin_console_workflow_structure
-    change_surfaces:
-      - docs/design/admin-console-workflow-ssot.yaml
-      - admin console page route registry
-      - admin page responsibility split (DB/wiring/hub vs UI/event)
-      - admin canonical workflow step order
-      - admin/manifests domain ownership
-      - admin/contents domain ownership
-      - admin/hub-navigation component (hub_relation ordering)
-      - AdminMainFlowStepper step definitions
-      - frontend/content/adminGuides.ts ADMIN_MAIN_FLOW_STEPS
-      - frontend/components/AdminMainFlowStepper.tsx
-      - frontend/routes/admin/hub-navigation.tsx
-      - frontend/islands/HubNavigationAdmin.tsx
-      - hub_navigation_ordering_component route contract
-      - wiring_domain_assignment (dispatcher axes in admin/manifests)
-    required_docs:
-      - docs/design/admin-console-workflow-ssot.yaml
-    supporting_docs:
-      - docs/design/db-schema.yaml
-      - docs/registrar-admin-ui-specification.md
-      - docs/design/runtime-orchestration-ssot.yaml
-    protocols:
-      - .agent/protocols/design-change.md
-      - .agent/protocols/ssot-change-impact.md
-
 worktypes:
   ids:
     - audit
