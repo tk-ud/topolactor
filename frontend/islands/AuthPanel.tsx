@@ -1,7 +1,12 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { loginDemo, authErrorText, type LoginResponse } from "../api/authApi.ts";
-import { persistSessionToken, syncClientSessionToken } from "../lib/demoSession.ts";
+import {
+  DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
+  isDemoSessionPresent,
+  persistSessionToken,
+  syncClientSessionToken,
+} from "../lib/demoSession.ts";
 
 type AuthState =
   | { status: "idle" }
@@ -26,7 +31,7 @@ export default function AuthPanel(): JSX.Element {
       setRedirectTo(redirect);
     }
     const existing = syncClientSessionToken();
-    if (existing) {
+    if (isDemoSessionPresent(existing)) {
       globalThis.location.replace(target);
     }
   }, []);
@@ -77,13 +82,17 @@ export default function AuthPanel(): JSX.Element {
 
       {state.status === "success" && (
         <div class="alert-success mt-4">
-          <strong>ログイン成功。</strong> トークンを保存しました（ブラウザと cookie）。
+          <strong>ログイン成功。</strong> デモ用トークンをブラウザと cookie に保存しました。
           <br />
           <a href={redirectTo} class="link mt-2 inline-block font-semibold">
             → {redirectTo === "/" ? "ディスパッチパネルへ" : "元のページへ戻る"}
           </a>
-          <small class="mt-2 block text-muted-xs">トークン（デモ用のみ）:</small>
-          <pre class="pre-box mt-1 break-all">{state.token}</pre>
+          <p class="text-muted-xs mt-2">{DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY}</p>
+          <details class="text-muted-xs mt-1">
+            <summary class="cursor-pointer">技術情報</summary>
+            <small class="mt-1 block">トークン（デモ用のみ）:</small>
+            <pre class="pre-box mt-1 break-all">{state.token}</pre>
+          </details>
         </div>
       )}
 
