@@ -651,6 +651,13 @@ export default function ContentsAdmin(): JSX.Element {
                 readback: {lifecycleResult.readback.label} / {lifecycleResult.readback.stateName}
               </p>
             )}
+            {lifecycleResult.ok && (
+              <p class="mt-3 text-xs text-muted-xs">
+                次のステップ:{" "}
+                <a href="/admin/ui-builder" class="link">UI Builder</a> でレイアウト登録、または{" "}
+                <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch を検証してください。
+              </p>
+            )}
           </div>
         )}
       </section>

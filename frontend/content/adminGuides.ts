@@ -44,8 +44,8 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     "失敗時: 画面のエラーパネルに code / message — silent fallback はしません",
   ],
   nextSteps: [
-    "Import → Seed → UI Builder → Manifests →（必要なら）Token / Vector Validate の順が無難",
-    "Contents は未実装",
+    "推奨受入フロー: Auth → Import または Contents → UI Builder → Runtime確認",
+    "全画面共通: preview / validate を必ず通してから apply / promote / import を実行する",
   ],
   boundaryNotes: [
     "Frontend = projection / intent submission。意味判断・永続化の正本は DB + backend runtime",
@@ -481,9 +481,13 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/contents",
     label: "コンテンツ",
-    purpose: "（スケルトン）エンティティ管理予定",
-    relation: "Issue #86 予定",
-    howToSummary: ["現状は Import / UI Builder を使用"],
+    purpose: "hub / entity / relation browse、entity draft → validate → preview → promote",
+    relation: "content_bundle admin route / hub topology 管理",
+    howToSummary: [
+      "browse タブで hub / entity / relation を検索・確認",
+      "Entity Draft Editor でドラフト作成 → Validate → Preview",
+      "Promote で active entity として DB 登録",
+    ],
   },
   {
     href: "/admin/manifests",
@@ -496,5 +500,110 @@ export const ADMIN_ROUTE_CARDS: {
       "active → deprecate",
     ],
     caution: "Promote / Deprecate で DB status 変更",
+  },
+];
+
+/** 推奨受入フロー — admin index の "推奨受入フロー" セクションで使用 */
+export type AcceptanceFlowStep = {
+  step: number;
+  label: string;
+  href: string;
+  purpose: string;
+  completionSign: string;
+  nextLabel?: string;
+  boundaryNote?: string;
+};
+
+export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
+  {
+    step: 1,
+    label: "認証 (Auth)",
+    href: "/auth",
+    purpose: "JWT を取得し sessionStorage に demo_jwt_token を保存する。バックエンド API を叩く画面はすべて事前ログインが必要。",
+    completionSign: "ログイン済み表示。sessionStorage に demo_jwt_token が存在すること。",
+    nextLabel: "Import または Contents へ",
+  },
+  {
+    step: 2,
+    label: "インポート (Import)",
+    href: "/admin/import",
+    purpose: "CSV/JSON ファイルを manifest+schema に照合し topology データとして DB へ取り込む。プレビューで valid 件数を確認してから適用する。",
+    completionSign: "適用成功後に applyLogId が表示されること。invalidCount = 0 が理想。",
+    nextLabel: "Contents またはUI Builder へ",
+    boundaryNote: "preview/apply の正本は backend。frontend はファイル送信と結果表示のみ。",
+  },
+  {
+    step: 3,
+    label: "コンテンツ (Contents)",
+    href: "/admin/contents",
+    purpose: "hub / entity / relation を browse で確認し、entity draft → validate → preview → promote の流れで active content として登録する。",
+    completionSign: "promote 成功後の readback に entity_id が返ること。Browse に新規エンティティが現れること。",
+    nextLabel: "UI Builder または Runtime確認へ",
+    boundaryNote: "promote 可否判定は backend。frontend は draft 状態の表示と intent 送信のみ。",
+  },
+  {
+    step: 4,
+    label: "UI ビルダー (UI Builder)",
+    href: "/admin/ui-builder",
+    purpose: "コンポーネントを bucket → generate → promote し、layout canvas に配置して preview → validate → apply する。",
+    completionSign: "パレットにプロモート済みコンポーネントが現れ、layout apply が valid 完了すること。ドラフトのみノードが 0 件であること。",
+    nextLabel: "Runtime確認へ",
+    boundaryNote: "topology 意味判断は backend。frontend はドラフト状態の表示と intent 送信のみ。",
+  },
+  {
+    step: 5,
+    label: "Runtime確認 (Runtime)",
+    href: "/admin/runtime",
+    purpose: "promoted topology に対して dispatch を発行し emission を確認する。登録不足なら対応する画面へ戻る。",
+    completionSign: "dispatch が成功し emission が返ること。ATTRACTOR_RESOLVE_FAILED などのエラーが解消されること。",
+    boundaryNote: "dispatch 経路・emission は backend / DB が正本。frontend は projection のみ。",
+  },
+];
+
+/** 受入チェックリスト — 完了判定の正本ではなく確認観点のリスト */
+export type AcceptanceCheckItem = {
+  label: string;
+  href: string;
+  checks: string[];
+};
+
+export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
+  {
+    label: "Import preview/apply",
+    href: "/admin/import",
+    checks: [
+      "manifest と schema を選択できること",
+      "プレビューで validCount > 0 になること",
+      "適用で applyLogId が返ること",
+    ],
+  },
+  {
+    label: "Content draft/validate/preview/promote",
+    href: "/admin/contents",
+    checks: [
+      "Browse で hub / entity / relation 一覧が表示されること",
+      "ドラフト作成 → Validate で blocking issues なしになること",
+      "Preview で canPromote: true になること",
+      "Promote 後 readback に entity_id が返ること",
+    ],
+  },
+  {
+    label: "UI Builder bucket/promote/layout apply",
+    href: "/admin/ui-builder",
+    checks: [
+      "バケットにコンポーネントを登録できること",
+      "generate → promote でパレットに追加されること",
+      "layout preview が valid になること",
+      "layout validate が通ること",
+      "draft-only ノードなしで layout apply が成功すること",
+    ],
+  },
+  {
+    label: "Runtime dispatch確認",
+    href: "/admin/runtime",
+    checks: [
+      "preset を選択して dispatch が成功すること",
+      "emission が返ること（ATTRACTOR_RESOLVE_FAILED なし）",
+    ],
   },
 ];

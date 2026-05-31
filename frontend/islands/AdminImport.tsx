@@ -235,6 +235,11 @@ export default function AdminImport(): JSX.Element {
         <section class="alert-success mb-6">
           <h2 class="mb-1 font-semibold">適用結果</h2>
           <p>applyLogId: <code>{applyResult.applyLogId}</code></p>
+          <p class="mt-2 text-xs text-muted-xs">
+            次のステップ:{" "}
+            <a href="/admin/ui-builder" class="link">UI Builder</a> で UI topology 登録、または{" "}
+            <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch を検証してください。
+          </p>
         </section>
       )}
     </main>
