@@ -674,6 +674,13 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         if ((int)(await checkHub.ExecuteScalarAsync(ct) ?? 0) == 0)
             return (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null);
 
+        await using var getSourceHub = conn.CreateCommand();
+        getSourceHub.CommandText = "SELECT hub_id::text FROM hubs.topology_manifests WHERE topology_manifest_id = @mid LIMIT 1";
+        getSourceHub.Parameters.AddWithValue("mid", topologyManifestId);
+        var sourceHubStr = (string?)await getSourceHub.ExecuteScalarAsync(ct);
+        if (sourceHubStr is not null && Guid.TryParse(sourceHubStr, out var sourceHubGuid) && sourceHubGuid == relatedHubId)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null);
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "INSERT INTO hubs.hub_relations " +
@@ -705,6 +712,16 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         checkHub.Parameters.AddWithValue("hid", relatedHubId);
         if (await checkHub.ExecuteScalarAsync(ct) is null)
             return (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null);
+
+        await using var getSourceHub = conn.CreateCommand();
+        getSourceHub.CommandText =
+            "SELECT tm.hub_id::text FROM hubs.hub_relations hr " +
+            "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
+            "WHERE hr.hub_relation_id = @id LIMIT 1";
+        getSourceHub.Parameters.AddWithValue("id", hubRelationId);
+        var sourceHubStr = (string?)await getSourceHub.ExecuteScalarAsync(ct);
+        if (sourceHubStr is not null && Guid.TryParse(sourceHubStr, out var sourceHubGuid) && sourceHubGuid == relatedHubId)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null);
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
@@ -767,5 +784,98 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     {
         if (reader.IsDBNull(ordinal)) return [];
         return reader.GetFieldValue<Guid[]>(ordinal);
+    }
+
+    public override async Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
+        Guid hubId, CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT hr.related_hub_id::text, COALESCE(h.name, hr.related_hub_id::text), hr.sequence_position " +
+            "FROM hubs.hub_relations hr " +
+            "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
+            "LEFT JOIN hubs.hub h ON h.hub_id = hr.related_hub_id " +
+            "WHERE tm.hub_id = @hid AND hr.status = 'active' " +
+            "ORDER BY hr.sequence_position";
+        cmd.Parameters.AddWithValue("hid", hubId);
+
+        var items = new List<HubNavigationSequenceItemDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+            items.Add(new HubNavigationSequenceItemDto(reader.GetString(0), reader.GetString(1), reader.GetInt32(2)));
+        return items;
+    }
+
+    public override async Task<(HubNavigationReorderResponseDto Response, ValidationError? Error)> ReorderHubRelationsAsync(
+        Guid topologyManifestId, IReadOnlyList<(Guid HubRelationId, int NewSequencePosition)> items, CancellationToken ct = default)
+    {
+        if (items.Count == 0)
+            return (new HubNavigationReorderResponseDto(true, "No items to reorder."), null);
+
+        await using var conn = await OpenAsync(ct);
+
+        await using var checkManifest = conn.CreateCommand();
+        checkManifest.CommandText = "SELECT COUNT(*)::int FROM hubs.topology_manifests WHERE topology_manifest_id = @mid";
+        checkManifest.Parameters.AddWithValue("mid", topologyManifestId);
+        if ((int)(await checkManifest.ExecuteScalarAsync(ct) ?? 0) == 0)
+            return (new HubNavigationReorderResponseDto(false, "Manifest not found.", "MANIFEST_NOT_FOUND"), null);
+
+        if (items.Select(i => i.NewSequencePosition).Distinct().Count() != items.Count)
+            return (new HubNavigationReorderResponseDto(false, "Duplicate sequence positions in reorder request.", "SEQUENCE_CONFLICT"), null);
+
+        var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            // Phase 1: shift to temp positions to avoid UNIQUE conflicts during reorder
+            foreach (var item in items)
+            {
+                await using var cmdTmp = conn.CreateCommand();
+                cmdTmp.Transaction = tx;
+                cmdTmp.CommandText =
+                    "UPDATE hubs.hub_relations SET sequence_position = @tmp " +
+                    "WHERE hub_relation_id = @id AND topology_manifest_id = @mid AND status = 'active'";
+                cmdTmp.Parameters.AddWithValue("tmp", item.NewSequencePosition + 1_000_000);
+                cmdTmp.Parameters.AddWithValue("id", item.HubRelationId);
+                cmdTmp.Parameters.AddWithValue("mid", topologyManifestId);
+                if (await cmdTmp.ExecuteNonQueryAsync(ct) == 0)
+                {
+                    await tx.RollbackAsync(ct);
+                    return (new HubNavigationReorderResponseDto(false,
+                        $"Hub relation {item.HubRelationId} not found or not active for this manifest.", "HUB_RELATION_NOT_FOUND"), null);
+                }
+            }
+
+            // Phase 2: set final positions
+            foreach (var item in items)
+            {
+                await using var cmdFinal = conn.CreateCommand();
+                cmdFinal.Transaction = tx;
+                cmdFinal.CommandText =
+                    "UPDATE hubs.hub_relations SET sequence_position = @seq, updated_at = now() " +
+                    "WHERE hub_relation_id = @id AND topology_manifest_id = @mid AND status = 'active'";
+                cmdFinal.Parameters.AddWithValue("seq", item.NewSequencePosition);
+                cmdFinal.Parameters.AddWithValue("id", item.HubRelationId);
+                cmdFinal.Parameters.AddWithValue("mid", topologyManifestId);
+                await cmdFinal.ExecuteNonQueryAsync(ct);
+            }
+
+            await tx.CommitAsync(ct);
+            return (new HubNavigationReorderResponseDto(true, $"Reordered {items.Count} hub relation(s)."), null);
+        }
+        catch (Exception ex) when (ex.Message.Contains("unique") || ex.Message.Contains("duplicate"))
+        {
+            await tx.RollbackAsync(ct);
+            return (new HubNavigationReorderResponseDto(false, "Sequence position conflict during reorder.", "SEQUENCE_CONFLICT"), null);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+        finally
+        {
+            await tx.DisposeAsync();
+        }
     }
 }

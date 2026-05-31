@@ -97,7 +97,8 @@ public record Emission(
     IReadOnlyList<ValidationError> Errors,
     IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
-    JsonElement? ProjectionDefinition = null
+    JsonElement? ProjectionDefinition = null,
+    IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null
 );
 
 public record RuntimeJumpEvent(

@@ -187,3 +187,20 @@ public record HubNavigationUpdateRequestDto(
 public record HubNavigationDeprecateRequestDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId
 );
+
+public record HubNavigationSequenceItemDto(
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
+    [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
+    [property: JsonPropertyName("sequencePosition")] int SequencePosition
+);
+
+public record HubNavigationReorderItemDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId,
+    [property: JsonPropertyName("newSequencePosition")] int NewSequencePosition
+);
+
+public record HubNavigationReorderResponseDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("errorCode")] string? ErrorCode = null
+);

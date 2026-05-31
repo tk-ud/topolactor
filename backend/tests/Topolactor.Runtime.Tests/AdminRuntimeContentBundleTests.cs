@@ -361,6 +361,88 @@ public class AdminRuntimeContentBundleTests
     }
 
     [Fact]
+    public async Task HubNavigation_Create_SelfLoop_ReturnsSelfLoopError()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoHubId.ToString(), // same as source hub
+            sequencePosition = 2,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "create", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.False(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("SELF_LOOP", data.Value.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Update_SelfLoop_ReturnsSelfLoopError()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoHubId.ToString(), // same as source hub
+            sequencePosition = 1,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.False(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("SELF_LOOP", data.Value.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Reorder_ChangesSequencePositions()
+    {
+        var repo = new InMemoryContentBundleRepository();
+        var runtime = CreateRuntime(repo);
+
+        // Add a second hub_relation to have something to swap
+        var createPayload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            sequencePosition = 2,
+        });
+        await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "create", null, "admin", createPayload, null), default);
+
+        var listPayload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+        });
+        var (listData, _) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "get_hub_relations", null, "admin", listPayload, null), default);
+        var relations = listData!.Value.EnumerateArray()
+            .Select(e => new { id = e.GetProperty("hubRelationId").GetString()!, seq = e.GetProperty("sequencePosition").GetInt32() })
+            .OrderBy(r => r.seq).ToList();
+
+        // Swap positions
+        var reorderPayload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            items = new[]
+            {
+                new { hubRelationId = relations[0].id, newSequencePosition = relations[1].seq },
+                new { hubRelationId = relations[1].id, newSequencePosition = relations[0].seq },
+            },
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "reorder", null, "admin", reorderPayload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetProperty("ok").GetBoolean());
+    }
+
+    [Fact]
     public async Task HubNavigation_Update_InvalidHub_ReturnsHubNotFound()
     {
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());

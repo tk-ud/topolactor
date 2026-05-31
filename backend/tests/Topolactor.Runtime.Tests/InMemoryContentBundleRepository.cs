@@ -290,6 +290,9 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
         if (topologyManifestId != DemoTopologyManifestId)
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
+        if (_manifestSourceHubMap.TryGetValue(topologyManifestId, out var sourceHub) && sourceHub == relatedHubId)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null));
         if (_hubRelations.Any(hr => hr.TopologyManifestId == topologyManifestId && hr.SequencePosition == sequencePosition && hr.Status == "active"))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", $"Sequence position {sequencePosition} already exists.", "SEQUENCE_CONFLICT"), null));
@@ -301,6 +304,10 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     }
 
     private static readonly HashSet<Guid> _validHubIds = [DemoHubId, DemoRelatedHubId];
+    private static readonly Dictionary<Guid, Guid> _manifestSourceHubMap = new()
+    {
+        { DemoTopologyManifestId, DemoHubId },
+    };
 
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
         Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
@@ -316,6 +323,10 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
                     "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null));
 
         var existing = _hubRelations[idx];
+        if (_manifestSourceHubMap.TryGetValue(existing.TopologyManifestId, out var sourceHub) && sourceHub == relatedHubId)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null));
+
         _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, relatedHubId, sequencePosition, "active");
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "active", "Hub relation updated."), null));
@@ -348,5 +359,55 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
 
         var stateNames = new Dictionary<Guid, string> { [ActiveStateId] = "active" };
         return new ContentBundleRefContext(hubExists, "demo_relation", relationNames, stateNames);
+    }
+
+    public override Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(
+        Guid hubId, CancellationToken ct = default)
+    {
+        var items = _hubRelations
+            .Where(hr => hr.Status == "active" &&
+                _manifestSourceHubMap.TryGetValue(hr.TopologyManifestId, out var srcHub) && srcHub == hubId)
+            .OrderBy(hr => hr.SequencePosition)
+            .Select(hr => new HubNavigationSequenceItemDto(
+                hr.RelatedHubId.ToString(),
+                $"Hub {hr.RelatedHubId.ToString()[..8]}…",
+                hr.SequencePosition))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<HubNavigationSequenceItemDto>>(items);
+    }
+
+    public override Task<(HubNavigationReorderResponseDto Response, ValidationError? Error)> ReorderHubRelationsAsync(
+        Guid topologyManifestId, IReadOnlyList<(Guid HubRelationId, int NewSequencePosition)> items, CancellationToken ct = default)
+    {
+        if (items.Count == 0)
+            return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
+                (new HubNavigationReorderResponseDto(true, "No items to reorder."), null));
+
+        if (topologyManifestId != DemoTopologyManifestId)
+            return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
+                (new HubNavigationReorderResponseDto(false, "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
+
+        if (items.Select(i => i.NewSequencePosition).Distinct().Count() != items.Count)
+            return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
+                (new HubNavigationReorderResponseDto(false, "Duplicate sequence positions in reorder request.", "SEQUENCE_CONFLICT"), null));
+
+        foreach (var item in items)
+        {
+            var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == item.HubRelationId && hr.Status == "active" && hr.TopologyManifestId == topologyManifestId);
+            if (idx < 0)
+                return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
+                    (new HubNavigationReorderResponseDto(false,
+                        $"Hub relation {item.HubRelationId} not found or not active for this manifest.", "HUB_RELATION_NOT_FOUND"), null));
+        }
+
+        foreach (var item in items)
+        {
+            var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == item.HubRelationId && hr.Status == "active");
+            var existing = _hubRelations[idx];
+            _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, existing.RelatedHubId, item.NewSequencePosition, "active");
+        }
+
+        return Task.FromResult<(HubNavigationReorderResponseDto, ValidationError?)>(
+            (new HubNavigationReorderResponseDto(true, $"Reordered {items.Count} hub relation(s)."), null));
     }
 }

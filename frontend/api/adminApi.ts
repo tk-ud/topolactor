@@ -870,3 +870,13 @@ export async function deprecateHubRelation(
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "deprecate hub_relation failed");
   return body.emission?.data as HubNavigationLifecycleResult;
 }
+
+export async function reorderHubRelations(
+  topologyManifestId: string,
+  items: Array<{ hubRelationId: string; newSequencePosition: number }>,
+): Promise<HubNavigationLifecycleResult> {
+  const body = await callHubNavigation("reorder", { topologyManifestId, items });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "reorder hub_relations failed");
+  return body.emission?.data as HubNavigationLifecycleResult;
+}

@@ -28,6 +28,7 @@ public class RuntimeExecutor : IDispatchableRuntime
     private readonly RuntimeGuard _runtimeGuard;
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
     private readonly OutputLaneRouter? _outputLaneRouter;
+    private readonly HubNavigationResolver? _hubNavigationResolver;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -42,7 +43,8 @@ public class RuntimeExecutor : IDispatchableRuntime
         SqlAttentionLogsRepository sqlAttentionLogsRepository,
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
-        OutputLaneRouter? outputLaneRouter = null)
+        OutputLaneRouter? outputLaneRouter = null,
+        HubNavigationResolver? hubNavigationResolver = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -57,6 +59,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         _runtimeGuard = runtimeGuard ?? throw new ArgumentNullException(nameof(runtimeGuard));
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
         _outputLaneRouter = outputLaneRouter;
+        _hubNavigationResolver = hubNavigationResolver;
     }
 
     /// <summary>
@@ -226,6 +229,22 @@ public class RuntimeExecutor : IDispatchableRuntime
 
         // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
+
+        // Step 11: Hub navigation sequence — enrich emission with ordered hub_relations
+        // when the dispatch carries a hub context (IdOrHubId). Non-fatal: failure yields
+        // null NavigationSequence without affecting the rest of the emission.
+        if (_hubNavigationResolver is not null && vector.IdOrHubId is Guid hubId)
+        {
+            try
+            {
+                var navSeq = await _hubNavigationResolver.ResolveAsync(hubId, ct);
+                emission = emission with { NavigationSequence = navSeq };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "HubNavigationResolver.ResolveAsync failed for hub '{HubId}'.", hubId);
+            }
+        }
 
         var response = new EndpointResponseDto(
             Success: emission.Errors.Count == 0,

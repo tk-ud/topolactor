@@ -6,6 +6,7 @@ import {
   createHubRelation,
   updateHubRelation,
   deprecateHubRelation,
+  reorderHubRelations,
   listContentHubs,
   type HubNavigationManifestItem,
   type HubNavigationHubRelationItem,
@@ -130,6 +131,29 @@ export default function HubNavigationAdmin(): JSX.Element {
     }
   };
 
+  const handleReorder = async (targetId: string, direction: "up" | "down") => {
+    const active = hubRelations.filter((hr) => hr.status === "active")
+      .sort((a, b) => a.sequencePosition - b.sequencePosition);
+    const idx = active.findIndex((hr) => hr.hubRelationId === targetId);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (idx < 0 || swapIdx < 0 || swapIdx >= active.length) return;
+    setLoading(true);
+    setErrors([]);
+    try {
+      const a = active[idx];
+      const b = active[swapIdx];
+      await reorderHubRelations(selectedManifestId, [
+        { hubRelationId: a.hubRelationId, newSequencePosition: b.sequencePosition },
+        { hubRelationId: b.hubRelationId, newSequencePosition: a.sequencePosition },
+      ]);
+      await loadHubRelations(selectedManifestId);
+    } catch (e) {
+      setErrors([{ message: String(e) }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const startEdit = (hr: HubNavigationHubRelationItem) => {
     setEditing({ mode: "edit", hubRelationId: hr.hubRelationId, relatedHubId: hr.relatedHubId, sequencePosition: hr.sequencePosition });
     setDraftRelatedHubId(hr.relatedHubId);
@@ -222,14 +246,26 @@ export default function HubNavigationAdmin(): JSX.Element {
                     {hubRelations
                       .filter((hr) => hr.status === "active")
                       .sort((a, b) => a.sequencePosition - b.sequencePosition)
-                      .map((hr) => (
+                      .map((hr, i, arr) => (
                         <tr key={hr.hubRelationId} class="border-b hover:bg-gray-50">
                           <td class="px-2 py-1 font-mono">{hr.sequencePosition}</td>
                           <td class="px-2 py-1">{hr.relatedHubLabel}</td>
                           <td class="px-2 py-1">
                             <span class="rounded bg-green-100 px-1 text-green-800">active</span>
                           </td>
-                          <td class="px-2 py-1 space-x-2">
+                          <td class="px-2 py-1 space-x-1">
+                            <button
+                              class="btn-secondary text-xs"
+                              onClick={() => handleReorder(hr.hubRelationId, "up")}
+                              disabled={loading || i === 0}
+                              title="上へ"
+                            >▲</button>
+                            <button
+                              class="btn-secondary text-xs"
+                              onClick={() => handleReorder(hr.hubRelationId, "down")}
+                              disabled={loading || i === arr.length - 1}
+                              title="下へ"
+                            >▼</button>
                             <button
                               class="btn-secondary text-xs"
                               onClick={() => startEdit(hr)}
@@ -275,19 +311,21 @@ export default function HubNavigationAdmin(): JSX.Element {
                   </select>
                 </div>
 
-                <div>
-                  <label class="mb-1 block text-xs font-medium text-gray-700">
-                    sequence_position（小さいほど先）
-                  </label>
-                  <input
-                    type="number"
-                    class="input-base w-32"
-                    min={1}
-                    value={draftSequencePosition}
-                    onInput={(e) =>
-                      setDraftSequencePosition(parseInt((e.target as HTMLInputElement).value, 10) || 1)}
-                  />
-                </div>
+                {editing.mode === "create" && (
+                  <div>
+                    <label class="mb-1 block text-xs font-medium text-gray-700">
+                      sequence_position（小さいほど先）
+                    </label>
+                    <input
+                      type="number"
+                      class="input-base w-32"
+                      min={1}
+                      value={draftSequencePosition}
+                      onInput={(e) =>
+                        setDraftSequencePosition(parseInt((e.target as HTMLInputElement).value, 10) || 1)}
+                    />
+                  </div>
+                )}
 
                 <div class="flex gap-2">
                   <button
