@@ -61,6 +61,23 @@ failf.call('system_roadmap_ssot.status_terms must be defined') if status_terms.e
 allowed = status_terms.keys
 impl = root['implementation_registry'].is_a?(Hash) ? root['implementation_registry'] : {}
 failf.call('implementation_registry must exist') if impl.empty?
+ux_gates = root['ux_acceptance_gates'].is_a?(Hash) ? root['ux_acceptance_gates'] : {}
+frontend_ux = ux_gates['frontend_projection_surface_general_ux'].is_a?(Hash) ? ux_gates['frontend_projection_surface_general_ux'] : {}
+if frontend_ux.empty?
+  failf.call('ux_acceptance_gates.frontend_projection_surface_general_ux must exist')
+else
+  failf.call('frontend UX acceptance gate must stay independent from production_ready') unless frontend_ux['production_ready_independent'] == true
+  criteria = frontend_ux['acceptance_criteria'].is_a?(Hash) ? frontend_ux['acceptance_criteria'] : {}
+  required_criteria = %w[lifecycle_state_visibility recovery_navigation actionable_validation_errors progressive_disclosure_vocabulary non_pointer_operation accessibility_observability first_run_guidance css_token_visual_diff]
+  required_criteria.each do |criterion|
+    failf.call("frontend UX acceptance criterion missing: #{criterion}") unless criteria.key?(criterion)
+  end
+  boundary = frontend_ux['authority_boundary'].is_a?(Hash) ? frontend_ux['authority_boundary'] : {}
+  frontend_only = boundary['frontend_projection_surface_only'].is_a?(Array) ? boundary['frontend_projection_surface_only'] : []
+  failf.call('frontend UX acceptance gate must prohibit direct DB write') unless frontend_only.include?('frontend_must_not_write_DB_directly')
+  failf.call('frontend UX acceptance gate must prohibit frontend topology judgment') unless frontend_only.include?('frontend_must_not_decide_topology_promotion_persistence_or_SQL_attention_policy')
+  failf.call('frontend UX acceptance gate must preserve backend preview validate apply route') unless frontend_only.include?('frontend_may_submit_intent_only_through_backend_preview_validate_apply_route')
+end
 file_statuses = Hash.new { |h, k| h[k] = [] }
 dir_statuses = Hash.new { |h, k| h[k] = [] }
 impl.each do |k,v|

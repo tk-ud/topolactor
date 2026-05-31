@@ -1,6 +1,6 @@
 system_roadmap_ssot:
   name: topolactor_system_roadmap
-  version: 0.2.1
+  version: 0.3.0
   status: public_status_ssot
   visibility: public
 
@@ -12,6 +12,7 @@ system_roadmap_ssot:
     - prevent_skeleton_stub_dummy_work_from_being_reported_as_complete
     - define_external_integration_as_human_editing_surface_not_system_SSOT
     - expose_non_IT_business_system_authoring_roadmap
+    - define_frontend_projection_surface_general_ux_acceptance_gate
 
   document_role:
     summary: >
@@ -25,6 +26,7 @@ system_roadmap_ssot:
       - public_completion_terms
       - ci_status_expectations
       - external_integration_direction
+      - frontend_projection_surface_ux_acceptance_gate
     does_not_own:
       - low_level_design_detail
       - temporary_task_queue
@@ -77,6 +79,111 @@ system_roadmap_ssot:
     - external_service_connection_must_not_be_treated_as_runtime_SSOT
     - external_import_must_have_preview_validate_apply_stages
     - external_sync_failure_must_be_explicit_not_silent_fallback
+
+  ux_acceptance_gates:
+    frontend_projection_surface_general_ux:
+      title: Frontend projection surface general UX acceptance
+      gate_kind: ux_acceptance_milestone
+      status: partial
+      production_ready_independent: true
+      summary: >
+        This acceptance gate evaluates whether the DB-authoritative frontend projection surface is
+        understandable and operable by general users. It is intentionally separate from runtime
+        component implementation status and production_ready judgment: a runtime lane may be
+        production-ready while this UX gate remains partial. Frontend remains an intent authoring,
+        preview, validation-result, and projection surface; it must not acquire topology, promotion,
+        persistence, SQL Attention, or policy judgment authority.
+      authority_boundary:
+        db_authority_preserved:
+          - design_layout_wiring_authority_remains_in_topology_DB_and_registry_surfaces
+          - topology_components_layout_design_and_ui_topology_tensor_remain_canonical_persistence_surfaces
+          - topology_components_style_design_and_ui_wiring_registry_remain_DB_authority_surfaces
+          - context_tables_remain_recommendation_learning_surfaces_not_frontend_topology_authority
+          - topology_namespace_and_hubs_namespace_canonical_schema_contracts_remain_unchanged
+        frontend_projection_surface_only:
+          - frontend_may_hold_local_draft_interaction_state_and_visual_preview
+          - frontend_may_submit_intent_only_through_backend_preview_validate_apply_route
+          - frontend_must_not_write_DB_directly
+          - frontend_must_not_bypass_backend_validation
+          - frontend_must_not_decide_topology_promotion_persistence_or_SQL_attention_policy
+      standards_basis:
+        - WCAG_2_2_SC_2_1_1_keyboard
+        - WCAG_2_2_SC_2_4_3_focus_order
+        - WCAG_2_2_SC_2_4_7_focus_visible
+        - WCAG_2_2_SC_2_5_7_dragging_movements
+        - WCAG_2_2_SC_2_5_8_target_size_minimum
+        - WCAG_2_2_SC_3_3_1_error_identification
+        - WCAG_2_2_SC_3_3_3_error_suggestion
+        - WCAG_2_2_SC_4_1_3_status_messages
+      acceptance_criteria:
+        lifecycle_state_visibility:
+          status: partial
+          acceptance: draft_validated_applied_failed_and_persisted_are_visibly_distinguishable
+          implemented_surface:
+            - local_apply_readiness_and_preview_validate_apply_result_summary_exist
+            - draft_only_nodes_are_visibly_marked_and_apply_blocked
+          unresolved_scope:
+            - expose_a_single_user_visible_lifecycle_model_that_distinguishes_draft_validated_applied_failed_and_backend_persisted
+        recovery_navigation:
+          status: not_started
+          acceptance: undo_redo_or_at_minimum_clear_cancel_reset_and_revert_paths_exist
+          implemented_surface: []
+          unresolved_scope:
+            - connect_local_draft_cancel_reset_and_last_persisted_revert_or_rollback_candidate_flow_without_direct_DB_write
+        actionable_validation_errors:
+          status: partial
+          acceptance: validation_errors_show_cause_target_node_and_repair_suggestion_not_internal_code_only
+          implemented_surface:
+            - backend_error_messages_and_role_alert_panel_are_projected
+            - generic_next_action_guidance_exists
+          unresolved_scope:
+            - preserve_error_code_for_advanced_view_but_add_plain_language_cause_target_node_and_repair_suggestion_projection
+        progressive_disclosure_vocabulary:
+          status: partial
+          acceptance: internal_slot_parent_and_grid_vocabulary_is_translated_for_normal_view_and_raw_terms_are_advanced_only
+          implemented_surface:
+            - advanced_manual_override_disclosure_exists_for_raw_SSOT_keys_and_UUIDs
+          unresolved_scope:
+            - move_slotKey_parentNodeId_gridCol_gridRow_and_raw_ref_vocabulary_behind_advanced_view_and_add_general_user_labels
+        non_pointer_operation:
+          status: not_started
+          acceptance: drag_move_resize_and_reorder_have_keyboard_or_button_alternatives
+          implemented_surface: []
+          unresolved_scope:
+            - add_button_and_keyboard_equivalents_for_palette_add_node_move_resize_reorder_and_delete
+        accessibility_observability:
+          status: partial
+          acceptance: focus_order_focus_visible_target_size_and_status_messages_are_testable_and_user_observable
+          implemented_surface:
+            - semantic_buttons_exist_for_primary_preview_validate_apply_actions
+            - validation_error_panel_uses_role_alert
+          unresolved_scope:
+            - make_canvas_nodes_and_resize_controls_keyboard_focusable_with_visible_focus_and_minimum_target_size
+            - expose_async_preview_validate_apply_and_persisted_results_as_status_messages
+            - add_repeatable_accessibility_checks_for_focus_order_focus_visible_target_size_and_status_messages
+        first_run_guidance:
+          status: partial
+          acceptance: empty_state_template_and_example_flow_make_the_first_action_clear
+          implemented_surface:
+            - admin_how_to_help_panel_and_drag_only_empty_canvas_message_exist
+          unresolved_scope:
+            - add_actionable_empty_state_with_template_or_example_flow_and_non_drag_first_action
+        css_token_visual_diff:
+          status: partial
+          acceptance: css_token_selection_has_visual_preview_and_selection_diff
+          implemented_surface:
+            - searchable_filterable_css_token_candidate_list_selected_chip_list_and_selected_count_exist
+          unresolved_scope:
+            - connect_visual_token_preview_and_before_after_selection_diff_to_local_draft_without_moving_style_authority_out_of_DB_registry
+      verification_policy:
+        executable_now:
+          - .agent/tests/check-system-roadmap.sh verifies UX acceptance SSOT criterion closure and authority-boundary declarations
+          - .agent/tests/check-css-dictionary.sh verifies CSS dictionary selector vocabulary binding
+          - .agent/tests/check-ui-ux-executable-component-slice.sh verifies representative primitive factory reachability
+          - frontend/tests/visualLayoutBuilder.test.ts verifies visual patch serialization draft-only blocking and parent-cycle helper behavior
+        required_when_implemented:
+          - add_frontend_interaction_tests_for_lifecycle_recovery_vocabulary_keyboard_button_empty_state_and_css_token_visual_diff
+          - add_accessibility_automation_or_repeatable_manual_check_for_focus_order_focus_visible_target_size_and_status_messages
 
   external_integration_policy:
     summary: >
@@ -280,6 +387,34 @@ system_roadmap_ssot:
         sql_attention_observation_runtime:
           - sql_attention_live_db_end_to_end_loop
           - sql_attention_observation_runtime_production_ready
+
+    UXA_frontend_projection_surface_general_ux:
+      title: Frontend projection surface general UX acceptance
+      status: partial
+      gate_kind: ux_acceptance_milestone
+      independent_of_production_ready: true
+      goal: >
+        Maximize general-user UX for frontend authoring and projection surfaces without moving
+        design/layout/wiring or topology judgment authority out of DB-backed runtime boundaries.
+      implemented_scope:
+        - preview_validate_apply_intent_route_and_draft_only_apply_guard
+        - local_readiness_and_result_summary_projection
+        - basic_backend_validation_error_projection_with_role_alert
+        - admin_how_to_and_help_surface
+        - searchable_filterable_css_token_candidate_selection
+      remaining_scope:
+        - lifecycle_state_visibility_for_draft_validated_applied_failed_persisted
+        - recovery_navigation_for_cancel_reset_revert_or_undo_redo
+        - plain_language_actionable_validation_errors_with_target_node_and_repair_suggestion
+        - progressive_disclosure_for_internal_topology_layout_vocabulary
+        - keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
+        - repeatable_focus_order_focus_visible_target_size_and_status_message_acceptance
+        - actionable_empty_state_template_and_example_flow
+        - css_token_visual_preview_and_before_after_selection_diff
+      completion_condition:
+        - frontend_projection_surface_general_ux_acceptance_gate_is_satisfied
+        - frontend_remains_projection_surface_without_topology_judgment
+        - preview_validate_apply_and_no_direct_DB_write_boundary_is_preserved
 
   implementation_registry:
     backend.sql_attention_logs_diff:
@@ -946,6 +1081,56 @@ system_roadmap_ssot:
       known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
+
+    product.frontend_projection_surface_ux_acceptance:
+      status: partial
+      production_ready: false
+      milestone: UXA_frontend_projection_surface_general_ux
+      public_summary: >
+        The frontend UI builder already projects local readiness, draft-only apply blocking,
+        preview/validate/apply result summaries, basic backend validation errors, how-to guidance,
+        and searchable CSS token selection. General-user UX acceptance remains partial because
+        lifecycle state closure, recovery paths, actionable node-targeted repair guidance,
+        progressive disclosure of internal vocabulary, non-pointer alternatives, accessibility
+        observability, first-run template/example flow, and CSS token visual diff are incomplete.
+        This UX acceptance status is independent from runtime production_ready judgment. Frontend
+        remains projection-only; DB-backed design/layout/wiring authority and backend validation
+        remain unchanged.
+      files:
+        - docs/system-roadmap.yaml
+        - .agent/tasks/todo.md
+        - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/components/ValidationErrorPanel.tsx
+        - frontend/runtime/cssDictionary.ts
+        - frontend/runtime/projectionConstructor.ts
+        - frontend/runtime/runtimeComponentAdapter.ts
+        - frontend/runtime/runtimePrimitiveRenderer.ts
+        - frontend/runtime/visualLayoutUtils.ts
+        - frontend/tests/visualLayoutBuilder.test.ts
+      evidence:
+        tests:
+          - visualLayoutBuilder.test.ts
+          - projectionConstructor.test.ts
+          - runtimeComponentAdapter.test.ts
+          - runtimePrimitiveRenderer.test.ts
+        ci:
+          - check-system-roadmap.sh
+          - check-css-dictionary.sh
+          - check-ui-ux-executable-component-slice.sh
+          - frontend-types
+      completion_condition:
+        - lifecycle_state_visibility_distinguishes_draft_validated_applied_failed_persisted
+        - recovery_navigation_supports_undo_redo_or_clear_cancel_reset_revert
+        - validation_error_projection_explains_cause_target_node_and_repair_suggestion
+        - internal_layout_vocabulary_is_translated_in_normal_view_and_raw_terms_are_advanced_only
+        - drag_move_resize_and_reorder_have_keyboard_or_button_alternatives
+        - focus_order_focus_visible_target_size_and_status_messages_are_repeatably_verifiable
+        - empty_state_template_and_example_flow_support_first_run_users
+        - css_token_selection_has_visual_preview_and_before_after_diff
+        - frontend_remains_projection_surface_without_topology_judgment
+        - preview_validate_apply_and_no_direct_DB_write_boundary_is_preserved
+      known_gap_ref:
+        - frontend_projection_surface_general_ux_acceptance_bundle remains open in .agent/tasks/todo.md
 
     frontend.admin_routes:
       status: partial
