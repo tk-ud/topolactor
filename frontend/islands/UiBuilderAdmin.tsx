@@ -144,6 +144,17 @@ type PaletteEntry = {
 
 type TabId = "ci" | "catalog" | "bucket" | "css" | "layout";
 
+// Gap 1: Lifecycle state machine
+type LifecyclePhase =
+  | "idle"
+  | "previewing" | "previewed"
+  | "validating" | "validated"
+  | "applying" | "applied_ok" | "applied_fail"
+  | "persisted";
+
+// Gap 2: History snapshot for undo/redo
+type HistorySnapshot = { nodes: DraftNode[]; label: string };
+
 // ─── アコーディオン ──────────────────────────────────────────────────────────
 
 // deno-lint-ignore no-explicit-any
@@ -290,6 +301,35 @@ const SNAP_SIZE = 10;
 const DEFAULT_NODE_WIDTH = 140;
 const DEFAULT_NODE_HEIGHT = 60;
 const CANVAS_MIN_HEIGHT = 400;
+const MAX_HISTORY = 50;
+
+// Gap 3: Error code → actionable cause + fix
+const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string }> = {
+  DRAFT_ONLY_NODES: {
+    cause: "未登録コンポーネントが含まれています",
+    suggestion: "「バケット管理」タブで対象コンポーネントをプロモートしてください",
+  },
+  LAYOUT_NOT_FOUND: {
+    cause: "レイアウトIDが見つかりません",
+    suggestion: "ルート/レイアウト選択を確認し、再選択してください",
+  },
+  ROUTE_NOT_FOUND: {
+    cause: "ルートキーが存在しません",
+    suggestion: "先にコンポーネントをバケット登録してルートを作成してください",
+  },
+  CSS_TOKEN_INVALID: {
+    cause: "CSSトークン参照が無効です",
+    suggestion: "「CSS トークン」タブで正しいトークンを選択してください",
+  },
+  LAYOUT_CLASS_REF_INVALID: {
+    cause: "レイアウトクラス参照が解決できません",
+    suggestion: "topology layout class ref を確認し、有効なキーを選択してください",
+  },
+  LAYOUT_CANDIDATES_LOAD_FAILED: {
+    cause: "レイアウト候補の取得に失敗しました",
+    suggestion: "バックエンド接続と認証トークンを確認してください",
+  },
+};
 
 function deriveCandidatesFromPalette(promoted: PromotedPaletteEntry[]): LayoutRouteCandidate[] {
   const seen = new Set<string>();
@@ -428,6 +468,102 @@ function projectLayoutPatchSummary(
 }
 
 // deno-lint-ignore no-explicit-any
+// Gap 1: Lifecycle step indicator — draft → validated → applied → persisted
+function LifecycleStepIndicator({ phase }: { phase: LifecyclePhase }): JSX.Element {
+  const steps: { id: string; label: string; phases: LifecyclePhase[] }[] = [
+    { id: "draft", label: "ドラフト編集", phases: ["idle", "previewing", "previewed"] },
+    { id: "validated", label: "検証済み", phases: ["validating", "validated"] },
+    { id: "applied", label: "適用済み", phases: ["applying", "applied_ok", "applied_fail"] },
+    { id: "persisted", label: "永続化完了", phases: ["persisted"] },
+  ];
+  const currentIdx = steps.findIndex((s) => s.phases.includes(phase));
+  const isError = phase === "applied_fail";
+
+  return (
+    <div class="mb-4" role="status" aria-label={`現在のフェーズ: ${steps[Math.max(0, currentIdx)]?.label ?? phase}`}>
+      <div class="flex items-center gap-0">
+        {steps.map((step, i) => {
+          const isDone = i < currentIdx;
+          const isCurrent = i === currentIdx;
+          const isErrorStep = isCurrent && isError;
+          return (
+            <div key={step.id} class="flex flex-1 flex-col items-center">
+              <div class="flex w-full items-center">
+                {i > 0 && (
+                  <div class={`h-0.5 flex-1 ${isDone ? "bg-blue-500" : "bg-gray-200"}`} />
+                )}
+                <div
+                  class={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                    isErrorStep ? "bg-red-500 text-white"
+                    : isCurrent ? "bg-blue-600 text-white ring-2 ring-blue-300 ring-offset-1"
+                    : isDone ? "bg-blue-500 text-white"
+                    : "border-2 border-gray-300 bg-white text-gray-400"
+                  }`}
+                  aria-current={isCurrent ? "step" : undefined}
+                >
+                  {isDone ? "✓" : isErrorStep ? "✗" : String(i + 1)}
+                </div>
+                {i < steps.length - 1 && (
+                  <div class={`h-0.5 flex-1 ${isDone ? "bg-blue-500" : "bg-gray-200"}`} />
+                )}
+              </div>
+              <div class={`mt-1 text-center text-[0.65rem] font-medium ${
+                isErrorStep ? "text-red-600"
+                : isCurrent ? "text-blue-700"
+                : isDone ? "text-blue-500"
+                : "text-gray-400"
+              }`}>
+                {step.label}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Gap 3: Actionable validation errors with cause + fix suggestion
+function ActionableValidationErrorPanel({
+  errors,
+  title,
+  affectedNodeKey,
+}: {
+  errors: { code: string; message: string }[];
+  title?: string;
+  affectedNodeKey?: string;
+}): JSX.Element | null {
+  if (errors.length === 0) return null;
+  return (
+    <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
+      {title && <div class="mb-2 font-semibold text-red-800">{title}</div>}
+      {affectedNodeKey && (
+        <div class="mb-2 rounded border border-red-200 bg-white px-2 py-1 font-mono text-xs text-red-700">
+          影響ノード: <code>{affectedNodeKey}</code>
+        </div>
+      )}
+      <ul class="space-y-2 pl-0">
+        {errors.map((e, i) => {
+          const fix = ERROR_CODE_FIX[e.code] ?? null;
+          return (
+            <li key={e.code ?? String(i)} class="flex flex-col gap-0.5">
+              <span class="font-medium text-red-700">
+                {fix?.cause ?? e.message}
+              </span>
+              {fix && (
+                <span class="text-xs text-red-600">
+                  修正方法: {fix.suggestion}
+                </span>
+              )}
+              <span class="font-mono text-[0.65rem] text-gray-400">[{e.code}]</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 function AdvancedManualOverride({
   title,
   children,
@@ -611,6 +747,35 @@ function RouteLayoutSelector({
   );
 }
 
+// Gap 8: CSS token visual swatch
+function CssTokenSwatch({ token }: { token: { category: string; property: string; semanticRole: string } }): JSX.Element {
+  if (token.category === "color") {
+    const roleColorMap: Record<string, string> = {
+      primary_action: "#2563eb",
+      secondary_action: "#6b7280",
+      danger_action: "#dc2626",
+    };
+    const bg = roleColorMap[token.semanticRole] ?? "#e5e7eb";
+    return (
+      <span
+        class="inline-block h-4 w-4 rounded border border-gray-300 align-middle"
+        style={{ backgroundColor: bg }}
+        aria-label={`色プレビュー: ${token.semanticRole}`}
+      />
+    );
+  }
+  if (token.category === "spacing") {
+    return <span class="inline-block h-3 w-3 rounded-sm border border-dashed border-gray-400 align-middle" aria-label="スペーシングプレビュー" />;
+  }
+  if (token.category === "radius") {
+    return <span class="inline-block h-4 w-4 rounded-full border border-gray-400 align-middle" aria-label="角丸プレビュー" />;
+  }
+  if (token.category === "typography") {
+    return <span class="font-mono text-[0.6rem] text-gray-500 align-middle">Aa</span>;
+  }
+  return <span class="text-[0.6rem] text-gray-400">{token.property.slice(0, 3)}</span>;
+}
+
 function CssTokenPicker({
   selectedTokenRefs,
   onToggle,
@@ -641,68 +806,85 @@ function CssTokenPicker({
         <input
           value={tokenFilter}
           onInput={(e) => setTokenFilter((e.target as HTMLInputElement).value)}
-          placeholder="tokenKey 検索"
+          placeholder="トークン名で検索"
           class="input-mono flex-1 text-xs"
+          aria-label="CSSトークンを検索"
         />
-        <select value={categoryFilter} onChange={(e) => setCategoryFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs" aria-label="カテゴリでフィルター">
           <option value="">カテゴリ（すべて）</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select value={scopeFilter} onChange={(e) => setScopeFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">componentScope（すべて）</option>
+        <select value={scopeFilter} onChange={(e) => setScopeFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs" aria-label="スコープでフィルター">
+          <option value="">対象コンポーネント（すべて）</option>
           {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">semanticRole（すべて）</option>
+        <select value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs" aria-label="役割でフィルター">
+          <option value="">役割（すべて）</option>
           {roles.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </div>
 
+      {/* Gap 8: before/after visual diff for selected tokens */}
       {selectedTokenRefs.length > 0 && (
-        <div class="mb-2 rounded border border-blue-200 bg-blue-50 p-2">
-          <strong class="text-xs">選択済み ({selectedTokenRefs.length})</strong>
-          <div class="mt-1 flex flex-wrap gap-1">
-            {selectedTokenRefs.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onToggle(key)}
-                class="rounded border border-blue-400 bg-white px-1.5 py-0.5 font-mono text-xs hover:bg-red-50"
-                title="クリックで解除"
-              >
-                {key} ✕
-              </button>
-            ))}
+        <div class="mb-3 rounded border border-blue-200 bg-blue-50 p-2">
+          <strong class="text-xs text-blue-800">選択済みトークン ({selectedTokenRefs.length}) — クリックで解除</strong>
+          <div class="mt-2 flex flex-wrap gap-2">
+            {selectedTokenRefs.map((key) => {
+              const token = CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onToggle(key)}
+                  class="flex items-center gap-1.5 rounded border border-blue-400 bg-white px-2 py-1 font-mono text-xs hover:border-red-400 hover:bg-red-50"
+                  title={`${key} — クリックで選択解除`}
+                  aria-label={`${key}を選択解除`}
+                >
+                  {token && <CssTokenSwatch token={token} />}
+                  <span>{key}</span>
+                  <span class="text-gray-400">✕</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
 
-      <div class="table-wrap max-h-64 overflow-y-auto">
+      <div class="table-wrap max-h-64 overflow-y-auto" role="region" aria-label="CSSトークン一覧">
         <table class="table font-mono text-xs">
           <thead>
             <tr>
-              {["選択", "トークンキー", "カテゴリ", "スコープ", "役割", "プロパティ"].map((h) => (
-                <th key={h}>{h}</th>
+              {["", "プレビュー", "トークンキー", "カテゴリ", "対象", "CSSプロパティ"].map((h) => (
+                <th key={h} scope="col">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t) => (
-              <tr key={t.tokenKey} class={selectedTokenRefs.includes(t.tokenKey) ? "bg-blue-50" : ""}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedTokenRefs.includes(t.tokenKey)}
-                    onChange={() => onToggle(t.tokenKey)}
-                  />
-                </td>
-                <td><code>{t.tokenKey}</code></td>
-                <td>{t.category}</td>
-                <td>{t.componentScope.join(",")}</td>
-                <td>{t.semanticRole}</td>
-                <td>{t.property}</td>
-              </tr>
-            ))}
+            {filtered.map((t) => {
+              const isSelected = selectedTokenRefs.includes(t.tokenKey);
+              return (
+                <tr
+                  key={t.tokenKey}
+                  class={isSelected ? "bg-blue-50" : "hover:bg-gray-50"}
+                  onClick={() => onToggle(t.tokenKey)}
+                  style={{ cursor: "pointer" }}
+                >
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggle(t.tokenKey)}
+                      aria-label={`${t.tokenKey}を選択`}
+                    />
+                  </td>
+                  <td><CssTokenSwatch token={t} /></td>
+                  <td><code>{t.tokenKey}</code></td>
+                  <td>{t.category}</td>
+                  <td>{t.componentScope.join(", ")}</td>
+                  <td class="text-gray-600">{t.property}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1471,16 +1653,23 @@ function CssTokenSelectorSection(): JSX.Element {
 // ─── v2 ビジュアルキャンバスコンポーネント ────────────────────────────────────
 
 const RESIZE_HANDLE_STYLE: Record<ResizeDir, Record<string, string>> = {
-  nw: { top: "-4px", left: "-4px", cursor: "nw-resize" },
-  n: { top: "-4px", left: "50%", transform: "translateX(-50%)", cursor: "n-resize" },
-  ne: { top: "-4px", right: "-4px", cursor: "ne-resize" },
-  w: { top: "50%", left: "-4px", transform: "translateY(-50%)", cursor: "w-resize" },
-  e: { top: "50%", right: "-4px", transform: "translateY(-50%)", cursor: "e-resize" },
-  sw: { bottom: "-4px", left: "-4px", cursor: "sw-resize" },
-  s: { bottom: "-4px", left: "50%", transform: "translateX(-50%)", cursor: "s-resize" },
-  se: { bottom: "-4px", right: "-4px", cursor: "se-resize" },
+  nw: { top: "-6px", left: "-6px", cursor: "nw-resize" },
+  n: { top: "-6px", left: "50%", transform: "translateX(-50%)", cursor: "n-resize" },
+  ne: { top: "-6px", right: "-6px", cursor: "ne-resize" },
+  w: { top: "50%", left: "-6px", transform: "translateY(-50%)", cursor: "w-resize" },
+  e: { top: "50%", right: "-6px", transform: "translateY(-50%)", cursor: "e-resize" },
+  sw: { bottom: "-6px", left: "-6px", cursor: "sw-resize" },
+  s: { bottom: "-6px", left: "50%", transform: "translateX(-50%)", cursor: "s-resize" },
+  se: { bottom: "-6px", right: "-6px", cursor: "se-resize" },
 };
 
+const RESIZE_DIR_LABEL: Record<ResizeDir, string> = {
+  nw: "左上リサイズ", n: "上リサイズ", ne: "右上リサイズ",
+  w: "左リサイズ", e: "右リサイズ",
+  sw: "左下リサイズ", s: "下リサイズ", se: "右下リサイズ",
+};
+
+// Gap 6: Accessible resize handle — 12×12px visible, with keyboard support
 function ResizeHandle({
   dir,
   onMouseDown,
@@ -1490,11 +1679,23 @@ function ResizeHandle({
 }): JSX.Element {
   return (
     <div
-      class="absolute z-20 h-2 w-2 rounded-sm border border-blue-600 bg-white"
+      role="button"
+      tabIndex={0}
+      aria-label={RESIZE_DIR_LABEL[dir]}
+      class="absolute z-20 h-3 w-3 rounded-sm border-2 border-blue-600 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
       style={RESIZE_HANDLE_STYLE[dir]}
       onMouseDown={(e: Event) => { e.stopPropagation(); onMouseDown(e); }}
+      onKeyDown={(e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onMouseDown(e as unknown as Event); }
+      }}
     />
   );
+}
+
+// Gap 4/6: Friendly component display name (hide raw key detail unless needed)
+function friendlyComponentLabel(componentKey: string): string {
+  const parts = componentKey.split("/");
+  return parts[parts.length - 1] ?? componentKey;
 }
 
 function VisualLayoutNode({
@@ -1508,6 +1709,8 @@ function VisualLayoutNode({
   onSelect,
   onNodeMouseDown,
   onResizeHandleMouseDown,
+  onKeyboardMove,
+  onDelete,
 }: {
   node: DraftNode;
   isSelected: boolean;
@@ -1519,16 +1722,25 @@ function VisualLayoutNode({
   onSelect: () => void;
   onNodeMouseDown: (e: Event) => void;
   onResizeHandleMouseDown: (e: Event, dir: ResizeDir) => void;
+  onKeyboardMove?: (dx: number, dy: number) => void;
+  onDelete?: () => void;
 }): JSX.Element {
+  const STEP = 10;
+  const BIG_STEP = 50;
+
   return (
     <div
-      class={`absolute select-none rounded border-2 font-mono text-xs ${
+      role="button"
+      tabIndex={0}
+      aria-selected={isSelected}
+      aria-label={`${friendlyComponentLabel(node.componentKey)}${node.isDraftOnly ? " (ドラフト)" : ""}${node.slotKey ? ` スロット:${node.slotKey}` : ""} 位置(${displayX},${displayY}) サイズ(${displayW}×${displayH})`}
+      class={`absolute select-none rounded border-2 font-mono text-xs transition-shadow ${
         isSelected
-          ? "border-blue-600 shadow-md"
+          ? "border-blue-600 shadow-lg ring-2 ring-blue-300 ring-offset-1"
           : node.isDraftOnly
-          ? "border-yellow-300"
-          : "border-blue-200"
-      } ${node.isDraftOnly ? "bg-yellow-50" : "bg-white"}`}
+          ? "border-yellow-300 hover:border-yellow-500"
+          : "border-blue-200 hover:border-blue-400"
+      } ${node.isDraftOnly ? "bg-yellow-50" : "bg-white"} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
       style={{
         left: `${displayX}px`,
         top: `${displayY}px`,
@@ -1540,17 +1752,29 @@ function VisualLayoutNode({
       }}
       onClick={(e: Event) => { (e as MouseEvent).stopPropagation(); onSelect(); }}
       onMouseDown={onNodeMouseDown}
+      onKeyDown={(e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); return; }
+        if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); onDelete?.(); return; }
+        if (e.key === "Escape") { e.preventDefault(); (e.currentTarget as HTMLElement).blur(); return; }
+        const step = e.shiftKey ? BIG_STEP : STEP;
+        if (e.key === "ArrowLeft") { e.preventDefault(); onKeyboardMove?.(-step, 0); }
+        if (e.key === "ArrowRight") { e.preventDefault(); onKeyboardMove?.(step, 0); }
+        if (e.key === "ArrowUp") { e.preventDefault(); onKeyboardMove?.(0, -step); }
+        if (e.key === "ArrowDown") { e.preventDefault(); onKeyboardMove?.(0, step); }
+      }}
     >
       <div class="flex h-full flex-col overflow-hidden p-1">
-        <div class="truncate font-bold leading-tight">{node.componentKey}</div>
+        <div class="truncate font-bold leading-tight" title={node.componentKey}>
+          {friendlyComponentLabel(node.componentKey)}
+        </div>
         {node.isDraftOnly && (
-          <span class="text-[0.58rem] text-yellow-700">ドラフト — 適用ブロック</span>
+          <span class="text-[0.58rem] text-yellow-700 font-medium">⚠ 未登録 — 適用ブロック</span>
         )}
         {node.slotKey && (
-          <span class="truncate text-[0.58rem] text-gray-500">slot:{node.slotKey}</span>
+          <span class="truncate text-[0.58rem] text-gray-500">配置: {node.slotKey}</span>
         )}
         <span class="mt-auto text-[0.55rem] text-gray-300">
-          {displayX},{displayY} {displayW}×{displayH}
+          {displayW}×{displayH}
         </span>
       </div>
       {isSelected && !isDragging && (
@@ -1584,6 +1808,9 @@ function VisualLayoutCanvas({
   onCanvasMouseUp,
   onDragOver,
   onDrop,
+  onKeyboardMoveNode,
+  onDeleteNode,
+  onAddFromEmptyState,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -1601,6 +1828,9 @@ function VisualLayoutCanvas({
   onCanvasMouseUp: () => void;
   onDragOver: (e: Event) => void;
   onDrop: (e: Event) => void;
+  onKeyboardMoveNode: (nodeId: string, dx: number, dy: number) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onAddFromEmptyState?: (templateId: string) => void;
 }): JSX.Element {
   const gridStyle = showGrid
     ? {
@@ -1614,7 +1844,9 @@ function VisualLayoutCanvas({
   return (
     <div
       ref={canvasRef}
-      class="relative overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white"
+      role="application"
+      aria-label="レイアウトキャンバス — ノードをドラッグして配置。キーボード: 矢印キーで移動、Delete で削除、Tab でノードを切り替え"
+      class="relative overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white focus-within:border-blue-300"
       style={{ minHeight: `${CANVAS_MIN_HEIGHT}px`, ...gridStyle }}
       onClick={onDeselectAll}
       onMouseMove={onCanvasMouseMove}
@@ -1623,9 +1855,41 @@ function VisualLayoutCanvas({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {/* Gap 7: First-run empty state with quick-start actions */}
       {draftNodes.length === 0 && (
-        <div class="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-sm text-gray-300">
-          パレットからコンポーネントをドラッグしてください
+        <div class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+          <div class="text-4xl text-gray-200" aria-hidden="true">☐</div>
+          <div>
+            <p class="text-base font-semibold text-gray-500">キャンバスが空です</p>
+            <p class="mt-1 text-sm text-gray-400">
+              左のパレットからドラッグするか、下のボタンでコンポーネントを追加してください
+            </p>
+          </div>
+          {onAddFromEmptyState && (
+            <div class="flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => onAddFromEmptyState("starter_header_main")}
+                class="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                ヘッダー + メイン を追加
+              </button>
+              <button
+                type="button"
+                onClick={() => onAddFromEmptyState("starter_card")}
+                class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                カードを追加
+              </button>
+              <button
+                type="button"
+                onClick={() => onAddFromEmptyState("starter_form")}
+                class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                フォームを追加
+              </button>
+            </div>
+          )}
         </div>
       )}
       {draftNodes.map((node) => {
@@ -1643,6 +1907,8 @@ function VisualLayoutCanvas({
             onSelect={() => onSelectNode(node.nodeId)}
             onNodeMouseDown={(e) => onNodeMouseDown(e, node.nodeId)}
             onResizeHandleMouseDown={(e, dir) => onResizeHandleMouseDown(e, node.nodeId, dir)}
+            onKeyboardMove={(dx, dy) => onKeyboardMoveNode(node.nodeId, dx, dy)}
+            onDelete={() => onDeleteNode(node.nodeId)}
           />
         );
       })}
@@ -1672,7 +1938,12 @@ function LayerTree({
           レイヤー ({draftNodes.length})
         </h4>
       </div>
-      <div class="overflow-y-auto" style="max-height:300px;">
+      <div
+        role="listbox"
+        aria-label="レイヤー一覧"
+        class="overflow-y-auto"
+        style="max-height:300px;"
+      >
         {draftNodes.length === 0 && (
           <p class="px-2 py-4 text-center text-xs text-gray-400">なし</p>
         )}
@@ -1682,8 +1953,15 @@ function LayerTree({
           return (
             <div
               key={node.nodeId}
+              role="option"
+              aria-selected={isSelected}
+              tabIndex={0}
               onClick={() => onSelect(node.nodeId)}
-              class={`flex cursor-pointer items-center gap-1 border-b border-gray-100 px-1.5 py-1 text-xs ${
+              onKeyDown={(e: KeyboardEvent) => {
+                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.nodeId); }
+                if (e.key === "Delete") { e.preventDefault(); onDelete(node.nodeId); }
+              }}
+              class={`flex cursor-pointer items-center gap-1 border-b border-gray-100 px-1.5 py-1 text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 ${
                 isSelected ? "bg-blue-50" : "hover:bg-gray-50"
               }`}
             >
@@ -1691,28 +1969,34 @@ function LayerTree({
                 class={`h-2 w-2 shrink-0 rounded-sm ${
                   node.isDraftOnly ? "bg-yellow-400" : "bg-blue-400"
                 }`}
+                aria-hidden="true"
               />
-              <span class="flex-1 truncate font-mono">{node.componentKey}</span>
+              <span class="flex-1 truncate font-mono" title={node.componentKey}>
+                {friendlyComponentLabel(node.componentKey)}
+              </span>
               <div class="flex shrink-0 gap-0.5">
                 <button
                   type="button"
                   onClick={(e: Event) => { e.stopPropagation(); onMoveUp(node.nodeId); }}
                   disabled={origIdx === draftNodes.length - 1}
-                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30 focus-visible:ring-1 focus-visible:ring-blue-400"
                   title="前面へ"
+                  aria-label={`${friendlyComponentLabel(node.componentKey)}を前面へ`}
                 >▲</button>
                 <button
                   type="button"
                   onClick={(e: Event) => { e.stopPropagation(); onMoveDown(node.nodeId); }}
                   disabled={origIdx === 0}
-                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30 focus-visible:ring-1 focus-visible:ring-blue-400"
                   title="背面へ"
+                  aria-label={`${friendlyComponentLabel(node.componentKey)}を背面へ`}
                 >▼</button>
                 <button
                   type="button"
                   onClick={(e: Event) => { e.stopPropagation(); onDelete(node.nodeId); }}
-                  class="rounded px-0.5 text-[0.65rem] text-red-400 hover:text-red-600"
+                  class="rounded px-0.5 text-[0.65rem] text-red-400 hover:text-red-600 focus-visible:ring-1 focus-visible:ring-red-400"
                   title="削除"
+                  aria-label={`${friendlyComponentLabel(node.componentKey)}を削除`}
                 >✕</button>
               </div>
             </div>
@@ -1722,6 +2006,14 @@ function LayerTree({
     </div>
   );
 }
+
+// Gap 4: Friendly field labels for CanvasInspector
+const FIELD_LABELS: Record<string, string> = {
+  x: "左端の位置 (px)",
+  y: "上端の位置 (px)",
+  width: "幅 (px)",
+  height: "高さ (px)",
+};
 
 function CanvasInspector({
   node,
@@ -1743,7 +2035,7 @@ function CanvasInspector({
   const handleParentChange = (value: string) => {
     const parentId = value || null;
     if (parentId && wouldCreateParentCycle(draftNodes, node.nodeId, parentId)) {
-      setParentCycleError("循環参照になる親は選択できません。");
+      setParentCycleError("その親を選択すると循環参照になります。別のノードを選択してください。");
       return;
     }
     setParentCycleError(null);
@@ -1765,24 +2057,42 @@ function CanvasInspector({
 
   return (
     <div
+      role="complementary"
+      aria-label={`${friendlyComponentLabel(node.componentKey)} のプロパティ`}
       class="w-52 shrink-0 overflow-y-auto rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs"
       style="max-height:440px;"
     >
       <div class="mb-2 flex items-center justify-between">
-        <strong class="text-sm">インスペクター</strong>
-        <button type="button" onClick={onClose} class="btn-secondary px-1.5 py-0 text-xs">✕</button>
-      </div>
-      <div class="mb-2">
-        <code class="text-xs">{node.componentKey}</code>
-        {node.isDraftOnly && <span class="badge-warn ml-1">ドラフト</span>}
+        <strong class="text-sm">プロパティ</strong>
+        <button
+          type="button"
+          onClick={onClose}
+          class="btn-secondary px-1.5 py-0 text-xs"
+          aria-label="プロパティパネルを閉じる"
+        >✕</button>
       </div>
 
-      <div class="mb-2">
-        <div class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">位置・サイズ</div>
+      {/* Gap 4: Friendly name first, technical key in details */}
+      <div class="mb-3 rounded border border-blue-200 bg-white p-1.5">
+        <div class="font-bold text-blue-900">{friendlyComponentLabel(node.componentKey)}</div>
+        {node.isDraftOnly && (
+          <div class="mt-0.5 text-[0.65rem] font-medium text-yellow-700">
+            ⚠ 未登録コンポーネント — 適用前にプロモートが必要です
+          </div>
+        )}
+        <details class="mt-1">
+          <summary class="cursor-pointer text-[0.6rem] text-gray-400">技術情報</summary>
+          <code class="text-[0.6rem] text-gray-500 break-all">{node.componentKey}</code>
+        </details>
+      </div>
+
+      {/* Gap 4: Friendly position/size labels */}
+      <fieldset class="mb-2">
+        <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">位置・サイズ</legend>
         <div class="grid grid-cols-2 gap-1">
           {(["x", "y", "width", "height"] as const).map((f) => (
             <label key={f} class="flex flex-col gap-0.5">
-              <span class="text-[0.65rem]">{f.toUpperCase()}</span>
+              <span class="text-[0.65rem] text-gray-600">{FIELD_LABELS[f]}</span>
               <input
                 type="number"
                 value={node[f]}
@@ -1790,54 +2100,64 @@ function CanvasInspector({
                 step={SNAP_SIZE}
                 onInput={(e) => handleNum(f, (e.target as HTMLInputElement).value, true)}
                 class="input px-1 py-0.5"
+                aria-label={FIELD_LABELS[f]}
               />
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
 
-      <div class="mb-2 flex flex-col gap-1.5">
+      <fieldset class="mb-2 flex flex-col gap-1.5">
+        <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">配置設定</legend>
+
+        {/* Gap 4: "親コンポーネント" instead of "parentNodeId" */}
         <label class="flex flex-col gap-0.5">
-          親ノード
+          <span class="text-[0.65rem] text-gray-600">親コンポーネント</span>
           <select
             value={node.parentNodeId ?? ""}
             onChange={(e) => handleParentChange((e.target as HTMLSelectElement).value)}
             class="input px-1 py-0.5 text-xs"
+            aria-label="親コンポーネントを選択"
           >
-            <option value="">(none / top-level)</option>
+            <option value="">(なし — トップレベル)</option>
             {parentOptions.map((n) => {
               const cyclic = wouldCreateParentCycle(draftNodes, node.nodeId, n.nodeId);
               return (
                 <option key={n.nodeId} value={n.nodeId} disabled={cyclic}>
-                  {n.componentKey} · {shortId(n.nodeId)}
-                  {cyclic ? " (循環)" : ""}
+                  {friendlyComponentLabel(n.componentKey)}
+                  {cyclic ? " (循環参照になるため不可)" : ""}
                 </option>
               );
             })}
           </select>
         </label>
-        {parentCycleError && <p class="m-0 text-red-600">{parentCycleError}</p>}
+        {parentCycleError && (
+          <p class="m-0 rounded bg-red-50 px-1.5 py-1 text-red-600" role="alert">{parentCycleError}</p>
+        )}
 
+        {/* Gap 4: "配置スロット" instead of "slotKey" */}
         <label class="flex flex-col gap-0.5">
-          スロットキー
+          <span class="text-[0.65rem] text-gray-600">配置スロット</span>
           <select
             value={node.slotKey}
             onChange={(e) => onUpdate({ slotKey: (e.target as HTMLSelectElement).value })}
             class="input px-1 py-0.5 text-xs"
+            aria-label="配置スロットを選択"
           >
             {slotKeyCandidates.map((sk) => (
-              <option key={sk || "__empty__"} value={sk}>{sk || "(空)"}</option>
+              <option key={sk || "__empty__"} value={sk}>{sk || "(デフォルト)"}</option>
             ))}
           </select>
         </label>
 
-        <AdvancedManualOverride title="manual slotKey">
+        <AdvancedManualOverride title="カスタムスロットを直接入力">
           <div class="flex gap-1">
             <input
               value={manualSlotKey}
               onInput={(e) => setManualSlotKey((e.target as HTMLInputElement).value)}
-              placeholder="カスタム slotKey"
+              placeholder="スロット名を入力"
               class="input-mono flex-1 px-1 py-0.5 text-xs"
+              aria-label="カスタム配置スロット名"
             />
             <button
               type="button"
@@ -1848,27 +2168,30 @@ function CanvasInspector({
             </button>
           </div>
         </AdvancedManualOverride>
-      </div>
+      </fieldset>
 
-      <div class="flex flex-col gap-1">
-        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">グリッド</div>
+      {/* Gap 4: Friendly grid labels */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">グリッド位置</legend>
         <label class="flex flex-col gap-0.5">
-          列 (1–12)
+          <span class="text-[0.65rem] text-gray-600">列 (1〜12)</span>
           <input
             type="number" min={1} max={12} value={node.gridCol}
             onInput={(e) => handleNum("gridCol", (e.target as HTMLInputElement).value)}
             class="input px-1 py-0.5"
+            aria-label="グリッド列 (1〜12)"
           />
         </label>
         <label class="flex flex-col gap-0.5">
-          行
+          <span class="text-[0.65rem] text-gray-600">行</span>
           <input
             type="number" min={1} value={node.gridRow}
             onInput={(e) => handleNum("gridRow", (e.target as HTMLInputElement).value)}
             class="input px-1 py-0.5"
+            aria-label="グリッド行"
           />
         </label>
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -1877,43 +2200,83 @@ function CanvasInspector({
 
 function LayoutPalette({
   onDragStart,
+  onAddToCanvas,
   entries,
   status,
 }: {
   onDragStart: (entry: PaletteEntry) => void;
+  onAddToCanvas: (entry: PaletteEntry) => void;
   entries: PaletteEntry[];
   status: string | null;
 }): JSX.Element {
+  const [filter, setFilter] = useState("");
+  const filtered = filter
+    ? entries.filter((e) =>
+        e.componentKey.toLowerCase().includes(filter.toLowerCase()) ||
+        e.componentKind.toLowerCase().includes(filter.toLowerCase())
+      )
+    : entries;
+
   return (
-    <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[340px]">
-      <h4 class="mb-1 text-sm font-semibold">パレット</h4>
-      <p class="mb-1 text-[0.68rem] text-muted-xs">
-        キャンバスにドラッグ。<strong class="text-yellow-700">(ドラフト)</strong> = 未登録 —
-        コンポーネントバケットでプロモートするまで適用はブロックされます。
+    <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[480px]">
+      <h4 class="mb-1 text-sm font-semibold">コンポーネント</h4>
+
+      {/* Gap 5: Filter so users can find components without scrolling */}
+      <input
+        value={filter}
+        onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
+        placeholder="絞り込み..."
+        class="mb-1 w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
+        aria-label="パレットのコンポーネントを絞り込み"
+      />
+
+      <p class="mb-1.5 text-[0.62rem] text-gray-500">
+        ドラッグ or「追加」ボタンで配置
       </p>
-      {status && <p class="text-[0.65rem] text-muted-xs">{status}</p>}
-      {entries.map((c) => {
+      {status && <p class="text-[0.62rem] text-gray-400">{status}</p>}
+
+      {filtered.length === 0 && (
+        <p class="py-3 text-center text-[0.65rem] text-gray-400">該当なし</p>
+      )}
+
+      {filtered.map((c) => {
         const draftOnly = c.isDraftOnly;
         return (
           <div
             key={c.componentKey}
-            draggable={true}
-            onDragStart={() => onDragStart(c)}
-            class={`mb-0.5 cursor-grab rounded border px-1.5 py-1 font-mono text-xs ${
-              draftOnly
-                ? "border-yellow-300 bg-yellow-50"
-                : "border-blue-200 bg-blue-50"
+            class={`mb-1 rounded border font-mono text-xs ${
+              draftOnly ? "border-yellow-300 bg-yellow-50" : "border-blue-200 bg-blue-50"
             }`}
           >
-            <div class="font-bold">
-              {c.componentKey}
-              {draftOnly && (
-                <span class="ml-1 font-normal text-yellow-700">
-                  (ドラフト)
-                </span>
-              )}
+            {/* Drag target area */}
+            <div
+              draggable={true}
+              onDragStart={() => onDragStart(c)}
+              class="cursor-grab px-1.5 pt-1 pb-0.5"
+              aria-label={`${friendlyComponentLabel(c.componentKey)}をドラッグ`}
+              title="ドラッグしてキャンバスへ"
+            >
+              <div class="font-bold truncate" title={c.componentKey}>
+                {friendlyComponentLabel(c.componentKey)}
+                {draftOnly && (
+                  <span class="ml-1 font-normal text-yellow-700 text-[0.6rem]">⚠未登録</span>
+                )}
+              </div>
+              <div class="text-[0.62rem] text-gray-500">{c.componentKind}</div>
             </div>
-            <div class="text-[0.65rem] text-gray-500">{c.componentKind}</div>
+            {/* Gap 5: Non-drag "追加" button */}
+            <button
+              type="button"
+              onClick={() => onAddToCanvas(c)}
+              class={`w-full rounded-b border-t px-1.5 py-0.5 text-[0.65rem] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                draftOnly
+                  ? "border-yellow-200 text-yellow-700 hover:bg-yellow-100"
+                  : "border-blue-100 text-blue-700 hover:bg-blue-100"
+              }`}
+              aria-label={`${friendlyComponentLabel(c.componentKey)}をキャンバスに追加`}
+            >
+              + 追加
+            </button>
           </div>
         );
       })}
@@ -1921,134 +2284,7 @@ function LayoutPalette({
   );
 }
 
-// ─── ノードインスペクター ─────────────────────────────────────────────────────
-
-function LayoutNodeInspector({
-  node,
-  draftNodes,
-  slotKeyCandidates,
-  onUpdate,
-  onClose,
-}: {
-  node: DraftNode;
-  draftNodes: DraftNode[];
-  slotKeyCandidates: string[];
-  onUpdate: (updates: Partial<DraftNode>) => void;
-  onClose: () => void;
-}): JSX.Element {
-  const [manualSlotKey, setManualSlotKey] = useState("");
-  const [parentCycleError, setParentCycleError] = useState<string | null>(null);
-
-  const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
-
-  const handleParentChange = (value: string) => {
-    const parentId = value || null;
-    if (parentId && wouldCreateParentCycle(draftNodes, node.nodeId, parentId)) {
-      setParentCycleError("循環参照になる親は選択できません。");
-      return;
-    }
-    setParentCycleError(null);
-    onUpdate({ parentNodeId: parentId });
-  };
-
-  return (
-    <div class="w-52 shrink-0 rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs">
-      <div class="mb-2 flex items-center justify-between">
-        <strong class="text-sm">インスペクター</strong>
-        <button onClick={onClose} class="btn-secondary px-1.5 py-0 text-xs">✕</button>
-      </div>
-      <div class="mb-2 text-gray-600">
-        <code class="text-xs">{node.componentKey}</code>
-      </div>
-      <div class="flex flex-col gap-1.5">
-        <label class="flex flex-col gap-0.5">
-          親ノード
-          <select
-            value={node.parentNodeId ?? ""}
-            onChange={(e) => handleParentChange((e.target as HTMLSelectElement).value)}
-            class="input px-1 py-0.5 text-xs"
-          >
-            <option value="">(none / top-level)</option>
-            {parentOptions.map((n) => {
-              const cyclic = wouldCreateParentCycle(draftNodes, node.nodeId, n.nodeId);
-              return (
-                <option key={n.nodeId} value={n.nodeId} disabled={cyclic}>
-                  {n.componentKey} · #{n.orderIndex} · {shortId(n.nodeId)}
-                  {cyclic ? " (循環)" : ""}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-        {parentCycleError && <p class="text-red-600 m-0">{parentCycleError}</p>}
-
-        <label class="flex flex-col gap-0.5">
-          スロットキー
-          <select
-            value={node.slotKey}
-            onChange={(e) => onUpdate({ slotKey: (e.target as HTMLSelectElement).value })}
-            class="input px-1 py-0.5 text-xs"
-          >
-            {slotKeyCandidates.map((sk) => (
-              <option key={sk || "__empty__"} value={sk}>
-                {sk || "(空 — デフォルト)"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p class="text-muted-xs m-0">
-          TODO: slot metadata SSOT/API — 現在は DB tensor slot + canvas 既存値 + 一般候補
-        </p>
-
-        <AdvancedManualOverride title="manual override — slotKey">
-          <input
-            value={manualSlotKey}
-            onInput={(e) => setManualSlotKey((e.target as HTMLInputElement).value)}
-            placeholder="カスタム slotKey"
-            class="input-mono w-full px-1 py-0.5 text-xs"
-          />
-          <button
-            type="button"
-            class="btn-secondary mt-1 text-xs"
-            onClick={() => onUpdate({ slotKey: manualSlotKey })}
-          >
-            手動 slotKey を適用
-          </button>
-        </AdvancedManualOverride>
-
-        <label class="flex flex-col gap-0.5">
-          グリッド列 (1–12)
-          <input
-            type="number"
-            min={1}
-            max={12}
-            value={node.gridCol}
-            onInput={(e) => {
-              const v = parseInt((e.target as HTMLInputElement).value);
-              onUpdate({ gridCol: isNaN(v) ? 1 : v });
-            }}
-            class="input px-1 py-0.5"
-          />
-        </label>
-        <label class="flex flex-col gap-0.5">
-          グリッド行
-          <input
-            type="number"
-            min={1}
-            value={node.gridRow}
-            onInput={(e) => {
-              const v = parseInt((e.target as HTMLInputElement).value);
-              onUpdate({ gridRow: isNaN(v) ? 1 : v });
-            }}
-            class="input px-1 py-0.5"
-          />
-        </label>
-      </div>
-    </div>
-  );
-}
-
-// ─── レイアウトビルダーセクション v2 ──────────────────────────────────────────
+// ─── レイアウトビルダーセクション v2 + UX強化 ─────────────────────────────────
 
 function LayoutBuilderSection(): JSX.Element {
   // ── route/layout selection ───────────────────────────────────────────────
@@ -2060,6 +2296,18 @@ function LayoutBuilderSection(): JSX.Element {
   // ── canvas draft state ───────────────────────────────────────────────────
   const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Gap 1: Lifecycle state machine
+  const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
+
+  // Gap 2: Undo/redo history
+  const historyRef = useRef<HistorySnapshot[]>([{ nodes: [], label: "初期状態" }]);
+  const historyPtrRef = useRef(0);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+
+  // Gap 6: ARIA live region message
+  const [liveAnnouncement, setLiveAnnouncement] = useState("");
 
   // ── v2: canvas visual interaction state ─────────────────────────────────
   const [showGrid, setShowGrid] = useState(true);
@@ -2077,8 +2325,8 @@ function LayoutBuilderSection(): JSX.Element {
 
   // ── patch / status ───────────────────────────────────────────────────────
   const [patchSummary, setPatchSummary] = useState<LayoutPatchSummary | null>(null);
+  const [patchErrors, setPatchErrors] = useState<{ code: string; message: string }[]>([]);
   const [debugJson, setDebugJson] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // ── palette / layout candidates ──────────────────────────────────────────
@@ -2107,6 +2355,56 @@ function LayoutBuilderSection(): JSX.Element {
   const canPatch = Boolean(effectiveLayoutId && effectiveRouteKey);
   const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ?? null;
   const canvasPreviewClass = topologyPreviewClasses?.ok ? topologyPreviewClasses.className : "";
+
+  // ── Gap 2: History management ─────────────────────────────────────────────
+  const pushHistory = (nodes: DraftNode[], label: string) => {
+    const snapshots = historyRef.current.slice(0, historyPtrRef.current + 1);
+    snapshots.push({ nodes: nodes.map((n) => ({ ...n })), label });
+    if (snapshots.length > MAX_HISTORY) snapshots.shift();
+    historyRef.current = snapshots;
+    historyPtrRef.current = snapshots.length - 1;
+    setCanUndo(historyPtrRef.current > 0);
+    setCanRedo(false);
+  };
+
+  const undo = () => {
+    if (historyPtrRef.current <= 0) return;
+    historyPtrRef.current--;
+    const snap = historyRef.current[historyPtrRef.current];
+    setDraftNodes(snap.nodes.map((n) => ({ ...n })));
+    setCanUndo(historyPtrRef.current > 0);
+    setCanRedo(true);
+    setLifecyclePhase("idle");
+    announce(`元に戻しました: ${snap.label}`);
+  };
+
+  const redo = () => {
+    if (historyPtrRef.current >= historyRef.current.length - 1) return;
+    historyPtrRef.current++;
+    const snap = historyRef.current[historyPtrRef.current];
+    setDraftNodes(snap.nodes.map((n) => ({ ...n })));
+    setCanUndo(true);
+    setCanRedo(historyPtrRef.current < historyRef.current.length - 1);
+    setLifecyclePhase("idle");
+    announce(`やり直しました: ${snap.label}`);
+  };
+
+  // Gap 6: ARIA live region announcer
+  const announce = (msg: string) => {
+    setLiveAnnouncement("");
+    setTimeout(() => setLiveAnnouncement(msg), 10);
+  };
+
+  // ── Gap 2: Keyboard undo/redo shortcut ───────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+      if (ctrl && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+    };
+    globalThis.addEventListener("keydown", handler);
+    return () => globalThis.removeEventListener("keydown", handler);
+  }, []);
 
   // ── initial load ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -2160,23 +2458,34 @@ function LayoutBuilderSection(): JSX.Element {
   }, []);
 
   // ── layout patch (preview / validate / apply) ────────────────────────────
-  // Frontend submits intent only. Topology persistence authority: backend/DB.
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
-    setError(null);
+    setPatchErrors([]);
     setPatchSummary(null);
     setDebugJson(null);
-    if (!canPatch) { setError("layoutId と routeKey を候補から選択してください。"); return; }
+
+    if (!canPatch) {
+      setPatchErrors([{ code: "NO_ROUTE_LAYOUT", message: "ルートとレイアウトを選択してください。" }]);
+      return;
+    }
     if (action === "apply") {
       const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
       if (draftOnlyNodes.length > 0) {
-        setError(
-          `APPLY_BLOCKED: ${draftOnlyNodes.length} 件のノードに DB 登録 ID がありません。` +
-          ` 先にバケット → プロモートしてください: ${draftOnlyNodes.map((n) => n.componentKey).join(", ")}`,
-        );
+        setPatchErrors([{
+          code: "DRAFT_ONLY_NODES",
+          message: `${draftOnlyNodes.length} 件のノードがまだ未登録です: ${draftOnlyNodes.map((n) => friendlyComponentLabel(n.componentKey)).join(", ")}`,
+        }]);
+        announce(`適用ブロック: ${draftOnlyNodes.length} 件の未登録ノードがあります`);
         return;
       }
     }
+
+    const phaseMap: Record<string, LifecyclePhase> = {
+      preview: "previewing", validate: "validating", apply: "applying",
+    };
+    setLifecyclePhase(phaseMap[action] as LifecyclePhase);
     setLoading(true);
+    announce(`${action === "preview" ? "プレビュー" : action === "validate" ? "バリデート" : "適用"}を実行中...`);
+
     try {
       const body = await dispatchAdminOp("layout_patch", action, {
         layoutId: effectiveLayoutId,
@@ -2186,16 +2495,59 @@ function LayoutBuilderSection(): JSX.Element {
         responsiveTokenRefs: { md: selectedTokenRefs },
       });
       setDebugJson(JSON.stringify(body, null, 2));
-      setPatchSummary(projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey));
-      if (body?.errors?.length) setError(`${body.errors[0].code}: ${body.errors[0].message}`);
+      const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey);
+      setPatchSummary(summary);
+
+      if (body?.errors?.length) {
+        setPatchErrors(body.errors);
+        setLifecyclePhase("applied_fail");
+        announce(`エラー: ${body.errors[0].message}`);
+      } else {
+        const donePhase: Record<string, LifecyclePhase> = {
+          preview: "previewed", validate: "validated", apply: "applied_ok",
+        };
+        const isPersisted = body?.emission?.data?.persisted === true;
+        setLifecyclePhase(isPersisted ? "persisted" : donePhase[action] as LifecyclePhase);
+        announce(summary.message);
+      }
     } catch (e) {
-      setError(`${e}`);
+      setPatchErrors([{ code: "NETWORK_ERROR", message: String(e) }]);
+      setLifecyclePhase("applied_fail");
+      announce(`ネットワークエラー: ${e}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── node operations ──────────────────────────────────────────────────────
+  // ── node factory ─────────────────────────────────────────────────────────
+  const makeNewNode = (entry: PaletteEntry, x: number, y: number): DraftNode => ({
+    nodeId: makeNodeId(),
+    componentKey: entry.componentKey,
+    isDraftOnly: entry.isDraftOnly,
+    componentId: entry.componentId,
+    packageId: entry.packageId,
+    layoutId: entry.layoutId,
+    wiringId: entry.wiringId,
+    tensorId: entry.tensorId,
+    slotKey: "",
+    orderIndex: draftNodes.length,
+    parentNodeId: null,
+    gridCol: Math.max(1, Math.floor(x / 50) + 1),
+    gridRow: Math.max(1, Math.floor(y / 40) + 1),
+    x, y,
+    width: DEFAULT_NODE_WIDTH,
+    height: DEFAULT_NODE_HEIGHT,
+  });
+
+  // ── node operations (all push to history) ────────────────────────────────
+  const addNode = (newNode: DraftNode) => {
+    const next = [...draftNodes, newNode];
+    setDraftNodes(next);
+    pushHistory(next, `追加: ${friendlyComponentLabel(newNode.componentKey)}`);
+    setLifecyclePhase("idle");
+    announce(`${friendlyComponentLabel(newNode.componentKey)}をキャンバスに追加しました`);
+  };
+
   const moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
     setDraftNodes((prev) => {
       const idx = prev.findIndex((n) => n.nodeId === nodeId);
@@ -2204,20 +2556,49 @@ function LayoutBuilderSection(): JSX.Element {
       if (swapIdx < 0 || swapIdx >= prev.length) return prev;
       const next = [...prev];
       [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      return next.map((n, i) => ({ ...n, orderIndex: i }));
+      const result = next.map((n, i) => ({ ...n, orderIndex: i }));
+      pushHistory(result, `順序変更: ${friendlyComponentLabel(prev[idx].componentKey)}`);
+      return result;
     });
   };
 
   const removeNode = (nodeId: string) => {
-    setDraftNodes((prev) => prev.filter((n) => n.nodeId !== nodeId));
+    const node = draftNodes.find((n) => n.nodeId === nodeId);
+    const next = draftNodes.filter((n) => n.nodeId !== nodeId);
+    setDraftNodes(next);
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
+    pushHistory(next, `削除: ${node ? friendlyComponentLabel(node.componentKey) : nodeId}`);
+    setLifecyclePhase("idle");
+    if (node) announce(`${friendlyComponentLabel(node.componentKey)}を削除しました`);
   };
 
   const updateNode = (nodeId: string, updates: Partial<DraftNode>) => {
-    setDraftNodes((prev) => prev.map((n) => (n.nodeId === nodeId ? { ...n, ...updates } : n)));
+    setDraftNodes((prev) => {
+      const next = prev.map((n) => (n.nodeId === nodeId ? { ...n, ...updates } : n));
+      return next;
+    });
+    setLifecyclePhase("idle");
   };
 
-  // ── palette drag (HTML5) → canvas drop with coordinate placement ─────────
+  const commitNodeUpdate = (nodeId: string, updates: Partial<DraftNode>, label: string) => {
+    setDraftNodes((prev) => {
+      const next = prev.map((n) => (n.nodeId === nodeId ? { ...n, ...updates } : n));
+      pushHistory(next, label);
+      return next;
+    });
+    setLifecyclePhase("idle");
+  };
+
+  // Gap 5: Keyboard move for selected node
+  const handleKeyboardMoveNode = (nodeId: string, dx: number, dy: number) => {
+    const node = draftNodes.find((n) => n.nodeId === nodeId);
+    if (!node) return;
+    const newX = snapToGrid(Math.max(0, node.x + dx), SNAP_SIZE);
+    const newY = snapToGrid(Math.max(0, node.y + dy), SNAP_SIZE);
+    commitNodeUpdate(nodeId, { x: newX, y: newY }, `移動: ${friendlyComponentLabel(node.componentKey)}`);
+  };
+
+  // ── palette drag ─────────────────────────────────────────────────────────
   const handleDragStartPalette = (entry: PaletteEntry) => {
     dragSrc.current = { kind: "palette", entry };
   };
@@ -2235,29 +2616,49 @@ function LayoutBuilderSection(): JSX.Element {
     const dropY = rect ? snapToGrid(Math.max(0, de.clientY - rect.top), SNAP_SIZE) : 20;
     if (src.entry.routeKey && !routeKey) setRouteKey(src.entry.routeKey);
     if (src.entry.layoutId && !layoutId) setLayoutId(src.entry.layoutId);
-    const newNode: DraftNode = {
-      nodeId: makeNodeId(),
-      componentKey: src.entry.componentKey,
-      isDraftOnly: src.entry.isDraftOnly,
-      componentId: src.entry.componentId,
-      packageId: src.entry.packageId,
-      layoutId: src.entry.layoutId,
-      wiringId: src.entry.wiringId,
-      tensorId: src.entry.tensorId,
-      slotKey: "",
-      orderIndex: draftNodes.length,
-      parentNodeId: null,
-      gridCol: Math.max(1, Math.floor(dropX / 50) + 1),
-      gridRow: Math.max(1, Math.floor(dropY / 40) + 1),
-      x: dropX,
-      y: dropY,
-      width: DEFAULT_NODE_WIDTH,
-      height: DEFAULT_NODE_HEIGHT,
-    };
-    setDraftNodes((prev) => [...prev, newNode]);
+    addNode(makeNewNode(src.entry, dropX, dropY));
   };
 
-  // ── v2: mouse drag for canvas node movement ──────────────────────────────
+  // Gap 5: Non-drag add from palette button
+  const handleAddFromPalette = (entry: PaletteEntry) => {
+    const count = draftNodes.length;
+    const x = snapToGrid(20 + (count % 5) * 160, SNAP_SIZE);
+    const y = snapToGrid(20 + Math.floor(count / 5) * 80, SNAP_SIZE);
+    if (entry.routeKey && !routeKey) setRouteKey(entry.routeKey);
+    if (entry.layoutId && !layoutId) setLayoutId(entry.layoutId);
+    addNode(makeNewNode(entry, x, y));
+  };
+
+  // Gap 7: Quick-start templates from empty state
+  const handleAddFromEmptyState = (templateId: string) => {
+    const catalog = paletteEntries;
+    const pick = (key: string) => catalog.find((e) => e.componentKey.includes(key)) ?? catalog[0];
+
+    let nodes: DraftNode[] = [];
+    if (templateId === "starter_header_main" && catalog.length >= 2) {
+      const header = pick("header") ?? catalog[0];
+      const main = pick("main") ?? catalog[1] ?? catalog[0];
+      nodes = [
+        makeNewNode(header, 20, 20),
+        { ...makeNewNode(main, 20, 100), height: 200 },
+      ];
+    } else if (templateId === "starter_card" && catalog.length >= 1) {
+      nodes = [{ ...makeNewNode(pick("card") ?? catalog[0], 40, 40), width: 200, height: 100 }];
+    } else if (templateId === "starter_form" && catalog.length >= 1) {
+      const form = pick("form") ?? catalog[0];
+      nodes = [{ ...makeNewNode(form, 40, 40), width: 300, height: 200 }];
+    } else if (catalog.length >= 1) {
+      nodes = [makeNewNode(catalog[0], 40, 40)];
+    }
+
+    if (nodes.length === 0) return;
+    setDraftNodes(nodes);
+    pushHistory(nodes, `テンプレート: ${templateId}`);
+    setLifecyclePhase("idle");
+    announce(`${nodes.length} 件のコンポーネントを追加しました`);
+  };
+
+  // ── mouse drag for canvas node movement ──────────────────────────────────
   const getCanvasPos = (e: Event): { x: number; y: number } => {
     const me = e as MouseEvent;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -2311,8 +2712,12 @@ function LayoutBuilderSection(): JSX.Element {
   };
 
   const handleCanvasMouseUp = () => {
-    if (dragState.current && liveDragPos) updateNode(dragState.current.nodeId, { x: liveDragPos.x, y: liveDragPos.y });
-    if (resizeState.current && liveResizePos) updateNode(resizeState.current.nodeId, { x: liveResizePos.x, y: liveResizePos.y, width: liveResizePos.width, height: liveResizePos.height });
+    if (dragState.current && liveDragPos) {
+      commitNodeUpdate(dragState.current.nodeId, { x: liveDragPos.x, y: liveDragPos.y }, "移動");
+    }
+    if (resizeState.current && liveResizePos) {
+      commitNodeUpdate(resizeState.current.nodeId, { x: liveResizePos.x, y: liveResizePos.y, width: liveResizePos.width, height: liveResizePos.height }, "リサイズ");
+    }
     dragState.current = null;
     resizeState.current = null;
     setLiveDragPos(null);
@@ -2354,9 +2759,17 @@ function LayoutBuilderSection(): JSX.Element {
 
   return (
     <div>
-      <div class="alert-warn mb-3.5">
-        <strong>投影サーフェス境界 (v2):</strong> フロントエンドはドラフトレイアウト状態・マウスインタラクション・ビジュアルプレビューのみ保持。
-        適用は <code>layout_patch:preview → validate → apply</code> 経由 — 直接 DB 書き込み・topology 判断・promotion 判断はしません。
+      {/* Gap 6: ARIA live region for status announcements */}
+      <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
+        {liveAnnouncement}
+      </div>
+
+      {/* Gap 1: Lifecycle step indicator */}
+      <LifecycleStepIndicator phase={lifecyclePhase} />
+
+      <div class="alert-warn mb-3.5 text-xs">
+        <strong>投影サーフェス境界:</strong> フロントエンドはドラフト状態・視覚プレビュー・intent 送信のみ担当。
+        適用は <code>preview → validate → apply</code> 経由。直接 DB 書き込みは行いません。
       </div>
 
       <RouteLayoutSelector
@@ -2377,29 +2790,69 @@ function LayoutBuilderSection(): JSX.Element {
       </AdvancedManualOverride>
 
       {!canPatch && !selectorsDisabled && (
-        <p class="text-sm text-yellow-700 mb-2">ルートとレイアウトを選択してから preview / validate / apply を実行してください。</p>
+        <p class="text-sm text-yellow-700 mb-2">ルートとレイアウトを選択してから操作してください。</p>
       )}
 
-      {/* v2 canvas toolbar */}
-      <div class="mb-2 flex flex-wrap items-center gap-3 text-xs">
-        <label class="flex cursor-pointer items-center gap-1">
+      {/* Canvas toolbar — Gap 2: Undo/Redo buttons */}
+      <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
+            title="元に戻す (Ctrl+Z)"
+            aria-label="元に戻す"
+          >↩ 元に戻す</button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            class="btn-secondary py-1 px-2 text-xs disabled:opacity-40"
+            title="やり直す (Ctrl+Y)"
+            aria-label="やり直す"
+          >↪ やり直す</button>
+        </div>
+
+        <div class="h-4 w-px bg-gray-300" />
+
+        <label class="flex cursor-pointer items-center gap-1 text-xs">
           <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid((e.target as HTMLInputElement).checked)} />
-          グリッド ({SNAP_SIZE}px snap)
+          グリッド表示
         </label>
+
         {draftNodes.length > 0 && (
-          <button type="button" onClick={() => { setDraftNodes([]); setSelectedNodeId(null); }} class="btn-danger py-0 px-2 text-xs">
-            キャンバスをクリア
+          <button
+            type="button"
+            onClick={() => {
+              const next: DraftNode[] = [];
+              setDraftNodes(next);
+              setSelectedNodeId(null);
+              pushHistory(next, "キャンバスをクリア");
+              setLifecyclePhase("idle");
+              announce("キャンバスをクリアしました");
+            }}
+            class="btn-danger py-0.5 px-2 text-xs"
+            aria-label="キャンバスを全クリア"
+          >
+            クリア
           </button>
         )}
-        <span class="text-gray-400">
-          {draftNodes.length} ノード
-          {selectedNode ? ` — 選択中: ${selectedNode.componentKey}` : ""}
+
+        <span class="ml-auto text-xs text-gray-400" aria-live="polite">
+          {draftNodes.length} コンポーネント
+          {selectedNode ? ` — 選択中: ${friendlyComponentLabel(selectedNode.componentKey)}` : ""}
         </span>
       </div>
 
       {/* v2 main canvas area: palette + canvas + layer/inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
-        <LayoutPalette onDragStart={handleDragStartPalette} entries={paletteEntries} status={paletteStatus} />
+        <LayoutPalette
+          onDragStart={handleDragStartPalette}
+          onAddToCanvas={handleAddFromPalette}
+          entries={paletteEntries}
+          status={paletteStatus}
+        />
 
         <div class="min-w-0 flex-1">
           <VisualLayoutCanvas
@@ -2418,11 +2871,14 @@ function LayoutBuilderSection(): JSX.Element {
             onCanvasMouseUp={handleCanvasMouseUp}
             onDragOver={handleDragOverCanvas}
             onDrop={handleDropOnCanvas}
+            onKeyboardMoveNode={handleKeyboardMoveNode}
+            onDeleteNode={removeNode}
+            onAddFromEmptyState={handleAddFromEmptyState}
           />
         </div>
 
         {/* right panel: layer tree + inspector */}
-        <div class="flex shrink-0 flex-col gap-2" style="width:196px;">
+        <div class="flex shrink-0 flex-col gap-2" style="width:200px;">
           <LayerTree
             draftNodes={draftNodes}
             selectedNodeId={selectedNodeId}
@@ -2443,18 +2899,18 @@ function LayoutBuilderSection(): JSX.Element {
         </div>
       </div>
 
-      <Accordion title="topology layout class refs (layoutClassRefs)" defaultOpen={false}>
+      <Accordion title="レイアウトクラス参照 (topology layout class refs)" defaultOpen={false}>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
-        {layoutClassRefError && <p class="text-red-600 text-sm mt-2">{layoutClassRefError}</p>}
-        <AdvancedManualOverride title="manual override — raw classKey（理由必須: SSOT外 ref 検証用）">
+        {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
+        <AdvancedManualOverride title="manual override — raw classKey（SSOT外 ref 検証用）">
           <div class="flex flex-wrap gap-2">
             <input value={manualLayoutClassRef} onInput={(e) => setManualLayoutClassRef((e.target as HTMLInputElement).value)} placeholder="layout.root.grid" class="input-mono flex-1 text-xs" />
-            <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">手動 classKey を適用</button>
+            <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">適用</button>
           </div>
         </AdvancedManualOverride>
       </Accordion>
 
-      <Accordion title="CSS トークン参照 (cssTokenRefs)" defaultOpen={false}>
+      <Accordion title="CSS トークン参照" defaultOpen={false}>
         <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
       </Accordion>
 
@@ -2467,28 +2923,55 @@ function LayoutBuilderSection(): JSX.Element {
         layoutClassRefError={layoutClassRefError}
       />
 
-      <div class="mb-2.5 flex flex-wrap gap-2">
-        <button onClick={() => callLayoutPatch("preview")} disabled={loading || !canPatch} class="btn-secondary">1. プレビュー</button>
-        <button onClick={() => callLayoutPatch("validate")} disabled={loading || !canPatch} class="btn border border-blue-600 text-blue-600 hover:bg-blue-50">2. バリデート</button>
-        <button onClick={() => callLayoutPatch("apply")} disabled={loading || !canPatch} class="btn-success">3. 適用</button>
+      {/* Action buttons with clear step labels */}
+      <div class="mb-1 flex flex-wrap gap-2">
+        <button
+          onClick={() => callLayoutPatch("preview")}
+          disabled={loading || !canPatch}
+          class="btn-secondary min-w-[100px]"
+          aria-label="プレビュー実行 — DBへの変更なし"
+        >
+          1. プレビュー
+        </button>
+        <button
+          onClick={() => callLayoutPatch("validate")}
+          disabled={loading || !canPatch}
+          class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
+          aria-label="バリデート実行 — ref整合チェック"
+        >
+          2. バリデート
+        </button>
+        <button
+          onClick={() => callLayoutPatch("apply")}
+          disabled={loading || !canPatch}
+          class="btn-success min-w-[100px]"
+          aria-label="適用実行 — DBへ反映"
+        >
+          3. 適用
+        </button>
+        {loading && <span class="flex items-center text-sm text-gray-500" aria-live="polite">実行中...</span>}
       </div>
-      <AdminActionHint>
-        プレビュー: 解決結果のみ（DB 不変）。バリデート: ref 整合チェック。適用: layout を DB へ明示反映。ドラフトのみノードがあると適用はブロック。
-      </AdminActionHint>
+      <p class="mb-3 text-xs text-gray-500">
+        プレビュー: 解決結果のみ(DB変更なし) → バリデート: ref整合チェック → 適用: DBへ反映
+      </p>
 
-      {loading && <p class="text-muted font-mono text-sm">処理中...</p>}
-      {error && (
-        <div class="alert-error mb-2">
-          <p class="font-mono text-sm"><strong>{error}</strong></p>
-          <p class="text-muted-xs mt-1">
-            missing ref / validation — layoutId・routeKey・componentId を確認。backend 未接続は JWT と DEMO_BACKEND_URL。
-          </p>
-        </div>
+      {/* Gap 3: Actionable error panel */}
+      {patchErrors.length > 0 && (
+        <ActionableValidationErrorPanel
+          errors={patchErrors}
+          title="エラー — 修正方法"
+          affectedNodeKey={
+            patchErrors[0]?.code === "DRAFT_ONLY_NODES"
+              ? draftNodes.filter((n) => n.isDraftOnly).map((n) => friendlyComponentLabel(n.componentKey)).join(", ")
+              : undefined
+          }
+        />
       )}
+
       {patchSummary && <LayoutPatchSummaryPanel summary={patchSummary} />}
 
-      <Accordion title="debug — tensorPatchJson (v2 visual coords) / raw backend JSON" defaultOpen={false}>
-        <p class="text-muted-xs mb-2">開発者向け。v2 payload には x/y/width/height が含まれます。</p>
+      <Accordion title="開発者向け情報 — payload / backend JSON" defaultOpen={false}>
+        <p class="text-muted-xs mb-2">v2 payload には x/y/width/height が含まれます。</p>
         <pre class="pre-box max-h-40 overflow-y-auto m-0 mb-2">{tensorPatchJson}</pre>
         {debugJson && (
           <pre class="pre-box max-h-[200px] overflow-y-auto border border-gray-200 m-0">{debugJson}</pre>

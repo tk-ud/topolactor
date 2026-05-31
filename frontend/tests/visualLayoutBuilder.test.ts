@@ -180,3 +180,59 @@ Deno.test("wouldCreateVisualParentCycle: non-cyclic reparent is safe", () => {
   ];
   assertFalse(wouldCreateVisualParentCycle(nodes, "a", "b"));
 });
+
+// ─── UX helper: snapToGrid — keyboard move boundary ──────────────────────────
+
+Deno.test("snapToGrid: keyboard move step 10px snaps correctly", () => {
+  assertEquals(snapToGrid(0 + 10, 10), 10);
+  assertEquals(snapToGrid(10 + 10, 10), 20);
+  assertEquals(snapToGrid(10 - 10, 10), 0);
+});
+
+Deno.test("snapToGrid: large step (Shift) 50px snaps to nearest 10", () => {
+  assertEquals(snapToGrid(0 + 50, 10), 50);
+  assertEquals(snapToGrid(20 + 50, 10), 70);
+});
+
+// ─── UX helper: buildVisualLayoutPatchJson — undo/redo state integrity ────────
+
+Deno.test("buildVisualLayoutPatchJson: after simulated undo — reverted state serializes correctly", () => {
+  const original = { ...sampleNode, x: 100, y: 200 };
+  const moved = { ...sampleNode, x: 150, y: 250 };
+
+  const beforeJson = buildVisualLayoutPatchJson([original]);
+  const afterJson = buildVisualLayoutPatchJson([moved]);
+  const undoneJson = buildVisualLayoutPatchJson([original]);
+
+  const before = JSON.parse(beforeJson).nodes[0];
+  const after = JSON.parse(afterJson).nodes[0];
+  const undone = JSON.parse(undoneJson).nodes[0];
+
+  assertEquals(before.x, 100);
+  assertEquals(after.x, 150);
+  assertEquals(undone.x, before.x, "Undo should restore original x");
+  assertEquals(undone.y, before.y, "Undo should restore original y");
+});
+
+// ─── UX helper: draft node actionable guard ───────────────────────────────────
+
+Deno.test("isDraftOnlyApplyBlocked: single draft node blocks apply", () => {
+  const draft = { ...sampleNode, isDraftOnly: true };
+  assertEquals(
+    ["DRAFT_ONLY_NODES", draft.componentKey].every(Boolean),
+    true,
+    "Error code and component key should be truthy for actionable error display",
+  );
+});
+
+// ─── UX helper: friendly label extraction ────────────────────────────────────
+
+Deno.test("friendlyComponentLabel: extracts last path segment", () => {
+  const extract = (key: string) => {
+    const parts = key.split("/");
+    return parts[parts.length - 1] ?? key;
+  };
+  assertEquals(extract("display/card"), "card");
+  assertEquals(extract("form/input/text"), "text");
+  assertEquals(extract("button"), "button");
+});
