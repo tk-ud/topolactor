@@ -60,7 +60,7 @@ Requires backend running for dispatch operations.
 
 ## Implementation Status
 
-Routes, islands, components, and runtime files are substantially implemented. Admin routes (`/admin/*`) are wired to backend registry flows for seed, bucket, and package operations; SSE receiver / dispatcher / projection runtime are partial (see `docs/system-roadmap.yaml` M4). Visual layout builder drag/drop UI is not yet implemented.
+Routes, islands, components, and runtime files are substantially implemented. Admin routes (`/admin/*`) are wired to backend registry flows for seed, bucket, and package operations; SSE receiver / dispatcher / projection runtime are partial (see `docs/system-roadmap.yaml` M4). Visual layout builder is implemented in `/admin/ui-builder` with lifecycle state visibility, undo/redo history, actionable validation errors, keyboard/non-pointer operation, and CSS token preview; manual accessibility first-run check is pending.
 
 ## Local type check
 

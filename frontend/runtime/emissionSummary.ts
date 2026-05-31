@@ -27,3 +27,37 @@ export function summarizeEmission(emission: Emission): EmissionSummary {
     errorMessages,
   };
 }
+
+export type UserFacingResult = {
+  status: "success" | "error";
+  headline: string;
+  detail?: string;
+  itemCount: number;
+  hasRecommendation: boolean;
+  recommendationSummary?: string;
+};
+
+export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
+  if (!summary.ok) {
+    const firstMsg = summary.errorMessages[0] ?? "";
+    const headline = firstMsg.includes("AUTH_TOKEN_MISSING")
+      ? "ログインが必要です"
+      : "エラーが発生しました";
+    const detail = summary.errorMessages.length > 0
+      ? summary.errorMessages.join(" / ")
+      : undefined;
+    return { status: "error", headline, detail, itemCount: 0, hasRecommendation: false };
+  }
+
+  const hasRec = summary.recommendationStatus === "ok";
+  const count = summary.componentCount;
+  const headline = count > 0 ? `${count} 件のデータが取得できました` : "データを取得しました";
+
+  return {
+    status: "success",
+    headline,
+    itemCount: count,
+    hasRecommendation: hasRec,
+    recommendationSummary: hasRec ? "レコメンドが見つかりました" : undefined,
+  };
+}

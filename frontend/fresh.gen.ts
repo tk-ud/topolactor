@@ -21,6 +21,7 @@ import * as $auth from "./routes/auth.tsx";
 import * as $demo_article from "./routes/demo-article.tsx";
 import * as $demo_static from "./routes/demo-static.tsx";
 import * as $demo from "./routes/demo.tsx";
+import * as $demo_debug from "./routes/demo/debug.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $AdminAuthGate from "./islands/AdminAuthGate.tsx";
@@ -34,6 +35,7 @@ import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx
 import * as $ReplyPanel from "./islands/ReplyPanel.tsx";
 import * as $SeedAdmin from "./islands/SeedAdmin.tsx";
 import * as $UiBuilderAdmin from "./islands/UiBuilderAdmin.tsx";
+import * as $UserDemoStepper from "./islands/UserDemoStepper.tsx";
 import type { Manifest } from "$fresh/server.ts";
 
 const manifest = {
@@ -59,6 +61,7 @@ const manifest = {
     "./routes/demo-article.tsx": $demo_article,
     "./routes/demo-static.tsx": $demo_static,
     "./routes/demo.tsx": $demo,
+    "./routes/demo/debug.tsx": $demo_debug,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
   },
@@ -74,6 +77,7 @@ const manifest = {
     "./islands/ReplyPanel.tsx": $ReplyPanel,
     "./islands/SeedAdmin.tsx": $SeedAdmin,
     "./islands/UiBuilderAdmin.tsx": $UiBuilderAdmin,
+    "./islands/UserDemoStepper.tsx": $UserDemoStepper,
   },
   baseUrl: import.meta.url,
 } satisfies Manifest;
