@@ -154,8 +154,13 @@ db_schema:
         migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql
         upsert_policy: >-
           Each INSERT uses ON CONFLICT (business_key) DO NOTHING. Canonical-table rows
-          take precedence over old public rows with the same business key. Idempotent
-          on re-runs. DROP IF EXISTS is safe on fresh DBs (old tables never existed).
+          take precedence over old public rows with the same business key. Child FKs
+          are remapped through canonical business keys. ui_topology_tensor.parent_tensor_id
+          is restored through the canonical logical parent tuple, not direct UUID match.
+          Non-NULL legacy parent references fail explicitly when the old parent row is
+          dangling or its canonical logical tuple cannot be resolved; no silent NULL
+          fallback is allowed. Idempotent on re-runs. DROP IF EXISTS is safe on fresh
+          DBs (old tables never existed).
         note: >-
           All public UI component/design/layout/package tables migrated to topology.* canonical schema
           and then retired (DROPped in reverse dependency order with CASCADE).
@@ -424,7 +429,7 @@ db_schema:
   legacy_transition_candidates:
     - manifest: compatibility-only retained for SeedImportApplyRepository runtime routing; admin_import FK migrated to hubs.topology_manifests (complete); canonical wiring path is topology.wiring_physical_to_package
     - public context_*: placement decision resolved — stays in public schema (recommendation learning surfaces, not topology definition tables)
-    - public ui_component_* / components / design / packages: migrated to topology.* canonical schema (migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql) — complete
+    - "public ui_component_* / components / design / packages: migrated to topology.* canonical schema (migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql) — complete"
     - logs.current / logs.hub_current / logs.attention remain canonical SQL Attention persistence surfaces, not targets
     - logs.diff remains the physical mutation pressure signal source for logs.current
 
