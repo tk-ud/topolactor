@@ -1326,7 +1326,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
       const combined = [...bucketed, ...packaging];
       if (combined.length > 0 || (!bucketedBody?.errors?.length && !packagingBody?.errors?.length)) {
         setItems(combined);
-        setStatus(`${combined.length} 件のバケットアイテムをロードしました。`);
+        setStatus(`${combined.length} 件の部品をロードしました。`);
       } else {
         setErrors(bucketedBody?.errors ?? packagingBody?.errors ?? [{ code: "BUCKET_LOAD_FAILED", message: "バケットのロードに失敗しました。" }]);
         setStatus("バケットのロードに失敗しました。");
@@ -1430,7 +1430,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
         await loadBucket();
       } else {
         setErrors(body?.errors ?? []);
-        setStatus("バケット作成に失敗しました。");
+        setStatus("部品の登録に失敗しました。");
       }
     } finally {
       setLoading(false);
@@ -1439,7 +1439,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
 
   const handleGenerate = async () => {
     if (!selectedId || !effectiveRouteKey) {
-      setStatus("バケットアイテムを選択し、ルートキーを選択してください。");
+      setStatus("部品とページルートを選択してください。");
       return;
     }
     setLoading(true);
@@ -1500,7 +1500,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
         <ValidationErrorPanel errors={candidateErrors} title="候補ロードエラー" />
       )}
 
-      <Accordion title="カタログからバケット登録" defaultOpen={true}>
+      <Accordion title="カタログから部品を登録" defaultOpen={true}>
         <div class="mb-2 flex flex-wrap gap-2">
           <input
             value={catalogFilter}
@@ -1563,7 +1563,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
               disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).status !== "unregistered"}
               class="btn-primary mt-2"
             >
-              バケットに登録
+              部品を登録する
             </button>
             <details class="mt-1">
               <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
