@@ -12,14 +12,23 @@ import { createSseReceiver, extractCiAttentionFragmentPayload, type CiAttentionF
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
+import {
+  snapToGrid,
+  buildVisualLayoutPatchJson,
+  wouldCreateVisualParentCycle,
+} from "../runtime/visualLayoutUtils.ts";
 
 /**
- * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー。
+ * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
  *
  * Issue #86: プリミティブコンポーネントシステム + UI topology DB 登録。
- * Issue #89: admin ビジュアルレイアウトビルダー（スケルトン）。
+ * Issue #89: admin ビジュアルレイアウトビルダー v2 — Figma-like mouse-driven canvas。
  *
- * SSOT: docs/registrar-admin-ui-specification.md §2.5
+ * Frontend authority: draft layout state, mouse interaction, visual preview,
+ *   local readiness display, intent submission, backend result display.
+ * Forbidden: direct DB write, backend validate bypass, topology judgment,
+ *   promotion judgment, draft-only node apply allow.
+ * SSOT: docs/registrar-admin-ui-specification.md §2.5, §7
  */
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
@@ -72,12 +81,39 @@ type DraftNode = {
   parentNodeId: string | null;
   gridCol: number;
   gridRow: number;
+  // v2: visual canvas position/size (pixels, snapped to SNAP_SIZE grid)
+  x: number;
+  y: number;
+  width: number;
+  height: number;
   componentId?: string;
   packageId?: string;
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
 };
+
+// v2: canvas interaction types
+type ResizeDir = "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
+
+type CanvasDragState = {
+  nodeId: string;
+  startMouseX: number;
+  startMouseY: number;
+  startNodeX: number;
+  startNodeY: number;
+} | null;
+
+type CanvasResizeState = {
+  nodeId: string;
+  dir: ResizeDir;
+  startMouseX: number;
+  startMouseY: number;
+  startNodeX: number;
+  startNodeY: number;
+  startNodeW: number;
+  startNodeH: number;
+} | null;
 
 type DragSrc =
   | { kind: "palette"; entry: PaletteEntry }
@@ -249,6 +285,12 @@ type LayoutPatchSummary = {
 
 const GENERIC_SLOT_KEYS = ["main", "header", "footer", "sidebar", "content", "body"];
 
+// v2 visual canvas constants
+const SNAP_SIZE = 10;
+const DEFAULT_NODE_WIDTH = 140;
+const DEFAULT_NODE_HEIGHT = 60;
+const CANVAS_MIN_HEIGHT = 400;
+
 function deriveCandidatesFromPalette(promoted: PromotedPaletteEntry[]): LayoutRouteCandidate[] {
   const seen = new Set<string>();
   const out: LayoutRouteCandidate[] = [];
@@ -280,14 +322,7 @@ function wouldCreateParentCycle(
   nodeId: string,
   parentId: string | null,
 ): boolean {
-  if (!parentId) return false;
-  let current: string | null = parentId;
-  while (current) {
-    if (current === nodeId) return true;
-    const parent = nodes.find((n) => n.nodeId === current);
-    current = parent?.parentNodeId ?? null;
-  }
-  return false;
+  return wouldCreateVisualParentCycle(nodes, nodeId, parentId);
 }
 
 function buildSlotKeyCandidates(
@@ -430,6 +465,9 @@ function ApplyReadinessPanel({
   layoutClassRefError: string | null;
 }): JSX.Element {
   const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
+  const customPositionedCount = draftNodes.filter(
+    (n) => n.x > 0 || n.y > 0 || n.width !== DEFAULT_NODE_WIDTH || n.height !== DEFAULT_NODE_HEIGHT,
+  ).length;
   const allClear = canPatch && draftOnlyCount === 0 && !layoutClassRefError;
 
   return (
@@ -459,6 +497,15 @@ function ApplyReadinessPanel({
           <span>
             layout class ref 解決:{" "}
             {layoutClassRefError ? layoutClassRefError : "OK"}
+          </span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="text-blue-600 text-xs">i</span>
+          <span class="text-xs">
+            visual canvas: {draftNodes.length} ノード
+            {customPositionedCount > 0
+              ? ` (${customPositionedCount} 件カスタム配置)`
+              : draftNodes.length > 0 ? " (デフォルト配置)" : ""}
           </span>
         </li>
         <li class="flex items-start gap-2">
@@ -1421,6 +1468,411 @@ function CssTokenSelectorSection(): JSX.Element {
   );
 }
 
+// ─── v2 ビジュアルキャンバスコンポーネント ────────────────────────────────────
+
+const RESIZE_HANDLE_STYLE: Record<ResizeDir, Record<string, string>> = {
+  nw: { top: "-4px", left: "-4px", cursor: "nw-resize" },
+  n: { top: "-4px", left: "50%", transform: "translateX(-50%)", cursor: "n-resize" },
+  ne: { top: "-4px", right: "-4px", cursor: "ne-resize" },
+  w: { top: "50%", left: "-4px", transform: "translateY(-50%)", cursor: "w-resize" },
+  e: { top: "50%", right: "-4px", transform: "translateY(-50%)", cursor: "e-resize" },
+  sw: { bottom: "-4px", left: "-4px", cursor: "sw-resize" },
+  s: { bottom: "-4px", left: "50%", transform: "translateX(-50%)", cursor: "s-resize" },
+  se: { bottom: "-4px", right: "-4px", cursor: "se-resize" },
+};
+
+function ResizeHandle({
+  dir,
+  onMouseDown,
+}: {
+  dir: ResizeDir;
+  onMouseDown: (e: Event) => void;
+}): JSX.Element {
+  return (
+    <div
+      class="absolute z-20 h-2 w-2 rounded-sm border border-blue-600 bg-white"
+      style={RESIZE_HANDLE_STYLE[dir]}
+      onMouseDown={(e: Event) => { e.stopPropagation(); onMouseDown(e); }}
+    />
+  );
+}
+
+function VisualLayoutNode({
+  node,
+  isSelected,
+  isDragging,
+  displayX,
+  displayY,
+  displayW,
+  displayH,
+  onSelect,
+  onNodeMouseDown,
+  onResizeHandleMouseDown,
+}: {
+  node: DraftNode;
+  isSelected: boolean;
+  isDragging: boolean;
+  displayX: number;
+  displayY: number;
+  displayW: number;
+  displayH: number;
+  onSelect: () => void;
+  onNodeMouseDown: (e: Event) => void;
+  onResizeHandleMouseDown: (e: Event, dir: ResizeDir) => void;
+}): JSX.Element {
+  return (
+    <div
+      class={`absolute select-none rounded border-2 font-mono text-xs ${
+        isSelected
+          ? "border-blue-600 shadow-md"
+          : node.isDraftOnly
+          ? "border-yellow-300"
+          : "border-blue-200"
+      } ${node.isDraftOnly ? "bg-yellow-50" : "bg-white"}`}
+      style={{
+        left: `${displayX}px`,
+        top: `${displayY}px`,
+        width: `${displayW}px`,
+        height: `${displayH}px`,
+        zIndex: isSelected ? 10 : 1,
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.75 : 1,
+      }}
+      onClick={(e: Event) => { (e as MouseEvent).stopPropagation(); onSelect(); }}
+      onMouseDown={onNodeMouseDown}
+    >
+      <div class="flex h-full flex-col overflow-hidden p-1">
+        <div class="truncate font-bold leading-tight">{node.componentKey}</div>
+        {node.isDraftOnly && (
+          <span class="text-[0.58rem] text-yellow-700">ドラフト — 適用ブロック</span>
+        )}
+        {node.slotKey && (
+          <span class="truncate text-[0.58rem] text-gray-500">slot:{node.slotKey}</span>
+        )}
+        <span class="mt-auto text-[0.55rem] text-gray-300">
+          {displayX},{displayY} {displayW}×{displayH}
+        </span>
+      </div>
+      {isSelected && !isDragging && (
+        <>
+          {(["nw", "n", "ne", "w", "e", "sw", "s", "se"] as ResizeDir[]).map((dir) => (
+            <ResizeHandle
+              key={dir}
+              dir={dir}
+              onMouseDown={(e) => onResizeHandleMouseDown(e, dir)}
+            />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function VisualLayoutCanvas({
+  draftNodes,
+  selectedNodeId,
+  canvasRef,
+  liveDragNodeId,
+  liveResizeNodeId,
+  getLivePos,
+  showGrid,
+  onSelectNode,
+  onDeselectAll,
+  onNodeMouseDown,
+  onResizeHandleMouseDown,
+  onCanvasMouseMove,
+  onCanvasMouseUp,
+  onDragOver,
+  onDrop,
+}: {
+  draftNodes: DraftNode[];
+  selectedNodeId: string | null;
+  // deno-lint-ignore no-explicit-any
+  canvasRef: { current: any };
+  liveDragNodeId: string | null;
+  liveResizeNodeId: string | null;
+  getLivePos: (nodeId: string) => { x: number; y: number; width: number; height: number } | null;
+  showGrid: boolean;
+  onSelectNode: (nodeId: string) => void;
+  onDeselectAll: () => void;
+  onNodeMouseDown: (e: Event, nodeId: string) => void;
+  onResizeHandleMouseDown: (e: Event, nodeId: string, dir: ResizeDir) => void;
+  onCanvasMouseMove: (e: Event) => void;
+  onCanvasMouseUp: () => void;
+  onDragOver: (e: Event) => void;
+  onDrop: (e: Event) => void;
+}): JSX.Element {
+  const gridStyle = showGrid
+    ? {
+        backgroundImage:
+          `linear-gradient(to right,#e5e7eb 1px,transparent 1px),` +
+          `linear-gradient(to bottom,#e5e7eb 1px,transparent 1px)`,
+        backgroundSize: `${SNAP_SIZE * 4}px ${SNAP_SIZE * 4}px`,
+      }
+    : {};
+
+  return (
+    <div
+      ref={canvasRef}
+      class="relative overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white"
+      style={{ minHeight: `${CANVAS_MIN_HEIGHT}px`, ...gridStyle }}
+      onClick={onDeselectAll}
+      onMouseMove={onCanvasMouseMove}
+      onMouseUp={onCanvasMouseUp}
+      onMouseLeave={onCanvasMouseUp}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {draftNodes.length === 0 && (
+        <div class="pointer-events-none absolute inset-0 flex items-center justify-center font-mono text-sm text-gray-300">
+          パレットからコンポーネントをドラッグしてください
+        </div>
+      )}
+      {draftNodes.map((node) => {
+        const live = getLivePos(node.nodeId);
+        return (
+          <VisualLayoutNode
+            key={node.nodeId}
+            node={node}
+            isSelected={node.nodeId === selectedNodeId}
+            isDragging={liveDragNodeId === node.nodeId}
+            displayX={live?.x ?? node.x}
+            displayY={live?.y ?? node.y}
+            displayW={live?.width ?? node.width}
+            displayH={live?.height ?? node.height}
+            onSelect={() => onSelectNode(node.nodeId)}
+            onNodeMouseDown={(e) => onNodeMouseDown(e, node.nodeId)}
+            onResizeHandleMouseDown={(e, dir) => onResizeHandleMouseDown(e, node.nodeId, dir)}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function LayerTree({
+  draftNodes,
+  selectedNodeId,
+  onSelect,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
+}: {
+  draftNodes: DraftNode[];
+  selectedNodeId: string | null;
+  onSelect: (nodeId: string) => void;
+  onMoveUp: (nodeId: string) => void;
+  onMoveDown: (nodeId: string) => void;
+  onDelete: (nodeId: string) => void;
+}): JSX.Element {
+  return (
+    <div class="w-44 shrink-0 rounded-lg border border-gray-200 bg-white">
+      <div class="border-b border-gray-200 px-2 py-1.5">
+        <h4 class="text-xs font-semibold text-gray-600">
+          レイヤー ({draftNodes.length})
+        </h4>
+      </div>
+      <div class="overflow-y-auto" style="max-height:300px;">
+        {draftNodes.length === 0 && (
+          <p class="px-2 py-4 text-center text-xs text-gray-400">なし</p>
+        )}
+        {[...draftNodes].reverse().map((node, reversedIdx) => {
+          const origIdx = draftNodes.length - 1 - reversedIdx;
+          const isSelected = node.nodeId === selectedNodeId;
+          return (
+            <div
+              key={node.nodeId}
+              onClick={() => onSelect(node.nodeId)}
+              class={`flex cursor-pointer items-center gap-1 border-b border-gray-100 px-1.5 py-1 text-xs ${
+                isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+              }`}
+            >
+              <span
+                class={`h-2 w-2 shrink-0 rounded-sm ${
+                  node.isDraftOnly ? "bg-yellow-400" : "bg-blue-400"
+                }`}
+              />
+              <span class="flex-1 truncate font-mono">{node.componentKey}</span>
+              <div class="flex shrink-0 gap-0.5">
+                <button
+                  type="button"
+                  onClick={(e: Event) => { e.stopPropagation(); onMoveUp(node.nodeId); }}
+                  disabled={origIdx === draftNodes.length - 1}
+                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  title="前面へ"
+                >▲</button>
+                <button
+                  type="button"
+                  onClick={(e: Event) => { e.stopPropagation(); onMoveDown(node.nodeId); }}
+                  disabled={origIdx === 0}
+                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30"
+                  title="背面へ"
+                >▼</button>
+                <button
+                  type="button"
+                  onClick={(e: Event) => { e.stopPropagation(); onDelete(node.nodeId); }}
+                  class="rounded px-0.5 text-[0.65rem] text-red-400 hover:text-red-600"
+                  title="削除"
+                >✕</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function CanvasInspector({
+  node,
+  draftNodes,
+  slotKeyCandidates,
+  onUpdate,
+  onClose,
+}: {
+  node: DraftNode;
+  draftNodes: DraftNode[];
+  slotKeyCandidates: string[];
+  onUpdate: (updates: Partial<DraftNode>) => void;
+  onClose: () => void;
+}): JSX.Element {
+  const [manualSlotKey, setManualSlotKey] = useState("");
+  const [parentCycleError, setParentCycleError] = useState<string | null>(null);
+  const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
+
+  const handleParentChange = (value: string) => {
+    const parentId = value || null;
+    if (parentId && wouldCreateParentCycle(draftNodes, node.nodeId, parentId)) {
+      setParentCycleError("循環参照になる親は選択できません。");
+      return;
+    }
+    setParentCycleError(null);
+    onUpdate({ parentNodeId: parentId });
+  };
+
+  const handleNum = (
+    field: "x" | "y" | "width" | "height" | "gridCol" | "gridRow",
+    raw: string,
+    applySnap = false,
+  ) => {
+    const v = parseInt(raw, 10);
+    if (isNaN(v)) return;
+    const min = field === "width" ? 40 : field === "height" ? 30 : field === "gridCol" ? 1 : 0;
+    const clamped = Math.max(min, v);
+    const final = applySnap ? snapToGrid(clamped, SNAP_SIZE) : clamped;
+    onUpdate({ [field]: final } as Partial<DraftNode>);
+  };
+
+  return (
+    <div
+      class="w-52 shrink-0 overflow-y-auto rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs"
+      style="max-height:440px;"
+    >
+      <div class="mb-2 flex items-center justify-between">
+        <strong class="text-sm">インスペクター</strong>
+        <button type="button" onClick={onClose} class="btn-secondary px-1.5 py-0 text-xs">✕</button>
+      </div>
+      <div class="mb-2">
+        <code class="text-xs">{node.componentKey}</code>
+        {node.isDraftOnly && <span class="badge-warn ml-1">ドラフト</span>}
+      </div>
+
+      <div class="mb-2">
+        <div class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">位置・サイズ</div>
+        <div class="grid grid-cols-2 gap-1">
+          {(["x", "y", "width", "height"] as const).map((f) => (
+            <label key={f} class="flex flex-col gap-0.5">
+              <span class="text-[0.65rem]">{f.toUpperCase()}</span>
+              <input
+                type="number"
+                value={node[f]}
+                min={f === "width" ? 40 : f === "height" ? 30 : 0}
+                step={SNAP_SIZE}
+                onInput={(e) => handleNum(f, (e.target as HTMLInputElement).value, true)}
+                class="input px-1 py-0.5"
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div class="mb-2 flex flex-col gap-1.5">
+        <label class="flex flex-col gap-0.5">
+          親ノード
+          <select
+            value={node.parentNodeId ?? ""}
+            onChange={(e) => handleParentChange((e.target as HTMLSelectElement).value)}
+            class="input px-1 py-0.5 text-xs"
+          >
+            <option value="">(none / top-level)</option>
+            {parentOptions.map((n) => {
+              const cyclic = wouldCreateParentCycle(draftNodes, node.nodeId, n.nodeId);
+              return (
+                <option key={n.nodeId} value={n.nodeId} disabled={cyclic}>
+                  {n.componentKey} · {shortId(n.nodeId)}
+                  {cyclic ? " (循環)" : ""}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        {parentCycleError && <p class="m-0 text-red-600">{parentCycleError}</p>}
+
+        <label class="flex flex-col gap-0.5">
+          スロットキー
+          <select
+            value={node.slotKey}
+            onChange={(e) => onUpdate({ slotKey: (e.target as HTMLSelectElement).value })}
+            class="input px-1 py-0.5 text-xs"
+          >
+            {slotKeyCandidates.map((sk) => (
+              <option key={sk || "__empty__"} value={sk}>{sk || "(空)"}</option>
+            ))}
+          </select>
+        </label>
+
+        <AdvancedManualOverride title="manual slotKey">
+          <div class="flex gap-1">
+            <input
+              value={manualSlotKey}
+              onInput={(e) => setManualSlotKey((e.target as HTMLInputElement).value)}
+              placeholder="カスタム slotKey"
+              class="input-mono flex-1 px-1 py-0.5 text-xs"
+            />
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              onClick={() => { onUpdate({ slotKey: manualSlotKey }); setManualSlotKey(""); }}
+            >
+              適用
+            </button>
+          </div>
+        </AdvancedManualOverride>
+      </div>
+
+      <div class="flex flex-col gap-1">
+        <div class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">グリッド</div>
+        <label class="flex flex-col gap-0.5">
+          列 (1–12)
+          <input
+            type="number" min={1} max={12} value={node.gridCol}
+            onInput={(e) => handleNum("gridCol", (e.target as HTMLInputElement).value)}
+            class="input px-1 py-0.5"
+          />
+        </label>
+        <label class="flex flex-col gap-0.5">
+          行
+          <input
+            type="number" min={1} value={node.gridRow}
+            onInput={(e) => handleNum("gridRow", (e.target as HTMLInputElement).value)}
+            class="input px-1 py-0.5"
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // ─── パレット ─────────────────────────────────────────────────────────────────
 
 function LayoutPalette({
@@ -1596,31 +2048,51 @@ function LayoutNodeInspector({
   );
 }
 
-// ─── レイアウトビルダーセクション ─────────────────────────────────────────────
+// ─── レイアウトビルダーセクション v2 ──────────────────────────────────────────
 
 function LayoutBuilderSection(): JSX.Element {
+  // ── route/layout selection ───────────────────────────────────────────────
   const [layoutId, setLayoutId] = useState("");
   const [routeKey, setRouteKey] = useState("");
   const [manualLayoutId, setManualLayoutId] = useState("");
   const [manualRouteKey, setManualRouteKey] = useState("");
+
+  // ── canvas draft state ───────────────────────────────────────────────────
   const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // ── v2: canvas visual interaction state ─────────────────────────────────
+  const [showGrid, setShowGrid] = useState(true);
+  const [liveDragPos, setLiveDragPos] = useState<{ nodeId: string; x: number; y: number } | null>(null);
+  const [liveResizePos, setLiveResizePos] = useState<{ nodeId: string; x: number; y: number; width: number; height: number } | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const dragState = useRef<CanvasDragState>(null);
+  const resizeState = useRef<CanvasResizeState>(null);
+
+  // ── CSS / layout class refs ──────────────────────────────────────────────
   const [selectedTokenRefs, setSelectedTokenRefs] = useState<string[]>([]);
   const [selectedLayoutClassRefs, setSelectedLayoutClassRefs] = useState<string[]>([]);
   const [manualLayoutClassRef, setManualLayoutClassRef] = useState("");
   const [layoutClassRefError, setLayoutClassRefError] = useState<string | null>(null);
+
+  // ── patch / status ───────────────────────────────────────────────────────
   const [patchSummary, setPatchSummary] = useState<LayoutPatchSummary | null>(null);
   const [debugJson, setDebugJson] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // ── palette / layout candidates ──────────────────────────────────────────
   const [paletteEntries, setPaletteEntries] = useState<PaletteEntry[]>([]);
   const [paletteStatus, setPaletteStatus] = useState<string | null>(null);
   const [layoutCandidates, setLayoutCandidates] = useState<LayoutRouteCandidate[]>([]);
   const [candidateErrors, setCandidateErrors] = useState<ValidationError[]>([]);
   const [paletteLoadFailed, setPaletteLoadFailed] = useState(false);
 
+  // ── palette drag (HTML5 drag API — palette→canvas only) ─────────────────
   const dragSrc = useRef<DragSrc | null>(null);
-  const tensorPatchJson = buildLayoutPatchJson(draftNodes, selectedLayoutClassRefs);
+
+  // ── derived ─────────────────────────────────────────────────────────────
+  const tensorPatchJson = buildVisualLayoutPatchJson(draftNodes, selectedLayoutClassRefs);
   const topologyPreviewClasses = selectedLayoutClassRefs.length > 0
     ? resolveTopologyLayoutClassRefs(selectedLayoutClassRefs)
     : null;
@@ -1633,17 +2105,18 @@ function LayoutBuilderSection(): JSX.Element {
   const slotKeyCandidates = buildSlotKeyCandidates(draftNodes, dbSlotKeys);
   const selectorsDisabled = candidateErrors.length > 0 || paletteLoadFailed;
   const canPatch = Boolean(effectiveLayoutId && effectiveRouteKey);
+  const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ?? null;
+  const canvasPreviewClass = topologyPreviewClasses?.ok ? topologyPreviewClasses.className : "";
 
+  // ── initial load ─────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setPaletteStatus("候補をロード中...");
       setPaletteLoadFailed(false);
       setCandidateErrors([]);
-
       const { candidates, errors: candErr } = await loadLayoutCandidatesFromBackend();
       setLayoutCandidates(candidates);
       if (candErr.length) setCandidateErrors(candErr);
-
       try {
         const body = await dispatchAdminOp("ui_topology", "promoted_palette");
         if (body?.errors?.length) {
@@ -1668,27 +2141,17 @@ function LayoutBuilderSection(): JSX.Element {
         const promotedKeys = new Set(promotedEntries.map((p) => p.componentKey));
         const draftCatalog = COMPONENT_CATALOG_ENTRIES
           .filter((c) => isDraftOnlyEntry(c) && !promotedKeys.has(c.componentKey))
-          .map((c) => ({
-            componentKey: c.componentKey,
-            componentKind: c.componentKind,
-            isDraftOnly: true,
-          } satisfies PaletteEntry));
+          .map((c) => ({ componentKey: c.componentKey, componentKind: c.componentKind, isDraftOnly: true } satisfies PaletteEntry));
         setPaletteEntries([...promotedEntries, ...draftCatalog]);
         setPaletteStatus(`プロモート済み ${promotedEntries.length} 件 / ドラフト ${draftCatalog.length} 件`);
-
-        if (candidates.length === 0 && promoted.length > 0) {
-          setLayoutCandidates(deriveCandidatesFromPalette(promoted));
-        }
+        if (candidates.length === 0 && promoted.length > 0) setLayoutCandidates(deriveCandidatesFromPalette(promoted));
         if (!routeKey && candidates.length > 0) {
           setRouteKey(candidates[0].routeKey);
           setLayoutId(candidates[0].layoutId);
         }
       } catch (e) {
         setPaletteLoadFailed(true);
-        setCandidateErrors((prev) => [
-          ...prev,
-          { code: "PROMOTED_PALETTE_LOAD_ERROR", message: String(e) },
-        ]);
+        setCandidateErrors((prev) => [...prev, { code: "PROMOTED_PALETTE_LOAD_ERROR", message: String(e) }]);
         setPaletteEntries([]);
         setPaletteStatus(`プロモートパレットのロードに失敗しました: ${e}`);
       }
@@ -1696,14 +2159,13 @@ function LayoutBuilderSection(): JSX.Element {
     load();
   }, []);
 
+  // ── layout patch (preview / validate / apply) ────────────────────────────
+  // Frontend submits intent only. Topology persistence authority: backend/DB.
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
     setError(null);
     setPatchSummary(null);
     setDebugJson(null);
-    if (!canPatch) {
-      setError("layoutId と routeKey を候補から選択してください。");
-      return;
-    }
+    if (!canPatch) { setError("layoutId と routeKey を候補から選択してください。"); return; }
     if (action === "apply") {
       const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
       if (draftOnlyNodes.length > 0) {
@@ -1724,17 +2186,8 @@ function LayoutBuilderSection(): JSX.Element {
         responsiveTokenRefs: { md: selectedTokenRefs },
       });
       setDebugJson(JSON.stringify(body, null, 2));
-      const summary = projectLayoutPatchSummary(
-        action,
-        body,
-        draftNodes,
-        selectedTokenRefs.length,
-        selectedLayout?.layoutKey,
-      );
-      setPatchSummary(summary);
-      if (body?.errors?.length) {
-        setError(`${body.errors[0].code}: ${body.errors[0].message}`);
-      }
+      setPatchSummary(projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey));
+      if (body?.errors?.length) setError(`${body.errors[0].code}: ${body.errors[0].message}`);
     } catch (e) {
       setError(`${e}`);
     } finally {
@@ -1742,51 +2195,7 @@ function LayoutBuilderSection(): JSX.Element {
     }
   };
 
-  const handleDragStartPalette = (entry: PaletteEntry) => {
-    dragSrc.current = { kind: "palette", entry };
-  };
-
-  const handleDragStartCanvas = (nodeId: string) => {
-    dragSrc.current = { kind: "canvas", nodeId };
-  };
-
-  const handleDragOverCanvas = (e: Event) => { e.preventDefault(); };
-
-  const handleDropOnCanvas = (e: Event) => {
-    e.preventDefault();
-    const src = dragSrc.current;
-    if (!src) return;
-    if (src.kind === "palette") {
-      if (src.entry.routeKey && !routeKey) setRouteKey(src.entry.routeKey);
-      if (src.entry.layoutId && !layoutId) setLayoutId(src.entry.layoutId);
-      const newNode: DraftNode = {
-        nodeId: makeNodeId(),
-        componentKey: src.entry.componentKey,
-        isDraftOnly: src.entry.isDraftOnly,
-        componentId: src.entry.componentId,
-        packageId: src.entry.packageId,
-        layoutId: src.entry.layoutId,
-        wiringId: src.entry.wiringId,
-        tensorId: src.entry.tensorId,
-        slotKey: "",
-        orderIndex: draftNodes.length,
-        parentNodeId: null,
-        gridCol: 1,
-        gridRow: draftNodes.length + 1,
-      };
-      setDraftNodes((prev) => [...prev, newNode]);
-    } else if (src.kind === "canvas") {
-      const nodeId = src.nodeId;
-      setDraftNodes((prev) => {
-        const node = prev.find((n) => n.nodeId === nodeId);
-        if (!node) return prev;
-        const rest = prev.filter((n) => n.nodeId !== nodeId);
-        return [...rest, node].map((n, i) => ({ ...n, orderIndex: i }));
-      });
-    }
-    dragSrc.current = null;
-  };
-
+  // ── node operations ──────────────────────────────────────────────────────
   const moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
     setDraftNodes((prev) => {
       const idx = prev.findIndex((n) => n.nodeId === nodeId);
@@ -1805,27 +2214,130 @@ function LayoutBuilderSection(): JSX.Element {
   };
 
   const updateNode = (nodeId: string, updates: Partial<DraftNode>) => {
-    setDraftNodes((prev) =>
-      prev.map((n) => (n.nodeId === nodeId ? { ...n, ...updates } : n))
-    );
+    setDraftNodes((prev) => prev.map((n) => (n.nodeId === nodeId ? { ...n, ...updates } : n)));
   };
 
+  // ── palette drag (HTML5) → canvas drop with coordinate placement ─────────
+  const handleDragStartPalette = (entry: PaletteEntry) => {
+    dragSrc.current = { kind: "palette", entry };
+  };
+
+  const handleDragOverCanvas = (e: Event) => { e.preventDefault(); };
+
+  const handleDropOnCanvas = (e: Event) => {
+    e.preventDefault();
+    const src = dragSrc.current;
+    dragSrc.current = null;
+    if (!src || src.kind !== "palette") return;
+    const de = e as unknown as DragEvent;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    const dropX = rect ? snapToGrid(Math.max(0, de.clientX - rect.left), SNAP_SIZE) : 20;
+    const dropY = rect ? snapToGrid(Math.max(0, de.clientY - rect.top), SNAP_SIZE) : 20;
+    if (src.entry.routeKey && !routeKey) setRouteKey(src.entry.routeKey);
+    if (src.entry.layoutId && !layoutId) setLayoutId(src.entry.layoutId);
+    const newNode: DraftNode = {
+      nodeId: makeNodeId(),
+      componentKey: src.entry.componentKey,
+      isDraftOnly: src.entry.isDraftOnly,
+      componentId: src.entry.componentId,
+      packageId: src.entry.packageId,
+      layoutId: src.entry.layoutId,
+      wiringId: src.entry.wiringId,
+      tensorId: src.entry.tensorId,
+      slotKey: "",
+      orderIndex: draftNodes.length,
+      parentNodeId: null,
+      gridCol: Math.max(1, Math.floor(dropX / 50) + 1),
+      gridRow: Math.max(1, Math.floor(dropY / 40) + 1),
+      x: dropX,
+      y: dropY,
+      width: DEFAULT_NODE_WIDTH,
+      height: DEFAULT_NODE_HEIGHT,
+    };
+    setDraftNodes((prev) => [...prev, newNode]);
+  };
+
+  // ── v2: mouse drag for canvas node movement ──────────────────────────────
+  const getCanvasPos = (e: Event): { x: number; y: number } => {
+    const me = e as MouseEvent;
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return { x: me.clientX - rect.left, y: me.clientY - rect.top };
+  };
+
+  const handleNodeMouseDown = (e: Event, nodeId: string) => {
+    if (resizeState.current) return;
+    const me = e as MouseEvent;
+    me.preventDefault();
+    me.stopPropagation();
+    const node = draftNodes.find((n) => n.nodeId === nodeId);
+    if (!node) return;
+    setSelectedNodeId(nodeId);
+    const pos = getCanvasPos(e);
+    dragState.current = { nodeId, startMouseX: pos.x, startMouseY: pos.y, startNodeX: node.x, startNodeY: node.y };
+  };
+
+  const handleResizeHandleMouseDown = (e: Event, nodeId: string, dir: ResizeDir) => {
+    const me = e as MouseEvent;
+    me.preventDefault();
+    me.stopPropagation();
+    dragState.current = null;
+    const node = draftNodes.find((n) => n.nodeId === nodeId);
+    if (!node) return;
+    const pos = getCanvasPos(e);
+    resizeState.current = { nodeId, dir, startMouseX: pos.x, startMouseY: pos.y, startNodeX: node.x, startNodeY: node.y, startNodeW: node.width, startNodeH: node.height };
+  };
+
+  const handleCanvasMouseMove = (e: Event) => {
+    const pos = getCanvasPos(e);
+    if (dragState.current) {
+      const { startMouseX, startMouseY, startNodeX, startNodeY, nodeId } = dragState.current;
+      setLiveDragPos({
+        nodeId,
+        x: snapToGrid(Math.max(0, startNodeX + pos.x - startMouseX), SNAP_SIZE),
+        y: snapToGrid(Math.max(0, startNodeY + pos.y - startMouseY), SNAP_SIZE),
+      });
+    } else if (resizeState.current) {
+      const { startMouseX, startMouseY, startNodeX, startNodeY, startNodeW, startNodeH, nodeId, dir } = resizeState.current;
+      const dx = pos.x - startMouseX;
+      const dy = pos.y - startMouseY;
+      let newX = startNodeX, newY = startNodeY, newW = startNodeW, newH = startNodeH;
+      if (dir.includes("e")) newW = Math.max(40, snapToGrid(startNodeW + dx, SNAP_SIZE));
+      if (dir.includes("s")) newH = Math.max(30, snapToGrid(startNodeH + dy, SNAP_SIZE));
+      if (dir.includes("w")) { newW = Math.max(40, snapToGrid(startNodeW - dx, SNAP_SIZE)); newX = snapToGrid(startNodeX + (startNodeW - newW), SNAP_SIZE); }
+      if (dir.includes("n")) { newH = Math.max(30, snapToGrid(startNodeH - dy, SNAP_SIZE)); newY = snapToGrid(startNodeY + (startNodeH - newH), SNAP_SIZE); }
+      setLiveResizePos({ nodeId, x: newX, y: newY, width: newW, height: newH });
+    }
+  };
+
+  const handleCanvasMouseUp = () => {
+    if (dragState.current && liveDragPos) updateNode(dragState.current.nodeId, { x: liveDragPos.x, y: liveDragPos.y });
+    if (resizeState.current && liveResizePos) updateNode(resizeState.current.nodeId, { x: liveResizePos.x, y: liveResizePos.y, width: liveResizePos.width, height: liveResizePos.height });
+    dragState.current = null;
+    resizeState.current = null;
+    setLiveDragPos(null);
+    setLiveResizePos(null);
+  };
+
+  const getLivePos = (nodeId: string): { x: number; y: number; width: number; height: number } | null => {
+    if (liveDragPos?.nodeId === nodeId) {
+      const node = draftNodes.find((n) => n.nodeId === nodeId);
+      return node ? { x: liveDragPos.x, y: liveDragPos.y, width: node.width, height: node.height } : null;
+    }
+    if (liveResizePos?.nodeId === nodeId) return liveResizePos;
+    return null;
+  };
+
+  // ── CSS / layout class token handlers ────────────────────────────────────
   const toggleTokenRef = (tokenKey: string) => {
-    setSelectedTokenRefs((prev) =>
-      prev.includes(tokenKey) ? prev.filter((k) => k !== tokenKey) : [...prev, tokenKey]
-    );
+    setSelectedTokenRefs((prev) => prev.includes(tokenKey) ? prev.filter((k) => k !== tokenKey) : [...prev, tokenKey]);
   };
 
   const toggleLayoutClassRef = (classKey: string) => {
     setLayoutClassRefError(null);
     setSelectedLayoutClassRefs((prev) => {
-      const next = prev.includes(classKey)
-        ? prev.filter((k) => k !== classKey)
-        : [...prev, classKey];
-      if (next.length > 0) {
-        const resolved = resolveTopologyLayoutClassRefs(next);
-        if (!resolved.ok) setLayoutClassRefError(resolved.error);
-      }
+      const next = prev.includes(classKey) ? prev.filter((k) => k !== classKey) : [...prev, classKey];
+      if (next.length > 0) { const r = resolveTopologyLayoutClassRefs(next); if (!r.ok) setLayoutClassRefError(r.error); }
       return next;
     });
   };
@@ -1833,59 +2345,34 @@ function LayoutBuilderSection(): JSX.Element {
   const applyManualLayoutClassRef = () => {
     const key = manualLayoutClassRef.trim();
     if (!key) return;
-    const resolved = resolveTopologyLayoutClassRefs([key]);
-    if (!resolved.ok) {
-      setLayoutClassRefError(resolved.error);
-      return;
-    }
+    const r = resolveTopologyLayoutClassRefs([key]);
+    if (!r.ok) { setLayoutClassRefError(r.error); return; }
     setLayoutClassRefError(null);
     setSelectedLayoutClassRefs((prev) => prev.includes(key) ? prev : [...prev, key]);
     setManualLayoutClassRef("");
   };
 
-  const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ?? null;
-  const canvasPreviewClass = topologyPreviewClasses?.ok ? topologyPreviewClasses.className : "";
-
   return (
     <div>
       <div class="alert-warn mb-3.5">
-        <strong>投影サーフェス境界:</strong> フロントエンドはドラフトレイアウト状態のみを保持します。
-        適用は <code>layout_patch:preview → validate → apply</code> 経由 — 直接 DB 書き込みはしません。
+        <strong>投影サーフェス境界 (v2):</strong> フロントエンドはドラフトレイアウト状態・マウスインタラクション・ビジュアルプレビューのみ保持。
+        適用は <code>layout_patch:preview → validate → apply</code> 経由 — 直接 DB 書き込み・topology 判断・promotion 判断はしません。
       </div>
 
       <RouteLayoutSelector
         candidates={layoutCandidates}
         routeKey={routeKey}
         layoutId={layoutId}
-        onRouteChange={(r) => {
-          setRouteKey(r);
-          setManualRouteKey("");
-          const first = layoutsForRoute(layoutCandidates, r)[0];
-          setLayoutId(first?.layoutId ?? "");
-          setManualLayoutId("");
-        }}
-        onLayoutChange={(l) => {
-          setLayoutId(l);
-          setManualLayoutId("");
-        }}
+        onRouteChange={(r) => { setRouteKey(r); setManualRouteKey(""); const first = layoutsForRoute(layoutCandidates, r)[0]; setLayoutId(first?.layoutId ?? ""); setManualLayoutId(""); }}
+        onLayoutChange={(l) => { setLayoutId(l); setManualLayoutId(""); }}
         disabled={selectorsDisabled}
         loadError={candidateErrors}
       />
 
       <AdvancedManualOverride title="manual override — layoutId / routeKey">
         <div class="flex flex-wrap gap-2">
-          <input
-            value={manualRouteKey}
-            onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
-            placeholder="routeKey 手入力"
-            class="input-mono flex-1 text-xs"
-          />
-          <input
-            value={manualLayoutId}
-            onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)}
-            placeholder="layoutId UUID 手入力"
-            class="input-mono flex-[2] text-xs"
-          />
+          <input value={manualRouteKey} onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey 手入力" class="input-mono flex-1 text-xs" />
+          <input value={manualLayoutId} onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId UUID 手入力" class="input-mono flex-[2] text-xs" />
         </div>
       </AdvancedManualOverride>
 
@@ -1893,92 +2380,76 @@ function LayoutBuilderSection(): JSX.Element {
         <p class="text-sm text-yellow-700 mb-2">ルートとレイアウトを選択してから preview / validate / apply を実行してください。</p>
       )}
 
-      <div class="mb-3 flex min-h-[280px] gap-2.5">
+      {/* v2 canvas toolbar */}
+      <div class="mb-2 flex flex-wrap items-center gap-3 text-xs">
+        <label class="flex cursor-pointer items-center gap-1">
+          <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid((e.target as HTMLInputElement).checked)} />
+          グリッド ({SNAP_SIZE}px snap)
+        </label>
+        {draftNodes.length > 0 && (
+          <button type="button" onClick={() => { setDraftNodes([]); setSelectedNodeId(null); }} class="btn-danger py-0 px-2 text-xs">
+            キャンバスをクリア
+          </button>
+        )}
+        <span class="text-gray-400">
+          {draftNodes.length} ノード
+          {selectedNode ? ` — 選択中: ${selectedNode.componentKey}` : ""}
+        </span>
+      </div>
+
+      {/* v2 main canvas area: palette + canvas + layer/inspector */}
+      <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
         <LayoutPalette onDragStart={handleDragStartPalette} entries={paletteEntries} status={paletteStatus} />
 
-        <div
-          onDragOver={handleDragOverCanvas}
-          onDrop={handleDropOnCanvas}
-          class={`relative min-h-[200px] flex-1 rounded-lg border-2 border-dashed border-gray-400 bg-gray-50 p-2.5 ${canvasPreviewClass}`}
-        >
-          <div class="mb-2 text-xs text-gray-400">
-            キャンバス — パレットからドロップ。クリックでインスペクター。
-          </div>
-          {draftNodes.length === 0 && (
-            <div class="py-16 text-center font-mono text-sm text-gray-300">
-              空です。パレットからコンポーネントをドラッグしてください。
-            </div>
-          )}
-          {draftNodes.map((node, idx) => (
-            <div
-              key={node.nodeId}
-              draggable={true}
-              onDragStart={() => handleDragStartCanvas(node.nodeId)}
-              onClick={() =>
-                setSelectedNodeId(node.nodeId === selectedNodeId ? null : node.nodeId)
-              }
-              class={`mb-1 flex cursor-grab select-none items-center justify-between rounded border-2 px-2.5 py-1.5 font-mono text-sm ${
-                node.nodeId === selectedNodeId
-                  ? "border-blue-600 bg-blue-50"
-                  : node.isDraftOnly
-                  ? "border-yellow-300 bg-yellow-50"
-                  : "border-blue-200 bg-white"
-              }`}
-            >
-              <div>
-                <span class="font-bold">{node.componentKey}</span>
-                {node.isDraftOnly && (
-                  <span class="badge-warn ml-1.5">ドラフトのみ — 適用ブロック</span>
-                )}
-                {node.slotKey && (
-                  <span class="ml-2 text-gray-600">スロット:<code>{node.slotKey}</code></span>
-                )}
-                <span class="ml-2 text-xs text-gray-300">
-                  順序:{node.orderIndex} 列:{node.gridCol} 行:{node.gridRow}
-                  {node.parentNodeId ? ` 親:${shortId(node.parentNodeId)}` : ""}
-                </span>
-              </div>
-              <div class="flex shrink-0 gap-0.5">
-                <button onClick={(e) => { e.stopPropagation(); moveLayoutNode(node.nodeId, "up"); }} disabled={idx === 0} class="btn-secondary px-1.5 py-0 text-xs">↑</button>
-                <button onClick={(e) => { e.stopPropagation(); moveLayoutNode(node.nodeId, "down"); }} disabled={idx === draftNodes.length - 1} class="btn-secondary px-1.5 py-0 text-xs">↓</button>
-                <button onClick={(e) => { e.stopPropagation(); removeNode(node.nodeId); }} class="btn-danger px-1.5 py-0 text-xs">✕</button>
-              </div>
-            </div>
-          ))}
+        <div class="min-w-0 flex-1">
+          <VisualLayoutCanvas
+            draftNodes={draftNodes}
+            selectedNodeId={selectedNodeId}
+            canvasRef={canvasRef}
+            liveDragNodeId={liveDragPos?.nodeId ?? null}
+            liveResizeNodeId={liveResizePos?.nodeId ?? null}
+            getLivePos={getLivePos}
+            showGrid={showGrid}
+            onSelectNode={(id) => setSelectedNodeId(id === selectedNodeId ? null : id)}
+            onDeselectAll={() => setSelectedNodeId(null)}
+            onNodeMouseDown={handleNodeMouseDown}
+            onResizeHandleMouseDown={handleResizeHandleMouseDown}
+            onCanvasMouseMove={handleCanvasMouseMove}
+            onCanvasMouseUp={handleCanvasMouseUp}
+            onDragOver={handleDragOverCanvas}
+            onDrop={handleDropOnCanvas}
+          />
         </div>
 
-        {selectedNode && (
-          <LayoutNodeInspector
-            node={selectedNode}
+        {/* right panel: layer tree + inspector */}
+        <div class="flex shrink-0 flex-col gap-2" style="width:196px;">
+          <LayerTree
             draftNodes={draftNodes}
-            slotKeyCandidates={slotKeyCandidates}
-            onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
-            onClose={() => setSelectedNodeId(null)}
+            selectedNodeId={selectedNodeId}
+            onSelect={(id) => setSelectedNodeId(id === selectedNodeId ? null : id)}
+            onMoveUp={(id) => moveLayoutNode(id, "up")}
+            onMoveDown={(id) => moveLayoutNode(id, "down")}
+            onDelete={removeNode}
           />
-        )}
+          {selectedNode && (
+            <CanvasInspector
+              node={selectedNode}
+              draftNodes={draftNodes}
+              slotKeyCandidates={slotKeyCandidates}
+              onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
+              onClose={() => setSelectedNodeId(null)}
+            />
+          )}
+        </div>
       </div>
 
       <Accordion title="topology layout class refs (layoutClassRefs)" defaultOpen={false}>
-        <TopologyLayoutClassPicker
-          selectedClassRefs={selectedLayoutClassRefs}
-          onToggle={toggleLayoutClassRef}
-          scopeFilter=""
-          allowedForFilter=""
-        />
-        {layoutClassRefError && (
-          <p class="text-red-600 text-sm mt-2">{layoutClassRefError}</p>
-        )}
+        <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
+        {layoutClassRefError && <p class="text-red-600 text-sm mt-2">{layoutClassRefError}</p>}
         <AdvancedManualOverride title="manual override — raw classKey（理由必須: SSOT外 ref 検証用）">
           <div class="flex flex-wrap gap-2">
-            <input
-              value={manualLayoutClassRef}
-              onInput={(e) => setManualLayoutClassRef((e.target as HTMLInputElement).value)}
-              placeholder="layout.root.grid"
-              class="input-mono flex-1 text-xs"
-            />
-            <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">
-              手動 classKey を適用
-            </button>
+            <input value={manualLayoutClassRef} onInput={(e) => setManualLayoutClassRef((e.target as HTMLInputElement).value)} placeholder="layout.root.grid" class="input-mono flex-1 text-xs" />
+            <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">手動 classKey を適用</button>
           </div>
         </AdvancedManualOverride>
       </Accordion>
@@ -2000,9 +2471,6 @@ function LayoutBuilderSection(): JSX.Element {
         <button onClick={() => callLayoutPatch("preview")} disabled={loading || !canPatch} class="btn-secondary">1. プレビュー</button>
         <button onClick={() => callLayoutPatch("validate")} disabled={loading || !canPatch} class="btn border border-blue-600 text-blue-600 hover:bg-blue-50">2. バリデート</button>
         <button onClick={() => callLayoutPatch("apply")} disabled={loading || !canPatch} class="btn-success">3. 適用</button>
-        {draftNodes.length > 0 && (
-          <button onClick={() => { setDraftNodes([]); setSelectedNodeId(null); }} class="btn-danger">キャンバスをクリア</button>
-        )}
       </div>
       <AdminActionHint>
         プレビュー: 解決結果のみ（DB 不変）。バリデート: ref 整合チェック。適用: layout を DB へ明示反映。ドラフトのみノードがあると適用はブロック。
@@ -2019,8 +2487,8 @@ function LayoutBuilderSection(): JSX.Element {
       )}
       {patchSummary && <LayoutPatchSummaryPanel summary={patchSummary} />}
 
-      <Accordion title="debug — tensorPatchJson / raw backend JSON" defaultOpen={false}>
-        <p class="text-muted-xs mb-2">開発者向け。通常操作では summary のみ参照してください。</p>
+      <Accordion title="debug — tensorPatchJson (v2 visual coords) / raw backend JSON" defaultOpen={false}>
+        <p class="text-muted-xs mb-2">開発者向け。v2 payload には x/y/width/height が含まれます。</p>
         <pre class="pre-box max-h-40 overflow-y-auto m-0 mb-2">{tensorPatchJson}</pre>
         {debugJson && (
           <pre class="pre-box max-h-[200px] overflow-y-auto border border-gray-200 m-0">{debugJson}</pre>
