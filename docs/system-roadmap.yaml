@@ -1899,7 +1899,10 @@ system_roadmap_ssot:
         topology.components_layout_design, topology.ui_wiring_registry, topology.ui_topology_tensor,
         topology.ui_builder_components, topology.components_style_design, topology.components_package_design.
         Upsert policy: ON CONFLICT (business_key) DO NOTHING; canonical rows take precedence.
-        Migration DDL: db/migrations/ui_topology_to_canonical_schema.sql.
+        Migration DDL: db/migrations/ui_topology_to_canonical_schema.sql. Tensor parent self-references
+        are remapped through canonical logical tuples; dangling legacy parent references fail explicitly.
+        DB-backed migration regression runs in runtime-environment-gate; without DB env the same script
+        intentionally provides static-only evidence and must not be treated as DB-backed completion evidence.
         context_* tables placement decision: stays in public schema as recommendation learning surfaces.
       files:
         - docs/design/db-schema.yaml
@@ -1907,6 +1910,8 @@ system_roadmap_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - .agent/tests/check-sql-attention-ssot.sh
         - .agent/tests/check-structure.sh
+        - .agent/tests/check-migration-ui-topology.sh
+        - .agent/tests/check-runtime-environment.sh
         - .agent/tests/check-ssot-vocabulary-contract.sh
         - db/schema.sql
         - db/topology_tables.sql
@@ -1926,6 +1931,7 @@ system_roadmap_ssot:
         tests:
           - check-sql-attention-ssot.sh
           - check-structure.sh
+          - check-migration-ui-topology.sh
           - check-backend-tests.sh
           - check-runtime-semantics.sh
           - check-default-entity-search.sh
@@ -1938,6 +1944,7 @@ system_roadmap_ssot:
           - runtime-semantics
           - default-entity-search
           - unified-test-gate
+          - runtime-environment-gate
       completion_condition:
         - ssot_canonical_schema_namespaces_match_topology_hubs_logs
         - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count

@@ -6,6 +6,8 @@
 #   3. (Requires DB) Idempotency: re-running migration on already-migrated DB is a no-op.
 #   4. (Requires DB) Conflict case: child FK remapped to canonical UUID when parent row
 #      existed in canonical with same business key but different UUID.
+#   5. (Requires DB) Tensor self-reference: logical parent remap survives displaced UUIDs;
+#      dangling legacy parent references are rejected explicitly.
 #
 # DB tests require POSTGRES_HOST/PORT/DB/USER/PASSWORD.  If env vars are absent,
 # only static checks run and the script exits with the static result.
@@ -52,6 +54,11 @@ check_content "$MIGRATION" "IS NOT DISTINCT FROM"
 check_content "$MIGRATION" "parent_tensor_id = NULL"
 check_content "$MIGRATION" "Pass 1"
 check_content "$MIGRATION" "Pass 2"
+check_content "$MIGRATION" "Explicit dangling-reference policy"
+check_content "$MIGRATION" "Repair the legacy tensor hierarchy before retrying."
+check_content "$MIGRATION" "parent_canonical.route_key   = parent_pub.route_key"
+check_content "$MIGRATION" "child_canonical.route_key     = child_pub.route_key"
+check_content "$MIGRATION" "logical parent_tensor_id remap"
 check_content "$MIGRATION" "DROP TABLE IF EXISTS public.ui_topology_tensor CASCADE"
 check_content "$MIGRATION" "DROP TABLE IF EXISTS public.ui_package_component_map CASCADE"
 check_content "$MIGRATION" "DROP TABLE IF EXISTS public.ui_component_package CASCADE"
@@ -269,13 +276,141 @@ BEGIN
 END;
 $$;
 
+-- Tensor parent self-reference regression: canonical parent and child tensors already
+-- exist under displaced UUIDs, while old child points to the old public parent UUID.
+INSERT INTO topology.components_layout_design (layout_id, layout_key, layout_kind)
+VALUES ('cccccccc-0000-0000-0000-000000000001', 'sim_layout', 'stack')
+ON CONFLICT (layout_key) DO NOTHING;
+
+INSERT INTO topology.ui_wiring_registry (wiring_id, wiring_key, wiring_kind, target_surface)
+VALUES ('dddddddd-0000-0000-0000-000000000001', 'sim_wiring', 'bind', 'sim')
+ON CONFLICT (wiring_key) DO NOTHING;
+
+DO $$
+DECLARE
+  canon_pkg_id            uuid;
+  canon_layout_id         uuid;
+  canon_wiring_id         uuid;
+  canon_parent_tensor_id  uuid := gen_random_uuid();
+  canon_child_tensor_id   uuid := gen_random_uuid();
+  old_pkg_id              uuid := gen_random_uuid();
+  old_layout_id           uuid := gen_random_uuid();
+  old_wiring_id           uuid := gen_random_uuid();
+  old_parent_tensor_id    uuid := gen_random_uuid();
+  old_child_tensor_id     uuid := gen_random_uuid();
+  dangling_tensor_id      uuid := gen_random_uuid();
+  dangling_parent_id      uuid := gen_random_uuid();
+  dangling_rejected       boolean := false;
+  bad_refs                integer;
+BEGIN
+  SELECT package_id INTO canon_pkg_id FROM topology.ui_component_package WHERE package_key = 'sim_pkg';
+  SELECT layout_id  INTO canon_layout_id FROM topology.components_layout_design WHERE layout_key = 'sim_layout';
+  SELECT wiring_id  INTO canon_wiring_id FROM topology.ui_wiring_registry WHERE wiring_key = 'sim_wiring';
+
+  INSERT INTO topology.ui_topology_tensor
+    (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index)
+  VALUES
+    (canon_parent_tensor_id, 'sim_parent_route', canon_pkg_id, canon_layout_id, canon_wiring_id, 'parent', 1),
+    (canon_child_tensor_id,  'sim_child_route',  canon_pkg_id, canon_layout_id, canon_wiring_id, 'child',  2);
+
+  CREATE TEMP TABLE sim_old_layout (layout_id uuid, layout_key text) ON COMMIT DROP;
+  CREATE TEMP TABLE sim_old_wiring (wiring_id uuid, wiring_key text) ON COMMIT DROP;
+  CREATE TEMP TABLE sim_old_tensor (
+    tensor_id uuid, route_key text, package_id uuid, layout_id uuid, wiring_id uuid,
+    parent_tensor_id uuid, slot_key text, order_index int
+  ) ON COMMIT DROP;
+
+  INSERT INTO sim_old_pkg VALUES (old_pkg_id, 'sim_pkg', 'ui', 'active', '{}');
+  INSERT INTO sim_old_layout VALUES (old_layout_id, 'sim_layout');
+  INSERT INTO sim_old_wiring VALUES (old_wiring_id, 'sim_wiring');
+  INSERT INTO sim_old_tensor VALUES
+    (old_parent_tensor_id, 'sim_parent_route', old_pkg_id, old_layout_id, old_wiring_id, NULL,                 'parent', 1),
+    (old_child_tensor_id,  'sim_child_route',  old_pkg_id, old_layout_id, old_wiring_id, old_parent_tensor_id, 'child',  2);
+
+  -- Mirror migration Pass 2: resolve the legacy parent through its remapped logical
+  -- tuple and target the canonical child through its own logical tuple.
+  UPDATE topology.ui_topology_tensor child_canonical
+  SET parent_tensor_id = parent_canonical.tensor_id
+  FROM sim_old_tensor child_pub
+  JOIN sim_old_pkg child_pp ON child_pp.package_id = child_pub.package_id
+  JOIN topology.ui_component_package child_cp ON child_cp.package_key = child_pp.package_key
+  JOIN sim_old_layout child_pl ON child_pl.layout_id = child_pub.layout_id
+  JOIN topology.components_layout_design child_cl ON child_cl.layout_key = child_pl.layout_key
+  JOIN sim_old_wiring child_pw ON child_pw.wiring_id = child_pub.wiring_id
+  JOIN topology.ui_wiring_registry child_cw ON child_cw.wiring_key = child_pw.wiring_key
+  JOIN sim_old_tensor parent_pub ON parent_pub.tensor_id = child_pub.parent_tensor_id
+  JOIN sim_old_pkg parent_pp ON parent_pp.package_id = parent_pub.package_id
+  JOIN topology.ui_component_package parent_cp ON parent_cp.package_key = parent_pp.package_key
+  JOIN sim_old_layout parent_pl ON parent_pl.layout_id = parent_pub.layout_id
+  JOIN topology.components_layout_design parent_cl ON parent_cl.layout_key = parent_pl.layout_key
+  JOIN sim_old_wiring parent_pw ON parent_pw.wiring_id = parent_pub.wiring_id
+  JOIN topology.ui_wiring_registry parent_cw ON parent_cw.wiring_key = parent_pw.wiring_key
+  JOIN topology.ui_topology_tensor parent_canonical
+    ON parent_canonical.route_key   = parent_pub.route_key
+   AND parent_canonical.package_id  = parent_cp.package_id
+   AND parent_canonical.layout_id   = parent_cl.layout_id
+   AND parent_canonical.wiring_id   = parent_cw.wiring_id
+   AND parent_canonical.slot_key    IS NOT DISTINCT FROM parent_pub.slot_key
+   AND parent_canonical.order_index = parent_pub.order_index
+  WHERE child_pub.parent_tensor_id    IS NOT NULL
+    AND child_canonical.route_key     = child_pub.route_key
+    AND child_canonical.package_id    = child_cp.package_id
+    AND child_canonical.layout_id     = child_cl.layout_id
+    AND child_canonical.wiring_id     = child_cw.wiring_id
+    AND child_canonical.slot_key      IS NOT DISTINCT FROM child_pub.slot_key
+    AND child_canonical.order_index   = child_pub.order_index
+    AND child_canonical.parent_tensor_id IS NULL;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM topology.ui_topology_tensor
+    WHERE tensor_id = canon_child_tensor_id
+      AND parent_tensor_id = canon_parent_tensor_id
+  ) THEN
+    RAISE EXCEPTION 'tensor parent remap simulation FAILED: child does not reference canonical parent tensor UUID';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM topology.ui_topology_tensor
+    WHERE tensor_id = canon_child_tensor_id
+      AND parent_tensor_id = old_parent_tensor_id
+  ) THEN
+    RAISE EXCEPTION 'tensor parent remap simulation FAILED: child still references old public parent tensor UUID';
+  END IF;
+
+  -- Fix the explicit dangling-reference policy: a non-NULL ref with no old parent
+  -- row must be rejected rather than silently retained as NULL.
+  INSERT INTO sim_old_tensor VALUES
+    (dangling_tensor_id, 'sim_dangling_route', old_pkg_id, old_layout_id, old_wiring_id, dangling_parent_id, 'dangling', 3);
+  BEGIN
+    SELECT COUNT(*) INTO bad_refs
+    FROM sim_old_tensor child_pub
+    WHERE child_pub.parent_tensor_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM sim_old_tensor parent_pub
+        WHERE parent_pub.tensor_id = child_pub.parent_tensor_id
+      );
+    IF bad_refs > 0 THEN
+      RAISE EXCEPTION 'expected dangling legacy parent rejection';
+    END IF;
+  EXCEPTION WHEN OTHERS THEN
+    dangling_rejected := true;
+  END;
+
+  IF NOT dangling_rejected THEN
+    RAISE EXCEPTION 'tensor dangling parent simulation FAILED: missing old parent row was not rejected';
+  END IF;
+
+  RAISE NOTICE 'tensor parent remap simulation PASSED: logical parent resolved and dangling ref rejected';
+END;
+$$;
+
 ROLLBACK;
 ENDSQL
 
 if "${PSQL_BASE[@]}" --file "$CONFLICT_SIM_SQL" >/dev/null; then
-  echo "OK  [sim] conflict-case FK remapping simulation passed (rolled back)"
+  echo "OK  [sim] conflict-case FK and tensor parent remapping simulation passed (rolled back)"
 else
-  fail "conflict-case FK remapping simulation failed"
+  fail "conflict-case FK and tensor parent remapping simulation failed"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then

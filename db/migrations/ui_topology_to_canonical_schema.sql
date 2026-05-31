@@ -31,7 +31,9 @@
 --   Unresolvable references (old parent UUID has no matching canonical business key)
 --   raise RAISE EXCEPTION — no silent skip.
 --   ui_topology_tensor.parent_tensor_id is resolved in a second UPDATE pass via
---   direct UUID match; unresolvable self-references are left NULL (FK ON DELETE SET NULL).
+--   the parent's remapped canonical logical tuple.  A non-NULL legacy parent reference
+--   must resolve; dangling legacy parent rows and unresolved logical parents raise
+--   RAISE EXCEPTION rather than silently degrading the relationship to NULL.
 --
 -- RETIREMENT POLICY:
 --   After data copy, old public tables are DROPPED in reverse dependency order.
@@ -211,10 +213,14 @@ BEGIN
     --
     -- parent_tensor_id is a self-reference handled in two passes:
     --   Pass 1: insert all rows with parent_tensor_id = NULL.
-    --   Pass 2: UPDATE parent_tensor_id to the canonical tensor_id via direct
-    --           UUID match.  Rows where the old parent UUID does not exist in
-    --           canonical remain NULL (acceptable: FK is ON DELETE SET NULL;
-    --           NULL = root-level tensor).
+    --   Pass 2: resolve the old public parent row, remap its package/layout/wiring
+    --           business keys to the canonical tuple, then UPDATE parent_tensor_id
+    --           to the matching canonical tensor_id.  This also handles displaced
+    --           child tensor UUIDs by resolving the child through its logical tuple.
+    --
+    -- Explicit dangling-reference policy: when a non-NULL legacy parent_tensor_id
+    -- has no public parent row, abort with RAISE EXCEPTION.  ON DELETE SET NULL is a
+    -- post-migration deletion policy; it is not permission to discard legacy data.
     --
     -- Logical duplicate detection uses WHERE NOT EXISTS with IS NOT DISTINCT FROM
     -- for nullable slot_key.  ON CONFLICT (tensor_id) handles re-runs.
@@ -315,22 +321,93 @@ BEGIN
         GET DIAGNOSTICS v_count = ROW_COUNT;
         RAISE NOTICE 'topology.ui_topology_tensor: inserted % row(s) (Pass 1, parent_tensor_id=NULL)', v_count;
 
-        -- Pass 2: restore parent_tensor_id via direct UUID match.
-        -- When the old public parent_tensor_id exists in canonical (no UUID displacement),
-        -- set it.  Rows where old UUID is absent remain NULL (root-level tensor).
-        UPDATE topology.ui_topology_tensor canonical
-        SET parent_tensor_id = pub.parent_tensor_id
-        FROM public.ui_topology_tensor pub
-        WHERE canonical.tensor_id       = pub.tensor_id
-          AND pub.parent_tensor_id      IS NOT NULL
-          AND canonical.parent_tensor_id IS NULL
-          AND EXISTS (
-              SELECT 1 FROM topology.ui_topology_tensor parent_row
-              WHERE parent_row.tensor_id = pub.parent_tensor_id
+        -- Pass 2 precondition: a non-NULL legacy parent reference must point to
+        -- an old public parent row.  A dangling legacy reference is data loss risk,
+        -- so abort explicitly instead of treating the child as a root tensor.
+        SELECT COUNT(*) INTO v_bad_refs
+        FROM public.ui_topology_tensor child_pub
+        WHERE child_pub.parent_tensor_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.ui_topology_tensor parent_pub
+              WHERE parent_pub.tensor_id = child_pub.parent_tensor_id
           );
+        IF v_bad_refs > 0 THEN
+            RAISE EXCEPTION
+                'ui_topology_to_canonical_schema: % ui_topology_tensor row(s) have dangling '
+                'parent_tensor_id values with no matching public parent tensor row. '
+                'Repair the legacy tensor hierarchy before retrying.',
+                v_bad_refs;
+        END IF;
+
+        -- Pass 2 precondition: remap each public parent row's package/layout/wiring
+        -- UUIDs through business keys and require a matching canonical logical tuple.
+        SELECT COUNT(*) INTO v_bad_refs
+        FROM public.ui_topology_tensor child_pub
+        JOIN public.ui_topology_tensor parent_pub ON parent_pub.tensor_id = child_pub.parent_tensor_id
+        WHERE child_pub.parent_tensor_id IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM public.ui_component_package parent_pp
+              JOIN topology.ui_component_package parent_cp ON parent_cp.package_key = parent_pp.package_key
+              JOIN public.ui_layout_registry parent_pl ON parent_pl.layout_id = parent_pub.layout_id
+              JOIN topology.components_layout_design parent_cl ON parent_cl.layout_key = parent_pl.layout_key
+              JOIN public.ui_wiring_registry parent_pw ON parent_pw.wiring_id = parent_pub.wiring_id
+              JOIN topology.ui_wiring_registry parent_cw ON parent_cw.wiring_key = parent_pw.wiring_key
+              JOIN topology.ui_topology_tensor parent_canonical
+                ON parent_canonical.route_key   = parent_pub.route_key
+               AND parent_canonical.package_id  = parent_cp.package_id
+               AND parent_canonical.layout_id   = parent_cl.layout_id
+               AND parent_canonical.wiring_id   = parent_cw.wiring_id
+               AND parent_canonical.slot_key    IS NOT DISTINCT FROM parent_pub.slot_key
+               AND parent_canonical.order_index = parent_pub.order_index
+              WHERE parent_pp.package_id = parent_pub.package_id
+          );
+        IF v_bad_refs > 0 THEN
+            RAISE EXCEPTION
+                'ui_topology_to_canonical_schema: % ui_topology_tensor row(s) have '
+                'parent_tensor_id values whose logical parent tuple cannot be resolved '
+                'to a canonical ui_topology_tensor row.',
+                v_bad_refs;
+        END IF;
+
+        -- Restore parent_tensor_id by resolving both sides through canonical logical
+        -- tuples.  Existing canonical parent links take precedence; only NULL links
+        -- are filled by legacy migration data.
+        UPDATE topology.ui_topology_tensor child_canonical
+        SET parent_tensor_id = parent_canonical.tensor_id
+        FROM public.ui_topology_tensor child_pub
+        JOIN public.ui_component_package child_pp ON child_pp.package_id = child_pub.package_id
+        JOIN topology.ui_component_package child_cp ON child_cp.package_key = child_pp.package_key
+        JOIN public.ui_layout_registry child_pl ON child_pl.layout_id = child_pub.layout_id
+        JOIN topology.components_layout_design child_cl ON child_cl.layout_key = child_pl.layout_key
+        JOIN public.ui_wiring_registry child_pw ON child_pw.wiring_id = child_pub.wiring_id
+        JOIN topology.ui_wiring_registry child_cw ON child_cw.wiring_key = child_pw.wiring_key
+        JOIN public.ui_topology_tensor parent_pub ON parent_pub.tensor_id = child_pub.parent_tensor_id
+        JOIN public.ui_component_package parent_pp ON parent_pp.package_id = parent_pub.package_id
+        JOIN topology.ui_component_package parent_cp ON parent_cp.package_key = parent_pp.package_key
+        JOIN public.ui_layout_registry parent_pl ON parent_pl.layout_id = parent_pub.layout_id
+        JOIN topology.components_layout_design parent_cl ON parent_cl.layout_key = parent_pl.layout_key
+        JOIN public.ui_wiring_registry parent_pw ON parent_pw.wiring_id = parent_pub.wiring_id
+        JOIN topology.ui_wiring_registry parent_cw ON parent_cw.wiring_key = parent_pw.wiring_key
+        JOIN topology.ui_topology_tensor parent_canonical
+          ON parent_canonical.route_key   = parent_pub.route_key
+         AND parent_canonical.package_id  = parent_cp.package_id
+         AND parent_canonical.layout_id   = parent_cl.layout_id
+         AND parent_canonical.wiring_id   = parent_cw.wiring_id
+         AND parent_canonical.slot_key    IS NOT DISTINCT FROM parent_pub.slot_key
+         AND parent_canonical.order_index = parent_pub.order_index
+        WHERE child_pub.parent_tensor_id    IS NOT NULL
+          AND child_canonical.route_key     = child_pub.route_key
+          AND child_canonical.package_id    = child_cp.package_id
+          AND child_canonical.layout_id     = child_cl.layout_id
+          AND child_canonical.wiring_id     = child_cw.wiring_id
+          AND child_canonical.slot_key      IS NOT DISTINCT FROM child_pub.slot_key
+          AND child_canonical.order_index   = child_pub.order_index
+          AND child_canonical.parent_tensor_id IS NULL;
 
         GET DIAGNOSTICS v_count = ROW_COUNT;
-        RAISE NOTICE 'topology.ui_topology_tensor: updated % row(s) with parent_tensor_id (Pass 2)', v_count;
+        RAISE NOTICE 'topology.ui_topology_tensor: updated % row(s) with logical parent_tensor_id remap (Pass 2)', v_count;
     END IF;
 
     -------------------------------------------------------------------------

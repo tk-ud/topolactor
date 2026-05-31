@@ -16,6 +16,7 @@ require_tool docker
 require_tool jq
 require_tool curl
 require_tool dotnet
+require_tool psql
 
 assert_relation_exists() {
   local relation="$1"
@@ -80,6 +81,14 @@ echo "=== [RUNTIME_ENV] Verify DB connectivity and required schema relations ===
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT 1;"
 assert_relation_exists "public.manifest"
 assert_relation_exists "topology.topology_edit_log"
+
+echo "=== [RUNTIME_ENV] Run UI topology migration regression against live DB ==="
+POSTGRES_HOST=127.0.0.1 \
+POSTGRES_PORT=5432 \
+POSTGRES_DB=topolactor_demo \
+POSTGRES_USER=topolactor_demo \
+POSTGRES_PASSWORD=topolactor_demo \
+  bash .agent/tests/check-migration-ui-topology.sh
 
 echo "=== [RUNTIME_ENV] Run integration tests against live DB ==="
 DATABASE_URL='Host=127.0.0.1;Port=5432;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo' \
