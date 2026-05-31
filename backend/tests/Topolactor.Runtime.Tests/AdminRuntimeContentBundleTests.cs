@@ -268,6 +268,115 @@ public class AdminRuntimeContentBundleTests
         Assert.Equal("HUB_NOT_FOUND", error!.Code);
     }
 
+    // Hub Navigation tests
+
+    [Fact]
+    public async Task HubNavigation_ListManifests_ReturnsSeededManifest()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "list_manifests", null, "admin", null, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetArrayLength() >= 1);
+        var first = data.Value[0];
+        Assert.Equal(InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            first.GetProperty("topologyManifestId").GetString());
+        Assert.True(first.GetProperty("hasHubRelations").GetBoolean());
+    }
+
+    [Fact]
+    public async Task HubNavigation_GetHubRelations_ReturnsSeededEntry()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "get_hub_relations", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetArrayLength() >= 1);
+        Assert.Equal(1, data.Value[0].GetProperty("sequencePosition").GetInt32());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Create_AddsNewEntry()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            sequencePosition = 99,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "create", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("active", data.Value.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Create_SequenceConflict_ReturnsError()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            topologyManifestId = InMemoryContentBundleRepository.DemoTopologyManifestId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            sequencePosition = 1, // already exists in seed
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "create", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.False(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("SEQUENCE_CONFLICT", data.Value.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Update_ChangesSequencePosition()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+            relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
+            sequencePosition = 5,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("active", data.Value.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task HubNavigation_Deprecate_SetsDeprecatedStatus()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "deprecate", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("deprecated", data.Value.GetProperty("status").GetString());
+    }
+
     private static async Task<string> CreateValidDraftAsync(AdminRuntime runtime)
     {
         var payload = JsonSerializer.SerializeToElement(new

@@ -255,6 +255,81 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
                 "Draft promoted to active entity.", readback), null));
     }
 
+    // Hub Navigation in-memory store
+    private readonly List<(Guid HubRelationId, Guid TopologyManifestId, Guid RelatedHubId, int SequencePosition, string Status)> _hubRelations =
+    [
+        (DemoHubRelationId, DemoTopologyManifestId, DemoRelatedHubId, 1, "active"),
+    ];
+
+    public override Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default)
+    {
+        var count = _hubRelations.Count(hr => hr.TopologyManifestId == DemoTopologyManifestId && hr.Status == "active");
+        IReadOnlyList<HubNavigationManifestItemDto> items =
+        [
+            new(DemoTopologyManifestId.ToString(), "demo_manifest", DemoHubId.ToString(), count > 0, count),
+        ];
+        return Task.FromResult(items);
+    }
+
+    public override Task<IReadOnlyList<HubNavigationHubRelationItemDto>> ListHubRelationsByManifestAsync(
+        Guid topologyManifestId, CancellationToken ct = default)
+    {
+        var items = _hubRelations
+            .Where(hr => hr.TopologyManifestId == topologyManifestId)
+            .Select(hr => new HubNavigationHubRelationItemDto(
+                hr.HubRelationId.ToString(), hr.TopologyManifestId.ToString(),
+                hr.RelatedHubId.ToString(), $"Hub {hr.RelatedHubId.ToString()[..8]}…",
+                hr.SequencePosition, null, hr.Status))
+            .ToList();
+        return Task.FromResult<IReadOnlyList<HubNavigationHubRelationItemDto>>(items);
+    }
+
+    public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(
+        Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+    {
+        if (topologyManifestId != DemoTopologyManifestId)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Manifest not found.", "MANIFEST_NOT_FOUND"), null));
+        if (_hubRelations.Any(hr => hr.TopologyManifestId == topologyManifestId && hr.SequencePosition == sequencePosition && hr.Status == "active"))
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", $"Sequence position {sequencePosition} already exists.", "SEQUENCE_CONFLICT"), null));
+
+        var newId = Guid.NewGuid();
+        _hubRelations.Add((newId, topologyManifestId, relatedHubId, sequencePosition, "active"));
+        return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+            (new HubNavigationLifecycleResponseDto(true, newId.ToString(), "active", "Hub relation created."), null));
+    }
+
+    public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
+        Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+    {
+        var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == hubRelationId && hr.Status == "active");
+        if (idx < 0)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
+                    "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null));
+
+        var existing = _hubRelations[idx];
+        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, relatedHubId, sequencePosition, "active");
+        return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+            (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "active", "Hub relation updated."), null));
+    }
+
+    public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(
+        Guid hubRelationId, CancellationToken ct = default)
+    {
+        var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == hubRelationId && hr.Status == "active");
+        if (idx < 0)
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
+                    "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null));
+
+        var existing = _hubRelations[idx];
+        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, existing.RelatedHubId, existing.SequencePosition, "deprecated");
+        return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+            (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "deprecated", "Hub relation deprecated."), null));
+    }
+
     private static ContentBundleRefContext BuildRefContext(
         Guid hubId, IReadOnlyList<Guid> relationIds, string? stateName)
     {

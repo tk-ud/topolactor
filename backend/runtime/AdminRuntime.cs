@@ -248,6 +248,11 @@ public class AdminRuntime
             "content_bundle:get_relation"               => await DataContentBundleGetRelationAsync(vector, ct),
             "content_bundle:update_entity_draft"        => await DataContentBundleUpdateDraftAsync(vector, ct),
             "content_bundle:list_hub_relations"         => await DataContentBundleListHubRelationsAsync(ct),
+            "hub_navigation:list_manifests"             => await HubNavigationListManifestsAsync(ct),
+            "hub_navigation:get_hub_relations"          => await HubNavigationGetHubRelationsAsync(vector, ct),
+            "hub_navigation:create"                     => await HubNavigationCreateAsync(vector, ct),
+            "hub_navigation:update"                     => await HubNavigationUpdateAsync(vector, ct),
+            "hub_navigation:deprecate"                  => await HubNavigationDeprecateAsync(vector, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };
@@ -1781,5 +1786,95 @@ public class AdminRuntime
                 result.ValidatedRuntimeCount,
                 "Seed import completed via canonical runtime route.",
                 [])), null);
+    }
+
+    // -----------------------------------------------------------------------
+    // Hub Navigation layer
+    // -----------------------------------------------------------------------
+
+    private async Task<(JsonElement? data, ValidationError? error)> HubNavigationListManifestsAsync(
+        CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+        var items = await _contentBundleRepository.ListTopologyManifestsAsync(ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> HubNavigationGetHubRelationsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object ||
+            !vector.Payload.Value.TryGetProperty("topologyManifestId", out var midEl) ||
+            midEl.ValueKind != JsonValueKind.String ||
+            !Guid.TryParse(midEl.GetString(), out var manifestId))
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.topologyManifestId is required."));
+        }
+
+        var items = await _contentBundleRepository.ListHubRelationsByManifestAsync(manifestId, ct);
+        return (JsonSerializer.SerializeToElement(items), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> HubNavigationCreateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload is required."));
+
+        var payload = vector.Payload.Value;
+        if (!payload.TryGetProperty("topologyManifestId", out var midEl) || !Guid.TryParse(midEl.GetString(), out var manifestId))
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.topologyManifestId is required."));
+        if (!payload.TryGetProperty("relatedHubId", out var hidEl) || !Guid.TryParse(hidEl.GetString(), out var relatedHubId))
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.relatedHubId is required."));
+        if (!payload.TryGetProperty("sequencePosition", out var seqEl) || seqEl.ValueKind != JsonValueKind.Number)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.sequencePosition is required."));
+
+        var (response, error) = await _contentBundleRepository.CreateHubRelationAsync(
+            manifestId, relatedHubId, seqEl.GetInt32(), ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> HubNavigationUpdateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload is required."));
+
+        var payload = vector.Payload.Value;
+        if (!payload.TryGetProperty("hubRelationId", out var hridEl) || !Guid.TryParse(hridEl.GetString(), out var hubRelationId))
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.hubRelationId is required."));
+        if (!payload.TryGetProperty("relatedHubId", out var hidEl) || !Guid.TryParse(hidEl.GetString(), out var relatedHubId))
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.relatedHubId is required."));
+        if (!payload.TryGetProperty("sequencePosition", out var seqEl) || seqEl.ValueKind != JsonValueKind.Number)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.sequencePosition is required."));
+
+        var (response, error) = await _contentBundleRepository.UpdateHubRelationAsync(
+            hubRelationId, relatedHubId, seqEl.GetInt32(), ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> HubNavigationDeprecateAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_contentBundleRepository is null) return (null, ContentBundleRepositoryNotAvailable());
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object ||
+            !vector.Payload.Value.TryGetProperty("hubRelationId", out var hridEl) ||
+            !Guid.TryParse(hridEl.GetString(), out var hubRelationId))
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.hubRelationId is required."));
+        }
+
+        var (response, error) = await _contentBundleRepository.DeprecateHubRelationAsync(hubRelationId, ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(response), null);
     }
 }
