@@ -12,6 +12,7 @@ import { createSseReceiver, extractCiAttentionFragmentPayload, type CiAttentionF
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
+import UiBuilderFlowStepper from "../components/UiBuilderFlowStepper.tsx";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
@@ -3085,6 +3086,9 @@ export default function UiBuilderAdmin(): JSX.Element {
         prerequisites={ADMIN_UI_BUILDER_GUIDE.prerequisites}
       />
       <AdminHelpPanel {...ADMIN_UI_BUILDER_GUIDE} />
+
+      {/* Stepper: bucket → generate → promote → layout → preview → validate → apply → runtime */}
+      <UiBuilderFlowStepper activeTab={activeTab} onNavigate={setActiveTab} />
 
       <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
 

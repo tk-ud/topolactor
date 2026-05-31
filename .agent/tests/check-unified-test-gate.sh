@@ -75,16 +75,36 @@ fi
 
 echo ""
 echo "=== [FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests ==="
-echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts"
+echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
+echo "           uiBuilderStepper.test.ts"
 
 if deno test \
     frontend/tests/adminApi.test.ts \
     frontend/tests/defaultEntitySearch.test.ts \
     frontend/tests/pipelineContinuity.test.ts \
+    frontend/tests/uiBuilderStepper.test.ts \
     --allow-read; then
   echo "OK  [FRONTEND_CONTRACT] frontend contract tests passed"
 else
   fail "[FRONTEND_CONTRACT] frontend contract tests failed"
+fi
+
+# ─── CATALOG_SSOT_ALIGNMENT ───────────────────────────────────────────────────
+
+echo ""
+echo "=== [CATALOG_SSOT_ALIGNMENT] Frontend catalog / seed / SSOT drift detection tests ==="
+echo "    Scope: componentCatalogSeedRegistration.test.ts, documentCanvasCatalogCheck.test.ts,"
+echo "           ssotReaderCatalog.test.ts"
+echo "    Note: requires --allow-read (reads db/seed_empty.sql, docs/design/*.yaml)"
+
+if deno test \
+    frontend/tests/componentCatalogSeedRegistration.test.ts \
+    frontend/tests/documentCanvasCatalogCheck.test.ts \
+    frontend/tests/ssotReaderCatalog.test.ts \
+    --allow-read; then
+  echo "OK  [CATALOG_SSOT_ALIGNMENT] catalog/seed/SSOT alignment tests passed"
+else
+  fail "[CATALOG_SSOT_ALIGNMENT] catalog/seed/SSOT alignment tests failed"
 fi
 
 
