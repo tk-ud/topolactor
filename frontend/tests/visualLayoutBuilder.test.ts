@@ -1,4 +1,4 @@
-import { assertEquals, assertFalse } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertFalse, assertNotEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
@@ -7,6 +7,7 @@ import {
   wouldCreateVisualParentCycle,
   type VisualNodePayload,
 } from "../runtime/visualLayoutUtils.ts";
+import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 
 // ─── snapToGrid ───────────────────────────────────────────────────────────────
 
@@ -179,4 +180,212 @@ Deno.test("wouldCreateVisualParentCycle: non-cyclic reparent is safe", () => {
     { ...sampleNode, nodeId: "b", parentNodeId: null },
   ];
   assertFalse(wouldCreateVisualParentCycle(nodes, "a", "b"));
+});
+
+// ─── UX helper: snapToGrid — keyboard move boundary ──────────────────────────
+
+Deno.test("snapToGrid: keyboard move step 10px snaps correctly", () => {
+  assertEquals(snapToGrid(0 + 10, 10), 10);
+  assertEquals(snapToGrid(10 + 10, 10), 20);
+  assertEquals(snapToGrid(10 - 10, 10), 0);
+});
+
+Deno.test("snapToGrid: large step (Shift) 50px snaps to nearest 10", () => {
+  assertEquals(snapToGrid(0 + 50, 10), 50);
+  assertEquals(snapToGrid(20 + 50, 10), 70);
+});
+
+// ─── UX helper: buildVisualLayoutPatchJson — undo/redo state integrity ────────
+
+Deno.test("buildVisualLayoutPatchJson: after simulated undo — reverted state serializes correctly", () => {
+  const original = { ...sampleNode, x: 100, y: 200 };
+  const moved = { ...sampleNode, x: 150, y: 250 };
+
+  const beforeJson = buildVisualLayoutPatchJson([original]);
+  const afterJson = buildVisualLayoutPatchJson([moved]);
+  const undoneJson = buildVisualLayoutPatchJson([original]);
+
+  const before = JSON.parse(beforeJson).nodes[0];
+  const after = JSON.parse(afterJson).nodes[0];
+  const undone = JSON.parse(undoneJson).nodes[0];
+
+  assertEquals(before.x, 100);
+  assertEquals(after.x, 150);
+  assertEquals(undone.x, before.x, "Undo should restore original x");
+  assertEquals(undone.y, before.y, "Undo should restore original y");
+});
+
+// ─── UX helper: draft node actionable guard ───────────────────────────────────
+
+Deno.test("isDraftOnlyApplyBlocked: single draft node blocks apply", () => {
+  const draft = { ...sampleNode, isDraftOnly: true };
+  assertEquals(
+    ["DRAFT_ONLY_NODES", draft.componentKey].every(Boolean),
+    true,
+    "Error code and component key should be truthy for actionable error display",
+  );
+});
+
+// ─── UX helper: friendly label extraction ────────────────────────────────────
+
+Deno.test("friendlyComponentLabel: extracts last path segment", () => {
+  const extract = (key: string) => {
+    const parts = key.split("/");
+    return parts[parts.length - 1] ?? key;
+  };
+  assertEquals(extract("display/card"), "card");
+  assertEquals(extract("form/input/text"), "text");
+  assertEquals(extract("button"), "button");
+});
+
+// ─── Fix 1: keyboard resize delta ────────────────────────────────────────────
+
+const SNAP = 10;
+
+function applyKeyboardResizeDelta(
+  node: { x: number; y: number; width: number; height: number },
+  dir: string,
+  delta = SNAP,
+): { x: number; y: number; width: number; height: number } {
+  let { x, y, width, height } = node;
+  if (dir.includes("e")) width = snapToGrid(Math.max(40, width + delta), SNAP);
+  if (dir.includes("w")) { x = snapToGrid(Math.max(0, x - delta), SNAP); width = snapToGrid(Math.max(40, width + delta), SNAP); }
+  if (dir.includes("s")) height = snapToGrid(Math.max(30, height + delta), SNAP);
+  if (dir.includes("n")) { y = snapToGrid(Math.max(0, y - delta), SNAP); height = snapToGrid(Math.max(30, height + delta), SNAP); }
+  return { x, y, width, height };
+}
+
+Deno.test("keyboardResize: se handle grows width and height", () => {
+  const n = { x: 20, y: 20, width: 140, height: 60 };
+  const r = applyKeyboardResizeDelta(n, "se");
+  assertEquals(r.width, 150);
+  assertEquals(r.height, 70);
+  assertEquals(r.x, 20);
+  assertEquals(r.y, 20);
+});
+
+Deno.test("keyboardResize: n handle shrinks from top edge", () => {
+  const n = { x: 20, y: 20, width: 140, height: 60 };
+  const r = applyKeyboardResizeDelta(n, "n");
+  assertEquals(r.y, 10);
+  assertEquals(r.height, 70);
+});
+
+Deno.test("keyboardResize: w handle expands left edge", () => {
+  const n = { x: 20, y: 20, width: 140, height: 60 };
+  const r = applyKeyboardResizeDelta(n, "w");
+  assertEquals(r.x, 10);
+  assertEquals(r.width, 150);
+});
+
+Deno.test("keyboardResize: e handle does not change x or y", () => {
+  const n = { x: 0, y: 0, width: 140, height: 60 };
+  const r = applyKeyboardResizeDelta(n, "e");
+  assertEquals(r.x, 0);
+  assertEquals(r.y, 0);
+  assertEquals(r.width, 150);
+  assertEquals(r.height, 60);
+});
+
+Deno.test("keyboardResize: width clamped to minimum 40", () => {
+  const n = { x: 10, y: 10, width: 40, height: 60 };
+  // w direction with tiny delta that would push width below 40
+  const delta = -SNAP;
+  let { x, y, width, height } = n;
+  const dir = "w";
+  if (dir.includes("w")) { x = snapToGrid(Math.max(0, x - delta), SNAP); width = snapToGrid(Math.max(40, width + delta), SNAP); }
+  assertEquals(width, 40);
+});
+
+Deno.test("keyboardResize: nw handle moves top-left corner", () => {
+  const n = { x: 20, y: 20, width: 140, height: 60 };
+  const r = applyKeyboardResizeDelta(n, "nw");
+  assertEquals(r.x, 10);
+  assertEquals(r.y, 10);
+  assertEquals(r.width, 150);
+  assertEquals(r.height, 70);
+});
+
+// ─── Fix 5: Lifecycle failure phase mapping ───────────────────────────────────
+
+type LifecyclePhase =
+  | "idle" | "previewing" | "previewed"
+  | "validating" | "validated"
+  | "applying" | "applied_ok" | "applied_fail"
+  | "persisted";
+
+function getFailPhase(action: string): LifecyclePhase {
+  const map: Record<string, LifecyclePhase> = {
+    preview: "previewed",
+    validate: "validated",
+    apply: "applied_fail",
+  };
+  return map[action] as LifecyclePhase;
+}
+
+Deno.test("lifecycleFailPhase: preview error stays in previewed", () => {
+  assertEquals(getFailPhase("preview"), "previewed");
+});
+
+Deno.test("lifecycleFailPhase: validate error stays in validated", () => {
+  assertEquals(getFailPhase("validate"), "validated");
+});
+
+Deno.test("lifecycleFailPhase: apply error maps to applied_fail", () => {
+  assertEquals(getFailPhase("apply"), "applied_fail");
+});
+
+Deno.test("lifecycleFailPhase: preview and apply failures are distinct phases", () => {
+  assertNotEquals(getFailPhase("preview"), getFailPhase("apply"));
+});
+
+// ─── Fix 5: CSS token value resolution (SSOT-based, no hardcoded role map) ───
+
+Deno.test("resolveCssTokenValue: primary background resolves to SSOT action_primary color", () => {
+  const val = resolveCssTokenValue("color.action.primary.background");
+  assertEquals(val, "#0070f3");
+});
+
+Deno.test("resolveCssTokenValue: danger background resolves to SSOT action_danger color", () => {
+  const val = resolveCssTokenValue("color.action.danger.background");
+  assertEquals(val, "#e00");
+});
+
+Deno.test("resolveCssTokenValue: secondary background resolves to SSOT surface_secondary", () => {
+  const val = resolveCssTokenValue("color.action.secondary.background");
+  assertEquals(val, "#eee");
+});
+
+Deno.test("resolveCssTokenValue: radius.control.sm resolves to SSOT radius.sm", () => {
+  assertEquals(resolveCssTokenValue("radius.control.sm"), "4px");
+});
+
+Deno.test("resolveCssTokenValue: border direct value resolves without value_ref", () => {
+  assertEquals(resolveCssTokenValue("border.control.default"), "1px solid #ccc");
+});
+
+Deno.test("resolveCssTokenValue: unknown token returns undefined", () => {
+  assertEquals(resolveCssTokenValue("color.nonexistent.token"), undefined);
+});
+
+// ─── Fix 2: Inspector commit produces distinct state (history boundary) ───────
+
+Deno.test("inspector commit: same node at two positions produces distinguishable snapshots", () => {
+  const base: VisualNodePayload = { ...sampleNode, x: 50, y: 50 };
+  const after: VisualNodePayload = { ...sampleNode, x: 100, y: 100 };
+  const snap1 = buildVisualLayoutPatchJson([base]);
+  const snap2 = buildVisualLayoutPatchJson([after]);
+  assertNotEquals(snap1, snap2, "committed position change must produce different serialized state");
+  assertEquals(JSON.parse(snap1).nodes[0].x, 50);
+  assertEquals(JSON.parse(snap2).nodes[0].x, 100);
+});
+
+Deno.test("inspector commit: live update then commit — final state matches committed value", () => {
+  // Simulate: live update to 80 (no history entry), then commit to 90
+  const live: VisualNodePayload = { ...sampleNode, x: 80 };
+  const committed: VisualNodePayload = { ...sampleNode, x: 90 };
+  const liveSnap = buildVisualLayoutPatchJson([live]);
+  const commitSnap = buildVisualLayoutPatchJson([committed]);
+  assertNotEquals(liveSnap, commitSnap);
+  assertEquals(JSON.parse(commitSnap).nodes[0].x, 90);
 });

@@ -9,6 +9,30 @@ export type CssDictionaryToken = {
   semanticRole: string;
 };
 
+// Resolved CSS values projected from value_scales in docs/design/css-dictionary-ssot.yaml.
+// Keys match SSOT value_refs (category.scale_key) or "direct" for tokens with literal values.
+const CSS_TOKEN_RESOLVED_VALUES: Record<string, string> = {
+  "color.action.primary.background": "#0070f3",
+  "color.action.primary.text": "#fff",
+  "color.action.secondary.background": "#eee",
+  "color.action.secondary.text": "#333",
+  "color.action.danger.background": "#e00",
+  "color.action.danger.text": "#fff",
+  "border.control.default": "1px solid #ccc",
+  "radius.control.sm": "4px",
+  "spacing.control.padding_md": "6px 14px",
+  "spacing.field.padding_sm": "4px 8px",
+  "typography.control.monospace": "monospace",
+  "interaction.control.pointer": "pointer",
+  "interaction.control.disabled_opacity": "0.6",
+  "layout.stack.flex_column": "column",
+  "layout.table.full_width": "100%",
+};
+
+export function resolveCssTokenValue(tokenKey: string): string | undefined {
+  return CSS_TOKEN_RESOLVED_VALUES[tokenKey];
+}
+
 export const CSS_DICTIONARY_TOKENS: CssDictionaryToken[] = [
   { tokenKey: "color.action.primary.background", category: "color", property: "background", componentScope: ["Button"], semanticRole: "primary_action" },
   { tokenKey: "color.action.primary.text", category: "color", property: "color", componentScope: ["Button"], semanticRole: "primary_action" },
