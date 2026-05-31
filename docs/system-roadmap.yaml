@@ -1133,23 +1133,27 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        /admin/ui-builder includes a mouse-driven visual layout editor (Issue #89).
+        /admin/ui-builder includes a Figma-like mouse-driven visual layout editor v2 (Issue #89).
         LayoutPalette shows catalog entries; components with registrationRequired:true are
-        labeled (draft) and blocked from layout_patch:apply — only preview/validate allowed.
-        Apply guard checks all canvas nodes: if any isDraftOnly node is present, apply is
-        rejected frontend-side with an explicit APPLY_BLOCKED error listing the unregistered
-        components. buildLayoutPatchJson marks draft-only nodes with _draftOnly:true, and
-        backend layout_patch:validate/apply fail-close with
-        DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED so draft-only
-        payloads cannot persist to topology.components_layout_design/topology.ui_topology_tensor via direct API calls.
-        Canvas: drag-to-reorder, up/down buttons, LayoutNodeInspector (click a node) for
-        slotKey/parentNodeId/gridCol/gridRow. cssTokenRefs selected from CSS_DICTIONARY_TOKENS.
+        labeled (draft) and blocked from layout_patch:apply.
+        Apply guard: isDraftOnly nodes → APPLY_BLOCKED frontend-side + backend fail-close
+        (DRAFT_ONLY_NODE_NOT_APPLICABLE) so draft-only payloads cannot persist to
+        topology.components_layout_design/topology.ui_topology_tensor.
+        v2 canvas: absolute-positioned nodes with x/y/width/height; mouse drag to move;
+        resize handles (8 directions) to change size; grid snap (10px); selection state;
+        CanvasInspector for x/y/w/h/slotKey/parentNodeId/gridCol/gridRow numeric editing;
+        LayerTree for node listing/selection/reordering/deletion.
+        buildVisualLayoutPatchJson includes x/y/width/height in patch payload.
         Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
         No direct DB write. Frontend holds draft projection state only; topology persistence
         authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
+        Frontend authority boundary: draft layout state, mouse interaction, visual preview,
+        local readiness display, intent submission. No topology judgment, no promotion judgment.
       files:
-        - frontend/routes/admin/ui-builder.tsx
+        - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/runtime/visualLayoutUtils.ts
         - frontend/runtime/cssDictionary.ts
+        - frontend/tests/visualLayoutBuilder.test.ts
         - db/ui_topology_tables.sql
         - backend/repository/NpgsqlUiTopologyRepository.cs
       completion_condition:
