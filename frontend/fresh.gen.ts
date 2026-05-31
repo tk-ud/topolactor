@@ -3,6 +3,7 @@
 // This file is automatically updated during development when running `dev.ts`.
 
 import * as $_app from "./routes/_app.tsx";
+import * as $admin_middleware from "./routes/admin/_middleware.ts";
 import * as $admin_contents from "./routes/admin/contents.tsx";
 import * as $admin_context_token_registry from "./routes/admin/context-token-registry.tsx";
 import * as $admin_import from "./routes/admin/import.tsx";
@@ -41,6 +42,7 @@ import type { Manifest } from "$fresh/server.ts";
 const manifest = {
   routes: {
     "./routes/_app.tsx": $_app,
+    "./routes/admin/_middleware.ts": $admin_middleware,
     "./routes/admin/contents.tsx": $admin_contents,
     "./routes/admin/context-token-registry.tsx": $admin_context_token_registry,
     "./routes/admin/import.tsx": $admin_import,

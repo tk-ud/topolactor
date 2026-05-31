@@ -1,8 +1,7 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { loginDemo, authErrorText, type LoginResponse } from "../api/authApi.ts";
-
-const SESSION_TOKEN_KEY = "demo_jwt_token";
+import { persistSessionToken, syncClientSessionToken } from "../lib/demoSession.ts";
 
 type AuthState =
   | { status: "idle" }
@@ -19,8 +18,16 @@ export default function AuthPanel(): JSX.Element {
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location?.search ?? "");
     const redirect = params.get("redirect");
+    const target =
+      redirect && redirect.startsWith("/") && !redirect.startsWith("//")
+        ? redirect
+        : "/";
     if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
       setRedirectTo(redirect);
+    }
+    const existing = syncClientSessionToken();
+    if (existing) {
+      globalThis.location.replace(target);
     }
   }, []);
 
@@ -29,7 +36,7 @@ export default function AuthPanel(): JSX.Element {
     setState({ status: "loading" });
     const result = await loginDemo({ username, password });
     if (result.success && result.token) {
-      sessionStorage.setItem(SESSION_TOKEN_KEY, result.token);
+      persistSessionToken(result.token);
       setState({ status: "success", token: result.token });
     } else {
       setState({ status: "error", errors: result.errors });
@@ -70,7 +77,7 @@ export default function AuthPanel(): JSX.Element {
 
       {state.status === "success" && (
         <div class="alert-success mt-4">
-          <strong>ログイン成功。</strong> トークンを sessionStorage に保存しました。
+          <strong>ログイン成功。</strong> トークンを保存しました（ブラウザと cookie）。
           <br />
           <a href={redirectTo} class="link mt-2 inline-block font-semibold">
             → {redirectTo === "/" ? "ディスパッチパネルへ" : "元のページへ戻る"}
