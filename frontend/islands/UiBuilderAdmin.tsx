@@ -18,6 +18,7 @@ import {
   buildVisualLayoutPatchJson,
   wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
+import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -62,14 +63,6 @@ async function dispatchAdminOp(layer: string, action: string, payload?: unknown)
 }
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
-
-type BucketItem = {
-  bucketItemId: string;
-  componentKey: string;
-  sourcePath: string;
-  componentKind: string;
-  status: string;
-};
 
 type ValidationError = { code: string; message: string; field?: string; nodeId?: string; componentKey?: string };
 
@@ -305,10 +298,11 @@ const CANVAS_MIN_HEIGHT = 400;
 const MAX_HISTORY = 50;
 
 // Gap 3: Error code → actionable cause + fix
-const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string }> = {
+const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; navigateTo?: TabId }> = {
   DRAFT_ONLY_NODES: {
-    cause: "未登録コンポーネントが含まれています",
-    suggestion: "「バケット管理」タブで対象コンポーネントをプロモートしてください",
+    cause: "まだ使えない部品が含まれています",
+    suggestion: "「部品登録」タブで対象の部品を配置可能にしてください",
+    navigateTo: "bucket",
   },
   LAYOUT_NOT_FOUND: {
     cause: "レイアウトIDが見つかりません",
@@ -320,7 +314,8 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string }> = {
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
-    suggestion: "「CSS トークン」タブで正しいトークンを選択してください",
+    suggestion: "「CSS設定」タブで正しいトークンを選択してください",
+    navigateTo: "css",
   },
   LAYOUT_CLASS_REF_INVALID: {
     cause: "レイアウトクラス参照が解決できません",
@@ -329,6 +324,21 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string }> = {
   LAYOUT_CANDIDATES_LOAD_FAILED: {
     cause: "レイアウト候補の取得に失敗しました",
     suggestion: "バックエンド接続と認証トークンを確認してください",
+  },
+  BUCKET_CREATE_FAILED: {
+    cause: "部品の登録に失敗しました",
+    suggestion: "すでに登録済みでないか確認してください",
+    navigateTo: "bucket",
+  },
+  GENERATE_FAILED: {
+    cause: "パッケージ化に失敗しました",
+    suggestion: "バックエンド接続を確認し、ルートキーが正しいか再確認してください",
+    navigateTo: "bucket",
+  },
+  PROMOTE_FAILED: {
+    cause: "配置可能化に失敗しました",
+    suggestion: "先にパッケージ化を完了してから実行してください",
+    navigateTo: "bucket",
   },
 };
 
@@ -378,23 +388,6 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-function resolveBucketStatus(
-  componentKey: string,
-  bucketItems: BucketItem[],
-  promotedKeys: Set<string>,
-): { label: string; variant: "ok" | "warn" | "error" | "info"; bucketItemId?: string } {
-  if (promotedKeys.has(componentKey)) {
-    return { label: "promoted", variant: "ok" };
-  }
-  const item = bucketItems.find((b) => b.componentKey === componentKey);
-  if (!item) return { label: "未登録", variant: "info" };
-  const variant =
-    item.status === "promoted" ? "ok"
-    : item.status === "packaging" ? "info"
-    : item.status === "bucketed" ? "warn"
-    : "info";
-  return { label: item.status, variant, bucketItemId: item.bucketItemId };
-}
 
 async function loadLayoutCandidatesFromBackend(): Promise<{
   candidates: LayoutRouteCandidate[];
@@ -520,6 +513,11 @@ function LifecycleStepIndicator({ phase }: { phase: LifecyclePhase }): JSX.Eleme
           );
         })}
       </div>
+      {isError && (
+        <p role="alert" class="mt-2 text-xs text-red-700">
+          エラー — 「エラー — 修正方法」を確認してください。まだ使えない部品がある場合は部品登録タブへ戻ってください。
+        </p>
+      )}
     </div>
   );
 }
@@ -536,11 +534,14 @@ type AnnotatedValidationError = {
 function ActionableValidationErrorPanel({
   errors,
   title,
+  onNavigate,
 }: {
   errors: AnnotatedValidationError[];
   title?: string;
+  onNavigate?: (tab: TabId) => void;
 }): JSX.Element | null {
   if (errors.length === 0) return null;
+  const shownNavigateTabs = new Set<TabId>();
   return (
     <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
       {title && <div class="mb-2 font-semibold text-red-800">{title}</div>}
@@ -570,6 +571,28 @@ function ActionableValidationErrorPanel({
           );
         })}
       </ul>
+      {onNavigate && (() => {
+        const navButtons: JSX.Element[] = [];
+        for (const e of errors) {
+          const fix = ERROR_CODE_FIX[e.code];
+          if (fix?.navigateTo && !shownNavigateTabs.has(fix.navigateTo)) {
+            shownNavigateTabs.add(fix.navigateTo);
+            const tab = fix.navigateTo;
+            const label = tab === "bucket" ? "→ 部品登録タブへ移動" : "→ CSS設定タブへ移動";
+            navButtons.push(
+              <button
+                key={tab}
+                type="button"
+                onClick={() => onNavigate(tab)}
+                class="mt-2 rounded bg-red-600 px-2 py-1 text-xs font-medium text-white hover:bg-red-700"
+              >
+                {label}
+              </button>
+            );
+          }
+        }
+        return navButtons.length > 0 ? <div class="mt-2 flex flex-wrap gap-2">{navButtons}</div> : null;
+      })()}
     </div>
   );
 }
@@ -585,7 +608,7 @@ function AdvancedManualOverride({
   return (
     <details class="mt-2 rounded border border-orange-300 bg-orange-50 p-2">
       <summary class="cursor-pointer text-sm font-bold text-orange-800">
-        {title ?? "manual override / unsafe / advanced"}
+        {title ?? "上級者向け設定（通常は不要）"}
       </summary>
       <p class="text-muted-xs mt-1 mb-2">
         通常導線外の手入力です。SSOT key/UUID を直接指定する場合のみ使用してください。
@@ -602,6 +625,7 @@ function ApplyReadinessPanel({
   draftNodes,
   selectedTokenRefs,
   layoutClassRefError,
+  onNavigate,
 }: {
   canPatch: boolean;
   effectiveRouteKey: string;
@@ -609,6 +633,7 @@ function ApplyReadinessPanel({
   draftNodes: DraftNode[];
   selectedTokenRefs: string[];
   layoutClassRefError: string | null;
+  onNavigate?: (tab: TabId) => void;
 }): JSX.Element {
   const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
   const customPositionedCount = draftNodes.filter(
@@ -618,7 +643,7 @@ function ApplyReadinessPanel({
 
   return (
     <div class={`mb-3 rounded border p-3 text-sm ${allClear ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
-      <strong class="block mb-2">Apply 前チェック</strong>
+      <strong class="block mb-2">保存前チェック</strong>
       <ul class="space-y-1 pl-1">
         <li class="flex items-start gap-2">
           <span class={canPatch ? "text-green-700" : "text-red-600"}>{canPatch ? "✓" : "✗"}</span>
@@ -628,15 +653,33 @@ function ApplyReadinessPanel({
               ? <><code class="text-xs">{effectiveRouteKey}</code> / <code class="text-xs">{shortId(effectiveLayoutId)}</code></>
               : "未選択 — ルートとレイアウトを選択してください"}
           </span>
+          {!canPatch && onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate("bucket")}
+              class="ml-2 rounded bg-amber-600 px-1.5 py-0.5 text-xs font-medium text-white hover:bg-amber-700"
+            >
+              部品登録タブで確認する
+            </button>
+          )}
         </li>
         <li class="flex items-start gap-2">
           <span class={draftOnlyCount === 0 ? "text-green-700" : "text-red-600"}>{draftOnlyCount === 0 ? "✓" : "✗"}</span>
           <span>
-            未プロモートノード:{" "}
+            まだ使えない部品:{" "}
             {draftOnlyCount === 0
               ? "なし"
-              : <>{draftOnlyCount} 件 — バケット → プロモートを先に完了してください（適用はブロック）</>}
+              : <>{draftOnlyCount} 件 — 先に部品登録を完了してください（保存はブロック）</>}
           </span>
+          {draftOnlyCount > 0 && onNavigate && (
+            <button
+              type="button"
+              onClick={() => onNavigate("bucket")}
+              class="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white hover:bg-red-700"
+            >
+              部品登録タブで修正する →
+            </button>
+          )}
         </li>
         <li class="flex items-start gap-2">
           <span class={!layoutClassRefError ? "text-green-700" : "text-red-600"}>{!layoutClassRefError ? "✓" : "✗"}</span>
@@ -658,13 +701,13 @@ function ApplyReadinessPanel({
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
             CSS トークン: {selectedTokenRefs.length} 件選択済み。
-            ref エラーは backend validate 結果に表示されます。
+            設定エラーはバックエンド検証結果に表示されます。
           </span>
         </li>
       </ul>
       {allClear && (
         <p class="mt-2 text-green-700 font-semibold text-xs">
-          すべてのローカルチェック通過。preview → validate → apply の順で実行してください。
+          すべてのローカルチェック通過。確認 → 検証 → 保存反映 の順で実行してください。
         </p>
       )}
     </div>
@@ -676,10 +719,10 @@ function LayoutPatchSummaryPanel({ summary }: { summary: LayoutPatchSummary }): 
     <div class={`rounded border p-3 text-sm ${summary.valid ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"}`}>
       <div class="mb-2 flex flex-wrap items-center gap-2">
         <strong>{summary.action === "preview" ? "プレビュー" : summary.action === "validate" ? "バリデート" : "適用"} 結果</strong>
-        <StatusBadge text={summary.valid ? "valid" : "invalid"} variant={summary.valid ? "ok" : "error"} />
+        <StatusBadge text={summary.valid ? "問題なし" : "エラーあり"} variant={summary.valid ? "ok" : "error"} />
       </div>
       <ul class="my-0 pl-4">
-        <li>ノード数: {summary.nodeCount}（ドラフトのみ: {summary.draftOnlyCount}）</li>
+        <li>ノード数: {summary.nodeCount}（まだ使えない部品: {summary.draftOnlyCount}）</li>
         <li>ルート: <code>{summary.routeKey || "—"}</code></li>
         <li>レイアウト: {summary.layoutKey ? <code>{summary.layoutKey}</code> : <code>{shortId(summary.layoutId) || "—"}</code>}</li>
         <li>CSS トークン: {summary.cssTokenCount} 件</li>
@@ -687,7 +730,7 @@ function LayoutPatchSummaryPanel({ summary }: { summary: LayoutPatchSummary }): 
         <li><strong>次のアクション:</strong> {summary.nextAction}</li>
       </ul>
       {summary.errors.length > 0 && (
-        <ValidationErrorPanel errors={summary.errors} title="blocking errors" />
+        <ValidationErrorPanel errors={summary.errors} title="修正が必要なエラー" />
       )}
     </div>
   );
@@ -716,7 +759,7 @@ function RouteLayoutSelector({
   return (
     <div class="mb-3 flex flex-wrap gap-2">
       <label class="flex min-w-[200px] flex-1 flex-col gap-0.5 text-sm">
-        ルートキー
+        ページルート
         <select
           value={routeKey}
           disabled={disabled || routes.length === 0}
@@ -750,7 +793,7 @@ function RouteLayoutSelector({
       )}
       {candidates.length === 0 && !loadError?.length && (
         <p class="text-sm text-yellow-700">
-          候補なし — 先にバケット → プロモートで UI topology を登録してください。
+          候補なし — 先に部品登録タブで部品を配置可能にしてください。
         </p>
       )}
     </div>
@@ -961,33 +1004,32 @@ function TopologyLayoutClassPicker({
   return (
     <div>
       <p class="text-muted-xs mb-2">
-        topology layout projection 専用 class ref（<code>docs/design/topology-layout-class-ssot.yaml</code>）。
-        admin 画面装飾ではありません。保存は classKey のみ — raw className / Tailwind は通常導線では使いません。
+        レイアウト投影専用のスタイルクラスです。画面装飾用ではありません。保存されるのはクラスキーのみです。
       </p>
       <div class="mb-2 flex flex-wrap gap-2">
         <input
           value={keyFilter}
           onInput={(e) => setKeyFilter((e.target as HTMLInputElement).value)}
-          placeholder="classKey 検索"
+          placeholder="クラス検索"
           class="input-mono flex-1 text-xs"
         />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">category（すべて）</option>
+          <option value="">カテゴリ（すべて）</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={scopeFilterState} onChange={(e) => setScopeFilterState((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">projectionScope（すべて）</option>
+          <option value="">適用範囲（すべて）</option>
           {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">semanticRole（すべて）</option>
+          <option value="">役割（すべて）</option>
           {roles.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </div>
 
       {selectedClassRefs.length > 0 && (
         <div class="mb-2 rounded border border-blue-200 bg-blue-50 p-2">
-          <strong class="text-xs">選択済み layoutClassRefs ({selectedClassRefs.length})</strong>
+          <strong class="text-xs">選択済みスタイルクラス ({selectedClassRefs.length})</strong>
           <div class="mt-1 flex flex-wrap gap-1">
             {selectedClassRefs.map((key) => (
               <button
@@ -1015,7 +1057,7 @@ function TopologyLayoutClassPicker({
         <table class="table font-mono text-xs">
           <thead>
             <tr>
-              {["選択", "classKey", "className", "category", "scope", "allowedFor"].map((h) => (
+              {["選択", "クラスキー", "クラス名", "カテゴリ", "適用範囲", "対象"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -1183,24 +1225,21 @@ function CiAttentionGuidanceSection(): JSX.Element {
 
 function PrimitiveCatalog(): JSX.Element {
   const headerMap: Record<string, string> = {
-    component_key: "コンポーネントキー",
+    component_key: "部品名",
     kind: "種別",
-    source_path: "ソースパス",
     family: "ファミリー",
     semantic_role: "セマンティクス役割",
     visual_role: "ビジュアル役割",
-    lifecycle_status: "ライフサイクル",
-    runtime_connected: "ランタイム接続",
-    registration_required: "登録必須",
-    capability_tags: "ケイパビリティタグ",
+    lifecycle_status: "状態",
+    runtime_connected: "DB連携",
+    registration_required: "登録要",
+    capability_tags: "機能タグ",
   };
 
   return (
     <div>
       <p class="text-muted mb-3">
-        プリミティブコンポーネントは <code>frontend/components/</code> で定義されます。
-        UI topology DB に登録（パッケージ生成経由）されて初めてトポロジーテンソルエンティティになります。
-        コードのみのコンポーネントは drift/GAP として扱われます。
+        ここに表示されている部品をレイアウトで使うには、部品登録タブで「登録済み」状態にする必要があります。
       </p>
       <div class="table-wrap">
         <table class="table font-mono text-xs">
@@ -1218,13 +1257,12 @@ function PrimitiveCatalog(): JSX.Element {
               <tr key={c.componentKey}>
                 <td><code>{c.componentKey}</code></td>
                 <td>{c.componentKind}</td>
-                <td><code>{c.sourcePath}</code></td>
                 <td>{c.componentFamily}</td>
                 <td>{c.semanticRole}</td>
                 <td>{c.visualRole}</td>
                 <td>
                   <StatusBadge
-                    text={c.lifecycleStatus}
+                    text={c.lifecycleStatus === "code_only_drift" ? "未登録（コードのみ）" : c.lifecycleStatus}
                     variant={c.lifecycleStatus === "code_only_drift" ? "warn" : "ok"}
                   />
                 </td>
@@ -1236,17 +1274,26 @@ function PrimitiveCatalog(): JSX.Element {
           </tbody>
         </table>
       </div>
-      <p class="text-muted-xs mt-2">
-        drift → topology エンティティへのプロモーション:
-        ui_component_bucket に登録後、パッケージジェネレーターを実行してください。
-      </p>
+      <AdvancedManualOverride title="ソースパス一覧（技術詳細）">
+        <table class="table font-mono text-xs mt-1">
+          <thead><tr><th>部品名</th><th>ソースパス</th></tr></thead>
+          <tbody>
+            {COMPONENT_CATALOG_ENTRIES.map((c) => (
+              <tr key={c.componentKey}>
+                <td><code>{c.componentKey}</code></td>
+                <td><code>{c.sourcePath}</code></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </AdvancedManualOverride>
     </div>
   );
 }
 
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
-function BucketSection(): JSX.Element {
+function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
   const [items, setItems] = useState<BucketItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationError[]>([]);
@@ -1279,7 +1326,7 @@ function BucketSection(): JSX.Element {
       const combined = [...bucketed, ...packaging];
       if (combined.length > 0 || (!bucketedBody?.errors?.length && !packagingBody?.errors?.length)) {
         setItems(combined);
-        setStatus(`${combined.length} 件のバケットアイテムをロードしました。`);
+        setStatus(`${combined.length} 件の部品をロードしました。`);
       } else {
         setErrors(bucketedBody?.errors ?? packagingBody?.errors ?? [{ code: "BUCKET_LOAD_FAILED", message: "バケットのロードに失敗しました。" }]);
         setStatus("バケットのロードに失敗しました。");
@@ -1335,7 +1382,7 @@ function BucketSection(): JSX.Element {
       return;
     }
     const existing = resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys);
-    if (existing.label === "promoted" || existing.label === "bucketed" || existing.label === "packaging") {
+    if (existing.status === "promoted" || existing.status === "bucketed" || existing.status === "packaging") {
       setStatus(`既に登録済みです（${existing.label}）。重複登録はできません。`);
       return;
     }
@@ -1350,12 +1397,12 @@ function BucketSection(): JSX.Element {
         metadataJson: "{}",
       });
       if (body?.emission?.data?.bucketItemId) {
-        setStatus(`バケットアイテムを作成しました: ${selectedCatalog.componentKey}`);
+        setStatus(`${selectedCatalog.componentKey} を登録しました`);
         setSelectedId(body.emission.data.bucketItemId);
         await loadBucket();
       } else {
-        setErrors(body?.errors ?? [{ code: "BUCKET_CREATE_FAILED", message: "バケット作成に失敗しました。" }]);
-        setStatus("バケット作成に失敗しました。");
+        setErrors(body?.errors?.length ? body.errors : [{ code: "BUCKET_CREATE_FAILED", message: "部品の登録に失敗しました。" }]);
+        setStatus("部品の登録に失敗しました。");
       }
     } finally {
       setLoading(false);
@@ -1378,12 +1425,12 @@ function BucketSection(): JSX.Element {
         metadataJson: "{}",
       });
       if (body?.emission?.data?.bucketItemId) {
-        setStatus(`バケットアイテムを作成しました: ${componentKey}`);
+        setStatus(`${componentKey} を登録しました`);
         setSelectedId(body.emission.data.bucketItemId);
         await loadBucket();
       } else {
         setErrors(body?.errors ?? []);
-        setStatus("バケット作成に失敗しました。");
+        setStatus("部品の登録に失敗しました。");
       }
     } finally {
       setLoading(false);
@@ -1392,7 +1439,7 @@ function BucketSection(): JSX.Element {
 
   const handleGenerate = async () => {
     if (!selectedId || !effectiveRouteKey) {
-      setStatus("バケットアイテムを選択し、ルートキーを選択してください。");
+      setStatus("部品とページルートを選択してください。");
       return;
     }
     setLoading(true);
@@ -1404,11 +1451,11 @@ function BucketSection(): JSX.Element {
         routeKey: effectiveRouteKey,
       });
       if (body?.success || body?.emission?.data?.ok) {
-        setStatus(`生成完了: ${selectedCatalog?.componentKey ?? selectedId} → packaging`);
+        setStatus(`${selectedCatalog?.componentKey ?? selectedId} のパッケージ化が完了しました`);
         await loadBucket();
       } else {
-        setErrors(body?.errors ?? []);
-        setStatus("パッケージ生成に失敗しました。");
+        setErrors(body?.errors?.length ? body.errors : [{ code: "GENERATE_FAILED", message: "パッケージ化に失敗しました。" }]);
+        setStatus("パッケージ化に失敗しました。");
       }
     } catch (e) {
       setStatus(`エラー: ${e}`);
@@ -1428,13 +1475,13 @@ function BucketSection(): JSX.Element {
         routeKey: effectiveRouteKey,
       });
       if (body?.success || body?.emission?.data?.ok) {
-        setStatus(`プロモート完了: route=${effectiveRouteKey}`);
+        setStatus(`${selectedItem?.componentKey ?? selectedId} が配置可能になりました（ルート: ${effectiveRouteKey}）`);
         await loadBucket();
         const { candidates } = await loadLayoutCandidatesFromBackend();
         setLayoutCandidates(candidates);
       } else {
-        setErrors(body?.errors ?? []);
-        setStatus("パッケージプロモートに失敗しました。");
+        setErrors(body?.errors?.length ? body.errors : [{ code: "PROMOTE_FAILED", message: "配置可能化に失敗しました。" }]);
+        setStatus("配置可能化に失敗しました。");
       }
     } finally {
       setLoading(false);
@@ -1446,20 +1493,19 @@ function BucketSection(): JSX.Element {
   return (
     <div>
       <p class="text-muted mb-3">
-        カタログからコンポーネントを選択してバケット登録 intent を送信します。パッケージジェネレーターが
-        UI topology テンソルエンティティへプロモートします。
+        カタログから部品を選んで登録し、パッケージ化・配置可能化の順で進めます。
       </p>
 
       {candidateErrors.length > 0 && (
         <ValidationErrorPanel errors={candidateErrors} title="候補ロードエラー" />
       )}
 
-      <Accordion title="カタログからバケット登録" defaultOpen={true}>
+      <Accordion title="カタログから部品を登録" defaultOpen={true}>
         <div class="mb-2 flex flex-wrap gap-2">
           <input
             value={catalogFilter}
             onInput={(e) => setCatalogFilter((e.target as HTMLInputElement).value)}
-            placeholder="componentKey 検索"
+            placeholder="部品名で検索"
             class="input-mono flex-1 text-xs"
           />
           <select value={kindFilter} onChange={(e) => setKindFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
@@ -1467,17 +1513,17 @@ function BucketSection(): JSX.Element {
             {catalogKinds.map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
           <select value={lifecycleFilter} onChange={(e) => setLifecycleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-            <option value="">ライフサイクル（すべて）</option>
-            <option value="code_only_drift">code_only_drift</option>
+            <option value="">状態（すべて）</option>
+            <option value="code_only_drift">未登録（コードのみ）</option>
           </select>
-          <button onClick={loadBucket} disabled={loading} class="btn-secondary">バケット再ロード</button>
+          <button onClick={loadBucket} disabled={loading} class="btn-secondary">一覧を再読み込み</button>
         </div>
 
         <div class="table-wrap max-h-64 overflow-y-auto">
           <table class="table font-mono text-xs">
             <thead>
               <tr>
-                {["選択", "componentKey", "kind", "sourcePath", "ステータス"].map((h) => (
+                {["選択", "部品名", "種別", "ステータス"].map((h) => (
                   <th key={h}>{h}</th>
                 ))}
               </tr>
@@ -1500,7 +1546,6 @@ function BucketSection(): JSX.Element {
                     </td>
                     <td><code>{c.componentKey}</code></td>
                     <td>{c.componentKind}</td>
-                    <td><code>{c.sourcePath}</code></td>
                     <td><StatusBadge text={st.label} variant={st.variant} /></td>
                   </tr>
                 );
@@ -1513,29 +1558,32 @@ function BucketSection(): JSX.Element {
           <div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm">
             <strong>選択中:</strong> <code>{selectedCatalog.componentKey}</code>
             <span class="ml-2 text-muted-xs">{selectedCatalog.componentKind}</span>
-            <div class="mt-1 font-mono text-xs text-gray-600">{selectedCatalog.sourcePath}</div>
             <button
               onClick={handleCreateFromCatalog}
-              disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).label !== "未登録"}
+              disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).status !== "unregistered"}
               class="btn-primary mt-2"
             >
-              バケットに登録
+              部品を登録する
             </button>
+            <details class="mt-1">
+              <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
+              <div class="mt-0.5 font-mono text-xs text-gray-500">{selectedCatalog.sourcePath}</div>
+            </details>
           </div>
         )}
 
-        <AdvancedManualOverride title="manual override — カタログ外バケット作成">
+        <AdvancedManualOverride title="詳細設定 — カタログ外から直接登録">
           <ManualBucketCreateForm onCreate={handleCreateManual} loading={loading} />
         </AdvancedManualOverride>
       </Accordion>
 
       {(items.length > 0 || selectedId) && (
-        <Accordion title="生成 / プロモート" defaultOpen={true}>
+        <Accordion title="パッケージ化・配置可能化" defaultOpen={true}>
           <div class="table-wrap mb-3">
             <table class="table font-mono text-sm">
               <thead>
                 <tr>
-                  {["選択", "componentKey", "kind", "status"].map((h) => (
+                  {["選択", "部品名", "種別", "状態"].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -1554,10 +1602,10 @@ function BucketSection(): JSX.Element {
                     <td><code>{item.componentKey}</code></td>
                     <td>{item.componentKind}</td>
                     <td>
-                      <StatusBadge
-                        text={item.status}
-                        variant={item.status === "packaging" ? "info" : "warn"}
-                      />
+                      {(() => {
+                        const st = resolveBucketStatus(item.componentKey, items, promotedKeys);
+                        return <StatusBadge text={st.label} variant={st.variant} />;
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -1566,7 +1614,7 @@ function BucketSection(): JSX.Element {
           </div>
 
           <label class="mb-2 flex flex-col gap-0.5 text-sm">
-            ルートキー（候補から選択）
+            ページルート（候補から選択）
             <select
               value={routeKey}
               onChange={(e) => {
@@ -1585,11 +1633,11 @@ function BucketSection(): JSX.Element {
 
           {routeOptions.length === 0 && candidateErrors.length === 0 && (
             <p class="text-sm text-yellow-700 mb-2">
-              ルート候補なし — 初回プロモート時は advanced で新規ルートを指定してください。
+              ルート候補なし — 下の「詳細設定」で新規ルートを直接入力してください。
             </p>
           )}
 
-          <AdvancedManualOverride title="manual override — 新規 routeKey">
+          <AdvancedManualOverride title="詳細設定 — 新規ページルートを直接入力">
             <input
               value={manualRouteKey}
               onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
@@ -1600,8 +1648,8 @@ function BucketSection(): JSX.Element {
 
           {selectedItem && effectiveRouteKey && (
             <p class="text-muted-xs mt-2">
-              次: <code>{selectedItem.componentKey}</code> を <code>{effectiveRouteKey}</code> へ
-              {selectedItem.status === "bucketed" ? " generate → promote" : " promote"}
+              次: <code>{friendlyComponentLabel(selectedItem.componentKey)}</code> を <code>{effectiveRouteKey}</code> へ
+              {selectedItem.status === "bucketed" ? " パッケージ化 → 配置可能化" : " 配置可能化"}
             </p>
           )}
 
@@ -1611,18 +1659,18 @@ function BucketSection(): JSX.Element {
               disabled={loading || !selectedId || !effectiveRouteKey}
               class="btn-primary"
             >
-              生成 (bucketed → packaging)
+              パッケージ化する
             </button>
             <button
               onClick={handlePromote}
               disabled={loading || !selectedId || !effectiveRouteKey}
               class="btn-success"
             >
-              プロモート (packaging → promoted)
+              配置可能にする
             </button>
           </div>
           <AdminActionHint>
-            生成: componentId 等を発行し packaging 状態へ。プロモート: UI topology DB に promoted として永続 — layout パレットに反映されます。
+            パッケージ化する: 部品をシステムに正式登録し、レイアウトで使えるようにします。配置可能にする: 部品を配置可能状態へ昇格します。
           </AdminActionHint>
         </Accordion>
       )}
@@ -1633,7 +1681,7 @@ function BucketSection(): JSX.Element {
           {status}
         </p>
       )}
-      {errors.length > 0 && <ValidationErrorPanel errors={errors} title="操作エラー" />}
+      {errors.length > 0 && <ActionableValidationErrorPanel errors={errors} title="操作エラー" onNavigate={onNavigate} />}
     </div>
   );
 }
@@ -1672,8 +1720,7 @@ function CssTokenSelectorSection(): JSX.Element {
   return (
     <div>
       <p class="text-muted mb-3">
-        セレクター候補は <code>docs/design/css-dictionary-ssot.yaml</code> 派生アーティファクトから投影されます。
-        ドラフトは <code>cssTokenRefs</code> / <code>responsiveTokenRefs</code> を保持してください。生の CSS はレガシーのみ。
+        見た目の設定（色・余白・フォント）を選択できます。選んだ設定はレイアウト保存時に適用されます。
       </p>
       <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
     </div>
@@ -1809,7 +1856,10 @@ function VisualLayoutNode({
           {friendlyComponentLabel(node.componentKey)}
         </div>
         {node.isDraftOnly && (
-          <span class="text-[0.58rem] text-yellow-700 font-medium">⚠ 未登録 — 適用ブロック</span>
+          <span
+            class="text-[0.58rem] text-yellow-700 font-medium"
+            title="部品登録タブで配置可能にしてから保存反映してください"
+          >⚠ まだ使えない部品 — 保存ブロック</span>
         )}
         {node.slotKey && (
           <span class="truncate text-[0.58rem] text-gray-500">配置: {node.slotKey}</span>
@@ -2130,7 +2180,7 @@ function CanvasInspector({
         <div class="font-bold text-blue-900">{friendlyComponentLabel(node.componentKey)}</div>
         {node.isDraftOnly && (
           <div class="mt-0.5 text-[0.65rem] font-medium text-yellow-700">
-            ⚠ 未登録コンポーネント — 適用前にプロモートが必要です
+            ⚠ まだ使えない部品 — 先に部品登録を完了してください
           </div>
         )}
         <details class="mt-1">
@@ -2315,7 +2365,10 @@ function LayoutPalette({
               <div class="font-bold truncate" title={c.componentKey}>
                 {friendlyComponentLabel(c.componentKey)}
                 {draftOnly && (
-                  <span class="ml-1 font-normal text-yellow-700 text-[0.6rem]">⚠未登録</span>
+                  <span
+                    class="ml-1 font-normal text-yellow-700 text-[0.6rem]"
+                    title="この部品はまだ登録されていません。部品登録タブでパッケージ化してから使用してください。"
+                  >⚠ まだ使えません</span>
                 )}
               </div>
               <div class="text-[0.62rem] text-gray-500">{c.componentKind}</div>
@@ -2342,7 +2395,7 @@ function LayoutPalette({
 
 // ─── レイアウトビルダーセクション v2 + UX強化 ─────────────────────────────────
 
-function LayoutBuilderSection(): JSX.Element {
+function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
   // ── route/layout selection ───────────────────────────────────────────────
   const [layoutId, setLayoutId] = useState("");
   const [routeKey, setRouteKey] = useState("");
@@ -2528,11 +2581,11 @@ function LayoutBuilderSection(): JSX.Element {
       if (draftOnlyNodes.length > 0) {
         setPatchErrors(draftOnlyNodes.map((n) => ({
           code: "DRAFT_ONLY_NODES",
-          message: `未登録コンポーネントです`,
+          message: `まだ使えない部品が ${draftOnlyNodes.length} 件あります — 先に登録してください`,
           nodeId: n.nodeId,
           componentKey: n.componentKey,
         })));
-        announce(`適用ブロック: ${draftOnlyNodes.length} 件の未登録ノードがあります`);
+        announce(`保存ブロック: ${draftOnlyNodes.length} 件のまだ使えない部品があります`);
         return;
       }
     }
@@ -2847,10 +2900,13 @@ function LayoutBuilderSection(): JSX.Element {
       {/* Gap 1: Lifecycle step indicator */}
       <LifecycleStepIndicator phase={lifecyclePhase} />
 
-      <div class="alert-warn mb-3.5 text-xs">
-        <strong>投影サーフェス境界:</strong> フロントエンドはドラフト状態・視覚プレビュー・intent 送信のみ担当。
-        適用は <code>preview → validate → apply</code> 経由。直接 DB 書き込みは行いません。
-      </div>
+      <details class="mb-3.5">
+        <summary class="cursor-pointer text-xs text-gray-500 hover:text-gray-700">技術情報</summary>
+        <div class="alert-warn mt-1 text-xs">
+          <strong>投影サーフェス境界:</strong> フロントエンドはドラフト状態・視覚プレビュー・intent 送信のみ担当。
+          適用は <code>preview → validate → apply</code> 経由。直接 DB 書き込みは行いません。
+        </div>
+      </details>
 
       <RouteLayoutSelector
         candidates={layoutCandidates}
@@ -2862,7 +2918,7 @@ function LayoutBuilderSection(): JSX.Element {
         loadError={candidateErrors}
       />
 
-      <AdvancedManualOverride title="manual override — layoutId / routeKey">
+      <AdvancedManualOverride title="詳細設定 — レイアウト・ルートを直接指定">
         <div class="flex flex-wrap gap-2">
           <input value={manualRouteKey} onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey 手入力" class="input-mono flex-1 text-xs" />
           <input value={manualLayoutId} onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId UUID 手入力" class="input-mono flex-[2] text-xs" />
@@ -2981,10 +3037,10 @@ function LayoutBuilderSection(): JSX.Element {
         </div>
       </div>
 
-      <Accordion title="レイアウトクラス参照 (topology layout class refs)" defaultOpen={false}>
+      <Accordion title="スタイルクラス設定" defaultOpen={false}>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
-        <AdvancedManualOverride title="manual override — raw classKey（SSOT外 ref 検証用）">
+        <AdvancedManualOverride title="詳細設定 — クラスキーを直接入力">
           <div class="flex flex-wrap gap-2">
             <input value={manualLayoutClassRef} onInput={(e) => setManualLayoutClassRef((e.target as HTMLInputElement).value)} placeholder="layout.root.grid" class="input-mono flex-1 text-xs" />
             <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">適用</button>
@@ -2992,7 +3048,7 @@ function LayoutBuilderSection(): JSX.Element {
         </AdvancedManualOverride>
       </Accordion>
 
-      <Accordion title="CSS トークン参照" defaultOpen={false}>
+      <Accordion title="色・余白の設定（CSSトークン）" defaultOpen={false}>
         <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
       </Accordion>
 
@@ -3003,6 +3059,7 @@ function LayoutBuilderSection(): JSX.Element {
         draftNodes={draftNodes}
         selectedTokenRefs={selectedTokenRefs}
         layoutClassRefError={layoutClassRefError}
+        onNavigate={onNavigate}
       />
 
       {/* Action buttons with clear step labels */}
@@ -3042,6 +3099,7 @@ function LayoutBuilderSection(): JSX.Element {
         <ActionableValidationErrorPanel
           errors={patchErrors}
           title="エラー — 修正方法"
+          onNavigate={onNavigate}
         />
       )}
 
@@ -3061,8 +3119,8 @@ function LayoutBuilderSection(): JSX.Element {
 // ─── タブナビゲーション ───────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
-  { id: "bucket", label: "バケット管理", hint: "Step 1: bucket → generate → promote" },
-  { id: "layout", label: "レイアウトビルダー", hint: "Step 2: canvas 配置 → preview → validate → apply" },
+  { id: "bucket", label: "部品登録", hint: "部品を選んで登録 → 配置可能にする" },
+  { id: "layout", label: "レイアウトビルダー", hint: "キャンバスに配置 → 確認 → 保存反映" },
   { id: "catalog", label: "コンポーネントカタログ" },
   { id: "css", label: "CSS トークン" },
   { id: "ci", label: "CI ガイダンス" },
@@ -3095,9 +3153,9 @@ export default function UiBuilderAdmin(): JSX.Element {
       <div>
         {activeTab === "ci" && <CiAttentionGuidanceSection />}
         {activeTab === "catalog" && <PrimitiveCatalog />}
-        {activeTab === "bucket" && <BucketSection />}
+        {activeTab === "bucket" && <BucketSection onNavigate={setActiveTab} />}
         {activeTab === "css" && <CssTokenSelectorSection />}
-        {activeTab === "layout" && <LayoutBuilderSection />}
+        {activeTab === "layout" && <LayoutBuilderSection onNavigate={setActiveTab} />}
       </div>
     </main>
   );

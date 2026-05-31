@@ -1101,24 +1101,31 @@ system_roadmap_ssot:
         All 8 UX acceptance criteria for the frontend projection surface are now implemented:
         lifecycle state visibility (LifecycleStepIndicator + corrected failure phase semantics),
         recovery navigation (50-step undo/redo Ctrl+Z/Y + clear canvas + inspector commit history),
-        actionable validation errors (ERROR_CODE_FIX map + per-error componentKey/nodeId context),
-        progressive disclosure vocabulary (friendly labels + advanced disclosures for raw terms),
+        actionable validation errors (ERROR_CODE_FIX map + per-error componentKey/nodeId context + tab
+        navigate buttons for DRAFT_ONLY_NODES/CSS_TOKEN_INVALID/BUCKET_*/GENERATE_FAILED/PROMOTE_FAILED),
+        progressive disclosure vocabulary (Japanese labels for bucket lifecycle statuses, friendly labels +
+        advanced disclosures for raw terms including sourcePath in catalog/bucket views),
         non-pointer operation (keyboard move/resize/add/reorder/delete alternatives),
         accessibility observability (24x24px resize handles, ARIA roles, live regions, manual check doc),
         first-run guidance (empty state CTA + 3 template buttons),
         CSS token visual diff (SSOT-derived swatch values via resolveCssTokenValue).
-        Frontend remains projection-only; DB-backed design/layout/wiring authority and backend
-        validation remain unchanged. accessibility_observability manual check execution pending.
+        resolveBucketStatus extracted to bucketUtils.ts with canonical status field separated from
+        display label — state judgment uses canonical status (promoted/packaging/bucketed/unregistered),
+        not display string. Frontend remains projection-only; DB-backed design/layout/wiring authority
+        and backend validation remain unchanged. accessibility_observability manual check execution pending.
       files:
         - docs/system-roadmap.yaml
         - .agent/tasks/todo.md
         - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/runtime/bucketUtils.ts
         - frontend/runtime/cssDictionary.ts
         - frontend/runtime/visualLayoutUtils.ts
+        - frontend/tests/bucketUtils.test.ts
         - frontend/tests/visualLayoutBuilder.test.ts
         - .agent/tests/check-accessibility-manual.md
       evidence:
         tests:
+          - bucketUtils.test.ts (resolveBucketStatus canonical status / label isolation)
           - visualLayoutBuilder.test.ts (43 tests)
           - projectionConstructor.test.ts
           - runtimeComponentAdapter.test.ts
@@ -1141,6 +1148,7 @@ system_roadmap_ssot:
         - css_token_selection_has_visual_preview_and_before_after_diff
         - frontend_remains_projection_surface_without_topology_judgment
         - preview_validate_apply_and_no_direct_DB_write_boundary_is_preserved
+        - bucket_status_state_judgment_uses_canonical_status_not_display_label
       known_gap_ref: []
 
     frontend.admin_routes:
