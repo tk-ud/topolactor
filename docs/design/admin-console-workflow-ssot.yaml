@@ -213,8 +213,20 @@ admin_console_workflow_ssot:
       - select_topology_manifest
       - view_hub_relations_for_manifest
       - create_hub_relation (immediate active, no draft stage)
-      - update_hub_relation (relatedHubId + sequencePosition)
+      - update_hub_relation (relatedHubId only; sequencePosition managed via reorder)
       - deprecate_hub_relation
+      - reorder_hub_relations (batch swap; 2-phase transaction avoids UNIQUE constraint on sequence_position)
+    fixed_design_policies:
+      runtime_consumer: >
+        topology_transform_runtime pipeline — HubNavigationResolver injected into RuntimeExecutor
+        as optional dep; Emission.NavigationSequence populated at step 11 when vector.IdOrHubId is
+        present; non-fatal (emission continues without NavigationSequence on resolver failure).
+      self_loop_policy: >
+        direct self-loop (source_hub_id == related_hub_id) returns SELF_LOOP error code and is
+        forbidden. n-hop cycles (A→B→A, A→B→C→A) are intentionally allowed as valid business flows.
+      access_path_policy: >
+        hub_navigation:* owns all ordering mutations (create/update/deprecate/reorder).
+        content_bundle:list_hub_relations is read-only browse only; it does NOT own sequence edits.
     responsibility_split:
       in_scope:
         - display hub_relation graph between promoted manifests

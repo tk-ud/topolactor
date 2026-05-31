@@ -792,10 +792,9 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var conn = await OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT hr.related_hub_id::text, COALESCE(h.name, hr.related_hub_id::text), hr.sequence_position " +
+            "SELECT hr.related_hub_id::text, hr.related_hub_id::text, hr.sequence_position " +
             "FROM hubs.hub_relations hr " +
             "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id " +
-            "LEFT JOIN hubs.hub h ON h.hub_id = hr.related_hub_id " +
             "WHERE tm.hub_id = @hid AND hr.status = 'active' " +
             "ORDER BY hr.sequence_position";
         cmd.Parameters.AddWithValue("hid", hubId);

@@ -309,7 +309,6 @@ system_roadmap_ssot:
         - Issue #84 seed import/export runtime
         - Issue #86 frontend UI component system
         - Gap-9 admin route skeletons
-        - hub_navigation_runtime_projection_layer: not_implemented (② consumer side; design decision pending)
 
     M6_external_integration:
       title: Self-hosted admin authoring loop (MVP)
@@ -824,7 +823,7 @@ system_roadmap_ssot:
         MANIFEST_NOT_FOUND, MANIFEST_AMBIGUOUS, RUNTIME_DESTINATION_UNKNOWN are explicit errors.
         Admin route manifests in seed_empty.sql use runtime_destination=admin_runtime:
         IDs 50-5a (seed_runtime/context_token/registry_vector/ui_component_bucket/package_generator/system_ci/ci_attention/manifest/content_bundle),
-        IDs 77-7b (hub_navigation: list_manifests/get_hub_relations/create/update/deprecate).
+        IDs 77-7b (hub_navigation: list_manifests/get_hub_relations/create/update/deprecate), 7c (hub_navigation:reorder).
         Test fixture stubs (FakeDispatchableRuntime) verify selection boundary without
         contaminating production DI.
       files:
@@ -1166,7 +1165,7 @@ system_roadmap_ssot:
         draft create/update, validate, preview, promote). Gap-9 content bundle partial follow-up complete.
         /admin/manifests and /admin/ui-builder have separate registry flows.
         /admin/hub-navigation is wired to hub_navigation admin runtime (list_manifests, get_hub_relations,
-        create/update/deprecate hub_relation). Seed manifest records (IDs 77-7b) registered.
+        create/update/deprecate/reorder hub_relation). Seed manifest records (IDs 77-7c) registered.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1184,7 +1183,6 @@ system_roadmap_ssot:
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
         - Gap-9 admin route skeletons
-        - hub_navigation runtime projection layer (② consumer side) is not yet implemented
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
@@ -1454,19 +1452,25 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Hub navigation admin write layer is fully implemented.
-        AdminRuntime dispatches hub_navigation:{list_manifests,get_hub_relations,create,update,deprecate}.
-        NpgsqlContentBundleRepository implements all 5 methods against hubs.topology_manifests and
+        Hub navigation admin write layer and runtime consumer are fully implemented.
+        AdminRuntime dispatches hub_navigation:{list_manifests,get_hub_relations,create,update,deprecate,reorder}.
+        NpgsqlContentBundleRepository implements all 6 methods against hubs.topology_manifests and
         hubs.hub_relations. hub_relation lifecycle is immediate-active (no draft stage).
         create validates manifest existence (MANIFEST_NOT_FOUND) and hub existence (HUB_NOT_FOUND);
-        update validates hub existence (HUB_NOT_FOUND); sequence conflicts return SEQUENCE_CONFLICT.
-        Seed manifest records (IDs 77-7b) registered in seed_empty.sql for all 5 dispatch actions.
-        Runtime projection layer (consumer side, ② in design backlog) is not yet implemented.
+        direct self-loop (source_hub == related_hub) returns SELF_LOOP; update validates hub existence (HUB_NOT_FOUND);
+        sequence conflicts return SEQUENCE_CONFLICT; reorder uses 2-phase transaction to avoid UNIQUE constraint violations.
+        Seed manifest records (IDs 77-7c) registered in seed_empty.sql for all 6 dispatch actions.
+        Runtime consumer: HubNavigationResolver reads hub_relations via topology_transform_runtime pipeline;
+        Emission.NavigationSequence populated when vector.IdOrHubId is present (non-fatal on failure).
       files:
         - backend/runtime/AdminRuntime.cs
+        - backend/runtime/HubNavigationResolver.cs
         - backend/repository/ContentBundleRepository.cs
         - backend/repository/NpgsqlContentBundleRepository.cs
         - backend/schema/ContentBundleContracts.cs
+        - backend/schema/Contracts.cs
+        - backend/runtime/RuntimeExecutor.cs
+        - backend/Program.cs
         - db/seed_empty.sql
         - frontend/islands/HubNavigationAdmin.tsx
         - frontend/routes/admin/hub-navigation.tsx
@@ -1481,22 +1485,27 @@ system_roadmap_ssot:
           - AdminRuntimeContentBundleTests (HubNavigation_GetHubRelations_ReturnsSeededEntry)
           - AdminRuntimeContentBundleTests (HubNavigation_Create_AddsNewEntry)
           - AdminRuntimeContentBundleTests (HubNavigation_Create_SequenceConflict_ReturnsError)
+          - AdminRuntimeContentBundleTests (HubNavigation_Create_SelfLoop_ReturnsSelfLoopError)
           - AdminRuntimeContentBundleTests (HubNavigation_Update_ChangesSequencePosition)
           - AdminRuntimeContentBundleTests (HubNavigation_Update_InvalidHub_ReturnsHubNotFound)
+          - AdminRuntimeContentBundleTests (HubNavigation_Update_SelfLoop_ReturnsSelfLoopError)
           - AdminRuntimeContentBundleTests (HubNavigation_Deprecate_SetsDeprecatedStatus)
+          - AdminRuntimeContentBundleTests (HubNavigation_Reorder_ChangesSequencePositions)
         ci:
           - backend-tests
       completion_condition:
         - hub_navigation_list_manifests_returns_topology_manifests_with_hub_relation_count
         - hub_navigation_get_hub_relations_returns_manifest_scoped_active_relations
         - hub_navigation_create_validates_manifest_and_hub_existence
+        - hub_navigation_create_direct_self_loop_returns_SELF_LOOP
         - hub_navigation_update_validates_hub_existence_returns_HUB_NOT_FOUND
+        - hub_navigation_update_direct_self_loop_returns_SELF_LOOP
         - hub_navigation_deprecate_sets_status_deprecated
         - sequence_conflict_returns_SEQUENCE_CONFLICT_not_exception
-        - seed_manifest_records_registered_for_all_5_hub_navigation_actions
-      known_gap_ref:
-        - hub_navigation_runtime_projection_layer (② consumer side) not implemented; design decision pending (see todo.md)
-        - sequence_position_swap_UNIQUE_constraint (③ reorder action or DEFERRABLE); design decision pending
+        - hub_navigation_reorder_uses_2phase_transaction_avoiding_UNIQUE_constraint
+        - seed_manifest_records_registered_for_all_6_hub_navigation_actions
+        - runtime_consumer_populates_emission_NavigationSequence_via_HubNavigationResolver
+      known_gap_ref: []
       detail_ssot:
         - docs/design/admin-console-workflow-ssot.yaml
 
