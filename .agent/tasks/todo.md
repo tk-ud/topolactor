@@ -25,11 +25,3 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] `product.dynamic_support_nocode_loop` の manual acceptance / hand-debug verification を実施し、authoring guidance・SQL Attention feedback・M6 self-hosted admin authoring loop が同一UX導線として受入可能か確認する。
       → 残理由は implementation gap ではない。M6 self-hosted admin authoring loop、SQL Attention SQLA-1..5、SQL Attention live DB E2E、roadmap/test-bundles 正規化は完了済みで、M6/M7 core runtime production-ready 判定は維持する。future optional external connector surfaces は M6/M7 blocker ではない。
-
-
-## Frontend projection surface — general UX acceptance
-
-- [x] `product.frontend_projection_surface_ux_acceptance` — 8 UX gaps 実装完了 (PR branch: `claude/frontend-ux-improvement-ucFQU`)
-      → 実装済み (#1〜#8): lifecycle_state_visibility (LifecycleStepIndicator), recovery_navigation (undo/redo 50step + Ctrl+Z/Y), actionable_validation_errors (ERROR_CODE_FIX map + ActionableValidationErrorPanel), progressive_disclosure_vocabulary (friendlyComponentLabel + CanvasInspector語彙更新), non_pointer_operation (palette "追加"ボタン + keyboard arrow move + Delete), accessibility_observability (ARIA role/label/live/tabindex/focus-visible/resize handle 12px), first_run_guidance (VisualLayoutCanvas空状態CTA + テンプレート3種), css_token_visual_diff (CssTokenSwatch色プレビュー + 選択前後diff表示)
-      → test: visualLayoutBuilder.test.ts に 5 件 helper 境界テスト追加 (25 passed)
-      → manual acceptance 残: focus order / target size / live status の反復可能 manual check (automation 対象外)

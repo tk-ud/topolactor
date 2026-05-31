@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
-import { CSS_DICTIONARY_TOKENS } from "../runtime/cssDictionary.ts";
+import { CSS_DICTIONARY_TOKENS, resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
 import { resolveTopologyLayoutClassRefs } from "../runtime/topologyLayoutClassResolver.ts";
 import { OperationGuardBanner } from "../components/OperationGuardBanner.tsx";
@@ -70,7 +70,7 @@ type BucketItem = {
   status: string;
 };
 
-type ValidationError = { code: string; message: string };
+type ValidationError = { code: string; message: string; field?: string; nodeId?: string; componentKey?: string };
 
 type DraftNode = {
   nodeId: string;
@@ -523,25 +523,26 @@ function LifecycleStepIndicator({ phase }: { phase: LifecyclePhase }): JSX.Eleme
   );
 }
 
-// Gap 3: Actionable validation errors with cause + fix suggestion
+// Gap 3: Actionable validation errors with cause + fix suggestion + contextual node info
+type AnnotatedValidationError = {
+  code: string;
+  message: string;
+  field?: string;
+  nodeId?: string;
+  componentKey?: string;
+};
+
 function ActionableValidationErrorPanel({
   errors,
   title,
-  affectedNodeKey,
 }: {
-  errors: { code: string; message: string }[];
+  errors: AnnotatedValidationError[];
   title?: string;
-  affectedNodeKey?: string;
 }): JSX.Element | null {
   if (errors.length === 0) return null;
   return (
     <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
       {title && <div class="mb-2 font-semibold text-red-800">{title}</div>}
-      {affectedNodeKey && (
-        <div class="mb-2 rounded border border-red-200 bg-white px-2 py-1 font-mono text-xs text-red-700">
-          影響ノード: <code>{affectedNodeKey}</code>
-        </div>
-      )}
       <ul class="space-y-2 pl-0">
         {errors.map((e, i) => {
           const fix = ERROR_CODE_FIX[e.code] ?? null;
@@ -554,6 +555,14 @@ function ActionableValidationErrorPanel({
                 <span class="text-xs text-red-600">
                   修正方法: {fix.suggestion}
                 </span>
+              )}
+              {/* Contextual detail: field / nodeId / componentKey when available */}
+              {(e.field || e.nodeId || e.componentKey) && (
+                <div class="mt-0.5 rounded border border-red-200 bg-white px-2 py-0.5 font-mono text-xs text-red-700">
+                  {e.componentKey && <span>コンポーネント: <code>{friendlyComponentLabel(e.componentKey)}</code>{" "}</span>}
+                  {e.field && <span>フィールド: <code>{e.field}</code>{" "}</span>}
+                  {e.nodeId && <span class="text-gray-400">({e.nodeId.slice(0, 8)})</span>}
+                </div>
               )}
               <span class="font-mono text-[0.65rem] text-gray-400">[{e.code}]</span>
             </li>
@@ -747,33 +756,53 @@ function RouteLayoutSelector({
   );
 }
 
-// Gap 8: CSS token visual swatch
-function CssTokenSwatch({ token }: { token: { category: string; property: string; semanticRole: string } }): JSX.Element {
+// Gap 8: CSS token visual swatch — values resolved from SSOT via resolveCssTokenValue
+function CssTokenSwatch({ token }: { token: { tokenKey: string; category: string; property: string; semanticRole: string } }): JSX.Element {
   if (token.category === "color") {
-    const roleColorMap: Record<string, string> = {
-      primary_action: "#2563eb",
-      secondary_action: "#6b7280",
-      danger_action: "#dc2626",
-    };
-    const bg = roleColorMap[token.semanticRole] ?? "#e5e7eb";
+    const resolvedValue = resolveCssTokenValue(token.tokenKey);
+    // Determine bg/fg from property to render a meaningful swatch
+    const isTextColor = token.property === "color";
+    const swatchBg = isTextColor ? "#f3f4f6" : (resolvedValue ?? "#e5e7eb");
+    const swatchFg = isTextColor ? (resolvedValue ?? "#333") : undefined;
     return (
       <span
-        class="inline-block h-4 w-4 rounded border border-gray-300 align-middle"
-        style={{ backgroundColor: bg }}
-        aria-label={`色プレビュー: ${token.semanticRole}`}
-      />
+        class="inline-flex items-center justify-center h-4 w-4 rounded border border-gray-300 align-middle font-mono text-[0.55rem] font-bold"
+        style={{ backgroundColor: swatchBg, color: swatchFg }}
+        aria-label={`色プレビュー: ${resolvedValue ?? token.semanticRole}`}
+        title={resolvedValue}
+      >
+        {isTextColor ? "A" : ""}
+      </span>
     );
   }
   if (token.category === "spacing") {
-    return <span class="inline-block h-3 w-3 rounded-sm border border-dashed border-gray-400 align-middle" aria-label="スペーシングプレビュー" />;
+    const val = resolveCssTokenValue(token.tokenKey) ?? "";
+    return (
+      <span
+        class="inline-block rounded-sm border border-dashed border-gray-400 align-middle"
+        style={{ width: "12px", height: "12px" }}
+        aria-label={`スペーシング: ${val}`}
+        title={val}
+      />
+    );
   }
   if (token.category === "radius") {
-    return <span class="inline-block h-4 w-4 rounded-full border border-gray-400 align-middle" aria-label="角丸プレビュー" />;
+    const val = resolveCssTokenValue(token.tokenKey) ?? "4px";
+    return (
+      <span
+        class="inline-block h-4 w-4 border border-gray-400 align-middle"
+        style={{ borderRadius: val }}
+        aria-label={`角丸: ${val}`}
+        title={val}
+      />
+    );
   }
   if (token.category === "typography") {
-    return <span class="font-mono text-[0.6rem] text-gray-500 align-middle">Aa</span>;
+    const val = resolveCssTokenValue(token.tokenKey) ?? "monospace";
+    return <span class="align-middle text-[0.6rem] text-gray-500" style={{ fontFamily: val }} aria-label={`フォント: ${val}`} title={val}>Aa</span>;
   }
-  return <span class="text-[0.6rem] text-gray-400">{token.property.slice(0, 3)}</span>;
+  const val = resolveCssTokenValue(token.tokenKey);
+  return <span class="text-[0.6rem] text-gray-400" title={val}>{token.property.slice(0, 3)}</span>;
 }
 
 function CssTokenPicker({
@@ -1652,15 +1681,16 @@ function CssTokenSelectorSection(): JSX.Element {
 
 // ─── v2 ビジュアルキャンバスコンポーネント ────────────────────────────────────
 
+// Outer hit area: 24×24px centered on the handle position (WCAG 2.5.8 minimum target size)
 const RESIZE_HANDLE_STYLE: Record<ResizeDir, Record<string, string>> = {
-  nw: { top: "-6px", left: "-6px", cursor: "nw-resize" },
-  n: { top: "-6px", left: "50%", transform: "translateX(-50%)", cursor: "n-resize" },
-  ne: { top: "-6px", right: "-6px", cursor: "ne-resize" },
-  w: { top: "50%", left: "-6px", transform: "translateY(-50%)", cursor: "w-resize" },
-  e: { top: "50%", right: "-6px", transform: "translateY(-50%)", cursor: "e-resize" },
-  sw: { bottom: "-6px", left: "-6px", cursor: "sw-resize" },
-  s: { bottom: "-6px", left: "50%", transform: "translateX(-50%)", cursor: "s-resize" },
-  se: { bottom: "-6px", right: "-6px", cursor: "se-resize" },
+  nw: { top: "-12px", left: "-12px", cursor: "nw-resize" },
+  n: { top: "-12px", left: "50%", transform: "translateX(-50%)", cursor: "n-resize" },
+  ne: { top: "-12px", right: "-12px", cursor: "ne-resize" },
+  w: { top: "50%", left: "-12px", transform: "translateY(-50%)", cursor: "w-resize" },
+  e: { top: "50%", right: "-12px", transform: "translateY(-50%)", cursor: "e-resize" },
+  sw: { bottom: "-12px", left: "-12px", cursor: "sw-resize" },
+  s: { bottom: "-12px", left: "50%", transform: "translateX(-50%)", cursor: "s-resize" },
+  se: { bottom: "-12px", right: "-12px", cursor: "se-resize" },
 };
 
 const RESIZE_DIR_LABEL: Record<ResizeDir, string> = {
@@ -1669,26 +1699,34 @@ const RESIZE_DIR_LABEL: Record<ResizeDir, string> = {
   sw: "左下リサイズ", s: "下リサイズ", se: "右下リサイズ",
 };
 
-// Gap 6: Accessible resize handle — 12×12px visible, with keyboard support
+// Gap 6: Accessible resize handle — 24×24px touch target (WCAG 2.5.8) with 12×12px visual dot
 function ResizeHandle({
   dir,
   onMouseDown,
+  onKeyboardActivate,
 }: {
   dir: ResizeDir;
   onMouseDown: (e: Event) => void;
+  onKeyboardActivate: () => void;
 }): JSX.Element {
   return (
     <div
       role="button"
       tabIndex={0}
       aria-label={RESIZE_DIR_LABEL[dir]}
-      class="absolute z-20 h-3 w-3 rounded-sm border-2 border-blue-600 bg-white shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+      class="absolute z-20 flex h-6 w-6 items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
       style={RESIZE_HANDLE_STYLE[dir]}
       onMouseDown={(e: Event) => { e.stopPropagation(); onMouseDown(e); }}
       onKeyDown={(e: KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onMouseDown(e as unknown as Event); }
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          onKeyboardActivate();
+        }
       }}
-    />
+    >
+      <span class="block h-3 w-3 rounded-sm border-2 border-blue-600 bg-white shadow-sm pointer-events-none" />
+    </div>
   );
 }
 
@@ -1710,6 +1748,7 @@ function VisualLayoutNode({
   onNodeMouseDown,
   onResizeHandleMouseDown,
   onKeyboardMove,
+  onKeyboardResize,
   onDelete,
 }: {
   node: DraftNode;
@@ -1723,6 +1762,7 @@ function VisualLayoutNode({
   onNodeMouseDown: (e: Event) => void;
   onResizeHandleMouseDown: (e: Event, dir: ResizeDir) => void;
   onKeyboardMove?: (dx: number, dy: number) => void;
+  onKeyboardResize?: (dir: ResizeDir) => void;
   onDelete?: () => void;
 }): JSX.Element {
   const STEP = 10;
@@ -1784,6 +1824,7 @@ function VisualLayoutNode({
               key={dir}
               dir={dir}
               onMouseDown={(e) => onResizeHandleMouseDown(e, dir)}
+              onKeyboardActivate={() => onKeyboardResize?.(dir)}
             />
           ))}
         </>
@@ -1809,6 +1850,7 @@ function VisualLayoutCanvas({
   onDragOver,
   onDrop,
   onKeyboardMoveNode,
+  onKeyboardResizeNode,
   onDeleteNode,
   onAddFromEmptyState,
 }: {
@@ -1829,6 +1871,7 @@ function VisualLayoutCanvas({
   onDragOver: (e: Event) => void;
   onDrop: (e: Event) => void;
   onKeyboardMoveNode: (nodeId: string, dx: number, dy: number) => void;
+  onKeyboardResizeNode: (nodeId: string, dir: ResizeDir) => void;
   onDeleteNode: (nodeId: string) => void;
   onAddFromEmptyState?: (templateId: string) => void;
 }): JSX.Element {
@@ -1908,6 +1951,7 @@ function VisualLayoutCanvas({
             onNodeMouseDown={(e) => onNodeMouseDown(e, node.nodeId)}
             onResizeHandleMouseDown={(e, dir) => onResizeHandleMouseDown(e, node.nodeId, dir)}
             onKeyboardMove={(dx, dy) => onKeyboardMoveNode(node.nodeId, dx, dy)}
+            onKeyboardResize={(dir) => onKeyboardResizeNode(node.nodeId, dir)}
             onDelete={() => onDeleteNode(node.nodeId)}
           />
         );
@@ -2020,12 +2064,14 @@ function CanvasInspector({
   draftNodes,
   slotKeyCandidates,
   onUpdate,
+  onCommit,
   onClose,
 }: {
   node: DraftNode;
   draftNodes: DraftNode[];
   slotKeyCandidates: string[];
   onUpdate: (updates: Partial<DraftNode>) => void;
+  onCommit: (updates: Partial<DraftNode>, label: string) => void;
   onClose: () => void;
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
@@ -2039,20 +2085,26 @@ function CanvasInspector({
       return;
     }
     setParentCycleError(null);
-    onUpdate({ parentNodeId: parentId });
+    onCommit({ parentNodeId: parentId }, "親コンポーネントを変更");
   };
 
+  // onInput → live preview (no history); onChange/blur → commit to history
   const handleNum = (
     field: "x" | "y" | "width" | "height" | "gridCol" | "gridRow",
     raw: string,
     applySnap = false,
+    commit = false,
   ) => {
     const v = parseInt(raw, 10);
     if (isNaN(v)) return;
     const min = field === "width" ? 40 : field === "height" ? 30 : field === "gridCol" ? 1 : 0;
     const clamped = Math.max(min, v);
     const final = applySnap ? snapToGrid(clamped, SNAP_SIZE) : clamped;
-    onUpdate({ [field]: final } as Partial<DraftNode>);
+    if (commit) {
+      onCommit({ [field]: final } as Partial<DraftNode>, `${FIELD_LABELS[field] ?? field}を変更`);
+    } else {
+      onUpdate({ [field]: final } as Partial<DraftNode>);
+    }
   };
 
   return (
@@ -2098,7 +2150,8 @@ function CanvasInspector({
                 value={node[f]}
                 min={f === "width" ? 40 : f === "height" ? 30 : 0}
                 step={SNAP_SIZE}
-                onInput={(e) => handleNum(f, (e.target as HTMLInputElement).value, true)}
+                onInput={(e) => handleNum(f, (e.target as HTMLInputElement).value, true, false)}
+                onChange={(e) => handleNum(f, (e.target as HTMLInputElement).value, true, true)}
                 class="input px-1 py-0.5"
                 aria-label={FIELD_LABELS[f]}
               />
@@ -2140,7 +2193,7 @@ function CanvasInspector({
           <span class="text-[0.65rem] text-gray-600">配置スロット</span>
           <select
             value={node.slotKey}
-            onChange={(e) => onUpdate({ slotKey: (e.target as HTMLSelectElement).value })}
+            onChange={(e) => onCommit({ slotKey: (e.target as HTMLSelectElement).value }, "配置スロットを変更")}
             class="input px-1 py-0.5 text-xs"
             aria-label="配置スロットを選択"
           >
@@ -2162,7 +2215,7 @@ function CanvasInspector({
             <button
               type="button"
               class="btn-secondary text-xs"
-              onClick={() => { onUpdate({ slotKey: manualSlotKey }); setManualSlotKey(""); }}
+              onClick={() => { onCommit({ slotKey: manualSlotKey }, "カスタムスロットを設定"); setManualSlotKey(""); }}
             >
               適用
             </button>
@@ -2177,7 +2230,8 @@ function CanvasInspector({
           <span class="text-[0.65rem] text-gray-600">列 (1〜12)</span>
           <input
             type="number" min={1} max={12} value={node.gridCol}
-            onInput={(e) => handleNum("gridCol", (e.target as HTMLInputElement).value)}
+            onInput={(e) => handleNum("gridCol", (e.target as HTMLInputElement).value, false, false)}
+            onChange={(e) => handleNum("gridCol", (e.target as HTMLInputElement).value, false, true)}
             class="input px-1 py-0.5"
             aria-label="グリッド列 (1〜12)"
           />
@@ -2186,7 +2240,8 @@ function CanvasInspector({
           <span class="text-[0.65rem] text-gray-600">行</span>
           <input
             type="number" min={1} value={node.gridRow}
-            onInput={(e) => handleNum("gridRow", (e.target as HTMLInputElement).value)}
+            onInput={(e) => handleNum("gridRow", (e.target as HTMLInputElement).value, false, false)}
+            onChange={(e) => handleNum("gridRow", (e.target as HTMLInputElement).value, false, true)}
             class="input px-1 py-0.5"
             aria-label="グリッド行"
           />
@@ -2470,10 +2525,12 @@ function LayoutBuilderSection(): JSX.Element {
     if (action === "apply") {
       const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
       if (draftOnlyNodes.length > 0) {
-        setPatchErrors([{
+        setPatchErrors(draftOnlyNodes.map((n) => ({
           code: "DRAFT_ONLY_NODES",
-          message: `${draftOnlyNodes.length} 件のノードがまだ未登録です: ${draftOnlyNodes.map((n) => friendlyComponentLabel(n.componentKey)).join(", ")}`,
-        }]);
+          message: `未登録コンポーネントです`,
+          nodeId: n.nodeId,
+          componentKey: n.componentKey,
+        })));
         announce(`適用ブロック: ${draftOnlyNodes.length} 件の未登録ノードがあります`);
         return;
       }
@@ -2498,9 +2555,14 @@ function LayoutBuilderSection(): JSX.Element {
       const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey);
       setPatchSummary(summary);
 
+      // Failure phases are scoped to the action: preview/validate errors stay in their
+      // respective phase (pipeline not advanced); only apply failures use applied_fail.
+      const failPhase: Record<string, LifecyclePhase> = {
+        preview: "previewed", validate: "validated", apply: "applied_fail",
+      };
       if (body?.errors?.length) {
         setPatchErrors(body.errors);
-        setLifecyclePhase("applied_fail");
+        setLifecyclePhase(failPhase[action] as LifecyclePhase);
         announce(`エラー: ${body.errors[0].message}`);
       } else {
         const donePhase: Record<string, LifecyclePhase> = {
@@ -2511,8 +2573,11 @@ function LayoutBuilderSection(): JSX.Element {
         announce(summary.message);
       }
     } catch (e) {
+      const failPhase: Record<string, LifecyclePhase> = {
+        preview: "previewed", validate: "validated", apply: "applied_fail",
+      };
       setPatchErrors([{ code: "NETWORK_ERROR", message: String(e) }]);
-      setLifecyclePhase("applied_fail");
+      setLifecyclePhase(failPhase[action] as LifecyclePhase);
       announce(`ネットワークエラー: ${e}`);
     } finally {
       setLoading(false);
@@ -2596,6 +2661,20 @@ function LayoutBuilderSection(): JSX.Element {
     const newX = snapToGrid(Math.max(0, node.x + dx), SNAP_SIZE);
     const newY = snapToGrid(Math.max(0, node.y + dy), SNAP_SIZE);
     commitNodeUpdate(nodeId, { x: newX, y: newY }, `移動: ${friendlyComponentLabel(node.componentKey)}`);
+  };
+
+  // Gap 5/6: Keyboard resize via resize handle Enter/Space — real delta, no mouse coords needed
+  const handleKeyboardResizeNode = (nodeId: string, dir: ResizeDir) => {
+    const node = draftNodes.find((n) => n.nodeId === nodeId);
+    if (!node) return;
+    const DELTA = SNAP_SIZE;
+    let { x, y, width, height } = node;
+    if (dir.includes("e")) width = snapToGrid(Math.max(40, width + DELTA), SNAP_SIZE);
+    if (dir.includes("w")) { x = snapToGrid(Math.max(0, x - DELTA), SNAP_SIZE); width = snapToGrid(Math.max(40, width + DELTA), SNAP_SIZE); }
+    if (dir.includes("s")) height = snapToGrid(Math.max(30, height + DELTA), SNAP_SIZE);
+    if (dir.includes("n")) { y = snapToGrid(Math.max(0, y - DELTA), SNAP_SIZE); height = snapToGrid(Math.max(30, height + DELTA), SNAP_SIZE); }
+    commitNodeUpdate(nodeId, { x, y, width, height }, `リサイズ: ${friendlyComponentLabel(node.componentKey)}`);
+    announce(`${RESIZE_DIR_LABEL[dir]} — ${width}×${height}`);
   };
 
   // ── palette drag ─────────────────────────────────────────────────────────
@@ -2872,6 +2951,7 @@ function LayoutBuilderSection(): JSX.Element {
             onDragOver={handleDragOverCanvas}
             onDrop={handleDropOnCanvas}
             onKeyboardMoveNode={handleKeyboardMoveNode}
+            onKeyboardResizeNode={handleKeyboardResizeNode}
             onDeleteNode={removeNode}
             onAddFromEmptyState={handleAddFromEmptyState}
           />
@@ -2893,6 +2973,7 @@ function LayoutBuilderSection(): JSX.Element {
               draftNodes={draftNodes}
               slotKeyCandidates={slotKeyCandidates}
               onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
+              onCommit={(updates, label) => commitNodeUpdate(selectedNode.nodeId, updates, label)}
               onClose={() => setSelectedNodeId(null)}
             />
           )}
@@ -2960,11 +3041,6 @@ function LayoutBuilderSection(): JSX.Element {
         <ActionableValidationErrorPanel
           errors={patchErrors}
           title="エラー — 修正方法"
-          affectedNodeKey={
-            patchErrors[0]?.code === "DRAFT_ONLY_NODES"
-              ? draftNodes.filter((n) => n.isDraftOnly).map((n) => friendlyComponentLabel(n.componentKey)).join(", ")
-              : undefined
-          }
         />
       )}
 
