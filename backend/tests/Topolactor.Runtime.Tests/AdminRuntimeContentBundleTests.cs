@@ -361,6 +361,25 @@ public class AdminRuntimeContentBundleTests
     }
 
     [Fact]
+    public async Task HubNavigation_Update_InvalidHub_ReturnsHubNotFound()
+    {
+        var runtime = CreateRuntime(new InMemoryContentBundleRepository());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
+            relatedHubId = Guid.NewGuid().ToString(),
+            sequencePosition = 5,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.False(data.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("HUB_NOT_FOUND", data.Value.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
     public async Task HubNavigation_Deprecate_SetsDeprecatedStatus()
     {
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());

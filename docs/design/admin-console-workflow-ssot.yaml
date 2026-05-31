@@ -111,7 +111,7 @@ admin_console_workflow_ssot:
           - ordering / sequence of manifests within each hub
           - manifest-to-hub-relation binding completeness validation
           - hub_relation ordering promotion
-      status: required_not_implemented
+      status: implemented
       rationale: >
         Each manifest is a single-screen unit. Page navigation transitions between
         screens require hub_relation ordering to be explicitly configured. This
@@ -184,7 +184,6 @@ admin_console_workflow_ssot:
       description: >
         Configure manifest sequence for page navigation hub_relations.
         Set ordering of promoted manifests within each hub navigation graph.
-      status: required_not_implemented
       note: >
         Required when multi-screen navigation transitions are needed.
         Must be completed before runtime verification for multi-screen flows.
@@ -211,11 +210,11 @@ admin_console_workflow_ssot:
       hub_relation graph, enabling page navigation transitions between
       single-screen manifests.
     lifecycle:
-      - select_hub
-      - view_manifest_sequence_graph
-      - set_ordering_per_hub
-      - validate_hub_relation_completeness
-      - promote_hub_navigation_config
+      - select_topology_manifest
+      - view_hub_relations_for_manifest
+      - create_hub_relation (immediate active, no draft stage)
+      - update_hub_relation (relatedHubId + sequencePosition)
+      - deprecate_hub_relation
     responsibility_split:
       in_scope:
         - display hub_relation graph between promoted manifests
@@ -232,7 +231,7 @@ admin_console_workflow_ssot:
         - hubs.hub
         - hubs.topology_manifests
     admin_guide_key: ADMIN_HUB_NAVIGATION_GUIDE
-    flow_step_key: ADMIN_MAIN_FLOW_STEPS (to be extended)
+    flow_step_key: ADMIN_MAIN_FLOW_STEPS
 
 # =============================================================================
 # Wiring Placement Boundary
@@ -261,29 +260,28 @@ admin_console_workflow_ssot:
     data_source: frontend/content/adminGuides.ts ADMIN_MAIN_FLOW_STEPS
     current_steps:
       - step: 1
-        label: Login
+        label: ログイン
         href: /auth
       - step: 2
-        label: マニフェスト登録
+        label: 取り込み設定
         href: /admin/manifests
       - step: 3
-        label: インポート
+        label: データ取り込み
         href: /admin/import
+        sub_steps:
+          - label: CSV/JSONインポート
+            href: /admin/import
+          - label: コンテンツ登録
+            href: /admin/contents
       - step: 4
-        label: UI Builder
+        label: 画面づくり
         href: /admin/ui-builder
       - step: 5
-        label: Runtime確認
-        href: /admin/runtime
-    required_extension:
-      - step: 3b
-        label: コンテンツ登録
-        href: /admin/contents
-        note: manual physical table and relational setup path
-      - step: 4b
         label: ナビ順序設定
         href: /admin/hub-navigation
-        note: hub_relation ordering for multi-screen navigation
+      - step: 6
+        label: 動作確認
+        href: /admin/runtime
     note: >
       ADMIN_MAIN_FLOW_STEPS in adminGuides.ts and AdminMainFlowStepper.tsx are the
       implementation surfaces for this contract. Changes to canonical_workflow steps

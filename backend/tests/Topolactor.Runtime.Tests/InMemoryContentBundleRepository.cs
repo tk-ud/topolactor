@@ -300,9 +300,15 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
             (new HubNavigationLifecycleResponseDto(true, newId.ToString(), "active", "Hub relation created."), null));
     }
 
+    private static readonly HashSet<Guid> _validHubIds = [DemoHubId, DemoRelatedHubId];
+
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
         Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
     {
+        if (!_validHubIds.Contains(relatedHubId))
+            return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
+                (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null));
+
         var idx = _hubRelations.FindIndex(hr => hr.HubRelationId == hubRelationId && hr.Status == "active");
         if (idx < 0)
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(

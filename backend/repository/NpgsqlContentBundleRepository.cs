@@ -700,6 +700,12 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
+        await using var checkHub = conn.CreateCommand();
+        checkHub.CommandText = "SELECT 1 FROM hubs.hub WHERE hub_id = @hid LIMIT 1";
+        checkHub.Parameters.AddWithValue("hid", relatedHubId);
+        if (await checkHub.ExecuteScalarAsync(ct) is null)
+            return (new HubNavigationLifecycleResponseDto(false, null, "error", "Related hub not found.", "HUB_NOT_FOUND"), null);
+
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "UPDATE hubs.hub_relations " +
