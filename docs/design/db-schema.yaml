@@ -133,6 +133,12 @@ db_schema:
         migration_target: hubs.topology_manifests
         bootstrap_ddl: db/manifest_tables.sql
         migration_ddl: db/migrations/admin_import_topology_manifest_migration.sql
+        remap_policy: >-
+          Existing admin_import_snapshot rows hold old manifest_id UUIDs from public.manifest,
+          which are not valid hubs.topology_manifests IDs. Before adding the FK constraint,
+          orphaned rows are remapped to the oldest hubs.topology_manifests row (by created_at).
+          Explicit RAISE EXCEPTION if no topology_manifests row exists and orphaned rows are present.
+          admin_import_records topology_manifest_id remains a soft reference (no FK); linked via snapshot_id.
         note: >-
           admin_import_snapshot.manifest_id FK to public.manifest retired.
           Column renamed to topology_manifest_id, FK now references hubs.topology_manifests.
@@ -146,8 +152,13 @@ db_schema:
         migration_target: topology schema
         bootstrap_ddl: db/ui_topology_tables.sql
         migration_ddl: db/migrations/ui_topology_to_canonical_schema.sql
+        upsert_policy: >-
+          Each INSERT uses ON CONFLICT (business_key) DO NOTHING. Canonical-table rows
+          take precedence over old public rows with the same business key. Idempotent
+          on re-runs. DROP IF EXISTS is safe on fresh DBs (old tables never existed).
         note: >-
-          All public UI component/design/layout/package tables migrated to topology.* canonical schema.
+          All public UI component/design/layout/package tables migrated to topology.* canonical schema
+          and then retired (DROPped in reverse dependency order with CASCADE).
           public.ui_component_bucket -> topology.components_bucket,
           public.ui_component_registry -> topology.ui_component_registry,
           public.ui_component_package -> topology.ui_component_package,

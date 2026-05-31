@@ -1889,13 +1889,17 @@ system_roadmap_ssot:
         manifest marked compatibility-only for runtime routing; canonical wiring path is topology.wiring_physical_to_package.
         CI vocabulary checks enforce canonical naming.
         admin_import_snapshot FK retired from public.manifest: column renamed to topology_manifest_id,
-        FK now references hubs.topology_manifests. admin_import_records.manifest_id similarly renamed
-        to topology_manifest_id (soft reference). Migration DDL at db/migrations/admin_import_topology_manifest_migration.sql.
-        All public UI component/design/layout/package tables migrated to topology.* canonical schema:
-        topology.components_bucket, topology.ui_component_registry, topology.ui_component_package,
-        topology.ui_package_component_map, topology.components_layout_design, topology.ui_wiring_registry,
-        topology.ui_topology_tensor, topology.ui_builder_components, topology.components_style_design,
-        topology.components_package_design. Migration DDL at db/migrations/ui_topology_to_canonical_schema.sql.
+        FK now references hubs.topology_manifests. Orphaned existing rows remapped to oldest
+        hubs.topology_manifests row; explicit RAISE EXCEPTION if no topology_manifest exists.
+        admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, linked via snapshot_id).
+        Migration DDL: db/migrations/admin_import_topology_manifest_migration.sql.
+        All public UI component/design/layout/package tables migrated to topology.* canonical schema
+        and retired (DROPped in reverse dependency order): topology.components_bucket,
+        topology.ui_component_registry, topology.ui_component_package, topology.ui_package_component_map,
+        topology.components_layout_design, topology.ui_wiring_registry, topology.ui_topology_tensor,
+        topology.ui_builder_components, topology.components_style_design, topology.components_package_design.
+        Upsert policy: ON CONFLICT (business_key) DO NOTHING; canonical rows take precedence.
+        Migration DDL: db/migrations/ui_topology_to_canonical_schema.sql.
         context_* tables placement decision: stays in public schema as recommendation learning surfaces.
       files:
         - docs/design/db-schema.yaml
