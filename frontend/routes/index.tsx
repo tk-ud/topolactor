@@ -1,4 +1,9 @@
 import { JSX } from "preact";
+import {
+  UX_IMPORT_SETTINGS,
+  UX_RUNTIME_CHECK,
+  UX_UI_BUILDER,
+} from "../content/adminUxTerms.ts";
 
 /**
  * トップページ — プロジェクト入口（概要・導線のみ）。
@@ -10,8 +15,8 @@ export default function Index(): JSX.Element {
       <h1 class="page-title">topolactor</h1>
 
       <p class="mb-4 leading-relaxed text-gray-700">
-        topolactor は、<strong>マニフェストを作り</strong>、CSV/JSON を取り込み、
-        画面を準備し、<strong>動作確認</strong>まで進める管理デモです。
+        topolactor は、<strong>{UX_IMPORT_SETTINGS}を作り</strong>、CSV/JSON を取り込み、
+        画面を準備し、<strong>{UX_RUNTIME_CHECK}</strong>まで進める管理デモです。
         管理画面を使うには先に<strong>ログイン</strong>が必要です。
       </p>
 
@@ -23,19 +28,19 @@ export default function Index(): JSX.Element {
             {" "}— 管理画面を使う前に認証します
           </li>
           <li>
-            <a href="/admin/manifests" class="link font-semibold">マニフェストを作る</a>
-            {" "}— 取り込み・表示・実行先の定義（インポートの前提）
+            <a href="/admin/manifests" class="link font-semibold">{UX_IMPORT_SETTINGS}を作る</a>
+            {" "}— 何をどこへ取り込むか、どう表示するか（インポートの前提）
           </li>
           <li>
             <a href="/admin/import" class="link font-semibold">CSV/JSON を取り込む</a>
             {" "}— プレビューで内容を確認してから反映
           </li>
           <li>
-            <a href="/admin/ui-builder" class="link font-semibold">UI Builder で画面を準備する</a>
+            <a href="/admin/ui-builder" class="link font-semibold">{UX_UI_BUILDER}で画面を準備する</a>
             {" "}— 部品の登録とレイアウト
           </li>
           <li>
-            <a href="/admin/runtime" class="link font-semibold">Runtime確認で動作を見る</a>
+            <a href="/admin/runtime" class="link font-semibold">{UX_RUNTIME_CHECK}</a>
             {" "}— 登録した設定が期待どおり動くか確認
           </li>
         </ol>
@@ -51,22 +56,24 @@ export default function Index(): JSX.Element {
         </a>
         <a href="/admin" class="card block hover:border-blue-300">
           <strong class="link">管理 — 作業の流れ</strong>
-          <p class="text-muted-xs mt-1">マニフェスト → インポート → UI Builder → 動作確認</p>
+          <p class="text-muted-xs mt-1">
+            {UX_IMPORT_SETTINGS} → インポート → {UX_UI_BUILDER} → {UX_RUNTIME_CHECK}
+          </p>
         </a>
         <a href="/admin/manifests" class="card block hover:border-blue-300">
-          <strong class="link">マニフェスト</strong>
-          <p class="text-muted-xs mt-1">取り込みルールと実行先の定義</p>
+          <strong class="link">{UX_IMPORT_SETTINGS}</strong>
+          <p class="text-muted-xs mt-1">取り込みルールと表示・実行先</p>
         </a>
         <a href="/admin/import" class="card block hover:border-blue-300">
           <strong class="link">インポート</strong>
           <p class="text-muted-xs mt-1">CSV/JSON のプレビューと反映</p>
         </a>
         <a href="/admin/ui-builder" class="card block hover:border-blue-300">
-          <strong class="link">UI Builder</strong>
+          <strong class="link">{UX_UI_BUILDER}</strong>
           <p class="text-muted-xs mt-1">画面部品とレイアウトの準備</p>
         </a>
         <a href="/admin/runtime" class="card block hover:border-blue-300">
-          <strong class="link">Runtime確認</strong>
+          <strong class="link">{UX_RUNTIME_CHECK}</strong>
           <p class="text-muted-xs mt-1">登録済み設定の動作確認</p>
         </a>
         <a href="/demo" class="card block hover:border-blue-300 sm:col-span-2">
@@ -78,9 +85,9 @@ export default function Index(): JSX.Element {
       <details class="mb-6 rounded border border-gray-200 bg-gray-50 p-4 text-sm">
         <summary class="cursor-pointer font-semibold text-gray-800">技術情報（開発者向け）</summary>
         <ul class="mt-3 list-disc space-y-1 pl-5 text-gray-600">
+          <li>画面上の「取り込み設定」は内部では manifest（/admin/manifests）</li>
           <li>UI は projection 面、topology 正本は DB + backend runtime</li>
           <li>操作は canonical dispatch（POST /api/dispatch）経由</li>
-          <li>promoted identity / emission / token 辞書などの用語は各管理画面の詳細リファレンスを参照</li>
           <li>
             仕様:{" "}
             <code class="rounded bg-gray-100 px-1 text-xs">docs/registrar-admin-ui-specification.md</code>

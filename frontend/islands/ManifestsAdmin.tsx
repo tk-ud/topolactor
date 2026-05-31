@@ -44,6 +44,10 @@ import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_MANIFESTS_GUIDE } from "../content/adminGuides.ts";
+import {
+  UX_IMPORT_SETTINGS,
+  UX_RUNTIME_CHECK,
+} from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
 type EditorMode = "wiring" | "promotion";
@@ -119,14 +123,14 @@ export default function ManifestsAdmin(): JSX.Element {
       if (items === null) {
         setBackendUnavailable(true);
         setPromotionManifests([]);
-        setStatus("バックエンド未設定 — promotion manifest 操作は利用できません。");
+        setStatus(`バックエンド未設定 — 公開・案内の編集は利用できません。`);
         return;
       }
       setPromotionManifests(items);
-      setStatus(`${items.length} 件の promotion manifest を読み込みました。`);
+      setStatus(`${items.length} 件の公開・案内設定を読み込みました。`);
     } catch (e) {
       setErrors([{ message: String(e) }]);
-      setStatus("promotion manifest 一覧の読み込みに失敗しました。");
+      setStatus("公開・案内一覧の読み込みに失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -178,7 +182,7 @@ export default function ManifestsAdmin(): JSX.Element {
   const handlePromotionSaveDraft = async () => {
     const manifestId = promotionSelectedId || promotionDraftManifestId.trim();
     if (!manifestId) {
-      setErrors([{ message: "manifestId を指定してください（既存 draft の UUID）。" }]);
+      setErrors([{ message: "対象の設定IDを指定してください（既存の下書き）。" }]);
       return;
     }
     setLoading(true);
@@ -190,7 +194,7 @@ export default function ManifestsAdmin(): JSX.Element {
       setPromotionDetail(saved);
       setPromotionSelectedId(saved.manifestId);
       setPromotionDraftManifestId(saved.manifestId);
-      setStatus("promotion metadata ドラフトを更新しました。");
+      setStatus("公開・案内の下書きを更新しました。");
       await loadPromotionList();
     } catch (e) {
       setErrors([{ message: String(e) }]);
@@ -212,7 +216,7 @@ export default function ManifestsAdmin(): JSX.Element {
         return;
       }
       setManifests(items);
-      setStatus(`${items.length} 件のマニフェストを読み込みました。`);
+      setStatus(`${items.length} 件の${UX_IMPORT_SETTINGS}を読み込みました。`);
     } catch (e) {
       setErrors([{ message: String(e) }]);
       setStatus("一覧の読み込みに失敗しました。");
@@ -292,9 +296,9 @@ export default function ManifestsAdmin(): JSX.Element {
       setLifecycleResult(result);
       if (!result.ok) {
         setErrors([{ code: result.errorCode, message: result.message }]);
-        setStatus("プロモートに失敗しました。");
+        setStatus("有効化に失敗しました。");
       } else {
-        setStatus("draft → active にプロモートしました。");
+        setStatus("下書きを有効化しました。");
         await loadList();
         await loadDetail(selectedId);
       }
@@ -358,7 +362,7 @@ export default function ManifestsAdmin(): JSX.Element {
       setDetail(saved);
       setSelectedId(saved.manifestId);
       setShowDraftForm(false);
-      setStatus(detail?.status === "draft" ? "ドラフトを更新しました。" : "ドラフトを作成しました。");
+      setStatus(detail?.status === "draft" ? "下書きを更新しました。" : "下書きを作成しました。");
       await loadList();
     } catch (e) {
       setErrors([{ message: String(e) }]);
@@ -373,7 +377,7 @@ export default function ManifestsAdmin(): JSX.Element {
 
   return (
     <main class="page-main font-mono">
-      <h1 class="page-title">topolactor — 管理 / マニフェスト</h1>
+      <h1 class="page-title">topolactor — 管理 / {UX_IMPORT_SETTINGS}</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
       <AdminHowTo steps={ADMIN_MANIFESTS_GUIDE.howToSteps} />
@@ -381,11 +385,11 @@ export default function ManifestsAdmin(): JSX.Element {
 
       {backendUnavailable && (
         <p class="alert-warning mb-4 text-sm" role="status">
-          バックエンド未接続 — manifest 管理操作は DB + dispatch 経由でのみ利用できます。
+          バックエンド未接続 — {UX_IMPORT_SETTINGS}の編集はサーバー接続後に利用できます。
         </p>
       )}
 
-      <ValidationErrorPanel errors={errors} title="manifest errors" />
+      <ValidationErrorPanel errors={errors} title="エラー" />
 
       {status && <p class="mb-4 text-sm text-muted-xs">{status}</p>}
 
@@ -395,21 +399,21 @@ export default function ManifestsAdmin(): JSX.Element {
           class={editorMode === "wiring" ? "btn-primary" : "btn-secondary"}
           onClick={() => setEditorMode("wiring")}
         >
-          Runtime wiring
+          データの流れ
         </button>
         <button
           type="button"
           class={editorMode === "promotion" ? "btn-primary" : "btn-secondary"}
           onClick={() => setEditorMode("promotion")}
         >
-          Promotion metadata
+          公開・案内
         </button>
       </div>
 
       {editorMode === "wiring" && (
       <>
       <section class="mb-8">
-        <h2 class="section-title">1. マニフェスト一覧</h2>
+        <h2 class="section-title">1. {UX_IMPORT_SETTINGS}一覧</h2>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <label class="text-sm">
             ステータス:
@@ -437,18 +441,18 @@ export default function ManifestsAdmin(): JSX.Element {
               setProjectionDraft(emptyManifestProjectionDraft());
             }}
           >
-            新規ドラフト
+            新規下書き
           </button>
         </div>
 
         {manifests.length === 0 ? (
-          <p class="text-sm text-muted-xs">マニフェストがありません。</p>
+          <p class="text-sm text-muted-xs">{UX_IMPORT_SETTINGS}がまだありません。</p>
         ) : (
           <div class="overflow-x-auto">
             <table class="w-full border-collapse text-sm">
               <thead>
                 <tr class="border-b bg-slate-50 text-left">
-                  {["manifest_id", "status", "role", "target", "layer", "action", "runtime_destination"].map((h) => (
+                  {["設定ID", "状態", "役割", "対象", "層", "操作", "実行先"].map((h) => (
                     <th key={h} class="px-2 py-1 font-semibold">{h}</th>
                   ))}
                 </tr>
@@ -477,26 +481,29 @@ export default function ManifestsAdmin(): JSX.Element {
 
       {(showDraftForm || detail) && (
         <section class="mb-8">
-          <h2 class="section-title">2. 詳細 / ドラフト編集</h2>
+          <h2 class="section-title">2. 詳細 / 下書き編集</h2>
 
           {detail && (
             <dl class="mb-4 grid gap-2 text-sm sm:grid-cols-2">
-              <div><dt class="font-semibold">manifest_id</dt><dd><code>{detail.manifestId}</code></dd></div>
-              <div><dt class="font-semibold">status</dt><dd class={statusBadgeClass(detail.status)}>{detail.status}</dd></div>
-              <div><dt class="font-semibold">relation_registry_id</dt><dd>{detail.relationRegistryId ?? "—"}</dd></div>
-              <div><dt class="font-semibold">updated_at</dt><dd>{detail.updatedAt}</dd></div>
+              <div><dt class="font-semibold">設定ID</dt><dd><code>{detail.manifestId}</code></dd></div>
+              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{detail.status}</dd></div>
+              <div><dt class="font-semibold">更新日時</dt><dd>{detail.updatedAt}</dd></div>
+              <details class="sm:col-span-2 text-xs text-muted-xs">
+                <summary class="cursor-pointer">技術情報（開発者向け）</summary>
+                <div class="mt-1">relation_registry_id: {detail.relationRegistryId ?? "—"}</div>
+              </details>
             </dl>
           )}
 
           {(showDraftForm || detail?.status === "draft") && (
             <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
-              <h3 class="mb-2 text-sm font-semibold">dispatcher axes + runtime_destination</h3>
+              <h3 class="mb-2 text-sm font-semibold">取り込み・実行のつながり</h3>
               <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {([
-                  ["role", draftRole, setDraftRole],
-                  ["target", draftTarget, setDraftTarget],
-                  ["layer", draftLayer, setDraftLayer],
-                  ["action", draftAction, setDraftAction],
+                  ["役割", draftRole, setDraftRole],
+                  ["対象", draftTarget, setDraftTarget],
+                  ["層", draftLayer, setDraftLayer],
+                  ["操作", draftAction, setDraftAction],
                 ] as const).map(([label, value, setter]) => (
                   <label key={label} class="text-xs">
                     {label}
@@ -508,7 +515,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   </label>
                 ))}
                 <label class="text-xs">
-                  runtime_destination
+                  実行先
                   <select
                     class="mt-1 w-full rounded border px-2 py-1 font-mono"
                     value={draftRuntimeDestination}
@@ -617,14 +624,14 @@ export default function ManifestsAdmin(): JSX.Element {
               </details>
 
               <button type="button" class="btn-primary mt-3" disabled={loading} onClick={handleSaveDraft}>
-                {detail?.status === "draft" ? "ドラフト更新" : "ドラフト作成"}
+                {detail?.status === "draft" ? "下書きを保存" : "下書きを作成"}
               </button>
             </div>
           )}
 
           {detail?.summary && (
             <div class="mb-4 rounded border p-4 text-sm">
-              <h3 class="mb-2 font-semibold">topology summary</h3>
+              <h3 class="mb-2 font-semibold">設定の概要</h3>
               <p><strong>dispatcher_mapping:</strong>{" "}
                 {detail.summary.dispatcherMapping
                   ? `[${detail.summary.dispatcherMapping.role}, ${detail.summary.dispatcherMapping.target}, ${detail.summary.dispatcherMapping.layer}, ${detail.summary.dispatcherMapping.action}]`
@@ -649,16 +656,16 @@ export default function ManifestsAdmin(): JSX.Element {
           {selectedId && (
             <div class="flex flex-wrap gap-2">
               <button type="button" class="btn-secondary" disabled={loading} onClick={handleValidate}>
-                バリデート
+                内容を確認
               </button>
               <button
                 type="button"
                 class="btn-primary"
                 disabled={loading || promoteDisabled}
-                title={promoteDisabled ? "draft かつ valid である必要があります" : ""}
+                title={promoteDisabled ? "下書きかつ確認済みである必要があります" : ""}
                 onClick={handlePromote}
               >
-                プロモート (draft → active)
+                有効化
               </button>
               <button
                 type="button"
@@ -666,7 +673,7 @@ export default function ManifestsAdmin(): JSX.Element {
                 disabled={loading || deprecateDisabled}
                 onClick={handleDeprecate}
               >
-                非推奨化 (active → deprecated)
+                利用停止
               </button>
             </div>
           )}
@@ -674,7 +681,7 @@ export default function ManifestsAdmin(): JSX.Element {
           {validation && (
             <div class="mt-4 rounded border p-4 text-sm">
               <h3 class="mb-2 font-semibold">
-                バリデーション結果: {validation.valid ? "valid" : "invalid"}
+                確認結果: {validation.valid ? "問題なし" : "要修正"}
               </h3>
               {validation.issues.length > 0 ? (
                 <ul class="list-inside list-disc">
@@ -698,7 +705,7 @@ export default function ManifestsAdmin(): JSX.Element {
               {lifecycleResult.ok && (
                 <p class="mt-2 text-xs text-muted-xs">
                   次のステップ:{" "}
-                  <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch 経路を検証してください。
+                  <a href="/admin/runtime" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
                 </p>
               )}
             </div>
@@ -711,10 +718,10 @@ export default function ManifestsAdmin(): JSX.Element {
       {editorMode === "promotion" && (
         <>
           <section class="mb-8">
-            <h2 class="section-title">1. Promotion manifest 一覧</h2>
+            <h2 class="section-title">1. 公開・案内の設定一覧</h2>
             <p class="mb-3 text-sm text-muted-xs">
-              promotion_metadata_mapping を含む manifest のみ表示します。新規作成は Runtime wiring タブで draft を作成後、
-              ここで metadata を追加してください。
+              案内文やキャンペーン情報が付いた設定のみ表示します。新規は「データの流れ」タブで下書きを作成後、
+              ここで公開・案内の内容を追加してください。
             </p>
             <div class="mb-3 flex flex-wrap items-center gap-2">
               <label class="text-sm">
@@ -735,13 +742,13 @@ export default function ManifestsAdmin(): JSX.Element {
             </div>
 
             {promotionManifests.length === 0 ? (
-              <p class="text-sm text-muted-xs">promotion metadata 付き manifest がありません。</p>
+              <p class="text-sm text-muted-xs">公開・案内が付いた設定はまだありません。</p>
             ) : (
               <div class="overflow-x-auto">
                 <table class="w-full border-collapse text-sm">
                   <thead>
                     <tr class="border-b bg-slate-50 text-left">
-                      {["manifest_id", "status", "manifest_key", "version", "has_disclosure"].map((h) => (
+                      {["設定ID", "状態", "キー", "版", "案内あり"].map((h) => (
                         <th key={h} class="px-2 py-1 font-semibold">{h}</th>
                       ))}
                     </tr>
@@ -767,10 +774,10 @@ export default function ManifestsAdmin(): JSX.Element {
           </section>
 
           <section class="mb-8">
-            <h2 class="section-title">2. Disclosure / campaign metadata 編集</h2>
+            <h2 class="section-title">2. 案内文・キャンペーン情報の編集</h2>
             <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
               <label class="block text-xs">
-                対象 manifest_id（draft）
+                対象の設定ID（下書き）
                 <input
                   class="mt-1 w-full rounded border px-2 py-1 font-mono"
                   value={promotionDraftManifestId}

@@ -13,6 +13,13 @@ import {
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_IMPORT_GUIDE } from "../content/adminGuides.ts";
+import {
+  UX_DATA_SHAPE,
+  UX_IMPORT_SETTINGS,
+  UX_IMPORT_SETTINGS_PAGE,
+  UX_RUNTIME_CHECK,
+  UX_UI_BUILDER,
+} from "../content/adminUxTerms.ts";
 
 export default function AdminImport(): JSX.Element {
   const [manifests, setManifests] = useState<AdminImportManifestItem[]>([]);
@@ -66,15 +73,15 @@ export default function AdminImport(): JSX.Element {
     setApplyResult(null);
 
     if (manifestsEmpty) {
-      setError("インポートには先にマニフェストが必要です。管理 / マニフェストで作成してください。");
+      setError(`インポートには先に${UX_IMPORT_SETTINGS}が必要です。${UX_IMPORT_SETTINGS_PAGE}で作成してください。`);
       return;
     }
     if (schemasEmpty) {
-      setError("取り込み用のスキーマが登録されていません。マニフェスト画面で前提を整えてください。");
+      setError(`取り込み用の${UX_DATA_SHAPE}が登録されていません。${UX_IMPORT_SETTINGS_PAGE}で前提を整えてください。`);
       return;
     }
-    if (!selectedManifestId) { setError("マニフェストを選択してください。"); return; }
-    if (!selectedSchemaId) { setError("スキーマを選択してください。"); return; }
+    if (!selectedManifestId) { setError(`${UX_IMPORT_SETTINGS}を選択してください。`); return; }
+    if (!selectedSchemaId) { setError(`${UX_DATA_SHAPE}を選択してください。`); return; }
     if (!fileContent) { setError("ファイルが選択されていません。"); return; }
 
     setLoading(true);
@@ -119,9 +126,9 @@ export default function AdminImport(): JSX.Element {
       <hr class="mb-6 border-gray-200" />
 
       <section class="mb-6">
-        <h2 class="section-title">1. マニフェストとスキーマを選択</h2>
+        <h2 class="section-title">1. {UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}を選択</h2>
         <AdminActionHint>
-          マニフェストは「何をどこへ取り込むか」、スキーマは「各行の形」です。
+          {UX_IMPORT_SETTINGS}は「何をどこへ取り込むか」、{UX_DATA_SHAPE}は「各行の項目」です。
           どちらも先に登録されている必要があります（未登録の場合は下の案内に従ってください）。
         </AdminActionHint>
         {loadingSelectors ? (
@@ -129,37 +136,37 @@ export default function AdminImport(): JSX.Element {
         ) : manifestsEmpty ? (
           <div class="alert-info">
             <p class="text-sm font-medium">
-              インポートには先にマニフェストが必要です。まず管理 / マニフェストで作成してください。
+              インポートには先に{UX_IMPORT_SETTINGS}が必要です。まず{UX_IMPORT_SETTINGS_PAGE}で作成してください。
             </p>
             <p class="text-muted-xs mt-2">
-              マニフェストは取り込みルールと実行先の定義です。作成・有効化後、この画面に戻ると選択できるようになります。
+              取り込みルールと表示・実行先の定義です。有効化後、この画面に戻ると選択できるようになります。
             </p>
             <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
-              マニフェスト画面へ
+              {UX_IMPORT_SETTINGS_PAGE}へ
             </a>
           </div>
         ) : schemasEmpty ? (
           <div class="alert-info">
             <p class="text-sm font-medium">
-              取り込み用のスキーマがまだ登録されていません。マニフェスト画面で前提を整えてください。
+              取り込み用の{UX_DATA_SHAPE}がまだ登録されていません。{UX_IMPORT_SETTINGS_PAGE}で前提を整えてください。
             </p>
             <p class="text-muted-xs mt-2">
-              スキーマは CSV/JSON の各行のフィールド形を決めます。プレビューにはマニフェストとスキーマの両方が必要です。
+              CSV/JSON の各行に必要な項目を決めます。プレビューには{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}の両方が必要です。
             </p>
             <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
-              マニフェスト画面へ
+              {UX_IMPORT_SETTINGS_PAGE}へ
             </a>
           </div>
         ) : (
           <div class="flex flex-wrap items-end gap-4">
             <label class="text-sm">
-              マニフェスト
+              {UX_IMPORT_SETTINGS}
               <select
                 value={selectedManifestId}
                 onChange={(e) => setSelectedManifestId((e.target as HTMLSelectElement).value)}
                 class="input-mono mt-1 min-w-[260px]"
               >
-                <option value="">— マニフェストを選択 —</option>
+                <option value="">— {UX_IMPORT_SETTINGS}を選択 —</option>
                 {manifests.map((m) => (
                   <option key={m.manifestId} value={m.manifestId}>
                     {m.manifestId.slice(0, 8)}… [{m.status}]
@@ -168,13 +175,13 @@ export default function AdminImport(): JSX.Element {
               </select>
             </label>
             <label class="text-sm">
-              スキーマ
+              {UX_DATA_SHAPE}
               <select
                 value={selectedSchemaId}
                 onChange={(e) => setSelectedSchemaId((e.target as HTMLSelectElement).value)}
                 class="input-mono mt-1 min-w-[220px]"
               >
-                <option value="">— スキーマを選択 —</option>
+                <option value="">— {UX_DATA_SHAPE}を選択 —</option>
                 {schemas.map((s) => (
                   <option key={s.schemaId} value={s.schemaId}>
                     {s.name} ({s.schemaId.slice(0, 8)}…)
@@ -189,7 +196,7 @@ export default function AdminImport(): JSX.Element {
       <section class="mb-6">
         <h2 class="section-title">2. CSV または JSON ファイルをアップロード</h2>
         {!canSelectInputs ? (
-          <p class="text-muted text-sm">マニフェストとスキーマを用意してからファイルを選べます。</p>
+          <p class="text-muted text-sm">{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}を用意してからファイルを選べます。</p>
         ) : (
           <div class="flex flex-wrap items-center gap-3">
             <input type="file" accept=".csv,.json" onChange={handleFileChange} class="text-sm" />
@@ -208,11 +215,11 @@ export default function AdminImport(): JSX.Element {
           プレビュー
         </button>
         <AdminActionHint>
-          まだ DB には書きません。マニフェストとスキーマに沿って各行を検証し、有効/無効の件数を表示します。
+          まだ保存はしません。{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}に沿って各行を確認し、有効/無効の件数を表示します。
         </AdminActionHint>
         {!canSelectInputs && (
           <p class="text-muted-xs mt-2">
-            プレビューできない理由: {manifestsEmpty ? "マニフェストが未登録" : "スキーマが未登録"}です。
+            プレビューできない理由: {manifestsEmpty ? `${UX_IMPORT_SETTINGS}が未登録` : `${UX_DATA_SHAPE}が未登録`}です。
           </p>
         )}
         {loading && <span class="text-muted">処理中...</span>}
@@ -222,7 +229,7 @@ export default function AdminImport(): JSX.Element {
         <div class="alert-error mb-4">
           <p><strong>エラー:</strong> {error}</p>
           <p class="text-muted-xs mt-2">
-            ファイル形式の誤り・マニフェスト/スキーマ未選択はここに表示されます。
+            ファイル形式の誤り・{UX_IMPORT_SETTINGS}/{UX_DATA_SHAPE}の未選択はここに表示されます。
             無効行はプレビュー表を修正してから再プレビューしてください。
           </p>
           <details class="text-muted-xs mt-1">
@@ -291,8 +298,8 @@ export default function AdminImport(): JSX.Element {
           <p>applyLogId: <code>{applyResult.applyLogId}</code></p>
           <p class="mt-2 text-xs text-muted-xs">
             次のステップ:{" "}
-            <a href="/admin/ui-builder" class="link">UI Builder</a> で UI topology 登録、または{" "}
-            <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch を検証してください。
+            <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a> で画面を準備する、または{" "}
+            <a href="/admin/runtime" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
           </p>
         </section>
       )}

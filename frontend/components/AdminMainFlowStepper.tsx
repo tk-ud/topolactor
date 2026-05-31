@@ -10,7 +10,7 @@ export default function AdminMainFlowStepper(): JSX.Element {
     >
       <p class="mb-3 text-sm text-blue-900">
         <strong>作業の流れ（この順で進めてください）</strong>
-        {" "}— インポートの前にマニフェストが必要です。
+        {" "}— インポートの前に取り込み設定が必要です。
       </p>
       <ol class="flex flex-wrap items-start gap-2" role="list">
         {ADMIN_MAIN_FLOW_STEPS.map((step, i) => (

@@ -11,6 +11,11 @@ import {
   ACCEPTANCE_FLOW_STEPS,
   ACCEPTANCE_CHECKLIST,
 } from "../../content/adminGuides.ts";
+import {
+  UX_IMPORT_SETTINGS,
+  UX_RUNTIME_CHECK,
+  UX_UI_BUILDER,
+} from "../../content/adminUxTerms.ts";
 
 export default function AdminIndex() {
   const structureMapEntries = Object.values(defaultStructureMap);
@@ -21,7 +26,7 @@ export default function AdminIndex() {
         <h1 class="page-title">topolactor — 管理</h1>
 
         <p class="mb-4 text-sm leading-relaxed text-gray-700">
-          マニフェスト → インポート → UI Builder → Runtime確認の順で進めてください。
+          {UX_IMPORT_SETTINGS} → インポート → {UX_UI_BUILDER} → {UX_RUNTIME_CHECK}の順で進めてください。
           利用には<strong>ログイン</strong>が必要です（未ログイン時はログイン画面が表示されます）。
         </p>
 
@@ -88,7 +93,7 @@ export default function AdminIndex() {
         <section class="mb-8">
           <h2 class="section-title">管理画面一覧</h2>
           <p class="text-muted mb-4 text-sm">
-            主導線: <strong>マニフェスト → インポート → UI Builder → Runtime確認</strong>。
+            主導線: <strong>{UX_IMPORT_SETTINGS} → インポート → {UX_UI_BUILDER} → {UX_RUNTIME_CHECK}</strong>。
             シード・コンテンツ・トークン辞書は必要に応じて利用してください。
           </p>
           <ul class="space-y-4">
@@ -152,7 +157,7 @@ export default function AdminIndex() {
             </dl>
           </section>
           <section class="mt-6 font-mono">
-            <h3 class="section-title text-base">デフォルトスキーマ</h3>
+            <h3 class="section-title text-base">デフォルトのデータの形（参照）</h3>
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt class="font-semibold">schemaId</dt>
               <dd>{defaultSchema.schemaId}</dd>
