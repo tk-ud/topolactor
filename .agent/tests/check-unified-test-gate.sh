@@ -75,12 +75,14 @@ fi
 
 echo ""
 echo "=== [FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests ==="
-echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts"
+echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
+echo "           uiBuilderStepper.test.ts"
 
 if deno test \
     frontend/tests/adminApi.test.ts \
     frontend/tests/defaultEntitySearch.test.ts \
     frontend/tests/pipelineContinuity.test.ts \
+    frontend/tests/uiBuilderStepper.test.ts \
     --allow-read; then
   echo "OK  [FRONTEND_CONTRACT] frontend contract tests passed"
 else
