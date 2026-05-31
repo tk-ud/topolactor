@@ -57,9 +57,20 @@ mapping:
     change_surfaces:
       - registrar admin UI
       - registry registration boundary
+      - admin console page responsibility split
+      - admin/manifests domain ownership (DB/wiring/hub)
+      - admin/contents domain ownership (UI/event-trigger)
+      - admin/hub-navigation component (hub_relation ordering)
+      - AdminMainFlowStepper step definitions
+      - frontend/content/adminGuides.ts ADMIN_MAIN_FLOW_STEPS
+      - frontend/components/AdminMainFlowStepper.tsx
+      - frontend/routes/admin/*
+      - frontend/islands/HubNavigationAdmin.tsx
     required_docs:
       - docs/registrar-admin-ui-specification.md
-    supporting_docs: []
+      - docs/design/admin-console-workflow-ssot.yaml
+    supporting_docs:
+      - docs/design/db-schema.yaml
     protocols:
       - .agent/protocols/runtime-boundary-matrix.md
 
@@ -202,6 +213,7 @@ mapping:
       - docs/framework-policy.yaml
       - docs/design/context-route-recommendation.md
       - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
     protocols: []
 
   - work_type: db_schema_table_structure_manifest
