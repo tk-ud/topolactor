@@ -18,6 +18,7 @@ import {
   buildVisualLayoutPatchJson,
   wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
+import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -62,14 +63,6 @@ async function dispatchAdminOp(layer: string, action: string, payload?: unknown)
 }
 
 // ─── 型定義 ──────────────────────────────────────────────────────────────────
-
-type BucketItem = {
-  bucketItemId: string;
-  componentKey: string;
-  sourcePath: string;
-  componentKind: string;
-  status: string;
-};
 
 type ValidationError = { code: string; message: string; field?: string; nodeId?: string; componentKey?: string };
 
@@ -335,14 +328,17 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
   BUCKET_CREATE_FAILED: {
     cause: "部品の登録に失敗しました",
     suggestion: "すでに登録済みでないか確認してください",
+    navigateTo: "bucket",
   },
   GENERATE_FAILED: {
     cause: "パッケージ化に失敗しました",
     suggestion: "バックエンド接続を確認し、ルートキーが正しいか再確認してください",
+    navigateTo: "bucket",
   },
   PROMOTE_FAILED: {
     cause: "配置可能化に失敗しました",
     suggestion: "先にパッケージ化を完了してから実行してください",
+    navigateTo: "bucket",
   },
 };
 
@@ -392,28 +388,6 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
-function resolveBucketStatus(
-  componentKey: string,
-  bucketItems: BucketItem[],
-  promotedKeys: Set<string>,
-): { label: string; variant: "ok" | "warn" | "error" | "info"; bucketItemId?: string } {
-  if (promotedKeys.has(componentKey)) {
-    return { label: "配置可能（登録完了）", variant: "ok" };
-  }
-  const item = bucketItems.find((b) => b.componentKey === componentKey);
-  if (!item) return { label: "未登録（使用不可）", variant: "info" };
-  const labelMap: Record<string, string> = {
-    promoted: "配置可能（登録完了）",
-    packaging: "パッケージ化中",
-    bucketed: "部品登録済み（準備中）",
-  };
-  const variant =
-    item.status === "promoted" ? "ok"
-    : item.status === "packaging" ? "info"
-    : item.status === "bucketed" ? "warn"
-    : "info";
-  return { label: labelMap[item.status] ?? item.status, variant, bucketItemId: item.bucketItemId };
-}
 
 async function loadLayoutCandidatesFromBackend(): Promise<{
   candidates: LayoutRouteCandidate[];
@@ -1320,7 +1294,7 @@ function PrimitiveCatalog(): JSX.Element {
 
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
-function BucketSection(): JSX.Element {
+function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
   const [items, setItems] = useState<BucketItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationError[]>([]);
@@ -1409,7 +1383,7 @@ function BucketSection(): JSX.Element {
       return;
     }
     const existing = resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys);
-    if (existing.label === "配置可能（登録完了）" || existing.label === "部品登録済み（準備中）" || existing.label === "パッケージ化中") {
+    if (existing.status === "promoted" || existing.status === "bucketed" || existing.status === "packaging") {
       setStatus(`既に登録済みです（${existing.label}）。重複登録はできません。`);
       return;
     }
@@ -1586,14 +1560,17 @@ function BucketSection(): JSX.Element {
           <div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm">
             <strong>選択中:</strong> <code>{selectedCatalog.componentKey}</code>
             <span class="ml-2 text-muted-xs">{selectedCatalog.componentKind}</span>
-            <div class="mt-1 font-mono text-xs text-gray-600">{selectedCatalog.sourcePath}</div>
             <button
               onClick={handleCreateFromCatalog}
-              disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).label !== "未登録（使用不可）"}
+              disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).status !== "unregistered"}
               class="btn-primary mt-2"
             >
               バケットに登録
             </button>
+            <details class="mt-1">
+              <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
+              <div class="mt-0.5 font-mono text-xs text-gray-500">{selectedCatalog.sourcePath}</div>
+            </details>
           </div>
         )}
 
@@ -1706,7 +1683,7 @@ function BucketSection(): JSX.Element {
           {status}
         </p>
       )}
-      {errors.length > 0 && <ActionableValidationErrorPanel errors={errors} title="操作エラー" />}
+      {errors.length > 0 && <ActionableValidationErrorPanel errors={errors} title="操作エラー" onNavigate={onNavigate} />}
     </div>
   );
 }
@@ -1883,8 +1860,8 @@ function VisualLayoutNode({
         {node.isDraftOnly && (
           <span
             class="text-[0.58rem] text-yellow-700 font-medium"
-            title="部品登録タブでプロモートしてから apply してください"
-          >⚠ まだ使えない部品 — 適用不可</span>
+            title="部品登録タブで配置可能にしてから保存反映してください"
+          >⚠ まだ使えない部品 — 保存ブロック</span>
         )}
         {node.slotKey && (
           <span class="truncate text-[0.58rem] text-gray-500">配置: {node.slotKey}</span>
@@ -3178,7 +3155,7 @@ export default function UiBuilderAdmin(): JSX.Element {
       <div>
         {activeTab === "ci" && <CiAttentionGuidanceSection />}
         {activeTab === "catalog" && <PrimitiveCatalog />}
-        {activeTab === "bucket" && <BucketSection />}
+        {activeTab === "bucket" && <BucketSection onNavigate={setActiveTab} />}
         {activeTab === "css" && <CssTokenSelectorSection />}
         {activeTab === "layout" && <LayoutBuilderSection onNavigate={setActiveTab} />}
       </div>
