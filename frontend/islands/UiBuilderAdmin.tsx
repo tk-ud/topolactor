@@ -1493,8 +1493,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
   return (
     <div>
       <p class="text-muted mb-3">
-        カタログからコンポーネントを選択してバケット登録 intent を送信します。パッケージジェネレーターが
-        UI topology テンソルエンティティへプロモートします。
+        カタログから部品を選んで登録し、パッケージ化・配置可能化の順で進めます。
       </p>
 
       {candidateErrors.length > 0 && (
@@ -1573,7 +1572,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
           </div>
         )}
 
-        <AdvancedManualOverride title="manual override — カタログ外バケット作成">
+        <AdvancedManualOverride title="詳細設定 — カタログ外から直接登録">
           <ManualBucketCreateForm onCreate={handleCreateManual} loading={loading} />
         </AdvancedManualOverride>
       </Accordion>
@@ -1638,7 +1637,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             </p>
           )}
 
-          <AdvancedManualOverride title="manual override — 新規 routeKey">
+          <AdvancedManualOverride title="詳細設定 — 新規ページルートを直接入力">
             <input
               value={manualRouteKey}
               onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
@@ -2919,7 +2918,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         loadError={candidateErrors}
       />
 
-      <AdvancedManualOverride title="manual override — layoutId / routeKey">
+      <AdvancedManualOverride title="詳細設定 — レイアウト・ルートを直接指定">
         <div class="flex flex-wrap gap-2">
           <input value={manualRouteKey} onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey 手入力" class="input-mono flex-1 text-xs" />
           <input value={manualLayoutId} onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId UUID 手入力" class="input-mono flex-[2] text-xs" />
@@ -3041,7 +3040,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       <Accordion title="スタイルクラス設定" defaultOpen={false}>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
-        <AdvancedManualOverride title="manual override — raw classKey（SSOT外 ref 検証用）">
+        <AdvancedManualOverride title="詳細設定 — クラスキーを直接入力">
           <div class="flex flex-wrap gap-2">
             <input value={manualLayoutClassRef} onInput={(e) => setManualLayoutClassRef((e.target as HTMLInputElement).value)} placeholder="layout.root.grid" class="input-mono flex-1 text-xs" />
             <button type="button" onClick={applyManualLayoutClassRef} class="btn-secondary text-xs">適用</button>
