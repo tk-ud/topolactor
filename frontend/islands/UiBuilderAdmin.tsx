@@ -701,7 +701,7 @@ function ApplyReadinessPanel({
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
             CSS トークン: {selectedTokenRefs.length} 件選択済み。
-            ref エラーは backend validate 結果に表示されます。
+            設定エラーはバックエンド検証結果に表示されます。
           </span>
         </li>
       </ul>
@@ -759,7 +759,7 @@ function RouteLayoutSelector({
   return (
     <div class="mb-3 flex flex-wrap gap-2">
       <label class="flex min-w-[200px] flex-1 flex-col gap-0.5 text-sm">
-        ルートキー
+        ページルート
         <select
           value={routeKey}
           disabled={disabled || routes.length === 0}
@@ -793,7 +793,7 @@ function RouteLayoutSelector({
       )}
       {candidates.length === 0 && !loadError?.length && (
         <p class="text-sm text-yellow-700">
-          候補なし — 先にバケット → プロモートで UI topology を登録してください。
+          候補なし — 先に部品登録タブで部品を配置可能にしてください。
         </p>
       )}
     </div>
@@ -1004,33 +1004,32 @@ function TopologyLayoutClassPicker({
   return (
     <div>
       <p class="text-muted-xs mb-2">
-        topology layout projection 専用 class ref（<code>docs/design/topology-layout-class-ssot.yaml</code>）。
-        admin 画面装飾ではありません。保存は classKey のみ — raw className / Tailwind は通常導線では使いません。
+        レイアウト投影専用のスタイルクラスです。画面装飾用ではありません。保存されるのはクラスキーのみです。
       </p>
       <div class="mb-2 flex flex-wrap gap-2">
         <input
           value={keyFilter}
           onInput={(e) => setKeyFilter((e.target as HTMLInputElement).value)}
-          placeholder="classKey 検索"
+          placeholder="クラス検索"
           class="input-mono flex-1 text-xs"
         />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">category（すべて）</option>
+          <option value="">カテゴリ（すべて）</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={scopeFilterState} onChange={(e) => setScopeFilterState((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">projectionScope（すべて）</option>
+          <option value="">適用範囲（すべて）</option>
           {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-          <option value="">semanticRole（すべて）</option>
+          <option value="">役割（すべて）</option>
           {roles.map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </div>
 
       {selectedClassRefs.length > 0 && (
         <div class="mb-2 rounded border border-blue-200 bg-blue-50 p-2">
-          <strong class="text-xs">選択済み layoutClassRefs ({selectedClassRefs.length})</strong>
+          <strong class="text-xs">選択済みスタイルクラス ({selectedClassRefs.length})</strong>
           <div class="mt-1 flex flex-wrap gap-1">
             {selectedClassRefs.map((key) => (
               <button
@@ -1058,7 +1057,7 @@ function TopologyLayoutClassPicker({
         <table class="table font-mono text-xs">
           <thead>
             <tr>
-              {["選択", "classKey", "className", "category", "scope", "allowedFor"].map((h) => (
+              {["選択", "クラスキー", "クラス名", "カテゴリ", "適用範囲", "対象"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -1507,7 +1506,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
           <input
             value={catalogFilter}
             onInput={(e) => setCatalogFilter((e.target as HTMLInputElement).value)}
-            placeholder="componentKey 検索"
+            placeholder="部品名で検索"
             class="input-mono flex-1 text-xs"
           />
           <select value={kindFilter} onChange={(e) => setKindFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
@@ -1515,10 +1514,10 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             {catalogKinds.map((k) => <option key={k} value={k}>{k}</option>)}
           </select>
           <select value={lifecycleFilter} onChange={(e) => setLifecycleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs">
-            <option value="">ライフサイクル（すべて）</option>
-            <option value="code_only_drift">code_only_drift</option>
+            <option value="">状態（すべて）</option>
+            <option value="code_only_drift">未登録（コードのみ）</option>
           </select>
-          <button onClick={loadBucket} disabled={loading} class="btn-secondary">バケット再ロード</button>
+          <button onClick={loadBucket} disabled={loading} class="btn-secondary">一覧を再読み込み</button>
         </div>
 
         <div class="table-wrap max-h-64 overflow-y-auto">
@@ -1580,12 +1579,12 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
       </Accordion>
 
       {(items.length > 0 || selectedId) && (
-        <Accordion title="生成 / プロモート" defaultOpen={true}>
+        <Accordion title="パッケージ化・配置可能化" defaultOpen={true}>
           <div class="table-wrap mb-3">
             <table class="table font-mono text-sm">
               <thead>
                 <tr>
-                  {["選択", "componentKey", "kind", "status"].map((h) => (
+                  {["選択", "部品名", "種別", "状態"].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>
@@ -1604,10 +1603,10 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
                     <td><code>{item.componentKey}</code></td>
                     <td>{item.componentKind}</td>
                     <td>
-                      <StatusBadge
-                        text={item.status}
-                        variant={item.status === "packaging" ? "info" : "warn"}
-                      />
+                      {(() => {
+                        const st = resolveBucketStatus(item.componentKey, items, promotedKeys);
+                        return <StatusBadge text={st.label} variant={st.variant} />;
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -1616,7 +1615,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
           </div>
 
           <label class="mb-2 flex flex-col gap-0.5 text-sm">
-            ルートキー（候補から選択）
+            ページルート（候補から選択）
             <select
               value={routeKey}
               onChange={(e) => {
@@ -1635,7 +1634,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
 
           {routeOptions.length === 0 && candidateErrors.length === 0 && (
             <p class="text-sm text-yellow-700 mb-2">
-              ルート候補なし — 初回プロモート時は advanced で新規ルートを指定してください。
+              ルート候補なし — 下の「詳細設定」で新規ルートを直接入力してください。
             </p>
           )}
 
@@ -1650,7 +1649,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
 
           {selectedItem && effectiveRouteKey && (
             <p class="text-muted-xs mt-2">
-              次: <code>{selectedItem.componentKey}</code> を <code>{effectiveRouteKey}</code> へ
+              次: <code>{friendlyComponentLabel(selectedItem.componentKey)}</code> を <code>{effectiveRouteKey}</code> へ
               {selectedItem.status === "bucketed" ? " パッケージ化 → 配置可能化" : " 配置可能化"}
             </p>
           )}
@@ -2182,7 +2181,7 @@ function CanvasInspector({
         <div class="font-bold text-blue-900">{friendlyComponentLabel(node.componentKey)}</div>
         {node.isDraftOnly && (
           <div class="mt-0.5 text-[0.65rem] font-medium text-yellow-700">
-            ⚠ 未登録コンポーネント — 適用前にプロモートが必要です
+            ⚠ まだ使えない部品 — 先に部品登録を完了してください
           </div>
         )}
         <details class="mt-1">
@@ -3039,7 +3038,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </div>
       </div>
 
-      <Accordion title="レイアウトクラス参照 (topology layout class refs)" defaultOpen={false}>
+      <Accordion title="スタイルクラス設定" defaultOpen={false}>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
         <AdvancedManualOverride title="manual override — raw classKey（SSOT外 ref 検証用）">
@@ -3050,7 +3049,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </AdvancedManualOverride>
       </Accordion>
 
-      <Accordion title="CSS トークン参照" defaultOpen={false}>
+      <Accordion title="色・余白の設定（CSSトークン）" defaultOpen={false}>
         <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
       </Accordion>
 
