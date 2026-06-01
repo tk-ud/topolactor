@@ -342,14 +342,13 @@ public class AdminRuntimeContentBundleTests
     }
 
     [Fact]
-    public async Task HubNavigation_Update_ChangesSequencePosition()
+    public async Task HubNavigation_Update_ChangesRelatedHubId()
     {
         var runtime = CreateRuntime(new InMemoryContentBundleRepository());
         var payload = JsonSerializer.SerializeToElement(new
         {
             hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
             relatedHubId = InMemoryContentBundleRepository.DemoRelatedHubId.ToString(),
-            sequencePosition = 5,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -387,7 +386,6 @@ public class AdminRuntimeContentBundleTests
         {
             hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
             relatedHubId = InMemoryContentBundleRepository.DemoHubId.ToString(), // same as source hub
-            sequencePosition = 1,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);
@@ -450,7 +448,6 @@ public class AdminRuntimeContentBundleTests
         {
             hubRelationId = InMemoryContentBundleRepository.DemoHubRelationId.ToString(),
             relatedHubId = Guid.NewGuid().ToString(),
-            sequencePosition = 5,
         });
         var (data, error) = await runtime.ExecuteDataAsync(
             new OperationVector("admin", "hub_navigation", "update", null, "admin", payload, null), default);

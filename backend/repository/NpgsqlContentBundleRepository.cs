@@ -704,7 +704,7 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
     }
 
     public override async Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
-        Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+        Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);
         await using var checkHub = conn.CreateCommand();
@@ -726,26 +726,17 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "UPDATE hubs.hub_relations " +
-            "SET related_hub_id = @hid, sequence_position = @seq, updated_at = now() " +
+            "SET related_hub_id = @hid, updated_at = now() " +
             "WHERE hub_relation_id = @id AND status = 'active' " +
             "RETURNING hub_relation_id::text";
         cmd.Parameters.AddWithValue("id", hubRelationId);
         cmd.Parameters.AddWithValue("hid", relatedHubId);
-        cmd.Parameters.AddWithValue("seq", sequencePosition);
 
-        try
-        {
-            var resultId = (string?)await cmd.ExecuteScalarAsync(ct);
-            if (resultId is null)
-                return (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
-                    "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null);
-            return (new HubNavigationLifecycleResponseDto(true, resultId, "active", "Hub relation updated."), null);
-        }
-        catch (Exception ex) when (ex.Message.Contains("unique") || ex.Message.Contains("duplicate"))
-        {
+        var resultId = (string?)await cmd.ExecuteScalarAsync(ct);
+        if (resultId is null)
             return (new HubNavigationLifecycleResponseDto(false, hubRelationId.ToString(), "error",
-                $"Sequence position {sequencePosition} already exists for this manifest.", "SEQUENCE_CONFLICT"), null);
-        }
+                "Hub relation not found or not active.", "HUB_RELATION_NOT_FOUND"), null);
+        return (new HubNavigationLifecycleResponseDto(true, resultId, "active", "Hub relation updated."), null);
     }
 
     public override async Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(

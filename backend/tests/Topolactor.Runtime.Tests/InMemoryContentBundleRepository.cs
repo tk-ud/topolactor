@@ -310,7 +310,7 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
     };
 
     public override Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(
-        Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default)
+        Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default)
     {
         if (!_validHubIds.Contains(relatedHubId))
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
@@ -327,7 +327,7 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
             return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
                 (new HubNavigationLifecycleResponseDto(false, null, "error", "Self-loop: related_hub_id cannot equal source hub_id.", "SELF_LOOP"), null));
 
-        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, relatedHubId, sequencePosition, "active");
+        _hubRelations[idx] = (existing.HubRelationId, existing.TopologyManifestId, relatedHubId, existing.SequencePosition, "active");
         return Task.FromResult<(HubNavigationLifecycleResponseDto, ValidationError?)>(
             (new HubNavigationLifecycleResponseDto(true, hubRelationId.ToString(), "active", "Hub relation updated."), null));
     }

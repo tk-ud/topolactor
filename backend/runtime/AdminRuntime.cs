@@ -1853,11 +1853,9 @@ public class AdminRuntime
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.hubRelationId is required."));
         if (!payload.TryGetProperty("relatedHubId", out var hidEl) || !Guid.TryParse(hidEl.GetString(), out var relatedHubId))
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.relatedHubId is required."));
-        if (!payload.TryGetProperty("sequencePosition", out var seqEl) || seqEl.ValueKind != JsonValueKind.Number)
-            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload.sequencePosition is required."));
 
         var (response, error) = await _contentBundleRepository.UpdateHubRelationAsync(
-            hubRelationId, relatedHubId, seqEl.GetInt32(), ct);
+            hubRelationId, relatedHubId, ct);
         if (error is not null) return (null, error);
         return (JsonSerializer.SerializeToElement(response), null);
     }

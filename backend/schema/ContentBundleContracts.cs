@@ -180,8 +180,7 @@ public record HubNavigationCreateRequestDto(
 
 public record HubNavigationUpdateRequestDto(
     [property: JsonPropertyName("hubRelationId")] string HubRelationId,
-    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
-    [property: JsonPropertyName("sequencePosition")] int SequencePosition
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId
 );
 
 public record HubNavigationDeprecateRequestDto(

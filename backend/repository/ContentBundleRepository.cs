@@ -78,7 +78,7 @@ public abstract class ContentBundleRepository
     public abstract Task<IReadOnlyList<HubNavigationManifestItemDto>> ListTopologyManifestsAsync(CancellationToken ct = default);
     public abstract Task<IReadOnlyList<HubNavigationHubRelationItemDto>> ListHubRelationsByManifestAsync(Guid topologyManifestId, CancellationToken ct = default);
     public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> CreateHubRelationAsync(Guid topologyManifestId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default);
-    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(Guid hubRelationId, Guid relatedHubId, int sequencePosition, CancellationToken ct = default);
+    public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> UpdateHubRelationAsync(Guid hubRelationId, Guid relatedHubId, CancellationToken ct = default);
     public abstract Task<(HubNavigationLifecycleResponseDto Response, ValidationError? Error)> DeprecateHubRelationAsync(Guid hubRelationId, CancellationToken ct = default);
     public abstract Task<IReadOnlyList<HubNavigationSequenceItemDto>> LoadHubNavigationSequenceAsync(Guid topologyManifestId, CancellationToken ct = default);
     public abstract Task<(HubNavigationReorderResponseDto Response, ValidationError? Error)> ReorderHubRelationsAsync(Guid topologyManifestId, IReadOnlyList<(Guid HubRelationId, int NewSequencePosition)> items, CancellationToken ct = default);

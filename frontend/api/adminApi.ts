@@ -854,9 +854,8 @@ export async function createHubRelation(
 export async function updateHubRelation(
   hubRelationId: string,
   relatedHubId: string,
-  sequencePosition: number,
 ): Promise<HubNavigationLifecycleResult> {
-  const body = await callHubNavigation("update", { hubRelationId, relatedHubId, sequencePosition });
+  const body = await callHubNavigation("update", { hubRelationId, relatedHubId });
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   if (!body.success) throw new Error(body.errors?.[0]?.message ?? "update hub_relation failed");
   return body.emission?.data as HubNavigationLifecycleResult;

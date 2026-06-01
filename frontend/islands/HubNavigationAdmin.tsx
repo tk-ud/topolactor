@@ -23,7 +23,7 @@ type PanelError = { code?: string; message: string };
 type EditingState =
   | { mode: "none" }
   | { mode: "create" }
-  | { mode: "edit"; hubRelationId: string; relatedHubId: string; sequencePosition: number };
+  | { mode: "edit"; hubRelationId: string; relatedHubId: string };
 
 export default function HubNavigationAdmin(): JSX.Element {
   const [manifests, setManifests] = useState<HubNavigationManifestItem[]>([]);
@@ -97,7 +97,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     setLoading(true);
     setErrors([]);
     try {
-      const res = await updateHubRelation(editing.hubRelationId, draftRelatedHubId, draftSequencePosition);
+      const res = await updateHubRelation(editing.hubRelationId, draftRelatedHubId);
       setResult(res);
       if (res.ok) {
         setEditing({ mode: "none" });
@@ -155,9 +155,8 @@ export default function HubNavigationAdmin(): JSX.Element {
   };
 
   const startEdit = (hr: HubNavigationHubRelationItem) => {
-    setEditing({ mode: "edit", hubRelationId: hr.hubRelationId, relatedHubId: hr.relatedHubId, sequencePosition: hr.sequencePosition });
+    setEditing({ mode: "edit", hubRelationId: hr.hubRelationId, relatedHubId: hr.relatedHubId });
     setDraftRelatedHubId(hr.relatedHubId);
-    setDraftSequencePosition(hr.sequencePosition);
     setResult(null);
     setErrors([]);
   };
