@@ -38,8 +38,8 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
   if (notBound) {
     return (
       <p class="text-muted">
-        レジストリ未接続 — DEMO_BACKEND_URL が未設定です (501)。
-        Docker Compose 起動後に <a href="/auth" class="link">ログイン</a> してください。
+        サーバーへの接続が確立されていません。環境の設定を確認し、
+        <a href="/auth" class="link">ログイン</a> してから再度お試しください。
       </p>
     );
   }
@@ -140,7 +140,7 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
                       onClick={() => handleDeprecate(t.tokenId)}
                       disabled={loading}
                       class="btn-danger px-2 py-1 text-xs"
-                      title="DB 上 status=deprecated。推薦対象から外す（物理削除ではない）"
+                      title="推薦対象から外します（データは保持されます）"
                     >
                       非推奨にする
                     </button>
@@ -180,15 +180,12 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
         </button>
       </form>
       <AdminActionHint>
-        label は表示名、value は [-1,1] の意味方向。backend が範囲検証後 DB に create します。
+        ラベルは表示名、値は -1.0〜1.0 の範囲で入力してください。サーバー側で検証後に登録されます。
       </AdminActionHint>
 
       {status && (
         <div class="mt-3">
           <p class="pre-box">{status}</p>
-          <AdminActionHint>
-            401/501 は /auth と DEMO_BACKEND_URL。value 範囲外はフォームを修正。
-          </AdminActionHint>
         </div>
       )}
     </div>

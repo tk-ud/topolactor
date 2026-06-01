@@ -36,8 +36,8 @@ export default function RegistryVectorValidator(): JSX.Element {
   if (notBound) {
     return (
       <p class="text-muted">
-        バックエンド未接続 — DEMO_BACKEND_URL が未設定です (501)。
-        Docker Compose 起動後に <a href="/auth" class="link">ログイン</a> してください。
+        サーバーへの接続が確立されていません。環境の設定を確認し、
+        <a href="/auth" class="link">ログイン</a> してから再度お試しください。
       </p>
     );
   }
@@ -89,7 +89,7 @@ export default function RegistryVectorValidator(): JSX.Element {
       <form onSubmit={handleValidate} class="flex flex-col gap-4">
         <div>
           <label class="mb-1 block text-sm font-medium">
-            レジストリテーブル <span class="text-red-600">*</span>
+            確認対象のテーブル <span class="text-red-600">*</span>
           </label>
           <input
             class="input-mono max-w-xs"
@@ -102,7 +102,7 @@ export default function RegistryVectorValidator(): JSX.Element {
         </div>
         <div>
           <label class="mb-1 block text-sm font-medium">
-            クエリ ID — UUID を改行・カンマ・スペース区切りで入力
+            確認するID — 改行・カンマ・スペース区切りで入力
           </label>
           <textarea
             class="input-mono h-24 resize-y"
@@ -113,10 +113,10 @@ export default function RegistryVectorValidator(): JSX.Element {
         </div>
         <div>
           <button type="submit" disabled={loading} class="btn-primary">
-            {loading ? "検証中..." : "レジストリベクター検証"}
+            {loading ? "確認中..." : "重複チェックを実行"}
           </button>
           <AdminActionHint>
-            DB へは書きません。blocking なら neighbors を参照して ID を修正してから Import/UI Builder 等へ。
+            データベースへの書き込みはしません。問題がなければ登録画面へ進んでください。
           </AdminActionHint>
         </div>
       </form>
@@ -124,7 +124,7 @@ export default function RegistryVectorValidator(): JSX.Element {
       {error && (
         <div class="alert-error mt-4 text-sm">
           <p>{error}</p>
-          <AdminActionHint>registryTable 必須。UUID 形式の query IDs を改行・カンマ区切りで入力。</AdminActionHint>
+          <AdminActionHint>確認対象のテーブルは必須です。IDを正しい形式で入力してください。</AdminActionHint>
         </div>
       )}
 
@@ -155,12 +155,12 @@ function ValidationResultView({ result }: { result: RegistryVectorValidationResu
 
       {result.neighbors.length > 0 && (
         <>
-          <h4 class="section-title mt-4">近傍レジストリ ({result.neighbors.length} 件)</h4>
+          <h4 class="section-title mt-4">類似する既存登録 ({result.neighbors.length} 件)</h4>
           <div class="table-wrap">
             <table class="table text-xs">
               <thead>
                 <tr>
-                  {["名前", "コサインスコア", "一致 ID", "理由"].map((h) => (
+                  {["名前", "類似度", "一致 ID", "理由"].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>

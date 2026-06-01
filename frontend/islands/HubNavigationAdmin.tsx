@@ -167,7 +167,8 @@ export default function HubNavigationAdmin(): JSX.Element {
   if (backendUnavailable) {
     return (
       <div class="alert-warning p-4 rounded">
-        バックエンドが接続されていません。DEMO_BACKEND_URL / DATABASE_URL を確認してください。
+        サーバーへの接続が確立されていません。環境の設定を確認し、
+        <a href="/auth" class="link ml-1">ログイン</a> してから再度お試しください。
       </div>
     );
   }
