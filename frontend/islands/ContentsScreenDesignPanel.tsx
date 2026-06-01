@@ -2,44 +2,97 @@ import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   listAdminManifests,
+  getAdminManifest,
   createAdminManifestDraft,
   validateAdminManifest,
   promoteAdminManifest,
-  assignAdminManifestHubGrouping,
   assignAdminManifestScreenDataShape,
   type AdminManifestListItem,
+  type AdminManifestDetail,
 } from "../api/adminApi.ts";
-import { listContentHubs } from "../api/adminApi.ts";
 import {
   SCREEN_OPERATION_OPTIONS,
   buildDraftInputFromScreenIntent,
   setStoredScreenLabel,
+  getStoredScreenLabel,
   type ScreenOperationKind,
 } from "../runtime/screenAuthoringIntent.ts";
 import {
   emptyManifestScreenDesign,
-  loadManifestScreenDesign,
+  loadManifestScreenDesignLocal,
+  saveManifestScreenDesignLocal,
+  clearManifestScreenDesignLocal,
+  screenDesignFromBackendShape,
   parseSearchTargets,
-  saveManifestScreenDesign,
+  MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
+  MANIFEST_SCREEN_DB_SHAPE_TODO_NOTE,
   type ManifestScreenDesignDraft,
 } from "../lib/manifestScreenDesign.ts";
+import {
+  extractHubGroupingFromTopology,
+  extractScreenDataShapeFromTopology,
+} from "../lib/manifestTopologyExtensions.ts";
 import { UX_HUB_MANIFESTS_PAGE, UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
+type DraftSource = "none" | "local" | "backend" | "merged";
 
 export default function ContentsScreenDesignPanel(): JSX.Element {
   const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
-  const [hubs, setHubs] = useState<{ id: string; label: string }[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [backendDetail, setBackendDetail] = useState<AdminManifestDetail | null>(null);
   const [design, setDesign] = useState<ManifestScreenDesignDraft>(emptyManifestScreenDesign());
+  const [draftSource, setDraftSource] = useState<DraftSource>("none");
+  const [hubGroupingSummary, setHubGroupingSummary] = useState<{ hubId: string | null; manifestKey: string | null }>({
+    hubId: null,
+    manifestKey: null,
+  });
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const loadManifests = async () => {
-    const [m, h] = await Promise.all([listAdminManifests(), listContentHubs()]);
+    const m = await listAdminManifests();
     if (m) setManifests(m);
-    if (h) setHubs(h.map((x) => ({ id: x.id, label: x.label || x.id })));
+  };
+
+  const loadSelectedManifest = async (manifestId: string) => {
+    const detail = await getAdminManifest(manifestId);
+    setBackendDetail(detail);
+    if (!detail) {
+      setHubGroupingSummary({ hubId: null, manifestKey: null });
+      const local = loadManifestScreenDesignLocal(manifestId);
+      if (local) {
+        setDesign(local);
+        setDraftSource("local");
+      } else {
+        setDesign(emptyManifestScreenDesign());
+        setDraftSource("none");
+      }
+      return;
+    }
+
+    const hub = extractHubGroupingFromTopology(detail.topologyRawJson);
+    setHubGroupingSummary(hub);
+
+    const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
+    const summaryLayer = detail.summary?.dispatcherMapping?.layer ?? "";
+    const summaryAction = detail.summary?.dispatcherMapping?.action ?? "";
+    const opFromBackend = shape.screenOperationKind as ScreenOperationKind | null;
+    const operationKind: ScreenOperationKind = opFromBackend ??
+      (summaryLayer.includes("detail") ? "detail" : "list");
+
+    const fromBackend = screenDesignFromBackendShape(shape, operationKind);
+    fromBackend.screenLabel = getStoredScreenLabel(manifestId) ?? "";
+
+    const local = loadManifestScreenDesignLocal(manifestId);
+    if (local) {
+      setDesign({ ...fromBackend, ...local, screenLabel: local.screenLabel || fromBackend.screenLabel });
+      setDraftSource("merged");
+    } else {
+      setDesign(fromBackend);
+      setDraftSource(shape.tableRef || shape.importSchemaName ? "backend" : "none");
+    }
   };
 
   useEffect(() => {
@@ -49,17 +102,21 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
   useEffect(() => {
     if (!selectedId) {
       setDesign(emptyManifestScreenDesign());
+      setBackendDetail(null);
+      setHubGroupingSummary({ hubId: null, manifestKey: null });
+      setDraftSource("none");
       return;
     }
-    const stored = loadManifestScreenDesign(selectedId);
-    if (stored) setDesign(stored);
-    else setDesign({ ...emptyManifestScreenDesign(), hubId: hubs[0]?.id ?? "" });
-  }, [selectedId, hubs]);
+    loadSelectedManifest(selectedId);
+  }, [selectedId]);
 
   const patchDesign = (patch: Partial<ManifestScreenDesignDraft>) => {
     setDesign((prev) => {
       const next = { ...prev, ...patch };
-      if (selectedId) saveManifestScreenDesign(selectedId, next);
+      if (selectedId) {
+        saveManifestScreenDesignLocal(selectedId, next);
+        setDraftSource((s) => (s === "backend" ? "merged" : "local"));
+      }
       return next;
     });
   };
@@ -70,6 +127,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     try {
       const draftInput = buildDraftInputFromScreenIntent({
         operationKind: design.operationKind,
+        manifestId: null,
       });
       const created = await createAdminManifestDraft({
         ...draftInput,
@@ -79,9 +137,10 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       if (design.screenLabel.trim()) {
         setStoredScreenLabel(created.manifestId, design.screenLabel.trim());
       }
-      saveManifestScreenDesign(created.manifestId, { ...design, hubId: design.hubId || hubs[0]?.id || "" });
+      saveManifestScreenDesignLocal(created.manifestId, design);
       setStatus(`下書き manifest を作成: ${created.manifestId}`);
       await loadManifests();
+      await loadSelectedManifest(created.manifestId);
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -94,26 +153,24 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       setErrors([{ message: "対象 manifest を選択するか、新規下書きを作成してください。" }]);
       return;
     }
-    if (!design.hubId || !design.manifestKey.trim()) {
-      setErrors([{ message: "親 hub と manifest_key は必須です（promote 前に hubs.topology_manifests 投影に使用）。" }]);
-      return;
-    }
     setLoading(true);
     setErrors([]);
     try {
       if (design.screenLabel.trim()) setStoredScreenLabel(selectedId, design.screenLabel.trim());
-      saveManifestScreenDesign(selectedId, design);
       await assignAdminManifestScreenDataShape({
         manifestId: selectedId,
-        dbTableName: design.dbTableName || undefined,
+        tableRef: design.tableRef || undefined,
+        dbTableName: design.tableRef || undefined,
         importSchemaName: design.importSchemaName || undefined,
         searchTargets: parseSearchTargets(design.searchTargets),
         aggregationSpec: design.aggregationSpec || undefined,
         columns: design.columns.filter((c) => c.name.trim()),
+        screenOperationKind: design.operationKind,
       });
-      await assignAdminManifestHubGrouping(selectedId, design.hubId, design.manifestKey.trim());
-      setStatus("画面設計とハブ割当を下書きに保存しました。");
+      clearManifestScreenDesignLocal(selectedId);
+      setStatus("画面設計を backend 下書きに保存しました（canonical は promote 後の topology 投影）。");
       await loadManifests();
+      await loadSelectedManifest(selectedId);
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -123,6 +180,13 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
   const handlePromote = async () => {
     if (!selectedId) return;
+    if (!hubGroupingSummary.hubId || !hubGroupingSummary.manifestKey) {
+      setErrors([{
+        code: "HUB_GROUPING_REQUIRED",
+        message: `promote 前に ${UX_HUB_MANIFESTS_PAGE} で親 hub と manifest_key を設定してください。`,
+      }]);
+      return;
+    }
     setLoading(true);
     setErrors([]);
     try {
@@ -139,6 +203,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       }
       setStatus(`有効化完了 — topology_manifests へ投影済み。次: ${UX_HUB_MANIFESTS_PAGE}`);
       await loadManifests();
+      await loadSelectedManifest(selectedId);
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -146,11 +211,23 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     }
   };
 
+  const draftSourceLabel = {
+    none: "未読込",
+    local: "ローカル下書きキャッシュ",
+    backend: "backend 保存済み",
+    merged: "backend + 未保存のローカル差分",
+  }[draftSource];
+
   return (
     <section class="mb-8 rounded border p-4">
       <h2 class="section-title">画面設計（manifest 単体）</h2>
       <p class="mb-3 text-xs text-muted-xs">
-        DB table/column、検索対象、集計、import schema を定義し、promote で hubs.topology_manifests に投影します。
+        DB table/column・検索・集計・import schema を定義します。ハブ割当・manifest_key は
+        <a href="/admin/manifests" class="link font-semibold"> {UX_HUB_MANIFESTS_PAGE}</a>
+        で確定してください（contents は grouping intent を確定しません）。
+      </p>
+      <p class="mb-3 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+        {MANIFEST_SCREEN_DB_SHAPE_TODO_NOTE}
       </p>
 
       {errors.length > 0 && (
@@ -160,12 +237,40 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       )}
       {status && <p class="mb-3 text-sm text-muted-xs">{status}</p>}
 
+      <p class="mb-2 text-xs text-muted-xs">
+        データ出所: <strong>{draftSourceLabel}</strong>
+        {draftSource === "local" || draftSource === "merged" ? ` — ${MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE}` : ""}
+      </p>
+
+      <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
+        <p class="font-semibold">ハブ割当（readonly — {UX_HUB_MANIFESTS_PAGE} で編集）</p>
+        {hubGroupingSummary.hubId && hubGroupingSummary.manifestKey ? (
+          <p class="mt-1 font-mono">
+            hub_id={hubGroupingSummary.hubId.slice(0, 8)}… / manifest_key={hubGroupingSummary.manifestKey}
+          </p>
+        ) : (
+          <p class="mt-1 text-amber-800">
+            未割当 — promote 前に
+            <a href="/admin/manifests" class="link font-semibold"> {UX_HUB_MANIFESTS_PAGE}</a>
+            で設定してください。
+          </p>
+        )}
+        {backendDetail?.summary?.dispatcherMapping && (
+          <p class="mt-2 font-mono text-[10px] text-muted-xs">
+            dispatcher: {backendDetail.summary.dispatcherMapping.role}/
+            {backendDetail.summary.dispatcherMapping.target}/
+            {backendDetail.summary.dispatcherMapping.layer}/
+            {backendDetail.summary.dispatcherMapping.action}
+          </p>
+        )}
+      </div>
+
       <div class="mb-3 flex flex-wrap gap-2">
         <button type="button" class="btn-secondary" disabled={loading} onClick={handleCreateDraft}>
           新規下書き（操作種別から軸を導出）
         </button>
         <button type="button" class="btn-primary" disabled={loading || !selectedId} onClick={handleSaveAuthoring}>
-          設計を下書きに保存
+          設計を backend 下書きに保存
         </button>
         <button type="button" class="btn-secondary" disabled={loading || !selectedId} onClick={handlePromote}>
           有効化（canonical 投影）
@@ -190,7 +295,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
       <div class="grid gap-2 sm:grid-cols-2">
         <label class="text-xs">
-          画面ラベル
+          画面ラベル（ローカル表示用）
           <input
             class="mt-1 w-full rounded border px-2 py-1"
             value={design.screenLabel}
@@ -211,11 +316,11 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           </select>
         </label>
         <label class="text-xs">
-          DB テーブル名
+          physical table ref（topology.physical_tables.table_ref）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
-            value={design.dbTableName}
-            onInput={(e) => patchDesign({ dbTableName: (e.target as HTMLInputElement).value })}
+            value={design.tableRef}
+            onInput={(e) => patchDesign({ tableRef: (e.target as HTMLInputElement).value })}
           />
         </label>
         <label class="text-xs">
@@ -235,29 +340,11 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           />
         </label>
         <label class="text-xs sm:col-span-2">
-          集計仕様
+          集計仕様（viewing key / display columns の構造化は未実装）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             value={design.aggregationSpec}
             onInput={(e) => patchDesign({ aggregationSpec: (e.target as HTMLInputElement).value })}
-          />
-        </label>
-        <label class="text-xs">
-          親 hub（promote 投影用）
-          <select
-            class="mt-1 w-full rounded border px-2 py-1 font-mono"
-            value={design.hubId}
-            onChange={(e) => patchDesign({ hubId: (e.target as HTMLSelectElement).value })}
-          >
-            {hubs.map((h) => <option key={h.id} value={h.id}>{h.label}</option>)}
-          </select>
-        </label>
-        <label class="text-xs">
-          manifest_key
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono"
-            value={design.manifestKey}
-            onInput={(e) => patchDesign({ manifestKey: (e.target as HTMLInputElement).value })}
           />
         </label>
       </div>

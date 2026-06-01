@@ -1046,6 +1046,8 @@ public class AdminRuntime
         var runtimeDestination = request.RuntimeDestination;
         if (ManifestScreenOperationDeriver.TryDeriveAxes(
                 request.ScreenOperationKind,
+                manifestKey: null,
+                manifestId: null,
                 out var derivedRole,
                 out var derivedTarget,
                 out var derivedLayer,
@@ -1085,6 +1087,11 @@ public class AdminRuntime
 
         var (manifest, error) = await _manifestRepository.CreateDraftAsync(relationRegistryId, topology, ct);
         if (error is not null) return (null, error);
+
+        var (refreshed, refreshError) = await RefreshManifestDispatcherFromExtensionsAsync(manifest!, ct);
+        if (refreshError is not null) return (null, refreshError);
+        manifest = refreshed ?? manifest;
+
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
     }
 
@@ -1768,6 +1775,8 @@ public class AdminRuntime
 
         var hasScreenOp = ManifestScreenOperationDeriver.TryDeriveAxes(
             request.ScreenOperationKind,
+            manifestKey: null,
+            manifestId: null,
             out _, out _, out _, out _, out _);
 
         if (!hasScreenOp &&
@@ -1832,6 +1841,11 @@ public class AdminRuntime
             entry,
             ct);
         if (error is not null) return (null, error);
+
+        var (refreshed, refreshError) = await RefreshManifestDispatcherFromExtensionsAsync(manifest!, ct);
+        if (refreshError is not null) return (null, refreshError);
+        manifest = refreshed ?? manifest;
+
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
     }
 
@@ -1858,14 +1872,20 @@ public class AdminRuntime
             return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID."));
         }
 
+        var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
+            ? request.TableRef.Trim()
+            : request.DbTableName?.Trim();
+
         var entry = JsonSerializer.SerializeToElement(new
         {
             type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
-            dbTableName = request.DbTableName,
+            tableRef,
+            dbTableName = tableRef,
             importSchemaName = request.ImportSchemaName,
             searchTargets = request.SearchTargets ?? Array.Empty<string>(),
             aggregationSpec = request.AggregationSpec,
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
+            screenOperationKind = request.ScreenOperationKind,
         });
 
         var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(
@@ -1874,7 +1894,63 @@ public class AdminRuntime
             entry,
             ct);
         if (error is not null) return (null, error);
+
+        var (refreshed, refreshError) = await RefreshManifestDispatcherFromExtensionsAsync(manifest!, ct);
+        if (refreshError is not null) return (null, refreshError);
+        manifest = refreshed ?? manifest;
+
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> RefreshManifestDispatcherFromExtensionsAsync(
+        ManifestDetailRecord detail,
+        CancellationToken ct)
+    {
+        if (_manifestRepository is null)
+            return (detail, ManifestRepositoryNotAvailable());
+
+        if (!detail.Status.Equals("draft", StringComparison.OrdinalIgnoreCase))
+            return (detail, null);
+
+        var screenOp = ManifestCanonicalProjection.ExtractScreenOperationKind(detail.Topology);
+        if (string.IsNullOrWhiteSpace(screenOp))
+            return (detail, null);
+
+        var (_, manifestKeyFromTopology) = ManifestCanonicalProjection.ExtractHubGrouping(detail.Topology);
+        if (!ManifestScreenOperationDeriver.TryDeriveAxes(
+                screenOp,
+                manifestKeyFromTopology,
+                detail.ManifestId,
+                out var role,
+                out var target,
+                out var layer,
+                out var action,
+                out var runtimeDestination))
+        {
+            return (detail, null);
+        }
+
+        var topology = ManifestCanonicalProjection.WithDispatcherMapping(
+            detail.Topology,
+            role,
+            target,
+            layer,
+            action,
+            runtimeDestination);
+
+        var promotionEntry = PromotionManifestValidator.ExtractEntry(detail.Topology);
+        if (promotionEntry is not null)
+            topology = PromotionManifestValidator.MergeIntoTopology(topology, promotionEntry.Value);
+
+        var validation = ManifestTopologyValidator.Validate(topology, KnownRuntimeDestinations);
+        if (validation.IsBlocking)
+            return (null, validation.Errors[0]);
+
+        return await _manifestRepository.UpdateDraftAsync(
+            detail.ManifestId,
+            detail.RelationRegistryId,
+            topology,
+            ct);
     }
 
     private static AdminManifestDetailDto ToManifestDetailDto(ManifestDetailRecord detail)

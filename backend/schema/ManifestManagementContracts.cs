@@ -86,11 +86,13 @@ public record AdminManifestScreenColumnDto(
 
 public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("manifestId")] string ManifestId,
+    [property: JsonPropertyName("tableRef")] string? TableRef,
     [property: JsonPropertyName("dbTableName")] string? DbTableName,
     [property: JsonPropertyName("importSchemaName")] string? ImportSchemaName,
     [property: JsonPropertyName("searchTargets")] IReadOnlyList<string>? SearchTargets,
     [property: JsonPropertyName("aggregationSpec")] string? AggregationSpec,
-    [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns
+    [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
+    [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind
 );
 
 public record AdminManifestUpdateDraftRequestDto(

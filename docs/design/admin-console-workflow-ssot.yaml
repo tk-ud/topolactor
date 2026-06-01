@@ -67,6 +67,9 @@ admin_console_workflow_ssot:
       note: >
         Per-manifest content and DB design live here — NOT in admin/manifests.
         hub_relation sequence ordering is NOT owned here (see admin/hub-navigation).
+        Hub assignment and manifest_key are NOT confirmed on this surface; admin/manifests
+        is the authority for hub_grouping / topology_manifest grouping. Contents may show
+        readonly hub summary and must link to manifests before promote.
 
     admin_import:
       route: /admin/import

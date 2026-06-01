@@ -1,6 +1,7 @@
 /**
  * Per-manifest screen operation → dispatcher axis mapping.
- * Target surface: admin/contents (manifest single-screen authoring). Not admin/manifests.
+ * Target surface: admin/contents (manifest single-screen authoring).
+ * Axes are manifest-scoped (target + layer) — aligned with ManifestScreenOperationDeriver.
  */
 import type { AdminManifestDraftInput } from "../api/adminApi.ts";
 
@@ -21,6 +22,11 @@ export type DispatcherAxes = {
   runtimeDestination: string;
 };
 
+export type ScreenAxisContext = {
+  manifestKey?: string | null;
+  manifestId?: string | null;
+};
+
 export const SCREEN_OPERATION_OPTIONS: { kind: ScreenOperationKind; label: string }[] = [
   { kind: "list", label: "一覧" },
   { kind: "search", label: "検索" },
@@ -30,62 +36,50 @@ export const SCREEN_OPERATION_OPTIONS: { kind: ScreenOperationKind; label: strin
   { kind: "aggregation_view", label: "集計ビュー" },
 ];
 
-const SCREEN_LABEL_STORAGE_KEY = "topolactor_screen_labels_v1";
+function sanitizeTarget(raw: string): string {
+  const sanitized = raw
+    .split("")
+    .map((c) => (/[a-zA-Z0-9._-]/.test(c) ? c : "_"))
+    .join("")
+    .replace(/^_+|_+$/g, "");
+  return sanitized || "screen_unassigned";
+}
+
+function resolveManifestTarget(ctx?: ScreenAxisContext): string {
+  const key = ctx?.manifestKey?.trim();
+  if (key) return sanitizeTarget(key);
+  const id = ctx?.manifestId?.trim();
+  if (id) return `screen_${id.replace(/-/g, "")}`;
+  return "screen_unassigned";
+}
 
 /**
- * Maps screen operation kind → dispatcher axes.
- * Aligned with db/seed_empty.sql default entity routes (admin/default/entity/*).
+ * Maps screen operation kind + manifest identity → dispatcher axes.
  */
-export function screenOperationToDispatcherAxes(kind: ScreenOperationKind): DispatcherAxes {
+export function screenOperationToDispatcherAxes(
+  kind: ScreenOperationKind,
+  ctx?: ScreenAxisContext,
+): DispatcherAxes {
+  const target = resolveManifestTarget(ctx);
+  const base = {
+    role: "admin",
+    target,
+    runtimeDestination: "topology_transform_runtime",
+  };
+
   switch (kind) {
     case "list":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "entity",
-        action: "Read",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_list", action: "Read" };
     case "search":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "entity",
-        action: "Search",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_entity", action: "Search" };
     case "detail":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "entity",
-        action: "Read",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_detail", action: "Read" };
     case "create":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "entity",
-        action: "Create",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_entity", action: "Create" };
     case "update":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "entity",
-        action: "Update",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_entity", action: "Update" };
     case "aggregation_view":
-      return {
-        role: "admin",
-        target: "default",
-        layer: "aggregation",
-        action: "Read",
-        runtimeDestination: "topology_transform_runtime",
-      };
+      return { ...base, layer: "screen_aggregation", action: "Read" };
   }
 }
 
@@ -101,19 +95,25 @@ export function dispatcherAxesToScreenOperationKind(axes: {
   const layer = (axes.layer ?? "").toLowerCase();
   const action = axes.action ?? "";
 
-  if (layer === "aggregation") return "aggregation_view";
+  if (layer === "screen_aggregation") return "aggregation_view";
   if (action === "Search") return "search";
   if (action === "Create") return "create";
   if (action === "Update") return "update";
-  if (action === "Read" && layer === "entity") return "list";
+  if (layer === "screen_detail") return "detail";
+  if (layer === "screen_list") return "list";
   return "list";
 }
 
 export function buildDraftInputFromScreenIntent(input: {
   operationKind: ScreenOperationKind;
+  manifestKey?: string | null;
+  manifestId?: string | null;
   debugAxesOverride?: Partial<DispatcherAxes> | null;
 }): AdminManifestDraftInput {
-  const derived = screenOperationToDispatcherAxes(input.operationKind);
+  const derived = screenOperationToDispatcherAxes(input.operationKind, {
+    manifestKey: input.manifestKey,
+    manifestId: input.manifestId,
+  });
   const axes = input.debugAxesOverride
     ? { ...derived, ...input.debugAxesOverride }
     : derived;
@@ -124,8 +124,11 @@ export function buildDraftInputFromScreenIntent(input: {
     action: axes.action,
     runtimeDestination: axes.runtimeDestination,
     projectionDefinition: null,
+    screenOperationKind: input.operationKind,
   };
 }
+
+const SCREEN_LABEL_STORAGE_KEY = "topolactor_screen_labels_v1";
 
 function readLabelMap(): Record<string, string> {
   if (typeof globalThis.localStorage === "undefined") return {};

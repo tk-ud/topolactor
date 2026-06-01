@@ -160,17 +160,14 @@ public static class ManifestCanonicalProjection
         }
 
         if (shapeEntry is null) return;
-        if (!shapeEntry.Value.TryGetProperty("dbTableName", out var tableEl) ||
-            tableEl.ValueKind != JsonValueKind.String ||
-            string.IsNullOrWhiteSpace(tableEl.GetString())) return;
-
-        var tableName = tableEl.GetString()!.Trim();
+        var tableRef = ExtractTableRef(shapeEntry.Value);
+        if (string.IsNullOrWhiteSpace(tableRef)) return;
 
         await using var lookup = conn.CreateCommand();
         lookup.CommandText =
             "SELECT physical_table_id FROM topology.physical_tables " +
-            "WHERE table_name = @name AND active = true LIMIT 1";
-        lookup.Parameters.AddWithValue("name", tableName);
+            "WHERE table_ref = @ref AND active = true LIMIT 1";
+        lookup.Parameters.AddWithValue("ref", tableRef);
         var physicalId = await lookup.ExecuteScalarAsync(ct);
         if (physicalId is not long physicalTableId) return;
 
@@ -179,7 +176,7 @@ public static class ManifestCanonicalProjection
         {
             manifest_id = detail.ManifestId,
             source = "manifest_promote",
-            db_table = tableName,
+            table_ref = tableRef,
         });
 
         await using var exists = conn.CreateCommand();
@@ -199,5 +196,105 @@ public static class ManifestCanonicalProjection
         insert.Parameters.AddWithValue("pkg", packageId);
         insert.Parameters.AddWithValue("def", wiringDef);
         await insert.ExecuteNonQueryAsync(ct);
+    }
+
+    public static string? ExtractTableRef(JsonElement shapeEntry)
+    {
+        if (shapeEntry.TryGetProperty("tableRef", out var refEl) &&
+            refEl.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(refEl.GetString()))
+        {
+            return refEl.GetString()!.Trim();
+        }
+
+        if (shapeEntry.TryGetProperty("dbTableName", out var legacyEl) &&
+            legacyEl.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(legacyEl.GetString()))
+        {
+            return legacyEl.GetString()!.Trim();
+        }
+
+        return null;
+    }
+
+    public static string? ExtractScreenOperationKind(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), ScreenDataShapeEntryType, StringComparison.Ordinal)) continue;
+
+            if (entry.TryGetProperty("screenOperationKind", out var kindEl) &&
+                kindEl.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(kindEl.GetString()))
+            {
+                return kindEl.GetString()!.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    public static IReadOnlyList<JsonElement> WithDispatcherMapping(
+        IReadOnlyList<JsonElement> topology,
+        string role,
+        string target,
+        string layer,
+        string action,
+        string runtimeDestination)
+    {
+        var rebuilt = ManifestTopologyValidator.BuildTopology(
+            role,
+            target,
+            layer,
+            action,
+            runtimeDestination,
+            projectionDefinition: null);
+
+        var dispatcher = rebuilt.First(e =>
+            e.ValueKind == JsonValueKind.Object &&
+            e.TryGetProperty("type", out var t) &&
+            t.GetString() == "dispatcher_mapping");
+
+        var runtime = rebuilt.FirstOrDefault(e =>
+            e.ValueKind == JsonValueKind.Object &&
+            e.TryGetProperty("type", out var t) &&
+            t.GetString() == "runtime_mapping");
+
+        var list = new List<JsonElement>();
+        var replacedDispatcher = false;
+        var replacedRuntime = false;
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("type", out var typeEl) &&
+                typeEl.ValueKind == JsonValueKind.String)
+            {
+                var type = typeEl.GetString();
+                if (type == "dispatcher_mapping")
+                {
+                    list.Add(dispatcher);
+                    replacedDispatcher = true;
+                    continue;
+                }
+
+                if (type == "runtime_mapping" && runtime.ValueKind != JsonValueKind.Undefined)
+                {
+                    list.Add(runtime);
+                    replacedRuntime = true;
+                    continue;
+                }
+            }
+
+            list.Add(entry);
+        }
+
+        if (!replacedDispatcher) list.Insert(0, dispatcher);
+        if (!replacedRuntime && runtime.ValueKind != JsonValueKind.Undefined && !replacedRuntime)
+            list.Add(runtime);
+
+        return list;
     }
 }

@@ -295,11 +295,14 @@ export type AdminManifestScreenColumnInput = {
 
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
+  tableRef?: string;
+  /** @deprecated use tableRef — sent for backward compatibility with older topology entries */
   dbTableName?: string;
   importSchemaName?: string;
   searchTargets?: string[];
   aggregationSpec?: string;
   columns?: AdminManifestScreenColumnInput[];
+  screenOperationKind?: string;
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [
