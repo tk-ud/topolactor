@@ -1,4 +1,5 @@
 import type { DispatchRequest, Emission, ValidationError } from "./dispatch.ts";
+import { validationErrorText } from "./dispatch.ts";
 
 import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
 
@@ -126,6 +127,8 @@ export type AdminImportManifestItem = {
   manifestId: string;
   status: string;
   createdAt: string;
+  manifestKey?: string | null;
+  hubId?: string | null;
 };
 
 export type AdminImportSchemaItem = {
@@ -281,6 +284,25 @@ export type AdminManifestDraftInput = {
   action: string;
   runtimeDestination: string;
   projectionDefinition?: Record<string, unknown> | null;
+  screenOperationKind?: string;
+};
+
+export type AdminManifestScreenColumnInput = {
+  name: string;
+  dataType: string;
+  nullable: boolean;
+};
+
+export type AdminManifestScreenDataShapeInput = {
+  manifestId: string;
+  tableRef?: string;
+  /** @deprecated use tableRef — sent for backward compatibility with older topology entries */
+  dbTableName?: string;
+  importSchemaName?: string;
+  searchTargets?: string[];
+  aggregationSpec?: string;
+  columns?: AdminManifestScreenColumnInput[];
+  screenOperationKind?: string;
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [
@@ -309,40 +331,42 @@ async function callAdminManifestOp(
 
   if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
 
-  const body = await res.json();
+  const body = await res.json() as {
+    success?: boolean;
+    emission?: { data?: unknown } | null;
+    errors?: ValidationError[];
+  };
   if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
     return null;
   }
-  return body;
+  if (!res.ok || body.success === false) {
+    const msg = body.errors?.[0]
+      ? validationErrorText(body.errors[0])
+      : `manifest ${action} failed (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+  return {
+    success: body.success ?? true,
+    emission: body.emission,
+    errors: body.errors,
+  };
 }
 
 export async function listAdminManifests(status?: string): Promise<AdminManifestListItem[] | null> {
   const body = await callAdminManifestOp("list", status ? { status } : undefined);
   if (body === null) return null;
-  if (!body.success) {
-    const msg = body.errors?.[0]?.message ?? "manifest list failed";
-    throw new Error(msg);
-  }
   return (body.emission?.data ?? []) as AdminManifestListItem[];
 }
 
 export async function getAdminManifest(manifestId: string): Promise<AdminManifestDetail | null> {
   const body = await callAdminManifestOp("get", { manifestId });
   if (body === null) return null;
-  if (!body.success) {
-    const msg = body.errors?.[0]?.message ?? "manifest get failed";
-    throw new Error(msg);
-  }
   return body.emission?.data as AdminManifestDetail;
 }
 
 export async function validateAdminManifest(manifestId: string): Promise<AdminManifestValidateResult | null> {
   const body = await callAdminManifestOp("validate", { manifestId });
   if (body === null) return null;
-  if (!body.success) {
-    const msg = body.errors?.[0]?.message ?? "manifest validate failed";
-    throw new Error(msg);
-  }
   return body.emission?.data as AdminManifestValidateResult;
 }
 
@@ -351,10 +375,6 @@ export async function createAdminManifestDraft(
 ): Promise<AdminManifestDetail> {
   const body = await callAdminManifestOp("create_draft", input);
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
-  if (!body.success) {
-    const msg = body.errors?.[0]?.message ?? "create draft failed";
-    throw new Error(msg);
-  }
   return body.emission?.data as AdminManifestDetail;
 }
 
@@ -364,10 +384,6 @@ export async function updateAdminManifestDraft(
 ): Promise<AdminManifestDetail> {
   const body = await callAdminManifestOp("update_draft", { manifestId, ...input });
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
-  if (!body.success) {
-    const msg = body.errors?.[0]?.message ?? "update draft failed";
-    throw new Error(msg);
-  }
   return body.emission?.data as AdminManifestDetail;
 }
 
@@ -379,6 +395,24 @@ export async function promoteAdminManifest(manifestId: string): Promise<AdminMan
     throw new Error(msg);
   }
   return body.emission?.data as AdminManifestLifecycleResult;
+}
+
+export async function assignAdminManifestHubGrouping(
+  manifestId: string,
+  hubId: string,
+  manifestKey: string,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp("assign_hub_grouping", { manifestId, hubId, manifestKey });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return body.emission?.data as AdminManifestDetail;
+}
+
+export async function assignAdminManifestScreenDataShape(
+  input: AdminManifestScreenDataShapeInput,
+): Promise<AdminManifestDetail> {
+  const body = await callAdminManifestOp("assign_screen_data_shape", input);
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return body.emission?.data as AdminManifestDetail;
 }
 
 export async function deprecateAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {

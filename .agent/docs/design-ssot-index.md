@@ -105,7 +105,7 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で設定するのが canonical であり、後工程の独立ステップではない。
 
 **関連実装surface**:
-- `frontend/components/AdminMainFlowStepper.tsx` — メインフロー表示
+- `frontend/islands/AdminMainFlowStepper.tsx` — メインフロー表示
 - `frontend/content/adminGuides.ts` — `ADMIN_MAIN_FLOW_STEPS`
 - `frontend/routes/admin/` — 各管理ページルート
 - `frontend/islands/HubNavigationAdmin.tsx` — hub_relation 順序設定 Island（実装済み: list/create/update/deprecate/reorder）

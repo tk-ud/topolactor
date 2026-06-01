@@ -14,6 +14,15 @@ public record LoginRequestDto(string? Username, string? Password);
 public record LoginResponseDto(bool Success, string? Token, IReadOnlyList<ValidationError> Errors);
 
 /// <summary>
+/// Outbound DTO for GET /auth/session — validates Bearer JWT without side effects.
+/// </summary>
+public record SessionResponseDto(
+    bool Success,
+    string? Subject,
+    string? Role,
+    IReadOnlyList<ValidationError> Errors);
+
+/// <summary>
 /// A single demo credential record stored in function_parameters under
 /// function_name='demo_auth', parameter_key='demo_users'.
 /// PasswordHash is a bcrypt hash. Role is the demo role granted on success.

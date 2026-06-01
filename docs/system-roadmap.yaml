@@ -314,9 +314,10 @@ system_roadmap_ssot:
       title: Self-hosted admin authoring loop (MVP)
       status: implemented
       goal: >
-        Establish a self-hosted admin authoring loop where admins can import CSV/JSON,
-        validate-preview-apply candidates, define JSONB label/value manifest and
-        user-defined aggregation/display/binding policy, bind DB/JSONB fields into
+        Establish a self-hosted admin authoring loop where admins define per-manifest content and DB design
+        in admin/contents first (see docs/design/admin-console-workflow-ssot.yaml v0.3), then import CSV/JSON,
+        build UI, group manifests under hubs, validate-preview-apply candidates, with backend-derived
+        manifest/topology (not raw manifest JSON as the default edit surface), user-defined aggregation/display/binding policy, bind DB/JSONB fields into
         document canvas templates, render invoice/estimate/delivery-note style documents,
         and export PDF snapshots with canonical diff/audit linkage.
       primary_entry_surface:

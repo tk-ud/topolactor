@@ -63,7 +63,7 @@ mapping:
       - admin/hub-navigation component (hub_relation ordering)
       - AdminMainFlowStepper step definitions
       - frontend/content/adminGuides.ts ADMIN_MAIN_FLOW_STEPS
-      - frontend/components/AdminMainFlowStepper.tsx
+      - frontend/islands/AdminMainFlowStepper.tsx
       - frontend/routes/admin/*
       - frontend/islands/HubNavigationAdmin.tsx
     required_docs:

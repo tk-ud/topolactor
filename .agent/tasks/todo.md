@@ -1,28 +1,21 @@
-# Agent Task List — Remaining TODO
+# Agent Task List — PR336 workflow boundary hardening
 
-このファイルは agent task surface として使用する。
+## Blocking (resolved in branch — verify on merge)
 
-完了済み作業・PR修正履歴・旧方針の残骸は残さない。
-未完了の implementation / design / SSOT / test-authoring task がある場合のみ、次の形式で追加する。
+- [x] `TryProjectWiringAsync` uses `topology.physical_tables.table_ref` (SSOT); legacy `dbTableName` accepted at API boundary.
+- [x] Hub grouping primary UI on `/admin/manifests`; contents shows readonly summary + promote gate.
+- [x] `ManifestScreenOperationDeriver` uses manifest-scoped target/layer (list vs detail no longer share `admin/default/entity/Read`).
 
-CI検証待ち、remote CI pass確認、local tool不足、未実行チェックの記録はこのファイルに追加しない。
-それらはPRサマリ/完了レポートの verification / Required Check Scope に記載する。
+## Implementation gap (explicit — not blocking promote path)
 
+- [ ] Contents UI: structured inputs for relation/join, aggregation viewing key, aggregation display columns.
+      → SSOT: `admin-console-workflow-ssot.yaml` db_design; current: tableRef, columns, searchTargets, aggregationSpec string only.
+- [ ] Backend: persist structured relation/join + aggregation display fields on `screen_data_shape` topology extension.
+      → Depends on schema design in `docs/design/db-schema.yaml` + validator updates.
+- [ ] Promote: explicit validation when `table_ref` not found in `topology.physical_tables` (currently skips wiring insert silently).
+      → Prefer explicit skipped status in projection result vs silent no-op.
 
-作業中に既存TODOへ一時的な in-progress 印を付ける場合は、チェックボックス（`[x]`）ではなく HTML comment marker を使う。
-- marker: `<!-- agent:in-progress -->`
-- 使い方: 対象TODOの**直下に単独行**で一時的に付与する（inline付与はしない）
-- 完了条件: 作業完了前に必ず marker 単独行を削除する（残存は構造チェック失敗）
+## Optional follow-up
 
-```md
-## <Area>
-
-- [ ] <具体的な未完了作業>
-      → <理由・対象ファイル・次の判断点>
-```
-
-
-## Dynamic Support Nocode Loop — manual acceptance
-
-- [ ] `product.dynamic_support_nocode_loop` の manual acceptance / hand-debug verification を実施し、authoring guidance・SQL Attention feedback・M6 self-hosted admin authoring loop が同一UX導線として受入可能か確認する。
-      → 残理由は implementation gap ではない。M6 self-hosted admin authoring loop、SQL Attention SQLA-1..5、SQL Attention live DB E2E、roadmap/test-bundles 正規化は完了済みで、M6/M7 core runtime production-ready 判定は維持する。future optional external connector surfaces は M6/M7 blocker ではない。
+- [ ] `product.dynamic_support_nocode_loop` manual acceptance (unchanged from roadmap).
+- [ ] Auto-refresh dispatcher axes on contents save when manifest_key already set on manifests page (partial: refresh on assign_screen_data_shape + assign_hub_grouping).

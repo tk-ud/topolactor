@@ -68,7 +68,31 @@ public record AdminManifestDraftRequestDto(
     [property: JsonPropertyName("layer")] string Layer,
     [property: JsonPropertyName("action")] string Action,
     [property: JsonPropertyName("runtimeDestination")] string RuntimeDestination,
-    [property: JsonPropertyName("projectionDefinition")] JsonElement? ProjectionDefinition
+    [property: JsonPropertyName("projectionDefinition")] JsonElement? ProjectionDefinition,
+    [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind
+);
+
+public record AdminManifestAssignHubGroupingRequestDto(
+    [property: JsonPropertyName("manifestId")] string ManifestId,
+    [property: JsonPropertyName("hubId")] string HubId,
+    [property: JsonPropertyName("manifestKey")] string ManifestKey
+);
+
+public record AdminManifestScreenColumnDto(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("dataType")] string DataType,
+    [property: JsonPropertyName("nullable")] bool Nullable
+);
+
+public record AdminManifestAssignScreenDataShapeRequestDto(
+    [property: JsonPropertyName("manifestId")] string ManifestId,
+    [property: JsonPropertyName("tableRef")] string? TableRef,
+    [property: JsonPropertyName("dbTableName")] string? DbTableName,
+    [property: JsonPropertyName("importSchemaName")] string? ImportSchemaName,
+    [property: JsonPropertyName("searchTargets")] IReadOnlyList<string>? SearchTargets,
+    [property: JsonPropertyName("aggregationSpec")] string? AggregationSpec,
+    [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
+    [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind
 );
 
 public record AdminManifestUpdateDraftRequestDto(

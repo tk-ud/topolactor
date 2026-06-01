@@ -28,6 +28,9 @@ import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_CONTENTS_GUIDE } from "../content/adminGuides.ts";
+import { UX_CONTENTS, UX_HUB_MANIFESTS_PAGE } from "../content/adminUxTerms.ts";
+import ContentsScreenDesignPanel from "./ContentsScreenDesignPanel.tsx";
+import ContentsPromotionPanel from "./ContentsPromotionPanel.tsx";
 
 type PanelError = { code?: string; message: string };
 
@@ -353,6 +356,14 @@ export default function ContentsAdmin(): JSX.Element {
       <h1 class="page-title">topolactor — 管理 / コンテンツ</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
+      <section class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <p class="font-semibold">{UX_CONTENTS} — manifest 単体の内容</p>
+        <p class="mt-1 text-xs">
+          DB テーブル/カラム/型、relation、検索対象、集計表示、手入力、import 用 data shape はこの画面の責務です。
+          画面群の束ね方は <a href="/admin/manifests" class="link font-semibold">{UX_HUB_MANIFESTS_PAGE}</a> です。
+        </p>
+      </section>
+
       <AdminHowTo steps={ADMIN_CONTENTS_GUIDE.howToSteps} />
       <AdminHelpPanel {...ADMIN_CONTENTS_GUIDE} />
 
@@ -371,8 +382,11 @@ export default function ContentsAdmin(): JSX.Element {
       <ValidationErrorPanel errors={errors} title="content bundle errors" />
       {status && <p class="mb-4 text-sm text-muted-xs">{status}</p>}
 
+      <ContentsScreenDesignPanel />
+      <ContentsPromotionPanel />
+
       <section class="mb-8">
-        <h2 class="section-title">1. Content Bundle Browser</h2>
+        <h2 class="section-title">Content Bundle Browser</h2>
         <div class="mb-3 flex flex-wrap items-center gap-2">
           <input
             type="search"

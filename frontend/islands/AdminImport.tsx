@@ -14,9 +14,9 @@ import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_IMPORT_GUIDE } from "../content/adminGuides.ts";
 import {
+  UX_CONTENTS,
+  UX_CONTENTS_PAGE,
   UX_DATA_SHAPE,
-  UX_IMPORT_SETTINGS,
-  UX_IMPORT_SETTINGS_PAGE,
   UX_RUNTIME_CHECK,
   UX_UI_BUILDER,
 } from "../content/adminUxTerms.ts";
@@ -73,14 +73,14 @@ export default function AdminImport(): JSX.Element {
     setApplyResult(null);
 
     if (manifestsEmpty) {
-      setError(`インポートには先に${UX_IMPORT_SETTINGS}が必要です。${UX_IMPORT_SETTINGS_PAGE}で作成してください。`);
+      setError(`インポートには先に${UX_CONTENTS}が必要です。${UX_CONTENTS_PAGE}で data shape を定義してください。`);
       return;
     }
     if (schemasEmpty) {
-      setError(`取り込み用の${UX_DATA_SHAPE}が登録されていません。${UX_IMPORT_SETTINGS_PAGE}で前提を整えてください。`);
+      setError(`取り込み用の${UX_DATA_SHAPE}が登録されていません。${UX_CONTENTS_PAGE}で前提を整えてください。`);
       return;
     }
-    if (!selectedManifestId) { setError(`${UX_IMPORT_SETTINGS}を選択してください。`); return; }
+    if (!selectedManifestId) { setError("取り込み先の画面を選択してください。"); return; }
     if (!selectedSchemaId) { setError(`${UX_DATA_SHAPE}を選択してください。`); return; }
     if (!fileContent) { setError("ファイルが選択されていません。"); return; }
 
@@ -126,49 +126,52 @@ export default function AdminImport(): JSX.Element {
       <hr class="mb-6 border-gray-200" />
 
       <section class="mb-6">
-        <h2 class="section-title">1. {UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}を選択</h2>
+        <h2 class="section-title">1. 画面と{UX_DATA_SHAPE}を選択</h2>
         <AdminActionHint>
-          {UX_IMPORT_SETTINGS}は「何をどこへ取り込むか」、{UX_DATA_SHAPE}は「各行の項目」です。
-          どちらも先に登録されている必要があります（未登録の場合は下の案内に従ってください）。
+          {UX_CONTENTS}で定義した画面（取り込み先）と、{UX_DATA_SHAPE}（各行の項目）を選びます。
+          未登録の場合は下の案内に従ってください。
         </AdminActionHint>
         {loadingSelectors ? (
           <p class="text-muted">選択肢をロード中...</p>
         ) : manifestsEmpty ? (
           <div class="alert-info">
             <p class="text-sm font-medium">
-              インポートには先に{UX_IMPORT_SETTINGS}が必要です。まず{UX_IMPORT_SETTINGS_PAGE}で作成してください。
+              取り込み先の画面がありません。まず{UX_CONTENTS_PAGE}で画面の内容と data shape を定義してください。
             </p>
             <p class="text-muted-xs mt-2">
-              取り込みルールと表示・実行先の定義です。有効化後、この画面に戻ると選択できるようになります。
+              画面を有効化しても一覧が空のままの場合: admin manifest の有効化が hubs.topology_manifests に
+              投影されていない既知ギャップです（.agent/tasks/todo.md の Admin Console Authoring Workflow を参照）。
+              silent fallback はしません。
             </p>
             <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
-              {UX_IMPORT_SETTINGS_PAGE}へ
+              {UX_CONTENTS_PAGE}へ
             </a>
           </div>
         ) : schemasEmpty ? (
           <div class="alert-info">
             <p class="text-sm font-medium">
-              取り込み用の{UX_DATA_SHAPE}がまだ登録されていません。{UX_IMPORT_SETTINGS_PAGE}で前提を整えてください。
+              取り込み用の{UX_DATA_SHAPE}がまだありません。{UX_CONTENTS_PAGE}でデータの形を整えてください。
             </p>
             <p class="text-muted-xs mt-2">
-              CSV/JSON の各行に必要な項目を決めます。プレビューには{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}の両方が必要です。
+              CSV/JSON の各行に必要な項目を決めます。プレビューには画面と{UX_DATA_SHAPE}の両方が必要です。
             </p>
             <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
-              {UX_IMPORT_SETTINGS_PAGE}へ
+              {UX_CONTENTS_PAGE}へ
             </a>
           </div>
         ) : (
           <div class="flex flex-wrap items-end gap-4">
             <label class="text-sm">
-              {UX_IMPORT_SETTINGS}
+              画面
               <select
                 value={selectedManifestId}
                 onChange={(e) => setSelectedManifestId((e.target as HTMLSelectElement).value)}
                 class="input-mono mt-1 min-w-[260px]"
               >
-                <option value="">— {UX_IMPORT_SETTINGS}を選択 —</option>
+                <option value="">— 画面を選択 —</option>
                 {manifests.map((m) => (
                   <option key={m.manifestId} value={m.manifestId}>
+                    {m.manifestKey ? `${m.manifestKey} — ` : ""}
                     {m.manifestId.slice(0, 8)}… [{m.status}]
                   </option>
                 ))}
@@ -196,7 +199,7 @@ export default function AdminImport(): JSX.Element {
       <section class="mb-6">
         <h2 class="section-title">2. CSV または JSON ファイルをアップロード</h2>
         {!canSelectInputs ? (
-          <p class="text-muted text-sm">{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}を用意してからファイルを選べます。</p>
+          <p class="text-muted text-sm">画面と{UX_DATA_SHAPE}を用意してからファイルを選べます。</p>
         ) : (
           <div class="flex flex-wrap items-center gap-3">
             <input type="file" accept=".csv,.json" onChange={handleFileChange} class="text-sm" />
@@ -215,11 +218,11 @@ export default function AdminImport(): JSX.Element {
           プレビュー
         </button>
         <AdminActionHint>
-          まだ保存はしません。{UX_IMPORT_SETTINGS}と{UX_DATA_SHAPE}に沿って各行を確認し、有効/無効の件数を表示します。
+          まだ保存はしません。{UX_CONTENTS}で定義した{UX_DATA_SHAPE}に沿って各行を確認し、有効/無効の件数を表示します。
         </AdminActionHint>
         {!canSelectInputs && (
           <p class="text-muted-xs mt-2">
-            プレビューできない理由: {manifestsEmpty ? `${UX_IMPORT_SETTINGS}が未登録` : `${UX_DATA_SHAPE}が未登録`}です。
+            プレビューできない理由: {manifestsEmpty ? `${UX_CONTENTS}が未整備` : `${UX_DATA_SHAPE}が未登録`}です。
           </p>
         )}
         {loading && <span class="text-muted">処理中...</span>}
@@ -229,7 +232,7 @@ export default function AdminImport(): JSX.Element {
         <div class="alert-error mb-4">
           <p><strong>エラー:</strong> {error}</p>
           <p class="text-muted-xs mt-2">
-            ファイル形式の誤り・{UX_IMPORT_SETTINGS}/{UX_DATA_SHAPE}の未選択はここに表示されます。
+            ファイル形式の誤り・画面/{UX_DATA_SHAPE}の未選択はここに表示されます。
             無効行はプレビュー表を修正してから再プレビューしてください。
           </p>
           <details class="text-muted-xs mt-1">

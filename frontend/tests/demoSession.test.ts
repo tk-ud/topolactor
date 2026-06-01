@@ -1,5 +1,6 @@
 import { assertEquals, assertFalse } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  buildAuthRedirectResponse,
   buildAuthRedirectUrl,
   DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
   DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY,
@@ -46,9 +47,9 @@ Deno.test("hasDemoSessionPresenceFromRequest: missing cookie is absent", () => {
   assertFalse(hasDemoSessionPresenceFromRequest(req));
 });
 
-Deno.test("boundary summaries document presence gate vs backend auth", () => {
-  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("presence gate"), true);
-  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("妥当性"), true);
+Deno.test("boundary summaries document session probe vs backend auth", () => {
+  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("/auth/session"), true);
+  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("検証"), true);
   assertEquals(DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY.includes("backend"), true);
   assertEquals(DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY.includes("AUTH_TOKEN_MISSING"), true);
 });
@@ -68,4 +69,12 @@ Deno.test("buildAuthRedirectUrl: preserves admin path in redirect param", () => 
   const req = new Request("https://example.com/admin/import?x=1");
   const url = buildAuthRedirectUrl(req);
   assertEquals(url, "https://example.com/auth?redirect=%2Fadmin%2Fimport%3Fx%3D1");
+});
+
+Deno.test("buildAuthRedirectResponse: clearSession sets Set-Cookie on mutable headers", () => {
+  const req = new Request("https://example.com/admin");
+  const res = buildAuthRedirectResponse(req, { clearSession: true });
+  assertEquals(res.status, 302);
+  assertEquals(res.headers.get("Location"), "https://example.com/auth?redirect=%2Fadmin");
+  assertEquals(res.headers.get("Set-Cookie")?.includes("Max-Age=0"), true);
 });

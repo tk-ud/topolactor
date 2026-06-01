@@ -19,6 +19,14 @@ export type LoginResponse = {
   errors?: AuthError[];
 };
 
+/** Response from GET /api/auth/session. */
+export type SessionResponse = {
+  success: boolean;
+  subject?: string;
+  role?: string;
+  errors?: AuthError[];
+};
+
 /** Extract display string from AuthError regardless of casing. */
 export function authErrorText(e: AuthError): string {
   const msg = e.message ?? e.Message;
@@ -31,6 +39,32 @@ export function authErrorText(e: AuthError): string {
  * Sends a LoginRequest to /api/auth/login and returns the parsed LoginResponse.
  * On fetch-level error, returns a failed LoginResponse with the error message.
  */
+/**
+ * Probes backend JWT validity via GET /api/auth/session.
+ * Returns false on missing token, network error, or any non-success response.
+ */
+export async function probeDemoSessionToken(token: string): Promise<boolean> {
+  if (!token.trim()) return false;
+  try {
+    const response = await fetch("/api/auth/session", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) return false;
+    const json: unknown = await response.json();
+    if (
+      typeof json === "object" &&
+      json !== null &&
+      !Array.isArray(json) &&
+      "success" in json
+    ) {
+      return (json as SessionResponse).success === true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function loginDemo(req: LoginRequest): Promise<LoginResponse> {
   try {
     const response = await fetch("/api/auth/login", {

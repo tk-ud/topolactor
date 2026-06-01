@@ -8,13 +8,22 @@ namespace Topolactor.Runtime.Tests;
 /// <summary>
 /// In-memory manifest repository for admin manifest management unit tests.
 /// </summary>
+internal sealed record ProjectedTopologyManifest(
+    Guid TopologyManifestId,
+    Guid HubId,
+    string ManifestKey,
+    string Status);
+
 internal sealed class InMemoryManifestAdminRepository : ManifestRepository
 {
     private readonly List<ManifestDetailRecord> _manifests = [];
+    private readonly List<ProjectedTopologyManifest> _projected = [];
 
     public InMemoryManifestAdminRepository() : base(NullLogger<ManifestRepository>.Instance) { }
 
     public void Seed(ManifestDetailRecord record) => _manifests.Add(record);
+
+    public IReadOnlyList<ProjectedTopologyManifest> ProjectedTopologyManifests => _projected;
 
     public override Task<ManifestRecord?> ResolveActiveManifestAsync(
         string? role, string? target, string? layer, string? action, CancellationToken ct = default)
@@ -139,6 +148,16 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
 
         var promoted = detail with { Status = "active", UpdatedAt = DateTimeOffset.UtcNow };
         _manifests[idx] = promoted;
+
+        var (hubId, manifestKey) = ManifestCanonicalProjection.ExtractHubGrouping(promoted.Topology);
+        manifestKey ??= PromotionManifestValidator.ExtractMetadataDto(promoted.Topology)?.ManifestKey;
+        manifestKey ??= ManifestCanonicalProjection.BuildDefaultManifestKey(summary);
+        _projected.Add(new ProjectedTopologyManifest(
+            promoted.ManifestId,
+            hubId ?? Guid.Empty,
+            manifestKey,
+            "active"));
+
         return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((promoted, null));
     }
 
@@ -191,6 +210,27 @@ internal sealed class InMemoryManifestAdminRepository : ManifestRepository
             return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("MANIFEST_NOT_DRAFT", "not draft")));
 
         var merged = PromotionManifestValidator.MergeIntoTopology(_manifests[idx].Topology, promotionEntry);
+        var updated = _manifests[idx] with { Topology = merged.ToList(), UpdatedAt = DateTimeOffset.UtcNow };
+        _manifests[idx] = updated;
+        return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((updated, null));
+    }
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId,
+        string entryType,
+        JsonElement entryBody,
+        CancellationToken ct = default)
+    {
+        var idx = _manifests.FindIndex(m => m.ManifestId == manifestId);
+        if (idx < 0)
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("MANIFEST_NOT_FOUND", "not found")));
+        if (_manifests[idx].Status != "draft")
+            return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("MANIFEST_NOT_DRAFT", "not draft")));
+
+        var entry = entryBody.ValueKind == JsonValueKind.Object
+            ? entryBody
+            : JsonSerializer.SerializeToElement(new { type = entryType });
+        var merged = ManifestCanonicalProjection.MergeTopologyEntry(_manifests[idx].Topology, entryType, entry);
         var updated = _manifests[idx] with { Topology = merged.ToList(), UpdatedAt = DateTimeOffset.UtcNow };
         _manifests[idx] = updated;
         return Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((updated, null));
@@ -263,4 +303,8 @@ internal static class ManifestRepositoryStubDefaults
     public static Task<int> ZeroPromotionConflicts(
         string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct) =>
         Task.FromResult(0);
+
+    public static Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> NotImplementedMerge() =>
+        Task.FromResult<(ManifestDetailRecord?, ValidationError?)>(
+            (null, new ValidationError("STUB", "manifest admin stub not implemented")));
 }

@@ -132,7 +132,7 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT topology_manifest_id, status, created_at " +
+            "SELECT topology_manifest_id, status, created_at, manifest_key, hub_id::text " +
             "FROM hubs.topology_manifests " +
             "ORDER BY created_at DESC " +
             "LIMIT 200";
@@ -143,7 +143,9 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
             results.Add(new AdminImportManifestSummary(
                 ManifestId: reader.GetGuid(0),
                 Status: reader.GetString(1),
-                CreatedAt: reader.GetFieldValue<DateTimeOffset>(2)));
+                CreatedAt: reader.GetFieldValue<DateTimeOffset>(2),
+                ManifestKey: reader.GetString(3),
+                HubId: reader.IsDBNull(4) ? null : reader.GetString(4)));
         }
         return results;
     }

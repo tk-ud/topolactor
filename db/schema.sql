@@ -355,7 +355,7 @@ CREATE INDEX IF NOT EXISTS idx_function_parameters_active
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS topology.physical_tables (
     physical_table_id   BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    table_name          TEXT        NOT NULL UNIQUE,
+    table_ref           TEXT        NOT NULL UNIQUE,
     schema_name         TEXT        NOT NULL DEFAULT 'topology',
     category            TEXT,
     active              BOOLEAN     NOT NULL DEFAULT true,

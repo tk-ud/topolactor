@@ -156,6 +156,15 @@ public abstract class ManifestRepository
         string versionLabel,
         Guid? excludeManifestId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Merges or replaces a typed topology extension entry on a draft manifest.
+    /// </summary>
+    public abstract Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId,
+        string entryType,
+        JsonElement entryBody,
+        CancellationToken ct = default);
 }
 
 public record PromotionManifestListItem(
