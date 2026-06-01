@@ -8,7 +8,7 @@ export default function ContextTokenRegistryPage() {
   return (
     <AdminAuthGate>
       <main class="page-main-wide font-mono">
-        <h1 class="page-title">topolactor — 管理 / スタイル設定辞書</h1>
+        <h1 class="page-title">topolactor — 管理 / 推薦トークン辞書</h1>
         <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
         <AdminHowTo

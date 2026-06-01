@@ -193,9 +193,9 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_CONTEXT_TOKEN_GUIDE: AdminGuide = {
-  title: "スタイル設定辞書",
+  title: "推薦トークン辞書",
   purpose:
-    "推薦エンジンが参照するトークン辞書を管理します。ラベルと値（-1.0〜1.0）を登録して推薦の方向性を調整します。",
+    "推薦エンジンが参照するトークン辞書を管理します。ここに登録されたトークンIDの存在が推薦の観測シグナルになります。",
   prerequisites: [
     "/auth でログイン済みであること",
   ],
@@ -484,8 +484,8 @@ export const ADMIN_ROUTE_CARDS: {
   },
   {
     href: "/admin/context-token-registry",
-    label: "スタイル設定辞書",
-    purpose: "推薦エンジン用のトークン辞書を管理する",
+    label: "推薦トークン辞書",
+    purpose: "推薦エンジンが参照するトークン辞書を管理する",
     relation: "推薦エンジン連携",
     howToSummary: [
       "ラベルと値を入力",
