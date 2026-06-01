@@ -297,6 +297,31 @@ app.MapPost("/auth/login", async (
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
 });
 
+// GET /auth/session — validate Bearer JWT (no mutation; for frontend/middleware probes)
+app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new SessionResponseDto(false, null, null, authErrors), statusCode: 401);
+
+    var subject = jwtGuard.TryGetSubject(token);
+    if (string.IsNullOrWhiteSpace(subject))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
+        return Results.Json(new SessionResponseDto(false, null, null, errors), statusCode: 401);
+    }
+
+    var role = jwtGuard.TryGetRole(token);
+    if (string.IsNullOrWhiteSpace(role))
+    {
+        var errors = new[] { new ValidationError("AUTH_TOKEN_ROLE_MISSING", "Token is missing required role claim.") };
+        return Results.Json(new SessionResponseDto(false, null, null, errors), statusCode: 401);
+    }
+
+    return Results.Json(new SessionResponseDto(true, subject, role, []));
+});
+
 // GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).
 // Streams projection events from DbNotifyListener via SseEventBroadcaster.
 // Guarded to keep reader authorization boundary explicit for runtime/admin projections.

@@ -46,9 +46,9 @@ Deno.test("hasDemoSessionPresenceFromRequest: missing cookie is absent", () => {
   assertFalse(hasDemoSessionPresenceFromRequest(req));
 });
 
-Deno.test("boundary summaries document presence gate vs backend auth", () => {
-  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("presence gate"), true);
-  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("妥当性"), true);
+Deno.test("boundary summaries document session probe vs backend auth", () => {
+  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("/auth/session"), true);
+  assertEquals(DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY.includes("検証"), true);
   assertEquals(DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY.includes("backend"), true);
   assertEquals(DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY.includes("AUTH_TOKEN_MISSING"), true);
 });

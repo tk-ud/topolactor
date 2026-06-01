@@ -2,16 +2,15 @@
  * Demo session carriers for Registrar admin UI (client + SSR).
  *
  * Boundary (SSOT: Registrar admin = intent submission / projection; authz = backend):
- * - `/admin` SSR middleware is a **demo session presence gate** only (non-empty demo_jwt_token cookie).
- * - It does **not** validate JWT signature, expiry, or authorization.
- * - Arbitrary cookie values satisfy presence only — they are **not** treated as pre-verified auth.
- * - Final auth failure boundary: backend/API on `Authorization: Bearer` (e.g. AUTH_TOKEN_MISSING) — explicit, no silent fallback.
+ * - `/admin` SSR middleware and client gates probe `GET /auth/session` (via backend or /api/auth/session).
+ * - Invalid, expired, or unverifiable tokens are cleared from sessionStorage + cookie (fail-close).
+ * - Operation authz remains backend `Authorization: Bearer` on each API call — explicit, no silent fallback.
  */
 export const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 /** Shared copy for UI technical-details — keep middleware/tests aligned with this boundary. */
 export const DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY =
-  "/admin の SSR は demo 用 cookie の存在チェック（presence gate）のみです。トークンの妥当性は検証しません。";
+  "/admin の SSR は backend の /auth/session で JWT を検証します。検証不能・無効トークンは cookie を削除して /auth へ戻します。";
 
 export const DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY =
   "API 操作の最終認証境界は backend の Authorization 検証です（無効トークンは AUTH_TOKEN_MISSING 等で明示失敗）。";
@@ -134,4 +133,33 @@ export function buildAuthRedirectUrl(req: Request): string {
     authUrl.searchParams.set("redirect", redirectPath);
   }
   return authUrl.toString();
+}
+
+/** 302 redirect to /auth; optional session cookie clear (Response.redirect headers are immutable). */
+export function buildAuthRedirectResponse(
+  req: Request,
+  options?: { clearSession?: boolean },
+): Response {
+  const headers = new Headers({ Location: buildAuthRedirectUrl(req) });
+  if (options?.clearSession) {
+    headers.append("Set-Cookie", sessionTokenClearCookieHeader());
+  }
+  return new Response(null, { status: 302, headers });
+}
+
+/**
+ * Sync carriers, probe backend session, clear storage when invalid or unverifiable.
+ * Use before treating the user as logged in on /auth or inside AdminAuthGate.
+ */
+export async function ensureValidClientSession(
+  probe: (token: string) => Promise<boolean>,
+): Promise<string | null> {
+  const token = syncClientSessionToken();
+  if (!isDemoSessionPresent(token)) return null;
+  const valid = await probe(token!);
+  if (!valid) {
+    clearSessionToken();
+    return null;
+  }
+  return token;
 }

@@ -1,12 +1,12 @@
 import { ComponentChildren } from "preact";
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
+import { probeDemoSessionToken } from "../api/authApi.ts";
 import {
   DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
   DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY,
   SESSION_TOKEN_KEY,
-  isDemoSessionPresent,
-  syncClientSessionToken,
+  ensureValidClientSession,
 } from "../lib/demoSession.ts";
 
 type Props = {
@@ -19,8 +19,10 @@ export default function AdminAuthGate({ children }: Props): JSX.Element {
 
   useEffect(() => {
     setRedirectPath(globalThis.location?.pathname ?? "/admin");
-    const token = syncClientSessionToken();
-    setAuthState(isDemoSessionPresent(token) ? "present" : "absent");
+    void (async () => {
+      const validToken = await ensureValidClientSession(probeDemoSessionToken);
+      setAuthState(validToken ? "present" : "absent");
+    })();
   }, []);
 
   if (authState === "loading") {

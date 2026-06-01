@@ -4,7 +4,7 @@ import { defaultStructureMap } from "../../structure_map.ts";
 import AdminAuthGate from "../../islands/AdminAuthGate.tsx";
 import AdminHowTo from "../../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../../components/AdminHelpPanel.tsx";
-import AdminMainFlowStepper from "../../components/AdminMainFlowStepper.tsx";
+import AdminMainFlowStepper from "../../islands/AdminMainFlowStepper.tsx";
 import {
   ADMIN_INDEX_GUIDE,
   ADMIN_ROUTE_CARDS,
@@ -12,7 +12,8 @@ import {
   ACCEPTANCE_CHECKLIST,
 } from "../../content/adminGuides.ts";
 import {
-  UX_IMPORT_SETTINGS,
+  UX_CONTENTS,
+  UX_HUB_MANIFESTS,
   UX_RUNTIME_CHECK,
   UX_UI_BUILDER,
 } from "../../content/adminUxTerms.ts";
@@ -26,7 +27,7 @@ export default function AdminIndex() {
         <h1 class="page-title">topolactor — 管理</h1>
 
         <p class="mb-4 text-sm leading-relaxed text-gray-700">
-          {UX_IMPORT_SETTINGS} → インポート → {UX_UI_BUILDER} → {UX_RUNTIME_CHECK}の順で進めてください。
+          {UX_CONTENTS} → インポート → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS} → {UX_RUNTIME_CHECK}の順で進めてください。
           利用には<strong>ログイン</strong>が必要です（未ログイン時はログイン画面が表示されます）。
         </p>
 
@@ -93,7 +94,7 @@ export default function AdminIndex() {
         <section class="mb-8">
           <h2 class="section-title">管理画面一覧</h2>
           <p class="text-muted mb-4 text-sm">
-            主導線: <strong>{UX_IMPORT_SETTINGS} → インポート → {UX_UI_BUILDER} → {UX_RUNTIME_CHECK}</strong>。
+            主導線: <strong>{UX_CONTENTS} → インポート → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS} → {UX_RUNTIME_CHECK}</strong>。
             シード・コンテンツ・トークン辞書は必要に応じて利用してください。
           </p>
           <ul class="space-y-4">

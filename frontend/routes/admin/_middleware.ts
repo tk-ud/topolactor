@@ -1,25 +1,32 @@
 import { FreshContext } from "$fresh/server.ts";
 import {
-  buildAuthRedirectUrl,
-  hasDemoSessionPresenceFromRequest,
+  buildAuthRedirectResponse,
+  getSessionTokenFromRequest,
+  isDemoSessionPresent,
 } from "../../lib/demoSession.ts";
+import { probeDemoSessionOnBackend } from "../../lib/demoSessionValidate.ts";
 
 /**
- * /admin/* SSR demo session **presence gate** (Registrar admin UI boundary).
+ * /admin/* SSR demo session gate (Registrar admin UI boundary).
  *
- * - Passes when `demo_jwt_token` cookie parses to a non-empty string.
- * - Does NOT validate JWT / authz — arbitrary non-empty values are not "pre-authenticated".
- * - Missing/empty cookie → fail-close redirect to /auth?redirect=...
- * - Token validity and operation authz remain backend `Authorization` responsibility.
+ * - Missing/empty cookie → redirect to /auth?redirect=...
+ * - Non-empty cookie → probe backend GET /auth/session; invalid/unverifiable → clear cookie + redirect
+ * - Valid JWT (signature, exp, sub, role) → pass through to route render
  */
 export async function handler(req: Request, ctx: FreshContext) {
   if (ctx.destination !== "route") {
     return await ctx.next();
   }
 
-  if (hasDemoSessionPresenceFromRequest(req)) {
-    return await ctx.next();
+  const token = getSessionTokenFromRequest(req);
+  if (!isDemoSessionPresent(token)) {
+    return buildAuthRedirectResponse(req);
   }
 
-  return Response.redirect(buildAuthRedirectUrl(req), 302);
+  const valid = await probeDemoSessionOnBackend(token!);
+  if (!valid) {
+    return buildAuthRedirectResponse(req, { clearSession: true });
+  }
+
+  return await ctx.next();
 }

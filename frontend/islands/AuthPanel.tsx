@@ -1,11 +1,10 @@
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { loginDemo, authErrorText, type LoginResponse } from "../api/authApi.ts";
+import { loginDemo, authErrorText, probeDemoSessionToken, type LoginResponse } from "../api/authApi.ts";
 import {
   DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
-  isDemoSessionPresent,
+  ensureValidClientSession,
   persistSessionToken,
-  syncClientSessionToken,
 } from "../lib/demoSession.ts";
 
 type AuthState =
@@ -19,6 +18,7 @@ export default function AuthPanel(): JSX.Element {
   const [password, setPassword] = useState("");
   const [redirectTo, setRedirectTo] = useState("/");
   const [state, setState] = useState<AuthState>({ status: "idle" });
+  const [sessionCheckDone, setSessionCheckDone] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(globalThis.location?.search ?? "");
@@ -30,10 +30,13 @@ export default function AuthPanel(): JSX.Element {
     if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
       setRedirectTo(redirect);
     }
-    const existing = syncClientSessionToken();
-    if (isDemoSessionPresent(existing)) {
-      globalThis.location.replace(target);
-    }
+    void (async () => {
+      const validToken = await ensureValidClientSession(probeDemoSessionToken);
+      setSessionCheckDone(true);
+      if (validToken) {
+        globalThis.location.replace(target);
+      }
+    })();
   }, []);
 
   async function handleSubmit(e: JSX.TargetedEvent<HTMLFormElement, Event>) {
@@ -46,6 +49,14 @@ export default function AuthPanel(): JSX.Element {
     } else {
       setState({ status: "error", errors: result.errors });
     }
+  }
+
+  if (!sessionCheckDone) {
+    return (
+      <section>
+        <p class="text-muted text-sm">ログイン状態を確認しています...</p>
+      </section>
+    );
   }
 
   return (
