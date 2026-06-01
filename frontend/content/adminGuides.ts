@@ -193,41 +193,40 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_CONTEXT_TOKEN_GUIDE: AdminGuide = {
-  title: "context_token_registry",
+  title: "スタイル設定辞書",
   purpose:
-    "推薦エンジンと SQL Attention が参照する離散トークン辞書を管理します。value がコサイン類似度の意味方向成分です。",
+    "推薦エンジンが参照するトークン辞書を管理します。ラベルと値（-1.0〜1.0）を登録して推薦の方向性を調整します。",
   prerequisites: [
-    "/auth 済み、DEMO_BACKEND_URL + DATABASE_URL 設定済み",
+    "/auth でログイン済みであること",
   ],
   howToSteps: [
-    "ページ読み込みでアクティブトークン一覧が表示される（空ならこれから追加）",
-    "「新規トークン追加」: label（必須）、group（任意）、value を -1.0〜1.0 で入力",
-    "「トークン追加」を押す — backend が検証し DB に create、一覧に行が増える",
-    "不要になったトークンは行の「非推奨にする」— 物理削除ではなく status=deprecated",
-    "新規 registry 登録前に /admin/registry-vector-validate で ID 重複がないか確認することを推奨",
+    "ページ読み込みで有効なトークン一覧が表示される（空ならこれから追加）",
+    "「新規トークン追加」: ラベル（必須）、グループ（任意）、値を -1.0〜1.0 で入力",
+    "「トークン追加」を押す — サーバーで検証し登録、一覧に行が増える",
+    "不要になったトークンは行の「非推奨にする」— データは保持され、推薦対象から外れます",
+    "新規登録前に「登録前重複チェック」でID重複がないか確認することを推奨",
   ],
   inputs: [
-    "label, group, value ∈ [-1.0, 1.0]",
+    "ラベル（必須）、グループ（任意）、値 -1.0〜1.0",
   ],
   actions: [
-    "トークン追加（create）",
-    "非推奨（deprecate）",
+    "トークン追加",
+    "非推奨にする",
   ],
   outputs: [
-    "create → tokenId 発行",
-    "deprecate → 一覧で非推奨表示",
+    "追加 → 一覧に反映",
+    "非推奨 → 一覧で非推奨表示",
   ],
   nextSteps: [
-    "/admin/registry-vector-validate",
-    "推薦パラメータは function_parameters（本 UI では編集不可）",
+    "/admin/registry-vector-validate（登録前重複チェック）",
   ],
   boundaryNotes: [
-    "Frontend は意図送信のみ。永続化は backend",
+    "登録・変更はサーバー側で管理されます",
   ],
   errorGuide: [
-    "501 → Docker + DEMO_BACKEND_URL",
-    "401 → /auth",
-    "value 範囲外 → -1〜1 に修正",
+    "サーバー未接続 → 環境設定を確認してください",
+    "ログインが必要 → /auth でログインしてください",
+    "値の範囲外 → -1.0〜1.0 の値を入力してください",
   ],
 };
 
@@ -278,41 +277,40 @@ export const ADMIN_RUNTIME_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_REGISTRY_VECTOR_GUIDE: AdminGuide = {
-  title: "レジストリベクター検証",
+  title: "登録前重複チェック",
   purpose:
-    "登録候補の registry ID 配列が既存レジストリと重複・近似していないかを事前検証します（DB には書きません）。",
+    "登録する予定のIDが既存の登録と重複・類似していないか事前に確認します（データベースへの書き込みはしません）。",
   prerequisites: [
-    "/auth 済み",
-    "検証したい UUID のリストを用意",
+    "/auth でログイン済みであること",
+    "確認したいIDのリストを用意",
   ],
   howToSteps: [
-    "registryTable に対象テーブル名を入力（例: relation_registry）",
-    "query IDs に UUID を改行・カンマ・スペース区切りで貼り付け",
-    "「レジストリベクター検証」を押す",
-    "結果の validationClass と isBlocking を確認 — blocking なら neighbors 表で既存 ID とスコアを見る",
-    "duplicate / near_duplicate なら query を統合・差別化して再検証",
-    "pass または非 blocking なら、Import / UI Builder / Token 登録など本登録操作へ進む",
+    "確認対象のテーブル名を入力（例: relation_registry）",
+    "確認するIDを改行・カンマ・スペース区切りで貼り付け",
+    "「重複チェックを実行」を押す",
+    "結果を確認 — 問題あり（ブロッキング）の場合は類似登録の一覧で既存IDを確認する",
+    "重複・類似が見つかった場合はIDを修正・統合して再確認",
+    "問題なければ登録画面（インポート・画面づくり・トークン追加等）へ進む",
   ],
   inputs: [
-    "registryTable, query IDs（UUID 列）",
+    "テーブル名、確認するID（改行・カンマ区切り）",
   ],
   actions: [
-    "検証実行のみ（read-only）",
+    "重複チェック実行（確認のみ）",
   ],
   outputs: [
-    "validationClass, isBlocking, neighbors[]",
+    "確認結果、類似する既存登録の一覧",
   ],
   nextSteps: [
-    "blocking → ID 修正後に再検証",
-    "pass → 登録画面へ",
+    "問題あり → ID修正後に再確認",
+    "問題なし → 登録画面へ",
   ],
   boundaryNotes: [
-    "閾値は function_parameters — 本 UI では変更不可",
-    "DB 書き込みなし",
+    "データベースへの書き込みはしません",
   ],
   errorGuide: [
-    "duplicate_vector → neighbors を参照して ID 見直し",
-    "zero_vector → 有効なベクトルを持つ ID を選ぶ",
+    "重複 → 類似する既存登録を参照してIDを見直してください",
+    "無効なID → 有効なIDを入力してください",
   ],
 };
 
@@ -486,35 +484,35 @@ export const ADMIN_ROUTE_CARDS: {
   },
   {
     href: "/admin/context-token-registry",
-    label: "Context Token Registry",
-    purpose: "推薦・SQL Attention 用トークン辞書",
-    relation: "推薦エンジン / context route",
+    label: "スタイル設定辞書",
+    purpose: "推薦エンジン用のトークン辞書を管理する",
+    relation: "推薦エンジン連携",
     howToSummary: [
-      "label + value を入力",
+      "ラベルと値を入力",
       "トークン追加",
       "不要時は非推奨",
     ],
   },
   {
     href: "/admin/registry-vector-validate",
-    label: "Registry Vector Validate",
-    purpose: "registry ID 配列の重複・近傍検証",
+    label: "登録前重複チェック",
+    purpose: "登録前にIDが既存の登録と重複していないか確認する",
     relation: "登録前チェック",
     howToSummary: [
-      "table + UUID 列を入力",
-      "検証実行",
-      "blocking なら ID 修正",
+      "確認対象のテーブルとIDを入力",
+      "重複チェックを実行",
+      "問題があればIDを修正",
     ],
   },
   {
     href: "/admin/contents",
     label: "コンテンツ",
-    purpose: "hub / entity / relation browse、entity draft → validate → preview → promote",
-    relation: "content_bundle admin route / hub topology 管理",
+    purpose: "ページ・項目・関係を閲覧し、下書き作成から登録まで行う",
+    relation: "コンテンツ管理",
     howToSummary: [
-      "browse タブで hub / entity / relation を検索・確認",
-      "Entity Draft Editor でドラフト作成 → Validate → Preview",
-      "Promote で active entity として DB 登録",
+      "一覧タブでページ・項目・関係を検索・確認",
+      "下書き作成 → 内容確認 → プレビュー",
+      "登録で有効なコンテンツとして反映",
     ],
   },
 ];

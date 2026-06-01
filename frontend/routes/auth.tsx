@@ -10,12 +10,15 @@ export default function AuthPage(): JSX.Element {
       <h1 class="page-title">topolactor — デモログイン</h1>
 
       <div class="alert-warn mb-6">
-        <strong>デモ用スキャフォールドのみ。</strong> 本番利用不可。
-        認証情報は <code class="rounded bg-yellow-100 px-1">function_parameters</code>（
-        <code class="rounded bg-yellow-100 px-1">demo_auth / demo_users</code>）に bcrypt ハッシュで保存されます。
-        JWT 設定は <code class="rounded bg-yellow-100 px-1">DEMO_JWT_SECRET</code> /{" "}
-        <code class="rounded bg-yellow-100 px-1">DEMO_JWT_ISSUER</code> 環境変数から読み込みます。
-        バックエンド認証には <code class="rounded bg-yellow-100 px-1">DEMO_BACKEND_URL</code> が必要です。
+        <strong>デモ環境専用です。</strong> 本番での利用はできません。
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer text-yellow-800">技術情報（開発者向け）</summary>
+          <div class="mt-1 space-y-0.5 text-yellow-900">
+            <p>認証情報は <code>function_parameters</code>（<code>demo_auth / demo_users</code>）に bcrypt ハッシュで保存されます。</p>
+            <p>JWT 設定: <code>DEMO_JWT_SECRET</code> / <code>DEMO_JWT_ISSUER</code> 環境変数</p>
+            <p>バックエンド接続: <code>DEMO_BACKEND_URL</code></p>
+          </div>
+        </details>
       </div>
 
       <AuthPanel />
