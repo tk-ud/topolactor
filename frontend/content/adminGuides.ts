@@ -40,11 +40,11 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     "（任意）/admin/seed — デモ用 seed.json、/admin/contents — コンテンツ登録、トークン辞書は別画面",
   ],
   inputs: [
-    "各画面で説明される manifest / schema / seed / bucket / layout / token などの登録対象",
-    "操作前に /auth で JWT を取得（DB 永続化が必要な画面）",
+    "各画面で説明される登録対象（取り込み設定 / データの形 / シード / 部品 / レイアウト / スタイル設定 など）",
+    "操作前に /auth でログイン（DB 永続化が必要な画面）",
   ],
   actions: [
-    "下のリンクから目的の画面へ移動し、画面内の Preview → Validate → Apply / Promote / Import の順で確認する",
+    "下のリンクから目的の画面へ移動し、画面内の「プレビュー → 検証 → 保存反映 / 有効化 / 取り込み」の順で確認する",
   ],
   outputs: [
     "成功時: backend が検証したうえで DB（canonical topology）または /storage に反映",
@@ -373,7 +373,7 @@ export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
     "「データの流れ」タブで登録済みの設定一覧を確認する",
     "行を選び、取り込み先・実行のつながりを確認・編集する",
     "下書きの場合は内容を直して「下書きを保存」",
-    "新規は「新規下書き」→ 必要項目を入力 → 「下書きを作成」",
+    "新規は「新規下書き」→ 必要項目を候補から選択 → 「下書きを作成」",
     "「内容を確認」でサーバー検証 — 不足や重複はエラー表示（黙って通過しない）",
     "問題なければ下書きのみ「有効化」— 自動では有効になりません",
     "「公開・案内」タブで、案内文やキャンペーン情報を編集する（必要な場合）",
@@ -381,29 +381,28 @@ export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
     "取り込みへ進む前に /admin/import で設定を選べることを確認する",
   ],
   inputs: [
-    "wiring: dispatcher axes role, target, layer, action + runtime_destination",
-    "optional advanced: projection_constructor_mapping — constructorKey, outputKind, packageIds, fieldDefs JSON",
-    "promotion: manifestKey, versionLabel, disclosureText, placementKey, projectionSurfaceType, activationPolicy, targetTopologyRefs",
+    "取り込み・実行のつながり: 役割、対象、層、操作、実行先（候補から選択）",
+    "公開・案内（任意）: 案内文、版ラベル、有効化ポリシーなど",
+    "上級者向け設定（通常は不要）: 出力の追加定義",
   ],
   actions: [
-    "manifest: list / get / validate / create_draft / update_draft / promote / deprecate",
-    "promotion_manifest: list / get / validate / update_draft",
+    "一覧 / 詳細表示 / 内容確認 / 下書き作成 / 下書き更新 / 有効化 / 利用停止",
+    "公開・案内: 一覧 / 詳細 / 確認 / 下書き更新",
   ],
   outputs: [
-    "一覧・詳細・structured validation result",
-    "promote/deprecate は lifecycle response（ok / errorCode）",
+    "一覧・詳細・検証結果",
+    "有効化/利用停止は結果コードで通知",
   ],
   nextSteps: [
-    "/admin/runtime で dispatch 経路を確認",
-    "CSV/JSON import manifest 選択は /admin/import",
+    "/admin/runtime で動作を確認",
+    "CSV/JSON 取り込みは /admin/import",
   ],
   boundaryNotes: [
-    "Frontend は intent submission のみ — manifest / promotion validity は backend validate",
-    "ManifestDispatcher の production path は変更しない",
-    "promotion metadata と runtime wiring は同一 manifest topology 配列に共存可能",
-    "silent fallback 禁止 — backend unavailable は明示表示",
+    "Frontend は操作送信のみ — 内容の正しさはサーバー側で検証",
+    "有効化の正本は DB + backend — frontend は結果を表示するのみ",
+    "silent fallback 禁止 — バックエンド未接続は明示表示",
   ],
-  caution: "Promote / Deprecate は DB status を変更します。",
+  caution: "有効化/利用停止は DB の状態を変更します。",
 };
 
 /** Index page: per-route cards with short how-to */
@@ -419,10 +418,10 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/manifests",
     label: UX_IMPORT_SETTINGS,
     purpose: "取り込み・表示・実行先の定義を作成する（インポートの前提）",
-    relation: "推奨フロー Step 1",
+    relation: "推奨フロー Step 2",
     howToSummary: [
       "一覧で既存の設定を確認",
-      "新規下書き → 内容編集",
+      "新規下書き → 内容を候補から選択",
       "内容確認 → 有効化",
     ],
     caution: "有効化で DB の状態が変わります",
@@ -431,7 +430,7 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/import",
     label: "インポート",
     purpose: "CSV/JSON をプレビューしてから取り込む",
-    relation: `推奨フロー Step 2 — ${UX_IMPORT_SETTINGS}登録後`,
+    relation: `推奨フロー Step 3 — ${UX_IMPORT_SETTINGS}登録後`,
     howToSummary: [
       `${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}を選択`,
       "ファイルを選びプレビュー",
@@ -443,7 +442,7 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
     purpose: "画面部品の登録とレイアウトの準備",
-    relation: "推奨フロー Step 3",
+    relation: "推奨フロー Step 4",
     howToSummary: [
       "部品を登録 → 配置できる状態にする",
       "レイアウトタブで配置",
@@ -452,10 +451,21 @@ export const ADMIN_ROUTE_CARDS: {
     caution: "保存反映で DB に書き込みます",
   },
   {
+    href: "/admin/hub-navigation",
+    label: "ナビ順序設定",
+    purpose: "画面間の遷移順序を設定する",
+    relation: "推奨フロー Step 5",
+    howToSummary: [
+      "設定を選択",
+      "遷移先を選んで追加",
+      "▲▼で順序を調整",
+    ],
+  },
+  {
     href: "/admin/runtime",
     label: UX_RUNTIME_CHECK,
     purpose: "登録済み設定の動作確認",
-    relation: "推奨フロー Step 4",
+    relation: "推奨フロー Step 6",
     howToSummary: [
       "ログイン済みを確認",
       "シナリオを選んで実行",
@@ -510,39 +520,41 @@ export const ADMIN_ROUTE_CARDS: {
 ];
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
-  title: "ナビ順序設定（hub_relation）",
+  title: "ナビ順序設定",
   purpose:
-    "マニフェスト単位のページ遷移順序を設定します。" +
-    "hub_relations の sequence_position を管理し、画面間ナビゲーションの順序を確定する画面です。",
+    "設定単位のページ遷移順序を設定します。" +
+    "画面間ナビゲーションの順序を管理する画面です。",
   prerequisites: [
     "/auth でログイン済みであること",
-    "先に /admin/manifests でマニフェストが登録・有効化されていること",
-    "遷移先 hub が /admin/contents で登録されていること",
+    "先に /admin/manifests で取り込み設定が登録・有効化されていること",
+    "遷移先の画面が /admin/contents で登録されていること",
   ],
   howToSteps: [
-    "「マニフェスト選択」で対象マニフェストを選ぶ",
-    "hub_relation が未登録なら「追加」フォームが自動表示される",
-    "遷移先 hub と sequence_position（順序番号）を設定して「登録」",
-    "既存エントリの「編集」で順序や遷移先を変更できる",
-    "不要なエントリは「削除」で deprecated 状態にする",
+    "「設定選択」で対象の取り込み設定を選ぶ",
+    "ナビ遷移が未登録なら「追加」フォームが自動表示される",
+    "遷移先の画面を選んで「登録」（順序は自動で末尾に追加されます）",
+    "既存エントリの「編集」でナビ遷移先を変更できる",
+    "順序の変更は▲▼ボタンで行う",
+    "不要なエントリは「削除」で無効化する（記録は保持）",
   ],
   inputs: [
-    "topology_manifest_id — 起点となるマニフェスト",
-    "related_hub_id — 遷移先 hub",
-    "sequence_position — 順序番号（小さいほど先）",
+    "設定 — 一覧から選択",
+    "遷移先の画面 — 一覧から選択",
+    "順序 — 末尾に自動追加（▲▼で変更可能）",
   ],
   actions: [
-    "登録 — hub_relation を新規作成（active）",
-    "編集 — sequence_position / related_hub_id を更新",
-    "削除 — hub_relation を deprecated に変更（DB 保持）",
+    "追加 — ナビ遷移を新規追加（有効）",
+    "編集 — 遷移先を変更",
+    "▲▼ — 順序を並び替え",
+    "削除 — ナビ遷移を無効化（記録は保持）",
   ],
   outputs: [
-    "成功時: hub_relation_id と status が返る",
-    "失敗時: SEQUENCE_CONFLICT / MANIFEST_NOT_FOUND / HUB_NOT_FOUND",
+    "成功時: ナビ遷移が登録され一覧に反映される",
+    "失敗時: 競合・設定未発見などのエラーが表示される",
   ],
   boundaryNotes: [
-    "Frontend は intent 送信のみ。DB 書き込みは backend hub_navigation layer が行う",
-    "sequence_position は manifest スコープで UNIQUE — 同じ値の重複登録はエラー",
+    "Frontend は操作送信のみ。書き込みはサーバー側で管理される",
+    "順序番号は設定スコープで一意です — 重複は自動回避されます",
   ],
 };
 
@@ -600,8 +612,8 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 5,
     label: "ナビ順序設定",
     href: "/admin/hub-navigation",
-    purpose: "マニフェスト間の画面遷移順序（hub_relation）を設定する",
-    completionSign: "必要な hub_relation が active 状態で登録されていること",
+    purpose: "画面間の遷移順序を設定する",
+    completionSign: "必要なナビ遷移が有効な状態で登録されていること",
     nextLabel: `${UX_RUNTIME_CHECK}へ`,
   },
   {
@@ -657,10 +669,10 @@ export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 5,
     label: "ナビ順序設定",
     href: "/admin/hub-navigation",
-    purpose: "マニフェスト間の画面遷移順序（hub_relation）を設定します。多画面ナビゲーションが必要な場合に実施します。",
-    completionSign: "必要な hub_relation が active 状態で登録されていること。",
+    purpose: "画面間の遷移順序を設定します。多画面ナビゲーションが必要な場合に実施します。",
+    completionSign: "必要なナビ遷移が有効な状態で登録されていること。",
     nextLabel: `${UX_RUNTIME_CHECK}へ`,
-    boundaryNote: "hub_relation 書き込みの正本は backend hub_navigation layer。frontend は intent 送信のみ。",
+    boundaryNote: "ナビ遷移の書き込みはサーバー側で管理します。frontend は操作送信のみ。",
   },
   {
     step: 6,

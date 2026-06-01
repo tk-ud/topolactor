@@ -47,6 +47,8 @@ import { ADMIN_MANIFESTS_GUIDE } from "../content/adminGuides.ts";
 import {
   UX_IMPORT_SETTINGS,
   UX_RUNTIME_CHECK,
+  UX_STATUS_LABELS,
+  UX_RUNTIME_DESTINATION_LABELS,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -171,7 +173,7 @@ export default function ManifestsAdmin(): JSX.Element {
         return;
       }
       setPromotionValidation(result);
-      setStatus(result.valid ? "promotion バリデーション成功。" : "promotion バリデーションで blocking error があります。");
+      setStatus(result.valid ? "公開・案内の内容確認が完了しました。" : "公開・案内の確認で問題が見つかりました。");
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -274,7 +276,7 @@ export default function ManifestsAdmin(): JSX.Element {
         return;
       }
       setValidation(result);
-      setStatus(result.valid ? "バリデーション成功。" : "バリデーションで blocking error があります。");
+      setStatus(result.valid ? "内容確認が完了しました。" : "確認で問題が見つかりました。修正してください。");
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -372,7 +374,7 @@ export default function ManifestsAdmin(): JSX.Element {
   };
 
   const promoteDisabled = !selectedId || detail?.status !== "draft" ||
-    (validation !== null && validation.isBlocking);
+    validation === null || validation.isBlocking;
   const deprecateDisabled = !selectedId || detail?.status !== "active";
 
   return (
@@ -465,7 +467,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     onClick={() => loadDetail(m.manifestId)}
                   >
                     <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                    <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{m.status}</td>
+                    <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
                     <td class="px-2 py-1">{m.role ?? "—"}</td>
                     <td class="px-2 py-1">{m.target ?? "—"}</td>
                     <td class="px-2 py-1">{m.layer ?? "—"}</td>
@@ -486,7 +488,7 @@ export default function ManifestsAdmin(): JSX.Element {
           {detail && (
             <dl class="mb-4 grid gap-2 text-sm sm:grid-cols-2">
               <div><dt class="font-semibold">設定ID</dt><dd><code>{detail.manifestId}</code></dd></div>
-              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{detail.status}</dd></div>
+              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{UX_STATUS_LABELS[detail.status] ?? detail.status}</dd></div>
               <div><dt class="font-semibold">更新日時</dt><dd>{detail.updatedAt}</dd></div>
               <details class="sm:col-span-2 text-xs text-muted-xs">
                 <summary class="cursor-pointer">技術情報（開発者向け）</summary>
@@ -522,7 +524,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     onChange={(e) => setDraftRuntimeDestination((e.target as HTMLSelectElement).value)}
                   >
                     {RUNTIME_DESTINATION_OPTIONS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                      <option key={d} value={d}>{UX_RUNTIME_DESTINATION_LABELS[d] ?? d}</option>
                     ))}
                   </select>
                 </label>
@@ -632,20 +634,22 @@ export default function ManifestsAdmin(): JSX.Element {
           {detail?.summary && (
             <div class="mb-4 rounded border p-4 text-sm">
               <h3 class="mb-2 font-semibold">設定の概要</h3>
-              <p><strong>dispatcher_mapping:</strong>{" "}
+              <p><strong>取り込み・実行のつながり:</strong>{" "}
                 {detail.summary.dispatcherMapping
-                  ? `[${detail.summary.dispatcherMapping.role}, ${detail.summary.dispatcherMapping.target}, ${detail.summary.dispatcherMapping.layer}, ${detail.summary.dispatcherMapping.action}]`
+                  ? `${detail.summary.dispatcherMapping.role} / ${detail.summary.dispatcherMapping.target} / ${detail.summary.dispatcherMapping.layer} / ${detail.summary.dispatcherMapping.action}`
                   : "—"}
               </p>
-              <p><strong>runtime_mapping:</strong>{" "}
-                {detail.summary.runtimeMapping?.runtimeDestination ?? "—"}
+              <p><strong>実行先:</strong>{" "}
+                {detail.summary.runtimeMapping?.runtimeDestination
+                  ? (UX_RUNTIME_DESTINATION_LABELS[detail.summary.runtimeMapping.runtimeDestination] ?? detail.summary.runtimeMapping.runtimeDestination)
+                  : "—"}
               </p>
-              <p><strong>projection_constructor_mapping:</strong>{" "}
+              <p><strong>出力マッピング:</strong>{" "}
                 {detail.summary.projectionConstructorMapping?.hasProjectionDefinition
                   ? formatProjectionSummary(extractProjectionDefinitionFromTopology(detail.topologyRawJson))
-                  : "none"}
+                  : "なし"}
               </p>
-              <p><strong>entry types:</strong> {detail.summary.entryTypes.join(", ") || "—"}</p>
+              <p><strong>エントリ種別:</strong> {detail.summary.entryTypes.join(", ") || "—"}</p>
               <details class="mt-2">
                 <summary class="cursor-pointer text-muted-xs">debug: raw topology JSON</summary>
                 <pre class="mt-2 max-h-64 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">{detail.topologyRawJson}</pre>
@@ -662,7 +666,7 @@ export default function ManifestsAdmin(): JSX.Element {
                 type="button"
                 class="btn-primary"
                 disabled={loading || promoteDisabled}
-                title={promoteDisabled ? "下書きかつ確認済みである必要があります" : ""}
+                title={promoteDisabled ? "下書き状態で「内容を確認」を完了した設定のみ有効化できます" : ""}
                 onClick={handlePromote}
               >
                 有効化
@@ -681,7 +685,7 @@ export default function ManifestsAdmin(): JSX.Element {
           {validation && (
             <div class="mt-4 rounded border p-4 text-sm">
               <h3 class="mb-2 font-semibold">
-                確認結果: {validation.valid ? "問題なし" : "要修正"}
+                確認結果: {validation.valid ? "問題なし ✓" : "要修正"}
               </h3>
               {validation.issues.length > 0 ? (
                 <ul class="list-inside list-disc">
@@ -692,7 +696,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   ))}
                 </ul>
               ) : (
-                <p class="text-emerald-700">blocking error なし</p>
+                <p class="text-emerald-700">問題なし</p>
               )}
             </div>
           )}
@@ -761,7 +765,7 @@ export default function ManifestsAdmin(): JSX.Element {
                         onClick={() => loadPromotionDetail(m.manifestId)}
                       >
                         <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                        <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{m.status}</td>
+                        <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
                         <td class="px-2 py-1">{m.manifestKey}</td>
                         <td class="px-2 py-1">{m.versionLabel}</td>
                         <td class="px-2 py-1">{String(m.hasDisclosure)}</td>
@@ -873,7 +877,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     (!promotionSelectedId && !promotionDraftManifestId.trim())}
                   onClick={handlePromotionSaveDraft}
                 >
-                  metadata ドラフト更新
+                  案内内容を下書き保存
                 </button>
                 <button
                   type="button"
@@ -889,7 +893,7 @@ export default function ManifestsAdmin(): JSX.Element {
             {promotionValidation && (
               <div class="rounded border p-4 text-sm">
                 <h3 class="mb-2 font-semibold">
-                  promotion バリデーション: {promotionValidation.valid ? "valid" : "invalid"}
+                  公開・案内の確認: {promotionValidation.valid ? "問題なし ✓" : "要修正"}
                 </h3>
                 {promotionValidation.issues.length > 0 ? (
                   <ul class="list-inside list-disc">
@@ -900,7 +904,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     ))}
                   </ul>
                 ) : (
-                  <p class="text-emerald-700">blocking error なし</p>
+                  <p class="text-emerald-700">問題なし</p>
                 )}
               </div>
             )}
