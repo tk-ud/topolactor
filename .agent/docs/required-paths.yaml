@@ -60,6 +60,7 @@ required_files:
     - docs/design/sql-attention-logs-ssot.yaml
     - docs/design/sql-attention-logs-ssot.md
     - docs/design/css-dictionary-ssot.yaml
+    - docs/design/admin-console-workflow-ssot.yaml
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml
@@ -320,6 +321,11 @@ required_content_terms:
     - "topology_definition"
     - "manifest"
     - "wiring_definition_for_dispatcher_and_projection"
+  docs/design/admin-console-workflow-ssot.yaml:
+    - "admin_console_workflow_ssot"
+    - "page_responsibility"
+    - "canonical_workflow"
+    - "hub_navigation_ordering"
   .github/workflows/structure-check.yml:
     - ".agent/tests/check-structure.sh"
   .github/workflows/backend-tests.yml:

@@ -509,6 +509,43 @@ export const ADMIN_ROUTE_CARDS: {
   },
 ];
 
+export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
+  title: "ナビ順序設定（hub_relation）",
+  purpose:
+    "マニフェスト単位のページ遷移順序を設定します。" +
+    "hub_relations の sequence_position を管理し、画面間ナビゲーションの順序を確定する画面です。",
+  prerequisites: [
+    "/auth でログイン済みであること",
+    "先に /admin/manifests でマニフェストが登録・有効化されていること",
+    "遷移先 hub が /admin/contents で登録されていること",
+  ],
+  howToSteps: [
+    "「マニフェスト選択」で対象マニフェストを選ぶ",
+    "hub_relation が未登録なら「追加」フォームが自動表示される",
+    "遷移先 hub と sequence_position（順序番号）を設定して「登録」",
+    "既存エントリの「編集」で順序や遷移先を変更できる",
+    "不要なエントリは「削除」で deprecated 状態にする",
+  ],
+  inputs: [
+    "topology_manifest_id — 起点となるマニフェスト",
+    "related_hub_id — 遷移先 hub",
+    "sequence_position — 順序番号（小さいほど先）",
+  ],
+  actions: [
+    "登録 — hub_relation を新規作成（active）",
+    "編集 — sequence_position / related_hub_id を更新",
+    "削除 — hub_relation を deprecated に変更（DB 保持）",
+  ],
+  outputs: [
+    "成功時: hub_relation_id と status が返る",
+    "失敗時: SEQUENCE_CONFLICT / MANIFEST_NOT_FOUND / HUB_NOT_FOUND",
+  ],
+  boundaryNotes: [
+    "Frontend は intent 送信のみ。DB 書き込みは backend hub_navigation layer が行う",
+    "sequence_position は manifest スコープで UNIQUE — 同じ値の重複登録はエラー",
+  ],
+};
+
 /** 推奨受入フロー — admin index の "推奨受入フロー" セクションで使用 */
 export type AcceptanceFlowStep = {
   step: number;
@@ -518,9 +555,10 @@ export type AcceptanceFlowStep = {
   completionSign: string;
   nextLabel?: string;
   boundaryNote?: string;
+  subSteps?: { label: string; href: string }[];
 };
 
-/** 管理トップのコンパクトステッパー — / と同じ推奨順 */
+/** 管理トップのコンパクトステッパー — admin-console-workflow-ssot.yaml canonical_workflow 準拠 */
 export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
   {
     step: 1,
@@ -534,17 +572,21 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_IMPORT_SETTINGS,
     href: "/admin/manifests",
-    purpose: "取り込み・表示・実行先の定義を作る",
-    completionSign: `インポート画面で選べる${UX_IMPORT_SETTINGS}が 1 件以上あること`,
-    nextLabel: "インポートへ",
+    purpose: "取り込み・表示・実行先の定義を作る（DB系 / 配線系 / hub系）",
+    completionSign: `有効な${UX_IMPORT_SETTINGS}が 1 件以上あること`,
+    nextLabel: "データ取り込みへ",
   },
   {
     step: 3,
-    label: "インポート",
+    label: "データ取り込み",
     href: "/admin/import",
-    purpose: "CSV/JSON をプレビューして取り込む",
-    completionSign: "適用成功（applyLogId 表示）",
+    purpose: "CSV/JSON インポート または コンテンツ手動登録",
+    completionSign: "データが DB に反映されていること",
     nextLabel: `${UX_UI_BUILDER}へ`,
+    subSteps: [
+      { label: "インポート", href: "/admin/import" },
+      { label: "手動登録", href: "/admin/contents" },
+    ],
   },
   {
     step: 4,
@@ -552,10 +594,18 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     href: "/admin/ui-builder",
     purpose: "画面部品とレイアウトを準備する",
     completionSign: "レイアウトの保存反映が完了していること",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    nextLabel: "ナビ順序設定へ",
   },
   {
     step: 5,
+    label: "ナビ順序設定",
+    href: "/admin/hub-navigation",
+    purpose: "マニフェスト間の画面遷移順序（hub_relation）を設定する",
+    completionSign: "必要な hub_relation が active 状態で登録されていること",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+  },
+  {
+    step: 6,
     label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
     purpose: "登録済み設定が動くか確認する",
@@ -576,19 +626,23 @@ export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_IMPORT_SETTINGS,
     href: "/admin/manifests",
-    purpose: `取り込み・表示・実行先の定義を作成します。インポートにはこの${UX_IMPORT_SETTINGS}が先に必要です。`,
+    purpose: `取り込み・表示・実行先の定義を作成します（DB系 / 配線系 / hub系）。インポートにはこの${UX_IMPORT_SETTINGS}が先に必要です。`,
     completionSign: `有効な${UX_IMPORT_SETTINGS}が 1 件以上あり、/admin/import の選択肢に現れること。`,
-    nextLabel: "インポートへ",
+    nextLabel: "データ取り込みへ",
     boundaryNote: "検証・有効化の正本は backend。frontend は入力と結果表示のみ。",
   },
   {
     step: 3,
-    label: "インポート",
+    label: "データ取り込み",
     href: "/admin/import",
-    purpose: `CSV/JSON を${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}に沿ってプレビューし、問題なければ取り込みます。`,
-    completionSign: "適用成功後に applyLogId が表示されること。無効行が 0 件であることが理想。",
+    purpose: `CSV/JSON インポート（/admin/import）または手動コンテンツ登録（/admin/contents）でデータを DB に反映します。`,
+    completionSign: "データが DB に反映されていること（applyLogId または promote 完了）。",
     nextLabel: `${UX_UI_BUILDER}へ`,
     boundaryNote: "プレビュー・適用の正本は backend。frontend はファイル送信と結果表示のみ。",
+    subSteps: [
+      { label: "インポート", href: "/admin/import" },
+      { label: "手動登録", href: "/admin/contents" },
+    ],
   },
   {
     step: 4,
@@ -596,11 +650,20 @@ export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
     href: "/admin/ui-builder",
     purpose: "部品を登録し、レイアウトを組んで保存反映します。",
     completionSign: "配置用パレットに部品が表示され、レイアウトの保存反映が完了すること。未登録のみの配置が残っていないこと。",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    nextLabel: "ナビ順序設定へ",
     boundaryNote: "topology 意味判断は backend。frontend はドラフト表示と操作送信のみ。",
   },
   {
     step: 5,
+    label: "ナビ順序設定",
+    href: "/admin/hub-navigation",
+    purpose: "マニフェスト間の画面遷移順序（hub_relation）を設定します。多画面ナビゲーションが必要な場合に実施します。",
+    completionSign: "必要な hub_relation が active 状態で登録されていること。",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    boundaryNote: "hub_relation 書き込みの正本は backend hub_navigation layer。frontend は intent 送信のみ。",
+  },
+  {
+    step: 6,
     label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
     purpose: "登録済み設定に対して操作を実行し、結果を確認します。不足があれば該当画面へ戻ります。",

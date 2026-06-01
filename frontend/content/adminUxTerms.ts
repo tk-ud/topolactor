@@ -12,7 +12,8 @@ export const UX_IMPORT_SETTINGS_PAGE = "取り込み設定画面";
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",
   UX_IMPORT_SETTINGS,
-  "インポート",
+  "データ取り込み",
   UX_UI_BUILDER,
+  "ナビ順序設定",
   UX_RUNTIME_CHECK,
 ] as const;

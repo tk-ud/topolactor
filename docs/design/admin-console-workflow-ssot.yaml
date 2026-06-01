@@ -1,0 +1,303 @@
+admin_console_workflow_ssot:
+  name: topolactor_admin_console_workflow_ssot
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - define admin console page responsibility split and canonical domain ownership
+    - define canonical workflow sequence for full admin setup
+    - declare hub_navigation_ordering as a separate configuration surface
+    - serve as SSOT for admin UI structural decisions affecting routes, islands, and content guides
+
+  owns:
+    - admin_page_route_registry and domain_responsibility_split
+    - canonical_workflow_step_order
+    - hub_navigation_ordering_component_route_contract
+    - wiring_domain_assignment_per_page (dispatcher axes belong to admin/manifests, not a late step)
+
+  does_not_own:
+    - component_implementation: frontend/islands/*Admin.tsx
+    - db_schema: docs/design/db-schema.yaml
+    - runtime_orchestration_semantics: docs/design/runtime-orchestration-ssot.yaml
+    - css_vocabulary: docs/design/css-dictionary-ssot.yaml
+    - ui_ux_primitive_catalog: docs/design/ui-ux-primitive-catalog-ssot.yaml
+
+# =============================================================================
+# Page Responsibility Split
+# admin/manifests  → DB系 / 配線系 / hub系
+# admin/contents   → UI系 / イベントトリガ系
+# =============================================================================
+
+  page_responsibility:
+
+    admin_manifests:
+      route: /admin/manifests
+      island: frontend/islands/ManifestsAdmin.tsx
+      domain_ownership:
+        db_system:
+          - physical table registration and DB-side schema binding
+          - topology_physical_tables reference
+        wiring_system:
+          - dispatcher axes: role / target / layer / action / runtime_destination
+          - projection_constructor_mapping (optional)
+          - wiring definition as the canonical authority for a single-screen dispatch
+        hub_system:
+          - hub assignment for the manifest
+          - topology_manifest grouping under hubs.topology_manifests
+      note: >
+        A manifest is a single-screen unit.
+        Page navigation ordering between screens is a separate concern
+        and must NOT be embedded here.
+
+    admin_contents:
+      route: /admin/contents
+      island: frontend/islands/ContentsAdmin.tsx
+      domain_ownership:
+        ui_system:
+          - entity / relation / hub content bundle registration
+          - UI-side relational structure (hub_id, relation_ids, state bindings)
+          - content bundle lifecycle (draft → validate → preview → promote)
+        event_trigger_system:
+          - state management for content lifecycle
+          - event trigger surface for entity promotion / deprecation
+      note: >
+        hub_relation structural entries (entity↔relation↔hub) live here.
+        Hub navigation sequence ordering is a separate concern handled by
+        the hub_navigation_ordering component.
+
+    admin_import:
+      route: /admin/import
+      island: frontend/islands/AdminImport.tsx
+      domain_ownership:
+        import_system:
+          - CSV / JSON file ingestion
+          - manifest + schema selection before ingestion
+          - preview (dry-run) → apply (DB write) lifecycle
+      prerequisite:
+        - manifest promoted in admin/manifests
+        - schema registered for the manifest
+
+    admin_ui_builder:
+      route: /admin/ui-builder
+      island: frontend/islands/UiBuilderAdmin.tsx
+      domain_ownership:
+        ui_layout_system:
+          - component catalog reference (read-only)
+          - bucket: catalog → register → generate → promote
+          - layout canvas: drag / drop / resize / snap-to-grid
+          - CSS style token selection
+          - layout patch: preview → validate → apply
+      prerequisite:
+        - manifest promoted in admin/manifests
+        - content bundle promoted in admin/contents
+
+    admin_runtime:
+      route: /admin/runtime
+      island: frontend/islands/OperationPanel.tsx
+      domain_ownership:
+        runtime_verification:
+          - dispatch execution verification via operation presets
+          - emission projection display
+          - SQL Attention projection panel
+      note: final verification step; all prior registration must be complete
+
+    admin_hub_navigation:
+      route: /admin/hub-navigation
+      island: frontend/islands/HubNavigationAdmin.tsx
+      domain_ownership:
+        hub_relation_ordering:
+          - manifest sequence configuration for page navigation transitions
+          - hub_relation graph display between promoted manifests
+          - ordering / sequence of manifests within each hub
+          - manifest-to-hub-relation binding completeness validation
+          - hub_relation ordering promotion
+      status: implemented
+      rationale: >
+        Each manifest is a single-screen unit. Page navigation transitions between
+        screens require hub_relation ordering to be explicitly configured. This
+        cannot live in admin/manifests (per-screen wiring) or admin/contents
+        (structural hub/entity content) — a dedicated surface is needed to manage
+        the sequence of manifests within the hub navigation graph.
+      db_binding:
+        primary_table: hubs.hub_relations
+        supporting_tables:
+          - hubs.hub
+          - hubs.topology_manifests
+
+# =============================================================================
+# Canonical Workflow Sequence
+# =============================================================================
+
+  canonical_workflow:
+
+    - step: 1
+      label: manifest_registration
+      route: /admin/manifests
+      domains: [db_system, wiring_system, hub_system]
+      description: >
+        Create manifest with dispatcher axes (role/target/layer/action/runtime_destination),
+        DB schema binding, and hub assignment.
+      note: >
+        Wiring (crud/search/aggregation operation types) is configured HERE as
+        dispatcher axis values — not as a separate later step.
+
+    - step: 2a
+      label: import_csv_json
+      route: /admin/import
+      domains: [import_system]
+      description: >
+        Select manifest + schema, upload CSV/JSON file, preview (dry-run validation),
+        apply valid records to DB.
+      condition: when data ingestion from CSV/JSON file is required
+
+    - step: 2b
+      label: physical_table_manual_registration
+      route: /admin/contents
+      domains: [db_system, ui_system]
+      description: >
+        Manually register entity / relation / hub content bundle by hand-input
+        when physical tables are created directly rather than via file import.
+      condition: when direct manual table registration is needed instead of file import
+
+    - step: 3
+      label: hub_rdb_relational_setup
+      route: /admin/contents
+      domains: [ui_system]
+      description: >
+        Configure hub, entity, and relation content bundles.
+        Bind relational columns: select physical table and relational column references.
+      prerequisite: step 2a or 2b
+
+    - step: 4
+      label: ui_builder_layout
+      route: /admin/ui-builder
+      domains: [ui_layout_system]
+      description: >
+        Register components in bucket (catalog → register → generate → promote),
+        place components on layout canvas, select CSS style tokens.
+      prerequisite: step 3
+
+    - step: 5
+      label: hub_navigation_ordering
+      route: /admin/hub-navigation
+      domains: [hub_relation_ordering]
+      description: >
+        Configure manifest sequence for page navigation hub_relations.
+        Set ordering of promoted manifests within each hub navigation graph.
+      note: >
+        Required when multi-screen navigation transitions are needed.
+        Must be completed before runtime verification for multi-screen flows.
+
+    - step: 6
+      label: registration_and_verification
+      route: /admin/runtime
+      domains: [runtime_verification]
+      description: >
+        Verify all registered configuration via dispatch execution.
+        Confirm emission projection and SQL Attention output.
+      prerequisite: all prior steps
+
+# =============================================================================
+# Hub Navigation Ordering Component Specification
+# =============================================================================
+
+  hub_navigation_ordering_component:
+    route: /admin/hub-navigation
+    island: frontend/islands/HubNavigationAdmin.tsx
+    route_file: frontend/routes/admin/hub-navigation.tsx
+    purpose: >
+      Provide explicit configuration surface for manifest sequence within the
+      hub_relation graph, enabling page navigation transitions between
+      single-screen manifests.
+    lifecycle:
+      - select_topology_manifest
+      - view_hub_relations_for_manifest
+      - create_hub_relation (immediate active, no draft stage)
+      - update_hub_relation (relatedHubId only; sequencePosition managed via reorder)
+      - deprecate_hub_relation
+      - reorder_hub_relations (batch swap; 2-phase transaction avoids UNIQUE constraint on sequence_position)
+    fixed_design_policies:
+      runtime_consumer: >
+        topology_transform_runtime pipeline — HubNavigationResolver injected into RuntimeExecutor
+        as optional dep; Emission.NavigationSequence populated at step 11 using the
+        dispatcher-resolved manifestId (not vector.IdOrHubId); this ensures a hub with multiple
+        topology_manifests returns the correct per-manifest sequence rather than mixing all
+        manifests sharing the same hub_id; non-fatal (emission continues without NavigationSequence
+        on resolver failure).
+      self_loop_policy: >
+        direct self-loop (source_hub_id == related_hub_id) returns SELF_LOOP error code and is
+        forbidden. n-hop cycles (A→B→A, A→B→C→A) are intentionally allowed as valid business flows.
+      access_path_policy: >
+        hub_navigation:* owns all ordering mutations (create/update/deprecate/reorder).
+        content_bundle:list_hub_relations is read-only browse only; it does NOT own sequence edits.
+    responsibility_split:
+      in_scope:
+        - display hub_relation graph between promoted manifests
+        - set and reorder manifest sequence within each hub
+        - validate manifest-to-hub-relation binding completeness
+        - promote hub_relation ordering configuration
+      out_of_scope:
+        - manifest content editing: admin/manifests
+        - hub entity and relation structure editing: admin/contents
+        - component layout design: admin/ui-builder
+    db_binding:
+      primary_table: hubs.hub_relations
+      supporting_tables:
+        - hubs.hub
+        - hubs.topology_manifests
+    admin_guide_key: ADMIN_HUB_NAVIGATION_GUIDE
+    flow_step_key: ADMIN_MAIN_FLOW_STEPS
+
+# =============================================================================
+# Wiring Placement Boundary
+# =============================================================================
+
+  wiring_placement:
+    canonical_location: admin_manifests (/admin/manifests)
+    wiring_definition: dispatcher_axes (role / target / layer / action / runtime_destination)
+    prohibited:
+      - treating wiring as a late/separate step after UI layout
+      - embedding page-navigation hub_relation ordering inside manifest wiring
+    crud_search_aggregation_mapping:
+      crud: action axis values (create / read / update / delete)
+      search: action axis value (search)
+      aggregation: layer + action axis combination
+      note: >
+        These are dispatcher axis values set at manifest creation time in admin/manifests.
+        They are NOT a separate wiring configuration step after layout.
+
+# =============================================================================
+# AdminMainFlowStepper Contract
+# =============================================================================
+
+  admin_main_flow_stepper:
+    source_file: frontend/components/AdminMainFlowStepper.tsx
+    data_source: frontend/content/adminGuides.ts ADMIN_MAIN_FLOW_STEPS
+    current_steps:
+      - step: 1
+        label: ログイン
+        href: /auth
+      - step: 2
+        label: 取り込み設定
+        href: /admin/manifests
+      - step: 3
+        label: データ取り込み
+        href: /admin/import
+        sub_steps:
+          - label: CSV/JSONインポート
+            href: /admin/import
+          - label: コンテンツ登録
+            href: /admin/contents
+      - step: 4
+        label: 画面づくり
+        href: /admin/ui-builder
+      - step: 5
+        label: ナビ順序設定
+        href: /admin/hub-navigation
+      - step: 6
+        label: 動作確認
+        href: /admin/runtime
+    note: >
+      ADMIN_MAIN_FLOW_STEPS in adminGuides.ts and AdminMainFlowStepper.tsx are the
+      implementation surfaces for this contract. Changes to canonical_workflow steps
+      above must be reflected there.

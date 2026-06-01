@@ -303,6 +303,8 @@ system_roadmap_ssot:
       goal: >
         Provide admin-facing registry, seed, component, layout, and projection management
         surfaces while keeping DB topology and backend runtime as the semantic authority.
+      unlocks:
+        - admin_hub_navigation_write_layer: implemented
       blocking_gaps:
         - Issue #84 seed import/export runtime
         - Issue #86 frontend UI component system
@@ -819,7 +821,9 @@ system_roadmap_ssot:
         admin_runtime → AdminRuntimeDispatchAdapter → AdminRuntime.ExecuteDataAsync.
         TargetDispatchOverride is isolated in the null-repository (dev/demo bypass) branch only.
         MANIFEST_NOT_FOUND, MANIFEST_AMBIGUOUS, RUNTIME_DESTINATION_UNKNOWN are explicit errors.
-        Admin route manifests in seed_empty.sql (IDs 50-5a) use runtime_destination=admin_runtime.
+        Admin route manifests in seed_empty.sql use runtime_destination=admin_runtime:
+        IDs 50-5a (seed_runtime/context_token/registry_vector/ui_component_bucket/package_generator/system_ci/ci_attention/manifest/content_bundle),
+        IDs 77-7b (hub_navigation: list_manifests/get_hub_relations/create/update/deprecate), 7c (hub_navigation:reorder).
         Test fixture stubs (FakeDispatchableRuntime) verify selection boundary without
         contaminating production DI.
       files:
@@ -1156,20 +1160,25 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Admin routes /admin/manifests, /admin/contents, /admin/ui-builder exist.
+        Admin routes /admin/manifests, /admin/contents, /admin/ui-builder, /admin/hub-navigation exist.
         /admin/contents is wired to content_bundle admin runtime (browse, hub/entity/relation/hub_relation detail,
         draft create/update, validate, preview, promote). Gap-9 content bundle partial follow-up complete.
         /admin/manifests and /admin/ui-builder have separate registry flows.
+        /admin/hub-navigation is wired to hub_navigation admin runtime (list_manifests, get_hub_relations,
+        create/update/deprecate/reorder hub_relation). Seed manifest records (IDs 77-7c) registered.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
         - frontend/routes/admin/manifests.tsx
         - frontend/routes/admin/contents.tsx
         - frontend/routes/admin/ui-builder.tsx
+        - frontend/routes/admin/hub-navigation.tsx
+        - frontend/islands/HubNavigationAdmin.tsx
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
+        - admin_hub_navigation_route_exists
         - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
@@ -1437,6 +1446,71 @@ system_roadmap_ssot:
       completion_condition:
         - admin_contracts_replace_temporary_fields_with_validated_runtime_schema
       known_gap_ref: []
+
+    backend.hub_navigation_admin:
+      status: implemented
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        Hub navigation admin write layer and runtime consumer are fully implemented.
+        AdminRuntime dispatches hub_navigation:{list_manifests,get_hub_relations,create,update,deprecate,reorder}.
+        NpgsqlContentBundleRepository implements all 6 methods against hubs.topology_manifests and
+        hubs.hub_relations. hub_relation lifecycle is immediate-active (no draft stage).
+        create validates manifest existence (MANIFEST_NOT_FOUND) and hub existence (HUB_NOT_FOUND);
+        direct self-loop (source_hub == related_hub) returns SELF_LOOP; update validates hub existence (HUB_NOT_FOUND);
+        sequence conflicts return SEQUENCE_CONFLICT; reorder uses 2-phase transaction to avoid UNIQUE constraint violations.
+        Seed manifest records (IDs 77-7c) registered in seed_empty.sql for all 6 dispatch actions.
+        Runtime consumer: HubNavigationResolver reads manifest-scoped hub_relations via
+        topology_transform_runtime pipeline; uses dispatcher-resolved manifestId (not
+        vector.IdOrHubId) so a hub with multiple topology_manifests returns the correct
+        per-manifest sequence; Emission.NavigationSequence populated when manifestId is present
+        (non-fatal on failure).
+      files:
+        - backend/runtime/AdminRuntime.cs
+        - backend/runtime/HubNavigationResolver.cs
+        - backend/repository/ContentBundleRepository.cs
+        - backend/repository/NpgsqlContentBundleRepository.cs
+        - backend/schema/ContentBundleContracts.cs
+        - backend/schema/Contracts.cs
+        - backend/runtime/RuntimeExecutor.cs
+        - backend/Program.cs
+        - db/seed_empty.sql
+        - frontend/islands/HubNavigationAdmin.tsx
+        - frontend/routes/admin/hub-navigation.tsx
+        - frontend/api/adminApi.ts
+        - frontend/content/adminGuides.ts
+        - docs/design/admin-console-workflow-ssot.yaml
+        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs
+      evidence:
+        tests:
+          - AdminRuntimeContentBundleTests (HubNavigation_ListManifests_ReturnsSeededManifest)
+          - AdminRuntimeContentBundleTests (HubNavigation_GetHubRelations_ReturnsSeededEntry)
+          - AdminRuntimeContentBundleTests (HubNavigation_Create_AddsNewEntry)
+          - AdminRuntimeContentBundleTests (HubNavigation_Create_SequenceConflict_ReturnsError)
+          - AdminRuntimeContentBundleTests (HubNavigation_Create_SelfLoop_ReturnsSelfLoopError)
+          - AdminRuntimeContentBundleTests (HubNavigation_Update_ChangesSequencePosition)
+          - AdminRuntimeContentBundleTests (HubNavigation_Update_InvalidHub_ReturnsHubNotFound)
+          - AdminRuntimeContentBundleTests (HubNavigation_Update_SelfLoop_ReturnsSelfLoopError)
+          - AdminRuntimeContentBundleTests (HubNavigation_Deprecate_SetsDeprecatedStatus)
+          - AdminRuntimeContentBundleTests (HubNavigation_Reorder_ChangesSequencePositions)
+        ci:
+          - backend-tests
+      completion_condition:
+        - hub_navigation_list_manifests_returns_topology_manifests_with_hub_relation_count
+        - hub_navigation_get_hub_relations_returns_manifest_scoped_active_relations
+        - hub_navigation_create_validates_manifest_and_hub_existence
+        - hub_navigation_create_direct_self_loop_returns_SELF_LOOP
+        - hub_navigation_update_validates_hub_existence_returns_HUB_NOT_FOUND
+        - hub_navigation_update_direct_self_loop_returns_SELF_LOOP
+        - hub_navigation_deprecate_sets_status_deprecated
+        - sequence_conflict_returns_SEQUENCE_CONFLICT_not_exception
+        - hub_navigation_reorder_uses_2phase_transaction_avoiding_UNIQUE_constraint
+        - seed_manifest_records_registered_for_all_6_hub_navigation_actions
+        - runtime_consumer_populates_emission_NavigationSequence_via_HubNavigationResolver
+      known_gap_ref: []
+      detail_ssot:
+        - docs/design/admin-console-workflow-ssot.yaml
 
     frontend.runtime_scheduler:
       status: implemented

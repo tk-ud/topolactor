@@ -137,3 +137,69 @@ public record ContentBundleHubIdRequestDto(
 public record ContentBundleRelationIdRequestDto(
     [property: JsonPropertyName("relationRegistryId")] string RelationRegistryId
 );
+
+// ---------------------------------------------------------------------------
+// Hub Navigation DTOs
+// ---------------------------------------------------------------------------
+
+public record HubNavigationManifestItemDto(
+    [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
+    [property: JsonPropertyName("manifestKey")] string ManifestKey,
+    [property: JsonPropertyName("hubId")] string HubId,
+    [property: JsonPropertyName("hasHubRelations")] bool HasHubRelations,
+    [property: JsonPropertyName("hubRelationCount")] int HubRelationCount
+);
+
+public record HubNavigationHubRelationItemDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId,
+    [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
+    [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
+    [property: JsonPropertyName("sequencePosition")] int SequencePosition,
+    [property: JsonPropertyName("relationConfig")] string? RelationConfig,
+    [property: JsonPropertyName("status")] string Status
+);
+
+public record HubNavigationLifecycleResponseDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("hubRelationId")] string? HubRelationId,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("errorCode")] string? ErrorCode = null
+);
+
+public record HubNavigationGetRequestDto(
+    [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId
+);
+
+public record HubNavigationCreateRequestDto(
+    [property: JsonPropertyName("topologyManifestId")] string TopologyManifestId,
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
+    [property: JsonPropertyName("sequencePosition")] int SequencePosition
+);
+
+public record HubNavigationUpdateRequestDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId,
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId
+);
+
+public record HubNavigationDeprecateRequestDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId
+);
+
+public record HubNavigationSequenceItemDto(
+    [property: JsonPropertyName("relatedHubId")] string RelatedHubId,
+    [property: JsonPropertyName("relatedHubLabel")] string RelatedHubLabel,
+    [property: JsonPropertyName("sequencePosition")] int SequencePosition
+);
+
+public record HubNavigationReorderItemDto(
+    [property: JsonPropertyName("hubRelationId")] string HubRelationId,
+    [property: JsonPropertyName("newSequencePosition")] int NewSequencePosition
+);
+
+public record HubNavigationReorderResponseDto(
+    [property: JsonPropertyName("ok")] bool Ok,
+    [property: JsonPropertyName("message")] string Message,
+    [property: JsonPropertyName("errorCode")] string? ErrorCode = null
+);

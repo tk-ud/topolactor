@@ -90,6 +90,36 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 
 ---
 
+### 5. Admin Console Workflow SSOT（管理コンソールワークフロー）
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/admin-console-workflow-ssot.yaml` |
+
+**概要**: 管理コンソールページの責務分割とワークフロー順序を定義する SSOT。
+- `admin/manifests` → DB系 / 配線系 / hub系
+- `admin/contents` → UI系 / イベントトリガ系
+- `admin/hub-navigation` → hub_relation によるページナビ順序設定（新規コンポーネント）
+
+マニフェストは一画面単位のため、画面遷移の hub_relation 順序設定は独立した設定サーフェスとして宣言される。
+Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で設定するのが canonical であり、後工程の独立ステップではない。
+
+**関連実装surface**:
+- `frontend/components/AdminMainFlowStepper.tsx` — メインフロー表示
+- `frontend/content/adminGuides.ts` — `ADMIN_MAIN_FLOW_STEPS`
+- `frontend/routes/admin/` — 各管理ページルート
+- `frontend/islands/HubNavigationAdmin.tsx` — hub_relation 順序設定 Island（実装済み: list/create/update/deprecate/reorder）
+- `hubs.hub_relations` / `hubs.topology_manifests` — DB binding
+
+**参照すべき場面**:
+- 管理コンソールのページ責務分割を変更するとき
+- ワークフロー順序（6ステップ）を変更するとき
+- `AdminMainFlowStepper` のステップ定義を変更するとき
+- `admin/hub-navigation` コンポーネントの仕様・設計判断を確認するとき
+- wiring 設定の位置（どのページで行うか）を確認するとき
+
+---
+
 ## SSOT 原則のまとめ
 
 | 対象 | SSOT の場所 |
@@ -98,6 +128,7 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 | トークン辞書（意味方向ベクトル） | `context_token_registry` テーブル |
 | コミット済みの操作ログ | `operation_log` + `operation_log_item` |
 | Runtime コードの定数 | **禁止** — すべてレジストリまたはコンフィグから読む |
+| 管理コンソールページ責務分割・ワークフロー順序 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
 
