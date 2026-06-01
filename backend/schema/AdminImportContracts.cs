@@ -74,7 +74,9 @@ public record AdminImportApplyResponseDto(
 public record AdminImportManifestListItemDto(
     [property: JsonPropertyName("manifestId")] string ManifestId,
     [property: JsonPropertyName("status")]     string Status,
-    [property: JsonPropertyName("createdAt")]  string CreatedAt
+    [property: JsonPropertyName("createdAt")]  string CreatedAt,
+    [property: JsonPropertyName("manifestKey")]  string? ManifestKey = null,
+    [property: JsonPropertyName("hubId")]        string? HubId = null
 );
 
 /// <summary>
@@ -133,7 +135,9 @@ public record AdminImportApplyResult(
 public record AdminImportManifestSummary(
     Guid ManifestId,
     string Status,
-    DateTimeOffset CreatedAt
+    DateTimeOffset CreatedAt,
+    string? ManifestKey = null,
+    string? HubId = null
 );
 
 /// <summary>

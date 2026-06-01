@@ -26,3 +26,11 @@ CI検証待ち、remote CI pass確認、local tool不足、未実行チェック
 
 - [ ] `product.dynamic_support_nocode_loop` の manual acceptance / hand-debug verification を実施し、authoring guidance・SQL Attention feedback・M6 self-hosted admin authoring loop が同一UX導線として受入可能か確認する。
       → 残理由は implementation gap ではない。M6 self-hosted admin authoring loop、SQL Attention SQLA-1..5、SQL Attention live DB E2E、roadmap/test-bundles 正規化は完了済みで、M6/M7 core runtime production-ready 判定は維持する。future optional external connector surfaces は M6/M7 blocker ではない。
+
+## Admin Console Authoring Workflow — optional follow-ups
+
+- [ ] `topology.wiring_physical_to_package` の本番 DB での E2E 検証（physical_tables 登録済みテーブル名と promote 連動）
+      → promote 時に screen_data_shape.dbTableName が topology.physical_tables に存在する場合のみ wiring 行を挿入。デモ DB 未整備時はスキップ。
+
+- [ ] ui-builder 確定後の projection_constructor_mapping 完全導出（backend generate エンドポイント）
+      → 現状は screenOperationKind から dispatcher 軸のみ導出。projection は advanced/optional のまま。

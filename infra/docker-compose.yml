@@ -69,6 +69,8 @@ services:
     environment:
       DEMO_BACKEND_URL: "${DEMO_BACKEND_URL:-http://backend:5000}"
       PORT: "8000"
+    ports:
+      - "8000:8000"
     depends_on:
       backend:
         condition: service_healthy

@@ -1,0 +1,203 @@
+using System.Text.Json;
+using Npgsql;
+using Topolactor.Schema;
+
+namespace Topolactor.Repository;
+
+/// <summary>
+/// Projects promoted public.manifest rows into hubs.topology_manifests (import/runtime canonical).
+/// </summary>
+public static class ManifestCanonicalProjection
+{
+    public const string HubGroupingEntryType = "hub_grouping";
+    public const string ScreenDataShapeEntryType = "screen_data_shape";
+
+    public static (Guid? HubId, string? ManifestKey) ExtractHubGrouping(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), HubGroupingEntryType, StringComparison.Ordinal)) continue;
+
+            Guid? hubId = null;
+            if (entry.TryGetProperty("hubId", out var hubEl) &&
+                hubEl.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(hubEl.GetString(), out var parsedHub))
+            {
+                hubId = parsedHub;
+            }
+
+            string? manifestKey = null;
+            if (entry.TryGetProperty("manifestKey", out var keyEl) &&
+                keyEl.ValueKind == JsonValueKind.String)
+            {
+                manifestKey = keyEl.GetString()?.Trim();
+            }
+
+            return (hubId, string.IsNullOrWhiteSpace(manifestKey) ? null : manifestKey);
+        }
+
+        return (null, null);
+    }
+
+    public static string BuildDefaultManifestKey(ManifestTopologySummary summary)
+    {
+        if (summary.DispatcherMapping is { } axes)
+        {
+            return $"{axes.Role}.{axes.Target}.{axes.Layer}.{axes.Action}";
+        }
+
+        return "manifest";
+    }
+
+    public static IReadOnlyList<JsonElement> MergeTopologyEntry(
+        IReadOnlyList<JsonElement> topology,
+        string entryType,
+        JsonElement entryBody)
+    {
+        var list = new List<JsonElement>();
+        var replaced = false;
+        foreach (var entry in topology)
+        {
+            if (!replaced &&
+                entry.ValueKind == JsonValueKind.Object &&
+                entry.TryGetProperty("type", out var typeEl) &&
+                typeEl.ValueKind == JsonValueKind.String &&
+                string.Equals(typeEl.GetString(), entryType, StringComparison.Ordinal))
+            {
+                list.Add(entryBody);
+                replaced = true;
+            }
+            else
+            {
+                list.Add(entry);
+            }
+        }
+
+        if (!replaced) list.Add(entryBody);
+        return list;
+    }
+
+    public static async Task<ValidationError?> ProjectOnPromoteAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        CancellationToken ct)
+    {
+        var summary = ManifestTopologyValidator.ExtractSummary(detail.Topology);
+        var (hubId, manifestKey) = ExtractHubGrouping(detail.Topology);
+
+        if (!hubId.HasValue && detail.RelationRegistryId.HasValue)
+        {
+            await using var hubCmd = conn.CreateCommand();
+            hubCmd.CommandText =
+                "SELECT hub_id FROM hubs.hub WHERE relation_registry_id = @rel ORDER BY created_at ASC LIMIT 1";
+            hubCmd.Parameters.AddWithValue("rel", detail.RelationRegistryId.Value);
+            var scalar = await hubCmd.ExecuteScalarAsync(ct);
+            if (scalar is Guid g) hubId = g;
+        }
+
+        if (!hubId.HasValue)
+        {
+            await using var fallbackCmd = conn.CreateCommand();
+            fallbackCmd.CommandText = "SELECT hub_id FROM hubs.hub ORDER BY created_at ASC LIMIT 1";
+            var scalar = await fallbackCmd.ExecuteScalarAsync(ct);
+            if (scalar is Guid g) hubId = g;
+        }
+
+        if (!hubId.HasValue)
+        {
+            return new ValidationError(
+                "HUB_GROUPING_REQUIRED",
+                "Promote requires hub_grouping.hubId on the manifest draft, or at least one row in hubs.hub.");
+        }
+
+        manifestKey ??= PromotionManifestValidator.ExtractMetadataDto(detail.Topology)?.ManifestKey;
+        manifestKey ??= BuildDefaultManifestKey(summary);
+
+        var topologyJsonb = JsonSerializer.Serialize(new
+        {
+            manifest_id = detail.ManifestId,
+            entries = detail.Topology,
+        });
+
+        await using var upsert = conn.CreateCommand();
+        upsert.CommandText =
+            "INSERT INTO hubs.topology_manifests " +
+            "(topology_manifest_id, hub_id, manifest_key, status, topology_jsonb) " +
+            "VALUES (@id, @hub, @key, 'active', @topo::jsonb) " +
+            "ON CONFLICT (topology_manifest_id) DO UPDATE SET " +
+            "hub_id = EXCLUDED.hub_id, " +
+            "manifest_key = EXCLUDED.manifest_key, " +
+            "status = 'active', " +
+            "topology_jsonb = EXCLUDED.topology_jsonb, " +
+            "updated_at = now()";
+        upsert.Parameters.AddWithValue("id", detail.ManifestId);
+        upsert.Parameters.AddWithValue("hub", hubId.Value);
+        upsert.Parameters.AddWithValue("key", manifestKey);
+        upsert.Parameters.AddWithValue("topo", topologyJsonb);
+        await upsert.ExecuteNonQueryAsync(ct);
+
+        await TryProjectWiringAsync(conn, detail, ct);
+        return null;
+    }
+
+    private static async Task TryProjectWiringAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        CancellationToken ct)
+    {
+        JsonElement? shapeEntry = null;
+        foreach (var entry in detail.Topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), ScreenDataShapeEntryType, StringComparison.Ordinal)) continue;
+            shapeEntry = entry;
+            break;
+        }
+
+        if (shapeEntry is null) return;
+        if (!shapeEntry.Value.TryGetProperty("dbTableName", out var tableEl) ||
+            tableEl.ValueKind != JsonValueKind.String ||
+            string.IsNullOrWhiteSpace(tableEl.GetString())) return;
+
+        var tableName = tableEl.GetString()!.Trim();
+
+        await using var lookup = conn.CreateCommand();
+        lookup.CommandText =
+            "SELECT physical_table_id FROM topology.physical_tables " +
+            "WHERE table_name = @name AND active = true LIMIT 1";
+        lookup.Parameters.AddWithValue("name", tableName);
+        var physicalId = await lookup.ExecuteScalarAsync(ct);
+        if (physicalId is not long physicalTableId) return;
+
+        var packageId = detail.ManifestId;
+        var wiringDef = JsonSerializer.Serialize(new
+        {
+            manifest_id = detail.ManifestId,
+            source = "manifest_promote",
+            db_table = tableName,
+        });
+
+        await using var exists = conn.CreateCommand();
+        exists.CommandText =
+            "SELECT 1 FROM topology.wiring_physical_to_package " +
+            "WHERE physical_table_id = @pt AND package_id = @pkg AND active = true LIMIT 1";
+        exists.Parameters.AddWithValue("pt", physicalTableId);
+        exists.Parameters.AddWithValue("pkg", packageId);
+        if (await exists.ExecuteScalarAsync(ct) is not null) return;
+
+        await using var insert = conn.CreateCommand();
+        insert.CommandText =
+            "INSERT INTO topology.wiring_physical_to_package " +
+            "(physical_table_id, package_id, wiring_def, active) " +
+            "VALUES (@pt, @pkg, @def::jsonb, true)";
+        insert.Parameters.AddWithValue("pt", physicalTableId);
+        insert.Parameters.AddWithValue("pkg", packageId);
+        insert.Parameters.AddWithValue("def", wiringDef);
+        await insert.ExecuteNonQueryAsync(ct);
+    }
+}

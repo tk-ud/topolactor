@@ -44,14 +44,35 @@ export const handler: Handlers = {
         headers,
         body,
       });
-      const json: unknown = await response.json();
+      const text = await response.text();
+      let json: unknown;
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        return Response.json(
+          {
+            success: false,
+            errors: [{
+              code: "DISPATCH_BACKEND_BAD_RESPONSE",
+              message: `Backend returned non-JSON (HTTP ${response.status}): ${text.slice(0, 300)}`,
+            }],
+          },
+          { status: 502 },
+        );
+      }
       return Response.json(json, { status: response.status });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
+      const detail = err instanceof Error ? err.message : String(err);
+      const hint = backendUrl.includes("://backend:")
+        ? " DEMO_BACKEND_URL が Docker 内部ホスト名のままです。ホストで deno task dev する場合は frontend/.env で http://localhost:5000 にしてください。"
+        : " backend が起動しているか（docker compose / ポート 5000）と frontend/.env の DEMO_BACKEND_URL を確認してください。";
       return Response.json(
         {
           success: false,
-          errors: [{ code: "DISPATCH_BACKEND_UNREACHABLE", message }],
+          errors: [{
+            code: "DISPATCH_BACKEND_UNREACHABLE",
+            message: `${detail} (${backendUrl})${hint}`,
+          }],
         },
         { status: 502 },
       );

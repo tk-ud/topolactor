@@ -1180,6 +1180,10 @@ internal sealed class StubManifestRepository : ManifestRepository
     public override Task<int> CountActivePromotionKeyConflictsAsync(
         string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
         ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedMerge();
 }
 
 internal sealed class AmbiguousStubManifestRepository : ManifestRepository
@@ -1231,6 +1235,10 @@ internal sealed class AmbiguousStubManifestRepository : ManifestRepository
     public override Task<int> CountActivePromotionKeyConflictsAsync(
         string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
         ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedMerge();
 }
 
 internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
@@ -1298,6 +1306,10 @@ internal sealed class AxesFilteredStubManifestRepository : ManifestRepository
     public override Task<int> CountActivePromotionKeyConflictsAsync(
         string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
         ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+        ManifestRepositoryStubDefaults.NotImplementedMerge();
 }
 
 
@@ -1348,6 +1360,10 @@ internal sealed class RoleFilteredManifestRepository(string expectedRole, Manife
         public override Task<int> CountActivePromotionKeyConflictsAsync(
             string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
             ManifestRepositoryStubDefaults.ZeroPromotionConflicts(manifestKey, versionLabel, excludeManifestId, ct);
+
+        public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+            Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+            ManifestRepositoryStubDefaults.NotImplementedMerge();
     }
 
 internal sealed class DemoEntityValidRouteTopologyRepository : TopologyRepository

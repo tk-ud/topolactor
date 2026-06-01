@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using NpgsqlTypes;
 using Topolactor.Schema;
 
 namespace Topolactor.Repository;
@@ -199,7 +200,6 @@ public class NpgsqlManifestRepository : ManifestRepository
         CancellationToken ct = default)
     {
         var manifestId = Guid.NewGuid();
-        var topologyJson = SerializeTopologyArray(topology);
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -211,7 +211,7 @@ public class NpgsqlManifestRepository : ManifestRepository
             "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
         cmd.Parameters.AddWithValue("id", manifestId);
         cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("topology", topologyJson);
+        AddTopologyArrayParameter(cmd, "topology", topology);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -239,8 +239,6 @@ public class NpgsqlManifestRepository : ManifestRepository
                 $"Manifest {manifestId} is status={existing.Status}; only draft manifests can be updated."));
         }
 
-        var topologyJson = SerializeTopologyArray(topology);
-
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
 
@@ -251,7 +249,7 @@ public class NpgsqlManifestRepository : ManifestRepository
             "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
         cmd.Parameters.AddWithValue("id", manifestId);
         cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("topology", topologyJson);
+        AddTopologyArrayParameter(cmd, "topology", topology);
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct))
@@ -301,21 +299,37 @@ public class NpgsqlManifestRepository : ManifestRepository
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "UPDATE manifest SET status = 'active', updated_at = now() " +
-            "WHERE manifest_id = @id AND status = 'draft' " +
-            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
-        cmd.Parameters.AddWithValue("id", manifestId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        ManifestDetailRecord promoted;
+        await using (var cmd = conn.CreateCommand())
         {
-            return (null, new ValidationError("MANIFEST_PROMOTE_FAILED", $"Failed to promote manifest {manifestId}."));
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "UPDATE manifest SET status = 'active', updated_at = now() " +
+                "WHERE manifest_id = @id AND status = 'draft' " +
+                "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+            cmd.Parameters.AddWithValue("id", manifestId);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                await tx.RollbackAsync(ct);
+                return (null, new ValidationError("MANIFEST_PROMOTE_FAILED", $"Failed to promote manifest {manifestId}."));
+            }
+
+            promoted = ReadDetailRecord(reader);
         }
 
-        return (ReadDetailRecord(reader), null);
+        var projectionError = await ManifestCanonicalProjection.ProjectOnPromoteAsync(conn, promoted, ct);
+        if (projectionError is not null)
+        {
+            await tx.RollbackAsync(ct);
+            return (null, projectionError);
+        }
+
+        await tx.CommitAsync(ct);
+        return (promoted, null);
     }
 
     /// <inheritdoc/>
@@ -431,6 +445,33 @@ public class NpgsqlManifestRepository : ManifestRepository
         return count;
     }
 
+    /// <inheritdoc/>
+    public override async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId,
+        string entryType,
+        JsonElement entryBody,
+        CancellationToken ct = default)
+    {
+        var existing = await LoadDetailByIdAsync(manifestId, ct);
+        if (existing is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+        if (!string.Equals(existing.Status, "draft", StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, new ValidationError(
+                "MANIFEST_NOT_DRAFT",
+                $"Manifest {manifestId} is status={existing.Status}; only draft manifests can be updated."));
+        }
+
+        var entry = entryBody.ValueKind == JsonValueKind.Object &&
+                    entryBody.TryGetProperty("type", out var typeEl) &&
+                    typeEl.ValueKind == JsonValueKind.String
+            ? entryBody
+            : JsonSerializer.SerializeToElement(new { type = entryType });
+
+        var merged = ManifestCanonicalProjection.MergeTopologyEntry(existing.Topology, entryType, entry);
+        return await UpdateDraftAsync(manifestId, existing.RelationRegistryId, merged, ct);
+    }
+
     private static ManifestDetailRecord ReadDetailRecord(NpgsqlDataReader reader)
     {
         return new ManifestDetailRecord(
@@ -444,6 +485,17 @@ public class NpgsqlManifestRepository : ManifestRepository
 
     private static string[] SerializeTopologyArray(IReadOnlyList<JsonElement> topology) =>
         topology.Select(e => e.GetRawText()).ToArray();
+
+    private static void AddTopologyArrayParameter(
+        NpgsqlCommand cmd,
+        string parameterName,
+        IReadOnlyList<JsonElement> topology)
+    {
+        cmd.Parameters.Add(new NpgsqlParameter(parameterName, NpgsqlDbType.Array | NpgsqlDbType.Jsonb)
+        {
+            Value = SerializeTopologyArray(topology),
+        });
+    }
 
     private static IReadOnlyList<JsonElement> ParseTopologyArray(string[]? raw)
     {

@@ -230,6 +230,8 @@ public class AdminRuntime
             "manifest:update_draft"                     => await DataManifestUpdateDraftAsync(vector, ct),
             "manifest:promote"                          => await DataManifestPromoteAsync(vector, ct),
             "manifest:deprecate"                        => await DataManifestDeprecateAsync(vector, ct),
+            "manifest:assign_hub_grouping"                => await DataManifestAssignHubGroupingAsync(vector, ct),
+            "manifest:assign_screen_data_shape"           => await DataManifestAssignScreenDataShapeAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
@@ -926,7 +928,11 @@ public class AdminRuntime
         if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
         var manifests = await _adminImportRuntime.ListManifestsAsync(ct);
         var dtos = manifests.Select(m => new AdminImportManifestListItemDto(
-            m.ManifestId.ToString(), m.Status, m.CreatedAt.ToString("o"))).ToList();
+            m.ManifestId.ToString(),
+            m.Status,
+            m.CreatedAt.ToString("o"),
+            m.ManifestKey,
+            m.HubId)).ToList();
         return (JsonSerializer.SerializeToElement(dtos), null);
     }
 
@@ -1033,12 +1039,32 @@ public class AdminRuntime
         if (!TryParseDraftRequest(vector, out var request, out var parseError))
             return (null, parseError);
 
+        var role = request!.Role;
+        var target = request.Target;
+        var layer = request.Layer;
+        var action = request.Action;
+        var runtimeDestination = request.RuntimeDestination;
+        if (ManifestScreenOperationDeriver.TryDeriveAxes(
+                request.ScreenOperationKind,
+                out var derivedRole,
+                out var derivedTarget,
+                out var derivedLayer,
+                out var derivedAction,
+                out var derivedRuntime))
+        {
+            role = derivedRole;
+            target = derivedTarget;
+            layer = derivedLayer;
+            action = derivedAction;
+            runtimeDestination = derivedRuntime;
+        }
+
         var topology = ManifestTopologyValidator.BuildTopology(
-            request!.Role,
-            request.Target,
-            request.Layer,
-            request.Action,
-            request.RuntimeDestination,
+            role,
+            target,
+            layer,
+            action,
+            runtimeDestination,
             request.ProjectionDefinition);
 
         var validation = ManifestTopologyValidator.Validate(topology, KnownRuntimeDestinations);
@@ -1734,23 +1760,121 @@ public class AdminRuntime
             return false;
         }
 
-        if (request is null ||
-            string.IsNullOrWhiteSpace(request.Role) ||
-            string.IsNullOrWhiteSpace(request.Target) ||
-            string.IsNullOrWhiteSpace(request.Layer) ||
-            string.IsNullOrWhiteSpace(request.Action))
+        if (request is null)
         {
-            error = new ValidationError("DISPATCHER_AXES_REQUIRED", "role, target, layer, and action are required.");
+            error = new ValidationError("MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed.");
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(request.RuntimeDestination))
+        var hasScreenOp = ManifestScreenOperationDeriver.TryDeriveAxes(
+            request.ScreenOperationKind,
+            out _, out _, out _, out _, out _);
+
+        if (!hasScreenOp &&
+            (string.IsNullOrWhiteSpace(request.Role) ||
+             string.IsNullOrWhiteSpace(request.Target) ||
+             string.IsNullOrWhiteSpace(request.Layer) ||
+             string.IsNullOrWhiteSpace(request.Action)))
+        {
+            error = new ValidationError(
+                "DISPATCHER_AXES_REQUIRED",
+                "role, target, layer, and action are required (or provide screenOperationKind).");
+            return false;
+        }
+
+        if (!hasScreenOp && string.IsNullOrWhiteSpace(request.RuntimeDestination))
         {
             error = new ValidationError("RUNTIME_DESTINATION_REQUIRED", "runtimeDestination is required.");
             return false;
         }
 
         return true;
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestAssignHubGroupingAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("MANIFEST_PAYLOAD_REQUIRED", "payload is required."));
+
+        AdminManifestAssignHubGroupingRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminManifestAssignHubGroupingRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null ||
+            !Guid.TryParse(request.ManifestId, out var manifestId) ||
+            !Guid.TryParse(request.HubId, out var hubId) ||
+            string.IsNullOrWhiteSpace(request.ManifestKey))
+        {
+            return (null, new ValidationError(
+                "HUB_GROUPING_PAYLOAD_INVALID",
+                "manifestId, hubId, and manifestKey are required."));
+        }
+
+        var entry = JsonSerializer.SerializeToElement(new
+        {
+            type = ManifestCanonicalProjection.HubGroupingEntryType,
+            hubId = hubId.ToString(),
+            manifestKey = request.ManifestKey.Trim(),
+        });
+
+        var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(
+            manifestId,
+            ManifestCanonicalProjection.HubGroupingEntryType,
+            entry,
+            ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestAssignScreenDataShapeAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("MANIFEST_PAYLOAD_REQUIRED", "payload is required."));
+
+        AdminManifestAssignScreenDataShapeRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<AdminManifestAssignScreenDataShapeRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("MANIFEST_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || !Guid.TryParse(request.ManifestId, out var manifestId))
+        {
+            return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID."));
+        }
+
+        var entry = JsonSerializer.SerializeToElement(new
+        {
+            type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
+            dbTableName = request.DbTableName,
+            importSchemaName = request.ImportSchemaName,
+            searchTargets = request.SearchTargets ?? Array.Empty<string>(),
+            aggregationSpec = request.AggregationSpec,
+            columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
+        });
+
+        var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(
+            manifestId,
+            ManifestCanonicalProjection.ScreenDataShapeEntryType,
+            entry,
+            ct);
+        if (error is not null) return (null, error);
+        return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
     }
 
     private static AdminManifestDetailDto ToManifestDetailDto(ManifestDetailRecord detail)

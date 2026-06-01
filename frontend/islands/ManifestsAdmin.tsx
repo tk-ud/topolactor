@@ -2,478 +2,144 @@ import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   listAdminManifests,
-  getAdminManifest,
-  validateAdminManifest,
-  createAdminManifestDraft,
-  updateAdminManifestDraft,
-  promoteAdminManifest,
-  deprecateAdminManifest,
-  listAdminPromotionManifests,
-  getAdminPromotionManifest,
-  validateAdminPromotionManifest,
-  updateAdminPromotionManifestDraft,
-  RUNTIME_DESTINATION_OPTIONS,
+  assignAdminManifestHubGrouping,
   type AdminManifestListItem,
-  type AdminManifestDetail,
-  type AdminManifestValidateResult,
-  type AdminManifestLifecycleResult,
-  type AdminPromotionManifestListItem,
-  type AdminPromotionManifestDetail,
-  type AdminPromotionManifestValidateResult,
-  type AdminPromotionManifestUpdateInput,
 } from "../api/adminApi.ts";
-import {
-  buildProjectionDefinitionPayload,
-  emptyManifestProjectionDraft,
-  extractProjectionDefinitionFromTopology,
-  formatProjectionSummary,
-  parseProjectionDefinitionToDraft,
-  PROJECTION_OUTPUT_KIND_OPTIONS,
-  type ManifestProjectionDraft,
-} from "../runtime/manifestProjectionEditor.ts";
-import {
-  buildPromotionUpdatePayload,
-  emptyPromotionManifestDraft,
-  formatPromotionSummary,
-  parsePromotionMetadataToDraft,
-  PROMOTION_ACTIVATION_POLICY_OPTIONS,
-  type PromotionManifestDraft,
-  type PromotionTargetRefDraft,
-} from "../runtime/promotionManifestEditor.ts";
+import { listContentHubs, listHubNavigationManifests, type HubNavigationManifestItem } from "../api/adminApi.ts";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_MANIFESTS_GUIDE } from "../content/adminGuides.ts";
 import {
-  UX_IMPORT_SETTINGS,
-  UX_RUNTIME_CHECK,
+  UX_CONTENTS,
+  UX_CONTENTS_PAGE,
+  UX_HUB_MANIFESTS,
   UX_STATUS_LABELS,
-  UX_RUNTIME_DESTINATION_LABELS,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
-type EditorMode = "wiring" | "promotion";
-
-const STATUS_FILTERS = ["", "draft", "active", "deprecated"] as const;
-
-function statusBadgeClass(status: string): string {
-  switch (status) {
-    case "active": return "text-emerald-700";
-    case "draft": return "text-amber-700";
-    case "deprecated": return "text-slate-500";
-    default: return "text-muted-xs";
-  }
-}
 
 export default function ManifestsAdmin(): JSX.Element {
-  const [editorMode, setEditorMode] = useState<EditorMode>("wiring");
-  const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [detail, setDetail] = useState<AdminManifestDetail | null>(null);
-  const [validation, setValidation] = useState<AdminManifestValidateResult | null>(null);
-  const [lifecycleResult, setLifecycleResult] = useState<AdminManifestLifecycleResult | null>(null);
+  const [topologyManifests, setTopologyManifests] = useState<HubNavigationManifestItem[]>([]);
+  const [draftManifests, setDraftManifests] = useState<AdminManifestListItem[]>([]);
+  const [hubOptions, setHubOptions] = useState<{ id: string; label: string }[]>([]);
+  const [assignManifestId, setAssignManifestId] = useState("");
+  const [assignHubId, setAssignHubId] = useState("");
+  const [assignManifestKey, setAssignManifestKey] = useState("");
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showDraftForm, setShowDraftForm] = useState(false);
 
-  const [draftRole, setDraftRole] = useState("admin");
-  const [draftTarget, setDraftTarget] = useState("admin");
-  const [draftLayer, setDraftLayer] = useState("");
-  const [draftAction, setDraftAction] = useState("");
-  const [draftRuntimeDestination, setDraftRuntimeDestination] = useState("admin_runtime");
-  const [projectionDraft, setProjectionDraft] = useState<ManifestProjectionDraft>(
-    emptyManifestProjectionDraft(),
-  );
-
-  const [promotionManifests, setPromotionManifests] = useState<AdminPromotionManifestListItem[]>([]);
-  const [promotionStatusFilter, setPromotionStatusFilter] = useState<string>("");
-  const [promotionSelectedId, setPromotionSelectedId] = useState<string>("");
-  const [promotionDetail, setPromotionDetail] = useState<AdminPromotionManifestDetail | null>(null);
-  const [promotionDraft, setPromotionDraft] = useState<PromotionManifestDraft>(emptyPromotionManifestDraft());
-  const [promotionValidation, setPromotionValidation] = useState<AdminPromotionManifestValidateResult | null>(null);
-  const [promotionDraftManifestId, setPromotionDraftManifestId] = useState<string>("");
-
-  const applyProjectionDraftFromDetail = (d: AdminManifestDetail) => {
-    const def = extractProjectionDefinitionFromTopology(d.topologyRawJson);
-    setProjectionDraft(parseProjectionDefinitionToDraft(def));
-  };
-
-  const updateProjectionDraft = (patch: Partial<ManifestProjectionDraft>) => {
-    setProjectionDraft((prev) => ({ ...prev, ...patch }));
-  };
-
-  const updatePromotionDraft = (patch: Partial<PromotionManifestDraft>) => {
-    setPromotionDraft((prev) => ({ ...prev, ...patch }));
-  };
-
-  const updatePromotionTargetRef = (index: number, patch: Partial<PromotionTargetRefDraft>) => {
-    setPromotionDraft((prev) => ({
-      ...prev,
-      targetRefs: prev.targetRefs.map((ref, i) => (i === index ? { ...ref, ...patch } : ref)),
-    }));
-  };
-
-  const loadPromotionList = async () => {
+  const loadAll = async () => {
     setLoading(true);
     setErrors([]);
     setBackendUnavailable(false);
     try {
-      const items = await listAdminPromotionManifests(promotionStatusFilter || undefined);
-      if (items === null) {
+      const [tm, drafts, hubs] = await Promise.all([
+        listHubNavigationManifests(),
+        listAdminManifests("draft"),
+        listContentHubs(),
+      ]);
+      if (tm === null || drafts === null || hubs === null) {
         setBackendUnavailable(true);
-        setPromotionManifests([]);
-        setStatus(`バックエンド未設定 — 公開・案内の編集は利用できません。`);
+        setTopologyManifests([]);
+        setDraftManifests([]);
         return;
       }
-      setPromotionManifests(items);
-      setStatus(`${items.length} 件の公開・案内設定を読み込みました。`);
+      setTopologyManifests(tm);
+      setDraftManifests(drafts);
+      setHubOptions(hubs.map((h) => ({ id: h.id, label: h.label || h.id })));
+      if (!assignHubId && hubs.length > 0) setAssignHubId(hubs[0].id);
+      setStatus(`topology_manifest ${tm.length} 件 / 下書き manifest ${drafts.length} 件`);
     } catch (e) {
       setErrors([{ message: String(e) }]);
-      setStatus("公開・案内一覧の読み込みに失敗しました。");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadPromotionDetail = async (manifestId: string) => {
-    setPromotionSelectedId(manifestId);
-    setPromotionDraftManifestId(manifestId);
-    setPromotionValidation(null);
-    setErrors([]);
-    setLoading(true);
-    try {
-      const d = await getAdminPromotionManifest(manifestId);
-      if (d === null) {
-        setBackendUnavailable(true);
-        setPromotionDetail(null);
-        return;
-      }
-      setPromotionDetail(d);
-      setPromotionDraft(parsePromotionMetadataToDraft(d.metadata ?? undefined));
-      setStatus(`promotion detail: ${manifestId}`);
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePromotionValidate = async () => {
-    if (!promotionSelectedId) return;
-    setLoading(true);
-    setPromotionValidation(null);
-    setErrors([]);
-    try {
-      const result = await validateAdminPromotionManifest(promotionSelectedId);
-      if (result === null) {
-        setBackendUnavailable(true);
-        return;
-      }
-      setPromotionValidation(result);
-      setStatus(result.valid ? "公開・案内の内容確認が完了しました。" : "公開・案内の確認で問題が見つかりました。");
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePromotionSaveDraft = async () => {
-    const manifestId = promotionSelectedId || promotionDraftManifestId.trim();
-    if (!manifestId) {
-      setErrors([{ message: "対象の設定IDを指定してください（既存の下書き）。" }]);
-      return;
-    }
-    setLoading(true);
-    setErrors([]);
-    try {
-      const saved = await updateAdminPromotionManifestDraft(
-        buildPromotionUpdatePayload(manifestId, promotionDraft) as AdminPromotionManifestUpdateInput,
-      );
-      setPromotionDetail(saved);
-      setPromotionSelectedId(saved.manifestId);
-      setPromotionDraftManifestId(saved.manifestId);
-      setStatus("公開・案内の下書きを更新しました。");
-      await loadPromotionList();
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadList = async () => {
-    setLoading(true);
-    setErrors([]);
-    setBackendUnavailable(false);
-    try {
-      const items = await listAdminManifests(statusFilter || undefined);
-      if (items === null) {
-        setBackendUnavailable(true);
-        setManifests([]);
-        setStatus("バックエンド未設定 — DATABASE_URL / DEMO_BACKEND_URL を確認してください。");
-        return;
-      }
-      setManifests(items);
-      setStatus(`${items.length} 件の${UX_IMPORT_SETTINGS}を読み込みました。`);
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-      setStatus("一覧の読み込みに失敗しました。");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (editorMode === "wiring") {
-      loadList();
-    } else {
-      loadPromotionList();
-    }
-  }, [editorMode]);
+    loadAll();
+  }, []);
 
-  const loadDetail = async (manifestId: string) => {
-    setSelectedId(manifestId);
-    setValidation(null);
-    setLifecycleResult(null);
-    setErrors([]);
-    setLoading(true);
-    try {
-      const d = await getAdminManifest(manifestId);
-      if (d === null) {
-        setBackendUnavailable(true);
-        setDetail(null);
-        return;
-      }
-      setDetail(d);
-      setDraftRole(d.summary.dispatcherMapping?.role ?? "admin");
-      setDraftTarget(d.summary.dispatcherMapping?.target ?? "admin");
-      setDraftLayer(d.summary.dispatcherMapping?.layer ?? "");
-      setDraftAction(d.summary.dispatcherMapping?.action ?? "");
-      setDraftRuntimeDestination(d.summary.runtimeMapping?.runtimeDestination ?? "admin_runtime");
-      applyProjectionDraftFromDetail(d);
-      setStatus(`詳細: ${manifestId}`);
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleValidate = async () => {
-    if (!selectedId) return;
-    setLoading(true);
-    setValidation(null);
-    setLifecycleResult(null);
-    setErrors([]);
-    try {
-      const result = await validateAdminManifest(selectedId);
-      if (result === null) {
-        setBackendUnavailable(true);
-        return;
-      }
-      setValidation(result);
-      setStatus(result.valid ? "内容確認が完了しました。" : "確認で問題が見つかりました。修正してください。");
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePromote = async () => {
-    if (!selectedId || detail?.status !== "draft") return;
-    setLoading(true);
-    setLifecycleResult(null);
-    setErrors([]);
-    try {
-      const result = await promoteAdminManifest(selectedId);
-      if (result === null) {
-        setBackendUnavailable(true);
-        return;
-      }
-      setLifecycleResult(result);
-      if (!result.ok) {
-        setErrors([{ code: result.errorCode, message: result.message }]);
-        setStatus("有効化に失敗しました。");
-      } else {
-        setStatus("下書きを有効化しました。");
-        await loadList();
-        await loadDetail(selectedId);
-      }
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeprecate = async () => {
-    if (!selectedId || detail?.status !== "active") return;
-    setLoading(true);
-    setLifecycleResult(null);
-    setErrors([]);
-    try {
-      const result = await deprecateAdminManifest(selectedId);
-      if (result === null) {
-        setBackendUnavailable(true);
-        return;
-      }
-      setLifecycleResult(result);
-      if (!result.ok) {
-        setErrors([{ code: result.errorCode, message: result.message }]);
-      } else {
-        setStatus("active → deprecated にしました。");
-        await loadList();
-        await loadDetail(selectedId);
-      }
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    setLoading(true);
-    setErrors([]);
-    setLifecycleResult(null);
-    setValidation(null); // draft changed — require explicit re-validation before promote
-    let projectionDefinition: Record<string, unknown> | null = null;
-    try {
-      projectionDefinition = buildProjectionDefinitionPayload(projectionDraft);
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-      setLoading(false);
+  const handleAssignGrouping = async () => {
+    if (!assignManifestId || !assignHubId || !assignManifestKey.trim()) {
+      setErrors([{ message: "下書き画面・親ハブ・manifest キーは必須です。" }]);
       return;
     }
-    const input = {
-      role: draftRole,
-      target: draftTarget,
-      layer: draftLayer,
-      action: draftAction,
-      runtimeDestination: draftRuntimeDestination,
-      projectionDefinition,
-    };
+    setLoading(true);
+    setErrors([]);
     try {
-      const saved = detail?.status === "draft" && selectedId
-        ? await updateAdminManifestDraft(selectedId, input)
-        : await createAdminManifestDraft(input);
-      setDetail(saved);
-      setSelectedId(saved.manifestId);
-      setShowDraftForm(false);
-      setStatus(detail?.status === "draft" ? "下書きを更新しました。" : "下書きを作成しました。");
-      await loadList();
+      await assignAdminManifestHubGrouping(
+        assignManifestId,
+        assignHubId,
+        assignManifestKey.trim(),
+      );
+      setStatus("ハブへの割当を下書きに保存しました。有効化はコンテンツ画面から promote してください。");
+      await loadAll();
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
       setLoading(false);
     }
   };
-
-  const promoteDisabled = !selectedId || detail?.status !== "draft" ||
-    validation === null || validation.isBlocking;
-  const deprecateDisabled = !selectedId || detail?.status !== "active";
 
   return (
     <main class="page-main font-mono">
-      <h1 class="page-title">topolactor — 管理 / {UX_IMPORT_SETTINGS}</h1>
+      <h1 class="page-title">topolactor — 管理 / {UX_HUB_MANIFESTS}</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
       <AdminHowTo steps={ADMIN_MANIFESTS_GUIDE.howToSteps} />
       <AdminHelpPanel {...ADMIN_MANIFESTS_GUIDE} />
 
+      <section class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+        <p class="font-semibold">この画面の責務: ハブ設計・画面群（topology_manifest grouping）</p>
+        <ul class="mt-2 list-inside list-disc text-xs">
+          <li>単一画面の DB 設計・data shape → <a href="/admin/contents" class="link font-semibold">{UX_CONTENTS_PAGE}</a></li>
+          <li>画面間の遷移順序 → <a href="/admin/hub-navigation" class="link font-semibold">遷移順序設定</a></li>
+        </ul>
+      </section>
+
       {backendUnavailable && (
         <p class="alert-warning mb-4 text-sm" role="status">
-          バックエンド未接続 — {UX_IMPORT_SETTINGS}の編集はサーバー接続後に利用できます。
+          バックエンド未接続 — hub / manifest API は DB + dispatch 経由でのみ利用できます。
         </p>
       )}
 
       <ValidationErrorPanel errors={errors} title="エラー" />
-
       {status && <p class="mb-4 text-sm text-muted-xs">{status}</p>}
 
-      <div class="mb-6 flex flex-wrap gap-2">
-        <button
-          type="button"
-          class={editorMode === "wiring" ? "btn-primary" : "btn-secondary"}
-          onClick={() => setEditorMode("wiring")}
-        >
-          データの流れ
-        </button>
-        <button
-          type="button"
-          class={editorMode === "promotion" ? "btn-primary" : "btn-secondary"}
-          onClick={() => setEditorMode("promotion")}
-        >
-          公開・案内
-        </button>
-      </div>
-
-      {editorMode === "wiring" && (
-      <>
       <section class="mb-8">
-        <h2 class="section-title">1. {UX_IMPORT_SETTINGS}一覧</h2>
-        <div class="mb-3 flex flex-wrap items-center gap-2">
-          <label class="text-sm">
-            ステータス:
-            <select
-              class="ml-2 rounded border px-2 py-1"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter((e.target as HTMLSelectElement).value)}
-            >
-              {STATUS_FILTERS.map((s) => (
-                <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
-              ))}
-            </select>
-          </label>
-          <button type="button" class="btn-secondary" disabled={loading} onClick={loadList}>
+        <div class="mb-3 flex flex-wrap gap-2">
+          <button type="button" class="btn-secondary" disabled={loading} onClick={loadAll}>
             再読み込み
           </button>
-          <button
-            type="button"
-            class="btn-secondary"
-            disabled={loading}
-            onClick={() => {
-              setShowDraftForm(true);
-              setDetail(null);
-              setSelectedId("");
-              setProjectionDraft(emptyManifestProjectionDraft());
-            }}
-          >
-            新規下書き
-          </button>
+          <a href="/admin/hub-navigation" class="btn-primary inline-block">遷移順序を設定</a>
         </div>
 
-        {manifests.length === 0 ? (
-          <p class="text-sm text-muted-xs">{UX_IMPORT_SETTINGS}がまだありません。</p>
+        <h2 class="section-title">1. 登録済み topology_manifest（canonical）</h2>
+        {topologyManifests.length === 0 ? (
+          <p class="text-sm text-muted-xs">
+            まだ topology_manifest がありません。{UX_CONTENTS_PAGE} で画面を定義し promote するとここに投影されます。
+          </p>
         ) : (
           <div class="overflow-x-auto">
             <table class="w-full border-collapse text-sm">
               <thead>
                 <tr class="border-b bg-slate-50 text-left">
-                  {["設定ID", "状態", "役割", "対象", "層", "操作", "実行先"].map((h) => (
+                  {["topology_manifest_id", "manifest_key", "hub_id", "hub_relation 数"].map((h) => (
                     <th key={h} class="px-2 py-1 font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {manifests.map((m) => (
-                  <tr
-                    key={m.manifestId}
-                    class={`cursor-pointer border-b hover:bg-slate-50 ${selectedId === m.manifestId ? "bg-blue-50" : ""}`}
-                    onClick={() => loadDetail(m.manifestId)}
-                  >
-                    <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                    <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
-                    <td class="px-2 py-1">{m.role ?? "—"}</td>
-                    <td class="px-2 py-1">{m.target ?? "—"}</td>
-                    <td class="px-2 py-1">{m.layer ?? "—"}</td>
-                    <td class="px-2 py-1">{m.action ?? "—"}</td>
-                    <td class="px-2 py-1">{m.runtimeDestination ?? "—"}</td>
+                {topologyManifests.map((m) => (
+                  <tr key={m.topologyManifestId} class="border-b">
+                    <td class="px-2 py-1"><code class="text-xs">{m.topologyManifestId.slice(0, 8)}…</code></td>
+                    <td class="px-2 py-1">{m.manifestKey}</td>
+                    <td class="px-2 py-1"><code class="text-xs">{m.hubId.slice(0, 8)}…</code></td>
+                    <td class="px-2 py-1">{m.hubRelationCount}</td>
                   </tr>
                 ))}
               </tbody>
@@ -482,449 +148,58 @@ export default function ManifestsAdmin(): JSX.Element {
         )}
       </section>
 
-      {(showDraftForm || detail) && (
-        <section class="mb-8">
-          <h2 class="section-title">2. 詳細 / 下書き編集</h2>
-
-          {detail && (
-            <dl class="mb-4 grid gap-2 text-sm sm:grid-cols-2">
-              <div><dt class="font-semibold">設定ID</dt><dd><code>{detail.manifestId}</code></dd></div>
-              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{UX_STATUS_LABELS[detail.status] ?? detail.status}</dd></div>
-              <div><dt class="font-semibold">更新日時</dt><dd>{detail.updatedAt}</dd></div>
-              <details class="sm:col-span-2 text-xs text-muted-xs">
-                <summary class="cursor-pointer">技術情報（開発者向け）</summary>
-                <div class="mt-1">relation_registry_id: {detail.relationRegistryId ?? "—"}</div>
-              </details>
-            </dl>
-          )}
-
-          {(showDraftForm || detail?.status === "draft") && (
-            <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
-              <h3 class="mb-2 text-sm font-semibold">取り込み・実行のつながり</h3>
-              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {([
-                  ["役割", draftRole, setDraftRole],
-                  ["対象", draftTarget, setDraftTarget],
-                  ["層", draftLayer, setDraftLayer],
-                  ["操作", draftAction, setDraftAction],
-                ] as const).map(([label, value, setter]) => (
-                  <label key={label} class="text-xs">
-                    {label}
-                    <input
-                      class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                      value={value}
-                      onInput={(e) => setter((e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                ))}
-                <label class="text-xs">
-                  実行先
-                  <select
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                    value={draftRuntimeDestination}
-                    onChange={(e) => setDraftRuntimeDestination((e.target as HTMLSelectElement).value)}
-                  >
-                    {RUNTIME_DESTINATION_OPTIONS.map((d) => (
-                      <option key={d} value={d}>{UX_RUNTIME_DESTINATION_LABELS[d] ?? d}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <details class="mt-4 rounded border border-dashed border-slate-300 bg-white p-3">
-                <summary class="cursor-pointer text-xs font-semibold">
-                  上級者向け設定 — 出力の追加定義（通常は不要）
-                </summary>
-                <p class="mt-2 text-xs text-muted-xs">
-                  内容の正しさはサーバー側で確認されます。通常のフローでは設定不要です。
-                </p>
-                <label class="mt-3 flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={projectionDraft.enabled}
-                    onChange={(e) => updateProjectionDraft({ enabled: (e.target as HTMLInputElement).checked })}
-                  />
-                  出力の追加定義を含める
-                </label>
-                {projectionDraft.enabled && (
-                  <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                    <label class="text-xs">
-                      コンストラクターキー
-                      <input
-                        class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                        value={projectionDraft.constructorKey}
-                        onInput={(e) => updateProjectionDraft({ constructorKey: (e.target as HTMLInputElement).value })}
-                      />
-                    </label>
-                    <label class="text-xs">
-                      出力の種別
-                      <select
-                        class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                        value={projectionDraft.outputKind}
-                        onChange={(e) =>
-                          updateProjectionDraft({
-                            outputKind: (e.target as HTMLSelectElement).value as ManifestProjectionDraft["outputKind"],
-                          })}
-                      >
-                        {PROJECTION_OUTPUT_KIND_OPTIONS.map((k) => (
-                          <option key={k} value={k}>{k}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label class="text-xs sm:col-span-2">
-                      パッケージID（カンマ区切り）
-                      <input
-                        class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                        value={projectionDraft.packageIds}
-                        onInput={(e) => updateProjectionDraft({ packageIds: (e.target as HTMLInputElement).value })}
-                        placeholder="00000000-0000-0000-0000-000000000020"
-                      />
-                    </label>
-                    <label class="text-xs sm:col-span-2">
-                      部品ID（任意）
-                      <input
-                        class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                        value={projectionDraft.componentId}
-                        onInput={(e) => updateProjectionDraft({ componentId: (e.target as HTMLInputElement).value })}
-                      />
-                    </label>
-                    <details class="sm:col-span-2">
-                      <summary class="cursor-pointer text-xs text-muted-xs">詳細JSON設定（フィールド定義・部品定義・表示上書き）</summary>
-                      <label class="mt-2 block text-xs">
-                        フィールド定義（JSON配列）
-                        <textarea
-                          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                          rows={4}
-                          value={projectionDraft.fieldDefsJson}
-                          onInput={(e) => updateProjectionDraft({ fieldDefsJson: (e.target as HTMLTextAreaElement).value })}
-                          placeholder='[{"key":"name","label":"Name","kind":"text"}]'
-                        />
-                      </label>
-                      <label class="mt-2 block text-xs">
-                        部品定義（JSONオブジェクト）
-                        <textarea
-                          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                          rows={3}
-                          value={projectionDraft.componentDefinitionJson}
-                          onInput={(e) =>
-                            updateProjectionDraft({ componentDefinitionJson: (e.target as HTMLTextAreaElement).value })}
-                        />
-                      </label>
-                      <label class="mt-2 block text-xs">
-                        表示上書き設定（JSONオブジェクト）
-                        <textarea
-                          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                          rows={3}
-                          value={projectionDraft.projectionOverridesJson}
-                          onInput={(e) =>
-                            updateProjectionDraft({ projectionOverridesJson: (e.target as HTMLTextAreaElement).value })}
-                        />
-                      </label>
-                    </details>
-                  </div>
-                )}
-              </details>
-
-              <button type="button" class="btn-primary mt-3" disabled={loading} onClick={handleSaveDraft}>
-                {detail?.status === "draft" ? "下書きを保存" : "下書きを作成"}
-              </button>
-            </div>
-          )}
-
-          {detail?.summary && (
-            <div class="mb-4 rounded border p-4 text-sm">
-              <h3 class="mb-2 font-semibold">設定の概要</h3>
-              <p><strong>取り込み・実行のつながり:</strong>{" "}
-                {detail.summary.dispatcherMapping
-                  ? `${detail.summary.dispatcherMapping.role} / ${detail.summary.dispatcherMapping.target} / ${detail.summary.dispatcherMapping.layer} / ${detail.summary.dispatcherMapping.action}`
-                  : "—"}
-              </p>
-              <p><strong>実行先:</strong>{" "}
-                {detail.summary.runtimeMapping?.runtimeDestination
-                  ? (UX_RUNTIME_DESTINATION_LABELS[detail.summary.runtimeMapping.runtimeDestination] ?? detail.summary.runtimeMapping.runtimeDestination)
-                  : "—"}
-              </p>
-              <p><strong>出力マッピング:</strong>{" "}
-                {detail.summary.projectionConstructorMapping?.hasProjectionDefinition
-                  ? formatProjectionSummary(extractProjectionDefinitionFromTopology(detail.topologyRawJson))
-                  : "なし"}
-              </p>
-              <p><strong>エントリ種別:</strong> {detail.summary.entryTypes.join(", ") || "—"}</p>
-              <details class="mt-2">
-                <summary class="cursor-pointer text-muted-xs">debug: raw topology JSON</summary>
-                <pre class="mt-2 max-h-64 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">{detail.topologyRawJson}</pre>
-              </details>
-            </div>
-          )}
-
-          {selectedId && (
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="btn-secondary" disabled={loading} onClick={handleValidate}>
-                内容を確認
-              </button>
-              <button
-                type="button"
-                class="btn-primary"
-                disabled={loading || promoteDisabled}
-                title={promoteDisabled ? "下書き状態で「内容を確認」を完了した設定のみ有効化できます" : ""}
-                onClick={handlePromote}
-              >
-                有効化
-              </button>
-              <button
-                type="button"
-                class="btn-secondary"
-                disabled={loading || deprecateDisabled}
-                onClick={handleDeprecate}
-              >
-                利用停止
-              </button>
-            </div>
-          )}
-
-          {validation && (
-            <div class="mt-4 rounded border p-4 text-sm">
-              <h3 class="mb-2 font-semibold">
-                確認結果: {validation.valid ? "問題なし ✓" : "要修正"}
-              </h3>
-              {validation.issues.length > 0 ? (
-                <ul class="list-inside list-disc">
-                  {validation.issues.map((issue) => (
-                    <li key={issue.code} class="text-red-700">
-                      [{issue.code}] {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p class="text-emerald-700">問題なし</p>
-              )}
-            </div>
-          )}
-
-          {lifecycleResult && (
-            <div class="mt-4">
-              <p class={`text-sm ${lifecycleResult.ok ? "text-emerald-700" : "text-red-700"}`}>
-                {lifecycleResult.message} (status={lifecycleResult.status})
-              </p>
-              {lifecycleResult.ok && (
-                <p class="mt-2 text-xs text-muted-xs">
-                  次のステップ:{" "}
-                  <a href="/admin/runtime" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
-                </p>
-              )}
-            </div>
-          )}
-        </section>
-      )}
-      </>
-      )}
-
-      {editorMode === "promotion" && (
-        <>
-          <section class="mb-8">
-            <h2 class="section-title">1. 公開・案内の設定一覧</h2>
-            <p class="mb-3 text-sm text-muted-xs">
-              案内文やキャンペーン情報が付いた設定のみ表示します。新規は「データの流れ」タブで下書きを作成後、
-              ここで公開・案内の内容を追加してください。
-            </p>
-            <div class="mb-3 flex flex-wrap items-center gap-2">
-              <label class="text-sm">
-                ステータス:
-                <select
-                  class="ml-2 rounded border px-2 py-1"
-                  value={promotionStatusFilter}
-                  onChange={(e) => setPromotionStatusFilter((e.target as HTMLSelectElement).value)}
-                >
-                  {STATUS_FILTERS.map((s) => (
-                    <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
-                  ))}
-                </select>
-              </label>
-              <button type="button" class="btn-secondary" disabled={loading} onClick={loadPromotionList}>
-                再読み込み
-              </button>
-            </div>
-
-            {promotionManifests.length === 0 ? (
-              <p class="text-sm text-muted-xs">公開・案内が付いた設定はまだありません。</p>
-            ) : (
-              <div class="overflow-x-auto">
-                <table class="w-full border-collapse text-sm">
-                  <thead>
-                    <tr class="border-b bg-slate-50 text-left">
-                      {["設定ID", "状態", "キー", "版", "案内あり"].map((h) => (
-                        <th key={h} class="px-2 py-1 font-semibold">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {promotionManifests.map((m) => (
-                      <tr
-                        key={m.manifestId}
-                        class={`cursor-pointer border-b hover:bg-slate-50 ${promotionSelectedId === m.manifestId ? "bg-blue-50" : ""}`}
-                        onClick={() => loadPromotionDetail(m.manifestId)}
-                      >
-                        <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                        <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
-                        <td class="px-2 py-1">{m.manifestKey}</td>
-                        <td class="px-2 py-1">{m.versionLabel}</td>
-                        <td class="px-2 py-1">{String(m.hasDisclosure)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-
-          <section class="mb-8">
-            <h2 class="section-title">2. 案内文・キャンペーン情報の編集</h2>
-            <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
-              <label class="block text-xs">
-                対象の設定（下書き）
-                <select
-                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                  value={promotionDraftManifestId}
-                  onChange={(e) => {
-                    const id = (e.target as HTMLSelectElement).value;
-                    setPromotionDraftManifestId(id);
-                    if (id) loadPromotionDetail(id);
-                  }}
-                >
-                  <option value="">— 設定を選択 —</option>
-                  {manifests.map((m) => (
-                    <option key={m.manifestId} value={m.manifestId}>
-                      {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ?? m.status}]
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {promotionDetail && (
-                <p class="mt-2 text-xs text-muted-xs">
-                  状態: {UX_STATUS_LABELS[promotionDetail.status] ?? promotionDetail.status} — {formatPromotionSummary(promotionDetail.metadata ?? undefined)}
-                </p>
-              )}
-              <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                {([
-                  ["設定キー", promotionDraft.manifestKey, (v: string) => updatePromotionDraft({ manifestKey: v })],
-                  ["版ラベル", promotionDraft.versionLabel, (v: string) => updatePromotionDraft({ versionLabel: v })],
-                  ["配置キー", promotionDraft.placementKey, (v: string) => updatePromotionDraft({ placementKey: v })],
-                  ["配置面の種別", promotionDraft.projectionSurfaceType, (v: string) => updatePromotionDraft({ projectionSurfaceType: v })],
-                ] as const).map(([label, value, setter]) => (
-                  <label key={label} class="text-xs">
-                    {label}
-                    <input
-                      class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                      value={value}
-                      onInput={(e) => setter((e.target as HTMLInputElement).value)}
-                    />
-                  </label>
-                ))}
-                <label class="text-xs sm:col-span-2">
-                  案内文
-                  <textarea
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                    rows={3}
-                    value={promotionDraft.disclosureText}
-                    onInput={(e) => updatePromotionDraft({ disclosureText: (e.target as HTMLTextAreaElement).value })}
-                  />
-                </label>
-                <label class="text-xs">
-                  カテゴリラベル
-                  <input
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                    value={promotionDraft.disclosureCategoryLabel}
-                    onInput={(e) => updatePromotionDraft({ disclosureCategoryLabel: (e.target as HTMLInputElement).value })}
-                  />
-                </label>
-                <label class="text-xs">
-                  有効化タイミング
-                  <select
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                    value={promotionDraft.activationPolicyType}
-                    onChange={(e) =>
-                      updatePromotionDraft({
-                        activationPolicyType: (e.target as HTMLSelectElement).value as PromotionManifestDraft["activationPolicyType"],
-                      })}
-                  >
-                    {PROMOTION_ACTIVATION_POLICY_OPTIONS.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-                </label>
-                <label class="text-xs sm:col-span-2">
-                  有効化条件式（条件付き・スケジュール時のみ）
-                  <input
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                    value={promotionDraft.activationConditionExpression}
-                    onInput={(e) =>
-                      updatePromotionDraft({ activationConditionExpression: (e.target as HTMLInputElement).value })}
-                  />
-                </label>
-              </div>
-
-              <h3 class="mt-4 text-xs font-semibold">対象の紐付け</h3>
-              {promotionDraft.targetRefs.map((ref, index) => (
-                <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
-                  {([
-                    ["packageId", "パッケージID"],
-                    ["schemaId", "データ形式ID"],
-                    ["componentId", "部品ID"],
-                  ] as const).map(([field, fieldLabel]) => (
-                    <label key={field} class="text-xs">
-                      {fieldLabel}
-                      <input
-                        class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                        value={ref[field]}
-                        onInput={(e) => updatePromotionTargetRef(index, { [field]: (e.target as HTMLInputElement).value })}
-                      />
-                    </label>
-                  ))}
-                </div>
+      <section class="mb-8 rounded border p-4">
+        <h2 class="section-title">2. 下書き画面のハブ割当（promote 前）</h2>
+        <p class="mb-3 text-xs text-muted-xs">
+          {UX_CONTENTS} で作成した下書き manifest に親 hub と manifest_key を付与します。promote 時に hubs.topology_manifests へ投影されます。
+        </p>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="text-xs">
+            下書き manifest
+            <select
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              value={assignManifestId}
+              onChange={(e) => setAssignManifestId((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">— 選択 —</option>
+              {draftManifests.map((m) => (
+                <option key={m.manifestId} value={m.manifestId}>
+                  {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ?? m.status}]
+                </option>
               ))}
-
-              <div class="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="btn-primary"
-                  disabled={loading || (promotionDetail !== null && promotionDetail.status !== "draft") ||
-                    (!promotionSelectedId && !promotionDraftManifestId.trim())}
-                  onClick={handlePromotionSaveDraft}
-                >
-                  案内内容を下書き保存
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary"
-                  disabled={loading || !promotionSelectedId}
-                  onClick={handlePromotionValidate}
-                >
-                  内容を確認
-                </button>
-              </div>
-            </div>
-
-            {promotionValidation && (
-              <div class="rounded border p-4 text-sm">
-                <h3 class="mb-2 font-semibold">
-                  公開・案内の確認: {promotionValidation.valid ? "問題なし ✓" : "要修正"}
-                </h3>
-                {promotionValidation.issues.length > 0 ? (
-                  <ul class="list-inside list-disc">
-                    {promotionValidation.issues.map((issue) => (
-                      <li key={issue.code} class="text-red-700">
-                        [{issue.code}] {issue.message}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p class="text-emerald-700">問題なし</p>
-                )}
-              </div>
-            )}
-          </section>
-        </>
-      )}
+            </select>
+          </label>
+          <label class="text-xs">
+            親 hub
+            <select
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              value={assignHubId}
+              onChange={(e) => setAssignHubId((e.target as HTMLSelectElement).value)}
+            >
+              {hubOptions.map((h) => (
+                <option key={h.id} value={h.id}>{h.label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="text-xs sm:col-span-2">
+            manifest_key（画面群内の識別子）
+            <input
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              value={assignManifestKey}
+              onInput={(e) => setAssignManifestKey((e.target as HTMLInputElement).value)}
+              placeholder="例: entity_list_primary"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          class="btn-primary mt-4"
+          disabled={loading || !assignManifestId}
+          onClick={handleAssignGrouping}
+        >
+          ハブ割当を保存
+        </button>
+      </section>
     </main>
   );
 }

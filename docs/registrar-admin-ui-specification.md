@@ -416,6 +416,24 @@ Recommendation targets `topology.*`, `topology.wiring_physical_to_package`,
 `topology.components_*`, and `context_*` learning surfaces. Phase Attention rotates/explores
 hubs space during hub construction, with `w`/`l2_norm` gating exploration budget.
 
+## 8.7 Admin Console Authoring Workflow (v0.3)
+
+Self-hosted admin authoring routes align with `docs/design/admin-console-workflow-ssot.yaml`:
+
+| Route | Responsibility |
+|-------|----------------|
+| `/admin/contents` | Single-screen manifest: DB/data shape, screen operation kind, promote → `hubs.topology_manifests` |
+| `/admin/import` | CSV/JSON import against canonical `topology_manifest_id` + schema registry |
+| `/admin/ui-builder` | Display/operation UI projection |
+| `/admin/manifests` | Hub grouping only (`topology_manifest` registry, hub assignment) |
+| `/admin/hub-navigation` | `hub_relations` sequence under a topology manifest |
+
+`manifest:promote` projects active drafts into `hubs.topology_manifests` (same UUID as
+`public.manifest.manifest_id` when used as topology_manifest_id). Optional
+`screen_data_shape` topology entries may create `topology.wiring_physical_to_package` rows
+when `topology.physical_tables` is populated. Dispatcher axes may be derived from
+`screenOperationKind` at draft creation; low-layer axis editing is not the default UX path.
+
 ## 9. Boundary
 
 This specification defines controlled registration and import boundaries.

@@ -122,6 +122,31 @@ public class AdminRuntimeManifestManagementTests
         Assert.Null(error);
         Assert.True(data!.Value.GetProperty("ok").GetBoolean());
         Assert.Equal("active", data.Value.GetProperty("status").GetString());
+        Assert.Single(repo.ProjectedTopologyManifests);
+        Assert.Equal(manifestId, repo.ProjectedTopologyManifests[0].TopologyManifestId);
+    }
+
+    [Fact]
+    public async Task CreateDraft_WithScreenOperationKind_DerivesAxes()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            screenOperationKind = "search",
+            role = "",
+            target = "",
+            layer = "",
+            action = "",
+            runtimeDestination = "",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "create_draft", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Equal("Search", data!.Value.GetProperty("summary").GetProperty("dispatcherMapping")
+            .GetProperty("action").GetString());
     }
 
     [Fact]
