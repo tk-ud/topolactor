@@ -341,6 +341,7 @@ export default function ManifestsAdmin(): JSX.Element {
     setLoading(true);
     setErrors([]);
     setLifecycleResult(null);
+    setValidation(null); // draft changed — require explicit re-validation before promote
     let projectionDefinition: Record<string, unknown> | null = null;
     try {
       projectionDefinition = buildProjectionDefinitionPayload(projectionDraft);
@@ -425,7 +426,7 @@ export default function ManifestsAdmin(): JSX.Element {
               onChange={(e) => setStatusFilter((e.target as HTMLSelectElement).value)}
             >
               {STATUS_FILTERS.map((s) => (
-                <option key={s || "all"} value={s}>{s || "すべて"}</option>
+                <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
               ))}
             </select>
           </label>
@@ -736,7 +737,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   onChange={(e) => setPromotionStatusFilter((e.target as HTMLSelectElement).value)}
                 >
                   {STATUS_FILTERS.map((s) => (
-                    <option key={s || "all"} value={s}>{s || "すべて"}</option>
+                    <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
                   ))}
                 </select>
               </label>

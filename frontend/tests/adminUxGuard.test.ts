@@ -118,6 +118,23 @@ Deno.test("promoteDisabled: disabled when no id selected", () => {
   );
 });
 
+// Contract: handleSaveDraft calls setValidation(null), so after a draft save
+// validation is null — promote stays disabled until the user explicitly re-validates.
+Deno.test("promoteDisabled: after draft save validation resets to null — disabled until re-validated", () => {
+  // State immediately after handleSaveDraft (validation cleared to null)
+  assertEquals(
+    computePromoteDisabled("some-id", "draft", null),
+    true,
+    "promote must be disabled immediately after draft save (validation cleared)",
+  );
+  // State after user explicitly re-runs validate with no blocking errors
+  assertEquals(
+    computePromoteDisabled("some-id", "draft", { isBlocking: false }),
+    false,
+    "promote must be enabled only after re-validation passes",
+  );
+});
+
 // ─── HubNavigation sequence auto-set guard ────────────────────────────────────
 
 function computeNextSequencePosition(activeRelations: { status: string }[]): number {
