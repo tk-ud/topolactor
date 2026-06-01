@@ -1,5 +1,6 @@
 import { assertEquals, assertFalse } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  buildAuthRedirectResponse,
   buildAuthRedirectUrl,
   DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
   DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY,
@@ -68,4 +69,12 @@ Deno.test("buildAuthRedirectUrl: preserves admin path in redirect param", () => 
   const req = new Request("https://example.com/admin/import?x=1");
   const url = buildAuthRedirectUrl(req);
   assertEquals(url, "https://example.com/auth?redirect=%2Fadmin%2Fimport%3Fx%3D1");
+});
+
+Deno.test("buildAuthRedirectResponse: clearSession sets Set-Cookie on mutable headers", () => {
+  const req = new Request("https://example.com/admin");
+  const res = buildAuthRedirectResponse(req, { clearSession: true });
+  assertEquals(res.status, 302);
+  assertEquals(res.headers.get("Location"), "https://example.com/auth?redirect=%2Fadmin");
+  assertEquals(res.headers.get("Set-Cookie")?.includes("Max-Age=0"), true);
 });
