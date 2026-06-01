@@ -100,6 +100,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<ContentBundleRepository>(),
         sp.GetRequiredService<TopologyRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
+builder.Services.AddSingleton<HubNavigationResolver>(sp =>
+    new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
 builder.Services.AddSingleton<OutputLaneRouter>(sp =>
     new OutputLaneRouter(
         sp.GetRequiredService<ILogger<OutputLaneRouter>>(),
@@ -123,7 +125,8 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
-        sp.GetRequiredService<OutputLaneRouter>()));
+        sp.GetRequiredService<OutputLaneRouter>(),
+        sp.GetRequiredService<HubNavigationResolver>()));
 builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
     new AdminRuntimeDispatchAdapter(
         sp.GetRequiredService<AdminRuntime>(),

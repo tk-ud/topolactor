@@ -234,7 +234,7 @@ export default function AdminImport(): JSX.Element {
           </p>
           <details class="text-muted-xs mt-1">
             <summary class="cursor-pointer">技術情報</summary>
-            <p class="mt-1">backend 未接続時は DEMO_BACKEND_URL と /auth を確認。API は manifest+schema 照合後に snapshotId を返します。</p>
+            <p class="mt-1">サーバー未接続時は接続設定と認証を確認してください。</p>
           </details>
         </div>
       )}
@@ -243,14 +243,17 @@ export default function AdminImport(): JSX.Element {
         <section class="mb-6">
           <h2 class="section-title">プレビュー結果</h2>
           <p class="mb-3 text-sm">
-            スナップショット ID: <code>{preview.snapshotId}</code>
-            {" | "}
             <span class="text-green-700">有効: {preview.validCount}</span>
             {" | "}
             <span class={preview.invalidCount > 0 ? "text-red-600" : "text-green-700"}>
               無効: {preview.invalidCount}
             </span>
             {" | "}合計: {preview.records.length}
+            {" "}
+            <details class="mt-1 inline-block">
+              <summary class="cursor-pointer text-xs text-muted-xs">技術情報</summary>
+              <code class="text-xs">{preview.snapshotId}</code>
+            </details>
           </p>
 
           <div class="table-wrap max-h-96 overflow-y-auto">
@@ -294,13 +297,16 @@ export default function AdminImport(): JSX.Element {
 
       {applyResult && (
         <section class="alert-success mb-6">
-          <h2 class="mb-1 font-semibold">適用結果</h2>
-          <p>applyLogId: <code>{applyResult.applyLogId}</code></p>
+          <h2 class="mb-1 font-semibold">取り込み完了</h2>
           <p class="mt-2 text-xs text-muted-xs">
             次のステップ:{" "}
             <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a> で画面を準備する、または{" "}
             <a href="/admin/runtime" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
           </p>
+          <details class="mt-1">
+            <summary class="cursor-pointer text-xs text-green-700">技術情報</summary>
+            <code class="text-xs">{applyResult.applyLogId}</code>
+          </details>
         </section>
       )}
     </main>

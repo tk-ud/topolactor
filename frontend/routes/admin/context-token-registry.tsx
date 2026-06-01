@@ -8,7 +8,7 @@ export default function ContextTokenRegistryPage() {
   return (
     <AdminAuthGate>
       <main class="page-main-wide font-mono">
-        <h1 class="page-title">context_token_registry — ハブ Registry（トークン管理）</h1>
+        <h1 class="page-title">topolactor — 管理 / 推薦トークン辞書</h1>
         <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
         <AdminHowTo
@@ -18,8 +18,7 @@ export default function ContextTokenRegistryPage() {
         <AdminHelpPanel {...ADMIN_CONTEXT_TOKEN_GUIDE} />
 
         <p class="mb-6 text-muted text-sm">
-          操作には <a href="/auth" class="link">ログイン</a>（JWT）が必要です。
-          DEMO_BACKEND_URL と DATABASE_URL 設定時のみ DB 永続化されます。
+          操作には <a href="/auth" class="link">ログイン</a> が必要です。
         </p>
 
         <hr class="mb-6 border-gray-200" />

@@ -19,6 +19,12 @@ import {
   wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
+import {
+  createEmptyLabelValueEditorRow,
+  LABEL_VALUE_DISPLAY_POLICIES,
+  serializeLabelValueMetadataJson,
+  type LabelValueEditorRow,
+} from "../runtime/labelValueEditor.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -1409,7 +1415,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
     }
   };
 
-  const handleCreateManual = async (componentKey: string, sourcePath: string, componentKind: string) => {
+  const handleCreateManual = async (componentKey: string, sourcePath: string, componentKind: string, metadataJson: string) => {
     if (!componentKey || !sourcePath || !componentKind) {
       setStatus("componentKey / sourcePath / componentKind は必須です。");
       return;
@@ -1422,7 +1428,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
         componentKey,
         sourcePath,
         componentKind,
-        metadataJson: "{}",
+        metadataJson,
       });
       if (body?.emission?.data?.bucketItemId) {
         setStatus(`${componentKey} を登録しました`);
@@ -1690,18 +1696,223 @@ function ManualBucketCreateForm({
   onCreate,
   loading,
 }: {
-  onCreate: (componentKey: string, sourcePath: string, componentKind: string) => void;
+  onCreate: (
+    componentKey: string,
+    sourcePath: string,
+    componentKind: string,
+    metadataJson: string,
+  ) => void;
   loading: boolean;
 }): JSX.Element {
   const [componentKey, setComponentKey] = useState("");
   const [sourcePath, setSourcePath] = useState("");
   const [componentKind, setComponentKind] = useState("primitive");
+  const [labelValueRows, setLabelValueRows] = useState<
+    Array<LabelValueEditorRow & { rowId: string }>
+  >([]);
+  const [editorError, setEditorError] = useState<string | null>(null);
+
+  const addLabelValueRow = () => {
+    setLabelValueRows((rows) => [
+      ...rows,
+      { ...createEmptyLabelValueEditorRow(), rowId: crypto.randomUUID() },
+    ]);
+    setEditorError(null);
+  };
+  const updateLabelValueRow = (
+    rowId: string,
+    patch: Partial<LabelValueEditorRow>,
+  ) => {
+    setLabelValueRows((rows) =>
+      rows.map((row) => row.rowId === rowId ? { ...row, ...patch } : row)
+    );
+    setEditorError(null);
+  };
+  const removeLabelValueRow = (rowId: string) => {
+    setLabelValueRows((rows) => rows.filter((row) => row.rowId !== rowId));
+    setEditorError(null);
+  };
+  const submit = () => {
+    try {
+      const metadataJson = serializeLabelValueMetadataJson(labelValueRows);
+      setEditorError(null);
+      onCreate(componentKey, sourcePath, componentKind, metadataJson);
+    } catch (error) {
+      setEditorError(error instanceof Error ? error.message : String(error));
+    }
+  };
+
   return (
-    <div class="flex flex-wrap gap-2">
-      <input value={componentKey} onInput={(e) => setComponentKey((e.target as HTMLInputElement).value)} placeholder="componentKey" class="input-mono w-auto text-xs" />
-      <input value={sourcePath} onInput={(e) => setSourcePath((e.target as HTMLInputElement).value)} placeholder="sourcePath" class="input-mono flex-1 text-xs" />
-      <input value={componentKind} onInput={(e) => setComponentKind((e.target as HTMLInputElement).value)} placeholder="componentKind" class="input-mono w-auto text-xs" />
-      <button type="button" onClick={() => onCreate(componentKey, sourcePath, componentKind)} disabled={loading} class="btn-secondary text-xs">
+    <div>
+      <div class="flex flex-wrap gap-2">
+        <input
+          value={componentKey}
+          onInput={(e) => setComponentKey((e.target as HTMLInputElement).value)}
+          placeholder="componentKey"
+          class="input-mono w-auto text-xs"
+        />
+        <input
+          value={sourcePath}
+          onInput={(e) => setSourcePath((e.target as HTMLInputElement).value)}
+          placeholder="sourcePath"
+          class="input-mono flex-1 text-xs"
+        />
+        <input
+          value={componentKind}
+          onInput={(e) =>
+            setComponentKind((e.target as HTMLInputElement).value)}
+          placeholder="componentKind"
+          class="input-mono w-auto text-xs"
+        />
+      </div>
+
+      <div class="mt-3 rounded border border-gray-200 bg-gray-50 p-2">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <strong class="text-sm">JSONB label/value fields</strong>
+            <p class="text-muted-xs m-0">
+              DocumentCanvas 用の <code>label(key名): value</code>{" "}
+              ドラフト。未追加なら従来どおり空 metadata を送信します。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={addLabelValueRow}
+            disabled={loading}
+            class="btn-secondary text-xs"
+          >
+            + 追加
+          </button>
+        </div>
+
+        {labelValueRows.length > 0 && (
+          <div class="overflow-x-auto">
+            <table class="table min-w-[920px] font-mono text-xs">
+              <thead>
+                <tr>
+                  {[
+                    "key *",
+                    "label",
+                    "value",
+                    "jsonPath",
+                    "x",
+                    "y",
+                    "displayPolicy",
+                    "",
+                  ].map((heading) => <th key={heading}>{heading}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {labelValueRows.map((row) => (
+                  <tr key={row.rowId}>
+                    <td>
+                      <input
+                        value={row.key}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            key: (e.target as HTMLInputElement).value,
+                          })}
+                        placeholder="company_name"
+                        class="input-mono w-32 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={row.label}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            label: (e.target as HTMLInputElement).value,
+                          })}
+                        placeholder="会社名"
+                        class="input w-28 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={row.value}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            value: (e.target as HTMLInputElement).value,
+                          })}
+                        placeholder="株式会社テスト"
+                        class="input w-36 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        value={row.jsonPath}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            jsonPath: (e.target as HTMLInputElement).value,
+                          })}
+                        placeholder={`$.${row.key || "key"}`}
+                        class="input-mono w-32 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.x}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            x: Number((e.target as HTMLInputElement).value),
+                          })}
+                        class="input-mono w-16 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={row.y}
+                        onInput={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            y: Number((e.target as HTMLInputElement).value),
+                          })}
+                        class="input-mono w-16 text-xs"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={row.displayPolicy}
+                        onChange={(e) =>
+                          updateLabelValueRow(row.rowId, {
+                            displayPolicy: (e.target as HTMLSelectElement)
+                              .value as LabelValueEditorRow["displayPolicy"],
+                          })}
+                        class="input w-32 text-xs"
+                      >
+                        {LABEL_VALUE_DISPLAY_POLICIES.map((policy) => (
+                          <option key={policy} value={policy}>{policy}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() => removeLabelValueRow(row.rowId)}
+                        disabled={loading}
+                        class="btn-danger px-2 py-1 text-xs"
+                      >
+                        削除
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {editorError && (
+          <p class="mt-2 text-sm font-bold text-red-600">{editorError}</p>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={submit}
+        disabled={loading}
+        class="btn-secondary mt-2 text-xs"
+      >
         手動作成
       </button>
     </div>

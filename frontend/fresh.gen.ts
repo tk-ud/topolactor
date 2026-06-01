@@ -6,6 +6,7 @@ import * as $_app from "./routes/_app.tsx";
 import * as $admin_middleware from "./routes/admin/_middleware.ts";
 import * as $admin_contents from "./routes/admin/contents.tsx";
 import * as $admin_context_token_registry from "./routes/admin/context-token-registry.tsx";
+import * as $admin_hub_navigation from "./routes/admin/hub-navigation.tsx";
 import * as $admin_import from "./routes/admin/import.tsx";
 import * as $admin_index from "./routes/admin/index.tsx";
 import * as $admin_manifests from "./routes/admin/manifests.tsx";
@@ -30,6 +31,7 @@ import * as $AdminImport from "./islands/AdminImport.tsx";
 import * as $AuthPanel from "./islands/AuthPanel.tsx";
 import * as $ContentsAdmin from "./islands/ContentsAdmin.tsx";
 import * as $ContextTokenRegistryEditor from "./islands/ContextTokenRegistryEditor.tsx";
+import * as $HubNavigationAdmin from "./islands/HubNavigationAdmin.tsx";
 import * as $ManifestsAdmin from "./islands/ManifestsAdmin.tsx";
 import * as $OperationPanel from "./islands/OperationPanel.tsx";
 import * as $RegistryVectorValidator from "./islands/RegistryVectorValidator.tsx";
@@ -45,6 +47,7 @@ const manifest = {
     "./routes/admin/_middleware.ts": $admin_middleware,
     "./routes/admin/contents.tsx": $admin_contents,
     "./routes/admin/context-token-registry.tsx": $admin_context_token_registry,
+    "./routes/admin/hub-navigation.tsx": $admin_hub_navigation,
     "./routes/admin/import.tsx": $admin_import,
     "./routes/admin/index.tsx": $admin_index,
     "./routes/admin/manifests.tsx": $admin_manifests,
@@ -73,6 +76,7 @@ const manifest = {
     "./islands/AuthPanel.tsx": $AuthPanel,
     "./islands/ContentsAdmin.tsx": $ContentsAdmin,
     "./islands/ContextTokenRegistryEditor.tsx": $ContextTokenRegistryEditor,
+    "./islands/HubNavigationAdmin.tsx": $HubNavigationAdmin,
     "./islands/ManifestsAdmin.tsx": $ManifestsAdmin,
     "./islands/OperationPanel.tsx": $OperationPanel,
     "./islands/RegistryVectorValidator.tsx": $RegistryVectorValidator,

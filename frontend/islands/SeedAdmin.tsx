@@ -151,7 +151,7 @@ export default function SeedAdmin(): JSX.Element {
 
   return (
     <main class="page-main font-mono">
-      <h1 class="page-title">topolactor — 管理 / シード</h1>
+      <h1 class="page-title">topolactor — 管理 / 初期データ設定</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
       <AdminHowTo
@@ -163,7 +163,7 @@ export default function SeedAdmin(): JSX.Element {
       <hr class="mb-6 border-gray-200" />
 
       <section class="mb-6">
-        <h2 class="section-title">Seed JSON エディター</h2>
+        <h2 class="section-title">初期データ エディター</h2>
         <textarea
           value={seedContent}
           onInput={(e) => setSeedContent((e.target as HTMLTextAreaElement).value)}
@@ -173,24 +173,24 @@ export default function SeedAdmin(): JSX.Element {
         />
         <div class="flex flex-wrap gap-2">
           <div>
-            <button onClick={handleSave} disabled={loading} class="btn-secondary">/storage に保存</button>
-            <AdminActionHint>ディスク上の seed.json のみ。DB・runtime は未変更。</AdminActionHint>
+            <button onClick={handleSave} disabled={loading} class="btn-secondary">一時保存（DBに反映しない）</button>
+            <AdminActionHint>ファイルとして保存するだけです。データベースは変更されません。</AdminActionHint>
           </div>
           <div>
-            <button onClick={handleLoad} disabled={loading} class="btn-secondary">/storage からロード</button>
-            <AdminActionHint>既存ファイルを読み取り表示。エディターへコピー可能。</AdminActionHint>
+            <button onClick={handleLoad} disabled={loading} class="btn-secondary">保存済みデータを読み込む</button>
+            <AdminActionHint>保存済みのデータをエディターに読み込みます。</AdminActionHint>
           </div>
           <div>
-            <button onClick={handleValidate} disabled={loading} class="btn-secondary">バリデート</button>
-            <AdminActionHint>構造・必須フィールドを backend 検証。永続化なし。</AdminActionHint>
+            <button onClick={handleValidate} disabled={loading} class="btn-secondary">内容を確認</button>
+            <AdminActionHint>構造と必須項目をサーバーで検証します。データベースは変更されません。</AdminActionHint>
           </div>
           <div>
             <button onClick={handlePreview} disabled={loading} class="btn-secondary">プレビュー</button>
-            <AdminActionHint>宣言 runtime 一覧を read-only 表示。DB 未反映。</AdminActionHint>
+            <AdminActionHint>設定される動作の一覧を表示します。データベースは変更されません。</AdminActionHint>
           </div>
           <div>
-            <button onClick={handleImport} disabled={loading} class="btn-primary">インポート</button>
-            <AdminActionHint>validate 後の想定で canonical DB へ反映。先にプレビュー推奨。</AdminActionHint>
+            <button onClick={handleImport} disabled={loading} class="btn-primary">取り込む</button>
+            <AdminActionHint>内容確認・プレビュー後に実行してください。データベースに反映されます。</AdminActionHint>
           </div>
         </div>
       </section>
@@ -210,8 +210,8 @@ export default function SeedAdmin(): JSX.Element {
             ))}
           </ul>
           <p class="text-muted-xs mt-2">
-            JSON 構文・必須フィールドはエディター修正 → 再バリデート。storage 未作成は先に保存。
-            import 失敗時はプレビュー表と backend ログで重複・ref を確認。
+            JSONの書式・必須項目はエディターを修正して再度「内容を確認」してください。
+            先にファイルを保存してから読み込み・取り込みを行ってください。
           </p>
         </section>
       )}
@@ -226,12 +226,12 @@ export default function SeedAdmin(): JSX.Element {
 
       {previewRuntimes.length > 0 && (
         <section class="mt-4">
-          <h3 class="mb-2 font-semibold">プレビュー — 宣言済みランタイム</h3>
+          <h3 class="mb-2 font-semibold">プレビュー — 設定済み動作一覧</h3>
           <div class="table-wrap">
             <table class="table">
               <thead>
                 <tr>
-                  {["名前", "ターゲット", "レイヤー", "アクション"].map((h) => (
+                  {["名前", "対象", "層", "操作"].map((h) => (
                     <th key={h}>{h}</th>
                   ))}
                 </tr>

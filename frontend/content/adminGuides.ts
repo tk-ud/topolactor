@@ -40,11 +40,11 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     "（任意）/admin/seed — デモ用 seed.json、/admin/contents — コンテンツ登録、トークン辞書は別画面",
   ],
   inputs: [
-    "各画面で説明される manifest / schema / seed / bucket / layout / token などの登録対象",
-    "操作前に /auth で JWT を取得（DB 永続化が必要な画面）",
+    "各画面で説明される登録対象（取り込み設定 / データの形 / シード / 部品 / レイアウト / スタイル設定 など）",
+    "操作前に /auth でログイン（DB 永続化が必要な画面）",
   ],
   actions: [
-    "下のリンクから目的の画面へ移動し、画面内の Preview → Validate → Apply / Promote / Import の順で確認する",
+    "下のリンクから目的の画面へ移動し、画面内の「プレビュー → 検証 → 保存反映 / 有効化 / 取り込み」の順で確認する",
   ],
   outputs: [
     "成功時: backend が検証したうえで DB（canonical topology）または /storage に反映",
@@ -193,41 +193,40 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_CONTEXT_TOKEN_GUIDE: AdminGuide = {
-  title: "context_token_registry",
+  title: "推薦トークン辞書",
   purpose:
-    "推薦エンジンと SQL Attention が参照する離散トークン辞書を管理します。value がコサイン類似度の意味方向成分です。",
+    "推薦エンジンが参照するトークン辞書を管理します。ここに登録されたトークンIDの存在が推薦の観測シグナルになります。",
   prerequisites: [
-    "/auth 済み、DEMO_BACKEND_URL + DATABASE_URL 設定済み",
+    "/auth でログイン済みであること",
   ],
   howToSteps: [
-    "ページ読み込みでアクティブトークン一覧が表示される（空ならこれから追加）",
-    "「新規トークン追加」: label（必須）、group（任意）、value を -1.0〜1.0 で入力",
-    "「トークン追加」を押す — backend が検証し DB に create、一覧に行が増える",
-    "不要になったトークンは行の「非推奨にする」— 物理削除ではなく status=deprecated",
-    "新規 registry 登録前に /admin/registry-vector-validate で ID 重複がないか確認することを推奨",
+    "ページ読み込みで有効なトークン一覧が表示される（空ならこれから追加）",
+    "「新規トークン追加」: ラベル（必須）、グループ（任意）、値を -1.0〜1.0 で入力",
+    "「トークン追加」を押す — サーバーで検証し登録、一覧に行が増える",
+    "不要になったトークンは行の「非推奨にする」— データは保持され、推薦対象から外れます",
+    "新規登録前に「登録前重複チェック」でID重複がないか確認することを推奨",
   ],
   inputs: [
-    "label, group, value ∈ [-1.0, 1.0]",
+    "ラベル（必須）、グループ（任意）、値 -1.0〜1.0",
   ],
   actions: [
-    "トークン追加（create）",
-    "非推奨（deprecate）",
+    "トークン追加",
+    "非推奨にする",
   ],
   outputs: [
-    "create → tokenId 発行",
-    "deprecate → 一覧で非推奨表示",
+    "追加 → 一覧に反映",
+    "非推奨 → 一覧で非推奨表示",
   ],
   nextSteps: [
-    "/admin/registry-vector-validate",
-    "推薦パラメータは function_parameters（本 UI では編集不可）",
+    "/admin/registry-vector-validate（登録前重複チェック）",
   ],
   boundaryNotes: [
-    "Frontend は意図送信のみ。永続化は backend",
+    "登録・変更はサーバー側で管理されます",
   ],
   errorGuide: [
-    "501 → Docker + DEMO_BACKEND_URL",
-    "401 → /auth",
-    "value 範囲外 → -1〜1 に修正",
+    "サーバー未接続 → 環境設定を確認してください",
+    "ログインが必要 → /auth でログインしてください",
+    "値の範囲外 → -1.0〜1.0 の値を入力してください",
   ],
 };
 
@@ -278,41 +277,40 @@ export const ADMIN_RUNTIME_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_REGISTRY_VECTOR_GUIDE: AdminGuide = {
-  title: "レジストリベクター検証",
+  title: "登録前重複チェック",
   purpose:
-    "登録候補の registry ID 配列が既存レジストリと重複・近似していないかを事前検証します（DB には書きません）。",
+    "登録する予定のIDが既存の登録と重複・類似していないか事前に確認します（データベースへの書き込みはしません）。",
   prerequisites: [
-    "/auth 済み",
-    "検証したい UUID のリストを用意",
+    "/auth でログイン済みであること",
+    "確認したいIDのリストを用意",
   ],
   howToSteps: [
-    "registryTable に対象テーブル名を入力（例: relation_registry）",
-    "query IDs に UUID を改行・カンマ・スペース区切りで貼り付け",
-    "「レジストリベクター検証」を押す",
-    "結果の validationClass と isBlocking を確認 — blocking なら neighbors 表で既存 ID とスコアを見る",
-    "duplicate / near_duplicate なら query を統合・差別化して再検証",
-    "pass または非 blocking なら、Import / UI Builder / Token 登録など本登録操作へ進む",
+    "確認対象のテーブル名を入力（例: relation_registry）",
+    "確認するIDを改行・カンマ・スペース区切りで貼り付け",
+    "「重複チェックを実行」を押す",
+    "結果を確認 — 問題あり（ブロッキング）の場合は類似登録の一覧で既存IDを確認する",
+    "重複・類似が見つかった場合はIDを修正・統合して再確認",
+    "問題なければ登録画面（インポート・画面づくり・トークン追加等）へ進む",
   ],
   inputs: [
-    "registryTable, query IDs（UUID 列）",
+    "テーブル名、確認するID（改行・カンマ区切り）",
   ],
   actions: [
-    "検証実行のみ（read-only）",
+    "重複チェック実行（確認のみ）",
   ],
   outputs: [
-    "validationClass, isBlocking, neighbors[]",
+    "確認結果、類似する既存登録の一覧",
   ],
   nextSteps: [
-    "blocking → ID 修正後に再検証",
-    "pass → 登録画面へ",
+    "問題あり → ID修正後に再確認",
+    "問題なし → 登録画面へ",
   ],
   boundaryNotes: [
-    "閾値は function_parameters — 本 UI では変更不可",
-    "DB 書き込みなし",
+    "データベースへの書き込みはしません",
   ],
   errorGuide: [
-    "duplicate_vector → neighbors を参照して ID 見直し",
-    "zero_vector → 有効なベクトルを持つ ID を選ぶ",
+    "重複 → 類似する既存登録を参照してIDを見直してください",
+    "無効なID → 有効なIDを入力してください",
   ],
 };
 
@@ -373,7 +371,7 @@ export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
     "「データの流れ」タブで登録済みの設定一覧を確認する",
     "行を選び、取り込み先・実行のつながりを確認・編集する",
     "下書きの場合は内容を直して「下書きを保存」",
-    "新規は「新規下書き」→ 必要項目を入力 → 「下書きを作成」",
+    "新規は「新規下書き」→ 必要項目を候補から選択 → 「下書きを作成」",
     "「内容を確認」でサーバー検証 — 不足や重複はエラー表示（黙って通過しない）",
     "問題なければ下書きのみ「有効化」— 自動では有効になりません",
     "「公開・案内」タブで、案内文やキャンペーン情報を編集する（必要な場合）",
@@ -381,29 +379,28 @@ export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
     "取り込みへ進む前に /admin/import で設定を選べることを確認する",
   ],
   inputs: [
-    "wiring: dispatcher axes role, target, layer, action + runtime_destination",
-    "optional advanced: projection_constructor_mapping — constructorKey, outputKind, packageIds, fieldDefs JSON",
-    "promotion: manifestKey, versionLabel, disclosureText, placementKey, projectionSurfaceType, activationPolicy, targetTopologyRefs",
+    "取り込み・実行のつながり: 役割、対象、層、操作、実行先（候補から選択）",
+    "公開・案内（任意）: 案内文、版ラベル、有効化ポリシーなど",
+    "上級者向け設定（通常は不要）: 出力の追加定義",
   ],
   actions: [
-    "manifest: list / get / validate / create_draft / update_draft / promote / deprecate",
-    "promotion_manifest: list / get / validate / update_draft",
+    "一覧 / 詳細表示 / 内容確認 / 下書き作成 / 下書き更新 / 有効化 / 利用停止",
+    "公開・案内: 一覧 / 詳細 / 確認 / 下書き更新",
   ],
   outputs: [
-    "一覧・詳細・structured validation result",
-    "promote/deprecate は lifecycle response（ok / errorCode）",
+    "一覧・詳細・検証結果",
+    "有効化/利用停止は結果コードで通知",
   ],
   nextSteps: [
-    "/admin/runtime で dispatch 経路を確認",
-    "CSV/JSON import manifest 選択は /admin/import",
+    "/admin/runtime で動作を確認",
+    "CSV/JSON 取り込みは /admin/import",
   ],
   boundaryNotes: [
-    "Frontend は intent submission のみ — manifest / promotion validity は backend validate",
-    "ManifestDispatcher の production path は変更しない",
-    "promotion metadata と runtime wiring は同一 manifest topology 配列に共存可能",
-    "silent fallback 禁止 — backend unavailable は明示表示",
+    "Frontend は操作送信のみ — 内容の正しさはサーバー側で検証",
+    "有効化の正本は DB + backend — frontend は結果を表示するのみ",
+    "silent fallback 禁止 — バックエンド未接続は明示表示",
   ],
-  caution: "Promote / Deprecate は DB status を変更します。",
+  caution: "有効化/利用停止は DB の状態を変更します。",
 };
 
 /** Index page: per-route cards with short how-to */
@@ -419,10 +416,10 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/manifests",
     label: UX_IMPORT_SETTINGS,
     purpose: "取り込み・表示・実行先の定義を作成する（インポートの前提）",
-    relation: "推奨フロー Step 1",
+    relation: "推奨フロー Step 2",
     howToSummary: [
       "一覧で既存の設定を確認",
-      "新規下書き → 内容編集",
+      "新規下書き → 内容を候補から選択",
       "内容確認 → 有効化",
     ],
     caution: "有効化で DB の状態が変わります",
@@ -431,7 +428,7 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/import",
     label: "インポート",
     purpose: "CSV/JSON をプレビューしてから取り込む",
-    relation: `推奨フロー Step 2 — ${UX_IMPORT_SETTINGS}登録後`,
+    relation: `推奨フロー Step 3 — ${UX_IMPORT_SETTINGS}登録後`,
     howToSummary: [
       `${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}を選択`,
       "ファイルを選びプレビュー",
@@ -443,7 +440,7 @@ export const ADMIN_ROUTE_CARDS: {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
     purpose: "画面部品の登録とレイアウトの準備",
-    relation: "推奨フロー Step 3",
+    relation: "推奨フロー Step 4",
     howToSummary: [
       "部品を登録 → 配置できる状態にする",
       "レイアウトタブで配置",
@@ -452,10 +449,21 @@ export const ADMIN_ROUTE_CARDS: {
     caution: "保存反映で DB に書き込みます",
   },
   {
+    href: "/admin/hub-navigation",
+    label: "ナビ順序設定",
+    purpose: "画面間の遷移順序を設定する",
+    relation: "推奨フロー Step 5",
+    howToSummary: [
+      "設定を選択",
+      "遷移先を選んで追加",
+      "▲▼で順序を調整",
+    ],
+  },
+  {
     href: "/admin/runtime",
     label: UX_RUNTIME_CHECK,
     purpose: "登録済み設定の動作確認",
-    relation: "推奨フロー Step 4",
+    relation: "推奨フロー Step 6",
     howToSummary: [
       "ログイン済みを確認",
       "シナリオを選んで実行",
@@ -476,38 +484,77 @@ export const ADMIN_ROUTE_CARDS: {
   },
   {
     href: "/admin/context-token-registry",
-    label: "Context Token Registry",
-    purpose: "推薦・SQL Attention 用トークン辞書",
-    relation: "推薦エンジン / context route",
+    label: "推薦トークン辞書",
+    purpose: "推薦エンジンが参照するトークン辞書を管理する",
+    relation: "推薦エンジン連携",
     howToSummary: [
-      "label + value を入力",
+      "ラベルと値を入力",
       "トークン追加",
       "不要時は非推奨",
     ],
   },
   {
     href: "/admin/registry-vector-validate",
-    label: "Registry Vector Validate",
-    purpose: "registry ID 配列の重複・近傍検証",
+    label: "登録前重複チェック",
+    purpose: "登録前にIDが既存の登録と重複していないか確認する",
     relation: "登録前チェック",
     howToSummary: [
-      "table + UUID 列を入力",
-      "検証実行",
-      "blocking なら ID 修正",
+      "確認対象のテーブルとIDを入力",
+      "重複チェックを実行",
+      "問題があればIDを修正",
     ],
   },
   {
     href: "/admin/contents",
     label: "コンテンツ",
-    purpose: "hub / entity / relation browse、entity draft → validate → preview → promote",
-    relation: "content_bundle admin route / hub topology 管理",
+    purpose: "ページ・項目・関係を閲覧し、下書き作成から登録まで行う",
+    relation: "コンテンツ管理",
     howToSummary: [
-      "browse タブで hub / entity / relation を検索・確認",
-      "Entity Draft Editor でドラフト作成 → Validate → Preview",
-      "Promote で active entity として DB 登録",
+      "一覧タブでページ・項目・関係を検索・確認",
+      "下書き作成 → 内容確認 → プレビュー",
+      "登録で有効なコンテンツとして反映",
     ],
   },
 ];
+
+export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
+  title: "ナビ順序設定",
+  purpose:
+    "設定単位のページ遷移順序を設定します。" +
+    "画面間ナビゲーションの順序を管理する画面です。",
+  prerequisites: [
+    "/auth でログイン済みであること",
+    "先に /admin/manifests で取り込み設定が登録・有効化されていること",
+    "遷移先の画面が /admin/contents で登録されていること",
+  ],
+  howToSteps: [
+    "「設定選択」で対象の取り込み設定を選ぶ",
+    "ナビ遷移が未登録なら「追加」フォームが自動表示される",
+    "遷移先の画面を選んで「登録」（順序は自動で末尾に追加されます）",
+    "既存エントリの「編集」でナビ遷移先を変更できる",
+    "順序の変更は▲▼ボタンで行う",
+    "不要なエントリは「削除」で無効化する（記録は保持）",
+  ],
+  inputs: [
+    "設定 — 一覧から選択",
+    "遷移先の画面 — 一覧から選択",
+    "順序 — 末尾に自動追加（▲▼で変更可能）",
+  ],
+  actions: [
+    "追加 — ナビ遷移を新規追加（有効）",
+    "編集 — 遷移先を変更",
+    "▲▼ — 順序を並び替え",
+    "削除 — ナビ遷移を無効化（記録は保持）",
+  ],
+  outputs: [
+    "成功時: ナビ遷移が登録され一覧に反映される",
+    "失敗時: 競合・設定未発見などのエラーが表示される",
+  ],
+  boundaryNotes: [
+    "Frontend は操作送信のみ。書き込みはサーバー側で管理される",
+    "順序番号は設定スコープで一意です — 重複は自動回避されます",
+  ],
+};
 
 /** 推奨受入フロー — admin index の "推奨受入フロー" セクションで使用 */
 export type AcceptanceFlowStep = {
@@ -518,9 +565,10 @@ export type AcceptanceFlowStep = {
   completionSign: string;
   nextLabel?: string;
   boundaryNote?: string;
+  subSteps?: { label: string; href: string }[];
 };
 
-/** 管理トップのコンパクトステッパー — / と同じ推奨順 */
+/** 管理トップのコンパクトステッパー — admin-console-workflow-ssot.yaml canonical_workflow 準拠 */
 export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
   {
     step: 1,
@@ -534,17 +582,21 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_IMPORT_SETTINGS,
     href: "/admin/manifests",
-    purpose: "取り込み・表示・実行先の定義を作る",
-    completionSign: `インポート画面で選べる${UX_IMPORT_SETTINGS}が 1 件以上あること`,
-    nextLabel: "インポートへ",
+    purpose: "取り込み・表示・実行先の定義を作る（DB系 / 配線系 / hub系）",
+    completionSign: `有効な${UX_IMPORT_SETTINGS}が 1 件以上あること`,
+    nextLabel: "データ取り込みへ",
   },
   {
     step: 3,
-    label: "インポート",
+    label: "データ取り込み",
     href: "/admin/import",
-    purpose: "CSV/JSON をプレビューして取り込む",
-    completionSign: "適用成功（applyLogId 表示）",
+    purpose: "CSV/JSON インポート または コンテンツ手動登録",
+    completionSign: "データが DB に反映されていること",
     nextLabel: `${UX_UI_BUILDER}へ`,
+    subSteps: [
+      { label: "インポート", href: "/admin/import" },
+      { label: "手動登録", href: "/admin/contents" },
+    ],
   },
   {
     step: 4,
@@ -552,10 +604,18 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     href: "/admin/ui-builder",
     purpose: "画面部品とレイアウトを準備する",
     completionSign: "レイアウトの保存反映が完了していること",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    nextLabel: "ナビ順序設定へ",
   },
   {
     step: 5,
+    label: "ナビ順序設定",
+    href: "/admin/hub-navigation",
+    purpose: "画面間の遷移順序を設定する",
+    completionSign: "必要なナビ遷移が有効な状態で登録されていること",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+  },
+  {
+    step: 6,
     label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
     purpose: "登録済み設定が動くか確認する",
@@ -576,19 +636,23 @@ export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_IMPORT_SETTINGS,
     href: "/admin/manifests",
-    purpose: `取り込み・表示・実行先の定義を作成します。インポートにはこの${UX_IMPORT_SETTINGS}が先に必要です。`,
+    purpose: `取り込み・表示・実行先の定義を作成します（DB系 / 配線系 / hub系）。インポートにはこの${UX_IMPORT_SETTINGS}が先に必要です。`,
     completionSign: `有効な${UX_IMPORT_SETTINGS}が 1 件以上あり、/admin/import の選択肢に現れること。`,
-    nextLabel: "インポートへ",
+    nextLabel: "データ取り込みへ",
     boundaryNote: "検証・有効化の正本は backend。frontend は入力と結果表示のみ。",
   },
   {
     step: 3,
-    label: "インポート",
+    label: "データ取り込み",
     href: "/admin/import",
-    purpose: `CSV/JSON を${UX_IMPORT_SETTINGS}と${UX_DATA_SHAPE}に沿ってプレビューし、問題なければ取り込みます。`,
-    completionSign: "適用成功後に applyLogId が表示されること。無効行が 0 件であることが理想。",
+    purpose: `CSV/JSON インポート（/admin/import）または手動コンテンツ登録（/admin/contents）でデータを DB に反映します。`,
+    completionSign: "データが DB に反映されていること（applyLogId または promote 完了）。",
     nextLabel: `${UX_UI_BUILDER}へ`,
     boundaryNote: "プレビュー・適用の正本は backend。frontend はファイル送信と結果表示のみ。",
+    subSteps: [
+      { label: "インポート", href: "/admin/import" },
+      { label: "手動登録", href: "/admin/contents" },
+    ],
   },
   {
     step: 4,
@@ -596,11 +660,20 @@ export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
     href: "/admin/ui-builder",
     purpose: "部品を登録し、レイアウトを組んで保存反映します。",
     completionSign: "配置用パレットに部品が表示され、レイアウトの保存反映が完了すること。未登録のみの配置が残っていないこと。",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    nextLabel: "ナビ順序設定へ",
     boundaryNote: "topology 意味判断は backend。frontend はドラフト表示と操作送信のみ。",
   },
   {
     step: 5,
+    label: "ナビ順序設定",
+    href: "/admin/hub-navigation",
+    purpose: "画面間の遷移順序を設定します。多画面ナビゲーションが必要な場合に実施します。",
+    completionSign: "必要なナビ遷移が有効な状態で登録されていること。",
+    nextLabel: `${UX_RUNTIME_CHECK}へ`,
+    boundaryNote: "ナビ遷移の書き込みはサーバー側で管理します。frontend は操作送信のみ。",
+  },
+  {
+    step: 6,
     label: UX_RUNTIME_CHECK,
     href: "/admin/runtime",
     purpose: "登録済み設定に対して操作を実行し、結果を確認します。不足があれば該当画面へ戻ります。",

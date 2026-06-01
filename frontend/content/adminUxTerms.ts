@@ -8,11 +8,53 @@ export const UX_UI_BUILDER = "画面づくり";
 export const UX_RUNTIME_CHECK = "動作確認";
 export const UX_IMPORT_SETTINGS_PAGE = "取り込み設定画面";
 
+/** ステータスラベル（通常表示用） */
+export const UX_STATUS_LABELS: Record<string, string> = {
+  draft: "下書き",
+  active: "有効",
+  deprecated: "利用停止",
+};
+
+/** アクションラベル（通常表示用） */
+export const UX_ACTION_LABELS: Record<string, string> = {
+  validate: "内容を確認",
+  promote: "有効化",
+  deprecate: "利用停止",
+  import: "取り込む",
+  create: "追加",
+  update: "更新",
+};
+
+/** 実行先ラベル（通常表示用） */
+export const UX_RUNTIME_DESTINATION_LABELS: Record<string, string> = {
+  topology_transform_runtime: "通常ルーティング",
+  admin_runtime: "管理機能",
+  sse_projection_runtime: "リアルタイム投影",
+};
+
+/** 技術用語→業務語ヘルパー（詳細/debug のみで技術語を表示） */
+export function toFriendlyLabel(technicalKey: string): string {
+  const map: Record<string, string> = {
+    manifest: UX_IMPORT_SETTINGS,
+    schema: UX_DATA_SHAPE,
+    runtime: UX_RUNTIME_CHECK,
+    dispatch: "実行",
+    hub_relation: "ナビ順序",
+    sequence_position: "順序番号",
+    topology_manifest_id: "設定ID",
+    related_hub_id: "遷移先",
+    component: "部品",
+    token: "スタイル設定",
+  };
+  return map[technicalKey] ?? technicalKey;
+}
+
 /** 推奨フローの Step ラベル（テストとステッパーで共有） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",
   UX_IMPORT_SETTINGS,
-  "インポート",
+  "データ取り込み",
   UX_UI_BUILDER,
+  "ナビ順序設定",
   UX_RUNTIME_CHECK,
 ] as const;

@@ -771,3 +771,111 @@ export async function promoteContentDraft(draftId: string): Promise<ContentBundl
   }
   return body.emission?.data as ContentBundleLifecycleResult;
 }
+
+// ---------------------------------------------------------------------------
+// Hub Navigation
+// ---------------------------------------------------------------------------
+
+export type HubNavigationManifestItem = {
+  topologyManifestId: string;
+  manifestKey: string;
+  hubId: string;
+  hasHubRelations: boolean;
+  hubRelationCount: number;
+};
+
+export type HubNavigationHubRelationItem = {
+  hubRelationId: string;
+  topologyManifestId: string;
+  relatedHubId: string;
+  relatedHubLabel: string;
+  sequencePosition: number;
+  relationConfig: string | null;
+  status: string;
+};
+
+export type HubNavigationLifecycleResult = {
+  ok: boolean;
+  hubRelationId: string | null;
+  status: string;
+  message: string;
+  errorCode?: string;
+};
+
+async function callHubNavigation(
+  action: string,
+  payload?: unknown,
+): Promise<{ success?: boolean; emission?: { data?: unknown } | null; errors?: { message?: string; Message?: string }[] } | null> {
+  const res = await fetch("/api/dispatch", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify({
+      operationType: "admin",
+      target: "admin",
+      layer: "hub_navigation",
+      action,
+      ...(payload !== undefined ? { payload } : {}),
+    }),
+  });
+  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
+  const body = await res.json() as { success?: boolean; emission?: { data?: unknown } | null; errors?: { message?: string; Message?: string; code?: string; Code?: string }[] };
+  if (res.status === 501) {
+    const code = body.errors?.[0]?.code ?? body.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+  }
+  return body;
+}
+
+export async function listHubNavigationManifests(): Promise<HubNavigationManifestItem[] | null> {
+  const body = await callHubNavigation("list_manifests");
+  if (body === null) return null;
+  return (body.emission?.data ?? null) as HubNavigationManifestItem[] | null;
+}
+
+export async function getHubRelationsByManifest(
+  topologyManifestId: string,
+): Promise<HubNavigationHubRelationItem[] | null> {
+  const body = await callHubNavigation("get_hub_relations", { topologyManifestId });
+  if (body === null) return null;
+  return (body.emission?.data ?? null) as HubNavigationHubRelationItem[] | null;
+}
+
+export async function createHubRelation(
+  topologyManifestId: string,
+  relatedHubId: string,
+  sequencePosition: number,
+): Promise<HubNavigationLifecycleResult> {
+  const body = await callHubNavigation("create", { topologyManifestId, relatedHubId, sequencePosition });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "create hub_relation failed");
+  return body.emission?.data as HubNavigationLifecycleResult;
+}
+
+export async function updateHubRelation(
+  hubRelationId: string,
+  relatedHubId: string,
+): Promise<HubNavigationLifecycleResult> {
+  const body = await callHubNavigation("update", { hubRelationId, relatedHubId });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "update hub_relation failed");
+  return body.emission?.data as HubNavigationLifecycleResult;
+}
+
+export async function deprecateHubRelation(
+  hubRelationId: string,
+): Promise<HubNavigationLifecycleResult> {
+  const body = await callHubNavigation("deprecate", { hubRelationId });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "deprecate hub_relation failed");
+  return body.emission?.data as HubNavigationLifecycleResult;
+}
+
+export async function reorderHubRelations(
+  topologyManifestId: string,
+  items: Array<{ hubRelationId: string; newSequencePosition: number }>,
+): Promise<HubNavigationLifecycleResult> {
+  const body = await callHubNavigation("reorder", { topologyManifestId, items });
+  if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  if (!body.success) throw new Error(body.errors?.[0]?.message ?? "reorder hub_relations failed");
+  return body.emission?.data as HubNavigationLifecycleResult;
+}

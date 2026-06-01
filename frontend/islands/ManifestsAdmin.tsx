@@ -47,6 +47,8 @@ import { ADMIN_MANIFESTS_GUIDE } from "../content/adminGuides.ts";
 import {
   UX_IMPORT_SETTINGS,
   UX_RUNTIME_CHECK,
+  UX_STATUS_LABELS,
+  UX_RUNTIME_DESTINATION_LABELS,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -171,7 +173,7 @@ export default function ManifestsAdmin(): JSX.Element {
         return;
       }
       setPromotionValidation(result);
-      setStatus(result.valid ? "promotion バリデーション成功。" : "promotion バリデーションで blocking error があります。");
+      setStatus(result.valid ? "公開・案内の内容確認が完了しました。" : "公開・案内の確認で問題が見つかりました。");
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -274,7 +276,7 @@ export default function ManifestsAdmin(): JSX.Element {
         return;
       }
       setValidation(result);
-      setStatus(result.valid ? "バリデーション成功。" : "バリデーションで blocking error があります。");
+      setStatus(result.valid ? "内容確認が完了しました。" : "確認で問題が見つかりました。修正してください。");
     } catch (e) {
       setErrors([{ message: String(e) }]);
     } finally {
@@ -339,6 +341,7 @@ export default function ManifestsAdmin(): JSX.Element {
     setLoading(true);
     setErrors([]);
     setLifecycleResult(null);
+    setValidation(null); // draft changed — require explicit re-validation before promote
     let projectionDefinition: Record<string, unknown> | null = null;
     try {
       projectionDefinition = buildProjectionDefinitionPayload(projectionDraft);
@@ -372,7 +375,7 @@ export default function ManifestsAdmin(): JSX.Element {
   };
 
   const promoteDisabled = !selectedId || detail?.status !== "draft" ||
-    (validation !== null && validation.isBlocking);
+    validation === null || validation.isBlocking;
   const deprecateDisabled = !selectedId || detail?.status !== "active";
 
   return (
@@ -423,7 +426,7 @@ export default function ManifestsAdmin(): JSX.Element {
               onChange={(e) => setStatusFilter((e.target as HTMLSelectElement).value)}
             >
               {STATUS_FILTERS.map((s) => (
-                <option key={s || "all"} value={s}>{s || "すべて"}</option>
+                <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
               ))}
             </select>
           </label>
@@ -465,7 +468,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     onClick={() => loadDetail(m.manifestId)}
                   >
                     <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                    <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{m.status}</td>
+                    <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
                     <td class="px-2 py-1">{m.role ?? "—"}</td>
                     <td class="px-2 py-1">{m.target ?? "—"}</td>
                     <td class="px-2 py-1">{m.layer ?? "—"}</td>
@@ -486,7 +489,7 @@ export default function ManifestsAdmin(): JSX.Element {
           {detail && (
             <dl class="mb-4 grid gap-2 text-sm sm:grid-cols-2">
               <div><dt class="font-semibold">設定ID</dt><dd><code>{detail.manifestId}</code></dd></div>
-              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{detail.status}</dd></div>
+              <div><dt class="font-semibold">状態</dt><dd class={statusBadgeClass(detail.status)}>{UX_STATUS_LABELS[detail.status] ?? detail.status}</dd></div>
               <div><dt class="font-semibold">更新日時</dt><dd>{detail.updatedAt}</dd></div>
               <details class="sm:col-span-2 text-xs text-muted-xs">
                 <summary class="cursor-pointer">技術情報（開発者向け）</summary>
@@ -522,7 +525,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     onChange={(e) => setDraftRuntimeDestination((e.target as HTMLSelectElement).value)}
                   >
                     {RUNTIME_DESTINATION_OPTIONS.map((d) => (
-                      <option key={d} value={d}>{d}</option>
+                      <option key={d} value={d}>{UX_RUNTIME_DESTINATION_LABELS[d] ?? d}</option>
                     ))}
                   </select>
                 </label>
@@ -530,11 +533,10 @@ export default function ManifestsAdmin(): JSX.Element {
 
               <details class="mt-4 rounded border border-dashed border-slate-300 bg-white p-3">
                 <summary class="cursor-pointer text-xs font-semibold">
-                  advanced: projection_constructor_mapping（optional）
+                  上級者向け設定 — 出力の追加定義（通常は不要）
                 </summary>
                 <p class="mt-2 text-xs text-muted-xs">
-                  backend validate が正本です。ここでは constructorKey / outputKind / packageIds を structured 入力し、
-                  fieldDefs 等は nested JSON のみ（raw topology 全面編集は debug 参照）。
+                  内容の正しさはサーバー側で確認されます。通常のフローでは設定不要です。
                 </p>
                 <label class="mt-3 flex items-center gap-2 text-xs">
                   <input
@@ -542,12 +544,12 @@ export default function ManifestsAdmin(): JSX.Element {
                     checked={projectionDraft.enabled}
                     onChange={(e) => updateProjectionDraft({ enabled: (e.target as HTMLInputElement).checked })}
                   />
-                  projection_constructor_mapping を含める
+                  出力の追加定義を含める
                 </label>
                 {projectionDraft.enabled && (
                   <div class="mt-3 grid gap-2 sm:grid-cols-2">
                     <label class="text-xs">
-                      constructorKey
+                      コンストラクターキー
                       <input
                         class="mt-1 w-full rounded border px-2 py-1 font-mono"
                         value={projectionDraft.constructorKey}
@@ -555,7 +557,7 @@ export default function ManifestsAdmin(): JSX.Element {
                       />
                     </label>
                     <label class="text-xs">
-                      outputKind
+                      出力の種別
                       <select
                         class="mt-1 w-full rounded border px-2 py-1 font-mono"
                         value={projectionDraft.outputKind}
@@ -570,7 +572,7 @@ export default function ManifestsAdmin(): JSX.Element {
                       </select>
                     </label>
                     <label class="text-xs sm:col-span-2">
-                      packageIds（カンマ区切り UUID）
+                      パッケージID（カンマ区切り）
                       <input
                         class="mt-1 w-full rounded border px-2 py-1 font-mono"
                         value={projectionDraft.packageIds}
@@ -579,7 +581,7 @@ export default function ManifestsAdmin(): JSX.Element {
                       />
                     </label>
                     <label class="text-xs sm:col-span-2">
-                      componentId（component_projection 時 optional）
+                      部品ID（任意）
                       <input
                         class="mt-1 w-full rounded border px-2 py-1 font-mono"
                         value={projectionDraft.componentId}
@@ -587,9 +589,9 @@ export default function ManifestsAdmin(): JSX.Element {
                       />
                     </label>
                     <details class="sm:col-span-2">
-                      <summary class="cursor-pointer text-xs text-muted-xs">nested JSON（fieldDefs / componentDefinition / overrides）</summary>
+                      <summary class="cursor-pointer text-xs text-muted-xs">詳細JSON設定（フィールド定義・部品定義・表示上書き）</summary>
                       <label class="mt-2 block text-xs">
-                        fieldDefs JSON array
+                        フィールド定義（JSON配列）
                         <textarea
                           class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                           rows={4}
@@ -599,7 +601,7 @@ export default function ManifestsAdmin(): JSX.Element {
                         />
                       </label>
                       <label class="mt-2 block text-xs">
-                        componentDefinition JSON object
+                        部品定義（JSONオブジェクト）
                         <textarea
                           class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                           rows={3}
@@ -609,7 +611,7 @@ export default function ManifestsAdmin(): JSX.Element {
                         />
                       </label>
                       <label class="mt-2 block text-xs">
-                        projectionOverrides JSON object
+                        表示上書き設定（JSONオブジェクト）
                         <textarea
                           class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                           rows={3}
@@ -632,20 +634,22 @@ export default function ManifestsAdmin(): JSX.Element {
           {detail?.summary && (
             <div class="mb-4 rounded border p-4 text-sm">
               <h3 class="mb-2 font-semibold">設定の概要</h3>
-              <p><strong>dispatcher_mapping:</strong>{" "}
+              <p><strong>取り込み・実行のつながり:</strong>{" "}
                 {detail.summary.dispatcherMapping
-                  ? `[${detail.summary.dispatcherMapping.role}, ${detail.summary.dispatcherMapping.target}, ${detail.summary.dispatcherMapping.layer}, ${detail.summary.dispatcherMapping.action}]`
+                  ? `${detail.summary.dispatcherMapping.role} / ${detail.summary.dispatcherMapping.target} / ${detail.summary.dispatcherMapping.layer} / ${detail.summary.dispatcherMapping.action}`
                   : "—"}
               </p>
-              <p><strong>runtime_mapping:</strong>{" "}
-                {detail.summary.runtimeMapping?.runtimeDestination ?? "—"}
+              <p><strong>実行先:</strong>{" "}
+                {detail.summary.runtimeMapping?.runtimeDestination
+                  ? (UX_RUNTIME_DESTINATION_LABELS[detail.summary.runtimeMapping.runtimeDestination] ?? detail.summary.runtimeMapping.runtimeDestination)
+                  : "—"}
               </p>
-              <p><strong>projection_constructor_mapping:</strong>{" "}
+              <p><strong>出力マッピング:</strong>{" "}
                 {detail.summary.projectionConstructorMapping?.hasProjectionDefinition
                   ? formatProjectionSummary(extractProjectionDefinitionFromTopology(detail.topologyRawJson))
-                  : "none"}
+                  : "なし"}
               </p>
-              <p><strong>entry types:</strong> {detail.summary.entryTypes.join(", ") || "—"}</p>
+              <p><strong>エントリ種別:</strong> {detail.summary.entryTypes.join(", ") || "—"}</p>
               <details class="mt-2">
                 <summary class="cursor-pointer text-muted-xs">debug: raw topology JSON</summary>
                 <pre class="mt-2 max-h-64 overflow-auto rounded bg-slate-900 p-2 text-xs text-slate-100">{detail.topologyRawJson}</pre>
@@ -662,7 +666,7 @@ export default function ManifestsAdmin(): JSX.Element {
                 type="button"
                 class="btn-primary"
                 disabled={loading || promoteDisabled}
-                title={promoteDisabled ? "下書きかつ確認済みである必要があります" : ""}
+                title={promoteDisabled ? "下書き状態で「内容を確認」を完了した設定のみ有効化できます" : ""}
                 onClick={handlePromote}
               >
                 有効化
@@ -681,7 +685,7 @@ export default function ManifestsAdmin(): JSX.Element {
           {validation && (
             <div class="mt-4 rounded border p-4 text-sm">
               <h3 class="mb-2 font-semibold">
-                確認結果: {validation.valid ? "問題なし" : "要修正"}
+                確認結果: {validation.valid ? "問題なし ✓" : "要修正"}
               </h3>
               {validation.issues.length > 0 ? (
                 <ul class="list-inside list-disc">
@@ -692,7 +696,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   ))}
                 </ul>
               ) : (
-                <p class="text-emerald-700">blocking error なし</p>
+                <p class="text-emerald-700">問題なし</p>
               )}
             </div>
           )}
@@ -732,7 +736,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   onChange={(e) => setPromotionStatusFilter((e.target as HTMLSelectElement).value)}
                 >
                   {STATUS_FILTERS.map((s) => (
-                    <option key={s || "all"} value={s}>{s || "すべて"}</option>
+                    <option key={s || "all"} value={s}>{s ? (UX_STATUS_LABELS[s] ?? s) : "すべて"}</option>
                   ))}
                 </select>
               </label>
@@ -761,7 +765,7 @@ export default function ManifestsAdmin(): JSX.Element {
                         onClick={() => loadPromotionDetail(m.manifestId)}
                       >
                         <td class="px-2 py-1"><code class="text-xs">{m.manifestId.slice(0, 8)}…</code></td>
-                        <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{m.status}</td>
+                        <td class={`px-2 py-1 ${statusBadgeClass(m.status)}`}>{UX_STATUS_LABELS[m.status] ?? m.status}</td>
                         <td class="px-2 py-1">{m.manifestKey}</td>
                         <td class="px-2 py-1">{m.versionLabel}</td>
                         <td class="px-2 py-1">{String(m.hasDisclosure)}</td>
@@ -777,25 +781,35 @@ export default function ManifestsAdmin(): JSX.Element {
             <h2 class="section-title">2. 案内文・キャンペーン情報の編集</h2>
             <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-4">
               <label class="block text-xs">
-                対象の設定ID（下書き）
-                <input
+                対象の設定（下書き）
+                <select
                   class="mt-1 w-full rounded border px-2 py-1 font-mono"
                   value={promotionDraftManifestId}
-                  onInput={(e) => setPromotionDraftManifestId((e.target as HTMLInputElement).value)}
-                  placeholder="00000000-0000-0000-0000-000000000061"
-                />
+                  onChange={(e) => {
+                    const id = (e.target as HTMLSelectElement).value;
+                    setPromotionDraftManifestId(id);
+                    if (id) loadPromotionDetail(id);
+                  }}
+                >
+                  <option value="">— 設定を選択 —</option>
+                  {manifests.map((m) => (
+                    <option key={m.manifestId} value={m.manifestId}>
+                      {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ?? m.status}]
+                    </option>
+                  ))}
+                </select>
               </label>
               {promotionDetail && (
                 <p class="mt-2 text-xs text-muted-xs">
-                  status={promotionDetail.status} — summary: {formatPromotionSummary(promotionDetail.metadata ?? undefined)}
+                  状態: {UX_STATUS_LABELS[promotionDetail.status] ?? promotionDetail.status} — {formatPromotionSummary(promotionDetail.metadata ?? undefined)}
                 </p>
               )}
               <div class="mt-4 grid gap-2 sm:grid-cols-2">
                 {([
-                  ["manifestKey", promotionDraft.manifestKey, (v: string) => updatePromotionDraft({ manifestKey: v })],
-                  ["versionLabel", promotionDraft.versionLabel, (v: string) => updatePromotionDraft({ versionLabel: v })],
-                  ["placementKey", promotionDraft.placementKey, (v: string) => updatePromotionDraft({ placementKey: v })],
-                  ["projectionSurfaceType", promotionDraft.projectionSurfaceType, (v: string) => updatePromotionDraft({ projectionSurfaceType: v })],
+                  ["設定キー", promotionDraft.manifestKey, (v: string) => updatePromotionDraft({ manifestKey: v })],
+                  ["版ラベル", promotionDraft.versionLabel, (v: string) => updatePromotionDraft({ versionLabel: v })],
+                  ["配置キー", promotionDraft.placementKey, (v: string) => updatePromotionDraft({ placementKey: v })],
+                  ["配置面の種別", promotionDraft.projectionSurfaceType, (v: string) => updatePromotionDraft({ projectionSurfaceType: v })],
                 ] as const).map(([label, value, setter]) => (
                   <label key={label} class="text-xs">
                     {label}
@@ -807,7 +821,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   </label>
                 ))}
                 <label class="text-xs sm:col-span-2">
-                  disclosureText
+                  案内文
                   <textarea
                     class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                     rows={3}
@@ -816,7 +830,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   />
                 </label>
                 <label class="text-xs">
-                  disclosureCategoryLabel
+                  カテゴリラベル
                   <input
                     class="mt-1 w-full rounded border px-2 py-1 font-mono"
                     value={promotionDraft.disclosureCategoryLabel}
@@ -824,7 +838,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   />
                 </label>
                 <label class="text-xs">
-                  activationPolicyType
+                  有効化タイミング
                   <select
                     class="mt-1 w-full rounded border px-2 py-1 font-mono"
                     value={promotionDraft.activationPolicyType}
@@ -839,7 +853,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   </select>
                 </label>
                 <label class="text-xs sm:col-span-2">
-                  activationConditionExpression（conditional / scheduled 時）
+                  有効化条件式（条件付き・スケジュール時のみ）
                   <input
                     class="mt-1 w-full rounded border px-2 py-1 font-mono"
                     value={promotionDraft.activationConditionExpression}
@@ -849,12 +863,16 @@ export default function ManifestsAdmin(): JSX.Element {
                 </label>
               </div>
 
-              <h3 class="mt-4 text-xs font-semibold">targetTopologyRefs</h3>
+              <h3 class="mt-4 text-xs font-semibold">対象の紐付け</h3>
               {promotionDraft.targetRefs.map((ref, index) => (
                 <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
-                  {(["packageId", "schemaId", "componentId"] as const).map((field) => (
+                  {([
+                    ["packageId", "パッケージID"],
+                    ["schemaId", "データ形式ID"],
+                    ["componentId", "部品ID"],
+                  ] as const).map(([field, fieldLabel]) => (
                     <label key={field} class="text-xs">
-                      {field}
+                      {fieldLabel}
                       <input
                         class="mt-1 w-full rounded border px-2 py-1 font-mono"
                         value={ref[field]}
@@ -873,7 +891,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     (!promotionSelectedId && !promotionDraftManifestId.trim())}
                   onClick={handlePromotionSaveDraft}
                 >
-                  metadata ドラフト更新
+                  案内内容を下書き保存
                 </button>
                 <button
                   type="button"
@@ -881,7 +899,7 @@ export default function ManifestsAdmin(): JSX.Element {
                   disabled={loading || !promotionSelectedId}
                   onClick={handlePromotionValidate}
                 >
-                  promotion バリデート
+                  内容を確認
                 </button>
               </div>
             </div>
@@ -889,7 +907,7 @@ export default function ManifestsAdmin(): JSX.Element {
             {promotionValidation && (
               <div class="rounded border p-4 text-sm">
                 <h3 class="mb-2 font-semibold">
-                  promotion バリデーション: {promotionValidation.valid ? "valid" : "invalid"}
+                  公開・案内の確認: {promotionValidation.valid ? "問題なし ✓" : "要修正"}
                 </h3>
                 {promotionValidation.issues.length > 0 ? (
                   <ul class="list-inside list-disc">
@@ -900,7 +918,7 @@ export default function ManifestsAdmin(): JSX.Element {
                     ))}
                   </ul>
                 ) : (
-                  <p class="text-emerald-700">blocking error なし</p>
+                  <p class="text-emerald-700">問題なし</p>
                 )}
               </div>
             )}
