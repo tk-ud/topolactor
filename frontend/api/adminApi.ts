@@ -342,7 +342,11 @@ async function callAdminManifestOp(
       : `manifest ${action} failed (HTTP ${res.status})`;
     throw new Error(msg);
   }
-  return body;
+  return {
+    success: body.success ?? true,
+    emission: body.emission,
+    errors: body.errors,
+  };
 }
 
 export async function listAdminManifests(status?: string): Promise<AdminManifestListItem[] | null> {

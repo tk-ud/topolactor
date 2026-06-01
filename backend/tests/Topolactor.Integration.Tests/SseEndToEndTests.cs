@@ -525,4 +525,8 @@ internal sealed class StubManifestRepository : Topolactor.Repository.ManifestRep
     public override Task<int> CountActivePromotionKeyConflictsAsync(
         string manifestKey, string versionLabel, Guid? excludeManifestId, CancellationToken ct = default) =>
         Task.FromResult(0);
+
+    public override Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> MergeTopologyExtensionDraftAsync(
+        Guid manifestId, string entryType, JsonElement entryBody, CancellationToken ct = default) =>
+        Task.FromResult<(ManifestDetailRecord?, ValidationError?)>((null, new ValidationError("STUB", "stub")));
 }
