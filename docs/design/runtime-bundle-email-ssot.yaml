@@ -1,0 +1,166 @@
+runtime_bundle_email_ssot:
+  name: runtime_bundle_email
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/runtime-bundle-email-ssot.yaml
+
+  purpose:
+    summary: >-
+      Email送信BundleのSSOT。
+      Email sendはUI/Human approvalを経た副作用として扱う。
+      CLI/MCPからのemail sendは禁止。AI判断による自律送信は禁止。
+      UI catalog / backend dispatch / runtime の実装は後段実装対象。
+      draft / preview / approval / dispatch / delivery_log の境界を本SSOTで定義する。
+    non_goals:
+      - cli_mcp_direct_email_send
+      - ai_autonomous_email_send
+      - smtp_provider_credential_specification
+      - email_runtime_implementation
+      - direct_db_write_on_email_action
+      - mass_email_campaign_management
+
+  authority_boundary:
+    email_send_authority: ui_approval_then_backend_dispatch
+    prohibited_authorities:
+      - cli_mcp_port
+      - ai_autonomous_judgment
+      - frontend_direct_send
+      - webhook_direct_send_without_scheduler
+
+  trigger_kind:
+    allowed:
+      - ui_approval_confirmed
+      - backend_dispatch_after_approval
+    prohibited:
+      - cli_trigger
+      - mcp_tool_trigger
+      - ai_autonomous_trigger
+      - webhook_direct_trigger_without_scheduler
+
+  allowed_side_effects:
+    - external_smtp_send_after_explicit_approval
+    - delivery_log_write_to_runtime_event_log
+
+  prohibited_operations:
+    - email_send_from_cli_or_mcp
+    - email_send_from_ai_judgment_alone
+    - email_send_without_human_approval
+    - silent_fallback_on_send_failure
+    - smtp_credential_in_public_ssot
+    - smtp_endpoint_in_public_ssot
+
+  public_safe_config_policy:
+    allowed_in_public_ssot:
+      - email_flow_boundary_definition
+      - draft_preview_approval_dispatch_delivery_log_boundary
+      - trigger_kind_policy
+      - failure_policy_definition
+    prohibited_in_public_ssot:
+      - smtp_host
+      - smtp_port
+      - smtp_api_key
+      - smtp_provider_endpoint
+      - sender_credentials
+      - rate_limit_values
+
+  secret_credential_boundary:
+    location: runtime_secret_store_not_in_public_ssot
+    policy: >-
+      SMTP provider credential (host / port / API key / sender address) は
+      公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
+
+  email_flow_boundary:
+    draft:
+      description: >-
+        Email下書き作成。UI catalogで構造化テンプレートから作成。
+      actor: user_or_authorized_agent
+      stores_to: email_draft_surface_not_canonical_db_table
+    preview:
+      description: 送信前プレビュー。内容・宛先・件名の確認。
+      actor: user
+      prohibited: silent_skip
+    approval:
+      description: 明示的ユーザー承認。UI上での確認アクション必須。
+      actor: user_or_approver
+      required: true
+      prohibited:
+        - ai_autonomous_approval
+        - implicit_approval
+    dispatch:
+      description: >-
+        承認後のbackend dispatch。SMTP / APIprovider経由で送信。
+      actor: backend_dispatch_after_approval_confirmation
+      requires: prior_approval_confirmed
+    delivery_log:
+      description: >-
+        送信結果のruntime_event_logへの記録。成功・失敗ともに記録。
+      stores_to: runtime_event_log
+      failure_behavior: explicit_failure_record
+
+  approval_boundary:
+    required: true
+    policy: >-
+      Email sendは必ずUI/Human approvalを経てから実行する。
+      承認なし・暗黙の承認・AI単独判断での送信は禁止。
+
+  scheduler_boundary:
+    policy: >-
+      Email sendのバックグラウンド実行はscheduler経由で行う。
+      webhook_direct_runtime_execution_without_schedulerは禁止。
+
+  audit_log_boundary:
+    required: runtime_event_log
+    scope:
+      - dispatch_initiated
+      - send_success
+      - send_failure
+      - approval_recorded
+
+  failure_policy:
+    policy: explicit_failure_no_silent_fallback
+    on_send_failure:
+      - record_to_runtime_event_log
+      - expose_failure_to_caller
+      - do_not_retry_silently
+
+  idempotency_policy:
+    policy: >-
+      同一approval IDに対するdispatchは冪等に扱う。
+      二重送信防止のため dispatch_idempotency_key を使用する。
+      実装詳細は後段実装SSOTで定義する。
+
+  relation_to_extended_runtime_bundle_registry:
+    registry_entry: email_bundle
+    registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+    owner_status: assigned_to_design_ssot
+    core_bundle_status: not_started
+
+  relation_to_cli_mcp_port:
+    ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+    boundary: email_send_is_explicitly_out_of_scope_for_cli_mcp_port
+    policy: >-
+      CLI/MCP read/export portはemail sendをout_of_scopeとして宣言している。
+      このBundleはそのboundaryを尊重し、CLI/MCP経由のemail send経路を提供しない。
+
+  explicitly_out_of_scope:
+    - smtp_provider_credential_specification
+    - smtp_provider_selection
+    - email_template_html_design
+    - email_unsubscribe_list_management
+    - email_bounce_rate_tracking
+    - mass_email_campaign_management
+    - cli_mcp_email_send
+    - ai_autonomous_email_send
+
+  future_implementation_requirements:
+    items:
+      - email_draft_surface_design
+      - email_template_catalog_design
+      - backend_email_dispatch_service_design
+      - smtp_api_provider_integration_design
+      - delivery_log_schema_design
+      - approval_confirmation_ui_component
+      - idempotency_key_schema
+    policy: >-
+      実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
+      credential / endpoint実体はこのSSOTに含めない。
