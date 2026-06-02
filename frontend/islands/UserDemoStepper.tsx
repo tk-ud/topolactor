@@ -129,7 +129,9 @@ export default function UserDemoStepper(): JSX.Element {
   }
 
   const emissionSummary = emission ? summarizeEmission(emission) : null;
-  const userResult = emissionSummary ? toUserFacingResult(emissionSummary) : null;
+  const userResult = emissionSummary
+    ? toUserFacingResult(emissionSummary)
+    : null;
 
   return (
     <div class="user-demo-stepper max-w-2xl">
@@ -138,15 +140,14 @@ export default function UserDemoStepper(): JSX.Element {
       {step === 1 && (
         <section>
           <h2 class="mb-2 text-lg font-semibold text-gray-900">
-            確認する投影を選んでください
+            確認したい画面を選んでください
           </h2>
           <p class="mb-5 text-sm text-gray-500">
-            admin で構築した demo project の各 projection を選んで確認できます。
+            設定済みページの表示と操作を確認できます。
           </p>
           {!token && (
             <div class="alert-warn mb-5">
-              <strong>ログインが必要です。</strong>{" "}
-              先に{" "}
+              <strong>ログインが必要です。</strong> 先に{" "}
               <a href="/auth" class="link font-semibold">
                 ログイン
               </a>{" "}
@@ -162,7 +163,9 @@ export default function UserDemoStepper(): JSX.Element {
                 class="w-full rounded-lg border border-gray-200 bg-white p-5 text-left transition hover:border-blue-400 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <p class="font-semibold text-gray-900">{opt.previewLabel}</p>
-                <p class="mt-1 text-sm text-gray-500">{opt.previewDescription}</p>
+                <p class="mt-1 text-sm text-gray-500">
+                  {opt.previewDescription}
+                </p>
               </button>
             ))}
           </div>
@@ -181,7 +184,7 @@ export default function UserDemoStepper(): JSX.Element {
 
       {step === 3 && userResult && !loading && (
         <section>
-          <h2 class="mb-4 text-lg font-semibold text-gray-900">投影結果</h2>
+          <h2 class="mb-4 text-lg font-semibold text-gray-900">確認結果</h2>
           <UserDemoResultCard result={userResult} />
           <UserDemoNextActions
             result={userResult}

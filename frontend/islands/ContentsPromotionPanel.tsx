@@ -1,15 +1,15 @@
 import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
-  listAdminManifests,
-  getAdminPromotionManifest,
-  validateAdminManifest,
-  validateAdminPromotionManifest,
-  promoteAdminManifest,
-  updateAdminPromotionManifestDraft,
   type AdminManifestListItem,
   type AdminPromotionManifestDetail,
   type AdminPromotionManifestUpdateInput,
+  getAdminPromotionManifest,
+  listAdminManifests,
+  promoteAdminManifest,
+  updateAdminPromotionManifestDraft,
+  validateAdminManifest,
+  validateAdminPromotionManifest,
 } from "../api/adminApi.ts";
 import {
   buildPromotionUpdatePayload,
@@ -20,15 +20,23 @@ import {
   type PromotionManifestDraft,
   type PromotionTargetRefDraft,
 } from "../runtime/promotionManifestEditor.ts";
-import { UX_STATUS_LABELS, UX_HUB_MANIFESTS_PAGE } from "../content/adminUxTerms.ts";
+import {
+  UX_ACTIVATION_POLICY_LABELS,
+  UX_HUB_MANIFESTS_PAGE,
+  UX_STATUS_LABELS,
+} from "../content/adminUxTerms.ts";
 
 type ValidationState = { isBlocking: boolean } | null;
 
 export default function ContentsPromotionPanel(): JSX.Element {
   const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
-  const [detail, setDetail] = useState<AdminPromotionManifestDetail | null>(null);
-  const [draft, setDraft] = useState<PromotionManifestDraft>(emptyPromotionManifestDraft());
+  const [detail, setDetail] = useState<AdminPromotionManifestDetail | null>(
+    null,
+  );
+  const [draft, setDraft] = useState<PromotionManifestDraft>(
+    emptyPromotionManifestDraft(),
+  );
   const [validation, setValidation] = useState<ValidationState>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -56,10 +64,16 @@ export default function ContentsPromotionPanel(): JSX.Element {
     setDraft((prev) => ({ ...prev, ...patch }));
   };
 
-  const updateTargetRef = (index: number, patch: Partial<PromotionTargetRefDraft>) => {
+  const updateTargetRef = (
+    index: number,
+    patch: Partial<PromotionTargetRefDraft>,
+  ) => {
     setDraft((prev) => ({
       ...prev,
-      targetRefs: prev.targetRefs.map((ref, i) => (i === index ? { ...ref, ...patch } : ref)),
+      targetRefs: prev.targetRefs.map((
+        ref,
+        i,
+      ) => (i === index ? { ...ref, ...patch } : ref)),
     }));
   };
 
@@ -69,12 +83,20 @@ export default function ContentsPromotionPanel(): JSX.Element {
     setValidation(null);
     try {
       const saved = await updateAdminPromotionManifestDraft(
-        buildPromotionUpdatePayload(selectedId, draft) as AdminPromotionManifestUpdateInput,
+        buildPromotionUpdatePayload(
+          selectedId,
+          draft,
+        ) as AdminPromotionManifestUpdateInput,
       );
       setDetail(saved);
-      setStatus("公開・案内の下書きを保存しました。内容確認後に有効化してください。");
+      setStatus(
+        "公開・案内の下書きを保存しました。内容確認後に有効化してください。",
+      );
     } catch (e) {
-      setStatus(String(e));
+      console.error("PROMOTION_DRAFT_SAVE_FAILED", e);
+      setStatus(
+        "公開・案内の下書きを保存できませんでした。接続状態を確認して再度お試しください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -91,13 +113,15 @@ export default function ContentsPromotionPanel(): JSX.Element {
         validateAdminPromotionManifest(selectedId),
       ]);
       const manifestBlocking = manifestResult ? !manifestResult.valid : true;
-      const promotionBlocking = promotionResult ? promotionResult.isBlocking : true;
+      const promotionBlocking = promotionResult
+        ? promotionResult.isBlocking
+        : true;
       const isBlocking = manifestBlocking || promotionBlocking;
       setValidation({ isBlocking });
       setStatus(
         isBlocking
-          ? "内容確認: 要修正 — manifest データまたは公開・案内メタデータに問題があります（修正後に再確認してください）"
-          : "内容確認: 問題なし — 初期データ候補のサンプル確認後、manifest の有効化が可能です",
+          ? "内容確認: 要修正 — ページ内容または公開設定に問題があります（修正後に再確認してください）"
+          : "内容確認: 問題なし — サンプルを確認後、ページを有効化できます",
       );
     } finally {
       setLoading(false);
@@ -110,15 +134,20 @@ export default function ContentsPromotionPanel(): JSX.Element {
     try {
       const result = await promoteAdminManifest(selectedId);
       if (!result?.ok) {
-        setStatus(`有効化エラー: ${result?.message ?? "promote failed"}`);
+        setStatus(
+          "ページを有効化できませんでした。内容を確認して再度お試しください。",
+        );
         return;
       }
-      setStatus(`有効化完了 — topology_manifests へ投影済み（初期データ候補の実データ登録は別フロー）。次: ${UX_HUB_MANIFESTS_PAGE}`);
+      setStatus(`有効化が完了しました。次: ${UX_HUB_MANIFESTS_PAGE}`);
       setValidation(null);
       const m = await listAdminManifests("draft");
       if (m) setManifests(m);
     } catch (e) {
-      setStatus(String(e));
+      console.error("PAGE_ACTIVATION_FAILED", e);
+      setStatus(
+        "ページを有効化できませんでした。接続状態を確認して再度お試しください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -128,7 +157,8 @@ export default function ContentsPromotionPanel(): JSX.Element {
     <section class="mb-8 rounded border p-4">
       <h2 class="section-title">③ 公開・案内 — 内容確認 → 有効化</h2>
       <p class="mb-2 text-xs text-muted-xs">
-        ① 下書き作成 → ② 設計保存（上のパネル） → ③ 内容確認 → 有効化（このパネル）
+        ① 下書き作成 → ② 設計保存（上のパネル） → ③ 内容確認 →
+        有効化（このパネル）
       </p>
       <p class="mb-3 text-xs text-muted-xs">
         案内文・キャンペーン情報を入力して保存し、内容確認が通ったら有効化してください。
@@ -136,7 +166,7 @@ export default function ContentsPromotionPanel(): JSX.Element {
       {status && <p class="mb-3 text-sm text-muted-xs">{status}</p>}
 
       <label class="block text-xs">
-        対象下書き manifest
+        対象の下書きページ
         <select
           class="mt-1 w-full rounded border px-2 py-1 font-mono"
           value={selectedId}
@@ -146,42 +176,26 @@ export default function ContentsPromotionPanel(): JSX.Element {
           }}
         >
           <option value="">— 選択 —</option>
-          {manifests.map((m) => (
+          {manifests.map((m, index) => (
             <option key={m.manifestId} value={m.manifestId}>
-              {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ?? m.status}]
+              下書きページ {index + 1}{" "}
+              [{UX_STATUS_LABELS[m.status] ?? m.status}]
             </option>
           ))}
         </select>
       </label>
 
-      {detail && (
-        <p class="mt-2 text-xs text-muted-xs">
-          {formatPromotionSummary(detail.metadata ?? undefined)}
-        </p>
-      )}
-
       <div class="mt-4 grid gap-2 sm:grid-cols-2">
-        {([
-          ["設定キー", draft.manifestKey, (v: string) => updateDraft({ manifestKey: v })],
-          ["版ラベル", draft.versionLabel, (v: string) => updateDraft({ versionLabel: v })],
-          ["配置キー", draft.placementKey, (v: string) => updateDraft({ placementKey: v })],
-        ] as const).map(([label, value, setter]) => (
-          <label key={label} class="text-xs">
-            {label}
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 font-mono"
-              value={value}
-              onInput={(e) => setter((e.target as HTMLInputElement).value)}
-            />
-          </label>
-        ))}
         <label class="text-xs sm:col-span-2">
           案内文
           <textarea
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             rows={3}
             value={draft.disclosureText}
-            onInput={(e) => updateDraft({ disclosureText: (e.target as HTMLTextAreaElement).value })}
+            onInput={(e) =>
+              updateDraft({
+                disclosureText: (e.target as HTMLTextAreaElement).value,
+              })}
           />
         </label>
         <label class="text-xs">
@@ -191,42 +205,90 @@ export default function ContentsPromotionPanel(): JSX.Element {
             value={draft.activationPolicyType}
             onChange={(e) =>
               updateDraft({
-                activationPolicyType: (e.target as HTMLSelectElement).value as PromotionManifestDraft["activationPolicyType"],
+                activationPolicyType: (e.target as HTMLSelectElement)
+                  .value as PromotionManifestDraft["activationPolicyType"],
               })}
           >
             {PROMOTION_ACTIVATION_POLICY_OPTIONS.map((p) => (
-              <option key={p} value={p}>{p}</option>
+              <option key={p} value={p}>
+                {UX_ACTIVATION_POLICY_LABELS[p] ?? p}
+              </option>
             ))}
           </select>
         </label>
       </div>
 
-      {draft.targetRefs.map((ref, index) => (
-        <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
-          {(["packageId", "schemaId", "componentId"] as const).map((field) => (
-            <label key={field} class="text-xs">
-              {field}
+      <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3 text-xs">
+        <summary class="cursor-pointer font-semibold">
+          技術情報 — 内部参照 ID と配置設定
+        </summary>
+        {detail && (
+          <p class="mt-2 text-muted-xs">
+            {formatPromotionSummary(detail.metadata ?? undefined)}
+          </p>
+        )}
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+          {([
+            ["manifestKey", draft.manifestKey, (v: string) =>
+              updateDraft({ manifestKey: v })],
+            ["versionLabel", draft.versionLabel, (v: string) =>
+              updateDraft({ versionLabel: v })],
+            ["placementKey", draft.placementKey, (v: string) =>
+              updateDraft({ placementKey: v })],
+          ] as const).map(([label, value, setter]) => (
+            <label key={label}>
+              {label}
               <input
                 class="mt-1 w-full rounded border px-2 py-1 font-mono"
-                value={ref[field]}
-                onInput={(e) => updateTargetRef(index, { [field]: (e.target as HTMLInputElement).value })}
+                value={value}
+                onInput={(e) => setter((e.target as HTMLInputElement).value)}
               />
             </label>
           ))}
         </div>
-      ))}
+        {draft.targetRefs.map((ref, index) => (
+          <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
+            {(["packageId", "schemaId", "componentId"] as const).map((
+              field,
+            ) => (
+              <label key={field}>
+                {field}
+                <input
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={ref[field]}
+                  onInput={(e) =>
+                    updateTargetRef(index, {
+                      [field]: (e.target as HTMLInputElement).value,
+                    })}
+                />
+              </label>
+            ))}
+          </div>
+        ))}
+      </details>
 
       <div class="mt-4 flex flex-wrap gap-2">
-        <button type="button" class="btn-primary" disabled={loading || !selectedId} onClick={handleSave}>
+        <button
+          type="button"
+          class="btn-primary"
+          disabled={loading || !selectedId}
+          onClick={handleSave}
+        >
           下書き保存
         </button>
-        <button type="button" class="btn-secondary" disabled={loading || !selectedId} onClick={handleValidate}>
+        <button
+          type="button"
+          class="btn-secondary"
+          disabled={loading || !selectedId}
+          onClick={handleValidate}
+        >
           内容を確認
         </button>
         <button
           type="button"
           class="btn-primary"
-          disabled={loading || !selectedId || validation === null || validation.isBlocking}
+          disabled={loading || !selectedId || validation === null ||
+            validation.isBlocking}
           onClick={handlePromote}
         >
           有効化

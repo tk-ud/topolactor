@@ -43,7 +43,7 @@ export type ManifestScreenDesignDraft = {
 const STORAGE_KEY = "topolactor_manifest_screen_design_v2";
 
 export const MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE =
-  "ブラウザ内の下書きキャッシュです。保存反映後は backend の manifest topology が正本です。";
+  "この端末に一時保存した未反映の変更があります。";
 
 export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   screenLabel: "",
@@ -72,21 +72,35 @@ function readAll(): Record<string, ManifestScreenDesignDraft> {
   }
 }
 
-export function loadManifestScreenDesignLocal(manifestId: string): ManifestScreenDesignDraft | null {
+export function loadManifestScreenDesignLocal(
+  manifestId: string,
+): ManifestScreenDesignDraft | null {
   const entry = readAll()[manifestId];
   if (!entry) return null;
   return {
     ...emptyManifestScreenDesign(),
     ...entry,
-    tableRef: entry.tableRef ?? (entry as { dbTableName?: string }).dbTableName ?? "",
-    searchKeyColumns: Array.isArray(entry.searchKeyColumns) ? entry.searchKeyColumns : [],
-    displayColumns: Array.isArray(entry.displayColumns) ? entry.displayColumns : [],
-    relationIntents: Array.isArray(entry.relationIntents) ? entry.relationIntents : [],
-    initialDataRows: Array.isArray(entry.initialDataRows) ? entry.initialDataRows : [],
+    tableRef: entry.tableRef ??
+      (entry as { dbTableName?: string }).dbTableName ?? "",
+    searchKeyColumns: Array.isArray(entry.searchKeyColumns)
+      ? entry.searchKeyColumns
+      : [],
+    displayColumns: Array.isArray(entry.displayColumns)
+      ? entry.displayColumns
+      : [],
+    relationIntents: Array.isArray(entry.relationIntents)
+      ? entry.relationIntents
+      : [],
+    initialDataRows: Array.isArray(entry.initialDataRows)
+      ? entry.initialDataRows
+      : [],
   };
 }
 
-export function saveManifestScreenDesignLocal(manifestId: string, draft: ManifestScreenDesignDraft): void {
+export function saveManifestScreenDesignLocal(
+  manifestId: string,
+  draft: ManifestScreenDesignDraft,
+): void {
   if (typeof globalThis.localStorage === "undefined") return;
   const all = readAll();
   all[manifestId] = draft;
@@ -106,19 +120,28 @@ export function screenDesignFromBackendShape(
 ): ManifestScreenDesignDraft {
   return {
     screenLabel: "",
-    operationKind: (shape.screenOperationKind as ScreenOperationKind) ?? operationKind,
+    operationKind: (shape.screenOperationKind as ScreenOperationKind) ??
+      operationKind,
     tableRef: shape.tableRef ?? "",
     importSchemaName: shape.importSchemaName ?? "",
     searchTargets: shape.searchTargets.join(", "),
-    searchKeyColumns: Array.isArray(shape.searchKeyColumns) ? shape.searchKeyColumns : shape.searchTargets,
+    searchKeyColumns: Array.isArray(shape.searchKeyColumns)
+      ? shape.searchKeyColumns
+      : shape.searchTargets,
     aggregationSpec: shape.aggregationSpec ?? "",
     aggregationKey: shape.aggregationKey ?? "",
-    displayColumns: Array.isArray(shape.displayColumns) ? shape.displayColumns : [],
+    displayColumns: Array.isArray(shape.displayColumns)
+      ? shape.displayColumns
+      : [],
     columns: shape.columns && shape.columns.length > 0
       ? shape.columns
       : [{ name: "", dataType: "text", nullable: true }],
-    relationIntents: Array.isArray(shape.relationIntents) ? shape.relationIntents : [],
-    initialDataRows: Array.isArray(shape.initialDataRows) ? shape.initialDataRows : [],
+    relationIntents: Array.isArray(shape.relationIntents)
+      ? shape.relationIntents
+      : [],
+    initialDataRows: Array.isArray(shape.initialDataRows)
+      ? shape.initialDataRows
+      : [],
   };
 }
 

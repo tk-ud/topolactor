@@ -1,31 +1,43 @@
-import { assertEquals, assertFalse, assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
-  ADMIN_MANIFESTS_GUIDE,
+  assert,
+  assertEquals,
+  assertFalse,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
+  ACCEPTANCE_CHECKLIST,
+  ADMIN_CONTENTS_GUIDE,
   ADMIN_HUB_NAVIGATION_GUIDE,
+  ADMIN_INDEX_GUIDE,
   ADMIN_MAIN_FLOW_STEPS,
+  ADMIN_MANIFESTS_GUIDE,
+  ADMIN_ROUTE_CARDS,
+  ADMIN_UI_BUILDER_GUIDE,
 } from "../content/adminGuides.ts";
 import {
-  UX_STATUS_LABELS,
-  UX_ACTION_LABELS,
-  UX_RUNTIME_DESTINATION_LABELS,
-  UX_FIELD_TABLE_REF,
-  UX_FIELD_IMPORT_SCHEMA,
-  UX_FIELD_NULLABLE,
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  NORMAL_VIEW_BANNED_TERMS,
+  UX_ACTION_LABELS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
-  UX_FIELD_SEARCH_KEY,
+  UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
-  UX_FIELD_SAMPLE_VIEWING,
+  UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_INITIAL_DATA,
+  UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
+  UX_FIELD_SAMPLE_VIEWING,
+  UX_FIELD_SEARCH_KEY,
+  UX_FIELD_TABLE_REF,
+  UX_MAIN_FLOW_STEP_LABELS,
+  UX_RUNTIME_DESTINATION_LABELS,
+  UX_STATUS_LABELS,
 } from "../content/adminUxTerms.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
+  clearManifestScreenDesignLocal,
   emptyManifestScreenDesign,
   loadManifestScreenDesignLocal,
   saveManifestScreenDesignLocal,
-  clearManifestScreenDesignLocal,
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
@@ -76,7 +88,10 @@ Deno.test("ADMIN_MAIN_FLOW_STEPS: does not contain hub_relation in purpose or co
   const text = ADMIN_MAIN_FLOW_STEPS
     .map((s) => s.purpose + " " + s.completionSign)
     .join(" ");
-  assertFalse(text.includes("hub_relation"), "Flow steps must not contain hub_relation");
+  assertFalse(
+    text.includes("hub_relation"),
+    "Flow steps must not contain hub_relation",
+  );
 });
 
 Deno.test("ADMIN_HUB_NAVIGATION_GUIDE title does not contain hub_relation", () => {
@@ -100,7 +115,8 @@ function computePromoteDisabled(
   status: string,
   validation: { isBlocking: boolean } | null,
 ): boolean {
-  return !selectedId || status !== "draft" || validation === null || validation.isBlocking;
+  return !selectedId || status !== "draft" || validation === null ||
+    validation.isBlocking;
 }
 
 Deno.test("promoteDisabled: disabled when validation is null (not yet validated)", () => {
@@ -162,7 +178,9 @@ Deno.test("promoteDisabled: after draft save validation resets to null — disab
 
 // ─── HubNavigation sequence auto-set guard ────────────────────────────────────
 
-function computeNextSequencePosition(activeRelations: { status: string }[]): number {
+function computeNextSequencePosition(
+  activeRelations: { status: string }[],
+): number {
   return activeRelations.filter((hr) => hr.status === "active").length + 1;
 }
 
@@ -171,11 +189,19 @@ Deno.test("HubNavigation: new entry sequence auto-set to end", () => {
     { status: "active" },
     { status: "active" },
   ];
-  assertEquals(computeNextSequencePosition(active), 3, "should auto-position at end");
+  assertEquals(
+    computeNextSequencePosition(active),
+    3,
+    "should auto-position at end",
+  );
 });
 
 Deno.test("HubNavigation: first entry sequence defaults to 1", () => {
-  assertEquals(computeNextSequencePosition([]), 1, "first entry should be at position 1");
+  assertEquals(
+    computeNextSequencePosition([]),
+    1,
+    "first entry should be at position 1",
+  );
 });
 
 Deno.test("HubNavigation: deprecated entries excluded from auto-position count", () => {
@@ -196,7 +222,9 @@ Deno.test("HubNavigation: deprecated entries excluded from auto-position count",
 // so that auto-fill works without hand-input.
 
 Deno.test("catalog: registration-required entries have sourcePath for auto-fill", () => {
-  const required = COMPONENT_CATALOG_ENTRIES.filter((e) => e.registrationRequired);
+  const required = COMPONENT_CATALOG_ENTRIES.filter((e) =>
+    e.registrationRequired
+  );
   for (const e of required) {
     assertFalse(
       !e.sourcePath || e.sourcePath === "",
@@ -206,7 +234,9 @@ Deno.test("catalog: registration-required entries have sourcePath for auto-fill"
 });
 
 Deno.test("catalog: registration-required entries have componentKind for auto-fill", () => {
-  const required = COMPONENT_CATALOG_ENTRIES.filter((e) => e.registrationRequired);
+  const required = COMPONENT_CATALOG_ENTRIES.filter((e) =>
+    e.registrationRequired
+  );
   for (const e of required) {
     assertFalse(
       !e.componentKind || e.componentKind === "",
@@ -229,9 +259,15 @@ Deno.test("UX_ACTION_LABELS: covers validate/promote", () => {
 });
 
 Deno.test("UX_RUNTIME_DESTINATION_LABELS: covers all runtime destination options", () => {
-  assertEquals(UX_RUNTIME_DESTINATION_LABELS["topology_transform_runtime"], "通常ルーティング");
+  assertEquals(
+    UX_RUNTIME_DESTINATION_LABELS["topology_transform_runtime"],
+    "通常ルーティング",
+  );
   assertEquals(UX_RUNTIME_DESTINATION_LABELS["admin_runtime"], "管理機能");
-  assertEquals(UX_RUNTIME_DESTINATION_LABELS["sse_projection_runtime"], "リアルタイム投影");
+  assertEquals(
+    UX_RUNTIME_DESTINATION_LABELS["sse_projection_runtime"],
+    "リアルタイム投影",
+  );
 });
 
 // ─── Advanced/details: can still hold raw technical information ────────────────
@@ -250,19 +286,34 @@ Deno.test("ADMIN_HUB_NAVIGATION_GUIDE boundaryNotes can hold technical scope not
 
 Deno.test("UX_FIELD_TABLE_REF: uses user-friendly label 参照テーブル名", () => {
   assertEquals(UX_FIELD_TABLE_REF, "参照テーブル名");
-  assertFalse(UX_FIELD_TABLE_REF.includes("physical table ref"), "must not use internal term");
-  assertFalse(UX_FIELD_TABLE_REF.includes("table_ref"), "must not use internal snake_case key");
+  assertFalse(
+    UX_FIELD_TABLE_REF.includes("physical table ref"),
+    "must not use internal term",
+  );
+  assertFalse(
+    UX_FIELD_TABLE_REF.includes("table_ref"),
+    "must not use internal snake_case key",
+  );
 });
 
-Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みデータ定義名", () => {
-  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みデータ定義名");
-  assertFalse(UX_FIELD_IMPORT_SCHEMA.includes("import schema"), "must not use internal term");
-  assertFalse(UX_FIELD_IMPORT_SCHEMA.includes("importSchema"), "must not use internal camelCase key");
+Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みルール名", () => {
+  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みルール名");
+  assertFalse(
+    UX_FIELD_IMPORT_SCHEMA.includes("import schema"),
+    "must not use internal term",
+  );
+  assertFalse(
+    UX_FIELD_IMPORT_SCHEMA.includes("importSchema"),
+    "must not use internal camelCase key",
+  );
 });
 
 Deno.test("UX_FIELD_NULLABLE: uses user-friendly label 空欄許可", () => {
   assertEquals(UX_FIELD_NULLABLE, "空欄許可");
-  assertFalse(UX_FIELD_NULLABLE.includes("nullable"), "must not use internal term");
+  assertFalse(
+    UX_FIELD_NULLABLE.includes("nullable"),
+    "must not use internal term",
+  );
 });
 
 // ─── Column type normal-view select regression ────────────────────────────────
@@ -301,9 +352,20 @@ Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: has exactly 10 entries matching SSOT
 
 Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: does not contain banned aggregation term 'group by'", () => {
   assertFalse(
-    COLUMN_TYPE_NORMAL_VIEW_OPTIONS.some((t) => t.toLowerCase().includes("group by")),
+    COLUMN_TYPE_NORMAL_VIEW_OPTIONS.some((t) =>
+      t.toLowerCase().includes("group by")
+    ),
     "normal-view column type select must not contain aggregation vocabulary 'group by'",
   );
+});
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: every persisted type has a user-facing label", () => {
+  for (const type of COLUMN_TYPE_NORMAL_VIEW_OPTIONS) {
+    assert(
+      UX_COLUMN_TYPE_LABELS[type],
+      `normal-view label is required for persisted type "${type}"`,
+    );
+  }
 });
 
 Deno.test("UX_COLUMN_TYPE_ADVANCED_LABEL: is a non-empty string for advanced/other isolation", () => {
@@ -323,9 +385,19 @@ Deno.test("UX_COLUMN_TYPE_ADVANCED_LABEL: is a non-empty string for advanced/oth
 // SSOT: admin-console-workflow-ssot.yaml steps 4–7 UX vocabulary requirements
 
 Deno.test("UX_FIELD_SEARCH_KEY: does not expose internal field names", () => {
-  assertFalse(UX_FIELD_SEARCH_KEY.includes("searchTargets"), "must not expose internal searchTargets key");
-  assertFalse(UX_FIELD_SEARCH_KEY.includes("_"), "must not use internal snake_case in normal-view label");
-  assertEquals(UX_FIELD_SEARCH_KEY.length > 0, true, "must be a non-empty label");
+  assertFalse(
+    UX_FIELD_SEARCH_KEY.includes("searchTargets"),
+    "must not expose internal searchTargets key",
+  );
+  assertFalse(
+    UX_FIELD_SEARCH_KEY.includes("_"),
+    "must not use internal snake_case in normal-view label",
+  );
+  assertEquals(
+    UX_FIELD_SEARCH_KEY.length > 0,
+    true,
+    "must be a non-empty label",
+  );
 });
 
 Deno.test("UX_FIELD_AGGREGATION_KEY: does not expose 'group by' vocabulary", () => {
@@ -333,7 +405,11 @@ Deno.test("UX_FIELD_AGGREGATION_KEY: does not expose 'group by' vocabulary", () 
     UX_FIELD_AGGREGATION_KEY.toLowerCase().includes("group by"),
     "aggregation key label must not contain 'group by' (SSOT prohibited in normal view)",
   );
-  assertEquals(UX_FIELD_AGGREGATION_KEY.length > 0, true, "must be a non-empty label");
+  assertEquals(
+    UX_FIELD_AGGREGATION_KEY.length > 0,
+    true,
+    "must be a non-empty label",
+  );
 });
 
 Deno.test("UX_FIELD_DISPLAY_COLUMNS: does not expose 'group by' vocabulary", () => {
@@ -345,7 +421,11 @@ Deno.test("UX_FIELD_DISPLAY_COLUMNS: does not expose 'group by' vocabulary", () 
 
 Deno.test("UX_FIELD_SAMPLE_VIEWING: is a non-empty user-facing label", () => {
   assertEquals(typeof UX_FIELD_SAMPLE_VIEWING, "string");
-  assertEquals(UX_FIELD_SAMPLE_VIEWING.length > 0, true, "sample viewing label must not be empty");
+  assertEquals(
+    UX_FIELD_SAMPLE_VIEWING.length > 0,
+    true,
+    "sample viewing label must not be empty",
+  );
 });
 
 Deno.test("UX_FIELD_INITIAL_DATA: does not expose direct-DB-write vocabulary", () => {
@@ -353,7 +433,11 @@ Deno.test("UX_FIELD_INITIAL_DATA: does not expose direct-DB-write vocabulary", (
     UX_FIELD_INITIAL_DATA.toLowerCase().includes("insert"),
     "initial data label must not suggest direct DB insert",
   );
-  assertEquals(UX_FIELD_INITIAL_DATA.length > 0, true, "must be a non-empty label");
+  assertEquals(
+    UX_FIELD_INITIAL_DATA.length > 0,
+    true,
+    "must be a non-empty label",
+  );
 });
 
 Deno.test("UX_FIELD_RELATION_INTENT: does not imply created-manifest hub management ownership", () => {
@@ -362,7 +446,11 @@ Deno.test("UX_FIELD_RELATION_INTENT: does not imply created-manifest hub managem
     UX_FIELD_RELATION_INTENT.toLowerCase().includes("hub"),
     "relation intent label must not suggest hub management (owned by /admin/manifests)",
   );
-  assertEquals(UX_FIELD_RELATION_INTENT.length > 0, true, "must be a non-empty label");
+  assertEquals(
+    UX_FIELD_RELATION_INTENT.length > 0,
+    true,
+    "must be a non-empty label",
+  );
 });
 
 // ─── ManifestScreenDesignDraft structured field round-trip ────────────────────
@@ -370,16 +458,48 @@ Deno.test("UX_FIELD_RELATION_INTENT: does not imply created-manifest hub managem
 
 Deno.test("emptyManifestScreenDesign: has all structured fields with correct defaults", () => {
   const d = emptyManifestScreenDesign();
-  assertEquals(Array.isArray(d.searchKeyColumns), true, "searchKeyColumns must be an array");
-  assertEquals(d.searchKeyColumns.length, 0, "searchKeyColumns defaults to empty");
-  assertEquals(Array.isArray(d.displayColumns), true, "displayColumns must be an array");
+  assertEquals(
+    Array.isArray(d.searchKeyColumns),
+    true,
+    "searchKeyColumns must be an array",
+  );
+  assertEquals(
+    d.searchKeyColumns.length,
+    0,
+    "searchKeyColumns defaults to empty",
+  );
+  assertEquals(
+    Array.isArray(d.displayColumns),
+    true,
+    "displayColumns must be an array",
+  );
   assertEquals(d.displayColumns.length, 0, "displayColumns defaults to empty");
-  assertEquals(typeof d.aggregationKey, "string", "aggregationKey must be a string");
+  assertEquals(
+    typeof d.aggregationKey,
+    "string",
+    "aggregationKey must be a string",
+  );
   assertEquals(d.aggregationKey, "", "aggregationKey defaults to empty string");
-  assertEquals(Array.isArray(d.relationIntents), true, "relationIntents must be an array");
-  assertEquals(d.relationIntents.length, 0, "relationIntents defaults to empty");
-  assertEquals(Array.isArray(d.initialDataRows), true, "initialDataRows must be an array");
-  assertEquals(d.initialDataRows.length, 0, "initialDataRows defaults to empty");
+  assertEquals(
+    Array.isArray(d.relationIntents),
+    true,
+    "relationIntents must be an array",
+  );
+  assertEquals(
+    d.relationIntents.length,
+    0,
+    "relationIntents defaults to empty",
+  );
+  assertEquals(
+    Array.isArray(d.initialDataRows),
+    true,
+    "initialDataRows must be an array",
+  );
+  assertEquals(
+    d.initialDataRows.length,
+    0,
+    "initialDataRows defaults to empty",
+  );
 });
 
 Deno.test("screen_data_shape topology extension: extracts structured fields from topology JSON", () => {
@@ -394,7 +514,11 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
       aggregationSpec: null,
       screenOperationKind: "list",
       columns: [{ name: "col_a", dataType: "text", nullable: true }],
-      relationIntents: [{ joinTableRef: "other_table", localKey: "id", remoteKey: "ref_id" }],
+      relationIntents: [{
+        joinTableRef: "other_table",
+        localKey: "id",
+        remoteKey: "ref_id",
+      }],
       initialDataRows: [{ col_a: "value1" }],
     },
   ]);
@@ -420,12 +544,32 @@ Deno.test("screen_data_shape topology extension: returns empty structured fields
     },
   ]);
   const shape = extractScreenDataShapeFromTopology(topology);
-  assertEquals(shape.searchKeyColumns, [], "absent searchKeyColumns returns empty array");
-  assertEquals(shape.displayColumns, [], "absent displayColumns returns empty array");
-  assertEquals(shape.aggregationKey, null, "absent aggregationKey returns null");
+  assertEquals(
+    shape.searchKeyColumns,
+    [],
+    "absent searchKeyColumns returns empty array",
+  );
+  assertEquals(
+    shape.displayColumns,
+    [],
+    "absent displayColumns returns empty array",
+  );
+  assertEquals(
+    shape.aggregationKey,
+    null,
+    "absent aggregationKey returns null",
+  );
   assertEquals(shape.columns, [], "absent columns returns empty array");
-  assertEquals(shape.relationIntents, [], "absent relationIntents returns empty array");
-  assertEquals(shape.initialDataRows, [], "absent initialDataRows returns empty array");
+  assertEquals(
+    shape.relationIntents,
+    [],
+    "absent relationIntents returns empty array",
+  );
+  assertEquals(
+    shape.initialDataRows,
+    [],
+    "absent initialDataRows returns empty array",
+  );
 });
 
 Deno.test("screenDesignFromBackendShape: maps structured fields from topology shape", () => {
@@ -487,5 +631,183 @@ Deno.test("aggregation UX: normal-view aggregation vocabulary does not contain '
 Deno.test("sample viewing: UX_FIELD_SAMPLE_VIEWING is the mandatory preview path label", () => {
   // Guard: sample viewing / preview path is required per SSOT step 7
   assertEquals(typeof UX_FIELD_SAMPLE_VIEWING, "string");
-  assert(UX_FIELD_SAMPLE_VIEWING.length > 0, "sample viewing label must be defined");
+  assert(
+    UX_FIELD_SAMPLE_VIEWING.length > 0,
+    "sample viewing label must be defined",
+  );
+});
+
+// ─── Normal-view source regression guard ─────────────────────────────────────
+// Scan rendered copy from normal-view sources. Explicit <details> disclosures are
+// removed before extraction so technical information remains available without
+// leaking into the default path.
+
+const NORMAL_VIEW_SOURCE_FILES = [
+  "../routes/index.tsx",
+  "../routes/demo.tsx",
+  "../routes/runtime-status.tsx",
+  "../routes/admin/index.tsx",
+  "../islands/AdminImport.tsx",
+  "../islands/ContentsAdmin.tsx",
+  "../islands/ContentsPromotionPanel.tsx",
+  "../islands/ContentsScreenDesignPanel.tsx",
+  "../islands/ManifestsAdmin.tsx",
+  "../lib/manifestScreenDesign.ts",
+];
+
+function stripTechnicalDisclosures(source: string): string {
+  return source
+    .replace(/<details\b[\s\S]*?<\/details>/gi, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
+function extractNormalViewCopy(source: string): string {
+  const visibleSource = stripTechnicalDisclosures(source);
+  const fragments: string[] = [];
+  for (const match of visibleSource.matchAll(/>([^<{]+)</g)) {
+    if (/[ぁ-んァ-ヶ一-龠]/.test(match[1])) fragments.push(match[1]);
+  }
+  for (
+    const match of visibleSource.matchAll(
+      /(?:placeholder|title|aria-label)=(?:"([^"]*)"|'([^']*)')/g,
+    )
+  ) {
+    fragments.push(match[1] ?? match[2] ?? "");
+  }
+  // Status/error labels are normal-view output even though they are not JSX text nodes.
+  for (
+    const match of visibleSource.matchAll(
+      /(?:setStatus|setError)\(\s*(["'`])([^"'`]*)\1/g,
+    )
+  ) {
+    fragments.push(match[2]);
+  }
+  for (const match of visibleSource.matchAll(/message:\s*"([^"]*)"/g)) {
+    fragments.push(match[1]);
+  }
+  // Draft source labels and local-cache notices are interpolated into normal view.
+  for (
+    const match of visibleSource.matchAll(
+      /(?:none|local|backend|merged):\s*"([^"]*)"/g,
+    )
+  ) {
+    fragments.push(match[1]);
+  }
+  for (
+    const match of visibleSource.matchAll(
+      /MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE\s*=\s*"([^"]*)"/g,
+    )
+  ) {
+    fragments.push(match[1]);
+  }
+  return fragments.join(" ").replace(/\$\{[^}]+\}/g, "");
+}
+
+function collectGuideNormalViewCopy(): string {
+  const guides = [
+    ADMIN_INDEX_GUIDE,
+    ADMIN_UI_BUILDER_GUIDE,
+    ADMIN_CONTENTS_GUIDE,
+    ADMIN_MANIFESTS_GUIDE,
+    ADMIN_HUB_NAVIGATION_GUIDE,
+  ];
+  return [
+    ...guides.flatMap((guide) => [
+      guide.title,
+      guide.purpose,
+      ...guide.howToSteps,
+      ...(guide.prerequisites ?? []),
+      ...guide.inputs,
+      ...guide.actions,
+      ...guide.outputs,
+      ...(guide.nextSteps ?? []),
+      ...(guide.errorGuide ?? []),
+      guide.caution ?? "",
+    ]),
+    ...ADMIN_ROUTE_CARDS.flatMap((
+      card,
+    ) => [card.label, card.purpose, card.relation, ...card.howToSummary]),
+    ...ADMIN_MAIN_FLOW_STEPS.flatMap((
+      step,
+    ) => [step.label, step.purpose, step.completionSign, step.nextLabel ?? ""]),
+    ...ACCEPTANCE_CHECKLIST.flatMap((item) => [item.label, ...item.checks]),
+  ].join(" ");
+}
+
+Deno.test("normal view guide guard: shared guide copy excludes extracted internal vocabulary", () => {
+  const normalViewCopy = collectGuideNormalViewCopy()
+    .replace(/\/admin\/manifests/g, "")
+    .toLowerCase();
+  for (const term of NORMAL_VIEW_BANNED_TERMS) {
+    assertFalse(
+      normalViewCopy.includes(term.toLowerCase()),
+      `shared guide copy must not expose internal term "${term}"`,
+    );
+  }
+});
+
+Deno.test("normal view source guard: scanned default-path copy excludes extracted internal vocabulary", async () => {
+  for (const relativePath of NORMAL_VIEW_SOURCE_FILES) {
+    const source = await Deno.readTextFile(
+      new URL(relativePath, import.meta.url),
+    );
+    const normalViewCopy = extractNormalViewCopy(source).toLowerCase();
+    for (const term of NORMAL_VIEW_BANNED_TERMS) {
+      assertFalse(
+        normalViewCopy.includes(term.toLowerCase()),
+        `${relativePath} must not expose internal term "${term}" outside technical details`,
+      );
+    }
+  }
+});
+
+Deno.test("normal view source guard: technical disclosures are excluded, adjacent default copy is checked", () => {
+  const source =
+    `<p>ページを設定</p><details><summary>技術情報</summary><code>backend runtime payload</code></details><p>manifest を選択</p>`;
+  const copy = extractNormalViewCopy(source).toLowerCase();
+  assertFalse(copy.includes("backend"));
+  assertFalse(copy.includes("runtime"));
+  assertFalse(copy.includes("payload"));
+  assert(
+    copy.includes("manifest"),
+    "default-path copy after details must remain scannable",
+  );
+});
+
+Deno.test("normal view terms: shared flow labels use user-facing page vocabulary", () => {
+  assertEquals(UX_MAIN_FLOW_STEP_LABELS[1], "新しいページを作る");
+  assertFalse(UX_MAIN_FLOW_STEP_LABELS.join(" ").includes("manifest"));
+});
+
+Deno.test("normal view banned terms: shared regression vocabulary covers extracted implementation categories", () => {
+  for (
+    const term of [
+      "manifest",
+      "manifestid",
+      "manifest_key",
+      "topology_manifest",
+      "canonical",
+      "projection",
+      "runtime",
+      "dispatcher",
+      "payload",
+      "backend",
+      "db table",
+      "column",
+      "schema",
+      "package",
+      "component",
+      "grouping intent",
+      "raw",
+      "silent fallback",
+    ]
+  ) {
+    assert(
+      NORMAL_VIEW_BANNED_TERMS.includes(
+        term as typeof NORMAL_VIEW_BANNED_TERMS[number],
+      ),
+      `NORMAL_VIEW_BANNED_TERMS must include extracted category term "${term}"`,
+    );
+  }
 });
