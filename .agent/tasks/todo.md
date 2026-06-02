@@ -16,8 +16,8 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 
 ### `/admin/contents` authoring wizard
 
-- [ ] Reflect the explicit contents wizard steps in UI: empty draft creation → DB reference → columns → initial data → optional table relation intent → search key → aggregation/display group with sample viewing → validate/preview/register → `/admin/ui-builder` handoff.
-- [ ] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Keep free text isolated under advanced / other.
+- [x] Reflect the explicit contents wizard steps in UI (front half): empty draft creation → DB reference → columns → steps ④⑤ explicitly marked as not-yet-implemented/next-step. Full 8-step display (initial data → optional relation/join intent → search key → aggregation/display group → validate/preview/register → /admin/ui-builder handoff) remains in later bundles. [authoring-wizard-front]
+- [x] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Free text isolated under その他（詳細入力）. Existing `dataType` persistence format preserved. [authoring-wizard-front]
 - [ ] Add initial-data registration flow with validate → preview → explicit apply or promote; do not add silent/direct DB writes.
 - [ ] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`.
 - [ ] Add user-facing search-key selection for `searchTargets`.

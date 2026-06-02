@@ -60,6 +60,27 @@ export const UX_FIELD_TABLE_REF = "参照テーブル名";
 export const UX_FIELD_IMPORT_SCHEMA = "取り込みデータ定義名";
 export const UX_FIELD_NULLABLE = "空欄許可";
 
+/**
+ * カラム型の通常表示候補（SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates）。
+ * free-text は UX_COLUMN_TYPE_ADVANCED_LABEL 経由で隔離する。
+ * 「group by」を含む集計語彙はここに追加しない。
+ */
+export const COLUMN_TYPE_NORMAL_VIEW_OPTIONS: readonly string[] = [
+  "text",
+  "integer",
+  "bigint",
+  "boolean",
+  "numeric",
+  "timestamp with time zone",
+  "date",
+  "jsonb",
+  "uuid",
+  "varchar",
+];
+
+/** 通常表示候補外のカスタム型を入力するための advanced/other オプションラベル */
+export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
+
 /** 推奨フローの Step ラベル（テストとステッパーで共有） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",

@@ -1175,9 +1175,18 @@ system_roadmap_ssot:
         Promote action is consolidated in ContentsPromotionPanel with explicit step flow
         (① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化); validation gating covers both
         manifest data shape and promotion metadata before enabling promote.
-        Detailed wizard UI steps, column type select, initial data flow, structured relation/join
-        input, search key selection, aggregation/display group, and screen_data_shape extension
-        persistence remain implementation gaps.
+        Contents authoring wizard front-half steps (① 下書き作成 ② 参照テーブル設定 ③ カラム定義)
+        are now explicitly displayed in ContentsScreenDesignPanel; steps ④ 初期データ登録 and
+        ⑤ テーブル結合意図（任意）are shown as not-yet-implemented next steps.
+        Column dataType normal-view input is now a select UI with SSOT-defined candidates
+        (text/integer/bigint/boolean/numeric/timestamp with time zone/date/jsonb/uuid/varchar);
+        free-text is isolated under その他（詳細入力）; existing dataType persistence format preserved.
+        COLUMN_TYPE_NORMAL_VIEW_OPTIONS and UX_COLUMN_TYPE_ADVANCED_LABEL exported from
+        adminUxTerms.ts with column type select and banned-term regression in adminUxGuard.test.ts.
+        Remaining gaps: initial-data registration flow, structured relation/join input,
+        user-facing search-key selection, aggregation/display group with mandatory sample viewing,
+        screen_data_shape topology extension persistence, topology.physical_tables mismatch
+        explicit failure, and /admin/ui-builder full authoring remain incomplete.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1199,7 +1208,12 @@ system_roadmap_ssot:
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
         - Gap-9 admin route detailed no-code wizard UX remains partial
-        - admin/contents structured relation/join aggregation/display and sample-viewing inputs remain incomplete
+        - closed-front: contents wizard front-half step display (①②③ implemented, ④⑤ marked as next/later)
+        - closed-front: column dataType normal-view select with SSOT candidates; advanced/other free-text isolated
+        - admin/contents initial-data registration flow with validate/preview/explicit apply remains incomplete
+        - admin/contents structured relation/join input remains incomplete (admin/manifests ownership unchanged)
+        - admin/contents user-facing search-key selection remains incomplete
+        - admin/contents aggregation/display group with mandatory sample viewing remains incomplete
         - screen_data_shape topology extension persistence for structured relation/join and aggregation/display fields remains incomplete
         - topology.physical_tables table_ref mismatch validation must fail explicitly instead of silently skipping wiring projection
         - admin/ui-builder selectable component placement design-token wiring and post-apply CI audit handoff remain incomplete
