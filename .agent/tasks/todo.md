@@ -62,6 +62,18 @@ Roadmap entry: `admin_visual_layout_builder`. Status promoted from `partial` →
 - [x] `filterEmptyResponsiveRules` strips empty breakpoint entries before backend submission. [responsive-token-ui]
 - [x] Tests: 5 filterEmptyResponsiveRules + 4 responsive rule per-breakpoint tests in `frontend/tests/visualLayoutBuilder.test.ts`. [responsive-token-ui]
 
+## CLI/MCP Port SSOT — future implementation TODOs
+
+Added by: CLI Model Context Protocols Port SSOT design_change
+SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+- [ ] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot]
+- [ ] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot]
+- [ ] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot]
+- [ ] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot]
+- [ ] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot]
+- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSSOTが揃うまで実装しない [future-bundle-ssot-gate]
+
 ## Optional follow-up
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]

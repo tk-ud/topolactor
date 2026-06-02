@@ -1,0 +1,270 @@
+extended_runtime_bundle_registry_ssot:
+  name: extended_runtime_bundle_registry
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+  purpose:
+    summary: >-
+      TopolactorのRuntimeが依存するBundle群を分類・管理するSSOT。
+      core_runtime_bundles（即時実装候補）と
+      future_optional_external_surface_bundles（roadmap候補）を明確に分類する。
+      外部サービスはTopolactorの runtime SSOT ではなく、
+      human editing / intake / notification / approval / external trigger surface として扱う。
+    non_goals:
+      - external_service_as_runtime_ssot
+      - direct_db_write_from_external
+      - silent_external_sync_fallback
+      - webhook_direct_runtime_execution_without_scheduler
+      - future_bundle_as_canonical_runtime_before_separate_ssot
+
+  external_service_policy:
+    canonical_authority:
+      - topolactor_db
+      - manifest
+      - registry
+      - schema
+      - relation_registry
+      - ui_topology_tensor
+      - diff_log
+      - runtime_event_log
+    external_surface_role:
+      - human_friendly_business_input
+      - draft_authoring
+      - intake_queue
+      - preview_surface
+      - notification_surface
+      - approval_surface
+      - external_trigger_source
+    prohibited:
+      - notion_as_system_ssot
+      - spreadsheet_as_runtime_policy_ssot
+      - external_tool_direct_db_write
+      - silent_external_sync_fallback
+      - implicit_schema_creation_without_preview
+      - webhook_direct_runtime_execution_without_scheduler
+    required_flow:
+      - external_source
+      - connector_adapter
+      - intake_snapshot
+      - topology_payload_candidate
+      - validate
+      - preview
+      - explicit_apply
+      - canonical_runtime_route
+      - diff_log_or_runtime_event_log
+
+  core_runtime_bundles:
+    description: >-
+      Topolactorのcoreとして設計・実装が検討されるBundleセット。
+      これらはTopolactor runtimeに直接関与するsurface。
+    bundles:
+      email_bundle:
+        id: email_bundle
+        status: not_started
+        description: >-
+          メール送信Bundle。CLI/MCPからは実行しない。
+          UI / backend dispatch / approval route から専用設計で扱う。
+          後段SSOTが必要。
+        trigger_kind: ui_approval_or_backend_dispatch
+        side_effect: external_smtp
+        out_of_scope_for: cli_mcp_read_export_port
+        requires_separate_ssot: true
+        notes:
+          - email send は CLI/MCP port の out_of_scope
+          - UI/Human commit boundary での実行
+
+      stripe_bundle:
+        id: stripe_bundle
+        status: not_started
+        description: >-
+          Stripe 決済Bundle。webhook verification なしに paid state を確定しない。
+          後段SSOTが必要。
+        trigger_kind: webhook_intake
+        side_effect: payment_state_mutation
+        webhook_verification_required: true
+        requires_separate_ssot: true
+
+      file_storage_bundle:
+        id: file_storage_bundle
+        status: not_started
+        description: >-
+          ファイル・ストレージBundle。export job / Data Reader と連携。
+          CLI/MCP export job からの file stream はこのBundleを経由。
+        trigger_kind: export_job_or_api
+        side_effect: file_write
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+        requires_separate_ssot: true
+
+      export_sftp_bundle:
+        id: export_sftp_bundle
+        status: not_started
+        description: >-
+          Export / SFTP Bundle。export job の外部搬出。
+          manifest + checksum を必須とする。
+        trigger_kind: export_job
+        side_effect: external_sftp_write
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+        requires_separate_ssot: true
+
+      webhook_inbox_bundle:
+        id: webhook_inbox_bundle
+        status: not_started
+        description: >-
+          Webhook Inboxからscheduler/runtime routeを通す受信Bundle。
+          direct runtime execution は禁止。必ずscheduler経由。
+        trigger_kind: webhook_intake
+        required_flow:
+          - webhook_inbox
+          - scheduler
+          - runtime_route
+        requires_separate_ssot: true
+
+      job_scheduler_bundle:
+        id: job_scheduler_bundle
+        status: not_started
+        description: cron / hook / client trigger を統合するJob Scheduler Bundle。
+        trigger_kind: cron_or_hook_or_client
+        related_ssot:
+          - docs/design/runtime-orchestration-ssot.yaml
+        requires_separate_ssot: true
+
+      audit_approval_bundle:
+        id: audit_approval_bundle
+        status: not_started
+        description: >-
+          Audit / Approval Bundle。承認フロー・監査ログ・export job approval を管理。
+          CLI/MCP audit log は cli-model-context-protocols-port-ssot で定義済み。
+        trigger_kind: ui_approval
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+        requires_separate_ssot: true
+
+      secret_credential_bundle:
+        id: secret_credential_bundle
+        status: not_started
+        description: Secret / Credential Bundle。外部連携に必要な認証情報を管理。
+        trigger_kind: api_or_admin_config
+        requires_separate_ssot: true
+
+  future_optional_external_surface_bundles:
+    description: >-
+      roadmap aligned candidates。
+      これらは future bundle であり、implemented 扱いにしない。
+      各bundleは separate SSOT が必要になった段階で設計する。
+      外部サービスはTopolactorのruntime SSOTではない。
+      external_source → connector_adapter → intake_snapshot →
+      topology_payload_candidate → validate → preview → explicit_apply →
+      canonical_runtime_route → diff_log_or_runtime_event_log の境界を維持する。
+    roadmap_source:
+      - docs/system-roadmap.yaml (M6_external_integration.future_optional_external_surfaces)
+      - .agent/tasks/todo.md
+    bundles:
+      notion_bundle:
+        id: notion_bundle
+        status: future_bundle_candidate
+        description: >-
+          Notion database をintake / draft authoring surface として扱うBundle。
+          Notion is never treated as canonical Topolactor SSOT。
+        external_role: human_editing_and_intake_surface
+        roadmap_ref: M6_external_integration.future_optional_external_surfaces
+        requires_separate_ssot: true
+
+      google_sheets_bundle:
+        id: google_sheets_bundle
+        status: future_bundle_candidate
+        description: >-
+          Google Sheets をintake / draft authoring surface として扱うBundle。
+          direct DB write は禁止。
+        external_role: human_editing_and_intake_surface
+        roadmap_ref: M6_external_integration.future_optional_external_surfaces
+        requires_separate_ssot: true
+
+      slack_bundle:
+        id: slack_bundle
+        status: future_bundle_candidate
+        description: >-
+          Slack をnotification / approval surface として扱うBundle。
+          Slack action から直接runtime execution しない。
+        external_role: notification_and_approval_surface
+        roadmap_ref: M6_external_integration.future_optional_external_surfaces
+        requires_separate_ssot: true
+
+      github_issues_bundle:
+        id: github_issues_bundle
+        status: future_bundle_candidate
+        description: >-
+          GitHub Issues を intake / approval surface として扱うBundle。
+          direct DB write は禁止。
+        external_role: intake_and_approval_surface
+        roadmap_ref: M6_external_integration.future_optional_external_surfaces
+        requires_separate_ssot: true
+
+      generic_webhook_bundle:
+        id: generic_webhook_bundle
+        status: future_bundle_candidate
+        description: >-
+          Generic Webhook Inbox Bundle。
+          webhook → scheduler → runtime route の境界を必須とする。
+          webhook direct runtime execution without scheduler は禁止。
+        external_role: external_trigger_source
+        required_flow:
+          - webhook_inbox
+          - connector_adapter
+          - intake_snapshot
+          - validate
+          - preview
+          - explicit_apply
+          - canonical_runtime_route
+        roadmap_ref: M6_external_integration.future_optional_external_surfaces
+        requires_separate_ssot: true
+
+      external_rest_api_connector_bundle:
+        id: external_rest_api_connector_bundle
+        status: future_bundle_candidate
+        description: >-
+          External REST API Connector Bundle。
+          外部APIからのデータ取得をconnector_adapter経由でintake_snapshotに変換。
+        external_role: intake_and_connector_surface
+        requires_separate_ssot: true
+
+      dynamic_support_nocode_loop_bundle:
+        id: dynamic_support_nocode_loop_bundle
+        status: future_bundle_candidate
+        description: >-
+          Dynamic Support No-code Loop Bundle。
+          product.dynamic_support_nocode_loop の外部surface連携部分。
+          non-IT business authoring surface として扱う。
+        external_role: human_editing_and_intake_surface
+        roadmap_ref: product.dynamic_support_nocode_loop
+        requires_separate_ssot: true
+
+  future_bundle_policy:
+    rules:
+      - future_bundles_are_roadmap_aligned_candidates_only
+      - future_bundles_must_not_be_marked_implemented
+      - future_bundles_must_not_bypass_preview_validate_apply
+      - future_bundles_must_not_become_canonical_runtime_ssot
+      - future_bundles_require_separate_ssot_before_implementation
+    required_declarations_per_future_bundle:
+      - owner
+      - trigger_kind
+      - intake_snapshot_shape
+      - validation_boundary
+      - approval_boundary
+      - scheduler_boundary
+      - audit_log_boundary
+
+  change_surface:
+    - extended_runtime_bundle_registry
+    - core_runtime_bundle
+    - future_optional_external_surface_bundle
+    - bundle_registry_policy
+
+  related_ssot:
+    - docs/design/cli-model-context-protocols-port-ssot.yaml
+    - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/admin-console-workflow-ssot.yaml
+    - docs/system-roadmap.yaml

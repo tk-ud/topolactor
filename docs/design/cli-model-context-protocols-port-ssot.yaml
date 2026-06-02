@@ -1,0 +1,222 @@
+cli_model_context_protocols_port_ssot:
+  name: cli_model_context_protocols_port
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+
+  purpose:
+    summary: >-
+      CLI Model Context Protocols Port は、Topolactorの業務データを
+      AI / shell / CLI から安全に検索・集計・搬出するための read/export port surface である。
+    non_goals:
+      - ui_browser_automation
+      - direct_db_connection
+      - record_commit
+      - delete_operation
+      - payment_approval
+      - email_send
+
+  core_invariant:
+    description: >-
+      以下の責務境界は不変条件とする。
+      CLI / AI / MCP は read/export のみ。UI / Human は approve / commit / mutate のみ。
+    cli_ai_mcp_operations:
+      - read
+      - search
+      - aggregate
+      - analyze
+      - validate
+      - export
+      - stream_file
+      - create_export_job
+    ui_human_operations:
+      - approve
+      - commit
+      - delete
+      - send_email
+      - final_register
+      - payment_approval
+    email_send_boundary:
+      status: out_of_scope
+      reason: >-
+        email send は後段の別設計で扱う。
+        将来、UI catalog / backend dispatch / runtime の別SSOTまたは別設計で扱う。
+        現時点では CLI/MCP から email send を実行しない。
+
+  admin_ui_configuration:
+    description: >-
+      admin/contents 設計時に、物理テーブルまたは業務コンテンツ単位で
+      CLI reader port を Open できる設計にする。
+      admin/contents は「どの業務コンテンツを、どの粒度で、AI/shell/CLIに読ませるか」を設定する入口。
+    port_config_fields:
+      - cli_reader_port_enabled
+      - allowed_roles
+      - allowed_users
+      - allowed_tables
+      - allowed_columns
+      - allowed_filters
+      - allowed_periods
+      - aggregation_windows
+      - export_formats
+      - file_stream_enabled
+      - requires_ui_approval
+      - expires_at
+      - rate_limit
+      - audit_required
+
+  api_responsibility:
+    description: >-
+      API は認証・認可・スコープ制御・有効期限・形式・監査ログを担う。
+      CLI / MCP は Context API / Data Reader のみを経由し、DBを直接読まない。
+    responsibilities:
+      - authentication
+      - authorization
+      - user_role_scope
+      - port_enabled
+      - period_scope
+      - table_scope
+      - column_scope
+      - row_scope
+      - deadline_and_expires_at
+      - export_format
+      - file_stream_permission
+      - export_job_id_and_idempotency_key_handling
+      - audit_log_write
+    prohibited:
+      - cli_mcp_direct_db_connection
+      - cli_mcp_direct_sql_execution
+
+  data_reader_responsibility:
+    description: >-
+      Data Reader は、SSOTからCLI/MCP用の安全なread modelを生成する責務を持つ。
+    required_responsibilities:
+      - query_validation
+      - search_result_shaping
+      - aggregation
+      - monthly_snapshot
+      - export_package_generation
+      - csv_generation
+      - json_generation
+      - pdf_generation
+      - zip_generation
+      - manifest_generation
+      - checksum_generation
+      - source_record_ids_capture
+
+  file_stream:
+    description: >-
+      ファイルストリームは、APIが許可したexport jobに対してのみ開放する。
+    allowed_targets:
+      - invoice_pdf
+      - receipt_image
+      - csv_export
+      - json_export
+      - monthly_zip_bundle
+      - manifest_json
+    required_metadata:
+      - export_job_id
+      - source_record_ids
+      - generated_by
+      - generated_at
+      - period
+      - checksum
+      - manifest_version
+
+  export_job:
+    description: >-
+      CLI / MCPによる搬出処理は必ず export_job として記録する。
+    required_fields:
+      - export_job_id
+      - port_id
+      - requested_by
+      - requested_at
+      - period
+      - target_scope
+      - export_format
+      - status
+      - source_record_ids
+      - generated_files
+      - checksum
+      - manifest_path
+      - completed_at
+
+  manifest:
+    description: >-
+      export_job には manifest が必須付属する。
+    required_fields:
+      - manifest_version
+      - export_job_id
+      - generated_at
+      - generated_by
+      - period
+      - source_tables
+      - source_record_ids
+      - files
+      - checksum
+
+  mcp_surface:
+    description: >-
+      MCPはadmin configから公開可能なtools/resourcesを生成する。
+    tools:
+      - get_monthly_context
+      - search_records
+      - aggregate_records
+      - validate_export
+      - create_export_job
+      - download_export_file
+      - get_export_status
+    resources:
+      - "topolactor://monthly/{period}/context.json"
+      - "topolactor://exports/{export_job_id}/manifest.json"
+      - "topolactor://exports/{export_job_id}/file"
+    design_note: >-
+      MCP surface は UI操作の自動化ではなく、AI/shell/CLIがTopolactorの
+      業務トポロジを安全に読むための read/export port surface である。
+
+  explicitly_out_of_scope:
+    operations:
+      - db_direct_connection
+      - direct_sql_execution
+      - record_commit
+      - delete_operation
+      - payment_approval
+      - email_send
+      - browser_ui_automation
+      - unauthorized_bulk_export
+      - permission_bypass
+    email_send_note: >-
+      email send は後段の別設計とし、本SSOTではout of scopeとする。
+      Email send は将来、UI catalog / backend dispatch / runtime の
+      別SSOTまたは別設計で扱う。現時点では CLI/MCP から email send を実行しない。
+
+  audit_log:
+    description: >-
+      すべてのCLI/MCP accessを監査ログへ記録する。
+      audit logは read/export 履歴を後から追跡できる設計とする。
+    required_fields:
+      - user_id
+      - role
+      - client_type
+      - tool_name
+      - resource_uri
+      - query_hash
+      - period
+      - target_table
+      - target_scope
+      - result_count
+      - export_job_id
+      - executed_at
+      - ip_address
+      - user_agent
+
+  parent_ssot:
+    - docs/design/runtime-orchestration-ssot.yaml
+    - docs/design/admin-console-workflow-ssot.yaml
+    - docs/design/db-schema.yaml
+
+  change_surface:
+    - cli_model_context_protocols_port
+    - mcp_read_export_port
+    - data_reader_boundary
+    - export_job_manifest
+    - admin_cli_reader_port_config

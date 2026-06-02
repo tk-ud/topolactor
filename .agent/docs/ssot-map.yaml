@@ -339,6 +339,47 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: cli_model_context_protocols_port
+    change_surfaces:
+      - cli_model_context_protocols_port
+      - mcp_read_export_port
+      - data_reader_boundary
+      - export_job_manifest
+      - admin_cli_reader_port_config
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.md
+    required_docs:
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.md
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: extended_runtime_bundle_registry
+    change_surfaces:
+      - extended_runtime_bundle_registry
+      - core_runtime_bundle
+      - future_optional_external_surface_bundle
+      - bundle_registry_policy
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.md
+    required_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.md
+    supporting_docs:
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/system-roadmap.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit
