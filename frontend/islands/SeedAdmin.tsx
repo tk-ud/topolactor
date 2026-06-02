@@ -1,8 +1,6 @@
 import { useState } from "preact/hooks";
 import { JSX } from "preact";
-import AdminHowTo from "../components/AdminHowTo.tsx";
-import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
-import { ADMIN_SEED_GUIDE } from "../content/adminGuides.ts";
+import { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -153,12 +151,6 @@ export default function SeedAdmin(): JSX.Element {
     <main class="page-main font-mono">
       <h1 class="page-title">topolactor — 管理 / 初期データ設定</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
-
-      <AdminHowTo
-        steps={ADMIN_SEED_GUIDE.howToSteps}
-        prerequisites={ADMIN_SEED_GUIDE.prerequisites}
-      />
-      <AdminHelpPanel {...ADMIN_SEED_GUIDE} />
 
       <hr class="mb-6 border-gray-200" />
 

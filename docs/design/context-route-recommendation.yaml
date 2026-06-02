@@ -270,7 +270,7 @@ entities:
       created_at: { type: timestamp }
       updated_at: { type: timestamp }
     unique_keys: [[label, group]]
-    admin_ui: "/dev/admin/context-token-registry"
+    admin_ui: deleted_legacy_helper_wrapper__future_ui_must_converge_on_canonical_surface
 
   context_token_binding:
     description: >

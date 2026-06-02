@@ -15,6 +15,15 @@ const NON_CANONICAL_ADMIN_ROUTES = [
   "/admin/registry-vector-validate",
 ];
 
+const DELETED_DEV_ADMIN_HELPER_ROUTES = [
+  "/dev/admin/import",
+  "/dev/admin/hub-navigation",
+  "/dev/admin/runtime",
+  "/dev/admin/seed",
+  "/dev/admin/context-token-registry",
+  "/dev/admin/registry-vector-validate",
+];
+
 Deno.test("ADMIN_MAIN_FLOW_STEPS matches canonical admin workflow", () => {
   assertEquals(ADMIN_MAIN_FLOW_STEPS.map((s) => s.label), [
     ...UX_MAIN_FLOW_STEP_LABELS,
@@ -36,7 +45,7 @@ Deno.test("ADMIN_ROUTE_CARDS contain canonical admin routes only", () => {
   );
 });
 
-Deno.test("canonical admin navigation does not expose retained legacy/debug routes", () => {
+Deno.test("canonical admin navigation does not expose removed legacy/debug routes", () => {
   const hrefs = [
     ...ADMIN_MAIN_FLOW_STEPS.map((step) => step.href),
     ...ACCEPTANCE_FLOW_STEPS.map((step) => step.href),
@@ -56,4 +65,17 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
       .map((route) => route === "index.tsx" ? "/admin" : `/admin/${route.replace(/\.tsx$/, "")}`),
   )].sort();
   assertEquals(adminRoutes, ["/admin", "/admin/contents", "/admin/manifests", "/admin/ui-builder"]);
+});
+
+
+Deno.test("Fresh registry does not retain deleted /dev/admin helper wrappers", async () => {
+  const generatedManifest = await Deno.readTextFile(new URL("../fresh.gen.ts", import.meta.url));
+  for (const route of DELETED_DEV_ADMIN_HELPER_ROUTES) {
+    const routeFile = `./routes${route}.tsx`;
+    assertEquals(
+      generatedManifest.includes(routeFile),
+      false,
+      `${routeFile} must not remain in generated Fresh registry`,
+    );
+  }
 });

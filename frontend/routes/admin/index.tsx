@@ -25,7 +25,7 @@ export default function AdminIndex() {
         <h1 class="page-title">topolactor — 管理</h1>
 
         <p class="mb-4 text-sm leading-relaxed text-gray-700">
-          新規 manifest 作成 → {UX_UI_BUILDER} → 既存 manifest の relation / hub 操作の順で進めてください。
+          新規 manifest 作成 → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS}の順で進めてください。
           利用には<strong>ログイン</strong>が必要です（未ログイン時はログイン画面が表示されます）。
         </p>
 

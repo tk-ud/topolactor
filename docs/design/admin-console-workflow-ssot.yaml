@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.4.0
+  version: 0.5.0
   status: subordinate_design_document
 
   authority:
@@ -17,8 +17,8 @@ admin_console_workflow_ssot:
   purpose:
     - keep the admin authoring workflow aligned with runtime-orchestration route authority
     - define /admin/contents as the new manifest creation surface
-    - define /admin/manifests as the existing manifest relation / hub operation surface
-    - isolate retained legacy or debug implementations from the canonical admin workflow
+    - define /admin/manifests as the created manifest hub / relation / navigation continuity surface
+    - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
   does_not_own:
     - runtime_orchestration_semantics: docs/design/runtime-orchestration-ssot.yaml
@@ -41,8 +41,9 @@ admin_console_workflow_ssot:
         - define the new manifest content and data shape intent
         - validate and preview before explicit promote
       explicitly_out_of_scope:
-        - existing manifest relation ordering
-        - existing manifest hub grouping operations
+        - manifest hub membership management
+        - manifest-to-manifest relation management
+        - navigation ordering
         - presenting file import as a canonical admin route
       note: >
         This surface creates a new manifest. Existing manifest relation / hub operations
@@ -60,12 +61,13 @@ admin_console_workflow_ssot:
       route: /admin/manifests
       island: frontend/islands/ManifestsAdmin.tsx
       domain_ownership:
-        - existing topology_manifest registry display
-        - existing manifest relation CRUD and ordering
-        - hub_navigation_ordering inside the canonical manifests page
+        - created topology_manifest registry display
+        - created manifest hub membership management
+        - manifest-to-manifest relation management
+        - navigation ordering and hub_navigation_ordering inside the canonical manifests page
+        - continuity management across a group of pages
       explicitly_out_of_scope:
         - new manifest content draft creation
-        - promote-before draft hub assignment
         - per-manifest DB table, column, and type editing
         - raw manifest JSON editing in the default path
       note: >
@@ -84,38 +86,20 @@ admin_console_workflow_ssot:
     - step: 3
       label: operate_existing_manifest_relations_and_hubs
       route: /admin/manifests
-      description: Review existing manifests and operate their registered relation / hub ordering. Draft hub assignment is not owned here.
+      description: Review created manifests and manage their hub membership, inter-manifest relations, and navigation ordering as page-group continuity.
 
-  retained_noncanonical_routes:
-    policy: legacy_debug_only
-    visibility_rule: >
-      Retained implementations MUST NOT appear in canonical admin cards, steppers, acceptance flow,
-      or user-facing canonical workflow explanations.
+  removed_legacy_wrapper_routes:
+    policy: deleted
+    note: >
+      Legacy/debug/helper wrapper routes were deleted. Implementations that remain useful must
+      converge on one of the canonical admin surfaces rather than reintroducing /dev/admin/* routes.
     routes:
-      - legacy_route: /admin/import
-        isolated_route: /dev/admin/import
-        island: frontend/islands/AdminImport.tsx
-        reason: retained CSV/JSON debug and migration aid; not in runtime-orchestration admin registry
-      - legacy_route: /admin/hub-navigation
-        isolated_route: /dev/admin/hub-navigation
-        island: frontend/islands/HubNavigationAdmin.tsx
-        reason: retained direct debug wrapper; canonical relation / hub operations render inside /admin/manifests
-      - legacy_route: /admin/runtime
-        isolated_route: /dev/admin/runtime
-        island: frontend/islands/OperationPanel.tsx
-        reason: retained dispatch debug wrapper; runtime verification is not a canonical admin authoring route
-      - legacy_route: /admin/seed
-        isolated_route: /dev/admin/seed
-        island: frontend/islands/SeedAdmin.tsx
-        reason: retained seed helper; not in runtime-orchestration admin registry
-      - legacy_route: /admin/context-token-registry
-        isolated_route: /dev/admin/context-token-registry
-        island: frontend/islands/ContextTokenRegistryEditor.tsx
-        reason: retained registry helper; not in runtime-orchestration admin registry
-      - legacy_route: /admin/registry-vector-validate
-        isolated_route: /dev/admin/registry-vector-validate
-        island: frontend/islands/RegistryVectorValidator.tsx
-        reason: retained validation helper; not in runtime-orchestration admin registry
+      - /dev/admin/import
+      - /dev/admin/hub-navigation
+      - /dev/admin/runtime
+      - /dev/admin/seed
+      - /dev/admin/context-token-registry
+      - /dev/admin/registry-vector-validate
 
   contents_promote_guard:
     required_before_promote:

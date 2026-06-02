@@ -2,10 +2,10 @@
  * 管理画面の非開発者向け表示用語（URL・API 名は変更しない）。
  * 内部の manifest / schema 等は技術情報・詳細リファレンスに退避する。
  */
-export const UX_CONTENTS = "コンテンツ設定";
-export const UX_CONTENTS_PAGE = "コンテンツ設定画面";
-export const UX_HUB_MANIFESTS = "ハブ・画面群";
-export const UX_HUB_MANIFESTS_PAGE = "ハブ・画面群設計画面";
+export const UX_CONTENTS = "ページ作成";
+export const UX_CONTENTS_PAGE = "ページ作成画面";
+export const UX_HUB_MANIFESTS = "ページ同士をつなぐ";
+export const UX_HUB_MANIFESTS_PAGE = "ページ同士をつなぐ画面";
 /** @deprecated 互換参照用 — 新規コードは UX_CONTENTS / UX_HUB_MANIFESTS を使用 */
 export const UX_IMPORT_SETTINGS = UX_CONTENTS;
 export const UX_IMPORT_SETTINGS_PAGE = UX_CONTENTS_PAGE;
