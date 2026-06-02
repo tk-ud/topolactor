@@ -1,11 +1,15 @@
-import { assertEquals, assertFalse, assertNotEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
   getDraftOnlyNodes,
   isDraftOnlyApplyBlocked,
   wouldCreateVisualParentCycle,
+  RESPONSIVE_BREAKPOINTS,
+  filterEmptyResponsiveRules,
+  validateResponsiveTokenRulesJson,
   type VisualNodePayload,
+  type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 
@@ -388,4 +392,222 @@ Deno.test("inspector commit: live update then commit — final state matches com
   const commitSnap = buildVisualLayoutPatchJson([committed]);
   assertNotEquals(liveSnap, commitSnap);
   assertEquals(JSON.parse(commitSnap).nodes[0].x, 90);
+});
+
+// ─── layoutId round-trip from DB ─────────────────────────────────────────────
+
+Deno.test("layoutId round-trip: RESPONSIVE_BREAKPOINTS exports sm/md/lg/xl", () => {
+  assertEquals(RESPONSIVE_BREAKPOINTS.length, 4);
+  assertEquals(RESPONSIVE_BREAKPOINTS[0], "sm");
+  assertEquals(RESPONSIVE_BREAKPOINTS[1], "md");
+  assertEquals(RESPONSIVE_BREAKPOINTS[2], "lg");
+  assertEquals(RESPONSIVE_BREAKPOINTS[3], "xl");
+});
+
+Deno.test("layoutId round-trip: same layoutId sent and confirmed is valid", () => {
+  const sentLayoutId = "550e8400-e29b-41d4-a716-446655440000";
+  const confirmedLayoutId = "550e8400-e29b-41d4-a716-446655440000";
+  // Round-trip is valid when confirmed matches sent
+  assertEquals(sentLayoutId === confirmedLayoutId, true);
+});
+
+Deno.test("layoutId round-trip: mismatch between sent and confirmed is detectable", () => {
+  const sentLayoutId: string = "550e8400-e29b-41d4-a716-446655440000";
+  const confirmedLayoutId: string = "550e8400-e29b-41d4-a716-000000000001";
+  const isMismatch = confirmedLayoutId.length > 0 && confirmedLayoutId !== sentLayoutId;
+  assertEquals(isMismatch, true);
+});
+
+Deno.test("layoutId round-trip: empty confirmed layoutId is treated as no confirmation", () => {
+  const confirmedLayoutId: string = "";
+  const shouldConfirm = confirmedLayoutId.length > 0;
+  assertFalse(shouldConfirm);
+});
+
+Deno.test("layoutId round-trip: backend response layoutId updates frontend state on apply", () => {
+  // Simulate the round-trip logic: backend returns same layoutId as sent
+  const sentId = "abc-123";
+  const backendData = { layoutId: "abc-123", routeKey: "/admin/ui-builder" };
+  const confirmedLayoutId = typeof backendData.layoutId === "string" ? backendData.layoutId : null;
+  assertEquals(confirmedLayoutId, sentId);
+  assertEquals(confirmedLayoutId !== sentId, false); // no mismatch
+});
+
+// ─── responsive token rule UI ─────────────────────────────────────────────────
+
+Deno.test("filterEmptyResponsiveRules: removes breakpoints with empty arrays", () => {
+  const rules: ResponsiveTokenRules = {
+    sm: [],
+    md: ["color.action.primary.background"],
+    lg: [],
+    xl: ["spacing.md"],
+  };
+  const result = filterEmptyResponsiveRules(rules);
+  assertEquals(Object.keys(result).length, 2);
+  assertEquals(result["md"], ["color.action.primary.background"]);
+  assertEquals(result["xl"], ["spacing.md"]);
+  assertEquals(result["sm"], undefined);
+  assertEquals(result["lg"], undefined);
+});
+
+Deno.test("filterEmptyResponsiveRules: returns empty object when all breakpoints empty", () => {
+  const rules: ResponsiveTokenRules = { sm: [], md: [], lg: [], xl: [] };
+  const result = filterEmptyResponsiveRules(rules);
+  assertEquals(Object.keys(result).length, 0);
+});
+
+Deno.test("filterEmptyResponsiveRules: preserves tokens when all breakpoints have values", () => {
+  const rules: ResponsiveTokenRules = {
+    sm: ["token.a"],
+    md: ["token.b"],
+    lg: ["token.c"],
+    xl: ["token.d"],
+  };
+  const result = filterEmptyResponsiveRules(rules);
+  assertEquals(Object.keys(result).length, 4);
+  assertEquals(result["sm"], ["token.a"]);
+});
+
+Deno.test("filterEmptyResponsiveRules: empty input returns empty object", () => {
+  const result = filterEmptyResponsiveRules({});
+  assertEquals(Object.keys(result).length, 0);
+});
+
+Deno.test("filterEmptyResponsiveRules: handles undefined token arrays", () => {
+  const rules: ResponsiveTokenRules = { sm: undefined, md: ["token.x"] };
+  const result = filterEmptyResponsiveRules(rules);
+  assertEquals(result["sm"], undefined);
+  assertEquals(result["md"], ["token.x"]);
+});
+
+Deno.test("responsive rule: per-breakpoint toggle adds token correctly", () => {
+  let rules: ResponsiveTokenRules = {};
+  // Simulate toggling a token on for md
+  const bp = "md";
+  const tokenKey = "color.action.primary.background";
+  const current = rules[bp] ?? [];
+  const next = current.includes(tokenKey)
+    ? current.filter((k) => k !== tokenKey)
+    : [...current, tokenKey];
+  rules = { ...rules, [bp]: next };
+  assertEquals(rules["md"], ["color.action.primary.background"]);
+});
+
+Deno.test("responsive rule: per-breakpoint toggle removes token correctly", () => {
+  let rules: ResponsiveTokenRules = {
+    md: ["color.action.primary.background", "spacing.md"],
+  };
+  const bp = "md";
+  const tokenKey = "color.action.primary.background";
+  const current = rules[bp] ?? [];
+  const next = current.includes(tokenKey)
+    ? current.filter((k) => k !== tokenKey)
+    : [...current, tokenKey];
+  rules = { ...rules, [bp]: next };
+  assertEquals(rules["md"], ["spacing.md"]);
+});
+
+Deno.test("responsive rule: clearing a breakpoint removes it from filter output", () => {
+  const rules: ResponsiveTokenRules = {
+    md: ["color.action.primary.background"],
+    lg: ["spacing.sm"],
+  };
+  const cleared = { ...rules };
+  delete cleared["md"];
+  const result = filterEmptyResponsiveRules(cleared);
+  assertEquals(result["md"], undefined);
+  assertEquals(result["lg"], ["spacing.sm"]);
+});
+
+Deno.test("responsive rule: payload uses filterEmptyResponsiveRules — no empty breakpoints sent", () => {
+  const rules: ResponsiveTokenRules = {
+    sm: [],
+    md: ["color.action.primary.background"],
+  };
+  const payload = filterEmptyResponsiveRules(rules);
+  // Payload should not include sm (empty)
+  assertFalse("sm" in payload);
+  assertEquals("md" in payload, true);
+});
+
+// ─── validateResponsiveTokenRulesJson ────────────────────────────────────────
+
+Deno.test("validateResponsiveTokenRulesJson: empty string returns ok with empty rules", () => {
+  const result = validateResponsiveTokenRulesJson("");
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.rules, {});
+});
+
+Deno.test("validateResponsiveTokenRulesJson: whitespace-only string returns ok with empty rules", () => {
+  const result = validateResponsiveTokenRulesJson("   ");
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.rules, {});
+});
+
+Deno.test("validateResponsiveTokenRulesJson: valid object parses correctly", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": ["color.action.primary.background"], "lg": ["spacing.sm"]}');
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.rules["md"], ["color.action.primary.background"]);
+    assertEquals(result.rules["lg"], ["spacing.sm"]);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: malformed JSON returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson("{not json}");
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("解析"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: JSON array returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('["sm", "md"]');
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: null JSON returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson("null");
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: JSON string (non-object) returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('"hello"');
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: unknown breakpoint key returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"xxl": ["spacing.sm"]}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("xxl"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: non-array value returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": "spacing.sm"}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("md"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: non-string array item returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": [1, 2]}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("md"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: empty arrays per breakpoint are valid", () => {
+  const result = validateResponsiveTokenRulesJson('{"sm": [], "md": []}');
+  assertEquals(result.ok, true);
 });

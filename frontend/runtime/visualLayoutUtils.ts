@@ -4,6 +4,59 @@
  * SSOT: docs/registrar-admin-ui-specification.md §5
  */
 
+export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
+export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
+export type ResponsiveTokenRules = Partial<Record<string, string[]>>;
+
+/**
+ * Strip breakpoints with empty token lists from a responsive rule map.
+ * Used before submitting to backend to avoid sending empty breakpoint entries.
+ */
+export function filterEmptyResponsiveRules(rules: ResponsiveTokenRules): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [bp, tokens] of Object.entries(rules)) {
+    if (tokens && tokens.length > 0) out[bp] = tokens;
+  }
+  return out;
+}
+
+export type ResponsiveTokenRulesValidationResult =
+  | { ok: true; rules: ResponsiveTokenRules }
+  | { ok: false; errorCode: string; message: string };
+
+/**
+ * Parse and validate raw JSON input for responsive token rules.
+ * Returns ok:true with parsed rules on success, ok:false with structured error on any invalid input.
+ * Empty string is treated as valid (clears the rules).
+ */
+export function validateResponsiveTokenRulesJson(raw: string): ResponsiveTokenRulesValidationResult {
+  if (!raw.trim()) return { ok: true, rules: {} };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { ok: false, errorCode: "RESPONSIVE_TOKEN_RULE_JSON_INVALID", message: "JSONとして解析できません" };
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, errorCode: "RESPONSIVE_TOKEN_RULE_JSON_INVALID", message: "JSONオブジェクトである必要があります（配列・nullは不可）" };
+  }
+  const record = parsed as Record<string, unknown>;
+  for (const [key, value] of Object.entries(record)) {
+    if (!(RESPONSIVE_BREAKPOINTS as readonly string[]).includes(key)) {
+      return { ok: false, errorCode: "RESPONSIVE_TOKEN_RULE_JSON_INVALID", message: `不明なブレークポイント: "${key}"（有効値: sm, md, lg, xl）` };
+    }
+    if (!Array.isArray(value)) {
+      return { ok: false, errorCode: "RESPONSIVE_TOKEN_RULE_JSON_INVALID", message: `"${key}" の値は文字列配列である必要があります` };
+    }
+    for (const item of value as unknown[]) {
+      if (typeof item !== "string") {
+        return { ok: false, errorCode: "RESPONSIVE_TOKEN_RULE_JSON_INVALID", message: `"${key}" の配列内に文字列以外の値があります` };
+      }
+    }
+  }
+  return { ok: true, rules: record as ResponsiveTokenRules };
+}
+
 // Minimal node shape for patch builder — compatible with DraftNode in UiBuilderAdmin.tsx.
 export interface VisualNodePayload {
   nodeId: string;

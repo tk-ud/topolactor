@@ -17,6 +17,10 @@ import {
   snapToGrid,
   buildVisualLayoutPatchJson,
   wouldCreateVisualParentCycle,
+  RESPONSIVE_BREAKPOINTS,
+  filterEmptyResponsiveRules,
+  validateResponsiveTokenRulesJson,
+  type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
 import {
@@ -346,6 +350,15 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
     suggestion: "先にパッケージ化を完了してから実行してください",
     navigateTo: "bucket",
   },
+  LAYOUT_ID_MISMATCH: {
+    cause: "サーバーが異なるレイアウトIDを返しました",
+    suggestion: "レイアウト候補を再読み込みして、正しいレイアウトを選択してください",
+    navigateTo: "layout",
+  },
+  RESPONSIVE_TOKEN_RULE_JSON_INVALID: {
+    cause: "レスポンシブルール JSON が不正です",
+    suggestion: "形式: {\"sm\": [\"token.key\"], \"md\": [\"token.key\"]}。有効ブレークポイント: sm, md, lg, xl",
+  },
 };
 
 function deriveCandidatesFromPalette(promoted: PromotedPaletteEntry[]): LayoutRouteCandidate[] {
@@ -584,7 +597,9 @@ function ActionableValidationErrorPanel({
           if (fix?.navigateTo && !shownNavigateTabs.has(fix.navigateTo)) {
             shownNavigateTabs.add(fix.navigateTo);
             const tab = fix.navigateTo;
-            const label = tab === "bucket" ? "→ 部品登録タブへ移動" : "→ CSS設定タブへ移動";
+            const label = tab === "bucket" ? "→ 部品登録タブへ移動"
+              : tab === "layout" ? "→ レイアウト選択へ移動"
+              : "→ CSS設定タブへ移動";
             navButtons.push(
               <button
                 key={tab}
@@ -2513,6 +2528,132 @@ function CanvasInspector({
   );
 }
 
+// ─── レスポンシブトークンルールエディター ──────────────────────────────────────
+
+const BREAKPOINT_LABELS: Record<string, string> = {
+  sm: "sm (640px〜)",
+  md: "md (768px〜)",
+  lg: "lg (1024px〜)",
+  xl: "xl (1280px〜)",
+};
+
+function ResponsiveTokenRuleEditor({
+  rules,
+  onChange,
+}: {
+  rules: ResponsiveTokenRules;
+  onChange: (rules: ResponsiveTokenRules) => void;
+}): JSX.Element {
+  const [activeBreakpoint, setActiveBreakpoint] = useState<string>(RESPONSIVE_BREAKPOINTS[1]);
+
+  const toggleToken = (bp: string, tokenKey: string) => {
+    const current = rules[bp] ?? [];
+    const next = current.includes(tokenKey)
+      ? current.filter((k) => k !== tokenKey)
+      : [...current, tokenKey];
+    onChange({ ...rules, [bp]: next });
+  };
+
+  const clearBreakpoint = (bp: string) => {
+    const next = { ...rules };
+    delete next[bp];
+    onChange(next);
+  };
+
+  const activeTokens = rules[activeBreakpoint] ?? [];
+  const hasRules = Object.values(rules).some((v) => v && v.length > 0);
+
+  return (
+    <div>
+      <p class="text-muted-xs mb-2">
+        画面幅ごとに異なるCSSトークンを設定します。未設定のブレークポイントはデフォルト（全体設定）のトークンを使用します。
+      </p>
+
+      {/* Breakpoint selector */}
+      <div class="mb-2 flex flex-wrap gap-1" role="tablist" aria-label="ブレークポイント選択">
+        {RESPONSIVE_BREAKPOINTS.map((bp) => {
+          const count = rules[bp]?.length ?? 0;
+          const isActive = bp === activeBreakpoint;
+          return (
+            <button
+              key={bp}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-controls={`responsive-panel-${bp}`}
+              onClick={() => setActiveBreakpoint(bp)}
+              class={`rounded px-2.5 py-1 text-xs font-mono transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 ${
+                isActive
+                  ? "bg-blue-600 text-white"
+                  : count > 0
+                  ? "border border-blue-300 bg-blue-50 text-blue-700"
+                  : "border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100"
+              }`}
+              title={BREAKPOINT_LABELS[bp]}
+            >
+              {bp}
+              {count > 0 && (
+                <span class={`ml-1 rounded-full px-1 text-[0.6rem] font-bold ${isActive ? "bg-blue-400 text-white" : "bg-blue-200 text-blue-800"}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Per-breakpoint token picker */}
+      <div
+        id={`responsive-panel-${activeBreakpoint}`}
+        role="tabpanel"
+        aria-label={`${BREAKPOINT_LABELS[activeBreakpoint] ?? activeBreakpoint} のトークン設定`}
+      >
+        <div class="mb-1 flex items-center justify-between">
+          <span class="text-xs font-medium text-gray-700">
+            {BREAKPOINT_LABELS[activeBreakpoint] ?? activeBreakpoint} のトークン
+            {activeTokens.length > 0 && <span class="ml-1 text-blue-600">({activeTokens.length} 件選択)</span>}
+          </span>
+          {activeTokens.length > 0 && (
+            <button
+              type="button"
+              onClick={() => clearBreakpoint(activeBreakpoint)}
+              class="text-[0.65rem] text-red-500 hover:text-red-700"
+              aria-label={`${activeBreakpoint} のトークン設定をクリア`}
+            >
+              クリア
+            </button>
+          )}
+        </div>
+        <CssTokenPicker
+          selectedTokenRefs={activeTokens}
+          onToggle={(key) => toggleToken(activeBreakpoint, key)}
+        />
+      </div>
+
+      {/* Configured rules summary */}
+      {hasRules && (
+        <div class="mt-2 rounded border border-blue-200 bg-blue-50 p-2">
+          <strong class="text-xs text-blue-800">設定済みブレークポイント</strong>
+          <ul class="mt-1 space-y-0.5 pl-0">
+            {RESPONSIVE_BREAKPOINTS.filter((bp) => (rules[bp]?.length ?? 0) > 0).map((bp) => (
+              <li key={bp} class="flex items-start gap-2 text-xs">
+                <code class="shrink-0 font-mono text-blue-700">{bp}:</code>
+                <span class="flex-1 text-gray-600 break-all">{rules[bp]!.join(", ")}</span>
+                <button
+                  type="button"
+                  onClick={() => clearBreakpoint(bp)}
+                  class="shrink-0 text-red-400 hover:text-red-600"
+                  aria-label={`${bp} をクリア`}
+                >✕</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── パレット ─────────────────────────────────────────────────────────────────
 
 function LayoutPalette({
@@ -2639,6 +2780,8 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
   // ── CSS / layout class refs ──────────────────────────────────────────────
   const [selectedTokenRefs, setSelectedTokenRefs] = useState<string[]>([]);
+  const [responsiveTokenRules, setResponsiveTokenRules] = useState<ResponsiveTokenRules>({});
+  const [responsiveJsonError, setResponsiveJsonError] = useState<{ code: string; message: string } | null>(null);
   const [selectedLayoutClassRefs, setSelectedLayoutClassRefs] = useState<string[]>([]);
   const [manualLayoutClassRef, setManualLayoutClassRef] = useState("");
   const [layoutClassRefError, setLayoutClassRefError] = useState<string | null>(null);
@@ -2787,6 +2930,10 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       setPatchErrors([{ code: "NO_ROUTE_LAYOUT", message: "ルートとレイアウトを選択してください。" }]);
       return;
     }
+    if (responsiveJsonError) {
+      setPatchErrors([responsiveJsonError]);
+      return;
+    }
     if (action === "apply") {
       const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
       if (draftOnlyNodes.length > 0) {
@@ -2814,7 +2961,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         routeKey: effectiveRouteKey,
         tensorPatchJson,
         cssTokenRefs: selectedTokenRefs,
-        responsiveTokenRefs: { md: selectedTokenRefs },
+        responsiveTokenRefs: filterEmptyResponsiveRules(responsiveTokenRules),
       });
       setDebugJson(JSON.stringify(body, null, 2));
       const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey);
@@ -2835,6 +2982,27 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         };
         const isPersisted = body?.emission?.data?.persisted === true;
         setLifecyclePhase(isPersisted ? "persisted" : donePhase[action] as LifecyclePhase);
+
+        // layoutId round-trip: confirm DB-authoritative identity from backend response.
+        // Backend NormalizeLayoutPatch returns the same layoutId it received, confirming
+        // the DB record was found and updated. Surface explicit mismatch rather than silent fallback.
+        const confirmedLayoutId = summary.layoutId;
+        const confirmedRouteKey = summary.routeKey;
+        if (action === "apply" && confirmedLayoutId) {
+          if (confirmedLayoutId !== effectiveLayoutId) {
+            setPatchErrors([{
+              code: "LAYOUT_ID_MISMATCH",
+              message: `サーバーが異なるレイアウトID (${confirmedLayoutId}) を返しました。候補を再読み込みしてください。`,
+            }]);
+            setLifecyclePhase("applied_fail");
+            announce("レイアウトIDの不一致が発生しました");
+            return;
+          }
+          // Confirm the DB-authoritative layoutId in frontend state
+          setLayoutId(confirmedLayoutId);
+          if (confirmedRouteKey) setRouteKey(confirmedRouteKey);
+        }
+
         announce(summary.message);
       }
     } catch (e) {
@@ -3263,6 +3431,45 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
       </Accordion>
 
+      <Accordion title="レスポンシブ設定（画面幅別トークン）" defaultOpen={false}>
+        <ResponsiveTokenRuleEditor
+          rules={responsiveTokenRules}
+          onChange={setResponsiveTokenRules}
+        />
+        <AdvancedManualOverride title="詳細設定 — レスポンシブルール JSON を直接入力">
+          <p class="text-muted-xs mb-1">
+            形式: <code>{`{"sm": ["token.key"], "md": ["token.key"]}`}</code>
+          </p>
+          <textarea
+            rows={3}
+            class={`input-mono w-full text-xs${responsiveJsonError ? " border-red-400" : ""}`}
+            placeholder={`{"sm": [], "md": [], "lg": [], "xl": []}`}
+            aria-label="レスポンシブルール JSON 手入力"
+            aria-invalid={responsiveJsonError ? "true" : undefined}
+            onBlur={(e) => {
+              const raw = (e.target as HTMLTextAreaElement).value.trim();
+              if (!raw) {
+                setResponsiveJsonError(null);
+                return;
+              }
+              const result = validateResponsiveTokenRulesJson(raw);
+              if (!result.ok) {
+                setResponsiveJsonError({ code: result.errorCode, message: result.message });
+                return;
+              }
+              setResponsiveJsonError(null);
+              setResponsiveTokenRules(result.rules);
+            }}
+          />
+          {responsiveJsonError && (
+            <div role="alert" class="mt-1 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+              <span class="font-medium">{responsiveJsonError.message}</span>
+              <span class="ml-2 font-mono text-[0.65rem] text-gray-400">[{responsiveJsonError.code}]</span>
+            </div>
+          )}
+        </AdvancedManualOverride>
+      </Accordion>
+
       <ApplyReadinessPanel
         canPatch={canPatch}
         effectiveRouteKey={effectiveRouteKey}
@@ -3277,7 +3484,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       <div class="mb-1 flex flex-wrap gap-2">
         <button
           onClick={() => callLayoutPatch("preview")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn-secondary min-w-[100px]"
           aria-label="プレビュー実行 — DBへの変更なし"
         >
@@ -3285,7 +3492,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </button>
         <button
           onClick={() => callLayoutPatch("validate")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
           aria-label="バリデート実行 — ref整合チェック"
         >
@@ -3293,7 +3500,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </button>
         <button
           onClick={() => callLayoutPatch("apply")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn-success min-w-[100px]"
           aria-label="適用実行 — DBへ反映"
         >
