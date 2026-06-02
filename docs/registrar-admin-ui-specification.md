@@ -430,9 +430,11 @@ not add canonical routes outside that registry.
 | `/admin/ui-builder` | Display/operation UI projection |
 | `/admin/manifests` | Existing manifest relation / hub operations, including ordering |
 
-Retained import, direct hub-navigation, and runtime-dispatch implementations are legacy/debug
-helpers only. Their wrappers live under `/dev/admin/*`; they are not canonical admin workflow
-routes and must not appear in canonical admin cards, steppers, or acceptance flow.
+Retained import, direct hub-navigation, runtime-dispatch, seed, context-token-registry, and
+registry-vector-validation implementations are legacy/debug helpers only. Their wrappers live
+under `/dev/admin/*`; they are not canonical admin workflow routes and must not appear in
+canonical admin cards, steppers, or acceptance flow. `/admin/manifests` owns registered
+relation / hub ordering only; promote-before draft hub assignment is not part of that page.
 
 ## 9. Boundary
 

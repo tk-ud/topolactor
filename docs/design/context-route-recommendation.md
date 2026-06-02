@@ -110,7 +110,7 @@ vocabulary 拡張は topology schema 変更と同等の重みを持つため、�
 ## SSOTの構造
 
 ```
-context_token_registry   ← トークン辞書（Hub Registry）— /admin/context-token-registry で管理
+context_token_registry   ← トークン辞書（Hub Registry）— /dev/admin/context-token-registry で管理
 function_parameters      ← 推薦エンジンチューニングパラメータ（topology データストア）
 context_event            ← 唯一の必須ログ（追記専用）
 context_prefix_vector_cache ← 近傍検索用プレフィックスベクトルキャッシュ

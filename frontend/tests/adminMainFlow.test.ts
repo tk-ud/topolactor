@@ -10,6 +10,9 @@ const NON_CANONICAL_ADMIN_ROUTES = [
   "/admin/import",
   "/admin/hub-navigation",
   "/admin/runtime",
+  "/admin/seed",
+  "/admin/context-token-registry",
+  "/admin/registry-vector-validate",
 ];
 
 Deno.test("ADMIN_MAIN_FLOW_STEPS matches canonical admin workflow", () => {
@@ -42,4 +45,15 @@ Deno.test("canonical admin navigation does not expose retained legacy/debug rout
   for (const route of NON_CANONICAL_ADMIN_ROUTES) {
     assertEquals(hrefs.includes(route), false);
   }
+});
+
+Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactly", async () => {
+  const generatedManifest = await Deno.readTextFile(new URL("../fresh.gen.ts", import.meta.url));
+  const adminRoutes = [...new Set(
+    [...generatedManifest.matchAll(/"\.\/routes\/admin\/([^"]+)"/g)]
+      .map((match) => match[1])
+      .filter((route) => route !== "_middleware.ts")
+      .map((route) => route === "index.tsx" ? "/admin" : `/admin/${route.replace(/\.tsx$/, "")}`),
+  )].sort();
+  assertEquals(adminRoutes, ["/admin", "/admin/contents", "/admin/manifests", "/admin/ui-builder"]);
 });

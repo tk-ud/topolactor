@@ -1,8 +1,8 @@
-import RegistryVectorValidator from "../../islands/RegistryVectorValidator.tsx";
-import AdminAuthGate from "../../islands/AdminAuthGate.tsx";
-import AdminHowTo from "../../components/AdminHowTo.tsx";
-import AdminHelpPanel from "../../components/AdminHelpPanel.tsx";
-import { ADMIN_REGISTRY_VECTOR_GUIDE } from "../../content/adminGuides.ts";
+import RegistryVectorValidator from "../../../islands/RegistryVectorValidator.tsx";
+import AdminAuthGate from "../../../islands/AdminAuthGate.tsx";
+import AdminHowTo from "../../../components/AdminHowTo.tsx";
+import AdminHelpPanel from "../../../components/AdminHelpPanel.tsx";
+import { ADMIN_REGISTRY_VECTOR_GUIDE } from "../../../content/adminGuides.ts";
 
 export default function RegistryVectorValidatePage() {
   return (

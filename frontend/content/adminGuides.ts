@@ -87,7 +87,7 @@ export const ADMIN_IMPORT_GUIDE: AdminGuide = {
   ],
   nextSteps: [
     "UI 投影が必要なら /admin/ui-builder へ",
-    "推薦トークンは /admin/context-token-registry へ",
+    "推薦トークンは /dev/admin/context-token-registry へ",
   ],
   boundaryNotes: [
     "Frontend はファイル送信と結果表示のみ。検証・永続化は backend",
@@ -218,7 +218,7 @@ export const ADMIN_CONTEXT_TOKEN_GUIDE: AdminGuide = {
     "非推奨 → 一覧で非推奨表示",
   ],
   nextSteps: [
-    "/admin/registry-vector-validate（登録前重複チェック）",
+    "/dev/admin/registry-vector-validate（登録前重複チェック）",
   ],
   boundaryNotes: [
     "登録・変更はサーバー側で管理されます",
@@ -260,7 +260,7 @@ export const ADMIN_RUNTIME_GUIDE: AdminGuide = {
     "silent fallback なし — 失敗は明示エラー",
   ],
   nextSteps: [
-    "登録が足りない → /dev/admin/import, /admin/seed, /admin/ui-builder",
+    "登録が足りない → /dev/admin/import, /dev/admin/seed, /admin/ui-builder",
     "demo トポロジ → /demo",
     "接続問題 → /runtime-status",
   ],
@@ -357,22 +357,21 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
 export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
   title: UX_HUB_MANIFESTS,
   purpose:
-    `既存 manifest の relation / hub 操作画面です。topology_manifest 一覧、hub 割当、画面間 relation の追加・編集・並び替えを同じ canonical route で扱います。新規 manifest 作成は ${UX_CONTENTS_PAGE} で行います。`,
+    `既存 manifest の relation / hub 操作画面です。登録済み topology_manifest 一覧と relation / hub の遷移・並び順を同じ canonical route で扱います。promote 前の draft hub 割当は扱いません。新規 manifest 作成は ${UX_CONTENTS_PAGE} で行います。`,
   prerequisites: [
     "/auth でログイン済みであること",
     `${UX_CONTENTS} で新規 manifest が作成済みであること`,
   ],
   howToSteps: [
     "登録済み topology_manifest 一覧を確認する",
-    "下書き manifest の親 hub と manifest_key を保存する",
     "同じ画面内の relation / hub 操作で遷移先を追加・編集・並び替える",
+    "promote 前の draft hub 割当はこの画面では扱わない",
   ],
   inputs: [
-    "既存 manifest の hub 割当 intent",
-    "既存 manifest の relation / navigation intent",
+    "既存 topology_manifest の relation / navigation intent",
   ],
   actions: [
-    "既存 manifest 一覧表示 / hub 割当",
+    "既存 topology_manifest 一覧表示",
     "relation 追加 / 編集 / 並び替え / 利用停止",
   ],
   outputs: [
@@ -424,7 +423,6 @@ export const ADMIN_ROUTE_CARDS: {
     relation: "canonical workflow Step 3",
     howToSummary: [
       "既存 manifest を確認",
-      "hub 割当を保存",
       "relation を追加・編集・並び替え",
     ],
   },
@@ -511,7 +509,7 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     label: UX_HUB_MANIFESTS,
     href: "/admin/manifests",
     purpose: "既存 manifest の relation / hub 操作",
-    completionSign: "必要な hub 割当と relation 操作が完了していること",
+    completionSign: "必要な relation / hub 並び順操作が完了していること",
   },
 ];
 

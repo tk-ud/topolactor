@@ -61,11 +61,11 @@ admin_console_workflow_ssot:
       island: frontend/islands/ManifestsAdmin.tsx
       domain_ownership:
         - existing topology_manifest registry display
-        - existing manifest hub assignment
         - existing manifest relation CRUD and ordering
         - hub_navigation_ordering inside the canonical manifests page
       explicitly_out_of_scope:
         - new manifest content draft creation
+        - promote-before draft hub assignment
         - per-manifest DB table, column, and type editing
         - raw manifest JSON editing in the default path
       note: >
@@ -84,7 +84,7 @@ admin_console_workflow_ssot:
     - step: 3
       label: operate_existing_manifest_relations_and_hubs
       route: /admin/manifests
-      description: Review existing manifests and operate their relation / hub assignments and ordering.
+      description: Review existing manifests and operate their registered relation / hub ordering. Draft hub assignment is not owned here.
 
   retained_noncanonical_routes:
     policy: legacy_debug_only
@@ -104,6 +104,18 @@ admin_console_workflow_ssot:
         isolated_route: /dev/admin/runtime
         island: frontend/islands/OperationPanel.tsx
         reason: retained dispatch debug wrapper; runtime verification is not a canonical admin authoring route
+      - legacy_route: /admin/seed
+        isolated_route: /dev/admin/seed
+        island: frontend/islands/SeedAdmin.tsx
+        reason: retained seed helper; not in runtime-orchestration admin registry
+      - legacy_route: /admin/context-token-registry
+        isolated_route: /dev/admin/context-token-registry
+        island: frontend/islands/ContextTokenRegistryEditor.tsx
+        reason: retained registry helper; not in runtime-orchestration admin registry
+      - legacy_route: /admin/registry-vector-validate
+        isolated_route: /dev/admin/registry-vector-validate
+        island: frontend/islands/RegistryVectorValidator.tsx
+        reason: retained validation helper; not in runtime-orchestration admin registry
 
   contents_promote_guard:
     required_before_promote:

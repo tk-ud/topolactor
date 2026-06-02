@@ -1164,9 +1164,10 @@ system_roadmap_ssot:
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
         /admin/ui-builder, and /admin/manifests. /admin/contents is the new manifest creation
         surface. /admin/manifests owns existing manifest relation / hub operations and renders
-        the hub relation operation UI in-page. Retained import, direct hub-navigation, and
-        runtime-dispatch wrappers are isolated under /dev/admin/* as legacy/debug helpers and
-        are excluded from canonical admin cards, steppers, and acceptance flow.
+        the registered hub relation operation UI in-page. Promote-before draft hub assignment
+        is not part of /admin/manifests. Retained import, direct hub-navigation, runtime-dispatch,
+        seed, context-token-registry, and registry-vector-validation wrappers are isolated under
+        /dev/admin/* as legacy/debug helpers and are excluded from canonical admin workflow.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1198,7 +1199,7 @@ system_roadmap_ssot:
         SeedRuntime implements validate/preview/import pipeline.
         AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
         docker-compose mounts topolactor_seed_storage volume at /storage.
-        Admin UI at /admin/seed provides all 5 operations.
+        Legacy/debug helper UI at /dev/admin/seed provides all 5 operations; it is not a canonical admin route.
         SeedRuntime.ImportAsync applies validated declarations through
         SeedImportApplyRepository.ApplyRuntimeDeclarationAsync and persists
         active dispatcher/runtime mappings in manifest. Import conflict/failure is
@@ -1211,7 +1212,7 @@ system_roadmap_ssot:
         - backend/schema/SeedContracts.cs
         - backend/runtime/AdminRuntime.cs
         - infra/docker-compose.yml
-        - frontend/routes/admin/seed.tsx
+        - frontend/routes/dev/admin/seed.tsx
         - docs/registrar-admin-ui-specification.md
       completion_condition:
         - seed_runtime_boundary_is_defined_in_SSOT

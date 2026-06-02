@@ -1,8 +1,8 @@
-import ContextTokenRegistryEditor from "../../islands/ContextTokenRegistryEditor.tsx";
-import AdminAuthGate from "../../islands/AdminAuthGate.tsx";
-import AdminHowTo from "../../components/AdminHowTo.tsx";
-import AdminHelpPanel from "../../components/AdminHelpPanel.tsx";
-import { ADMIN_CONTEXT_TOKEN_GUIDE } from "../../content/adminGuides.ts";
+import ContextTokenRegistryEditor from "../../../islands/ContextTokenRegistryEditor.tsx";
+import AdminAuthGate from "../../../islands/AdminAuthGate.tsx";
+import AdminHowTo from "../../../components/AdminHowTo.tsx";
+import AdminHelpPanel from "../../../components/AdminHelpPanel.tsx";
+import { ADMIN_CONTEXT_TOKEN_GUIDE } from "../../../content/adminGuides.ts";
 
 export default function ContextTokenRegistryPage() {
   return (
