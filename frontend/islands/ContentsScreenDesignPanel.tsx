@@ -4,8 +4,6 @@ import {
   listAdminManifests,
   getAdminManifest,
   createAdminManifestDraft,
-  validateAdminManifest,
-  promoteAdminManifest,
   assignAdminManifestScreenDataShape,
   type AdminManifestListItem,
   type AdminManifestDetail,
@@ -29,7 +27,13 @@ import {
   type ManifestScreenDesignDraft,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
-import { UX_HUB_MANIFESTS_PAGE, UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
+import {
+  UX_HUB_MANIFESTS_PAGE,
+  UX_STATUS_LABELS,
+  UX_FIELD_TABLE_REF,
+  UX_FIELD_IMPORT_SCHEMA,
+  UX_FIELD_NULLABLE,
+} from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
 type DraftSource = "none" | "local" | "backend" | "merged";
@@ -166,32 +170,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     }
   };
 
-  const handlePromote = async () => {
-    if (!selectedId) return;
-    setLoading(true);
-    setErrors([]);
-    try {
-      const validation = await validateAdminManifest(selectedId);
-      if (validation && !validation.valid) {
-        setErrors(validation.issues.map((i) => ({ code: i.code, message: i.message })));
-        setStatus("promote 前に内容確認で問題を解消してください。");
-        return;
-      }
-      const result = await promoteAdminManifest(selectedId);
-      if (!result?.ok) {
-        setErrors([{ code: result?.errorCode, message: result?.message ?? "promote failed" }]);
-        return;
-      }
-      setStatus(`有効化完了 — topology_manifests へ投影済み。次: ${UX_HUB_MANIFESTS_PAGE}`);
-      await loadManifests();
-      await loadSelectedManifest(selectedId);
-    } catch (e) {
-      setErrors([{ message: String(e) }]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const draftSourceLabel = {
     none: "未読込",
     local: "ローカル下書きキャッシュ",
@@ -237,15 +215,15 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
       <div class="mb-3 flex flex-wrap gap-2">
         <button type="button" class="btn-secondary" disabled={loading} onClick={handleCreateDraft}>
-          新規下書き（操作種別から軸を導出）
+          ① 下書き作成
         </button>
         <button type="button" class="btn-primary" disabled={loading || !selectedId} onClick={handleSaveAuthoring}>
-          設計を backend 下書きに保存
-        </button>
-        <button type="button" class="btn-secondary" disabled={loading || !selectedId} onClick={handlePromote}>
-          有効化（canonical 投影）
+          ② 設計を保存
         </button>
       </div>
+      <p class="mb-2 text-xs text-muted-xs">
+        ③ 有効化（内容確認 → 有効化）は下の「公開・案内」パネルで実行してください。
+      </p>
 
       <label class="mb-3 block text-xs">
         既存 manifest
@@ -286,7 +264,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           </select>
         </label>
         <label class="text-xs">
-          physical table ref（topology.physical_tables.table_ref）
+          {UX_FIELD_TABLE_REF}
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             value={design.tableRef}
@@ -294,7 +272,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           />
         </label>
         <label class="text-xs">
-          import schema 名
+          {UX_FIELD_IMPORT_SCHEMA}
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono"
             value={design.importSchemaName}
@@ -352,7 +330,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
                 patchDesign({ columns });
               }}
             />
-            nullable
+            {UX_FIELD_NULLABLE}
           </label>
         </div>
       ))}

@@ -55,6 +55,11 @@ export function toFriendlyLabel(technicalKey: string): string {
   return map[technicalKey] ?? technicalKey;
 }
 
+/** ContentsScreenDesignPanel フィールドラベル（通常表示用） */
+export const UX_FIELD_TABLE_REF = "参照テーブル名";
+export const UX_FIELD_IMPORT_SCHEMA = "取り込みデータ定義名";
+export const UX_FIELD_NULLABLE = "空欄許可";
+
 /** 推奨フローの Step ラベル（テストとステッパーで共有） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",
