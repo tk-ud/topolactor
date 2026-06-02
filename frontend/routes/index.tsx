@@ -7,8 +7,7 @@ export default function Index(): JSX.Element {
     <main class="page-main max-w-3xl font-sans">
       <h1 class="page-title">topolactor</h1>
       <p class="mb-4 leading-relaxed text-gray-700">
-        管理画面では、新規 manifest 作成、{UX_UI_BUILDER}、既存 manifest の
-        relation / hub 操作を順に進めます。 管理画面を使うには先に<strong>
+        管理画面では、新規 manifest 作成、{UX_UI_BUILDER}、{UX_HUB_MANIFESTS}を順に進めます。 管理画面を使うには先に<strong>
           ログイン
         </strong>が必要です。
       </p>
@@ -36,7 +35,7 @@ export default function Index(): JSX.Element {
             <a href="/admin/manifests" class="link font-semibold">
               {UX_HUB_MANIFESTS}
             </a>{" "}
-            — 既存 manifest の relation / hub 操作
+            — 作成済み manifest の hub 所属、relation、導線順序管理
           </li>
         </ol>
       </section>

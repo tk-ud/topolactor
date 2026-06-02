@@ -19,12 +19,6 @@ import * as $demo_article from "./routes/demo-article.tsx";
 import * as $demo_static from "./routes/demo-static.tsx";
 import * as $demo from "./routes/demo.tsx";
 import * as $demo_debug from "./routes/demo/debug.tsx";
-import * as $dev_admin_context_token_registry from "./routes/dev/admin/context-token-registry.tsx";
-import * as $dev_admin_hub_navigation from "./routes/dev/admin/hub-navigation.tsx";
-import * as $dev_admin_import from "./routes/dev/admin/import.tsx";
-import * as $dev_admin_registry_vector_validate from "./routes/dev/admin/registry-vector-validate.tsx";
-import * as $dev_admin_runtime from "./routes/dev/admin/runtime.tsx";
-import * as $dev_admin_seed from "./routes/dev/admin/seed.tsx";
 import * as $index from "./routes/index.tsx";
 import * as $runtime_status from "./routes/runtime-status.tsx";
 import * as $AdminAuthGate from "./islands/AdminAuthGate.tsx";
@@ -65,14 +59,6 @@ const manifest = {
     "./routes/demo-static.tsx": $demo_static,
     "./routes/demo.tsx": $demo,
     "./routes/demo/debug.tsx": $demo_debug,
-    "./routes/dev/admin/context-token-registry.tsx":
-      $dev_admin_context_token_registry,
-    "./routes/dev/admin/hub-navigation.tsx": $dev_admin_hub_navigation,
-    "./routes/dev/admin/import.tsx": $dev_admin_import,
-    "./routes/dev/admin/registry-vector-validate.tsx":
-      $dev_admin_registry_vector_validate,
-    "./routes/dev/admin/runtime.tsx": $dev_admin_runtime,
-    "./routes/dev/admin/seed.tsx": $dev_admin_seed,
     "./routes/index.tsx": $index,
     "./routes/runtime-status.tsx": $runtime_status,
   },

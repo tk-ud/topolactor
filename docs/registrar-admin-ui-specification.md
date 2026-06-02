@@ -426,15 +426,15 @@ not add canonical routes outside that registry.
 | Canonical route | Responsibility |
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
-| `/admin/contents` | New manifest creation: draft, validate, preview, explicit promote |
+| `/admin/contents` | Single-page manifest creation: content, data shape, draft, validate, preview, explicit promote |
 | `/admin/ui-builder` | Display/operation UI projection |
-| `/admin/manifests` | Existing manifest relation / hub operations, including ordering |
+| `/admin/manifests` | Created manifest hub membership, inter-manifest relations, and navigation ordering |
 
-Retained import, direct hub-navigation, runtime-dispatch, seed, context-token-registry, and
-registry-vector-validation implementations are legacy/debug helpers only. Their wrappers live
-under `/dev/admin/*`; they are not canonical admin workflow routes and must not appear in
-canonical admin cards, steppers, or acceptance flow. `/admin/manifests` owns registered
-relation / hub ordering only; promote-before draft hub assignment is not part of that page.
+The legacy/debug/helper wrappers formerly isolated under `/dev/admin/*` are deleted. Useful
+implementation pieces must converge on a canonical surface instead of adding helper routes.
+`/admin/contents` owns single-page manifest creation only. `/admin/manifests` owns created
+manifest hub membership, inter-manifest relations, and navigation ordering as page-group
+continuity management.
 
 ## 9. Boundary
 

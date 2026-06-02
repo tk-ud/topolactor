@@ -53,11 +53,11 @@ export default function ManifestsAdmin(): JSX.Element {
       <AdminHelpPanel {...ADMIN_MANIFESTS_GUIDE} />
 
       <section class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <p class="font-semibold">この画面の責務: 既存 manifest の relation / hub 操作</p>
+        <p class="font-semibold">この画面の責務: 作成済み manifest をつなぐ</p>
         <ul class="mt-2 list-inside list-disc text-xs">
           <li>新規 manifest 作成 → <a href="/admin/contents" class="link font-semibold">{UX_CONTENTS_PAGE}</a></li>
-          <li>promote 前の draft hub 割当はこの画面では扱いません。</li>
-          <li>登録済み topology_manifest の relation 追加・編集・並び替えを扱います。</li>
+          <li>作成済み manifest の hub 所属を管理します。</li>
+          <li>manifest 間 relation と hub navigation ordering を管理します。</li>
         </ul>
       </section>
 
@@ -108,9 +108,9 @@ export default function ManifestsAdmin(): JSX.Element {
       </section>
 
       <section class="mb-8 rounded border border-slate-200 bg-slate-50 p-4">
-        <h2 class="section-title">2. 既存 manifest の relation / hub 操作</h2>
+        <h2 class="section-title">2. hub 所属 / manifest 間 relation / navigation ordering</h2>
         <p class="mb-4 text-xs text-muted-xs">
-          登録済み topology_manifest の画面間 relation を追加・編集・並び替えします。
+          作成済み topology_manifest の hub 所属、画面間 relation、導線順序をまとめて管理します。
         </p>
         <HubNavigationAdmin />
       </section>

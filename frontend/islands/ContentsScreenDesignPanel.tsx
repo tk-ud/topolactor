@@ -28,10 +28,7 @@ import {
   MANIFEST_SCREEN_DB_SHAPE_TODO_NOTE,
   type ManifestScreenDesignDraft,
 } from "../lib/manifestScreenDesign.ts";
-import {
-  extractHubGroupingFromTopology,
-  extractScreenDataShapeFromTopology,
-} from "../lib/manifestTopologyExtensions.ts";
+import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import { UX_HUB_MANIFESTS_PAGE, UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -43,10 +40,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
   const [backendDetail, setBackendDetail] = useState<AdminManifestDetail | null>(null);
   const [design, setDesign] = useState<ManifestScreenDesignDraft>(emptyManifestScreenDesign());
   const [draftSource, setDraftSource] = useState<DraftSource>("none");
-  const [hubGroupingSummary, setHubGroupingSummary] = useState<{ hubId: string | null; manifestKey: string | null }>({
-    hubId: null,
-    manifestKey: null,
-  });
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +53,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     const detail = await getAdminManifest(manifestId);
     setBackendDetail(detail);
     if (!detail) {
-      setHubGroupingSummary({ hubId: null, manifestKey: null });
       const local = loadManifestScreenDesignLocal(manifestId);
       if (local) {
         setDesign(local);
@@ -71,9 +63,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       }
       return;
     }
-
-    const hub = extractHubGroupingFromTopology(detail.topologyRawJson);
-    setHubGroupingSummary(hub);
 
     const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
     const summaryLayer = detail.summary?.dispatcherMapping?.layer ?? "";
@@ -103,7 +92,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     if (!selectedId) {
       setDesign(emptyManifestScreenDesign());
       setBackendDetail(null);
-      setHubGroupingSummary({ hubId: null, manifestKey: null });
       setDraftSource("none");
       return;
     }
@@ -180,13 +168,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
   const handlePromote = async () => {
     if (!selectedId) return;
-    if (!hubGroupingSummary.hubId || !hubGroupingSummary.manifestKey) {
-      setErrors([{
-        code: "HUB_GROUPING_REQUIRED",
-        message: `promote 前に ${UX_HUB_MANIFESTS_PAGE} で親 hub と manifest_key を設定してください。`,
-      }]);
-      return;
-    }
     setLoading(true);
     setErrors([]);
     try {
@@ -243,18 +224,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       </p>
 
       <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
-        <p class="font-semibold">ハブ割当（readonly — {UX_HUB_MANIFESTS_PAGE} で編集）</p>
-        {hubGroupingSummary.hubId && hubGroupingSummary.manifestKey ? (
-          <p class="mt-1 font-mono">
-            hub_id={hubGroupingSummary.hubId.slice(0, 8)}… / manifest_key={hubGroupingSummary.manifestKey}
-          </p>
-        ) : (
-          <p class="mt-1 text-amber-800">
-            未割当 — promote 前に
-            <a href="/admin/manifests" class="link font-semibold"> {UX_HUB_MANIFESTS_PAGE}</a>
-            で設定してください。
-          </p>
-        )}
+        <p class="font-semibold">単体ページ runtime 投影</p>
         {backendDetail?.summary?.dispatcherMapping && (
           <p class="mt-2 font-mono text-[10px] text-muted-xs">
             dispatcher: {backendDetail.summary.dispatcherMapping.role}/

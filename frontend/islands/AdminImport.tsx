@@ -10,9 +10,7 @@ import {
   type AdminImportPreviewResult,
   type AdminImportApplyResult,
 } from "../api/adminApi.ts";
-import AdminHowTo from "../components/AdminHowTo.tsx";
-import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
-import { ADMIN_IMPORT_GUIDE } from "../content/adminGuides.ts";
+import { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import {
   UX_CONTENTS,
   UX_CONTENTS_PAGE,
@@ -116,12 +114,6 @@ export default function AdminImport(): JSX.Element {
     <main class="page-main font-mono">
       <h1 class="page-title">topolactor — 管理 / インポート</h1>
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
-
-      <AdminHowTo
-        steps={ADMIN_IMPORT_GUIDE.howToSteps}
-        prerequisites={ADMIN_IMPORT_GUIDE.prerequisites}
-      />
-      <AdminHelpPanel {...ADMIN_IMPORT_GUIDE} />
 
       <hr class="mb-6 border-gray-200" />
 

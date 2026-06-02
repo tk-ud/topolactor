@@ -1,10 +1,5 @@
 /** Parse manifest topology extension entries from AdminManifestDetail.topologyRawJson */
 
-export type HubGroupingSummary = {
-  hubId: string | null;
-  manifestKey: string | null;
-};
-
 export type ScreenDataShapeSummary = {
   tableRef: string | null;
   importSchemaName: string | null;
@@ -25,16 +20,6 @@ function parseTopologyEntries(raw: string): Record<string, unknown>[] {
   } catch {
     return [];
   }
-}
-
-export function extractHubGroupingFromTopology(raw: string): HubGroupingSummary {
-  for (const entry of parseTopologyEntries(raw)) {
-    if (entry.type !== "hub_grouping") continue;
-    const hubId = typeof entry.hubId === "string" ? entry.hubId : null;
-    const manifestKey = typeof entry.manifestKey === "string" ? entry.manifestKey : null;
-    return { hubId, manifestKey };
-  }
-  return { hubId: null, manifestKey: null };
 }
 
 export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShapeSummary {

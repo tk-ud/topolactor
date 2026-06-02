@@ -1162,12 +1162,11 @@ system_roadmap_ssot:
       milestone: M5_admin_and_ui_topology
       public_summary: >
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, and /admin/manifests. /admin/contents is the new manifest creation
-        surface. /admin/manifests owns existing manifest relation / hub operations and renders
-        the registered hub relation operation UI in-page. Promote-before draft hub assignment
-        is not part of /admin/manifests. Retained import, direct hub-navigation, runtime-dispatch,
-        seed, context-token-registry, and registry-vector-validation wrappers are isolated under
-        /dev/admin/* as legacy/debug helpers and are excluded from canonical admin workflow.
+        /admin/ui-builder, and /admin/manifests. /admin/contents owns single-page manifest
+        creation only. /admin/manifests owns created manifest hub membership, inter-manifest
+        relations, and navigation ordering as page-group continuity management. Legacy/debug/helper
+        wrappers formerly isolated under /dev/admin/* are deleted; useful implementation pieces
+        must converge on canonical surfaces.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1175,13 +1174,12 @@ system_roadmap_ssot:
         - frontend/routes/admin/contents.tsx
         - frontend/routes/admin/ui-builder.tsx
         - frontend/islands/HubNavigationAdmin.tsx
-        - frontend/routes/dev/admin/hub-navigation.tsx
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
         - admin_manifests_route_owns_existing_manifest_relation_and_hub_operations
-        - noncanonical_admin_wrappers_are_isolated_from_user_facing_canonical_workflow
+        - noncanonical_admin_wrappers_are_deleted_and_future_ui_converges_on_canonical_surfaces
         - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
@@ -1199,7 +1197,7 @@ system_roadmap_ssot:
         SeedRuntime implements validate/preview/import pipeline.
         AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
         docker-compose mounts topolactor_seed_storage volume at /storage.
-        Legacy/debug helper UI at /dev/admin/seed provides all 5 operations; it is not a canonical admin route.
+        The legacy/debug /dev/admin/seed wrapper is deleted; any future seed UI exposure must converge on a canonical surface.
         SeedRuntime.ImportAsync applies validated declarations through
         SeedImportApplyRepository.ApplyRuntimeDeclarationAsync and persists
         active dispatcher/runtime mappings in manifest. Import conflict/failure is
@@ -1212,7 +1210,6 @@ system_roadmap_ssot:
         - backend/schema/SeedContracts.cs
         - backend/runtime/AdminRuntime.cs
         - infra/docker-compose.yml
-        - frontend/routes/dev/admin/seed.tsx
         - docs/registrar-admin-ui-specification.md
       completion_condition:
         - seed_runtime_boundary_is_defined_in_SSOT
@@ -1479,7 +1476,6 @@ system_roadmap_ssot:
         - backend/Program.cs
         - db/seed_empty.sql
         - frontend/islands/HubNavigationAdmin.tsx
-        - frontend/routes/dev/admin/hub-navigation.tsx
         - frontend/api/adminApi.ts
         - frontend/content/adminGuides.ts
         - docs/design/admin-console-workflow-ssot.yaml
@@ -2138,7 +2134,6 @@ system_roadmap_ssot:
         - backend/runtime/AdminRuntime.cs
         - backend/Program.cs
         - frontend/api/adminApi.ts
-        - frontend/routes/dev/admin/import.tsx
         - frontend/routes/admin/index.tsx
         - frontend/tests/adminImport.test.ts
         - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs
