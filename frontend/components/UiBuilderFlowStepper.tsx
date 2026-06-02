@@ -47,7 +47,7 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
     label: "動作確認",
     detail:
       "保存反映後は Runtime確認 で登録結果を試します。不足があれば該当画面へ戻ります。",
-    externalHref: "/admin/runtime",
+    externalHref: "/demo",
   },
 ];
 
@@ -180,7 +180,7 @@ export default function UiBuilderFlowStepper({
         <p class="mt-2 text-[0.65rem] text-gray-500">
           「バケット管理」タブで Step 1–2、「レイアウトビルダー」タブで Step 3–4 の作業を行ってください。
           完了後は Step 5 の{" "}
-          <a href="/admin/runtime" class="text-blue-600 underline hover:text-blue-800">Runtime確認</a>{" "}
+          <a href="/demo" class="text-blue-600 underline hover:text-blue-800">Runtime確認</a>{" "}
           で動作を確認してください。
         </p>
       )}

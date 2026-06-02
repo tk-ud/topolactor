@@ -1161,25 +1161,26 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Admin routes /admin/manifests, /admin/contents, /admin/ui-builder, /admin/hub-navigation exist.
-        /admin/contents is wired to content_bundle admin runtime (browse, hub/entity/relation/hub_relation detail,
-        draft create/update, validate, preview, promote). Gap-9 content bundle partial follow-up complete.
-        /admin/manifests and /admin/ui-builder have separate registry flows.
-        /admin/hub-navigation is wired to hub_navigation admin runtime (list_manifests, get_hub_relations,
-        create/update/deprecate/reorder hub_relation). Seed manifest records (IDs 77-7c) registered.
+        Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
+        /admin/ui-builder, and /admin/manifests. /admin/contents is the new manifest creation
+        surface. /admin/manifests owns existing manifest relation / hub operations and renders
+        the hub relation operation UI in-page. Retained import, direct hub-navigation, and
+        runtime-dispatch wrappers are isolated under /dev/admin/* as legacy/debug helpers and
+        are excluded from canonical admin cards, steppers, and acceptance flow.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
         - frontend/routes/admin/manifests.tsx
         - frontend/routes/admin/contents.tsx
         - frontend/routes/admin/ui-builder.tsx
-        - frontend/routes/admin/hub-navigation.tsx
         - frontend/islands/HubNavigationAdmin.tsx
+        - frontend/routes/dev/admin/hub-navigation.tsx
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
-        - admin_hub_navigation_route_exists
+        - admin_manifests_route_owns_existing_manifest_relation_and_hub_operations
+        - noncanonical_admin_wrappers_are_isolated_from_user_facing_canonical_workflow
         - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
@@ -1477,7 +1478,7 @@ system_roadmap_ssot:
         - backend/Program.cs
         - db/seed_empty.sql
         - frontend/islands/HubNavigationAdmin.tsx
-        - frontend/routes/admin/hub-navigation.tsx
+        - frontend/routes/dev/admin/hub-navigation.tsx
         - frontend/api/adminApi.ts
         - frontend/content/adminGuides.ts
         - docs/design/admin-console-workflow-ssot.yaml
@@ -2136,7 +2137,7 @@ system_roadmap_ssot:
         - backend/runtime/AdminRuntime.cs
         - backend/Program.cs
         - frontend/api/adminApi.ts
-        - frontend/routes/admin/import.tsx
+        - frontend/routes/dev/admin/import.tsx
         - frontend/routes/admin/index.tsx
         - frontend/tests/adminImport.test.ts
         - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs

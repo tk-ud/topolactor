@@ -63,7 +63,7 @@ export function UserDemoNextActions(
           admin で構築・編集する
         </a>
         <a
-          href="/admin/runtime"
+          href="/demo/debug"
           class="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-gray-500 hover:bg-gray-50"
         >
           admin runtime 検証

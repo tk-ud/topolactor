@@ -27,7 +27,7 @@ export default function DemoDebug(): JSX.Element {
       <div class="nav-footer">
         <a href="/demo" class="link">← demo preview</a>
         {" · "}
-        <a href="/admin/runtime" class="link">admin runtime 検証</a>
+        <a href="/demo/debug" class="link">admin runtime 検証</a>
         {" · "}
         <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}

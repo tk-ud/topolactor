@@ -1,12 +1,12 @@
 import { JSX } from "preact";
-import AdminAuthGate from "../../islands/AdminAuthGate.tsx";
-import OperationPanel from "../../islands/OperationPanel.tsx";
-import AdminHowTo from "../../components/AdminHowTo.tsx";
-import AdminHelpPanel from "../../components/AdminHelpPanel.tsx";
-import { ADMIN_RUNTIME_GUIDE } from "../../content/adminGuides.ts";
+import AdminAuthGate from "../../../islands/AdminAuthGate.tsx";
+import OperationPanel from "../../../islands/OperationPanel.tsx";
+import AdminHowTo from "../../../components/AdminHowTo.tsx";
+import AdminHelpPanel from "../../../components/AdminHelpPanel.tsx";
+import { ADMIN_RUNTIME_GUIDE } from "../../../content/adminGuides.ts";
 
 /**
- * /admin/runtime — 開発者向け runtime dispatch 検証（Registrar 登録 UI とは別経路）。
+ * /dev/admin/runtime — 開発者向け runtime dispatch 検証（Registrar 登録 UI とは別経路）。
  * SSOT: registrar-admin-ui-specification.md — admin は登録境界; 本画面は promoted topology の動作確認。
  */
 export default function AdminRuntimePage(): JSX.Element {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
+import HubNavigationAdmin from "./HubNavigationAdmin.tsx";
 import {
   listAdminManifests,
   assignAdminManifestHubGrouping,
@@ -94,10 +95,10 @@ export default function ManifestsAdmin(): JSX.Element {
       <AdminHelpPanel {...ADMIN_MANIFESTS_GUIDE} />
 
       <section class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <p class="font-semibold">この画面の責務: ハブ設計・画面群（topology_manifest grouping）</p>
+        <p class="font-semibold">この画面の責務: 既存 manifest の relation / hub 操作</p>
         <ul class="mt-2 list-inside list-disc text-xs">
-          <li>単一画面の DB 設計・data shape → <a href="/admin/contents" class="link font-semibold">{UX_CONTENTS_PAGE}</a></li>
-          <li>画面間の遷移順序 → <a href="/admin/hub-navigation" class="link font-semibold">遷移順序設定</a></li>
+          <li>新規 manifest 作成 → <a href="/admin/contents" class="link font-semibold">{UX_CONTENTS_PAGE}</a></li>
+          <li>既存 topology_manifest の hub 割当、relation 追加・編集・並び替えをこの画面で扱います。</li>
         </ul>
       </section>
 
@@ -115,7 +116,6 @@ export default function ManifestsAdmin(): JSX.Element {
           <button type="button" class="btn-secondary" disabled={loading} onClick={loadAll}>
             再読み込み
           </button>
-          <a href="/admin/hub-navigation" class="btn-primary inline-block">遷移順序を設定</a>
         </div>
 
         <h2 class="section-title">1. 登録済み topology_manifest（canonical）</h2>
@@ -199,6 +199,14 @@ export default function ManifestsAdmin(): JSX.Element {
         >
           ハブ割当を保存
         </button>
+      </section>
+
+      <section class="mb-8 rounded border border-slate-200 bg-slate-50 p-4">
+        <h2 class="section-title">3. 既存 manifest の relation / hub 操作</h2>
+        <p class="mb-4 text-xs text-muted-xs">
+          既存 manifest の画面間 relation を追加・編集・並び替えします。この操作面は /admin/manifests の責務です。
+        </p>
+        <HubNavigationAdmin />
       </section>
     </main>
   );

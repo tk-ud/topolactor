@@ -338,7 +338,7 @@ export default function ContentsAdmin(): JSX.Element {
   };
 
   const promoteDisabled = !draft?.draftId || draft.status !== "draft" ||
-    (validation !== null && validation.isBlocking) ||
+    validation === null || validation.isBlocking ||
     (preview !== null && !preview.canPromote);
 
   useEffect(() => {
@@ -357,10 +357,10 @@ export default function ContentsAdmin(): JSX.Element {
       <p class="mb-4"><a href="/admin" class="link">&larr; 管理インデックス</a></p>
 
       <section class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <p class="font-semibold">{UX_CONTENTS} — manifest 単体の内容</p>
+        <p class="font-semibold">新規 manifest 作成</p>
         <p class="mt-1 text-xs">
           DB テーブル/カラム/型、relation、検索対象、集計表示、手入力、import 用 data shape はこの画面の責務です。
-          画面群の束ね方は <a href="/admin/manifests" class="link font-semibold">{UX_HUB_MANIFESTS_PAGE}</a> です。
+          既存 manifest の relation / hub 操作は <a href="/admin/manifests" class="link font-semibold">{UX_HUB_MANIFESTS_PAGE}</a> です。
         </p>
       </section>
 
@@ -668,8 +668,8 @@ export default function ContentsAdmin(): JSX.Element {
             {lifecycleResult.ok && (
               <p class="mt-3 text-xs text-muted-xs">
                 次のステップ:{" "}
-                <a href="/admin/ui-builder" class="link">UI Builder</a> でレイアウト登録、または{" "}
-                <a href="/admin/runtime" class="link">Runtime確認</a> で dispatch を検証してください。
+                <a href="/admin/ui-builder" class="link">UI Builder</a> でレイアウト登録し、
+                既存 manifest の relation / hub 操作は <a href="/admin/manifests" class="link">ハブ・画面群</a> で行ってください。
               </p>
             )}
           </div>

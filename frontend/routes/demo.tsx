@@ -4,7 +4,7 @@ import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 /**
  * /demo — admin構築済み demo project projection の体験監査 preview 面。
  * UX構築 authority は持たない。構築・編集は /admin で行う。
- * raw runtime 検証は /demo/debug または /admin/runtime を利用。
+ * raw runtime 検証は /demo/debug または /demo/debug を利用。
  */
 export default function Demo(): JSX.Element {
   return (
@@ -16,7 +16,7 @@ export default function Demo(): JSX.Element {
         先に <a href="/auth" class="link">ログイン</a> してください。
         raw runtime 検証は{" "}
         <a href="/demo/debug" class="link">/demo/debug</a> または{" "}
-        <a href="/admin/runtime" class="link">/admin/runtime</a>、
+        <a href="/demo/debug" class="link">/demo/debug</a>、
         構築・編集は <a href="/admin" class="link">/admin</a> をご利用ください。
       </div>
 
@@ -29,7 +29,7 @@ export default function Demo(): JSX.Element {
         {" · "}
         <a href="/demo/debug" class="link">raw 検証</a>
         {" · "}
-        <a href="/admin/runtime" class="link">admin runtime</a>
+        <a href="/demo/debug" class="link">admin runtime</a>
         {" · "}
         <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}

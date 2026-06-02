@@ -27,44 +27,36 @@ export type AdminGuide = {
 export const ADMIN_INDEX_GUIDE: AdminGuide = {
   title: "管理 UI（入口）",
   purpose:
-    `${UX_CONTENTS} → データ取り込み → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} → ${UX_RUNTIME_CHECK}まで進める管理デモの入口です。直接 DB を編集する画面ではありません。`,
+    `${UX_CONTENTS} → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} の canonical admin workflow を案内します。直接 DB を編集する画面ではありません。`,
   prerequisites: [
     "/auth でログイン（管理画面利用の前提）",
     "DB 永続化する場合: infra 起動と DATABASE_URL / DEMO_BACKEND_URL の設定",
-    `推奨順: ${UX_CONTENTS} → インポート → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} → ${UX_RUNTIME_CHECK}`,
   ],
   howToSteps: [
-    `上の「作業の流れ」に沿って進める（まず${UX_CONTENTS}で画面の内容と DB 設計）`,
-    `/admin/contents で画面単体の内容・データの形を定義する`,
-    "/admin/import で CSV/JSON をプレビューしてから取り込む",
+    `/admin/contents で新規 manifest の下書きを作成し、内容確認・プレビュー・有効化を行う`,
     "/admin/ui-builder で部品登録・レイアウトを準備し、保存反映する",
-    `/admin/manifests でハブ・画面群を束ね、/admin/hub-navigation で遷移順序を設定する`,
-    "/admin/runtime で登録済み設定の動作を確認する",
-    "（任意）/admin/seed — デモ用 seed.json、トークン辞書は別画面",
+    `/admin/manifests で既存 manifest の relation / hub 操作を行う`,
+    "動作確認が必要な場合は canonical admin workflow 外の /demo を利用する",
   ],
   inputs: [
-    "各画面で説明される登録対象（コンテンツ / データの形 / シード / 部品 / レイアウト / ハブ・画面群 など）",
-    "操作前に /auth でログイン（DB 永続化が必要な画面）",
+    "各 canonical admin 画面で説明される登録対象",
+    "操作前に /auth でログイン",
   ],
   actions: [
-    "下のリンクから目的の画面へ移動し、画面内の「プレビュー → 検証 → 保存反映 / 有効化 / 取り込み」の順で確認する",
+    "canonical route registry に沿って新規 manifest 作成、UI 準備、既存 manifest relation / hub 操作を進める",
   ],
   outputs: [
-    "成功時: backend が検証したうえで DB（canonical topology）または /storage に反映",
+    "成功時: backend が検証したうえで canonical topology に反映",
     "失敗時: 画面のエラーパネルに code / message — silent fallback はしません",
-  ],
-  nextSteps: [
-    `推奨順: ログイン → ${UX_CONTENTS} → インポート → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} → ${UX_RUNTIME_CHECK}`,
-    "書き込み操作の前に、各画面のプレビューまたは検証を必ず通す",
   ],
   boundaryNotes: [
     "Frontend = projection / intent submission。意味判断・永続化の正本は DB + backend runtime",
-    "Preview は read-only。Apply / Promote / Import は明示操作のみ",
+    "Preview は read-only。Apply / Promote は明示操作のみ",
   ],
 };
 
 export const ADMIN_IMPORT_GUIDE: AdminGuide = {
-  title: "インポート（CSV/JSON）",
+  title: "Legacy / Debug: インポート（CSV/JSON）",
   purpose:
     `CSV/JSON ファイルを、${UX_CONTENTS}で定義した${UX_DATA_SHAPE}に沿って取り込む画面です。`,
   prerequisites: [
@@ -78,7 +70,7 @@ export const ADMIN_IMPORT_GUIDE: AdminGuide = {
     "「3. プレビュー（バリデート）」を押す — backend が各行を検証し、DB にはまだ書かない",
     "プレビュー表で invalid 行があれば validationErrors を直し、ファイルを差し替えて再プレビュー",
     "validCount > 0 を確認したら「4. 適用」を押す — snapshotId 経由で valid レコードのみ DB 反映",
-    "applyLogId が表示されたら /admin/runtime または /demo で取り込み結果を確認する",
+    "applyLogId が表示されたら /demo で取り込み結果を確認する",
   ],
   inputs: [
     `画面 — ${UX_CONTENTS}で定義した取り込み先`,
@@ -106,7 +98,8 @@ export const ADMIN_IMPORT_GUIDE: AdminGuide = {
     "missing ref → 画面/schema の存在とフィールド名の一致を確認",
     "画面一覧が空 → /admin/manifests で画面を作成。有効化済みでも一覧が空なら canonical 投影ギャップ（.agent/tasks/todo.md 参照）",
   ],
-  caution: "適用は DB へ書き込みます。プレビューで valid 件数と内容を必ず確認してください。",
+  caution:
+    "適用は DB へ書き込みます。プレビューで valid 件数と内容を必ず確認してください。",
 };
 
 export const ADMIN_SEED_GUIDE: AdminGuide = {
@@ -123,7 +116,7 @@ export const ADMIN_SEED_GUIDE: AdminGuide = {
     "「バリデート」で構文・必須フィールドを確認する。errors が出たら JSON を修正",
     "「プレビュー」で宣言される runtime 一覧（name/target/layer/action）を read-only 確認",
     "内容に問題がなければ「インポート」を押す — backend が DB authority へ反映",
-    "成功メッセージ（importedCount）のあと /admin/runtime または /demo で runtime が解決されるか確認",
+    "成功メッセージ（importedCount）のあと /demo で runtime が解決されるか確認",
   ],
   inputs: [
     "Seed JSON（version + runtimes 配列）",
@@ -140,7 +133,7 @@ export const ADMIN_SEED_GUIDE: AdminGuide = {
     "import → importedCount",
   ],
   nextSteps: [
-    "大量レコードは /admin/import を検討",
+    "大量レコード取り込み helper は legacy/debug 隔離済み",
     "UI 登録は /admin/ui-builder",
   ],
   boundaryNotes: [
@@ -150,7 +143,8 @@ export const ADMIN_SEED_GUIDE: AdminGuide = {
     "ファイルなし → 先に保存するか backend storage を確認",
     "validation 失敗 → errors[].code に従い JSON 修正",
   ],
-  caution: "インポートは DB へ runtime 宣言を書き込みます。バリデートとプレビューを省略しないでください。",
+  caution:
+    "インポートは DB へ runtime 宣言を書き込みます。バリデートとプレビューを省略しないでください。",
 };
 
 export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
@@ -160,7 +154,7 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
   prerequisites: [
     "/auth 済み、UI topology DB 接続可能",
     `${UX_CONTENTS}で画面の内容と${UX_DATA_SHAPE}が定義されていること`,
-    "データは /admin/import または /admin/contents で投入済みであること（推奨）",
+    "データは /admin/contents で登録済みであること（推奨）",
     "componentKey / sourcePath は frontend/components の実在パスと一致させる",
   ],
   howToSteps: [
@@ -184,7 +178,7 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     "apply: UI topology DB に layout 永続",
   ],
   nextSteps: [
-    "/admin/runtime または /demo で投影確認",
+    "/demo で投影確認",
     "推薦連携は Context Token Registry",
   ],
   boundaryNotes: [
@@ -237,7 +231,7 @@ export const ADMIN_CONTEXT_TOKEN_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_RUNTIME_GUIDE: AdminGuide = {
-  title: "ランタイム検証（dispatch）",
+  title: "Legacy / Debug: ランタイム検証（dispatch）",
   purpose:
     "Registrar 登録 UI とは別の、promoted topology に対する user operation dispatch の検証面です。operationType=admin ではなく通常 runtime 経路（POST /api/dispatch）で emission を投影します。本番運用コンソールではありません。",
   prerequisites: [
@@ -266,7 +260,7 @@ export const ADMIN_RUNTIME_GUIDE: AdminGuide = {
     "silent fallback なし — 失敗は明示エラー",
   ],
   nextSteps: [
-    "登録が足りない → /admin/import, /admin/seed, /admin/ui-builder",
+    "登録が足りない → /dev/admin/import, /admin/seed, /admin/ui-builder",
     "demo トポロジ → /demo",
     "接続問題 → /runtime-status",
   ],
@@ -321,49 +315,41 @@ export const ADMIN_REGISTRY_VECTOR_GUIDE: AdminGuide = {
 };
 
 export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
-  title: UX_CONTENTS,
+  title: "新規 manifest 作成",
   purpose:
-    `manifest 単体の内容設定画面です。DB テーブル/カラム/型、relation/join、検索対象、集計表示、手入力、インポート用${UX_DATA_SHAPE}をここで定義します。hub への束ね方は ${UX_HUB_MANIFESTS_PAGE} です。`,
+    `新しい manifest の下書きを作成し、内容と${UX_DATA_SHAPE}を整え、内容確認・プレビュー後に明示的に有効化する画面です。既存 manifest の relation / hub 操作は ${UX_HUB_MANIFESTS_PAGE} で行います。`,
   prerequisites: [
     "/auth 済み、DATABASE_URL / DEMO_BACKEND_URL 設定済み",
     "seed に content_bundle 管理用 admin route（layer=content_bundle）が active 登録されていること",
-    "demo データ利用時は db/demo_seed.sql 適用済みであること",
   ],
   howToSteps: [
-    "hub / entity / relation で画面が扱うデータ構造を確認・登録する",
-    "DB 設計: テーブル名、カラム、型、関連、検索対象、集計表示の intent を入力する（UI 拡張は TODO）",
-    "Entity Draft Editor で hub / relation / state を選び label を入力（手動登録）",
-    "ドラフト作成 → 更新（任意）→ 内容確認 → プレビュー → 有効化",
-    "Advanced / Debug でのみ entityJsonb raw edit や UUID override が可能",
-    `${UX_DATA_SHAPE} を整えたら /admin/import へ`,
+    "新規 manifest が扱う hub / entity / relation を選ぶ",
+    "Entity Draft Editor で state と label を入力し、ドラフトを作成する",
+    "ドラフト更新後は内容確認を再実行する",
+    "内容確認 → プレビュー → 有効化の順で進める",
+    `既存 manifest の relation / hub 操作は /admin/manifests へ`,
   ],
   inputs: [
-    "DB 設計 intent（テーブル、カラム、型、relation、join、検索、集計表示）",
-    "keyword / kind / state filter（browse）",
-    "hub selector / relation / state / label（手動登録）",
+    "新規 manifest の hub selector / relation / state / label",
     "Advanced: entityJsonb JSON（debug のみ）",
   ],
   actions: [
-    "content_bundle:search / list_hubs / list_entities / list_relations / list_hub_relations / get_entity / get_hub / get_relation",
     "content_bundle:create_entity_draft / update_entity_draft / validate_draft / preview_draft / promote_draft",
   ],
   outputs: [
-    "browse 結果（hub / entity / relation list items）",
-    "entity detail / draft detail",
+    "新規 manifest draft detail",
     "structured validation issues（blocking / warning）",
     "preview summary + canPromote",
     "promote 結果 + created entity_id + readback",
   ],
   nextSteps: [
-    "/admin/import",
     "/admin/ui-builder",
     "/admin/manifests",
-    "/admin/registry-vector-validate",
   ],
   boundaryNotes: [
     "direct DB 編集は行いません — backend validation / persistence boundary 経由のみ",
+    "validation 未実行では promote を有効化しません",
     "draft は runtime visible active state ではありません",
-    "promote は明示操作 — 自動 promote なし",
     "frontend は topology 意味判断をしません",
   ],
 };
@@ -371,41 +357,33 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
 export const ADMIN_MANIFESTS_GUIDE: AdminGuide = {
   title: UX_HUB_MANIFESTS,
   purpose:
-    `複数 manifest を hub / topology_manifest として束ね、画面群の関係・ナビゲーション intent を設計する画面です。manifest 単体の DB 設計や内容は ${UX_CONTENTS_PAGE} で行います。`,
+    `既存 manifest の relation / hub 操作画面です。topology_manifest 一覧、hub 割当、画面間 relation の追加・編集・並び替えを同じ canonical route で扱います。新規 manifest 作成は ${UX_CONTENTS_PAGE} で行います。`,
   prerequisites: [
     "/auth でログイン済みであること",
-    `${UX_CONTENTS} と ${UX_UI_BUILDER} が先行していること（推奨）`,
-    "デモ環境では DATABASE_URL / DEMO_BACKEND_URL が設定されていること",
+    `${UX_CONTENTS} で新規 manifest が作成済みであること`,
   ],
   howToSteps: [
-    "登録済み画面（topology_manifest 候補）一覧を確認する",
-    "/admin/hub-navigation で遷移順序（hub_relations）を設定する",
-    "必要なら互換セクションで legacy manifest 低レイヤ編集（移行予定）",
-    "公開・案内タブで案内文を編集する（必要な場合）",
+    "登録済み topology_manifest 一覧を確認する",
+    "下書き manifest の親 hub と manifest_key を保存する",
+    "同じ画面内の relation / hub 操作で遷移先を追加・編集・並び替える",
   ],
   inputs: [
-    "hub への画面割当 intent",
-    "manifest 群の関係・ナビゲーション intent",
-    "互換（通常不要）: legacy manifest 実行軸・projection",
+    "既存 manifest の hub 割当 intent",
+    "既存 manifest の relation / navigation intent",
   ],
   actions: [
-    "一覧 / 詳細表示 / 内容確認 / 下書き作成 / 下書き更新 / 有効化 / 利用停止",
-    "公開・案内: 一覧 / 詳細 / 確認 / 下書き更新",
+    "既存 manifest 一覧表示 / hub 割当",
+    "relation 追加 / 編集 / 並び替え / 利用停止",
   ],
   outputs: [
-    "一覧・詳細・検証結果",
-    "有効化/利用停止は結果コードで通知",
-  ],
-  nextSteps: [
-    "/admin/runtime で動作を確認",
-    "CSV/JSON 取り込みは /admin/import",
+    "既存 topology_manifest 一覧",
+    "relation / hub 操作結果",
   ],
   boundaryNotes: [
     "Frontend は操作送信のみ — 内容の正しさはサーバー側で検証",
-    "有効化の正本は DB + backend — frontend は結果を表示するのみ",
     "silent fallback 禁止 — バックエンド未接続は明示表示",
   ],
-  caution: "有効化/利用停止は DB の状態を変更します。",
+  caution: "relation / hub 操作は DB の状態を変更します。",
 };
 
 /** Index page: per-route cards with short how-to */
@@ -419,111 +397,42 @@ export const ADMIN_ROUTE_CARDS: {
 }[] = [
   {
     href: "/admin/contents",
-    label: UX_CONTENTS,
-    purpose: "manifest 単体の内容・DB 設計・data shape",
-    relation: "推奨フロー Step 2",
+    label: "新規 manifest 作成",
+    purpose: "新しい manifest のドラフト作成・内容確認・プレビュー・有効化",
+    relation: "canonical workflow Step 1",
     howToSummary: [
-      "画面が扱うデータ構造を定義",
-      "手動登録または import 用 data shape を整える",
-      "内容確認 → 有効化",
+      "新規ドラフトを作成",
+      "内容確認 → プレビュー",
+      "明示的に有効化",
     ],
-  },
-  {
-    href: "/admin/import",
-    label: "インポート",
-    purpose: "CSV/JSON をプレビューしてから取り込む",
-    relation: `推奨フロー Step 3 — ${UX_CONTENTS}後`,
-    howToSummary: [
-      `画面と${UX_DATA_SHAPE}を選択`,
-      "ファイルを選びプレビュー",
-      "問題なければ適用",
-    ],
-    caution: "適用で DB に書き込みます",
   },
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
     purpose: "画面部品の登録とレイアウトの準備",
-    relation: "推奨フロー Step 4",
+    relation: "canonical workflow Step 2",
     howToSummary: [
-      "部品を登録 → 配置できる状態にする",
-      "レイアウトタブで配置",
+      "部品を登録",
+      "レイアウトを配置",
       "プレビュー → 検証 → 保存反映",
     ],
-    caution: "保存反映で DB に書き込みます",
   },
   {
     href: "/admin/manifests",
     label: UX_HUB_MANIFESTS,
-    purpose: "ハブ・画面群の束ね方",
-    relation: "推奨フロー Step 5",
+    purpose: "既存 manifest の relation / hub 操作",
+    relation: "canonical workflow Step 3",
     howToSummary: [
-      "登録済み画面を確認",
-      "hub / topology_manifest の grouping intent",
-    ],
-  },
-  {
-    href: "/admin/hub-navigation",
-    label: "遷移順序",
-    purpose: "hub_relations の sequence_position",
-    relation: "推奨フロー Step 5（sub）",
-    howToSummary: [
-      "画面を選択",
-      "遷移先を追加",
-      "▲▼で順序を調整",
-    ],
-  },
-  {
-    href: "/admin/runtime",
-    label: UX_RUNTIME_CHECK,
-    purpose: "登録済み設定の動作確認",
-    relation: "推奨フロー Step 6",
-    howToSummary: [
-      "ログイン済みを確認",
-      "シナリオを選んで実行",
-      "結果を確認",
-    ],
-  },
-  {
-    href: "/admin/seed",
-    label: "シード（任意）",
-    purpose: "デモ用 seed.json の編集と取り込み",
-    relation: "デモ runtime 宣言 — 通常フローとは別",
-    howToSummary: [
-      "JSON 編集 or ロード",
-      "バリデート → プレビュー",
-      "インポート",
-    ],
-    caution: "インポートで DB に書き込みます",
-  },
-  {
-    href: "/admin/context-token-registry",
-    label: "推薦トークン辞書",
-    purpose: "推薦エンジンが参照するトークン辞書を管理する",
-    relation: "推薦エンジン連携",
-    howToSummary: [
-      "ラベルと値を入力",
-      "トークン追加",
-      "不要時は非推奨",
-    ],
-  },
-  {
-    href: "/admin/registry-vector-validate",
-    label: "登録前重複チェック",
-    purpose: "登録前にIDが既存の登録と重複していないか確認する",
-    relation: "登録前チェック",
-    howToSummary: [
-      "確認対象のテーブルとIDを入力",
-      "重複チェックを実行",
-      "問題があればIDを修正",
+      "既存 manifest を確認",
+      "hub 割当を保存",
+      "relation を追加・編集・並び替え",
     ],
   },
 ];
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
   title: "ナビ順序設定",
-  purpose:
-    "設定単位のページ遷移順序を設定します。" +
+  purpose: "設定単位のページ遷移順序を設定します。" +
     "画面間ナビゲーションの順序を管理する画面です。",
   prerequisites: [
     "/auth でログイン済みであること",
@@ -579,30 +488,18 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     href: "/auth",
     purpose: "管理画面利用の前提",
     completionSign: "ログイン済みであること",
-    nextLabel: `${UX_CONTENTS}へ`,
+    nextLabel: "新規 manifest 作成へ",
   },
   {
     step: 2,
-    label: UX_CONTENTS,
+    label: "新規 manifest 作成",
     href: "/admin/contents",
-    purpose: "manifest 単体の内容・DB 設計・import 用 data shape",
-    completionSign: "画面の内容とデータの形が定義されていること",
-    nextLabel: "データ取り込みへ",
+    purpose: "新しい manifest の下書き・内容確認・プレビュー・有効化",
+    completionSign: "新規 manifest が有効化されていること",
+    nextLabel: `${UX_UI_BUILDER}へ`,
   },
   {
     step: 3,
-    label: "データ取り込み",
-    href: "/admin/import",
-    purpose: "CSV/JSON インポート または コンテンツ手動登録",
-    completionSign: "データが DB に反映されていること",
-    nextLabel: `${UX_UI_BUILDER}へ`,
-    subSteps: [
-      { label: "CSV/JSON", href: "/admin/import" },
-      { label: "手動登録", href: "/admin/contents" },
-    ],
-  },
-  {
-    step: 4,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
     purpose: "表示・操作 UI（component / layout / style）",
@@ -610,84 +507,16 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
   {
-    step: 5,
+    step: 4,
     label: UX_HUB_MANIFESTS,
     href: "/admin/manifests",
-    purpose: "ハブ・画面群の束ね方と遷移 intent",
-    completionSign: "画面群が hub に割り当てられていること",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
-    subSteps: [
-      { label: "ハブ設計", href: "/admin/manifests" },
-      { label: "遷移順序", href: "/admin/hub-navigation" },
-    ],
-  },
-  {
-    step: 6,
-    label: UX_RUNTIME_CHECK,
-    href: "/admin/runtime",
-    purpose: "登録済み設定が動くか確認する",
-    completionSign: "実行が成功し結果が返ること",
+    purpose: "既存 manifest の relation / hub 操作",
+    completionSign: "必要な hub 割当と relation 操作が完了していること",
   },
 ];
 
-export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = [
-  {
-    step: 1,
-    label: "ログイン",
-    href: "/auth",
-    purpose: "管理画面を使う前に認証します。未ログインでは各 /admin/* 画面は利用できません。",
-    completionSign: "ログイン済み表示。管理トップ以降の画面に進めること。",
-    nextLabel: `${UX_CONTENTS}へ`,
-  },
-  {
-    step: 2,
-    label: UX_CONTENTS,
-    href: "/admin/contents",
-    purpose: `manifest 単体の DB 設計・relation・検索・集計・手入力・${UX_DATA_SHAPE}を定義します。`,
-    completionSign: `画面の内容と ${UX_DATA_SHAPE} が定義されていること。`,
-    nextLabel: "データ取り込みへ",
-    boundaryNote: "検証・有効化の正本は backend + canonical topology。frontend は intent 送信と結果表示のみ。",
-  },
-  {
-    step: 3,
-    label: "データ取り込み",
-    href: "/admin/import",
-    purpose: `CSV/JSON インポート（/admin/import）または手動コンテンツ登録（/admin/contents）でデータを DB に反映します。`,
-    completionSign: "データが DB に反映されていること（applyLogId または promote 完了）。",
-    nextLabel: `${UX_UI_BUILDER}へ`,
-    boundaryNote: "プレビュー・適用の正本は backend。frontend はファイル送信と結果表示のみ。",
-    subSteps: [
-      { label: "インポート", href: "/admin/import" },
-      { label: "手動登録", href: "/admin/contents" },
-    ],
-  },
-  {
-    step: 4,
-    label: UX_UI_BUILDER,
-    href: "/admin/ui-builder",
-    purpose: "部品を登録し、レイアウトを組んで保存反映します。",
-    completionSign: "配置用パレットに部品が表示され、レイアウトの保存反映が完了すること。未登録のみの配置が残っていないこと。",
-    nextLabel: `${UX_HUB_MANIFESTS}へ`,
-    boundaryNote: "topology 意味判断は backend。frontend はドラフト表示と操作送信のみ。",
-  },
-  {
-    step: 5,
-    label: UX_HUB_MANIFESTS,
-    href: "/admin/manifests",
-    purpose: "hub / topology_manifest で画面群を束ね、/admin/hub-navigation で遷移順序を設定します。",
-    completionSign: "画面群の grouping と必要な遷移順序が登録されていること。",
-    nextLabel: `${UX_RUNTIME_CHECK}へ`,
-    boundaryNote: "grouping intent は manifests、sequence_position は hub-navigation。",
-  },
-  {
-    step: 6,
-    label: UX_RUNTIME_CHECK,
-    href: "/admin/runtime",
-    purpose: "登録済み設定に対して操作を実行し、結果を確認します。不足があれば該当画面へ戻ります。",
-    completionSign: "実行が成功し結果が返ること。登録不足エラーが解消されていること。",
-    boundaryNote: "dispatch / emission の正本は backend + DB。frontend は結果の表示のみ。",
-  },
-];
+export const ACCEPTANCE_FLOW_STEPS: AcceptanceFlowStep[] = ADMIN_MAIN_FLOW_STEPS
+  .map((step) => ({ ...step }));
 
 /** 受入チェックリスト — 完了判定の正本ではなく確認観点のリスト */
 export type AcceptanceCheckItem = {
@@ -698,47 +527,28 @@ export type AcceptanceCheckItem = {
 
 export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
   {
-    label: UX_CONTENTS,
+    label: "新規 manifest 作成",
     href: "/admin/contents",
     checks: [
-      "hub / entity / relation の一覧が表示されること",
-      "ドラフト → 内容確認 → プレビュー → 有効化ができること",
-      `${UX_DATA_SHAPE} の前提が整っていること`,
+      "ドラフトを作成できること",
+      "validation 未実行では有効化できないこと",
+      "内容確認 → プレビュー → 有効化ができること",
     ],
   },
   {
-    label: "インポート（プレビュー・適用）",
-    href: "/admin/import",
+    label: UX_UI_BUILDER,
+    href: "/admin/ui-builder",
     checks: [
-      `画面と${UX_DATA_SHAPE}を選択できること`,
-      "プレビューで有効件数 > 0 になること",
-      "適用で applyLogId が返ること",
+      "部品を登録できること",
+      "レイアウトのプレビュー・検証・保存反映ができること",
     ],
   },
   {
     label: UX_HUB_MANIFESTS,
     href: "/admin/manifests",
     checks: [
-      "登録済み画面一覧が表示されること",
-      "/admin/hub-navigation で遷移順序を設定できること",
-    ],
-  },
-  {
-    label: "UI Builder（部品・レイアウト）",
-    href: "/admin/ui-builder",
-    checks: [
-      "部品を登録できること",
-      "配置用パレットに部品が現れること",
-      "レイアウトのプレビュー・検証が通ること",
-      "未登録のみの配置がなく保存反映できること",
-    ],
-  },
-  {
-    label: UX_RUNTIME_CHECK,
-    href: "/admin/runtime",
-    checks: [
-      "シナリオを選んで実行が成功すること",
-      "結果が返ること（登録不足エラーがないこと）",
+      "既存 manifest 一覧が表示されること",
+      "relation / hub 操作を同じ画面で行えること",
     ],
   },
 ];

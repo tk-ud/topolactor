@@ -58,9 +58,7 @@ export function toFriendlyLabel(technicalKey: string): string {
 /** 推奨フローの Step ラベル（テストとステッパーで共有） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",
-  UX_CONTENTS,
-  "データ取り込み",
+  "新規 manifest 作成",
   UX_UI_BUILDER,
   UX_HUB_MANIFESTS,
-  UX_RUNTIME_CHECK,
 ] as const;

@@ -94,7 +94,7 @@ export default function AdminIndex() {
         <section class="mb-8">
           <h2 class="section-title">管理画面一覧</h2>
           <p class="text-muted mb-4 text-sm">
-            主導線: <strong>{UX_CONTENTS} → インポート → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS} → {UX_RUNTIME_CHECK}</strong>。
+            正規導線: <strong>新規 manifest 作成 → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS}</strong>。
             シード・コンテンツ・トークン辞書は必要に応じて利用してください。
           </p>
           <ul class="space-y-4">
@@ -185,8 +185,6 @@ export default function AdminIndex() {
         </details>
 
         <p class="nav-footer font-mono">
-          <a href="/admin/runtime" class="link">Runtime確認</a>
-          {" · "}
           <a href="/auth" class="link">ログイン</a>
           {" · "}
           <a href="/" class="link">トップ</a>

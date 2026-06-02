@@ -53,9 +53,9 @@ Deno.test("flow steps 3 and 4 target the layout tab", () => {
   assertEquals(s4.tabTarget, "layout");
 });
 
-Deno.test("flow step 5 has external href pointing to /admin/runtime", () => {
+Deno.test("flow step 5 has external href pointing outside canonical admin workflow", () => {
   const s5 = UI_BUILDER_FLOW_STEPS.find((s) => s.id === 5)!;
-  assertEquals(s5.externalHref, "/admin/runtime");
+  assertEquals(s5.externalHref, "/demo");
   assertEquals(s5.tabTarget, undefined);
 });
 

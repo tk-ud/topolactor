@@ -1,4 +1,4 @@
-import { JSX } from "preact";
+import { type ComponentChildren, JSX } from "preact";
 import type { AdminGuide } from "../content/adminGuides.ts";
 
 export type AdminHelpPanelProps = AdminGuide & {
@@ -87,6 +87,6 @@ export default function AdminHelpPanel({
 }
 
 /** One-line hint under a button or control */
-export function AdminActionHint({ children }: { children: string }): JSX.Element {
+export function AdminActionHint({ children }: { children: ComponentChildren }): JSX.Element {
   return <p class="text-muted-xs mt-1 mb-0 max-w-2xl">{children}</p>;
 }
