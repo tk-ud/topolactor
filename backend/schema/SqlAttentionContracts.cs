@@ -64,6 +64,8 @@ public record ExplorationBudgetTierLimits(
 /// Exploration policy resolved from topology.function_parameters.
 /// w / l2_norm thresholds (norm_level_high/medium) classify budget tier; tier limits
 /// bound topK, hub-table distance band, and permutation expansion — not full-space search.
+/// neighbor_score_policy keys (neighbor_score_min, strong/normal/exploratory_hit_threshold)
+/// resolve score band classification from data-defined source — no hidden literals.
 /// Policy source: function_name="sql_attention_hub_attractor_exploration" parameter_key="default_policy".
 /// </summary>
 public record HubAttractorExplorationPolicy(
@@ -73,7 +75,11 @@ public record HubAttractorExplorationPolicy(
     ExplorationBudgetTierLimits MidTier,
     ExplorationBudgetTierLimits HighTier,
     int MaxHubKindsPerCurrent,
-    int MaxAttentionRowsSaved
+    int MaxAttentionRowsSaved,
+    double NeighborScoreMin,
+    double StrongHitThreshold,
+    double NormalHitThreshold,
+    double ExploratoryHitThreshold
 );
 
 /// <summary>
