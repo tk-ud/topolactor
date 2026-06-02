@@ -33,6 +33,8 @@ import {
   UX_FIELD_TABLE_REF,
   UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_NULLABLE,
+  COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  UX_COLUMN_TYPE_ADVANCED_LABEL,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
@@ -213,6 +215,17 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         )}
       </div>
 
+      <div class="mb-4 rounded border border-blue-100 bg-blue-50 p-3 text-xs">
+        <p class="mb-2 font-semibold text-blue-800">作成ステップ（前半）</p>
+        <ol class="space-y-1 text-blue-900">
+          <li>① 下書き作成</li>
+          <li>② 参照テーブル設定</li>
+          <li>③ カラム定義</li>
+          <li class="text-slate-400">④ 初期データ登録 — 未実装（次工程）</li>
+          <li class="text-slate-400">⑤ テーブル結合意図（任意）— 未実装（後続工程）</li>
+        </ol>
+      </div>
+
       <div class="mb-3 flex flex-wrap gap-2">
         <button type="button" class="btn-secondary" disabled={loading} onClick={handleCreateDraft}>
           ① 下書き作成
@@ -222,7 +235,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </button>
       </div>
       <p class="mb-2 text-xs text-muted-xs">
-        ③ 有効化（内容確認 → 有効化）は下の「公開・案内」パネルで実行してください。
+        次: 内容確認 → 有効化は下の「公開・案内」パネルで実行してください。
       </p>
 
       <label class="mb-3 block text-xs">
@@ -310,16 +323,39 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
               patchDesign({ columns });
             }}
           />
-          <input
-            class="rounded border px-2 py-1 text-xs font-mono"
-            placeholder="type"
-            value={col.dataType}
-            onInput={(e) => {
-              const columns = [...design.columns];
-              columns[index] = { ...columns[index], dataType: (e.target as HTMLInputElement).value };
-              patchDesign({ columns });
-            }}
-          />
+          <div>
+            <select
+              class="w-full rounded border px-2 py-1 text-xs font-mono"
+              value={COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType) ? col.dataType : "__advanced__"}
+              onChange={(e) => {
+                const val = (e.target as HTMLSelectElement).value;
+                const columns = [...design.columns];
+                if (val === "__advanced__") {
+                  columns[index] = { ...columns[index], dataType: "" };
+                } else {
+                  columns[index] = { ...columns[index], dataType: val };
+                }
+                patchDesign({ columns });
+              }}
+            >
+              {COLUMN_TYPE_NORMAL_VIEW_OPTIONS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+              <option value="__advanced__">{UX_COLUMN_TYPE_ADVANCED_LABEL}</option>
+            </select>
+            {!COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType) && (
+              <input
+                class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
+                placeholder="カスタム型"
+                value={col.dataType}
+                onInput={(e) => {
+                  const columns = [...design.columns];
+                  columns[index] = { ...columns[index], dataType: (e.target as HTMLInputElement).value };
+                  patchDesign({ columns });
+                }}
+              />
+            )}
+          </div>
           <label class="flex items-center gap-2 text-xs">
             <input
               type="checkbox"

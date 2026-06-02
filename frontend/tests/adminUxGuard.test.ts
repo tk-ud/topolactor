@@ -11,6 +11,8 @@ import {
   UX_FIELD_TABLE_REF,
   UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_NULLABLE,
+  COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  UX_COLUMN_TYPE_ADVANCED_LABEL,
 } from "../content/adminUxTerms.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 
@@ -247,4 +249,58 @@ Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みデー�
 Deno.test("UX_FIELD_NULLABLE: uses user-friendly label 空欄許可", () => {
   assertEquals(UX_FIELD_NULLABLE, "空欄許可");
   assertFalse(UX_FIELD_NULLABLE.includes("nullable"), "must not use internal term");
+});
+
+// ─── Column type normal-view select regression ────────────────────────────────
+// SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates
+// Normal-view select must cover exactly the SSOT candidates; free-text is in advanced/other.
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: contains all SSOT candidates", () => {
+  const required = [
+    "text",
+    "integer",
+    "bigint",
+    "boolean",
+    "numeric",
+    "timestamp with time zone",
+    "date",
+    "jsonb",
+    "uuid",
+    "varchar",
+  ];
+  for (const t of required) {
+    assertEquals(
+      COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(t),
+      true,
+      `COLUMN_TYPE_NORMAL_VIEW_OPTIONS must include "${t}"`,
+    );
+  }
+});
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: has exactly 10 entries matching SSOT", () => {
+  assertEquals(
+    COLUMN_TYPE_NORMAL_VIEW_OPTIONS.length,
+    10,
+    "must have exactly 10 normal-view candidates from SSOT",
+  );
+});
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: does not contain banned aggregation term 'group by'", () => {
+  assertFalse(
+    COLUMN_TYPE_NORMAL_VIEW_OPTIONS.some((t) => t.toLowerCase().includes("group by")),
+    "normal-view column type select must not contain aggregation vocabulary 'group by'",
+  );
+});
+
+Deno.test("UX_COLUMN_TYPE_ADVANCED_LABEL: is a non-empty string for advanced/other isolation", () => {
+  assertEquals(typeof UX_COLUMN_TYPE_ADVANCED_LABEL, "string");
+  assertEquals(
+    UX_COLUMN_TYPE_ADVANCED_LABEL.length > 0,
+    true,
+    "advanced label must not be empty",
+  );
+  assertFalse(
+    UX_COLUMN_TYPE_ADVANCED_LABEL.toLowerCase().includes("group by"),
+    "advanced label must not contain 'group by'",
+  );
 });
