@@ -51,14 +51,15 @@ admin_console_workflow_ssot:
       domain_ownership:
         - create one new empty manifest draft
         - define the new manifest content and screen_data_shape intent
-        - author DB reference, column shape, initial data, optional table relation intent, search key, aggregation key, and display group
-        - validate and preview before explicit promote or register
+        - author DB reference, column shape, initial-data topology intent, optional table relation intent, search key, aggregation key, and display group
+        - validate and preview topology intent before explicit manifest promote or register
         - hand off a successfully registered manifest to /admin/ui-builder
       explicitly_out_of_scope:
         - created manifest hub membership management as a page-group operation
         - manifest-to-manifest relation management between already-created manifests
         - navigation ordering or hub_navigation_ordering
         - page-group continuity management
+        - actual initial-data business-row insertion, which belongs to the separate content_bundle validated draft -> preview -> explicit promote route
         - presenting file import as a canonical admin route
       note: >
         This surface creates one data-shaped single-page manifest. Optional relation or join
@@ -98,10 +99,12 @@ admin_console_workflow_ssot:
         - step: 4
           label: register_initial_data
           responsibility:
-            - treat initial-data registration as part of contents authoring
-            - preserve validate, preview, and explicit apply or promote boundaries
+            - author initial-data candidates as screen_data_shape topology intent
+            - preview the authored candidates before explicit manifest promote or register
+            - keep actual business-row insertion in the separate content_bundle validated draft -> preview -> explicit promote route
           prohibited:
             - silent_direct_DB_write
+            - treating_manifest_promote_as_actual_initial_data_business_row_insertion
         - step: 5
           label: configure_optional_table_relation_intent
           responsibility:
@@ -135,7 +138,8 @@ admin_console_workflow_ssot:
         - step: 8
           label: register_manifest
           responsibility:
-            - execute validate, preview, then explicit promote or register
+            - execute validate, preview, then explicit manifest promote or register
+            - treat initial-data candidates as topology intent only; actual business-row insertion remains a separate content_bundle operation
             - hand off successful registration to /admin/ui-builder
           guard_ref: contents_promote_guard
 

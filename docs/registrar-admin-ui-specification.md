@@ -426,7 +426,7 @@ not add canonical routes outside that registry.
 | Canonical route | Responsibility |
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
-| `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial data, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit promote/register |
+| `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial-data topology intent, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit manifest promote/register. Actual business-row insertion remains the separate `content_bundle` validated draft -> preview -> explicit promote route. |
 | `/admin/ui-builder` | Manifest display/operation UI projection: component placement, selectable design/layout settings, selectable component wiring, validate, visual preview, explicit apply, then CI/local governance audit handoff |
 | `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
 
@@ -437,8 +437,10 @@ manifest hub membership, inter-manifest relations, navigation ordering, and page
 continuity management. Optional structured relation/join intent in a new single-page draft remains a
 `/admin/contents` data-shape concern; it does not move created-manifest relation ownership out of
 `/admin/manifests`. `/admin/ui-builder` is a frontend projection surface, not a runtime judgment
-owner. All authoring surfaces preserve validate -> preview -> explicit promote/register/apply
-boundaries and prohibit silent/direct DB writes.
+owner. `/admin/contents` initial-data candidates are screen-data-shape topology intent only; manifest
+promotion does not insert business rows. Actual business-row insertion remains the separate
+`content_bundle` validated draft -> preview -> explicit promote route. All authoring surfaces preserve
+validate -> preview -> explicit promote/register/apply boundaries and prohibit silent/direct DB writes.
 
 ## 9. Boundary
 

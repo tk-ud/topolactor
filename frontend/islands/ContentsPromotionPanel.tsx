@@ -97,7 +97,7 @@ export default function ContentsPromotionPanel(): JSX.Element {
       setStatus(
         isBlocking
           ? "内容確認: 要修正 — manifest データまたは公開・案内メタデータに問題があります（修正後に再確認してください）"
-          : "内容確認: 問題なし — 有効化が可能です",
+          : "内容確認: 問題なし — 初期データ候補のサンプル確認後、manifest の有効化が可能です",
       );
     } finally {
       setLoading(false);
@@ -113,7 +113,7 @@ export default function ContentsPromotionPanel(): JSX.Element {
         setStatus(`有効化エラー: ${result?.message ?? "promote failed"}`);
         return;
       }
-      setStatus(`有効化完了 — topology_manifests へ投影済み。次: ${UX_HUB_MANIFESTS_PAGE}`);
+      setStatus(`有効化完了 — topology_manifests へ投影済み（初期データ候補の実データ登録は別フロー）。次: ${UX_HUB_MANIFESTS_PAGE}`);
       setValidation(null);
       const m = await listAdminManifests("draft");
       if (m) setManifests(m);

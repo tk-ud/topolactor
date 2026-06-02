@@ -317,7 +317,7 @@ export type AdminManifestScreenDataShapeInput = {
   screenOperationKind?: string;
   /** Structured relation/join intents for draft data-shape only (not created-manifest relations). */
   relationIntents?: RelationIntentInput[];
-  /** Initial data rows as topology intent. No direct DB write. */
+  /** Initial-data candidates as screen-data-shape topology intent. Actual row insertion belongs to content_bundle. */
   initialDataRows?: Record<string, string>[];
 };
 

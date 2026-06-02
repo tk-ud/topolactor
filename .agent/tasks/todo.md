@@ -18,7 +18,7 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 
 - [x] Reflect the explicit contents wizard steps in UI (front half): empty draft creation → DB reference → columns → steps ④⑤ explicitly marked as not-yet-implemented/next-step. Full 8-step display (initial data → optional relation/join intent → search key → aggregation/display group → validate/preview/register → /admin/ui-builder handoff) remains in later bundles. [authoring-wizard-front]
 - [x] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Free text isolated under その他（詳細入力）. Existing `dataType` persistence format preserved. [authoring-wizard-front]
-- [x] Add initial-data registration flow with validate → preview → explicit apply or promote; do not add silent/direct DB writes. [admin-routes-completion] Initial data rows stored as topology intent in screen_data_shape extension; no direct DB write; preview via SamplePreviewPanel.
+- [x] Add initial-data topology-intent authoring flow with validate → sample preview → explicit manifest promote/register; do not add silent/direct DB writes. [admin-routes-completion] Initial-data candidates are stored in the screen_data_shape extension; actual business-row insertion is explicitly the separate content_bundle validated draft → preview → explicit promote route and is not a frontend.admin_routes completion condition.
 - [x] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`. [admin-routes-completion]
 - [x] Add user-facing search-key selection for `searchTargets`. [admin-routes-completion] searchKeyColumns multi-select from defined columns; raw searchTargets in advanced disclosure.
 - [x] Add aggregation-key and display-group selection with mandatory sample viewing / preview. Do not expose `group by` as primary UX vocabulary. [admin-routes-completion] aggregationKey select + displayColumns multi-select + SamplePreviewPanel.
@@ -26,7 +26,7 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 ### Backend persistence and explicit validation
 
 - [x] Persist structured relation/join and aggregation display fields on the `screen_data_shape` topology extension. [admin-routes-completion] searchKeyColumns/aggregationKey/displayColumns/relationIntents/initialDataRows added to topology extension JSON and backend contracts.
-- [x] Fail explicitly when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op. [admin-routes-completion] TryProjectWiringAsync now returns WIRING_TABLE_REF_NOT_FOUND; ProjectOnPromoteAsync propagates the error.
+- [x] Fail explicitly without partial canonical writes when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op. [admin-routes-completion] ProjectOnPromoteAsync preflights before canonical upsert and returns WIRING_TABLE_REF_NOT_FOUND; live-DB regression asserts no hubs.topology_manifests or topology.wiring_physical_to_package residue.
 
 ### `/admin/ui-builder` projection authoring
 

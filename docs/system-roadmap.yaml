@@ -1171,12 +1171,15 @@ system_roadmap_ssot:
         Structured relation/join intents, searchKeyColumns, aggregationKey, and displayColumns
         are persisted as screen_data_shape topology extension fields; raw aggregationSpec and
         searchTargets are advanced-only disclosures. Initial data rows are stored as topology
-        intent (no direct DB write). Sample viewing panel is mandatory as part of step 7.
+        intent (no direct DB write); actual business-row insertion is explicitly owned by the
+        separate content_bundle validated draft → preview → explicit promote route and is not a
+        frontend.admin_routes completion condition. Sample viewing panel is mandatory as part of step 7.
         All normal-view UX vocabulary adheres to SSOT: no "group by" in aggregation labels;
         no internal field names exposed in search-key selection; relation intent is draft
         data-shape only and does not transfer hub/inter-manifest ownership from /admin/manifests.
         topology.physical_tables table_ref mismatch now returns WIRING_TABLE_REF_NOT_FOUND
-        (explicit failure) instead of silently skipping wiring projection.
+        (explicit failure) before canonical projection writes, so mismatch cannot leave a partial
+        hubs.topology_manifests or topology.wiring_physical_to_package row.
         /admin/ui-builder has component placement from catalog, CSS/design-token/layout-class
         selectable settings, validate→preview→explicit apply route, and CI audit handoff.
         Raw dispatcher fields (role/target/layer/action) and advanced wiring inputs are
@@ -1204,7 +1207,7 @@ system_roadmap_ssot:
       evidence:
         tests:
           - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions)
-          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, ManifestCanonicalProjectionUnitTests)
+          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
         ci:
           - frontend-types
           - backend-tests
@@ -1223,7 +1226,6 @@ system_roadmap_ssot:
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
-        - initial data rows are topology intent only; actual DB table insertion is separate content_bundle flow
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml

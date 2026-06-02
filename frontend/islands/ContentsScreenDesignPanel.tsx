@@ -493,8 +493,8 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       {/* ④ 初期データ登録 */}
       <h3 class="mt-5 text-xs font-semibold">④ {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期データを topology intent として登録します（保存 → 有効化時に canonical route を経由して反映）。
-        direct DB write は行いません。
+        初期データ候補を topology intent として保存します。下のサンプル表示で確認し、内容確認後に manifest を有効化してください。
+        この画面から実データを直接登録しません。実データ登録は別のコンテンツ登録フローで行います。
       </p>
       {namedColumns.length === 0 ? (
         <p class="text-xs text-slate-400 italic">カラムを定義してから初期データを追加してください。</p>
