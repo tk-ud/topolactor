@@ -107,7 +107,8 @@ public class HubAttractorExplorationRuntime
             if (relation.RelationScore is < 0 or > 1)
                 throw new InvalidOperationException($"relation_config.sql_attention_score for hub_relation_id={relation.HubRelationId} must be within [0,1].");
 
-        var bounded = relations
+        var eligible = relations.Where(r => r.RelationScore >= policy.NeighborScoreMin).ToList();
+        var bounded = eligible
             .GroupBy(r => r.TopologyManifestId)
             .OrderBy(g => g.Key)
             .Take(policy.MaxHubKindsPerCurrent)
@@ -141,7 +142,7 @@ public class HubAttractorExplorationRuntime
                 resolver_evidence_json = NormalizeJsonArrayOrEmpty(resolution.ResolverEvidenceJson),
                 no_logs_hub_current_fallback = true
             });
-            hits.Add(new HubAttractorExplorationHit(candidate.CurrentId, Guid.Empty, sourceSetId, relation.HubId, "hubs.hub_relations", relation.HubRelationId, null, relation.RelationScore, rank + 1, ClassifyScoreBand(relation.RelationScore), "canonical", candidate.L2Norm, "{}", phaseJson, evidenceJson, generationLineId, relation.TopologyManifestId, relation.RelatedHubId, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds));
+            hits.Add(new HubAttractorExplorationHit(candidate.CurrentId, Guid.Empty, sourceSetId, relation.HubId, "hubs.hub_relations", relation.HubRelationId, null, relation.RelationScore, rank + 1, ClassifyScoreBand(relation.RelationScore, policy), "canonical", candidate.L2Norm, "{}", phaseJson, evidenceJson, generationLineId, relation.TopologyManifestId, relation.RelatedHubId, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds));
         }
         return hits;
     }
@@ -345,7 +346,7 @@ public class HubAttractorExplorationRuntime
                             RelationRegistryId: hub.RelationRegistryId,
                             NeighborScore: scoring.Score,
                             HitRank: rank + 1,
-                            ScoreBand: ClassifyScoreBand(scoring.Score),
+                            ScoreBand: ClassifyScoreBand(scoring.Score, policy),
                             PermutationKey: permutationKey,
                             L2Norm: candidate.L2Norm,
                             VectorJson: scoring.VectorJson,
@@ -697,13 +698,13 @@ public class HubAttractorExplorationRuntime
     }
 
     /// <summary>
-    /// Classifies a neighbor score into a score band per SSOT neighbor_score_policy_range.
-    /// strong: 0.95-1.00, normal: 0.90-0.95, exploratory: 0.85-0.90, evidence_only: below 0.85.
+    /// Classifies a neighbor score into a score band using data-defined policy thresholds.
+    /// Thresholds are resolved from policy; no hidden literals in runtime code.
     /// </summary>
-    internal static string ClassifyScoreBand(double score) =>
-        score >= 0.95 ? "strong"
-        : score >= 0.90 ? "normal"
-        : score >= 0.85 ? "exploratory"
+    internal static string ClassifyScoreBand(double score, HubAttractorExplorationPolicy policy) =>
+        score >= policy.StrongHitThreshold ? "strong"
+        : score >= policy.NormalHitThreshold ? "normal"
+        : score >= policy.ExploratoryHitThreshold ? "exploratory"
         : "evidence_only";
 
     /// <summary>
@@ -785,7 +786,11 @@ public class HubAttractorExplorationRuntime
             MidTier: ParseTierLimits(tiersRoot, "mid"),
             HighTier: ParseTierLimits(tiersRoot, "high"),
             MaxHubKindsPerCurrent: RequireInt(root, "max_hub_kinds_per_current"),
-            MaxAttentionRowsSaved: RequireInt(root, "max_attention_rows_saved")
+            MaxAttentionRowsSaved: RequireInt(root, "max_attention_rows_saved"),
+            NeighborScoreMin: RequireDouble(root, "neighbor_score_min"),
+            StrongHitThreshold: RequireDouble(root, "strong_hit_threshold"),
+            NormalHitThreshold: RequireDouble(root, "normal_hit_threshold"),
+            ExploratoryHitThreshold: RequireDouble(root, "exploratory_hit_threshold")
         );
     }
 
@@ -821,6 +826,18 @@ public class HubAttractorExplorationRuntime
             return $"max_hub_kinds_per_current={policy.MaxHubKindsPerCurrent} must be > 0.";
         if (policy.MaxAttentionRowsSaved <= 0)
             return $"max_attention_rows_saved={policy.MaxAttentionRowsSaved} must be > 0.";
+
+        if (policy.NeighborScoreMin < 0)
+            return $"neighbor_score_min={policy.NeighborScoreMin} must be >= 0.";
+        if (policy.ExploratoryHitThreshold < policy.NeighborScoreMin)
+            return $"exploratory_hit_threshold={policy.ExploratoryHitThreshold} must be >= neighbor_score_min={policy.NeighborScoreMin}.";
+        if (policy.NormalHitThreshold < policy.ExploratoryHitThreshold)
+            return $"normal_hit_threshold={policy.NormalHitThreshold} must be >= exploratory_hit_threshold={policy.ExploratoryHitThreshold}.";
+        if (policy.StrongHitThreshold < policy.NormalHitThreshold)
+            return $"strong_hit_threshold={policy.StrongHitThreshold} must be >= normal_hit_threshold={policy.NormalHitThreshold}.";
+        if (policy.StrongHitThreshold > 1.0)
+            return $"strong_hit_threshold={policy.StrongHitThreshold} must be <= 1.";
+
         return null;
     }
 }

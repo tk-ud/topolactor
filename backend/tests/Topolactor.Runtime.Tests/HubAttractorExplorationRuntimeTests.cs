@@ -133,7 +133,11 @@ internal static class ExplorationTestFactory
         int maxKinds = 5,
         int maxRows = 20,
         double normLevelHigh = 10.0,
-        double normLevelMedium = 1.0) =>
+        double normLevelMedium = 1.0,
+        double neighborScoreMin = 0.0,
+        double strongHitThreshold = 0.95,
+        double normalHitThreshold = 0.90,
+        double exploratoryHitThreshold = 0.85) =>
         $$"""
         {
           "norm_level_high": {{normLevelHigh}},
@@ -159,7 +163,11 @@ internal static class ExplorationTestFactory
             }
           },
           "max_hub_kinds_per_current": {{maxKinds}},
-          "max_attention_rows_saved": {{maxRows}}
+          "max_attention_rows_saved": {{maxRows}},
+          "neighbor_score_min": {{neighborScoreMin}},
+          "strong_hit_threshold": {{strongHitThreshold}},
+          "normal_hit_threshold": {{normalHitThreshold}},
+          "exploratory_hit_threshold": {{exploratoryHitThreshold}}
         }
         """;
 
@@ -601,7 +609,11 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             MidTier: new ExplorationBudgetTierLimits(3, 5, 1, "normal_topK"),
             HighTier: new ExplorationBudgetTierLimits(5, 10, 3, "expanded_distance_band_or_permutation"),
             MaxHubKindsPerCurrent: 5,
-            MaxAttentionRowsSaved: 20);
+            MaxAttentionRowsSaved: 20,
+            NeighborScoreMin: 0.0,
+            StrongHitThreshold: 0.95,
+            NormalHitThreshold: 0.90,
+            ExploratoryHitThreshold: 0.85);
 
     [Theory]
     [InlineData("low", 0.5, ExplorationBudgetTier.Weak)]
@@ -971,11 +983,29 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
 }
 
 // ---------------------------------------------------------------------------
-// Tests — ScoreBand classification
+// Tests — ScoreBand classification (policy-driven; no hardcoded thresholds)
 // ---------------------------------------------------------------------------
 
 public class HubAttractorExplorationRuntime_ScoreBandTests
 {
+    private static HubAttractorExplorationPolicy PolicyWithThresholds(
+        double strong = 0.95,
+        double normal = 0.90,
+        double exploratory = 0.85,
+        double neighborScoreMin = 0.0) =>
+        new(
+            NormLevelHigh: 10.0,
+            NormLevelMedium: 1.0,
+            WeakTier: new ExplorationBudgetTierLimits(1, 2, 1, "near_neighbor_narrow_topK"),
+            MidTier: new ExplorationBudgetTierLimits(3, 5, 1, "normal_topK"),
+            HighTier: new ExplorationBudgetTierLimits(5, 10, 3, "expanded_distance_band_or_permutation"),
+            MaxHubKindsPerCurrent: 5,
+            MaxAttentionRowsSaved: 20,
+            NeighborScoreMin: neighborScoreMin,
+            StrongHitThreshold: strong,
+            NormalHitThreshold: normal,
+            ExploratoryHitThreshold: exploratory);
+
     [Theory]
     [InlineData(1.00, "strong")]
     [InlineData(0.95, "strong")]
@@ -985,10 +1015,92 @@ public class HubAttractorExplorationRuntime_ScoreBandTests
     [InlineData(0.85, "exploratory")]
     [InlineData(0.84, "evidence_only")]
     [InlineData(0.0,  "evidence_only")]
-    public void ClassifyScoreBand_ReturnsExpectedBand(double score, string expectedBand)
+    public void ClassifyScoreBand_PolicyThresholds_ReturnsExpectedBand(double score, string expectedBand)
     {
-        var band = HubAttractorExplorationRuntime.ClassifyScoreBand(score);
-        Assert.Equal(expectedBand, band);
+        var policy = PolicyWithThresholds(0.95, 0.90, 0.85);
+        Assert.Equal(expectedBand, HubAttractorExplorationRuntime.ClassifyScoreBand(score, policy));
+    }
+
+    [Fact]
+    public void ClassifyScoreBand_CustomPolicyThresholds_FollowsPolicyNotHardcoded()
+    {
+        // Thresholds differ from legacy 0.95/0.90/0.85 — classification must follow policy.
+        var policy = PolicyWithThresholds(strong: 0.80, normal: 0.60, exploratory: 0.40);
+        Assert.Equal("strong",       HubAttractorExplorationRuntime.ClassifyScoreBand(0.80, policy));
+        Assert.Equal("normal",       HubAttractorExplorationRuntime.ClassifyScoreBand(0.70, policy));
+        Assert.Equal("exploratory",  HubAttractorExplorationRuntime.ClassifyScoreBand(0.50, policy));
+        Assert.Equal("evidence_only",HubAttractorExplorationRuntime.ClassifyScoreBand(0.30, policy));
+        // 0.95 would be "strong" in hardcoded logic but is "strong" only because >= 0.80 in this policy
+        Assert.Equal("strong",       HubAttractorExplorationRuntime.ClassifyScoreBand(0.95, policy));
+        // 0.89 would be "exploratory" in hardcoded logic; with these thresholds it is "strong"
+        Assert.Equal("strong",       HubAttractorExplorationRuntime.ClassifyScoreBand(0.89, policy));
+    }
+
+    [Fact]
+    public async Task ExploreAsync_CanonicalRoute_ScoreBandFollowsPolicyThresholds()
+    {
+        // Use a policy with non-default thresholds to prove score band is policy-driven.
+        // strong=0.80 means score=0.97 must yield "strong"; with 0.95 default it would also be "strong"
+        // but 0.82 would be "evidence_only" with 0.95 default while "strong" with 0.80 threshold.
+        var policyJson = ExplorationTestFactory.ValidPolicyJson(
+            strongHitThreshold: 0.80,
+            normalHitThreshold: 0.60,
+            exploratoryHitThreshold: 0.40);
+        var manifestId = Guid.NewGuid();
+        var repo = new CanonicalSqlAttentionStubRepository
+        {
+            ManifestIds = [manifestId],
+            Relations = [new HubRelationExplorationCandidate(Guid.NewGuid(), manifestId, Guid.NewGuid(), Guid.NewGuid(), 1, 0.82, "{\"sql_attention_score\":0.82}")]
+        };
+        var runtime = new HubAttractorExplorationRuntime(
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<HubAttractorExplorationRuntime>.Instance,
+            new StubExplorationPolicyTopologyRepository(policyJson),
+            repo);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.0, normLevel: "high")], "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
+        var hit = Assert.Single(result.Result!.Hits);
+        // score=0.82 with strong_hit_threshold=0.80 → "strong" (not "evidence_only" as per legacy 0.95)
+        Assert.Equal("strong", hit.ScoreBand);
+    }
+
+    [Fact]
+    public async Task ExploreAsync_PolicyMissingScoreBandKey_ReturnsMalformedPolicy()
+    {
+        // Policy JSON without neighbor_score_policy keys must fail-close.
+        var policyWithoutThresholds =
+            """{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""";
+        var runtime = ExplorationTestFactory.CreateRuntime(policyWithoutThresholds, []);
+
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
+            "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.MalformedPolicy, result.Status);
+    }
+
+    [Theory]
+    [InlineData(0.80, 0.90, 0.85)] // strong < normal
+    [InlineData(0.95, 0.90, 0.92)] // exploratory > normal
+    [InlineData(0.95, 0.90, 0.85, -0.01)] // neighbor_score_min < 0
+    [InlineData(1.01, 0.90, 0.85)] // strong > 1
+    public async Task ExploreAsync_PolicyThresholdOrderInvalid_ReturnsMalformedPolicy(
+        double strong, double normal, double exploratory, double neighborScoreMin = 0.0)
+    {
+        var policyJson = ExplorationTestFactory.ValidPolicyJson(
+            neighborScoreMin: neighborScoreMin,
+            strongHitThreshold: strong,
+            normalHitThreshold: normal,
+            exploratoryHitThreshold: exploratory);
+        var runtime = ExplorationTestFactory.CreateRuntime(policyJson, []);
+
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+            [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
+            "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.MalformedPolicy, result.Status);
     }
 }
 
@@ -1307,5 +1419,9 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
         Assert.Contains("RunCanonicalHubRelationsExploration", runtimeCode);
         Assert.Contains("ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync", runtimeCode);
+        // Score band thresholds must not be hardcoded in runtime — resolved from policy only.
+        Assert.DoesNotContain(">= 0.95", runtimeCode);
+        Assert.DoesNotContain(">= 0.90", runtimeCode);
+        Assert.DoesNotContain(">= 0.85", runtimeCode);
     }
 }
