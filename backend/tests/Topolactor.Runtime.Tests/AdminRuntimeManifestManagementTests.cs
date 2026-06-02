@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Runtime;
@@ -322,11 +323,81 @@ public class ManifestCanonicalProjectionUnitTests
     }
 
     /// <summary>
-    /// Regression: TryProjectWiringAsync is now documented to return WIRING_TABLE_REF_NOT_FOUND
-    /// when tableRef is present but not in topology.physical_tables. This contract is verified
-    /// in live DB integration tests. Unit-level: verify that ExtractTableRef correctly identifies
-    /// the field that triggers the check.
+    /// Regression: a tableRef mismatch fails before canonical projection writes, even when the
+    /// projection helper is called independently of NpgsqlManifestRepository's transaction.
     /// </summary>
+    [Fact]
+    [Trait("Category", "RequiresDatabase")]
+    public async Task ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite()
+    {
+        var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+                throw new InvalidOperationException(
+                    "TOPOLACTOR_TEST_DB_CONNECTION is required for manifest projection live DB regression " +
+                    "(TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 enforces DB presence).");
+            // No DB connection available — explicit local skip. Set TOPOLACTOR_TEST_DB_CONNECTION
+            // to execute the canonical no-partial-write assertion against PostgreSQL.
+            return;
+        }
+
+        var hubId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        var missingTableRef = $"missing_projection_table_{Guid.NewGuid():N}";
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new { type = "hub_grouping", hubId, manifestKey = $"test-{manifestId:N}" }),
+            JsonSerializer.SerializeToElement(new { type = "screen_data_shape", tableRef = missingTableRef }),
+        };
+        var detail = new ManifestDetailRecord(
+            manifestId, null, topology, "active", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        try
+        {
+            await using (var seedHub = new NpgsqlCommand(
+                "INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)", conn))
+            {
+                seedHub.Parameters.AddWithValue("id", hubId);
+                await seedHub.ExecuteNonQueryAsync();
+            }
+
+            var error = await ManifestCanonicalProjection.ProjectOnPromoteAsync(conn, detail, default);
+
+            Assert.NotNull(error);
+            Assert.Equal("WIRING_TABLE_REF_NOT_FOUND", error!.Code);
+            Assert.Equal(0, await CountAsync(
+                conn,
+                "SELECT count(*) FROM hubs.topology_manifests WHERE topology_manifest_id = @id",
+                manifestId));
+            Assert.Equal(0, await CountAsync(
+                conn,
+                "SELECT count(*) FROM topology.wiring_physical_to_package WHERE package_id = @id",
+                manifestId));
+        }
+        finally
+        {
+            await using var cleanup = new NpgsqlCommand(
+                "DELETE FROM topology.wiring_physical_to_package WHERE package_id = @manifest; " +
+                "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @manifest; " +
+                "DELETE FROM hubs.hub WHERE hub_id = @hub",
+                conn);
+            cleanup.Parameters.AddWithValue("manifest", manifestId);
+            cleanup.Parameters.AddWithValue("hub", hubId);
+            await cleanup.ExecuteNonQueryAsync();
+        }
+    }
+
+    private static async Task<long> CountAsync(NpgsqlConnection conn, string sql, Guid id)
+    {
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("id", id);
+        return (long)(await cmd.ExecuteScalarAsync())!;
+    }
+
     [Fact]
     public void WiringTableRefMismatch_Contract_ExtractTableRefIdentifiesCheckTarget()
     {
