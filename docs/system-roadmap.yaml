@@ -331,6 +331,8 @@ system_roadmap_ssot:
         - GitHub Issues
         - generic webhooks
         - external REST API connectors
+      future_optional_external_surfaces_ssot_ref:
+        - docs/design/extended-runtime-bundle-registry-ssot.yaml
       intended_non_IT_loop:
         - admin_imports_csv_or_json_as_candidate_payload
         - validate_stage_returns_explicit_mapping_required_field_and_policy_errors

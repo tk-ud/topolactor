@@ -61,6 +61,12 @@ required_files:
     - docs/design/sql-attention-logs-ssot.md
     - docs/design/css-dictionary-ssot.yaml
     - docs/design/admin-console-workflow-ssot.yaml
+    - docs/design/cli-model-context-protocols-port-ssot.yaml
+    - docs/design/cli-model-context-protocols-port-ssot.md
+    - docs/design/extended-runtime-bundle-registry-ssot.yaml
+    - docs/design/extended-runtime-bundle-registry-ssot.md
+    - docs/design/user-facing-helper-manual-ssot.yaml
+    - docs/design/user-facing-helper-manual-ssot.md
   agent:
     - .agent/README.md
     - .agent/docs/structure-map.yaml

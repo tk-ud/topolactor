@@ -62,6 +62,27 @@ Roadmap entry: `admin_visual_layout_builder`. Status promoted from `partial` →
 - [x] `filterEmptyResponsiveRules` strips empty breakpoint entries before backend submission. [responsive-token-ui]
 - [x] Tests: 5 filterEmptyResponsiveRules + 4 responsive rule per-breakpoint tests in `frontend/tests/visualLayoutBuilder.test.ts`. [responsive-token-ui]
 
+## CLI/MCP Port SSOT — future implementation TODOs
+
+Added by: CLI Model Context Protocols Port SSOT design_change
+SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+- [ ] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot]
+- [ ] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot]
+- [ ] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot]
+- [ ] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot]
+- [ ] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot]
+- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate]
+
+## User-facing Helper / Manual — future implementation TODOs
+
+Added by: user-facing-helper-manual-ssot design_change
+SSOT ref: docs/design/user-facing-helper-manual-ssot.yaml
+
+- [ ] helper/manual category 候補（はじめての業務アプリ作成〜外部Bundle連携の考え方）の実装設計を行う [helper-manual-category-design]
+- [ ] Desktop AI / CLI / MCP Reader 向けユーザー説明文言ライティング方針を確定する [helper-manual-copywriting-policy]
+- [ ] ヘルプコンポーネント実装は user-facing-helper-manual-ssot のカテゴリ構造に基づいて行う [helper-component-impl-gate]
+
 ## Optional follow-up
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
