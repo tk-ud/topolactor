@@ -10,6 +10,7 @@ on:
       - 'docs/design/pipeline-continuity-ssot.yaml'
       - 'db/sql_attention_logs_tables.sql'
       - 'db/topology_tables.sql'
+      - 'db/manifest_tables.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
   push:
@@ -23,6 +24,7 @@ on:
       - 'docs/design/pipeline-continuity-ssot.yaml'
       - 'db/sql_attention_logs_tables.sql'
       - 'db/topology_tables.sql'
+      - 'db/manifest_tables.sql'
       - '.agent/tests/check-backend-tests.sh'
       - '.github/workflows/backend-tests.yml'
 
@@ -63,6 +65,7 @@ jobs:
         run: |
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/schema.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/topology_tables.sql
+          psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/manifest_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/sql_attention_logs_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/context_route_tables.sql
           psql "${TOPOLACTOR_TEST_DB_PSQL_URL}" -v ON_ERROR_STOP=1 -f db/ui_topology_tables.sql
