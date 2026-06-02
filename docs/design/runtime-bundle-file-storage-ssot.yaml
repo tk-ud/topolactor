@@ -1,0 +1,185 @@
+runtime_bundle_file_storage_ssot:
+  name: runtime_bundle_file_storage
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/runtime-bundle-file-storage-ssot.yaml
+
+  purpose:
+    summary: >-
+      File/Storage BundleのSSOT。
+      PDF / CSV / JSON / ZIP / receipt image / manifest などの保存・取得境界を定義する。
+      signed download / checksum / manifest / export_job との関係を定義する。
+      CLI/MCP file streamはpermitted export_job経由のみ許可する。
+      object storage provider のcredential実体はこのSSOTに含めない。
+    non_goals:
+      - object_storage_provider_credential_specification
+      - bucket_name_specification
+      - direct_file_stream_outside_export_job
+      - public_url_specification
+      - cdn_configuration_detail
+
+  authority_boundary:
+    file_read_authority: export_job_or_authorized_api
+    file_write_authority: export_job_or_authorized_backend_dispatch
+    prohibited_authorities:
+      - cli_mcp_direct_file_stream_outside_export_job
+      - ai_autonomous_file_write
+      - unauthenticated_download
+
+  trigger_kind:
+    allowed:
+      - export_job_trigger
+      - authorized_api_trigger
+      - signed_download_request
+    prohibited:
+      - cli_mcp_direct_stream_outside_export_job
+      - unauthenticated_file_access
+
+  allowed_side_effects:
+    - file_write_via_export_job
+    - signed_url_generation_for_download
+    - checksum_record_write
+    - manifest_write_for_export_package
+    - runtime_event_log_write
+
+  prohibited_operations:
+    - direct_file_stream_from_cli_mcp_outside_export_job
+    - unauthenticated_file_access
+    - file_write_without_checksum
+    - silent_fallback_on_storage_failure
+    - object_storage_credential_in_public_ssot
+    - bucket_name_in_public_ssot
+    - storage_endpoint_in_public_ssot
+
+  public_safe_config_policy:
+    allowed_in_public_ssot:
+      - file_type_boundary_definition
+      - export_job_relationship_definition
+      - checksum_policy_definition
+      - signed_download_policy_definition
+      - failure_policy_definition
+    prohibited_in_public_ssot:
+      - storage_provider_access_key
+      - storage_provider_secret_key
+      - bucket_name
+      - storage_endpoint_url
+      - cdn_url
+      - rate_limit_values
+
+  secret_credential_boundary:
+    location: runtime_secret_store_not_in_public_ssot
+    policy: >-
+      object storage provider credential (access key / secret key / bucket name / endpoint) は
+      公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
+
+  supported_file_types:
+    document_export:
+      - pdf
+      - csv
+      - json
+    archive:
+      - zip
+    receipt_and_manifest:
+      - receipt_image
+      - manifest_json
+
+  file_flow_boundary:
+    export_job:
+      description: >-
+        export_jobによるファイル生成。manifestとchecksumが必須。
+      requires:
+        - export_job_authorized
+        - manifest_defined
+      outputs:
+        - file_artifact
+        - checksum_record
+        - manifest_record
+    signed_download:
+      description: >-
+        signed URLによる一時ダウンロード。認証済みユーザーのみ。
+        URLは有効期限付きで発行する。URL実値はruntime secret管理。
+      requires: authenticated_user_or_authorized_export_job
+      prohibited: public_unsigned_download
+    checksum:
+      description: >-
+        ファイル整合性検証。export_job生成・取得時に検証する。
+      required: true
+      failure_behavior: explicit_rejection
+    manifest:
+      description: >-
+        export packageのmanifestファイル。export_jobに紐付けて管理する。
+      required_for: export_package
+
+  cli_mcp_file_stream_policy:
+    allowed: export_job_authorized_stream_only
+    prohibited:
+      - direct_stream_outside_export_job
+      - unauthenticated_stream
+    reference: docs/design/cli-model-context-protocols-port-ssot.yaml
+
+  approval_boundary:
+    policy: >-
+      export_jobはapproval済みoperationの副作用として実行する。
+      未承認operationからのfile writeは禁止。
+
+  scheduler_boundary:
+    policy: >-
+      大容量exportなどの非同期処理はscheduler経由で行う。
+      direct_runtime_execution_without_schedulerは禁止。
+
+  audit_log_boundary:
+    required: runtime_event_log
+    scope:
+      - export_job_initiated
+      - file_write_completed
+      - checksum_verified
+      - signed_url_generated
+      - download_completed
+
+  failure_policy:
+    on_storage_failure:
+      - expose_failure_explicitly
+      - record_to_runtime_event_log
+      - do_not_silently_fallback
+    on_checksum_failure:
+      - reject_file_explicitly
+      - record_to_runtime_event_log
+
+  idempotency_policy:
+    policy: >-
+      同一export_job_idに対するfile writeは冪等に扱う。
+      実装詳細は後段実装SSOTで定義する。
+
+  relation_to_extended_runtime_bundle_registry:
+    registry_entry: file_storage_bundle
+    registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+    owner_status: assigned_to_design_ssot
+    core_bundle_status: not_started
+
+  relation_to_cli_mcp_port:
+    ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+    boundary: cli_mcp_file_stream_requires_authorized_export_job
+    policy: >-
+      CLI/MCP read/export portはexport_job経由のfile streamを許可している。
+      このBundleはその許可経路を担うsurface。
+      export_job外のdirect file streamは許可しない。
+
+  explicitly_out_of_scope:
+    - object_storage_provider_selection
+    - storage_provider_credential_specification
+    - cdn_configuration
+    - file_format_transformation_logic
+    - compression_algorithm_selection
+    - media_file_management
+
+  future_implementation_requirements:
+    items:
+      - export_job_schema_design
+      - file_artifact_storage_schema_design
+      - checksum_record_schema_design
+      - signed_url_generation_service_design
+      - manifest_schema_design
+      - storage_provider_adapter_design
+    policy: >-
+      実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
+      credential / bucket実体はこのSSOTに含めない。

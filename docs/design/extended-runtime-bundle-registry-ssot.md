@@ -56,16 +56,16 @@ external_source
 
 Topolactor runtime に直接関与する Bundle セット。各 Bundle は別 SSOT が必要。
 
-| Bundle | Status | 説明 |
-|--------|--------|------|
-| Email Bundle | not_started | UI/backend dispatch経由。CLI/MCP out of scope。後段SSOT必要 |
-| Stripe Bundle | not_started | webhook verification必須。paid state確定に後段SSOT必要 |
-| File/Storage Bundle | not_started | export job / Data Reader連携。後段SSOT必要 |
-| Export/SFTP Bundle | not_started | export job外部搬出。manifest + checksum必須。後段SSOT必要 |
-| Webhook Inbox Bundle | not_started | scheduler経由必須。direct execution禁止。後段SSOT必要 |
-| Job/Scheduler Bundle | not_started | cron/hook/client統合。後段SSOT必要 |
-| Audit/Approval Bundle | not_started | 承認フロー・監査ログ。後段SSOT必要 |
-| Secret/Credential Bundle | not_started | 外部連携認証情報管理。後段SSOT必要 |
+| Bundle | Status | owner_status | SSOT |
+|--------|--------|--------------|------|
+| Email Bundle | not_started | assigned_to_design_ssot | [runtime-bundle-email-ssot.yaml](runtime-bundle-email-ssot.yaml) |
+| Stripe Bundle | not_started | assigned_to_design_ssot | [runtime-bundle-stripe-ssot.yaml](runtime-bundle-stripe-ssot.yaml) |
+| File/Storage Bundle | not_started | assigned_to_design_ssot | [runtime-bundle-file-storage-ssot.yaml](runtime-bundle-file-storage-ssot.yaml) |
+| Export/SFTP Bundle | not_started | assigned_to_design_ssot | [runtime-bundle-export-sftp-ssot.yaml](runtime-bundle-export-sftp-ssot.yaml) |
+| Webhook Inbox Bundle | not_started | — | 後段SSOT必要 |
+| Job/Scheduler Bundle | not_started | — | 後段SSOT必要 |
+| Audit/Approval Bundle | not_started | — | 後段SSOT必要 |
+| Secret/Credential Bundle | not_started | — | 後段SSOT必要 |
 
 > **Email Bundle について:**
 > Email send は CLI/MCP port の **out of scope**。
@@ -86,15 +86,17 @@ roadmap 参照元:
 - `docs/system-roadmap.yaml` → `M6_external_integration.future_optional_external_surfaces`
 - `.agent/tasks/todo.md`
 
-| Bundle | roadmap_ref | 外部サービスとしての役割 | scheduler_boundary |
-|--------|-------------|--------------------------|-------------------|
-| Notion Bundle | M6_external_integration | human editing / intake surface | no_direct_runtime_execution |
-| Google Sheets Bundle | M6_external_integration | human editing / intake surface | no_direct_runtime_execution |
-| Slack Bundle | M6_external_integration | notification / approval surface | no_direct_runtime_execution |
-| GitHub Issues Bundle | M6_external_integration | intake / approval surface | no_direct_runtime_execution |
-| Generic Webhook Bundle | M6_external_integration | external trigger source | scheduler_intake_required_before_runtime |
-| External REST API Connector Bundle | — | intake / connector surface | no_direct_runtime_execution |
-| Dynamic Support No-code Loop Bundle | product.dynamic_support_nocode_loop | human editing / intake surface | no_direct_runtime_execution |
+| Bundle | owner_status | scheduler_boundary |
+|--------|-------------|-------------------|
+| Notion Bundle | unresolved_by_design | no_direct_runtime_execution |
+| Google Sheets Bundle | unresolved_by_design | no_direct_runtime_execution |
+| Slack Bundle | unresolved_by_design | no_direct_runtime_execution |
+| GitHub Issues Bundle | unresolved_by_design | no_direct_runtime_execution |
+| Generic Webhook Bundle | unresolved_by_design | scheduler_intake_required_before_runtime |
+| External REST API Connector Bundle | unresolved_by_design | no_direct_runtime_execution |
+| Dynamic Support No-code Loop Bundle | unresolved_by_design | no_direct_runtime_execution |
+
+各 Bundle の `owner_status: unresolved_by_design` は、個別SSOTが未作成であることを明示している。`implementation_gate: separate_ssot_required` が解消されるまで実装不可。
 
 各 Bundle の必須宣言（`owner` / `trigger_kind` / `intake_snapshot_shape` / `validation_boundary` / `approval_boundary` / `scheduler_boundary` / `audit_log_boundary`）は YAML 側に記載。
 詳細 SSOT 未作成の Bundle は public-safe placeholder 値を使用する（実 endpoint・credential は記載しない）。

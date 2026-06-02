@@ -241,6 +241,15 @@ check_file "docs/design/extended-runtime-bundle-registry-ssot.yaml"
 check_file "docs/design/extended-runtime-bundle-registry-ssot.md"
 check_file "docs/design/user-facing-helper-manual-ssot.yaml"
 check_file "docs/design/user-facing-helper-manual-ssot.md"
+check_file "docs/design/runtime-bundle-email-ssot.yaml"
+check_file "docs/design/runtime-bundle-email-ssot.md"
+check_file "docs/design/runtime-bundle-stripe-ssot.yaml"
+check_file "docs/design/runtime-bundle-stripe-ssot.md"
+check_file "docs/design/runtime-bundle-file-storage-ssot.yaml"
+check_file "docs/design/runtime-bundle-file-storage-ssot.md"
+check_file "docs/design/runtime-bundle-export-sftp-ssot.yaml"
+check_file "docs/design/runtime-bundle-export-sftp-ssot.md"
+check_file ".agent/tests/check-runtime-bundle-ssots.sh"
 
 check_content ".agent/tests/check-local-ci.sh" "set -euo pipefail"
 check_content ".agent/tests/check-local-ci.sh" "check-unified-test-gate.sh"
@@ -874,6 +883,12 @@ if bash "$REPO_ROOT/.agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
   echo "OK  [subcheck] .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
 else
   fail "Subcheck failed: .agent/tests/check-system-ci-admin-runtime-callable-ssot.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-runtime-bundle-ssots.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-runtime-bundle-ssots.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-runtime-bundle-ssots.sh"
 fi
 
 if [ "$FAILURES" -eq 0 ]; then

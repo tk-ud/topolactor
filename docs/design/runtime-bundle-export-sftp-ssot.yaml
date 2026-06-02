@@ -1,0 +1,209 @@
+runtime_bundle_export_sftp_ssot:
+  name: runtime_bundle_export_sftp
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/runtime-bundle-export-sftp-ssot.yaml
+
+  purpose:
+    summary: >-
+      Export/SFTP BundleのSSOT。
+      export_job → package → manifest → checksum → transfer の順序を定義する。
+      SFTP pushはpermitted export jobの外部搬出として扱う。
+      transfer log / retry / explicit failure を定義する。
+      SFTP host / user / key実体はこのSSOTに含めない。
+    non_goals:
+      - sftp_host_specification
+      - sftp_user_specification
+      - sftp_key_specification
+      - sftp_endpoint_specification
+      - direct_sftp_push_outside_export_job
+
+  authority_boundary:
+    sftp_push_authority: authorized_export_job_only
+    prohibited_authorities:
+      - cli_mcp_direct_sftp_push_outside_export_job
+      - ai_autonomous_sftp_push
+      - unauthenticated_sftp_transfer
+
+  trigger_kind:
+    allowed:
+      - export_job_trigger_with_sftp_transfer_config
+    prohibited:
+      - cli_mcp_direct_sftp_trigger
+      - ai_autonomous_sftp_trigger
+      - unauthenticated_sftp_trigger
+
+  allowed_side_effects:
+    - sftp_file_transfer_after_export_job_approval
+    - transfer_log_write_to_runtime_event_log
+    - checksum_verification_record
+
+  prohibited_operations:
+    - sftp_push_outside_export_job
+    - sftp_push_without_manifest
+    - sftp_push_without_checksum
+    - silent_fallback_on_transfer_failure
+    - sftp_credential_in_public_ssot
+    - sftp_host_in_public_ssot
+    - sftp_key_in_public_ssot
+
+  public_safe_config_policy:
+    allowed_in_public_ssot:
+      - export_transfer_flow_boundary_definition
+      - transfer_order_definition
+      - failure_policy_definition
+      - retry_policy_definition
+    prohibited_in_public_ssot:
+      - sftp_host
+      - sftp_port
+      - sftp_username
+      - sftp_private_key
+      - sftp_remote_path
+      - rate_limit_values
+
+  secret_credential_boundary:
+    location: runtime_secret_store_not_in_public_ssot
+    policy: >-
+      SFTP host / user / key実体は公開SSOTに記載しない。
+      runtime環境変数またはsecret store経由で注入する。
+
+  export_transfer_flow:
+    export_job:
+      description: >-
+        外部搬出の起点となるexport_job。承認済みoperationから生成する。
+      required: true
+      requires: prior_approval
+    package:
+      description: >-
+        export_jobが生成するpackage artifact。
+        複数ファイルの場合はZIPまたはmanifest付きディレクトリ構造とする。
+      requires: export_job_completed
+    manifest:
+      description: >-
+        packageに含まれるファイルリスト・メタデータ。
+        SFTP転送前に必須。
+      required: true
+      failure_behavior: explicit_rejection_if_missing
+    checksum:
+      description: >-
+        packageのintegrity検証。転送前・転送後の両方で検証する。
+        不一致の場合は転送を拒否し明示的failureを返す。
+      required: true
+      verified_at:
+        - before_transfer
+        - after_transfer
+      failure_behavior: explicit_rejection
+    transfer:
+      description: >-
+        SFTP経由でのpackage転送。manifest + checksum確認後に実行する。
+        転送先credential実体はruntime secret store管理。
+      requires:
+        - package_ready
+        - manifest_present
+        - checksum_verified
+      logs_to: runtime_event_log
+
+  transfer_log_boundary:
+    required: runtime_event_log
+    scope:
+      - transfer_initiated
+      - transfer_completed
+      - transfer_failed
+      - checksum_mismatch
+      - retry_attempted
+
+  retry_policy:
+    policy: >-
+      転送失敗時は明示的retryをscheduler経由で行う。
+      silent fallback / silent retry は禁止。
+      retry回数・間隔は後段実装SSOTで定義する。
+    prohibited:
+      - silent_auto_retry
+      - infinite_retry_without_failure_record
+
+  approval_boundary:
+    policy: >-
+      SFTP転送はapproval済みexport_jobの副作用として実行する。
+      未承認operationからのSFTP pushは禁止。
+
+  scheduler_boundary:
+    policy: >-
+      SFTP転送はscheduler経由で実行する。
+      webhook_direct_runtime_execution_without_schedulerは禁止。
+
+  audit_log_boundary:
+    required: runtime_event_log
+    scope:
+      - export_job_initiated
+      - package_generated
+      - manifest_generated
+      - checksum_computed
+      - transfer_initiated
+      - transfer_completed
+      - transfer_failed
+      - retry_initiated
+
+  failure_policy:
+    on_manifest_missing:
+      - reject_transfer_explicitly
+      - record_failure_to_runtime_event_log
+    on_checksum_failure:
+      - reject_transfer_explicitly
+      - record_failure_to_runtime_event_log
+    on_transfer_failure:
+      - record_failure_explicitly
+      - do_not_silently_fallback
+      - schedule_retry_if_policy_allows
+
+  idempotency_policy:
+    policy: >-
+      同一export_job_idに対するtransferは冪等に扱う。
+      転送済みpackageの再送は明示的に制御する。
+      実装詳細は後段実装SSOTで定義する。
+
+  relation_to_extended_runtime_bundle_registry:
+    registry_entry: export_sftp_bundle
+    registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+    owner_status: assigned_to_design_ssot
+    core_bundle_status: not_started
+
+  relation_to_cli_mcp_port:
+    ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+    boundary: sftp_transfer_requires_authorized_export_job
+    policy: >-
+      CLI/MCP read/export portはexport_job経由のfile exportを許可している。
+      このBundleはその許可経路の外部搬出（SFTP）部分を担う。
+      export_job外のdirect SFTP pushは許可しない。
+
+  relation_to_file_storage_bundle:
+    ssot_path: docs/design/runtime-bundle-file-storage-ssot.yaml
+    boundary: >-
+      SFTP transferはFile/Storage Bundleで生成されたpackage artifactの外部搬出を担う。
+    responsibility_split:
+      file_storage_bundle:
+        - file_generation
+        - checksum_computation
+        - manifest_generation
+      export_sftp_bundle:
+        - sftp_file_transfer
+        - transfer_log
+        - retry_on_failure
+
+  explicitly_out_of_scope:
+    - sftp_server_configuration
+    - sftp_credential_specification
+    - sftp_protocol_implementation_detail
+    - managed_file_transfer_service_selection
+    - non_sftp_transfer_protocols
+
+  future_implementation_requirements:
+    items:
+      - export_job_schema_design
+      - package_artifact_schema_design
+      - sftp_transfer_service_design
+      - transfer_log_schema_design
+      - retry_policy_implementation_design
+      - credential_injection_design
+    policy: >-
+      実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
+      SFTP credential / host実体はこのSSOTに含めない。

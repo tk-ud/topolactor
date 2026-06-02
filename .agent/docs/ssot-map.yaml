@@ -380,6 +380,82 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: runtime_bundle_email_ssot
+    change_surfaces:
+      - runtime_bundle_email
+      - email_bundle
+      - email_send_boundary
+      - draft_preview_approval_dispatch_delivery_log
+      - docs/design/runtime-bundle-email-ssot.yaml
+      - docs/design/runtime-bundle-email-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-email-ssot.yaml
+      - docs/design/runtime-bundle-email-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_stripe_ssot
+    change_surfaces:
+      - runtime_bundle_stripe
+      - stripe_bundle
+      - webhook_verification_boundary
+      - payment_state_projection
+      - ledger_binding
+      - docs/design/runtime-bundle-stripe-ssot.yaml
+      - docs/design/runtime-bundle-stripe-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-stripe-ssot.yaml
+      - docs/design/runtime-bundle-stripe-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_file_storage_ssot
+    change_surfaces:
+      - runtime_bundle_file_storage
+      - file_storage_bundle
+      - export_job_file_stream
+      - signed_download
+      - checksum_manifest
+      - docs/design/runtime-bundle-file-storage-ssot.yaml
+      - docs/design/runtime-bundle-file-storage-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-file-storage-ssot.yaml
+      - docs/design/runtime-bundle-file-storage-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_export_sftp_ssot
+    change_surfaces:
+      - runtime_bundle_export_sftp
+      - export_sftp_bundle
+      - sftp_transfer_boundary
+      - export_job_package_manifest_checksum_transfer
+      - transfer_log
+      - docs/design/runtime-bundle-export-sftp-ssot.yaml
+      - docs/design/runtime-bundle-export-sftp-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-export-sftp-ssot.yaml
+      - docs/design/runtime-bundle-export-sftp-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-bundle-file-storage-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: user_facing_helper_manual
     change_surfaces:
       - user_facing_helper_manual

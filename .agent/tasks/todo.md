@@ -68,11 +68,11 @@ Added by: CLI Model Context Protocols Port SSOT design_change
 SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/extended-runtime-bundle-registry-ssot.yaml
 
 - [ ] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot]
-- [ ] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot]
-- [ ] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot]
-- [ ] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot]
-- [ ] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot]
-- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate]
+- [x] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot] → docs/design/runtime-bundle-email-ssot.yaml
+- [x] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot] → docs/design/runtime-bundle-stripe-ssot.yaml
+- [x] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot] → docs/design/runtime-bundle-file-storage-ssot.yaml
+- [x] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot] → docs/design/runtime-bundle-export-sftp-ssot.yaml
+- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook/REST-API-Connector/NoCode-Loop）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate] — owner_status: unresolved_by_design として明示済み
 
 ## User-facing Helper / Manual — future implementation TODOs
 

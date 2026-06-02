@@ -70,6 +70,10 @@ extended_runtime_bundle_registry_ssot:
         side_effect: external_smtp
         out_of_scope_for: cli_mcp_read_export_port
         requires_separate_ssot: true
+        owner: runtime-bundle-email-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-email-ssot.yaml
         notes:
           - email send は CLI/MCP port の out_of_scope
           - UI/Human commit boundary での実行
@@ -84,6 +88,10 @@ extended_runtime_bundle_registry_ssot:
         side_effect: payment_state_mutation
         webhook_verification_required: true
         requires_separate_ssot: true
+        owner: runtime-bundle-stripe-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-stripe-ssot.yaml
 
       file_storage_bundle:
         id: file_storage_bundle
@@ -96,6 +104,10 @@ extended_runtime_bundle_registry_ssot:
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
+        owner: runtime-bundle-file-storage-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-file-storage-ssot.yaml
 
       export_sftp_bundle:
         id: export_sftp_bundle
@@ -108,6 +120,10 @@ extended_runtime_bundle_registry_ssot:
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
+        owner: runtime-bundle-export-sftp-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-export-sftp-ssot.yaml
 
       webhook_inbox_bundle:
         id: webhook_inbox_bundle
@@ -171,7 +187,10 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -188,7 +207,10 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -205,7 +227,10 @@ extended_runtime_bundle_registry_ssot:
         external_role: notification_and_approval_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: notification_or_approval_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -222,7 +247,10 @@ extended_runtime_bundle_registry_ssot:
         external_role: intake_and_approval_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -248,7 +276,10 @@ extended_runtime_bundle_registry_ssot:
           - canonical_runtime_route
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: webhook_intake
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -264,7 +295,10 @@ extended_runtime_bundle_registry_ssot:
           外部APIからのデータ取得をconnector_adapter経由でintake_snapshotに変換。
         external_role: intake_and_connector_surface
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -282,7 +316,10 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: product.dynamic_support_nocode_loop
         requires_separate_ssot: true
-        owner: future_separate_bundle_ssot
+        owner: future_bundle_owner_unassigned
+        owner_resolution: requires_future_specific_bundle_ssot
+        owner_status: unresolved_by_design
+        implementation_gate: separate_ssot_required
         trigger_kind: external_intake_trigger
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
@@ -313,7 +350,14 @@ extended_runtime_bundle_registry_ssot:
         実endpoint・credential・実運用詳細を書いてはならない。
         ただし、7項目の欄自体を省略することは許可しない。
       allowed_placeholder_values:
-        owner: future_separate_bundle_ssot
+        owner:
+          - future_bundle_owner_unassigned
+        owner_resolution:
+          - requires_future_specific_bundle_ssot
+        owner_status:
+          - unresolved_by_design
+        implementation_gate:
+          - separate_ssot_required
         intake_snapshot_shape: defined_by_separate_ssot
         validation_boundary: validate_preview_apply_required
         approval_boundary: explicit_apply_or_ui_approval_required

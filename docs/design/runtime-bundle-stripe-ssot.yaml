@@ -1,0 +1,163 @@
+runtime_bundle_stripe_ssot:
+  name: runtime_bundle_stripe
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/runtime-bundle-stripe-ssot.yaml
+
+  purpose:
+    summary: >-
+      Stripe決済BundleのSSOT。
+      webhook verificationなしにpaid stateを確定しない。
+      UI表示やclient callbackだけで支払済み状態にしない。
+      webhook inbox / event verification / payment state projection / ledger binding
+      の境界を本SSOTで定義する。
+    non_goals:
+      - stripe_secret_key_specification
+      - webhook_secret_specification
+      - stripe_endpoint_specification
+      - payment_ui_design_implementation
+      - direct_db_write_on_webhook_without_verification
+
+  authority_boundary:
+    payment_state_authority: verified_webhook_event_only
+    prohibited_authorities:
+      - ui_display_confirmation
+      - client_callback_confirmation
+      - unverified_webhook_payload
+      - ai_autonomous_payment_confirmation
+
+  trigger_kind:
+    allowed:
+      - webhook_intake_with_verification
+      - scheduler_driven_event_reconciliation
+    prohibited:
+      - ui_callback_direct_state_mutation
+      - unverified_webhook_direct_execution
+      - client_side_payment_confirmation
+
+  allowed_side_effects:
+    - payment_state_projection_after_verification
+    - ledger_binding_after_verified_event
+    - runtime_event_log_write
+
+  prohibited_operations:
+    - paid_state_from_ui_callback_only
+    - paid_state_from_unverified_webhook
+    - silent_fallback_on_verification_failure
+    - stripe_secret_key_in_public_ssot
+    - webhook_secret_in_public_ssot
+    - stripe_endpoint_in_public_ssot
+    - direct_db_write_without_verification
+
+  public_safe_config_policy:
+    allowed_in_public_ssot:
+      - payment_flow_boundary_definition
+      - webhook_verification_requirement
+      - payment_state_projection_boundary
+      - failure_policy_definition
+    prohibited_in_public_ssot:
+      - stripe_secret_key
+      - stripe_publishable_key
+      - webhook_endpoint_secret
+      - stripe_account_id
+      - stripe_api_endpoint
+      - rate_limit_values
+
+  secret_credential_boundary:
+    location: runtime_secret_store_not_in_public_ssot
+    policy: >-
+      Stripe secret key / webhook secret / endpoint実体は
+      公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
+
+  payment_flow_boundary:
+    webhook_inbox:
+      description: >-
+        Stripe webhookの受信。署名検証前はデータを信頼しない。
+      prohibited: direct_state_mutation_before_verification
+    event_verification:
+      description: >-
+        webhook signatureの検証。Stripe-Signatureヘッダーを使用する。
+        検証成功後のみpayment stateの変更を許可する。
+      required: true
+      webhook_verification_required: true
+      failure_behavior: explicit_rejection_no_fallback
+    payment_state_projection:
+      description: >-
+        検証済みeventからのpayment state投影。
+        UI callback / client confirmationのみでは実行しない。
+      requires: verified_webhook_event
+      prohibited:
+        - unverified_source
+        - silent_state_mutation
+    ledger_binding:
+      description: >-
+        payment state確定後のledger / account記録。
+        検証済みeventを権威ソースとする。
+      requires: payment_state_projected
+
+  approval_boundary:
+    policy: >-
+      payment UIは自作可能。
+      ただし最終的なpaid state反映は必ずwebhook event verificationを経てから行う。
+      UI / client confirmationのみでのstate確定は禁止。
+
+  scheduler_boundary:
+    policy: >-
+      Stripe webhookのruntime executionはscheduler経由で行う。
+      webhook_direct_runtime_execution_without_schedulerは禁止。
+
+  audit_log_boundary:
+    required: runtime_event_log
+    scope:
+      - webhook_received
+      - verification_success
+      - verification_failure
+      - payment_state_projected
+      - ledger_binding_completed
+
+  failure_policy:
+    on_verification_failure:
+      - reject_webhook_event_explicitly
+      - record_failure_to_runtime_event_log
+      - do_not_fallback_to_unverified_state
+    on_state_projection_failure:
+      - expose_failure_explicitly
+      - do_not_silently_commit_partial_state
+
+  idempotency_policy:
+    policy: >-
+      同一stripe_event_idに対するstate projectionは冪等に扱う。
+      実装詳細は後段実装SSOTで定義する。
+
+  relation_to_extended_runtime_bundle_registry:
+    registry_entry: stripe_bundle
+    registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+    owner_status: assigned_to_design_ssot
+    core_bundle_status: not_started
+
+  relation_to_cli_mcp_port:
+    ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+    boundary: payment_approval_is_explicitly_out_of_scope_for_cli_mcp_port
+    policy: >-
+      CLI/MCP portはpayment_approvalをout_of_scopeとして宣言している。
+      このBundleはそのboundaryを尊重する。
+
+  explicitly_out_of_scope:
+    - stripe_provider_credential_specification
+    - payment_ui_html_design
+    - subscription_management_design
+    - refund_policy_design
+    - stripe_connect_integration
+    - cli_mcp_payment_trigger
+    - ai_autonomous_payment_decision
+
+  future_implementation_requirements:
+    items:
+      - webhook_inbox_schema_design
+      - stripe_event_verification_service_design
+      - payment_state_projection_schema_design
+      - ledger_binding_schema_design
+      - idempotency_key_schema
+    policy: >-
+      実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
+      credential / endpoint実体はこのSSOTに含めない。
