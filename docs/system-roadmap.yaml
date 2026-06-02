@@ -308,14 +308,14 @@ system_roadmap_ssot:
       blocking_gaps:
         - Issue #84 seed import/export runtime
         - Issue #86 frontend UI component system
-        - Gap-9 admin route skeletons
+        - Gap-9 admin route detailed no-code workflow bundle
 
     M6_external_integration:
       title: Self-hosted admin authoring loop (MVP)
       status: implemented
       goal: >
         Establish a self-hosted admin authoring loop where admins define per-manifest content and DB design
-        in admin/contents first (see docs/design/admin-console-workflow-ssot.yaml v0.3), then import CSV/JSON,
+        in admin/contents first (see docs/design/admin-console-workflow-ssot.yaml v0.6), then import CSV/JSON,
         build UI, group manifests under hubs, validate-preview-apply candidates, with backend-derived
         manifest/topology (not raw manifest JSON as the default edit surface), user-defined aggregation/display/binding policy, bind DB/JSONB fields into
         document canvas templates, render invoice/estimate/delivery-note style documents,
@@ -671,16 +671,18 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M6_external_integration
       public_summary: >
-        End-to-end dynamic-support no-code loop implementation boundaries are closed for
-        CI Attention authoring guidance, SQL Attention recommendation feedback UX, and
-        the M6 self-hosted admin authoring loop. The remaining partial status tracks
-        manual acceptance / hand-debug verification of the combined UX loop, not an
-        implementation gap. Future optional external connector surfaces remain outside
-        the M6/M7 core runtime production-ready blocker set.
+        Dynamic-support no-code loop implementation boundaries are closed for CI Attention
+        authoring guidance and SQL Attention recommendation feedback UX. The M6 self-hosted admin
+        route split is canonical, while detailed /admin/contents and /admin/ui-builder no-code
+        wizard behavior remains an explicit frontend.admin_routes implementation bundle. Combined
+        UX manual acceptance / hand-debug verification also remains pending. Future optional external
+        connector surfaces remain outside the M6/M7 core runtime production-ready blocker set.
       completion_condition:
+        - frontend_admin_routes_detailed_nocode_wizard_bundle_is_completed
         - manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux
       known_gap_ref:
-        - manual acceptance / hand-debug verification pending for combined UX loop (not implementation gap)
+        - frontend.admin_routes detailed no-code wizard implementation bundle remains partial
+        - manual acceptance / hand-debug verification pending for combined UX loop
 
     backend.sql_attention_topology_projection:
       status: implemented
@@ -1162,11 +1164,12 @@ system_roadmap_ssot:
       milestone: M5_admin_and_ui_topology
       public_summary: >
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, and /admin/manifests. /admin/contents owns single-page manifest
-        creation only. /admin/manifests owns created manifest hub membership, inter-manifest
-        relations, and navigation ordering as page-group continuity management. Legacy/debug/helper
-        wrappers formerly isolated under /dev/admin/* are deleted; useful implementation pieces
-        must converge on canonical surfaces.
+        /admin/ui-builder, and /admin/manifests. The intended no-code workflow is now explicit:
+        /admin/contents authors one data-shaped single-page manifest, /admin/ui-builder adds
+        projection layout and selectable component wiring, and /admin/manifests owns created-manifest
+        hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
+        Legacy/debug/helper wrappers formerly isolated under /dev/admin/* are deleted. Detailed
+        wizard UI and screen_data_shape extension persistence remain implementation gaps.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1178,14 +1181,23 @@ system_roadmap_ssot:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
-        - admin_manifests_route_owns_existing_manifest_relation_and_hub_operations
+        - admin_manifests_route_owns_existing_manifest_relation_hub_navigation_and_page_group_operations
+        - admin_contents_wizard_supports_DB_reference_columns_initial_data_optional_table_relation_search_key_aggregation_display_group_sample_preview_and_explicit_register
+        - admin_ui_builder_supports_component_placement_selectable_design_layout_and_wiring_preview_explicit_apply_and_CI_audit_handoff
+        - screen_data_shape_topology_extension_persists_structured_relation_join_and_aggregation_display_fields
+        - topology_physical_tables_table_ref_mismatch_fails_explicitly
         - noncanonical_admin_wrappers_are_deleted_and_future_ui_converges_on_canonical_surfaces
         - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
-        - Gap-9 admin route skeletons
+        - Gap-9 admin route detailed no-code wizard UX remains partial
+        - admin/contents structured relation/join aggregation/display and sample-viewing inputs remain incomplete
+        - screen_data_shape topology extension persistence for structured relation/join and aggregation/display fields remains incomplete
+        - topology.physical_tables table_ref mismatch validation must fail explicitly instead of silently skipping wiring projection
+        - admin/ui-builder selectable component placement design-token wiring and post-apply CI audit handoff remain incomplete
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
 
     seed_import_export_runtime:
       status: implemented

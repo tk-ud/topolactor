@@ -416,7 +416,7 @@ Recommendation targets `topology.*`, `topology.wiring_physical_to_package`,
 `topology.components_*`, and `context_*` learning surfaces. Phase Attention rotates/explores
 hubs space during hub construction, with `w`/`l2_norm` gating exploration budget.
 
-## 8.7 Admin Console Authoring Workflow (v0.4)
+## 8.7 Admin Console Authoring Workflow (v0.6)
 
 Canonical self-hosted admin authoring routes are owned by
 `docs/design/runtime-orchestration-ssot.yaml`.
@@ -426,15 +426,19 @@ not add canonical routes outside that registry.
 | Canonical route | Responsibility |
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
-| `/admin/contents` | Single-page manifest creation: content, data shape, draft, validate, preview, explicit promote |
-| `/admin/ui-builder` | Display/operation UI projection |
-| `/admin/manifests` | Created manifest hub membership, inter-manifest relations, and navigation ordering |
+| `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial data, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit promote/register |
+| `/admin/ui-builder` | Manifest display/operation UI projection: component placement, selectable design/layout settings, selectable component wiring, validate, visual preview, explicit apply, then CI/local governance audit handoff |
+| `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
 
 The legacy/debug/helper wrappers formerly isolated under `/dev/admin/*` are deleted. Useful
 implementation pieces must converge on a canonical surface instead of adding helper routes.
 `/admin/contents` owns single-page manifest creation only. `/admin/manifests` owns created
-manifest hub membership, inter-manifest relations, and navigation ordering as page-group
-continuity management.
+manifest hub membership, inter-manifest relations, navigation ordering, and page-group
+continuity management. Optional structured relation/join intent in a new single-page draft remains a
+`/admin/contents` data-shape concern; it does not move created-manifest relation ownership out of
+`/admin/manifests`. `/admin/ui-builder` is a frontend projection surface, not a runtime judgment
+owner. All authoring surfaces preserve validate -> preview -> explicit promote/register/apply
+boundaries and prohibit silent/direct DB writes.
 
 ## 9. Boundary
 

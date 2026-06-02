@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.5.0
+  version: 0.6.0
   status: subordinate_design_document
 
   authority:
@@ -16,8 +16,9 @@ admin_console_workflow_ssot:
 
   purpose:
     - keep the admin authoring workflow aligned with runtime-orchestration route authority
-    - define /admin/contents as the new manifest creation surface
-    - define /admin/manifests as the created manifest hub / relation / navigation continuity surface
+    - define /admin/contents as the data-shaped single-page manifest authoring surface
+    - define /admin/ui-builder as the UI projection, layout, and component-wiring surface
+    - define /admin/manifests as the created manifest hub membership, relation, navigation ordering, and page-group continuity surface
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
   does_not_own:
@@ -27,6 +28,17 @@ admin_console_workflow_ssot:
     - css_vocabulary: docs/design/css-dictionary-ssot.yaml
     - ui_ux_primitive_catalog: docs/design/ui-ux-primitive-catalog-ssot.yaml
 
+  shared_authoring_boundary:
+    explicit_stage_order:
+      - validate
+      - preview
+      - explicit_promote_register_or_apply
+    prohibited:
+      - direct_DB_write_from_admin_UI
+      - silent_fallback_or_silent_write
+      - adding_noncanonical_admin_or_dev_admin_helper_routes
+      - treating_frontend_projection_as_runtime_judgment_owner
+
   page_responsibility:
     admin_index:
       route: /admin
@@ -35,58 +47,194 @@ admin_console_workflow_ssot:
     admin_contents:
       route: /admin/contents
       island: frontend/islands/ContentsAdmin.tsx
-      ux_label: 新規 manifest 作成
+      ux_label: データ構造付きの単独ページ manifest 作成
       domain_ownership:
-        - create one new manifest draft
-        - define the new manifest content and data shape intent
-        - validate and preview before explicit promote
+        - create one new empty manifest draft
+        - define the new manifest content and screen_data_shape intent
+        - author DB reference, column shape, initial data, optional table relation intent, search key, aggregation key, and display group
+        - validate and preview before explicit promote or register
+        - hand off a successfully registered manifest to /admin/ui-builder
       explicitly_out_of_scope:
-        - manifest hub membership management
-        - manifest-to-manifest relation management
-        - navigation ordering
+        - created manifest hub membership management as a page-group operation
+        - manifest-to-manifest relation management between already-created manifests
+        - navigation ordering or hub_navigation_ordering
+        - page-group continuity management
         - presenting file import as a canonical admin route
       note: >
-        This surface creates a new manifest. Existing manifest relation / hub operations
-        belong to /admin/manifests.
+        This surface creates one data-shaped single-page manifest. Optional relation or join
+        intent for the draft's data shape does not transfer ownership of created-manifest
+        relation, hub, or navigation operations from /admin/manifests.
+      authoring_workflow:
+        - step: 1
+          label: create_new_page
+          responsibility:
+            - create an empty manifest draft
+            - do not configure page-to-page navigation or inter-manifest relations at this stage
+        - step: 2
+          label: configure_DB_reference
+          responsibility:
+            - select or input the referenced or newly created table_ref or table name
+            - validate later against topology.physical_tables
+        - step: 3
+          label: define_columns
+          responsibility:
+            - define each column name
+            - select column type from normal-view candidates
+            - converge imported schema into the same data-shape intent
+          column_type_UI:
+            normal_view: select
+            candidates:
+              - text
+              - integer
+              - bigint
+              - boolean
+              - numeric
+              - timestamp with time zone
+              - date
+              - jsonb
+              - uuid
+              - varchar
+            advanced_or_other: isolate_free_text_input
+        - step: 4
+          label: register_initial_data
+          responsibility:
+            - treat initial-data registration as part of contents authoring
+            - preserve validate, preview, and explicit apply or promote boundaries
+          prohibited:
+            - silent_direct_DB_write
+        - step: 5
+          label: configure_optional_table_relation_intent
+          responsibility:
+            - accept structured relation or join intent for existing tables
+            - retain only the minimum hubs.hub or relation-config information needed by the draft data-shape intent
+          boundary:
+            remains_owned_by_admin_manifests:
+              - created manifest hub membership management
+              - manifest-to-manifest relation management
+              - navigation ordering
+              - page-group continuity management
+        - step: 6
+          label: select_search_key
+          responsibility:
+            - select searchTargets or search key through user-facing UX vocabulary
+            - do not require users to understand internal structure names
+        - step: 7
+          label: select_aggregation_and_display_group
+          responsibility:
+            - select aggregation key
+            - select display columns or display group
+            - require a sample-viewing or preview path
+            - persist aggregation settings as structured fields in a screen_data_shape topology extension
+          UX_vocabulary:
+            normal_view_prohibited:
+              - group by
+            normal_view_preferred:
+              - aggregation key
+              - display group
+              - sample viewing
+        - step: 8
+          label: register_manifest
+          responsibility:
+            - execute validate, preview, then explicit promote or register
+            - hand off successful registration to /admin/ui-builder
+          guard_ref: contents_promote_guard
 
     admin_ui_builder:
       route: /admin/ui-builder
       island: frontend/islands/UiBuilderAdmin.tsx
+      ux_label: manifest の見た目と操作配線
       domain_ownership:
-        - component catalog reference
-        - component registration and promotion
-        - layout preview, validation, and explicit apply
+        - component catalog reference and component placement
+        - layout canvas or preview projection
+        - selectable design, layout, and design-token settings
+        - component-level wiring selected from DB, manifest, or topology registry references
+        - validation, visual preview, and explicit apply
+        - post-apply handoff to CI, local guard, and agent-governance audit checks
+      explicitly_out_of_scope:
+        - runtime judgment ownership
+        - direct_DB_write_from_frontend
+        - silent_fallback
+        - raw dispatcher fields as the normal-view authoring path
+      note: >
+        This surface projects selectable presentation and operation-wiring intent onto a
+        manifest. It is a frontend projection surface, not a runtime semantics or runtime
+        judgment owner.
+      authoring_workflow:
+        - step: 1
+          label: place_components
+          responsibility:
+            - select components from the component catalog
+            - place components on a layout canvas or preview
+            - preserve keyboard or button alternatives to drag and drop
+        - step: 2
+          label: configure_design_and_layout
+          responsibility:
+            - select CSS, Tailwind, or design-token settings where supported by their vocabulary SSOT
+            - emphasize visual preview or before-and-after preview
+          input_policy:
+            normal_view: prefer_selectable_options
+            advanced_raw_input: isolated
+        - step: 3
+          label: configure_component_wiring
+          responsibility:
+            - configure wiring per component
+            - select wiring from DB, manifest, or topology-registry references instead of requiring free text
+            - keep role, target, layer, and action raw dispatcher fields in advanced disclosure
+          boundary:
+            - wiring_is_frontend_projection_intent
+            - runtime_judgment_remains_outside_UI_builder
+        - step: 4
+          label: apply_UI_projection
+          responsibility:
+            - execute validate, preview, then explicit apply
+          prohibited:
+            - direct_DB_write
+            - silent_fallback
+        - step: 5
+          label: continue_to_CI_audit
+          responsibility:
+            - proceed to CI, local guard, and agent-governance checks after apply
+            - detect generated-artifact drift, registry drift, and SSOT inconsistency
+          boundary:
+            - CI_audit_does_not_change_runtime_semantics
 
     admin_manifests:
       route: /admin/manifests
       island: frontend/islands/ManifestsAdmin.tsx
+      ux_label: 作成済みページ群の hub / relation / navigation 管理
       domain_ownership:
         - created topology_manifest registry display
         - created manifest hub membership management
         - manifest-to-manifest relation management
         - navigation ordering and hub_navigation_ordering inside the canonical manifests page
-        - continuity management across a group of pages
+        - page-group continuity management across created manifests
       explicitly_out_of_scope:
         - new manifest content draft creation
         - per-manifest DB table, column, and type editing
         - raw manifest JSON editing in the default path
+        - moving page-group operations back into /admin/contents
       note: >
-        Relation / hub operations are part of this canonical page. They MUST NOT require a
-        separate canonical /admin/hub-navigation route.
+        Relation, hub membership, navigation ordering, and page-group continuity operations
+        for created manifests are part of this canonical page. They MUST NOT require a separate
+        canonical /admin/hub-navigation route and MUST NOT move back into /admin/contents.
 
   canonical_workflow:
     - step: 1
-      label: create_new_manifest
+      label: create_data_shaped_single_page_manifest
       route: /admin/contents
-      description: Create a new manifest draft, validate it, preview it, and explicitly promote it.
+      description: Create one data-shaped manifest draft, validate it, preview it, and explicitly promote or register it.
     - step: 2
-      label: build_manifest_ui
+      label: build_manifest_UI_projection
       route: /admin/ui-builder
-      description: Register UI components and apply a validated layout for the manifest.
+      description: Place UI components, select design and layout settings, wire components, preview, and explicitly apply the validated UI projection.
     - step: 3
-      label: operate_existing_manifest_relations_and_hubs
+      label: audit_UI_projection
+      handoff_target: CI_local_guard_and_agent_governance_checks
+      description: Detect generated-artifact drift, registry drift, and SSOT inconsistency without changing runtime semantics.
+    - step: 4
+      label: operate_created_manifest_relations_and_hubs
       route: /admin/manifests
-      description: Review created manifests and manage their hub membership, inter-manifest relations, and navigation ordering as page-group continuity.
+      description: Review created manifests and manage their hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
 
   removed_legacy_wrapper_routes:
     policy: deleted
@@ -107,6 +255,8 @@ admin_console_workflow_ssot:
       - draft status is draft
       - validation has executed
       - validation has no blocking issue
+      - preview is possible
       - preview, when present, allows promote
     prohibited:
       - enabling promote before validation execution
+      - treating unresolved topology.physical_tables table_ref mismatch as a silent no-op
