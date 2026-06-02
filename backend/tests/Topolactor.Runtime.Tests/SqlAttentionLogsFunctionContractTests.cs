@@ -106,18 +106,40 @@ public class SqlAttentionLogsFunctionContractTests
     }
 
     [Fact]
-    public void GenerateAttentionPhaseVector_ContainsWxyzIjkAndNoPolicyCapMovement()
+    public void GenerateAttentionPhaseVector_ReturnsPendingIdSpaceEvidence_NotCountScalarAxes()
     {
         var sql = LoadSql();
         Assert.Contains("CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector", sql);
-        Assert.Contains("'w'", sql);
-        Assert.Contains("'x'", sql);
-        Assert.Contains("'y'", sql);
-        Assert.Contains("'z'", sql);
-        Assert.Contains("'i'", sql);
-        Assert.Contains("'j'", sql);
-        Assert.Contains("'k'", sql);
-        Assert.Contains("not_manifest_or_policy_cap", sql);
+        Assert.Contains("'q_kind', 'phaseAT'", sql);
+        Assert.Contains("'q_is_draft', false", sql);
+        Assert.Contains("'canonical_exploration_field', 'hubs.hub_relations'", sql);
+        Assert.Contains("'x_hit_hub_relation_id', NULL", sql);
+        Assert.Contains("'y_topology_manifest_id', NULL", sql);
+        Assert.Contains("'z_hub_id', NULL", sql);
+        Assert.Contains("'i_expanded_hub_relation_ids', '[]'::jsonb", sql);
+        Assert.Contains("'legacy_support_cache_statistics'", sql);
+        Assert.DoesNotContain("'x', COALESCE(p_hub_relations_count", sql);
+        Assert.DoesNotContain("'y', COALESCE(p_hub_count", sql);
+        Assert.DoesNotContain("'z', COALESCE(p_topology_manifests_count", sql);
         Assert.Contains("no_automatic_topology_mutation", sql);
     }
+    [Fact]
+    public void Step4GenerationLine_HasExplicitResolverLineageColumnsAndMigration()
+    {
+        var sql = LoadSql();
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.resolve_related_topology_manifests", sql);
+        Assert.Contains("topology.physical_table_manifest_bindings", sql);
+        Assert.Contains("AMBIGUOUS_PHYSICAL_TABLE_IDENTITY", sql);
+        Assert.Contains("generation_line_id", sql);
+        Assert.Contains("source_attention_id", sql);
+        Assert.Contains("source_topology_manifest_ids", sql);
+        Assert.Contains("expanded_hub_relation_ids", sql);
+        Assert.Contains("evidence_kind IN ('sql_attention_hit', 'phaseAT', 'draft_projection', 'adoption_result', 'rejection_result')", sql);
+        var migration = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/migrations/sql_attention_phase_generation_line.sql"));
+        Assert.Contains("ALTER TABLE logs.attention ALTER COLUMN hub_current_id DROP NOT NULL", migration);
+        Assert.Contains("fk_logs_attention_source_attention", migration);
+        Assert.Contains("CREATE OR REPLACE FUNCTION logs.resolve_related_topology_manifests", migration);
+        Assert.DoesNotContain("UPDATE hubs.hub_relations", migration);
+    }
+
 }

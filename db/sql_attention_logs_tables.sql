@@ -74,7 +74,7 @@ COMMENT ON TABLE logs.current IS
 
 -- ---------------------------------------------------------------------------
 -- logs.hub_current
--- Hub-side Tensor/attractor current for exploration projection cache.
+-- Optional derived support cache. Not the canonical SQL Attention exploration field.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.hub_current (
     hub_current_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -98,20 +98,36 @@ CREATE TABLE IF NOT EXISTS logs.hub_current (
 );
 
 COMMENT ON TABLE logs.hub_current IS
-  'Hub-side Tensor/attractor current cache. Not adopted state; no hub/topology mutation.';
+  'Optional derived support cache. Not the canonical SQL Attention hubs.hub_relations exploration field; not adopted state; no hub/topology mutation.';
 
 COMMENT ON COLUMN logs.hub_current.tensor_basis_json IS
-  'Tensor/attractor projection cache for hub exploration. This is not topology payload and not a mutation surface.';
+  'Deprecated diagnostics/support-cache projection basis only. This is not the canonical hubs.hub_relations exploration field, topology payload, or mutation surface.';
 
 -- ---------------------------------------------------------------------------
 -- logs.attention
--- Append-only evidence log for physical current × registry exploration plane.
+-- Append-only SQLAT / phaseAT evidence generation log. q phaseAT rows are never Draft.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs.attention (
     attention_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     current_id            UUID        NOT NULL REFERENCES logs.current(current_id) ON DELETE RESTRICT,
-    hub_current_id   UUID        NOT NULL REFERENCES logs.hub_current(hub_current_id) ON DELETE RESTRICT,
+    hub_current_id        UUID        REFERENCES logs.hub_current(hub_current_id) ON DELETE RESTRICT,
     source_set_id         TEXT        NOT NULL,
+    evidence_kind         TEXT        NOT NULL DEFAULT 'sql_attention_hit'
+                                  CHECK (evidence_kind IN ('sql_attention_hit', 'phaseAT', 'draft_projection', 'adoption_result', 'rejection_result')),
+    generation_line_id    UUID        NOT NULL DEFAULT gen_random_uuid(),
+    source_attention_id   UUID        REFERENCES logs.attention(attention_id) ON DELETE RESTRICT,
+    source_current_id     UUID        NOT NULL REFERENCES logs.current(current_id) ON DELETE RESTRICT,
+    source_topology_manifest_ids UUID[] NOT NULL DEFAULT '{}',
+    hit_hub_relation_ids  UUID[]      NOT NULL DEFAULT '{}',
+    expanded_hub_relation_ids UUID[]  NOT NULL DEFAULT '{}',
+    expanded_topology_manifest_ids UUID[] NOT NULL DEFAULT '{}',
+    expanded_hub_ids      UUID[]      NOT NULL DEFAULT '{}',
+    phase_status          TEXT        NOT NULL DEFAULT 'not_applicable'
+                                  CHECK (phase_status IN ('not_applicable', 'evidence', 'draft_projection', 'adoption_result', 'rejection_result')),
+    promotion_status      TEXT        NOT NULL DEFAULT 'not_requested'
+                                  CHECK (promotion_status IN ('not_requested', 'draft', 'adopted', 'rejected')),
+    actor_or_source       TEXT,
+    command_id            TEXT,
     statistics_json       JSONB       NOT NULL DEFAULT '{}'::jsonb,
     ema_score             DOUBLE PRECISION,
     l2_norm               DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -131,7 +147,7 @@ CREATE TABLE IF NOT EXISTS logs.attention (
 );
 
 COMMENT ON TABLE logs.attention IS
-  'SQL Attention evidence log linking physical pressure current and hub current. SQL Attention target is hubs Tensor/attractor, not direct topology/registry search. Keeps statistics, attention, and phase-attention meanings separated.';
+  'Append-only SQLAT / phaseAT evidence generation log. q phaseAT rows are evidence, never Draft. Canonical exploration field is hubs.hub_relations; hub_current linkage is optional derived support-cache lineage only. No automatic topology/registry/manifest/hub_relation mutation.';
 
 CREATE INDEX IF NOT EXISTS idx_logs_current_source_table
   ON logs.current (source_set_id, physical_table_id);
@@ -167,6 +183,12 @@ CREATE INDEX IF NOT EXISTS idx_logs_attention_hub_current_id
   ON logs.attention (hub_current_id);
 CREATE INDEX IF NOT EXISTS idx_logs_attention_score_band
   ON logs.attention (score_band);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_generation_line
+  ON logs.attention (generation_line_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_source_attention_id
+  ON logs.attention (source_attention_id);
+CREATE INDEX IF NOT EXISTS idx_logs_attention_evidence_kind
+  ON logs.attention (evidence_kind, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_logs_hub_current_attractor_key
   ON logs.hub_current (attractor_key);
@@ -233,14 +255,77 @@ END;
 $$;
 
 -- ---------------------------------------------------------------------------
--- phase_vector generation helper
--- Boundary:
---   w = l2_norm (physical_table_id excitation strength from logs.current)
---   x = hubs.hub_relations count (manifest-scoped hub sequence / UI transition axis)
---   y = hubs.hub count (topology meaning space axis)
---   z = hubs.topology_manifests count (manifest grouping axis)
---   i/j/k = axis movement amounts
--- phase movement is not derived from manifest/policy cap.
+-- Canonical SQL Attention related topology manifest resolver.
+-- Uses only explicit topology.physical_table_manifest_bindings; no implicit or
+-- oldest-row fallback is permitted. Empty result is an explicit no-hit boundary.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION logs.resolve_related_topology_manifests(
+    p_current_id UUID,
+    p_physical_table_id TEXT,
+    p_physical_table_name TEXT
+)
+RETURNS TABLE (
+    topology_manifest_id UUID,
+    resolver_evidence_json JSONB
+)
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_identity_count INTEGER;
+BEGIN
+    SELECT COUNT(*)
+      INTO v_identity_count
+      FROM topology.physical_tables pt
+     WHERE pt.active = true
+       AND (pt.physical_table_id::TEXT = p_physical_table_id OR pt.table_ref = p_physical_table_name);
+
+    IF v_identity_count > 1 THEN
+      RAISE EXCEPTION 'AMBIGUOUS_PHYSICAL_TABLE_IDENTITY: physical_table_id=% physical_table_name=% matched % active catalog rows',
+        p_physical_table_id, p_physical_table_name, v_identity_count;
+    END IF;
+
+    RETURN QUERY
+    SELECT
+      b.topology_manifest_id,
+      jsonb_build_object(
+        'resolver', 'explicit_physical_table_manifest_binding',
+        'current_id', p_current_id,
+        'physical_table_id', pt.physical_table_id,
+        'physical_table_ref', pt.table_ref,
+        'binding_id', b.binding_id,
+        'binding_evidence_json', b.binding_evidence_json,
+        'no_implicit_fallback', true
+      ) AS resolver_evidence_json
+    FROM topology.physical_tables pt
+    JOIN topology.physical_table_manifest_bindings b
+      ON b.physical_table_id = pt.physical_table_id
+     AND b.active = true
+    JOIN hubs.topology_manifests tm
+      ON tm.topology_manifest_id = b.topology_manifest_id
+     AND tm.status = 'active'
+    WHERE pt.active = true
+      AND (pt.physical_table_id::TEXT = p_physical_table_id OR pt.table_ref = p_physical_table_name)
+    ORDER BY b.topology_manifest_id;
+END;
+$$;
+
+COMMENT ON FUNCTION logs.resolve_related_topology_manifests(UUID, TEXT, TEXT) IS
+  'Explicit physical table to active topology_manifest_id[] resolver for canonical SQL Attention. Empty result means explicit no-hit; never falls back to oldest manifest or logs.hub_current.';
+
+-- ---------------------------------------------------------------------------
+-- Deprecated phase_vector compatibility helper.
+-- Canonical Phase Attention is ID-space evidence:
+--   w = l2_norm
+--   x = SQL Attention hit hub_relation_id
+--   y = topology_manifest_id that contains x
+--   z = hub_id registered by y
+--   i/j/k = expanded hub_relation_id[] / topology_manifest_id[] / hub_id[]
+--   q = logs.attention.phaseAT append-only evidence row, never Draft
+-- Step 3 retains the legacy scalar signature only for compatibility. Its count and
+-- movement parameters are emitted under explicitly deprecated support statistics;
+-- they never populate canonical x/y/z/i/j/k. The canonical runtime separately emits
+-- resolved payloads after topology_manifest_id[] resolution and hubs.hub_relations exploration.
 -- No mutation/migration/promotion is triggered from this function.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(
@@ -259,24 +344,46 @@ RETURNS JSONB
 LANGUAGE sql
 AS $$
     SELECT jsonb_build_object(
-        'basis_source', 'logs.hub_current',
+        'q_kind', 'phaseAT',
+        'q_is_draft', false,
+        'generation_status', 'deprecated_support_cache_diagnostics_only',
+        'pending_reason', 'legacy support-cache helper is deprecated; canonical phaseAT generation is emitted by manifest-scoped hubs.hub_relations exploration',
+        'canonical_exploration_field', 'hubs.hub_relations',
+        'legacy_support_cache_source', 'logs.hub_current',
         'meaning_boundary', jsonb_build_object(
             'w', 'l2_norm',
-            'x', 'hubs_hub_relations_count',
-            'y', 'hubs_hub_count',
-            'z', 'hubs_topology_manifests_count',
-            'ijk', 'axis movement amounts',
-            'phase_movement_source', 'not_manifest_or_policy_cap',
+            'x', 'hit_hub_relation_id',
+            'y', 'topology_manifest_id',
+            'z', 'hub_id',
+            'ijk', 'expanded ID arrays',
+            'q', 'logs.attention.phaseAT append-only evidence row',
+            'q_is_draft', false,
+            'legacy_count_scalar_axes_deprecated', true,
             'no_automatic_topology_mutation', true
         ),
-        'w', COALESCE(p_l2_norm, 0),
-        'x', COALESCE(p_hub_relations_count, 0),
-        'y', COALESCE(p_hub_count, 0),
-        'z', COALESCE(p_topology_manifests_count, 0),
-        'i', COALESCE(p_axis_move_i, 0),
-        'j', COALESCE(p_axis_move_j, 0),
-        'k', COALESCE(p_axis_move_k, 0),
-        'generated_from', 'logs.attention.vector_json',
+        'w_l2_norm', COALESCE(p_l2_norm, 0),
+        'x_hit_hub_relation_id', NULL,
+        'y_topology_manifest_id', NULL,
+        'z_hub_id', NULL,
+        'i_expanded_hub_relation_ids', '[]'::jsonb,
+        'j_expanded_topology_manifest_ids', '[]'::jsonb,
+        'k_expanded_hub_ids', '[]'::jsonb,
+        'q_phaseAT_payload', jsonb_build_object(
+            'status', 'deprecated_support_cache_diagnostics_only',
+            'evidence_only', true,
+            'is_draft', false
+        ),
+        'legacy_support_cache_statistics', jsonb_build_object(
+            'hub_relations_count', COALESCE(p_hub_relations_count, 0),
+            'hub_count', COALESCE(p_hub_count, 0),
+            'topology_manifests_count', COALESCE(p_topology_manifests_count, 0)
+        ),
+        'legacy_axis_movement_observations', jsonb_build_object(
+            'i', COALESCE(p_axis_move_i, 0),
+            'j', COALESCE(p_axis_move_j, 0),
+            'k', COALESCE(p_axis_move_k, 0)
+        ),
+        'generated_from', 'legacy_logs_hub_current_support_cache_diagnostics',
         'vector_keys', COALESCE(p_vector_keys_json, '[]'::jsonb),
         'vector_basis_json', COALESCE(p_vector_basis_json, '{}'::jsonb),
         'phase_basis_json', COALESCE(p_phase_basis_json, '{}'::jsonb)
@@ -285,12 +392,12 @@ $$;
 
 -- ---------------------------------------------------------------------------
 -- logs.hub_current refresh function
--- Refreshes hub_current population/recordcount basis from logs.attention append evidence.
--- axis_population_json uses canonical hubs space axes:
---   hub_relations_count = manifest-scoped count of hubs.hub_relations for this hub (x-axis)
---   hub_count = total count of hubs.hub (y-axis)
---   topology_manifests_count = count of hubs.topology_manifests for this hub (z-axis)
--- axis_z_score_json(i/j/k) is used as movement-amount placeholder; when unobserved set to 0.
+-- Refreshes optional logs.hub_current support-cache population/recordcount basis from
+-- logs.attention append evidence. This cache is not the SQL Attention exploration field.
+-- axis_population_json retains deprecated support statistics only:
+--   hub_relations_count, hub_count, topology_manifests_count
+-- These count scalars are not canonical Phase Attention x/y/z ID-space values.
+-- axis_z_score_json(i/j/k) retains deprecated unobserved movement placeholders only.
 -- neighbor_score statistics are not written into i/j/k to avoid movement-semantic masquerade.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION logs.refresh_hub_current(
@@ -398,6 +505,9 @@ BEGIN
 END;
 $$;
 
+-- SQL Attention trigger source only: refresh logs.current from logs.diff, calculate
+-- l2_norm/rank/level change detection, and return changed topN candidates. This function
+-- does not resolve manifests, explore hubs.hub_relations, or generate phaseAT evidence.
 CREATE OR REPLACE FUNCTION logs.refresh_logs_current_watch(
     p_source_set_id TEXT,
     p_basis_window TEXT,
@@ -407,6 +517,7 @@ CREATE OR REPLACE FUNCTION logs.refresh_logs_current_watch(
 RETURNS TABLE (
     current_id UUID,
     physical_table_id TEXT,
+    physical_table_name TEXT,
     norm_rank INTEGER,
     previous_norm_level TEXT,
     norm_level TEXT,
@@ -567,10 +678,10 @@ BEGIN
              updated_at = now()
       FROM tmp_logs_current_watch_reasons r
       WHERE c.current_id = r.current_id
-      RETURNING c.current_id, c.physical_table_id, c.norm_rank, c.previous_norm_level, c.norm_level,
+      RETURNING c.current_id, c.physical_table_id, c.physical_table_name, c.norm_rank, c.previous_norm_level, c.norm_level,
                 c.l2_norm, c.basis_vector_json
     )
-    SELECT ap.current_id, ap.physical_table_id, ap.norm_rank, ap.previous_norm_level, ap.norm_level,
+    SELECT ap.current_id, ap.physical_table_id, ap.physical_table_name, ap.norm_rank, ap.previous_norm_level, ap.norm_level,
            true AS change_detected,
            rs.reason AS change_reason,
            ap.l2_norm, ap.basis_vector_json

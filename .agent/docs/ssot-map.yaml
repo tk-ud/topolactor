@@ -96,13 +96,16 @@ mapping:
 
   - work_type: context_route_recommendation_sql_attention_registry_tensor
     change_surfaces:
-      - context route recommendation
-      - SQL Attention behavior
+      - context route recommendation child projection
+      - SQL Attention evidence consumer boundary
+      - phaseAT evidence consumer boundary
       - registry tensor semantics
     required_docs:
       - docs/design/context-route-recommendation.md
       - docs/design/context-route-recommendation.yaml
     supporting_docs:
+      - docs/design/sql-attention-logs-ssot.md
+      - docs/design/sql-attention-logs-ssot.yaml
       - docs/framework-policy.yaml
     protocols:
       - .agent/protocols/registry-tensor-policy.md
@@ -119,9 +122,15 @@ mapping:
       - signal source
       - current calculation basis
       - l2 norm trigger
-      - norm level watch
-      - hub-attractor observation
-      - attractor tensor / hub_current observation boundary
+      - topN rank and norm level watch
+      - related topology_manifest_id[] resolution
+      - hubs.hub_relations exploration field
+      - hub_relation_id / topology_manifest_id / hub_id SQLAT hit evidence
+      - phaseAT ID-space evidence generation line
+      - logs.hub_current optional support cache / derived current boundary
+      - explicit Draft promotion and adopted reflection boundary
+      - automatic topology / registry / manifest / hub_relation mutation prohibition
+      - legacy key: hub-attractor observation through logs.hub_current (support cache only / not exploration body)
       - legacy key: registry-neighbor exploration (legacy / not target)
       - legacy key: table registry vector search (legacy / not target)
       - physical table pressure

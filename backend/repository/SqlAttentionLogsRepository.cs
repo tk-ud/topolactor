@@ -8,7 +8,10 @@ namespace Topolactor.Repository;
 ///
 /// Provides access to:
 ///   - logs.refresh_logs_current_watch: returns watch change candidates
-///   - logs.hub_current: returns hub attractor candidates for exploration
+///   - explicit physical table -> topology manifest resolution
+///   - hubs.hub_relations: canonical SQL Attention exploration candidates
+///   - logs.hub_current: deprecated diagnostics-only support cache
+///   - logs.attention: append-only SQLAT / phaseAT / lifecycle evidence
 ///
 /// In-memory test double: returns empty collections by default.
 /// Production: override in NpgsqlSqlAttentionLogsRepository.
@@ -46,19 +49,61 @@ public class SqlAttentionLogsRepository
     }
 
     /// <summary>
-    /// Loads logs.hub_current records for (sourceSetId, basisWindow).
-    /// These are used as hub attractor candidates during exploration.
+    /// Resolves explicit physical-table bindings to active hubs.topology_manifests.
+    /// Empty results are explicit no-hit evidence; implementations must not fall back.
+    /// </summary>
+    public virtual Task<RelatedTopologyManifestResolution> ResolveRelatedTopologyManifestsAsync(
+        WatchChangeCandidate candidate,
+        CancellationToken ct = default) =>
+        Task.FromResult(new RelatedTopologyManifestResolution(candidate.CurrentId, [], "{\"resolver\":\"test_double_empty\",\"no_implicit_fallback\":true}"));
+
+    /// <summary>
+    /// Loads active canonical hubs.hub_relations candidates for resolved manifest scopes.
+    /// </summary>
+    public virtual Task<IReadOnlyList<HubRelationExplorationCandidate>> LoadHubRelationExplorationCandidatesAsync(
+        IReadOnlyList<Guid> topologyManifestIds,
+        CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<HubRelationExplorationCandidate>>([]);
+
+    /// <summary>
+    /// Appends one SQLAT hit row and its phaseAT q row in one generation line.
+    /// </summary>
+    public virtual Task<AttentionGenerationAppendResult> AppendAttentionGenerationAsync(
+        AttentionGenerationAppendRequest request,
+        CancellationToken ct = default)
+    {
+        ValidateGenerationRequest(request);
+        return Task.FromResult(new AttentionGenerationAppendResult(request.GenerationLineId, Guid.NewGuid(), Guid.NewGuid()));
+    }
+
+    public virtual Task<AttentionLifecycleSource?> LoadAttentionLifecycleSourceAsync(
+        Guid attentionId,
+        CancellationToken ct = default) =>
+        Task.FromResult<AttentionLifecycleSource?>(null);
+
+    public virtual Task<Guid> AppendAttentionLifecycleEvidenceAsync(
+        AttentionLifecycleAppendRequest request,
+        CancellationToken ct = default)
+    {
+        ValidateLifecycleAppendRequest(request);
+        return Task.FromResult(Guid.NewGuid());
+    }
+
+    /// <summary>
+    /// Loads deprecated logs.hub_current support-cache records for explicit diagnostics only.
+    /// These records are not canonical SQL Attention exploration candidates; the canonical
+    /// route resolves related topology_manifest_id[] and explores hubs.hub_relations separately.
     ///
     /// In-memory test double: returns empty list.
     /// Production: override to query logs.hub_current via Npgsql.
     /// </summary>
-    public virtual Task<IReadOnlyList<HubCurrentCandidate>> LoadHubCurrentCandidatesAsync(
+    public virtual Task<IReadOnlyList<HubCurrentCandidate>> LoadLegacyHubCurrentSupportCacheCandidatesAsync(
         string sourceSetId,
         string basisWindow,
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "SqlAttentionLogsRepository.LoadHubCurrentCandidatesAsync: no DB connection (test double) — returning empty list for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+            "SqlAttentionLogsRepository.LoadLegacyHubCurrentSupportCacheCandidatesAsync: no DB connection (test double) — returning empty list for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
             sourceSetId, basisWindow);
         return Task.FromResult<IReadOnlyList<HubCurrentCandidate>>([]);
     }
@@ -73,7 +118,7 @@ public class SqlAttentionLogsRepository
     ///   - Empty hits → returns 0 without INSERT (no-change early return).
     ///   - append-only: INSERT only, no UPDATE or DELETE.
     ///   - archive_policy is always 'required'.
-    ///   - phase_vector_json is stored as provided by runtime-generated evidence JSON.
+    ///   - phase_vector_json is stored as provided append-only phaseAT evidence JSON; q is not Draft.
     ///   - write boundary does not generate phase vectors; it only appends provided evidence.
     ///   - statistics_json / ema_score are stored as provided; EMA integration is a separate TODO.
     ///   - No registry mutation / migration / column promotion.
@@ -143,6 +188,25 @@ public class SqlAttentionLogsRepository
         ValidateLogsDiffRequest(request);
         _logger.LogDebug("SqlAttentionLogsRepository.AppendLogsDiffAsync: no DB connection (test double) — request validated only.");
         return Task.CompletedTask;
+    }
+
+    protected static void ValidateGenerationRequest(AttentionGenerationAppendRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.GenerationLineId == Guid.Empty) throw new ArgumentException("generation_line_id must not be empty.", nameof(request));
+        if (request.CurrentId == Guid.Empty) throw new ArgumentException("current_id must not be empty.", nameof(request));
+        if (request.TopologyManifestId == Guid.Empty) throw new ArgumentException("topology_manifest_id must not be empty.", nameof(request));
+        if (request.HubRelationId == Guid.Empty) throw new ArgumentException("hub_relation_id must not be empty.", nameof(request));
+        if (request.HubId == Guid.Empty) throw new ArgumentException("hub_id must not be empty.", nameof(request));
+        if (!string.Equals(request.ArchivePolicy, "required", StringComparison.Ordinal)) throw new ArgumentException("archive_policy must be required.", nameof(request));
+    }
+
+    protected static void ValidateLifecycleAppendRequest(AttentionLifecycleAppendRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Source.AttentionId == Guid.Empty) throw new ArgumentException("source_attention_id must not be empty.", nameof(request));
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.ActorOrSource);
+        ArgumentException.ThrowIfNullOrWhiteSpace(request.CommandId);
     }
 
     protected static void ValidateLogsDiffRequest(LogsDiffAppendRequest request)

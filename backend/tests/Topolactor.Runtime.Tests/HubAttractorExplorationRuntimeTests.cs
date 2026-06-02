@@ -27,7 +27,7 @@ internal sealed class StubExplorationPolicyTopologyRepository(string? policyJson
 
 /// <summary>
 /// Stub SqlAttentionLogsRepository with controllable return values.
-/// Tracks whether LoadHubCurrentCandidatesAsync was called (to verify no exploration when no change).
+/// Tracks whether deprecated logs.hub_current support-cache diagnostics were loaded.
 /// </summary>
 internal sealed class StubSqlAttentionLogsRepository(
     IReadOnlyList<WatchChangeCandidate> candidates,
@@ -44,7 +44,7 @@ internal sealed class StubSqlAttentionLogsRepository(
         CancellationToken ct = default)
         => Task.FromResult(candidates);
 
-    public override Task<IReadOnlyList<HubCurrentCandidate>> LoadHubCurrentCandidatesAsync(
+    public override Task<IReadOnlyList<HubCurrentCandidate>> LoadLegacyHubCurrentSupportCacheCandidatesAsync(
         string sourceSetId,
         string basisWindow,
         CancellationToken ct = default)
@@ -184,6 +184,27 @@ internal static class ExplorationTestFactory
 // Tests — change candidate triggers exploration
 // ---------------------------------------------------------------------------
 
+public class HubAttractorExplorationRuntime_CanonicalBoundaryTests
+{
+    [Fact]
+    public async Task ExploreAsync_WithChangedCandidate_FailsCloseWithoutLegacySupportCacheFallback()
+    {
+        var logsRepo = new StubSqlAttentionLogsRepository(
+            [ExplorationTestFactory.ChangeCandidate()],
+            [ExplorationTestFactory.HubCurrent(attractorVectorJson: """{"diff_count": 10}""")]);
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(), logsRepo);
+
+        var result = await runtime.ExploreAsync(
+            [ExplorationTestFactory.ChangeCandidate()], "src", "7d");
+
+        Assert.Equal(HubAttractorExplorationStatus.NoRelatedTopologyManifest, result.Status);
+        Assert.Null(result.Result);
+        Assert.Contains("No explicit physical table", result.Detail);
+        Assert.Equal(0, logsRepo.HubCurrentCallCount);
+    }
+}
+
 public class HubAttractorExplorationRuntime_ChangeCandidateTests
 {
     [Fact]
@@ -197,7 +218,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -215,7 +236,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        await runtime.ExploreAsync(
+        await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
@@ -229,7 +250,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -247,7 +268,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hubCurrent]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(currentId: currentId, normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -263,7 +284,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "my_source_set", "7d");
 
@@ -289,7 +310,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -303,7 +324,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        var result = await runtime.ExploreAsync([], "src", "7d");
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync([], "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.NoChange, result.Status);
     }
@@ -318,7 +339,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        await runtime.ExploreAsync(
+        await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -331,7 +352,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -346,7 +367,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.NoChangeCandidate(), ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
@@ -365,7 +386,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -377,7 +398,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -389,7 +410,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -404,7 +425,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
             """{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""",
             []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -421,7 +442,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(policyJson, []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -433,7 +454,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -468,7 +489,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 2, maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -492,7 +513,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(highTopK: 5, maxKinds: 10, highMaxTables: 10, highPhaseLimit: 1, maxRows: 3),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -517,7 +538,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 1, maxKinds: 2, midMaxTables: 5, midPhaseLimit: 1, maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -534,7 +555,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(),
             []);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -556,7 +577,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 2),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -614,7 +635,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             ExplorationTestFactory.ValidPolicyJson(weakTopK: 1, weakMaxTables: 2),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "low", l2Norm: 0.5)],
             "src", "7d");
 
@@ -645,7 +666,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
                 maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -665,7 +686,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -694,7 +715,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
     {
         // Responsibility split boundary:
         // - HubAttractorExplorationRuntime: result generation only (no persistence)
-        // - SqlAttentionScheduler: owns WriteLogsAttentionAsync boundary
+        // - SqlAttentionScheduler: owns AppendAttentionGenerationAsync boundary
         var logsRepo = new StubSqlAttentionLogsRepository(
             [],
             [ExplorationTestFactory.HubCurrent()]);
@@ -702,7 +723,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -721,7 +742,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -772,7 +793,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -800,7 +821,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 42.5)],
             "src", "7d");
 
@@ -816,7 +837,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 5.0,
@@ -838,7 +859,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hub]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 5.0,
@@ -861,7 +882,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hub]);
 
-        var result = await runtime.ExploreAsync(
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 99.0,
@@ -990,7 +1011,7 @@ public class SqlAttentionScheduler_RunOnceTests
                 logsRepo));
 
     [Fact]
-    public async Task RunOnceAsync_WithEnvVars_ChangeCandidates_LoadsHubCurrentCandidates()
+    public async Task RunOnceAsync_WithEnvVars_ChangeCandidates_DoesNotLoadLegacySupportCache()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -1003,7 +1024,7 @@ public class SqlAttentionScheduler_RunOnceTests
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
-            Assert.Equal(1, logsRepo.HubCurrentCallCount);
+            Assert.Equal(0, logsRepo.HubCurrentCallCount);
         }
         finally
         {
@@ -1183,7 +1204,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
                 logsRepo));
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_CallsWriteLogsAttention()
+    public async Task RunOnceAsync_ChangedCandidate_FailsCloseWithoutLegacySupportCacheOrWrite()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -1191,53 +1212,14 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         {
             var logsRepo = new StubSqlAttentionLogsRepository(
                 [ExplorationTestFactory.ChangeCandidate()],
-                [ExplorationTestFactory.HubCurrent()]);
+                [ExplorationTestFactory.HubCurrent(attractorVectorJson: """{"diff_count": 10}""")]);
 
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
-            Assert.Equal(1, logsRepo.WriteLogsAttentionCallCount);
-            Assert.NotNull(logsRepo.LastWriteRequests);
-            var request = Assert.Single(logsRepo.LastWriteRequests!);
-            Assert.Equal("required", request.ArchivePolicy);
-            // VectorJson: {} when attractor_vector_json is {} (no shared components until hub refresh)
-            Assert.Equal("{}", request.VectorJson);
-            Assert.NotEqual("{}", request.PhaseVectorJson);
-            Assert.NotEqual("{}", request.StatisticsJson);
-            Assert.Null(request.EmaScore);
-            using (var sdoc = JsonDocument.Parse(request.StatisticsJson))
-            {
-                var s = sdoc.RootElement;
-                Assert.Equal("sql_attention_scheduler", s.GetProperty("generated_by").GetString());
-                Assert.Equal("logs.attention_write", s.GetProperty("statistics_scope").GetString());
-                Assert.Equal("not_implemented_null", s.GetProperty("ema_score_status").GetString());
-            }
-            // EvidenceJson now contains scoring provenance (not placeholder {})
-            Assert.NotEqual("{}", request.EvidenceJson);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
-    }
-
-    [Fact]
-    public async Task RunOnceAsync_OkWithNoHits_DoesNotCallWriteLogsAttention()
-    {
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            // No hub current candidates → exploration Ok but empty hits
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate()],
-                []);
-
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
-
+            Assert.Equal(0, logsRepo.HubCurrentCallCount);
             Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
+            Assert.Null(logsRepo.LastWriteRequests);
         }
         finally
         {
@@ -1247,7 +1229,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_NoChange_DoesNotCallWriteLogsAttention()
+    public async Task RunOnceAsync_NoChange_DoesNotLoadSupportCacheOrWrite()
     {
         Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
         Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
@@ -1260,6 +1242,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
             var scheduler = CreateScheduler(logsRepo);
             await scheduler.RunOnceAsync(CancellationToken.None);
 
+            Assert.Equal(0, logsRepo.HubCurrentCallCount);
             Assert.Equal(0, logsRepo.WriteLogsAttentionCallCount);
         }
         finally
@@ -1270,196 +1253,59 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_WriteRequestsAreBuilt()
+    public async Task ExplicitLegacyDiagnostics_PhaseVectorJson_IsPendingIdSpaceEvidence_NotDraftOrCountScalarAxes()
     {
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate()],
-                [ExplorationTestFactory.HubCurrent()]);
+        var logsRepo = new StubSqlAttentionLogsRepository(
+            [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)],
+            [ExplorationTestFactory.HubCurrent(
+                attractorVectorJson: """{"diff_count": 10}""")]);
+        var runtime = ExplorationTestFactory.CreateRuntime(
+            ExplorationTestFactory.ValidPolicyJson(highPhaseLimit: 1), logsRepo);
 
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
+        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+            [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)], "src", "7d");
 
-            Assert.NotNull(logsRepo.LastWriteRequests);
-            Assert.NotEmpty(logsRepo.LastWriteRequests!);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
+        Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
+        var hit = Assert.Single(result.Result!.Hits);
+        using var doc = JsonDocument.Parse(hit.PhaseVectorJson);
+        var root = doc.RootElement;
+        Assert.Equal("phaseAT", root.GetProperty("q_kind").GetString());
+        Assert.False(root.GetProperty("q_is_draft").GetBoolean());
+        Assert.Equal("hubs.hub_relations", root.GetProperty("canonical_exploration_field").GetString());
+        Assert.Equal(12.5, root.GetProperty("w_l2_norm").GetDouble());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("x_hit_hub_relation_id").ValueKind);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("y_topology_manifest_id").ValueKind);
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("z_hub_id").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("i_expanded_hub_relation_ids").ValueKind);
+        Assert.False(root.TryGetProperty("x", out _));
+        Assert.False(root.TryGetProperty("y", out _));
+        Assert.False(root.TryGetProperty("z", out _));
+        Assert.False(root.TryGetProperty("i", out _));
+        Assert.False(root.TryGetProperty("j", out _));
+        Assert.False(root.TryGetProperty("k", out _));
+        Assert.Equal(JsonValueKind.Object, root.GetProperty("legacy_support_cache_statistics").ValueKind);
+        Assert.Equal(JsonValueKind.Object, root.GetProperty("phase_basis_json").ValueKind);
     }
 
     [Fact]
-    public async Task RunOnceAsync_OkWithHits_RequestHasRequiredIdentityFields()
+    public void EvidenceContracts_RemainSeparated_AndSqlFunctionUsesPendingIdSpaceShape()
     {
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate(l2Norm: 10.0)],
-                [ExplorationTestFactory.HubCurrent()]);
+        var hitType = typeof(HubAttractorExplorationHit);
+        Assert.Null(hitType.GetProperty("CollapsedScore"));
+        Assert.Null(hitType.GetProperty("SingleScore"));
+        Assert.NotNull(hitType.GetProperty("PhaseVectorJson"));
+        Assert.Null(hitType.GetProperty("StatisticsJson"));
 
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
+        var sql = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/sql_attention_logs_tables.sql"));
+        Assert.Contains("'q_kind', 'phaseAT'", sql);
+        Assert.Contains("'q_is_draft', false", sql);
+        Assert.Contains("'x_hit_hub_relation_id', NULL", sql);
+        Assert.Contains("'i_expanded_hub_relation_ids', '[]'::jsonb", sql);
+        Assert.DoesNotContain("'x', COALESCE(p_hub_relations_count", sql);
 
-            Assert.NotNull(logsRepo.LastWriteRequests);
-            foreach (var request in logsRepo.LastWriteRequests!)
-            {
-                Assert.NotEqual(Guid.Empty, request.CurrentId);
-                Assert.NotEqual(Guid.Empty, request.HubCurrentId);
-                Assert.Equal("required", request.ArchivePolicy);
-                // L2Norm is now from candidate.L2Norm (production value, not placeholder 0.0)
-                Assert.Equal(10.0, request.L2Norm);
-                // VectorJson is {} when attractor_vector_json is {} (no shared components)
-                Assert.Equal("{}", request.VectorJson);
-                Assert.NotEqual("{}", request.PhaseVectorJson);
-                Assert.NotEqual("{}", request.StatisticsJson);
-                Assert.Null(request.EmaScore);
-                // EvidenceJson contains scoring provenance
-                Assert.NotEqual("{}", request.EvidenceJson);
-            }
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
-    }
-
-    [Fact]
-    public async Task RunOnceAsync_OkWithHits_EvidenceMeaningsNotCollapsed()
-    {
-        // Structural check: hit does not carry a single collapsed score field.
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate()],
-                [ExplorationTestFactory.HubCurrent()]);
-
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
-
-            var hitType = typeof(HubAttractorExplorationHit);
-            // No collapsed single score field — evidence layers stay separate
-            Assert.Null(hitType.GetProperty("CollapsedScore"));
-            Assert.Null(hitType.GetProperty("SingleScore"));
-            // Phase vector evidence exists but remains separate from collapsed/single-score fields.
-            Assert.NotNull(hitType.GetProperty("PhaseVectorJson"));
-            // Statistics excluded from exploration hit (integration is separate TODO)
-            Assert.Null(hitType.GetProperty("StatisticsJson"));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
-    }
-
-    [Fact]
-    public async Task RunOnceAsync_OkWithHits_PhaseVectorJson_HasMeaningBoundaryAndObjectPhaseBasis()
-    {
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)],
-                [ExplorationTestFactory.HubCurrent()]);
-
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
-
-            var request = Assert.Single(logsRepo.LastWriteRequests!);
-            using var doc = JsonDocument.Parse(request.PhaseVectorJson);
-            var root = doc.RootElement;
-            Assert.Equal(12.5, root.GetProperty("w").GetDouble());
-            Assert.Equal("logs.hub_current", root.GetProperty("basis_source").GetString());
-            var boundary = root.GetProperty("meaning_boundary");
-            Assert.Equal("l2_norm", boundary.GetProperty("w").GetString());
-            Assert.Equal("hubs_hub_relations_count", boundary.GetProperty("x").GetString());
-            Assert.Equal("hubs_hub_count", boundary.GetProperty("y").GetString());
-            Assert.Equal("hubs_topology_manifests_count", boundary.GetProperty("z").GetString());
-            Assert.Equal("axis movement amounts", boundary.GetProperty("ijk").GetString());
-            Assert.Equal("not_manifest_or_policy_cap", boundary.GetProperty("phase_movement_source").GetString());
-            Assert.True(boundary.GetProperty("no_automatic_topology_mutation").GetBoolean());
-            Assert.True(root.TryGetProperty("x", out _));
-            Assert.True(root.TryGetProperty("y", out _));
-            Assert.True(root.TryGetProperty("z", out _));
-            Assert.True(root.TryGetProperty("i", out _));
-            Assert.True(root.TryGetProperty("j", out _));
-            Assert.True(root.TryGetProperty("k", out _));
-            Assert.Equal("logs.attention.vector_json", root.GetProperty("generated_from").GetString());
-            Assert.Equal(JsonValueKind.Array, root.GetProperty("vector_keys").ValueKind);
-            Assert.Equal(JsonValueKind.Object, root.GetProperty("vector_basis_json").ValueKind);
-            Assert.Equal(JsonValueKind.Object, root.GetProperty("phase_basis_json").ValueKind);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
-    }
-
-    [Fact]
-    public async Task RunOnceAsync_OkWithHits_PhaseVectorJsonShape_AlignedWithSqlFunctionContract()
-    {
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", "src");
-        Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", "7d");
-        try
-        {
-            var logsRepo = new StubSqlAttentionLogsRepository(
-                [ExplorationTestFactory.ChangeCandidate(l2Norm: 2.0)],
-                [ExplorationTestFactory.HubCurrent()]);
-            var scheduler = CreateScheduler(logsRepo);
-            await scheduler.RunOnceAsync(CancellationToken.None);
-
-            var request = Assert.Single(logsRepo.LastWriteRequests!);
-            using var doc = JsonDocument.Parse(request.PhaseVectorJson);
-            var root = doc.RootElement;
-            foreach (var key in new[]
-                     { "basis_source", "meaning_boundary", "w", "x", "y", "z", "i", "j", "k", "generated_from", "vector_keys", "vector_basis_json", "phase_basis_json" })
-                Assert.True(root.TryGetProperty(key, out _), $"missing runtime key: {key}");
-            Assert.Equal("logs.attention.vector_json", root.GetProperty("generated_from").GetString());
-
-            var sql = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../db/sql_attention_logs_tables.sql"));
-            Assert.Contains("generate_attention_phase_vector", sql);
-            Assert.Contains("'basis_source'", sql);
-            Assert.Contains("'meaning_boundary'", sql);
-            Assert.Contains("'w'", sql);
-            Assert.Contains("'hubs_hub_relations_count'", sql);
-            Assert.Contains("'hubs_hub_count'", sql);
-            Assert.Contains("'hubs_topology_manifests_count'", sql);
-            Assert.Contains("'ijk'", sql);
-            Assert.Contains("'phase_movement_source'", sql);
-            Assert.Contains("'no_automatic_topology_mutation'", sql);
-            Assert.Contains("'x'", sql);
-            Assert.Contains("'y'", sql);
-            Assert.Contains("'z'", sql);
-            Assert.Contains("'i'", sql);
-            Assert.Contains("'j'", sql);
-            Assert.Contains("'k'", sql);
-            Assert.Contains("'generated_from'", sql);
-            Assert.Contains("'vector_keys'", sql);
-            Assert.Contains("'vector_basis_json'", sql);
-            Assert.Contains("'phase_basis_json'", sql);
-
-            var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
-            Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
-            Assert.Contains("scoring.VectorJson, budgetTier, tierLimits)", runtimeCode);
-            Assert.Contains("exploration_budget_gate", runtimeCode);
-            Assert.Contains("string vectorJson", runtimeCode);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_SOURCE_SET_ID", null);
-            Environment.SetEnvironmentVariable("SQL_ATTENTION_BASIS_WINDOW", null);
-        }
+        var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
+        Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
+        Assert.Contains("RunCanonicalHubRelationsExploration", runtimeCode);
+        Assert.Contains("ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync", runtimeCode);
     }
 }

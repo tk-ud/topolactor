@@ -391,13 +391,14 @@ system_roadmap_ssot:
 
     M7_sql_attention_observation_runtime:
       title: SQL Attention observation runtime
-      status: production_ready
+      status: partial
       goal: >
-        Implement SQL Attention as a DB-native hub-attractor observation runtime with
-        explicit separation of logs.current, logs.hub_current, and logs.attention planes.
-        Completion is defined by logs.attention evidence-row persistence (not exploration
-        execution alone). Topology/context-route recommendation remains a child projection
-        and consumer surface, not the SQL Attention parent observation body.
+        Implement SQL Attention as a DB-native manifest-scoped hubs.hub_relations exploration
+        runtime triggered by policy-qualified logs.current topN/rank/norm-level changes.
+        logs.hub_current is an optional support cache / derived current, not the exploration body.
+        Completion requires append-only SQLAT / phaseAT evidence generation-line persistence,
+        ID-space Phase Attention, and explicit-only Draft/adopted reflection boundaries.
+        Topology/context-route recommendation remains a child projection and consumer surface.
       blocking_gaps: []
       test_bundle_refs:
         sql_attention_observation_runtime:
@@ -499,9 +500,9 @@ system_roadmap_ssot:
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         logs.hub_current refresh rebuilds attractor_vector_json/population/axis/phase projection
-        fields from append-only logs.attention evidence. Live DB loop proven by
-        SqlAttentionLiveDbEndToEndTests (population_count updated after refresh_hub_current).
-        Production_ready promotion pending CI confirmation of live DB E2E evidence.
+        fields from append-only logs.attention evidence. This is a support cache / derived current,
+        not the canonical SQL Attention exploration field. Live DB loop proves the existing cache
+        refresh boundary; canonical ID-space runtime does not depend on this cache.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/repository/SqlAttentionLogsRepository.cs
@@ -513,8 +514,7 @@ system_roadmap_ssot:
         ci:
           - backend-tests
           - Structure Check
-      known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
+      known_gap_ref: []
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -524,16 +524,12 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        Scheduler/runtime hub-attractor exploration lane is implemented end-to-end:
-        SqlAttentionScheduler registered as hosted service, watch candidates loaded from
-        logs.refresh_logs_current_watch, hub candidates from logs.hub_current,
-        HubAttractorExplorationRuntime.ExploreAsync runs bounded exploration,
-        WriteLogsAttentionAsync appends phase/evidence/statistics to logs.attention.
-        EmaScore remains null by explicit boundary. Live DB loop proven by
-        SqlAttentionLiveDbEndToEndTests. Production_ready promotion pending CI confirmation.
+        Scheduler/runtime plumbing retains logs.current trigger and policy validation. Production
+        ExploreAsync resolves explicit physical table manifest bindings, explores manifest-scoped
+        hubs.hub_relations candidates with data-defined relation scores, and never silently loads
+        logs.hub_current cosine candidates. The old cache path remains explicitly named diagnostics only.
       known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
-        - EMA score integration not implemented; scheduler writes null with explicit provenance status
+        - EMA score integration remains separate; canonical generation rows preserve phase evidence and relation lineage without EMA collapse
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
@@ -550,7 +546,9 @@ system_roadmap_ssot:
       completion_condition:
         - scheduler is wired as hosted service in production runtime
         - watch candidates are loaded from logs.refresh_logs_current_watch
-        - hub candidates are loaded from logs.hub_current
+        - related topology_manifest_id arrays are resolved for triggered physical tables
+        - hubs.hub_relations is explored as the canonical manifest-scoped field
+        - logs.hub_current is optional support cache only
         - exploration policy caps are enforced without hardcoded clamp
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
@@ -561,20 +559,19 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >-
-        Production evidence filling implemented: l2_norm from logs.current, cosine similarity
-        scoring (basis_vector_json × attractor_vector_json), vector_json (convergent hit components),
-        evidence_json (scoring provenance), phase_vector_json auxiliary evidence, and scheduler-side
-        statistics_json provenance/statistics are now persisted to logs.attention.
-        logs.hub_current refresh rebuild now populates attractor_vector_json from append-only
-        logs.attention.vector_json evidence within source_set_id/basis_window scope.
-        EmaScore remains null (not implemented) by explicit boundary.
-        Live DB loop proven end-to-end by SqlAttentionLiveDbEndToEndTests.
+        Append-only logs.attention persistence stores SQLAT hit and phaseAT q rows on the same
+        generation_line_id, links phaseAT to its source hit through source_attention_id, preserves
+        resolved manifest/relation/hub identity arrays, and records explicit Draft/adoption/rejection
+        lifecycle rows without updating prior evidence rows.
       files:
         - backend/repository/SqlAttentionLogsRepository.cs
         - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
         - backend/schema/SqlAttentionContracts.cs
         - backend/scheduler/SqlAttentionScheduler.cs
         - backend/runtime/HubAttractorExplorationRuntime.cs
+        - backend/runtime/SqlAttentionEvidencePromotionRuntime.cs
+        - db/migrations/sql_attention_phase_generation_line.sql
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionPhaseGenerationLineTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
       evidence:
         tests:
@@ -585,11 +582,12 @@ system_roadmap_ssot:
           - unified-test-gate
           - Structure Check
       completion_condition:
-        - logs_attention_persists_production_l2_norm_vector_json_evidence_json
+        - logs_attention_persists_l2_norm_vector_json_evidence_json
         - write_path_is_append_only_and_identity_preserving
+        - SQLAT_hit_rows_preserve_physical_table_topology_manifest_hub_relation_hub_identity
+        - phaseAT_rows_preserve_parent_SQLAT_generation_lineage
       known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
-        - EMA score integration not implemented; scheduler writes null with explicit provenance status
+        - EMA score integration remains separate and is not collapsed into phaseAT identity evidence
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
@@ -599,13 +597,9 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        phase_vector semantics are implemented with w/x/y/z/i/j/k boundaries and non-mutation
-        guarantees. logs.generate_attention_phase_vector SQL function and
-        HubAttractorExplorationRuntime.BuildPhaseVectorJson generate phase_vector_json
-        with phase_movement_source='not_manifest_or_policy_cap' and
-        no_automatic_topology_mutation=true per SSOT invariant. Live DB loop proven by
-        SqlAttentionLiveDbEndToEndTests (phase_vector_json w/x/y/z/i/j/k verified from DB).
-        Production_ready promotion pending CI confirmation.
+        Canonical runtime phase_vector_json generation emits resolved x/y/z IDs, bounded farther
+        relation/manifest/hub ID arrays, and q as append-only logs.attention phaseAT evidence (never Draft).
+        Deprecated support-cache compatibility payloads remain isolated from the canonical scheduler route.
       files:
         - db/sql_attention_logs_tables.sql
         - backend/runtime/HubAttractorExplorationRuntime.cs
@@ -619,24 +613,27 @@ system_roadmap_ssot:
         ci:
           - backend-tests
           - Structure Check
-      known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
+      completion_condition:
+        - w_is_l2_norm
+        - x_y_z_are_hub_relation_topology_manifest_hub_ID_spaces_not_count_scalars
+        - i_j_k_preserve_bounded_farther_ID_space_exploration_evidence
+        - q_is_append_only_logs_attention_phaseAT_evidence_row_not_Draft
+        - no_automatic_topology_registry_manifest_or_hub_relation_mutation
+      known_gap_ref: []
       detail_ssot:
         - docs/design/sql-attention-logs-ssot.md
         - docs/design/sql-attention-logs-ssot.yaml
 
     backend.sql_attention_observation_runtime:
       status: implemented
-      production_ready: true
+      production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
-        SQL Attention observation runtime is implemented across all boundaries:
-        logs.diff append, logs.current refresh/watch, logs.hub_current candidate cache,
-        HubAttractorExplorationRuntime bounded exploration, logs.attention append-only evidence write,
-        logs.refresh_hub_current projection refresh, and LoadAttentionEvidenceForProjectionAsync
-        read boundary. Live DB closed loop proven end-to-end by SqlAttentionLiveDbEndToEndTests.
-        This entry is infrastructure/runtime scope and must not be read as recommendation UX completion.
-        M7 core runtime production-ready evidence is maintained.
+        logs.diff append and logs.current refresh/watch feed explicit physical table manifest binding
+        resolution, manifest-scoped hubs.hub_relations exploration, and append-only SQLAT / phaseAT
+        generation rows. The old logs.hub_current cosine route is isolated for diagnostics only.
+        Explicit lifecycle commands append Draft/adoption/rejection evidence without automatic canonical
+        mutation. This infrastructure entry must not be read as recommendation UX completion.
       files:
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
@@ -649,10 +646,33 @@ system_roadmap_ssot:
           - Structure Check
       completion_condition:
         - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
+        - canonical_manifest_scoped_hubs_hub_relations_exploration_is_wired
+        - canonical_ID_space_phaseAT_generation_is_wired
+        - append_only_SQLAT_phaseAT_generation_lineage_is_wired
+      known_gap_ref: []
+
+    backend.sql_attention_explicit_evidence_promotion_line:
+      status: implemented
+      production_ready: false
+      milestone: M7_sql_attention_observation_runtime
+      public_summary: >
+        Implements the explicit command/user-operation boundary from append-only SQLAT / phaseAT evidence
+        to Draft promotion and explicit adopted reflection. SQL Attention and Phase Attention must
+        never auto-mutate topology, registry, manifests, or hub relations.
+      completion_condition:
+        - phaseAT_evidence_is_not_Draft
+        - Draft_promotion_requires_explicit_command_or_user_operation
+        - adopted_reflection_requires_explicit_operation
+        - non_adopted_evidence_never_mutates_canonical_topology_manifest_or_hub_relation
+      known_gap_ref:
+        - adopted reflection currently records append-only adoption_result evidence and intentionally performs no automatic canonical mutation
+      detail_ssot:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
 
     product.sql_attention_recommendation_feedback_ux:
-      status: implemented
-      production_ready: true
+      status: partial
+      production_ready: false
       milestone: M7_sql_attention_observation_runtime
       public_summary: >
         SQL Attention evidence (logs.attention) is now connected to the user-visible
@@ -661,12 +681,14 @@ system_roadmap_ssot:
         projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
         Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
         for all policy and DB error cases. Frontend is projection-only.
-        Parent observation runtime (SQLA-1..5) implementation boundaries are all implemented;
-        live DB E2E evidence is proven by SqlAttentionLiveDbEndToEndTests.
-        Production function_parameters seed for sql_attention_topology_projection is present in seed_empty.sql.
-        SQL Attention recommendation feedback UX production-ready evidence is maintained.
+        Existing evidence is projected to the feedback UX, and parent canonical SQLAT / phaseAT
+        generation-line alignment is wired. Production function_parameters seed for
+        sql_attention_topology_projection is present in seed_empty.sql.
       completion_condition:
         - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
+        - feedback_projection_consumes_canonical_SQLAT_phaseAT_generation_line_without_frontend_authority
+      known_gap_ref:
+        - manual acceptance / hand-debug verification remains before production-ready promotion
 
     product.dynamic_support_nocode_loop:
       status: partial
@@ -679,7 +701,8 @@ system_roadmap_ssot:
         implemented (all 8 /admin/contents authoring steps, structured field persistence,
         explicit wiring failure, /admin/ui-builder authoring surface). Combined UX manual
         acceptance / hand-debug verification remains pending. Future optional external
-        connector surfaces remain outside the M6/M7 core runtime production-ready blocker set.
+        connector surfaces remain outside M6 scope. M7 SQL Attention canonical alignment blockers
+        are implemented under SQLA-IDSPACE-STEP4 and SQLA-GENERATION-STEP4; combined UX manual verification remains separate.
       completion_condition:
         - frontend_admin_routes_detailed_nocode_wizard_bundle_is_completed
         - manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux
@@ -2226,7 +2249,8 @@ system_roadmap_ssot:
         Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
         introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
         Hubs space hierarchy: hubs.hub -> hubs.topology_manifests -> hubs.hub_relations.
-        Phase Attention axis migration complete. hubs.hub_relations manifest-scoped sequence chain.
+        Schema-level hubs.hub_relations manifest-scoped sequence migration is complete.
+        Phase Attention resolved ID-space runtime implementation is wired under SQLA-IDSPACE-STEP4.
         topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE).
         manifest marked compatibility-only for runtime routing; canonical wiring path is topology.wiring_physical_to_package.
         CI vocabulary checks enforce canonical naming.
@@ -2260,6 +2284,7 @@ system_roadmap_ssot:
         - db/migrations/hub_relations_legacy_to_manifest_scoped.sql
         - db/migrations/admin_import_topology_manifest_migration.sql
         - db/migrations/ui_topology_to_canonical_schema.sql
+        - db/migrations/sql_attention_phase_generation_line.sql
         - db/manifest_tables.sql
         - db/ui_topology_tables.sql
         - db/sql_attention_logs_tables.sql
@@ -2289,13 +2314,12 @@ system_roadmap_ssot:
           - runtime-environment-gate
       completion_condition:
         - ssot_canonical_schema_namespaces_match_topology_hubs_logs
-        - phase_attention_axis_definition_uses_hubs_space_axes_not_population_count
+        - phase_attention_axis_definition_uses_hub_relation_topology_manifest_hub_ID_spaces_not_population_count
         - topologys_naming_drift_absent_from_sql_attention_ssot_files
         - old_phase_axis_x_y_z_hub_side_record_count_bases_absent_from_canonical_ssot
         - ci_vocabulary_checks_enforce_all_of_the_above
         - db_schema_uses_topology_not_topologys
         - hubs_hub_table_replaces_hubs_hubs
-        - phase_attention_runtime_uses_hubs_space_axes
         - phase_attention_exploration_budget_gate_weak_mid_high_from_w_l2_norm
         - exploration_budget_limits_sourced_from_function_parameters_not_runtime_magic_numbers
         - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced

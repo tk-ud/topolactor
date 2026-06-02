@@ -104,9 +104,9 @@ CREATE INDEX IF NOT EXISTS idx_entities_relation_ids
 
 -- ---------------------------------------------------------------------------
 -- hubs.topology_manifests
--- Child of hubs.hub. Manifest grouping axis for Phase Attention z-axis.
+-- Child of hubs.hub. Manifest grouping surface for the Phase Attention y ID-space.
 -- Groups topology manifests associated with a hub, providing the canonical
--- z-axis reference for Phase Attention quaternion semantics.
+-- manifest grouping reference for Phase Attention ID-space semantics.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
     topology_manifest_id  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -120,8 +120,8 @@ CREATE TABLE IF NOT EXISTS hubs.topology_manifests (
 );
 
 COMMENT ON TABLE hubs.topology_manifests IS
-    'Child of hubs.hub. Hub-side manifest grouping surface. Canonical z-axis reference for Phase Attention '
-    'quaternion semantics (z = hubs.topology_manifests manifest grouping axis). '
+    'Child of hubs.hub. Hub-side manifest grouping surface. Canonical manifest reference for Phase Attention '
+    'ID-space semantics (y = topology_manifest_id; z is the registered hub_id). '
     'Parent of hubs.hub_relations. Not a wiring table; topology.wiring_physical_to_package owns package wiring.';
 
 CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
@@ -130,6 +130,34 @@ CREATE INDEX IF NOT EXISTS idx_topology_manifests_hub_id
 CREATE INDEX IF NOT EXISTS idx_topology_manifests_status
     ON hubs.topology_manifests (status)
     WHERE status = 'active';
+
+
+-- ---------------------------------------------------------------------------
+-- topology.physical_table_manifest_bindings
+-- Explicit SQL Attention resolver association. No implicit/oldest manifest fallback.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS topology.physical_table_manifest_bindings (
+    binding_id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    physical_table_id     BIGINT      NOT NULL REFERENCES topology.physical_tables (physical_table_id) ON DELETE RESTRICT,
+    topology_manifest_id  UUID        NOT NULL REFERENCES hubs.topology_manifests (topology_manifest_id) ON DELETE RESTRICT,
+    active                BOOLEAN     NOT NULL DEFAULT true,
+    binding_evidence_json JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (physical_table_id, topology_manifest_id)
+);
+
+COMMENT ON TABLE topology.physical_table_manifest_bindings IS
+    'Explicit physical table to hub topology manifest association for SQL Attention resolver. '
+    'No implicit join, nullable fallback, or oldest-row fallback is permitted.';
+
+CREATE INDEX IF NOT EXISTS idx_physical_table_manifest_bindings_physical
+    ON topology.physical_table_manifest_bindings (physical_table_id)
+    WHERE active = true;
+
+CREATE INDEX IF NOT EXISTS idx_physical_table_manifest_bindings_manifest
+    ON topology.physical_table_manifest_bindings (topology_manifest_id)
+    WHERE active = true;
 
 
 -- ---------------------------------------------------------------------------
@@ -160,7 +188,7 @@ COMMENT ON TABLE hubs.hub_relations IS
     'Child of hubs.topology_manifests. Manifest-scoped hub sequence / UI transition order. '
     'related_hub_id is the sequenced hub entry. sequence_position is the sequence authority. '
     'Source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id. '
-    'Counted as Phase Attention x-axis (manifest-scoped hub_relations_count).';
+    'Canonical SQL Attention exploration field. Phase Attention x uses hit hub_relation_id identity; aggregate counts are deprecated support-cache statistics only.';
 
 COMMENT ON COLUMN hubs.hub_relations.topology_manifest_id IS
     'Parent topology manifest scope. Source hub authority flows through topology_manifests.hub_id.';

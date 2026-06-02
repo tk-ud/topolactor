@@ -18,6 +18,9 @@ sql_attention_target:
     - tensor
     - attractor
     - collapse_point
+    - hubs_hub_relations_exploration_field
+    - topology_manifest_scoped_relation_hit_evidence
+    - derived_hub_identity_evidence
   not_target:
     - topology
     - registry
@@ -31,6 +34,10 @@ projection_boundary:
     - trend
 deprecated_or_rejected:
   - legacy registry exploration wording as SQL Attention target
+  - x/y/z count scalar interpretation as canonical Phase Attention axes
+
+deprecated_interpretations:
+  logs.hub_current: treating_support_cache_as_SQL_Attention_exploration_body
 physical_schema_contract:
   namespace_boundary:
     logs_namespace_role:
@@ -50,17 +57,14 @@ physical_schema_contract:
     - logs.table_current
     - logs.table_attention
   schema_profile: hub_attractor_target_aware_generic_schema
-  neighbor_score_policy_range:
-    min: 0.85
-    max: 1.00
-    strong_hit_threshold: 0.95
-    normal_hit_threshold: 0.90
-    exploratory_hit_threshold: 0.85
-  score_band_contract:
-    strong: "1.00-0.95"
-    normal: "0.95-0.90"
-    exploratory: "0.90-0.85"
-    evidence_only_below: 0.85
+  neighbor_score_policy:
+    source: data_defined_policy_source
+    keys:
+      - neighbor_score_min
+      - strong_hit_threshold
+      - normal_hit_threshold
+      - exploratory_hit_threshold
+    rule: resolve_thresholds_from_policy_source_without_hidden_literals
   exploration_budget_policy_keys:
     - norm_level_high
     - norm_level_medium
@@ -121,23 +125,31 @@ physical_schema_contract:
         - mutates_hubs
         - mutates_topology
     exploration_runtime:
-      role: hub_attractor_neighbor_observation
+      role: manifest_scoped_hub_relation_observation
       side_effect_scope:
-        - reads_logs_current
-        - reads_logs_hub_current
-        - appends_logs_attention_evidence
+        - reads_logs_current_trigger
+        - resolves_related_topology_manifest_ids
+        - explores_hubs_hub_relations
+        - derives_hub_id_through_topology_manifests
+        - may_read_logs_hub_current_support_cache
+        - appends_logs_attention_sqlAT_evidence
       prohibited:
+        - treats_logs_hub_current_as_exploration_body
         - mutates_registry
         - mutates_topology
+        - mutates_manifests
+        - mutates_hub_relations
     phase_vector_transform:
-      role: auxiliary_evidence_transform
+      role: ID_space_phaseAT_evidence_generation
       side_effect_scope:
-        - reads_logs_attention_main_vector
-        - updates_logs_attention_phase_vector_field
+        - reads_logs_attention_sqlAT_hit_evidence
+        - explores_farther_hub_relation_topology_manifest_and_hub_ID_spaces
+        - appends_logs_attention_phaseAT_evidence_generation
       prohibited:
         - auto_migration
-        - auto_promotion
-        - registry_or_topology_mutation
+        - auto_Draft_promotion
+        - auto_adopted_reflection
+        - registry_topology_manifest_or_hub_relation_mutation
 public_article: false
 canonical_markdown: docs/design/sql-attention-logs-ssot.md
 
@@ -155,18 +167,20 @@ purpose:
 
 core_definition:
   one_sentence: >-
-    SQL Attention converts physical-side logs.* signals into a current-basis surface (physical name: logs.current)
-    calculation basis, watches l2 norm-level changes, and only when the level
-    changes observes hub/vector-indicated attractor evidence from hubs.* and
-    records statistics, l2_norm, vector, phase_vector, and hit evidence into
-    logs.attention without collapsing statistics, Attention, and Phase Attention
-    into one score.
+    SQL Attention converts logs.diff physical mutation pressure into logs.current,
+    watches policy-qualified topN rank and norm-level changes, resolves related
+    topology_manifest_id arrays for triggered physical tables, explores
+    hubs.hub_relations, and appends traceable SQLAT evidence into logs.attention.
+    Phase Attention starts from those hits, explores farther ID spaces, and appends
+    phaseAT evidence without automatically authoring canonical state.
   flow:
-    - logs_signal_sources
+    - logs_diff_physical_mutation_pressure
     - logs_current_calculation_basis
-    - l2_norm_level_watch
-    - scheduler_runtime_hub_attractor_exploration
-    - logs_attention_evidence
+    - topN_rank_norm_level_watch
+    - related_topology_manifest_id_array_resolution
+    - hubs_hub_relations_exploration
+    - logs_attention_sqlAT_hit_evidence_append
+    - logs_attention_phaseAT_generation_append
 
 philosophy_and_structure:
   separation_required: true
@@ -352,89 +366,100 @@ layers:
       persistence_semantics: regenerable_projection_cache_not_archive_required_append_log
 
   norm_trigger:
-    role: exploration_gate
+    role: logs_current_topN_rank_norm_level_exploration_gate
     description: >-
-      Monitoring may run every time current is updated, but hub-attractor
-      exploration only starts when norm level changes.
-    initial_policy:
-      watch_top_n: 3
-      trigger_conditions:
-        - top_n_membership_changed
-        - top_n_order_changed
-        - norm_delta_exceeds_policy_threshold
-      no_change_action: return
-      change_action: mark_exploration_candidate
-    flow:
-      - logs_append
-      - current_basis_update
-      - l2_norm_update
-      - top3_norm_level_snapshot_compare
-      - no_level_change_return
-      - level_change_enqueue_or_expose_exploration_candidate
-    schema_contract:
-      watch_target: top3_norm_level_records_initial_policy
-      watch_timing: every_logs_current_refresh
-      no_change_action: return
-      change_action: mark_exploration_candidate
-      trigger_conditions:
-        - top3_membership_changed
-        - top3_order_changed
-        - norm_delta_exceeds_policy_threshold
-        - norm_level_changed
-      policy_source: manifest_or_function_parameters_or_policy_table_future_resolved_no_fixed_literals
+      Monitoring may run whenever logs.current is refreshed. SQL Attention
+      exploration begins only when the policy-qualified topN membership, rank
+      order, norm delta, or norm level changes.
+    trigger_conditions:
+      - topN_membership_changed
+      - topN_rank_order_changed
+      - norm_delta_exceeds_policy_threshold
+      - norm_level_changed
+    no_change_action: return
+    change_action: mark_exploration_candidate
+    policy_source: data_defined_policy_source_no_fixed_literals
 
   exploration:
-    role: scheduler_runtime_responsibility
+    role: hubs_hub_relations_exploration
     description: >-
-      Registry-neighbor exploration is performed by scheduler/runtime, not by
-      an every-write DB trigger.
+      For triggered physical_table_id / physical_table_name subjects, resolve
+      related topology_manifest_id arrays and explore hubs.hub_relations from
+      those manifest IDs. Derive hub_id through hubs.topology_manifests and append
+      hit evidence. logs.hub_current is an optional support cache, not the
+      exploration body.
     inputs:
-      - logs.current
-      - norm_trigger_candidate
-      - logs_hub_current_and_hubs
-    behavior:
-      - explore_hub_attractor_neighbors
-      - vary_vector_order_or_permutation
-      - keep_best_neighbor_hits
+      - logs.current_triggered_physical_table_id_and_name
+      - related_topology_manifest_id_array_via_topology.physical_table_manifest_bindings
+      - hubs.hub_relations
+      - optional_logs.hub_current_support_cache
+    hit_identity:
+      - hub_relation_id
+      - topology_manifest_id
+      - hub_id_derived_through_hubs.topology_manifests
     required_caps:
-      - current_top_level_watch_count
+      - watched_topN_size
       - norm_delta_threshold
-      - permutation_limit
-      - hub_attractor_topK
+      - neighbor_score_thresholds
+      - relation_exploration_topK
+      - phase_expansion_limit
       - attention_evidence_save_limit
       - archive_policy
+    policy_rule: resolve_caps_from_data_defined_policy_source
 
   logs_attention:
-    role: neighbor_hit_phase_evidence_log
+    role: append_only_SQLAT_phaseAT_generation_log
     description: >-
-      logs.attention stores hub/vector-observed attractor evidence, stable statistics, and phase-shifted candidate vectors. It links physical current (logs.current) to hub relation planes via hub_id/attractor_key/hub_relation_id/relation_registry_id.
+      logs.attention appends SQLAT hub-relation hit evidence and phaseAT farther
+      ID-space exploration evidence. Each row belongs to an evidence generation
+      line. Evidence is not a Draft or adopted canonical topology object.
     retention: archive_required
-    suggested_fields:
-      - attention_id
-      - current_id
-      - source_set_id
-      - statistics_json
-      - ema_score
-      - l2_norm
-      - vector_json
-      - phase_vector_json
-      - permutation_key
-      - hub_id
-      - attractor_key
+    generation_line:
+      stages:
+        - logs_current_trigger
+        - SQLAT_hit_evidence_row
+        - phaseAT_evidence_row
+        - explicit_Draft_promotion_command_or_user_operation
+        - explicit_adopted_operation
+        - explicit_rejected_operation
+        - canonical_reflection
+      append_only_evidence_stages:
+        - SQLAT_hit_evidence_row
+        - phaseAT_evidence_row
+        - Draft_adoption_rejection_lifecycle_evidence_rows
+      explicit_only_stages:
+        - Draft_promotion
+        - adopted_reflection
+        - rejected_recording
+    SQLAT_hit_identity:
+      - physical_table_id
+      - physical_table_name
+      - topology_manifest_id
       - hub_relation_id
-      - relation_registry_id
-      - neighbor_score
-      - hit_rank
-      - evidence_json
-      - created_at
-      - archive_policy
+      - hub_id
     schema_contract:
-      role: hub_vector_indicated_attractor_observation_and_phase_vector_evidence_log
+      role: append_only_SQLAT_phaseAT_generation_evidence_log
       suggested_fields:
         - attention_id
         - current_id
         - hub_current_id
         - source_set_id
+        - evidence_kind
+        - generation_line_id
+        - source_attention_id
+        - source_current_id
+        - source_topology_manifest_ids
+        - hit_hub_relation_ids
+        - expanded_hub_relation_ids
+        - expanded_topology_manifest_ids
+        - expanded_hub_ids
+        - phase_status
+        - promotion_status
+        - actor_or_source
+        - command_id
+        - physical_table_id
+        - physical_table_name
+        - topology_manifest_id
         - statistics_json
         - ema_score
         - l2_norm
@@ -457,34 +482,54 @@ layers:
         - statistics_json_and_ema_score_store_stable_confidence_layer
         - vector_json_stores_convergent_neighbor_hit_vector
         - phase_vector_json_stores_exploratory_phase_shifted_candidate_vector
+        - SQLAT_and_phaseAT_rows_preserve_generation_lineage
+    lineage_semantics:
+      - trace_trigger_current
+      - trace_parent_SQLAT_hit_for_phaseAT
+      - trace_policy_source
+      - preserve_generation_identity
+    prohibited:
+      - evidence_row_equals_Draft
+      - automatic_topology_mutation
+      - automatic_registry_mutation
+      - automatic_manifest_mutation
+      - automatic_hub_relation_mutation
 
   phase_attention:
-    role: post_main_auxiliary_evidence_transform
+    role: SQLAT_hit_seeded_farther_ID_space_evidence_generation
     description: >-
-      Phase Attention is a downstream auxiliary transformation that starts from
-      logs.attention.vector_json after main neighbor exploration has already
-      produced evidence. It is not the primary SQL Attention exploration path.
-    route:
-      - logs.attention.vector_json
-      - quaternion_transform
-      - logs.attention.phase_vector_json
+      Phase Attention starts from SQLAT hit evidence, explores farther relation,
+      manifest, and hub ID spaces under the w l2_norm budget, and appends q as a
+      phaseAT evidence row in logs.attention.
     quaternion_semantics:
       equation: q_equals_w_plus_xi_plus_yj_plus_zk
-      q_role: phase_rotation_or_projection_state_operator
-      attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
-      boundary: q_is_not_attention_and_not_the_attractor_itself
-      w: l2_norm_physical_table_heat_physical_table_id_excitation_from_logs_current
-      x: hubs_hub_relations_manifest_scoped_hub_sequence_ui_transition_axis
-      y: hubs_hub_topology_meaning_space_axis
-      z: hubs_topology_manifests_manifest_grouping_axis
-      i_j_k: phase_movement_amount_over_hubs_space
+      q: logs.attention_phaseAT_evidence_row
+      w: l2_norm
+      x: hubs_hub_relations_SQLAT_near_neighbor_hit_hub_relation_id
+      y: topology_manifest_id_present_on_x_in_hubs_topology_manifests_not_hubs_hub_axis
+      z: hub_id_registered_by_y_through_hubs_topology_manifests
+      i: farther_hub_relation_id_array_from_x_ID_vector_bounded_by_w
+      j: i_plus_farther_topology_manifest_id_array_from_y_ID_vector
+      k: j_plus_farther_hub_id_array_from_z_ID_vector
+    deprecated_count_scalar_interpretation:
+      canonical: false
+      legacy_only:
+        - x_equals_hub_relations_count
+        - y_equals_hub_count
+        - z_equals_topology_manifests_count
+      allowed_use: statistics_or_support_cache_observation_only
     invariants:
       - phase_attention_is_post_main_auxiliary_route
       - phase_vector_is_candidate_evidence_not_adopted_topology_state
+      - q_is_phaseAT_evidence_row_not_Draft
+      - Draft_promotion_requires_explicit_command_or_user_operation
+      - adopted_reflection_requires_explicit_operation
       - no_direct_registry_mutation
       - no_automatic_migration_execution
       - no_automatic_column_promotion
+      - no_automatic_topology_registry_manifest_or_hub_relation_mutation
       - phase_movement_is_not_manifest_or_policy_cap_derived
+      - policy_values_resolve_from_data_defined_sources
 
 physical_table_pressure:
   tableid_semantics: physical_table_identity
@@ -524,13 +569,14 @@ registry_semantics:
     - packages
 
 completion_boundary:
-  aggregation_completed: attention_query_basis_ready
-  attention_observation_completed: hub_attractor_hit_and_evidence_saved
-  phase_candidate_visible: phase_vector_generated_on_logs_attention
-  adoption_or_migration: separate_implementation_path
+  sqlAT_observation_completed: append_only_SQLAT_hit_evidence_saved
+  phaseAT_observation_completed: append_only_phaseAT_evidence_saved
+  Draft_promotion: explicit_command_or_user_operation_only
+  adopted_reflection: explicit_adopted_operation_only
   dangerous_misunderstanding:
-    - logs_aggregation_completed_equals_sql_attention_completed
-    - phase_vector_generated_equals_adopted_topology_state
+    - SQLAT_or_phaseAT_evidence_equals_Draft
+    - phaseAT_evidence_equals_adopted_topology_state
+    - evidence_generation_auto_mutates_canonical_state
 
 existing_repository_mismatch_notes:
   topology_edit_log:
@@ -651,7 +697,7 @@ db_trigger_boundary:
 
 scheduler_runtime_boundary:
   owns:
-    - registry_neighbor_exploration
+    - hubs_hub_relations_exploration
     - bounded_permutation_search
     - phase_vector_generation
     - write_logs_attention_evidence
@@ -661,31 +707,27 @@ scheduler_runtime_boundary:
 
 phase_attention_function_contract:
   input:
-    - logs_attention_vector_json
-    - l2_norm
-    - hubs_hub_relations_axis_as_x
-    - hubs_hub_axis_as_y
-    - hubs_topology_manifests_axis_as_z
-    - axis_movement_amounts_i_j_k
+    - logs_attention_SQLAT_hit_evidence
+    - w_l2_norm
+    - x_SQLAT_hit_hub_relation_id
+    - y_topology_manifest_id_present_on_x
+    - z_hub_id_registered_by_y
   calculation:
     quaternion_equation: q_equals_w_plus_xi_plus_yj_plus_zk
-    q_role: phase_rotation_or_projection_state_operator
-    attractor_relation: q_can_represent_projection_phase_toward_vector_convergence_point
-    boundary: q_is_not_attention_and_not_the_attractor_itself
-    w: l2_norm_physical_table_heat_physical_table_id_excitation_from_logs_current
-    x: hubs_hub_relations_fixed_hub_sequence_ui_transition_axis
-    y: hubs_hub_topology_meaning_space_axis
-    z: hubs_topology_manifests_manifest_grouping_axis
-    i_j_k: phase_movement_amount_over_hubs_space
+    q_role: logs_attention_phaseAT_evidence_row
+    x: hubs_hub_relations_SQLAT_near_neighbor_hit_hub_relation_id
+    y: topology_manifest_id_present_on_x_in_hubs_topology_manifests_not_hubs_hub_axis
+    z: hub_id_registered_by_y_through_hubs_topology_manifests
+    i: farther_hub_relation_id_array_from_x_ID_vector_bounded_by_w
+    j: i_plus_farther_topology_manifest_id_array_from_y_ID_vector
+    k: j_plus_farther_hub_id_array_from_z_ID_vector
   output:
-    - logs_attention_phase_vector_json
+    - append_logs_attention_phaseAT_evidence_row
   invariants:
-    - phase_attention_is_post_main_auxiliary_route
-    - phase_vector_is_candidate_evidence
-    - phase_vector_does_not_auto_mutate_registry
-    - phase_vector_does_not_auto_execute_migration
-    - phase_vector_does_not_auto_execute_column_promotion
-    - phase_movement_is_not_manifest_or_policy_cap_derived
+    - phaseAT_evidence_row_is_not_Draft
+    - Draft_promotion_requires_explicit_command_or_user_operation
+    - adopted_reflection_requires_explicit_operation
+    - no_automatic_topology_registry_manifest_or_hub_relation_mutation
 
 evidence_layer_separation:
   statistics_layer:
@@ -701,20 +743,27 @@ evidence_layer_separation:
 
 policy_sources:
   allowed:
-    - manifest
-    - function_parameters
+    - manifest_policy_binding
+    - topology.function_parameters
     - policy_table
+  applies_to:
+    - thresholds
+    - watched_topN_size
+    - rank_and_norm_change_policy
+    - neighbor_score_policy
+    - topK_selection
+    - expansion_limits
+    - evidence_save_limits
   rule: policy_values_are_resolved_from_data_defined_sources_no_hidden_magic_numbers
 
 implementation_order:
-  - create_markdown_and_yaml_ssot
-  - wire_ssot_into_repository_maps_required_paths_and_structure_checks
-  - align_internal_readme_and_design_docs_without_changing_public_article_intent
-  - define_schema_function_trigger_contracts
-  - implement_logs_current_basis_update_and_norm_level_monitoring
-  - implement_logs_attention_evidence_persistence_with_statistics_vector_and_phase_vector
-  - implement_scheduler_runtime_hub_attractor_exploration
-  - phase_attention_axis_migrated_to_hubs_space_canonical_x_y_z
+  - refresh_SQL_Attention_and_Phase_Attention_SSOT_semantics
+  - wire_SSOT_vocabulary_and_checks_to_ID_space_and_generation_line_contracts
+  - align_schema_and_persistence_contracts_for_SQLAT_phaseAT_lineage_and_topology_manifest_id_evidence
+  - align_SQL_functions_to_resolve_manifest_IDs_and_explore_hubs_hub_relations
+  - retain_logs_hub_current_only_as_optional_support_cache
+  - align_backend_exploration_and_repository_writes_with_ID_space_phaseAT_evidence
+  - align_explicit_Draft_promotion_and_adopted_reflection_commands_without_automatic_mutation
 
 initial_minimal_basis:
   table_pressure: logs.diff

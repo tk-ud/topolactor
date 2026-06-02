@@ -316,6 +316,19 @@ db_schema:
         hubs.hub_relations has no hub_id source authority. Source hub is derived through
         topology_manifest_id -> hubs.topology_manifests.hub_id -> hubs.hub.
 
+    physical_table_manifest_binding:
+      table: topology.physical_table_manifest_bindings
+      meaning: explicit SQL Attention resolver association from topology.physical_tables to hubs.topology_manifests
+      authority: db
+      shape:
+        binding_id: uuid
+        physical_table_id: bigint
+        topology_manifest_id: uuid
+        active: boolean
+        binding_evidence_json: jsonb
+      unique_constraint: physical_table_id + topology_manifest_id
+      invariant: no_implicit_join_nullable_fallback_or_oldest_manifest_fallback
+
     manifest_hub_chain:
       table: hubs.hub_relations
       parent: hubs.topology_manifests
@@ -438,9 +451,9 @@ db_schema:
     - hubs_hub_relation_vs_ui_order: hubs.hub.relation is not UI display or transition order.
     - hubs_space_hierarchy: "hubs.hub -> hubs.topology_manifests -> hubs.hub_relations; hub_relations source hub is derived via topology_manifests.hub_id, not hub_relations.hub_id."
     - hubs_hub_relations_sequence: hubs.hub_relations owns manifest-scoped hub sequence / UI transition order; not a global hub-to-hub relation graph.
-    - logs_current_preserved: logs.current, logs.hub_current, and logs.attention remain canonical SQL Attention current/evidence surfaces.
-    - sql_attention_target: "SQL Attention target is hubs space only: hubs.hub, hubs.hub_relations, and hubs.topology_manifests."
-    - sql_attention_persistence: "logs.current, logs.hub_current, and logs.attention are current/evidence persistence surfaces, not targets."
+    - logs_current_preserved: logs.current is the rebuildable trigger basis; logs.hub_current is an optional support cache / derived current; logs.attention is the append-only SQLAT / phaseAT generation log.
+    - sql_attention_target: "SQL Attention resolves related topology_manifest_id arrays and explores hubs.hub_relations; hub_id is derived through hubs.topology_manifests."
+    - sql_attention_persistence: "logs.current is a trigger-basis projection, logs.hub_current is not the exploration body, and logs.attention stores append-only evidence generations rather than Draft or adopted canonical state."
     - sql_attention_signal_sources: "logs.diff remains the physical mutation pressure source for logs.current; context_event remains the UI operation pressure source."
     - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
@@ -687,6 +700,7 @@ db_schema:
       category: converged_entity
       file: db/topology_tables.sql
       role: manifest_scoped_topology_sequence_chain
+      sql_attention_role: canonical_manifest_scoped_exploration_field
       parent_table: hubs.topology_manifests
       bootstrap_policy: CREATE TABLE IF NOT EXISTS; no destructive DROP CASCADE in bootstrap DDL
       legacy_migration_ddl: db/migrations/hub_relations_legacy_to_manifest_scoped.sql
@@ -872,21 +886,23 @@ db_schema:
       role: sql_attention_physical_pressure_current_top_n_physical_items_by_signal_axes
       physical_table: logs.current
       persistence: regenerable_projection_cache
+      sql_attention_role: policy_qualified_topN_rank_norm_level_trigger_basis
 
     logs_hub_current:
       category: sql_attention_observation
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_hub_tensor_attractor_current
+      role: sql_attention_optional_support_cache_derived_hub_current
       physical_table: logs.hub_current
       persistence: regenerable_projection_cache
-      note: sql_attention_target_is_hubs_tensor_attractor_not_topology_registry_search
+      note: not_sql_attention_exploration_body_or_meaning_authority
 
     logs_attention:
       category: sql_attention_observation
       file: db/sql_attention_logs_tables.sql
-      role: sql_attention_hub_attractor_hit_and_phase_evidence_log
+      role: sql_attention_SQLAT_hit_and_phaseAT_evidence_generation_log
       physical_table: logs.attention
       persistence: append_only_archive_required
+      boundary: evidence_rows_are_not_Draft_or_adopted_canonical_state
       sql_attention_logs_mapping:
         classification: canonical_physical
         holds_hub_plane_identity:
@@ -895,9 +911,26 @@ db_schema:
           - hub_relation_id
           - relation_registry_id
           - hub_current_id
+        required_generation_identity_alignment:
+          - generation_line_id
+          - source_attention_id
+          - source_current_id
+          - source_topology_manifest_ids
+          - hit_hub_relation_ids
+          - expanded_hub_relation_ids
+          - expanded_topology_manifest_ids
+          - expanded_hub_ids
+        evidence_generations:
+          - SQLAT_hit_evidence_row
+          - phaseAT_evidence_row
+          - draft_projection_explicit_command_row
+          - adoption_result_explicit_command_row
+          - rejection_result_explicit_command_row
         references:
           - current_id_to_logs_current
-          - hub_current_id_to_logs_hub_current
+          - source_current_id_to_logs_current
+          - source_attention_id_to_logs_attention
+          - optional_hub_current_id_to_logs_hub_current_support_cache
         evidence_layers:
           - statistics_json_ema_score
           - l2_norm_vector_neighbor_score
@@ -1121,54 +1154,67 @@ db_schema:
           role: apply_execution_status
 
 phase_attention_axis_mapping:
-  quaternion_axes:
+  quaternion_equation: q_equals_w_plus_xi_plus_yj_plus_zk
+  q:
+    meaning: logs.attention append-only phaseAT evidence row
+    is_not:
+      - Draft_canonical_object
+      - adopted_canonical_state
+  canonical_ID_space_axes:
     w:
-      meaning: l2_norm / physical table heat / physical_table_id excitation strength from logs.current
+      meaning: l2_norm
       attended_subject: physical_table_id
     x:
-      meaning: hubs.hub_relations manifest-scoped hub sequence / UI transition axis; not global hub-to-hub relation graph
+      meaning: SQL Attention near-neighbor hit hub_relation_id
     y:
-      meaning: hubs.hub topology meaning space axis
+      meaning: topology_manifest_id present on x
     z:
-      meaning: hubs.topology_manifests manifest grouping axis
-    i_j_k:
-      meaning: phase movement amount / movement vector over hubs space
-  movement_rule:
-    - physical_table_id_is_attended_by_w
-    - w_strength_controls_exploration_budget_and_phase_movement_amount
-    - movement_direction_is_based_on_cosine_neighborhood_rate
-    - weak_w_uses_near_neighbor_search_and_narrow_topK
-    - mid_w_uses_normal_topK_search
-    - high_w_uses_expanded_farther_candidate_search_distance_band_or_permutation_expansion
+      meaning: hub_id registered by y
+    i:
+      meaning: farther hub_relation_id array from x ID vector bounded by w
+    j:
+      meaning: i plus farther topology_manifest_id array from y ID vector
+    k:
+      meaning: j plus farther hub_id array from z ID vector
+  deprecated_count_scalar_interpretation:
+    canonical: false
+    legacy_only:
+      - hub_relations_count
+      - hub_count
+      - topology_manifests_count
+    allowed_use: statistics_or_support_cache_observation_only
   exploration_budget_gate:
     gate: w_l2_norm
     rule: Phase Attention does not perform full-space repeated search
     bounded_by:
-      - topN_physical_heat
-      - topK_hub_candidates
-      - policy_defined_expansion_limits
-  boundary:
-    sql_attention_target: hubs
-    phase_attention_role: rotates_and_explores_hubs_space_during_hub_construction
-    phase_vector_json:
-      is_not:
-        - generic_diff
-        - adopted_topology_state
-      is: auxiliary_evidence_for_rotating_exploring_hubs_hub_relations_hubs_hub_hubs_topology_manifests
-    semantic_axes_not_canonical:
-      - population_count
-      - recordcount
+      - data_defined_watched_topN_size
+      - data_defined_topK_selection
+      - data_defined_expansion_limits
+  generation_line:
+    append_only_evidence:
+      - SQLAT_hit_evidence_row
+      - phaseAT_evidence_row
+    explicit_only:
+      - Draft_promotion_command_or_user_operation
+      - adopted_reflection_operation
+    prohibited:
+      - automatic_topology_mutation
+      - automatic_registry_mutation
+      - automatic_manifest_mutation
+      - automatic_hub_relation_mutation
 
 sql_attention_target_boundary:
-  target_space: hubs
-  targets:
-    - hubs.hub
-    - hubs.hub_relations
-    - hubs.topology_manifests
+  trigger_surface: logs.current topN rank and norm-level change
+  related_manifest_resolution: physical_table_id / physical_table_name to topology_manifest_id array
+  exploration_field: hubs.hub_relations
+  hit_identity:
+    - hub_relation_id
+    - topology_manifest_id
+    - hub_id_derived_through_hubs.topology_manifests
   persistence_surfaces:
-    - logs.current
-    - logs.hub_current
-    - logs.attention
+    logs.current: rebuildable_trigger_basis
+    logs.hub_current: optional_support_cache_derived_current_not_exploration_body
+    logs.attention: append_only_SQLAT_phaseAT_evidence_generation_log
   signal_sources:
     - logs.diff
     - context_event
@@ -1176,7 +1222,7 @@ sql_attention_target_boundary:
     - logs_current_evidence_persistence_surfaces
     - topology_recommendation_surfaces
     - context_learning_surfaces
-  interpretation_path: logs_signal_sources_feed_logs_persistence_surfaces_which_rotate_explore_hubs_space
+  interpretation_path: logs_diff_feeds_logs_current_trigger_then_related_manifest_IDs_scope_hubs_hub_relations_exploration_and_logs_attention_evidence_append
 
 recommend_target_boundary:
   target:
