@@ -73,12 +73,14 @@ pa_quat = ssot.dig('layers', 'phase_attention', 'quaternion_semantics')
 fail!('layers.phase_attention.quaternion_semantics missing') unless pa_quat.is_a?(Hash)
 fail!('phase_attention.quaternion_semantics must not use x_y_z key (canonical is separate x, y, z)') if pa_quat.key?('x_y_z')
 fail!('phase_attention.quaternion_semantics.x must reference hubs_hub_relations') unless pa_quat['x'].to_s.include?('hubs_hub_relations')
-fail!('phase_attention.quaternion_semantics.y must reference hubs_hub') unless pa_quat['y'].to_s.include?('hubs_hub')
-fail!('phase_attention.quaternion_semantics.z must reference hubs_topology_manifests') unless pa_quat['z'].to_s.include?('hubs_topology_manifests')
+fail!('phase_attention.quaternion_semantics.y must reference topology_manifest_id') unless pa_quat['y'].to_s.include?('topology_manifest_id')
+fail!('phase_attention.quaternion_semantics.z must reference hub_id') unless pa_quat['z'].to_s.include?('hub_id')
 pa_calc = ssot.dig('phase_attention_function_contract', 'calculation')
 fail!('phase_attention_function_contract.calculation missing') unless pa_calc.is_a?(Hash)
 fail!('phase_attention_function_contract.calculation must not use x_y_z key') if pa_calc.key?('x_y_z')
 fail!('phase_attention_function_contract.calculation.x must reference hubs_hub_relations') unless pa_calc['x'].to_s.include?('hubs_hub_relations')
+fail!('phase_attention_function_contract.calculation.y must reference topology_manifest_id') unless pa_calc['y'].to_s.include?('topology_manifest_id')
+fail!('phase_attention_function_contract.calculation.z must reference hub_id') unless pa_calc['z'].to_s.include?('hub_id')
 puts 'OK: phase_attention canonical axis checks passed'
 
 detailed = roadmap.dig('system_roadmap_ssot', 'related_surfaces', 'detailed_design_ssot')
@@ -136,13 +138,13 @@ insert_boundary_present=0
 grep -qF "public virtual Task<int> WriteLogsAttentionAsync(" backend/repository/SqlAttentionLogsRepository.cs && logs_repo_boundary_present=1
 grep -qF "public override async Task<int> WriteLogsAttentionAsync(" backend/repository/NpgsqlSqlAttentionLogsRepository.cs && npgsql_boundary_present=1
 grep -qF "explorationResult.Hits.Count == 0" backend/scheduler/SqlAttentionScheduler.cs && scheduler_empty_hits_guard_present=1
-grep -qF "_sqlAttentionLogsRepository.WriteLogsAttentionAsync(" backend/scheduler/SqlAttentionScheduler.cs && scheduler_write_call_present=1
+grep -qF "_sqlAttentionLogsRepository.AppendAttentionGenerationAsync(" backend/scheduler/SqlAttentionScheduler.cs && scheduler_write_call_present=1
 grep -qF "INSERT INTO logs.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs && insert_boundary_present=1
 
 [[ "$logs_repo_boundary_present" -eq 1 ]] || { echo "FAIL: missing SqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 [[ "$npgsql_boundary_present" -eq 1 ]] || { echo "FAIL: missing NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync boundary" >&2; exit 1; }
 [[ "$scheduler_empty_hits_guard_present" -eq 1 ]] || { echo "FAIL: scheduler missing empty-hits guard before write" >&2; exit 1; }
-[[ "$scheduler_write_call_present" -eq 1 ]] || { echo "FAIL: scheduler missing write_logs_attention call" >&2; exit 1; }
+[[ "$scheduler_write_call_present" -eq 1 ]] || { echo "FAIL: scheduler missing append SQLAT -> phaseAT generation call" >&2; exit 1; }
 [[ "$insert_boundary_present" -eq 1 ]] || { echo "FAIL: logs.attention INSERT boundary missing" >&2; exit 1; }
 
 if find_pattern_matches "UPDATE\\s+logs\\.attention|DELETE\\s+FROM\\s+logs\\.attention" backend/repository/NpgsqlSqlAttentionLogsRepository.cs >/dev/null; then
@@ -153,7 +155,12 @@ grep -qF "ArchivePolicy must be 'required'" backend/repository/SqlAttentionLogsR
 grep -qF "ArchivePolicy must be 'required'" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: archive_policy required enforcement missing in Npgsql repo" >&2; exit 1; }
 grep -qF "CurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: current_id required boundary missing" >&2; exit 1; }
 grep -qF "HubCurrentId must not be empty" backend/repository/SqlAttentionLogsRepository.cs || { echo "FAIL: hub_current_id required boundary missing" >&2; exit 1; }
-echo "OK: write_logs_attention implementation boundary checks passed"
+grep -qF "resolve_related_topology_manifests" db/sql_attention_logs_tables.sql || { echo "FAIL: explicit related topology manifest resolver missing" >&2; exit 1; }
+grep -qF "topology.physical_table_manifest_bindings" db/topology_tables.sql || { echo "FAIL: explicit physical table manifest binding missing" >&2; exit 1; }
+grep -qF "LoadHubRelationExplorationCandidatesAsync" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: canonical hubs.hub_relations candidate loader missing" >&2; exit 1; }
+grep -qF "source_attention_id" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || { echo "FAIL: append-only generation lineage source_attention_id missing" >&2; exit 1; }
+grep -qF "draft_projection" backend/runtime/SqlAttentionEvidencePromotionRuntime.cs || { echo "FAIL: explicit Draft promotion runtime missing" >&2; exit 1; }
+echo "OK: write_logs_attention and canonical generation-line implementation boundary checks passed"
 # phase_vector TODO requirement is conditional:
 # - implementation boundary complete -> TODO is not required
 # - implementation boundary incomplete -> TODO entry is required
@@ -207,21 +214,21 @@ if ! grep -qF "hubs.topology_manifests" "$HUBS_HIERARCHY_MD" || ! grep -qF "hubs
   exit 1
 fi
 if ! grep -qi "manifest-scoped" "$HUBS_HIERARCHY_MD"; then
-  echo "FAIL: SQL Attention SSOT md must describe x-axis as manifest-scoped hub sequence" >&2
+  echo "FAIL: SQL Attention SSOT md must describe manifest-scoped hub sequence exploration" >&2
   exit 1
 fi
-echo "OK: hubs space hierarchy and manifest-scoped x-axis documented in SSOT md"
+echo "OK: hubs space hierarchy and manifest-scoped exploration documented in SSOT md"
 
 SQL_ATTENTION_SQL="$REPO_ROOT/db/sql_attention_logs_tables.sql"
 if ! grep -qF "JOIN hubs.topology_manifests tm ON tm.topology_manifest_id = hr.topology_manifest_id" "$SQL_ATTENTION_SQL"; then
-  echo "FAIL: refresh_hub_current x-axis count must JOIN hubs.topology_manifests" >&2
+  echo "FAIL: refresh_hub_current deprecated support-cache hub_relations count must JOIN hubs.topology_manifests" >&2
   exit 1
 fi
 if grep -qE "hub_relations hr WHERE hr\.hub_id|WHERE hr\.hub_id = h\.hub_id" "$SQL_ATTENTION_SQL"; then
   echo "FAIL: refresh_hub_current must not count hub_relations via hr.hub_id source authority" >&2
   exit 1
 fi
-echo "OK: refresh_hub_current uses manifest-scoped hub_relations count"
+echo "OK: refresh_hub_current deprecated support cache uses manifest-scoped hub_relations count"
 
 CONTENT_BUNDLE_REPO="$REPO_ROOT/backend/repository/NpgsqlContentBundleRepository.cs"
 if grep -qE "hub_relations WHERE hub_id|hr\.hub_id::text" "$CONTENT_BUNDLE_REPO"; then

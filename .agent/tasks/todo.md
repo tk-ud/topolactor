@@ -97,3 +97,11 @@ SSOT ref: docs/design/user-facing-helper-manual-ssot.yaml
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
 - [ ] `product.dynamic_support_nocode_loop` manual acceptance (unchanged from roadmap).
+
+## SQL Attention / Phase Attention Bundle carry-over
+
+Roadmap milestone: `M7_sql_attention_observation_runtime`. Detailed authority: `docs/design/sql-attention-logs-ssot.md` / `docs/design/sql-attention-logs-ssot.yaml`.
+
+- [x] **Step 3 — SQLA-IDSPACE-STEP3 existing semantic mismatch removal.** Before Step 4, production `HubAttractorExplorationRuntime.ExploreAsync` failed close with an explicit pending status instead of silently treating `logs.hub_current` cosine diagnostics as canonical SQL Attention exploration. SQL/runtime phase-vector compatibility payloads expose deprecated diagnostics-only ID-space phaseAT evidence (`q` is append-only evidence, not Draft); legacy count scalars remain only as deprecated support-cache statistics. Existing regression tests cover the isolated diagnostics path and the production fail-close boundary.
+- [x] **Step 4 — SQLA-IDSPACE-STEP4 canonical relation exploration runtime.** Implemented related `topology_manifest_id[]` resolution from `logs.current`-triggered physical tables, explore `hubs.hub_relations`, produce resolved `hub_relation_id / topology_manifest_id / hub_id` hits and bounded ID-space `i/j/k` expansions, and replaced the Step-3 pending boundary. Added schema/runtime/repository/test surfaces in the bundle implementation change.
+- [x] **Step 4 — SQLA-GENERATION-STEP4 append-only evidence generation line and explicit promotion boundary.** Aligned `backend.sql_attention_logs_attention_persistence` and `backend.sql_attention_explicit_evidence_promotion_line` so SQLAT hit rows and phaseAT rows preserve lineage and resolved identity. Added explicit command/user-operation Draft promotion and explicit adopted reflection boundaries; prohibit non-adopted evidence from mutating topology, registry, manifests, or hub relations. Added the required schema/migration/runtime/test surfaces in the bundle implementation change.

@@ -8,9 +8,9 @@ namespace Topolactor.Runtime;
 /// <summary>
 /// Hub-attractor exploration runtime for SQL Attention.
 ///
-/// Consumes watch change candidates from logs.refresh_logs_current_watch and performs
-/// bounded hub-attractor topK neighbor exploration. Returns an exploration result that
-/// downstream write_logs_attention can consume — does NOT write to logs.attention here.
+/// Consumes watch change candidates from logs.refresh_logs_current_watch. Canonical SQL
+/// Attention exploration is related topology_manifest_id[] resolution followed by
+/// hubs.hub_relations exploration. The production entry point never falls back to logs.hub_current.
 ///
 /// Policy source: topology.function_parameters
 ///   function_name = "sql_attention_hub_attractor_exploration"
@@ -26,7 +26,7 @@ namespace Topolactor.Runtime;
 ///   - No change candidates → NoChange (exploration skipped, not an error)
 ///
 /// Prohibited:
-///   - Writing to logs.attention directly (persistence boundary is SqlAttentionScheduler -> WriteLogsAttentionAsync)
+///   - Writing to logs.attention directly (persistence boundary is SqlAttentionScheduler -> AppendAttentionGenerationAsync)
 ///   - registry mutation / migration / column promotion
 ///   - Magic number policy defaults in runtime code
 /// </summary>
@@ -50,18 +50,137 @@ public class HubAttractorExplorationRuntime
     }
 
     /// <summary>
-    /// Executes one hub-attractor exploration run.
+    /// Executes the canonical SQL Attention exploration entry point.
     ///
-    /// Returns:
-    ///   NoChange   — no change candidates detected; exploration skipped.
-    ///   MissingPolicy  — no active policy row; fail-close.
-    ///   MalformedPolicy — policy JSON invalid or required key invalid; fail-close.
-    ///   Ok         — exploration ran; Result contains hits (may be empty if no hub current records).
-    ///
-    /// Never writes to logs.attention. Runtime generates phase_vector_json evidence for logs.attention
-    /// without mutation / migration / promotion and without deriving phase movement from manifest / policy cap.
+    /// Resolves explicit related topology_manifest_id[] bindings and explores manifest-scoped
+    /// hubs.hub_relations. This method never falls back to logs.hub_current cosine search.
     /// </summary>
     public async Task<HubAttractorExplorationRunResult> ExploreAsync(
+        IReadOnlyList<WatchChangeCandidate> candidates,
+        string sourceSetId,
+        string basisWindow,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourceSetId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(basisWindow);
+        var executedAt = DateTimeOffset.UtcNow;
+        var changeCandidates = candidates.Where(c => c.ChangeDetected).ToList();
+        if (changeCandidates.Count == 0)
+            return new HubAttractorExplorationRunResult(HubAttractorExplorationStatus.NoChange, "No change candidates detected — exploration skipped.", null, executedAt);
+
+        var policyResult = await LoadValidatedPolicyAsync(executedAt, ct);
+        if (policyResult.EarlyResult is not null) return policyResult.EarlyResult;
+        var policy = policyResult.Policy!;
+        var hits = new List<HubAttractorExplorationHit>();
+        var resolvedAnyManifest = false;
+
+        foreach (var candidate in changeCandidates)
+        {
+            if (hits.Count >= policy.MaxAttentionRowsSaved) break;
+            var resolution = await _sqlAttentionLogsRepository.ResolveRelatedTopologyManifestsAsync(candidate, ct);
+            if (resolution.TopologyManifestIds.Count == 0) continue;
+            resolvedAnyManifest = true;
+            var relations = await _sqlAttentionLogsRepository.LoadHubRelationExplorationCandidatesAsync(resolution.TopologyManifestIds, ct);
+            hits.AddRange(RunCanonicalHubRelationsExploration(candidate, relations, resolution, policy, sourceSetId)
+                .Take(policy.MaxAttentionRowsSaved - hits.Count));
+        }
+
+        if (!resolvedAnyManifest)
+            return new HubAttractorExplorationRunResult(HubAttractorExplorationStatus.NoRelatedTopologyManifest, "No explicit physical table -> topology manifest binding resolved. No logs.hub_current fallback executed.", null, executedAt);
+        if (hits.Count == 0)
+            return new HubAttractorExplorationRunResult(HubAttractorExplorationStatus.NoHubRelations, "No active hubs.hub_relations candidates with data-defined sql_attention_score were found. No fallback executed.", null, executedAt);
+
+        return new HubAttractorExplorationRunResult(HubAttractorExplorationStatus.Ok, $"Canonical hubs.hub_relations exploration complete: {hits.Count} hit(s).", new HubAttractorExplorationResult(sourceSetId, basisWindow, hits), executedAt);
+    }
+
+    private static IReadOnlyList<HubAttractorExplorationHit> RunCanonicalHubRelationsExploration(
+        WatchChangeCandidate candidate,
+        IReadOnlyList<HubRelationExplorationCandidate> relations,
+        RelatedTopologyManifestResolution resolution,
+        HubAttractorExplorationPolicy policy,
+        string sourceSetId)
+    {
+        var tier = ClassifyExplorationBudgetTier(candidate, policy);
+        var limits = ResolveTierLimits(policy, tier);
+        foreach (var relation in relations)
+            if (relation.RelationScore is < 0 or > 1)
+                throw new InvalidOperationException($"relation_config.sql_attention_score for hub_relation_id={relation.HubRelationId} must be within [0,1].");
+
+        var bounded = relations
+            .GroupBy(r => r.TopologyManifestId)
+            .OrderBy(g => g.Key)
+            .Take(policy.MaxHubKindsPerCurrent)
+            .SelectMany(g => g.OrderBy(r => r.SequencePosition).Take(limits.MaxHubTablesPerKind))
+            .OrderByDescending(r => r.RelationScore)
+            .ThenBy(r => r.SequencePosition)
+            .Take(limits.TopKPerHubKind)
+            .ToList();
+        var hits = new List<HubAttractorExplorationHit>();
+        for (var rank = 0; rank < bounded.Count; rank++)
+        {
+            var relation = bounded[rank];
+            var expandedRelations = relations
+                .Where(r => r.HubRelationId != relation.HubRelationId)
+                .OrderByDescending(r => Math.Abs(r.SequencePosition - relation.SequencePosition))
+                .ThenBy(r => r.SequencePosition)
+                .Take(limits.PhaseExpansionLimit)
+                .ToList();
+            var expandedRelationIds = expandedRelations.Select(r => r.HubRelationId).Distinct().ToArray();
+            var expandedManifestIds = expandedRelations.Select(r => r.TopologyManifestId).Append(relation.TopologyManifestId).Distinct().ToArray();
+            var expandedHubIds = expandedRelations.SelectMany(r => new[] { r.HubId, r.RelatedHubId }).Append(relation.HubId).Append(relation.RelatedHubId).Distinct().ToArray();
+            var generationLineId = Guid.NewGuid();
+            var phaseJson = BuildCanonicalPhaseVectorJson(candidate, relation, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds, tier, limits);
+            var evidenceJson = JsonSerializer.Serialize(new
+            {
+                scoring_role = "canonical_hubs_hub_relations_manifest_scoped",
+                canonical_exploration_field = "hubs.hub_relations",
+                relation_score_source = "relation_config.sql_attention_score",
+                relation_score = relation.RelationScore,
+                relation_config_json = NormalizeJsonObjectOrEmpty(relation.RelationConfigJson),
+                resolver_evidence_json = NormalizeJsonArrayOrEmpty(resolution.ResolverEvidenceJson),
+                no_logs_hub_current_fallback = true
+            });
+            hits.Add(new HubAttractorExplorationHit(candidate.CurrentId, Guid.Empty, sourceSetId, relation.HubId, "hubs.hub_relations", relation.HubRelationId, null, relation.RelationScore, rank + 1, ClassifyScoreBand(relation.RelationScore), "canonical", candidate.L2Norm, "{}", phaseJson, evidenceJson, generationLineId, relation.TopologyManifestId, relation.RelatedHubId, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds));
+        }
+        return hits;
+    }
+
+    private static string BuildCanonicalPhaseVectorJson(
+        WatchChangeCandidate candidate,
+        HubRelationExplorationCandidate hit,
+        IReadOnlyList<Guid> sourceManifestIds,
+        IReadOnlyList<Guid> expandedRelationIds,
+        IReadOnlyList<Guid> expandedManifestIds,
+        IReadOnlyList<Guid> expandedHubIds,
+        ExplorationBudgetTier tier,
+        ExplorationBudgetTierLimits limits) =>
+        JsonSerializer.Serialize(new
+        {
+            q_kind = "phaseAT",
+            q_is_draft = false,
+            generation_status = "generated",
+            generated_from = "sql_attention_hit",
+            canonical_exploration_field = "hubs.hub_relations",
+            w_l2_norm = candidate.L2Norm,
+            x_hit_hub_relation_id = hit.HubRelationId,
+            y_topology_manifest_id = hit.TopologyManifestId,
+            z_hub_id = hit.HubId,
+            i_expanded_hub_relation_ids = expandedRelationIds,
+            j_expanded_topology_manifest_ids = expandedManifestIds,
+            k_expanded_hub_ids = expandedHubIds,
+            q_phaseAT_payload = new { evidence_only = true, is_draft = false, source_topology_manifest_ids = sourceManifestIds },
+            exploration_budget_tier = TierToLabel(tier),
+            exploration_search_mode = limits.SearchMode,
+            no_automatic_topology_mutation = true
+        });
+
+    /// <summary>
+    /// Executes the deprecated logs.hub_current cosine diagnostics path explicitly.
+    /// This support-cache route is not canonical SQL Attention exploration and is never
+    /// invoked by SqlAttentionScheduler. Keep only for regression inspection; canonical scheduling never invokes it.
+    /// </summary>
+    public async Task<HubAttractorExplorationRunResult> ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
         IReadOnlyList<WatchChangeCandidate> candidates,
         string sourceSetId,
         string basisWindow,
@@ -86,6 +205,31 @@ public class HubAttractorExplorationRuntime
                 executedAt);
         }
 
+        var policyResult = await LoadValidatedPolicyAsync(executedAt, ct);
+        if (policyResult.EarlyResult is not null)
+            return policyResult.EarlyResult;
+        var policy = policyResult.Policy!;
+
+        var hubCurrentCandidates = await _sqlAttentionLogsRepository.LoadLegacyHubCurrentSupportCacheCandidatesAsync(
+            sourceSetId, basisWindow, ct);
+
+        var hits = RunLegacyHubCurrentSupportCacheExploration(changeCandidates, hubCurrentCandidates, policy, sourceSetId);
+
+        _logger.LogInformation(
+            "HubAttractorExplorationRuntime: exploration complete — sourceSetId={SourceSetId} basisWindow={BasisWindow} changeCandidates={ChangeCandidateCount} hubCurrentCandidates={HubCurrentCount} hits={HitCount}.",
+            sourceSetId, basisWindow, changeCandidates.Count, hubCurrentCandidates.Count, hits.Count);
+
+        return new HubAttractorExplorationRunResult(
+            HubAttractorExplorationStatus.Ok,
+            $"Exploration complete: {hits.Count} hit(s) from {changeCandidates.Count} change candidate(s).",
+            new HubAttractorExplorationResult(sourceSetId, basisWindow, hits),
+            executedAt);
+    }
+
+    private async Task<(HubAttractorExplorationPolicy? Policy, HubAttractorExplorationRunResult? EarlyResult)> LoadValidatedPolicyAsync(
+        DateTimeOffset executedAt,
+        CancellationToken ct)
+    {
         var policyJson = await _topologyRepository.LoadFunctionParameterAsync(
             ExplorationFunctionName, ExplorationPolicyKey, ct);
 
@@ -94,11 +238,11 @@ public class HubAttractorExplorationRuntime
             _logger.LogError(
                 "HubAttractorExplorationRuntime: MissingPolicy — no active function_parameters row for '{Fn}/{Key}'.",
                 ExplorationFunctionName, ExplorationPolicyKey);
-            return new HubAttractorExplorationRunResult(
+            return (null, new HubAttractorExplorationRunResult(
                 HubAttractorExplorationStatus.MissingPolicy,
                 $"No active function_parameters row for '{ExplorationFunctionName}/{ExplorationPolicyKey}'.",
                 null,
-                executedAt);
+                executedAt));
         }
 
         HubAttractorExplorationPolicy policy;
@@ -112,11 +256,11 @@ public class HubAttractorExplorationRuntime
             _logger.LogError(ex,
                 "HubAttractorExplorationRuntime: MalformedPolicy — '{Fn}/{Key}' could not be parsed.",
                 ExplorationFunctionName, ExplorationPolicyKey);
-            return new HubAttractorExplorationRunResult(
+            return (null, new HubAttractorExplorationRunResult(
                 HubAttractorExplorationStatus.MalformedPolicy,
                 $"Policy JSON for '{ExplorationFunctionName}/{ExplorationPolicyKey}' is malformed: {ex.Message}",
                 null,
-                executedAt);
+                executedAt));
         }
 
         var validationError = ValidatePolicy(policy);
@@ -125,36 +269,23 @@ public class HubAttractorExplorationRuntime
             _logger.LogError(
                 "HubAttractorExplorationRuntime: MalformedPolicy — invalid policy value: {Detail}",
                 validationError);
-            return new HubAttractorExplorationRunResult(
+            return (null, new HubAttractorExplorationRunResult(
                 HubAttractorExplorationStatus.MalformedPolicy,
                 $"Policy for '{ExplorationFunctionName}/{ExplorationPolicyKey}' has invalid value: {validationError}",
                 null,
-                executedAt);
+                executedAt));
         }
 
-        var hubCurrentCandidates = await _sqlAttentionLogsRepository.LoadHubCurrentCandidatesAsync(
-            sourceSetId, basisWindow, ct);
-
-        var hits = RunExploration(changeCandidates, hubCurrentCandidates, policy, sourceSetId);
-
-        _logger.LogInformation(
-            "HubAttractorExplorationRuntime: exploration complete — sourceSetId={SourceSetId} basisWindow={BasisWindow} changeCandidates={ChangeCandidateCount} hubCurrentCandidates={HubCurrentCount} hits={HitCount}.",
-            sourceSetId, basisWindow, changeCandidates.Count, hubCurrentCandidates.Count, hits.Count);
-
-        return new HubAttractorExplorationRunResult(
-            HubAttractorExplorationStatus.Ok,
-            $"Exploration complete: {hits.Count} hit(s) from {changeCandidates.Count} change candidate(s).",
-            new HubAttractorExplorationResult(sourceSetId, basisWindow, hits),
-            executedAt);
+        return (policy, null);
     }
 
     /// <summary>
-    /// Runs bounded hub-attractor topK exploration gated by w / l2_norm budget tier.
+    /// Runs deprecated bounded logs.hub_current support-cache diagnostics gated by w / l2_norm budget tier.
     /// Applies tier-specific topK, hub-table distance band, permutation expansion,
     /// max_hub_kinds_per_current, and max_attention_rows_saved caps.
     /// Does NOT write to logs.attention. Does NOT perform full-space repeated search.
     /// </summary>
-    private static IReadOnlyList<HubAttractorExplorationHit> RunExploration(
+    private static IReadOnlyList<HubAttractorExplorationHit> RunLegacyHubCurrentSupportCacheExploration(
         IReadOnlyList<WatchChangeCandidate> changeCandidates,
         IReadOnlyList<HubCurrentCandidate> hubCurrentCandidates,
         HubAttractorExplorationPolicy policy,
@@ -245,7 +376,7 @@ public class HubAttractorExplorationRuntime
             int permutationIndex)
     {
         var scoredAll = hubsInKind
-            .Select(h => (Hub: h, Scoring: ComputeNeighborScore(candidate, h)))
+            .Select(h => (Hub: h, Scoring: ComputeLegacyHubCurrentSupportCacheNeighborScore(candidate, h)))
             .OrderByDescending(x => x.Scoring.Score)
             .ThenBy(x => x.Hub.HubCurrentId)
             .ToList();
@@ -344,8 +475,9 @@ public class HubAttractorExplorationRuntime
     }
 
     /// <summary>
-    /// Computes neighbor score using vector cosine similarity between
+    /// Computes deprecated diagnostics-only support-cache cosine score between
     /// candidate.BasisVectorJson (logs.current) and hub.AttractorVectorJson (logs.hub_current).
+    /// This is not canonical SQL Attention hubs.hub_relations exploration scoring.
     ///
     /// Returns:
     ///   Score       — cosine similarity clamped [0, 1]. 0 when either vector is empty/unpopulated.
@@ -355,7 +487,7 @@ public class HubAttractorExplorationRuntime
     /// When attractor_vector_json is {} (hub refresh not yet implemented), score=0 and
     /// evidence_json documents this fact — no silent fallback, no magic number override.
     /// </summary>
-    private static (double Score, string VectorJson, string EvidenceJson) ComputeNeighborScore(
+    private static (double Score, string VectorJson, string EvidenceJson) ComputeLegacyHubCurrentSupportCacheNeighborScore(
         WatchChangeCandidate candidate,
         HubCurrentCandidate hub)
     {
@@ -381,7 +513,10 @@ public class HubAttractorExplorationRuntime
             current_l2_norm = candidate.L2Norm,
             basis_key_count = basisVec.Count,
             attractor_key_count = attractorVec.Count,
-            shared_key_count = sharedKeys.Count
+            shared_key_count = sharedKeys.Count,
+            scoring_role = "legacy_logs_hub_current_support_cache_diagnostic_only",
+            canonical_exploration_field = "hubs.hub_relations",
+            canonical_relation_exploration_status = "implemented_separate_manifest_scoped_route"
         });
 
         return (neighborScore, vectorJson, evidenceJson);
@@ -469,51 +604,79 @@ public class HubAttractorExplorationRuntime
         ExplorationBudgetTier budgetTier,
         ExplorationBudgetTierLimits tierLimits)
     {
-        var axisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
-        var axisMovement = FlattenVectorJson(hub.AxisZScoreJson);
+        var legacyAxisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
+        var legacyAxisMovement = FlattenVectorJson(hub.AxisZScoreJson);
         var vectorBasis = NormalizeJsonObjectOrEmpty(vectorJson);
         var vectorKeys = FlattenVectorJson(vectorJson).Keys.OrderBy(k => k).ToArray();
         var phaseBasis = NormalizeJsonObjectOrEmpty(hub.PhaseBasisJson);
 
-        static double GetAxisValue(Dictionary<string, double> values, string key)
+        static double GetLegacyValue(Dictionary<string, double> values, string key)
             => values.TryGetValue(key, out var v) ? v : 0.0;
-
-        var x = GetAxisValue(axisPopulation, "hub_relations_count");
-        var y = GetAxisValue(axisPopulation, "hub_count");
-        var z = GetAxisValue(axisPopulation, "topology_manifests_count");
-
-        var i = GetAxisValue(axisMovement, "i");
-        var j = GetAxisValue(axisMovement, "j");
-        var k = GetAxisValue(axisMovement, "k");
 
         return JsonSerializer.Serialize(new
         {
-            basis_source = "logs.hub_current",
+            q_kind = "phaseAT",
+            q_is_draft = false,
+            generation_status = "deprecated_support_cache_diagnostics_only",
+            pending_reason = "legacy support-cache helper is deprecated; canonical phaseAT generation is emitted by manifest-scoped hubs.hub_relations exploration",
+            canonical_exploration_field = "hubs.hub_relations",
+            legacy_support_cache_source = "logs.hub_current",
             meaning_boundary = new
             {
                 w = "l2_norm",
-                x = "hubs_hub_relations_count",
-                y = "hubs_hub_count",
-                z = "hubs_topology_manifests_count",
-                ijk = "axis movement amounts",
-                phase_movement_source = "not_manifest_or_policy_cap",
+                x = "hit_hub_relation_id",
+                y = "topology_manifest_id",
+                z = "hub_id",
+                ijk = "expanded ID arrays",
+                q = "logs.attention.phaseAT append-only evidence row",
+                q_is_draft = false,
+                legacy_count_scalar_axes_deprecated = true,
                 no_automatic_topology_mutation = true,
                 exploration_budget_gate = "w_l2_norm",
                 exploration_budget_tier = TierToLabel(budgetTier),
                 exploration_search_mode = tierLimits.SearchMode
             },
-            w = candidate.L2Norm,
-            x,
-            y,
-            z,
-            i,
-            j,
-            k,
-            generated_from = "logs.attention.vector_json",
+            w_l2_norm = candidate.L2Norm,
+            x_hit_hub_relation_id = (string?)null,
+            y_topology_manifest_id = (string?)null,
+            z_hub_id = (string?)null,
+            i_expanded_hub_relation_ids = Array.Empty<string>(),
+            j_expanded_topology_manifest_ids = Array.Empty<string>(),
+            k_expanded_hub_ids = Array.Empty<string>(),
+            q_phaseAT_payload = new
+            {
+                status = "deprecated_support_cache_diagnostics_only",
+                evidence_only = true,
+                is_draft = false
+            },
+            legacy_support_cache_statistics = new
+            {
+                hub_relations_count = GetLegacyValue(legacyAxisPopulation, "hub_relations_count"),
+                hub_count = GetLegacyValue(legacyAxisPopulation, "hub_count"),
+                topology_manifests_count = GetLegacyValue(legacyAxisPopulation, "topology_manifests_count")
+            },
+            legacy_axis_movement_observations = new
+            {
+                i = GetLegacyValue(legacyAxisMovement, "i"),
+                j = GetLegacyValue(legacyAxisMovement, "j"),
+                k = GetLegacyValue(legacyAxisMovement, "k")
+            },
+            generated_from = "legacy_logs_hub_current_support_cache_diagnostics",
             vector_keys = vectorKeys,
             vector_basis_json = vectorBasis,
             phase_basis_json = phaseBasis
         });
+    }
+
+    private static JsonElement NormalizeJsonArrayOrEmpty(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return JsonSerializer.Deserialize<JsonElement>("[]");
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<JsonElement>(json);
+            return parsed.ValueKind == JsonValueKind.Array ? parsed : JsonSerializer.Deserialize<JsonElement>("[]");
+        }
+        catch (JsonException) { return JsonSerializer.Deserialize<JsonElement>("[]"); }
     }
 
     private static JsonElement NormalizeJsonObjectOrEmpty(string? json)

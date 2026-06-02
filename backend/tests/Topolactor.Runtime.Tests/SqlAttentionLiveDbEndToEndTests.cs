@@ -3,305 +3,161 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Topolactor.Repository;
 using Topolactor.Runtime;
-using Topolactor.Scheduler;
 using Topolactor.Schema;
 using Xunit;
 
 /// <summary>
-/// Live PostgreSQL end-to-end test proving the SQL Attention closed loop.
+/// Live PostgreSQL end-to-end proof for the canonical SQL Attention generation line:
+/// logs.diff -> logs.current watch -> explicit physical-table manifest resolver ->
+/// hubs.hub_relations exploration -> append-only SQLAT hit / phaseAT evidence ->
+/// explicit Draft/adoption/rejection lifecycle evidence.
 ///
-/// Loop under test:
-///   logs.diff append
-///   → logs.refresh_logs_current_watch → change candidate
-///   → HubAttractorExplorationRuntime.ExploreAsync → hits
-///   → NpgsqlSqlAttentionLogsRepository.WriteLogsAttentionAsync → logs.attention persisted
-///   → logs.refresh_hub_current → hub_current population_count / axis_population_json / attractor_vector_json updated
-///   → NpgsqlSqlAttentionLogsRepository.LoadAttentionEvidenceForProjectionAsync → evidence returned
-///
-/// This test is production_ready evidence for SQL Attention: it proves that the runtime boundary
-/// is closed end-to-end with a real PostgreSQL instance, not just in-memory mocks.
-///
-/// Skip condition:
-///   TOPOLACTOR_TEST_DB_CONNECTION not set → early return (not a silent pass; reason logged in source).
-///   TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 → throws, enforcing DB presence in CI.
-///
-/// To run:
-///   export TOPOLACTOR_TEST_DB_CONNECTION='Host=localhost;Database=topolactor_demo;Username=topolactor_demo;Password=topolactor_demo'
-///   dotnet test --filter SqlAttentionLiveDbEndToEndTests
+/// TOPOLACTOR_TEST_DB_CONNECTION unset means explicit local skip. Set
+/// TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 to require a live database in CI.
 /// </summary>
 public class SqlAttentionLiveDbEndToEndTests
 {
     [Fact]
     [Trait("Category", "RequiresDatabase")]
-    public async Task ClosedLoop_DiffAppend_Watch_Explore_WriteAttention_RefreshHubCurrent_ProjectionRead()
+    public async Task ClosedLoop_Resolver_RelationExploration_GenerationLine_ExplicitLifecycle()
     {
         var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(cs))
         {
             if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
-                throw new InvalidOperationException(
-                    "TOPOLACTOR_TEST_DB_CONNECTION is required for SQL Attention live DB E2E test " +
-                    "(TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 enforces DB presence). " +
-                    "Set TOPOLACTOR_TEST_DB_CONNECTION to a valid PostgreSQL connection string.");
-            // No DB connection available — explicit skip, not a silent pass.
-            // Run with TOPOLACTOR_TEST_DB_CONNECTION set to execute this test.
+                throw new InvalidOperationException("TOPOLACTOR_TEST_DB_CONNECTION is required when TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1.");
             return;
         }
 
         var suffix = Guid.NewGuid().ToString("N")[..12];
         var sourceSetId = $"test-sqla-e2e-{suffix}";
         var basisWindow = $"test-window-{suffix}";
-        Guid hubCurrentId = Guid.Empty;
+        var tableRef = $"test_table_{suffix}";
+        var hubId = Guid.NewGuid();
+        var relatedHubId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        var relationId = Guid.NewGuid();
+        long physicalTableId = 0;
 
-        var repo = new NpgsqlSqlAttentionLogsRepository(
-            NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, cs);
-        var topologyRepo = new NpgsqlTopologyRepository(
-            NullLogger<NpgsqlTopologyRepository>.Instance, cs);
-        var explorationRuntime = new HubAttractorExplorationRuntime(
-            NullLogger<HubAttractorExplorationRuntime>.Instance, topologyRepo, repo);
+        var repo = new NpgsqlSqlAttentionLogsRepository(NullLogger<NpgsqlSqlAttentionLogsRepository>.Instance, cs);
+        var topologyRepo = new NpgsqlTopologyRepository(NullLogger<NpgsqlTopologyRepository>.Instance, cs);
+        var explorationRuntime = new HubAttractorExplorationRuntime(NullLogger<HubAttractorExplorationRuntime>.Instance, topologyRepo, repo);
+        var promotionRuntime = new SqlAttentionEvidencePromotionRuntime(repo);
 
         try
         {
-            // ── Setup: seed function_parameters policies ────────────────────────────────────
-            // ON CONFLICT DO NOTHING: safe if production rows already present.
-            // Values are minimal valid defaults; any existing production values are preserved.
             await using (var conn = new NpgsqlConnection(cs))
             {
                 await conn.OpenAsync();
-
                 await using (var cmd = new NpgsqlCommand(@"
 INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES ('sql_attention_logs_watch', 'default_policy',
-        '{""top_n"":3,""delta_threshold"":0.0,""norm_level_high"":10.0,""norm_level_medium"":1.0}'::jsonb,
-        true)
-ON CONFLICT (function_name, parameter_key) DO NOTHING", conn))
-                    await cmd.ExecuteNonQueryAsync();
-
-                await using (var cmd = new NpgsqlCommand(@"
+        '{""top_n"":3,""delta_threshold"":0.0,""norm_level_high"":10.0,""norm_level_medium"":1.0}'::jsonb, true)
+ON CONFLICT (function_name, parameter_key) DO NOTHING;
 INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES ('sql_attention_hub_attractor_exploration', 'default_policy',
-        '{""norm_level_high"":10.0,""norm_level_medium"":1.0,""exploration_budget_tiers"":{""weak"":{""topK_per_hub_kind"":1,""max_hub_tables_per_kind"":2,""phase_expansion_limit"":1,""search_mode"":""near_neighbor_narrow_topK""},""mid"":{""topK_per_hub_kind"":3,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""search_mode"":""normal_topK""},""high"":{""topK_per_hub_kind"":5,""max_hub_tables_per_kind"":10,""phase_expansion_limit"":3,""search_mode"":""expanded_distance_band_or_permutation""}},""max_hub_kinds_per_current"":5,""max_attention_rows_saved"":10}'::jsonb,
-        true)
-ON CONFLICT (function_name, parameter_key) DO NOTHING", conn))
-                    await cmd.ExecuteNonQueryAsync();
-
-                // Insert logs.hub_current candidate.
-                // attractor_vector_json has diff_count key that overlaps with basis_vector_json
-                // produced by refresh_logs_current_watch (which includes diff_count).
-                await using (var cmd = new NpgsqlCommand(@"
-INSERT INTO logs.hub_current (
-    source_set_id, basis_window, attractor_key,
-    attractor_vector_json, axis_population_json, axis_z_score_json, phase_basis_json,
-    population_count, population_recordcount
-) VALUES (
-    @sid, @bw, @ak,
-    '{""diff_count"":2.0}'::jsonb, '{}'::jsonb, '{}'::jsonb, '{}'::jsonb,
-    0, 0
-) RETURNING hub_current_id", conn))
+        '{""norm_level_high"":10.0,""norm_level_medium"":1.0,""exploration_budget_tiers"":{""weak"":{""topK_per_hub_kind"":1,""max_hub_tables_per_kind"":2,""phase_expansion_limit"":1,""search_mode"":""near_neighbor_narrow_topK""},""mid"":{""topK_per_hub_kind"":3,""max_hub_tables_per_kind"":5,""phase_expansion_limit"":1,""search_mode"":""normal_topK""},""high"":{""topK_per_hub_kind"":5,""max_hub_tables_per_kind"":10,""phase_expansion_limit"":3,""search_mode"":""expanded_distance_band_or_permutation""}},""max_hub_kinds_per_current"":5,""max_attention_rows_saved"":10}'::jsonb, true)
+ON CONFLICT (function_name, parameter_key) DO NOTHING;
+INSERT INTO hubs.hub (hub_id, relation) VALUES (@hub_id, '{}'::jsonb), (@related_hub_id, '{}'::jsonb);
+INSERT INTO hubs.topology_manifests (topology_manifest_id, hub_id, manifest_key) VALUES (@manifest_id, @hub_id, @manifest_key);
+INSERT INTO hubs.hub_relations (hub_relation_id, topology_manifest_id, related_hub_id, sequence_position, relation_config)
+VALUES (@relation_id, @manifest_id, @related_hub_id, 1, '{""sql_attention_score"":0.8}'::jsonb);
+INSERT INTO topology.physical_tables (table_ref) VALUES (@table_ref) RETURNING physical_table_id", conn))
                 {
-                    cmd.Parameters.AddWithValue("sid", sourceSetId);
-                    cmd.Parameters.AddWithValue("bw", basisWindow);
-                    cmd.Parameters.AddWithValue("ak", $"test-attractor-{suffix}");
-                    hubCurrentId = (Guid)(await cmd.ExecuteScalarAsync())!;
+                    cmd.Parameters.AddWithValue("hub_id", hubId);
+                    cmd.Parameters.AddWithValue("related_hub_id", relatedHubId);
+                    cmd.Parameters.AddWithValue("manifest_id", manifestId);
+                    cmd.Parameters.AddWithValue("manifest_key", $"manifest-{suffix}");
+                    cmd.Parameters.AddWithValue("relation_id", relationId);
+                    cmd.Parameters.AddWithValue("table_ref", tableRef);
+                    physicalTableId = Convert.ToInt64(await cmd.ExecuteScalarAsync());
                 }
+                await using var binding = new NpgsqlCommand(@"
+INSERT INTO topology.physical_table_manifest_bindings (physical_table_id, topology_manifest_id, binding_evidence_json)
+VALUES (@physical_table_id, @manifest_id, '{""seed"":""SqlAttentionLiveDbEndToEndTests""}'::jsonb)", conn);
+                binding.Parameters.AddWithValue("physical_table_id", physicalTableId);
+                binding.Parameters.AddWithValue("manifest_id", manifestId);
+                await binding.ExecuteNonQueryAsync();
             }
 
-            // ── Step 1: Append logs.diff (physical mutation pressure source) ───────────────
-            await repo.AppendLogsDiffAsync(new LogsDiffAppendRequest(
-                SourceSetId: sourceSetId,
-                BasisWindow: basisWindow,
-                PhysicalTableId: $"test-table-{suffix}",
-                PhysicalTableName: $"test_table_{suffix}",
-                RecordId: $"rec-{suffix}",
-                OperationKind: "create",
-                BeforeStateOrDiffJson: "{}",
-                AfterStateOrDiffJson: $@"{{""id"":""{suffix}""}}",
-                ObservedAt: DateTimeOffset.UtcNow,
-                ActorOrSource: "SqlAttentionLiveDbEndToEndTests",
-                ArchivePolicy: "required"));
-
-            // ── Step 2: LoadWatchCandidatesAsync → refresh_logs_current_watch → change candidates
+            await repo.AppendLogsDiffAsync(new LogsDiffAppendRequest(sourceSetId, basisWindow, physicalTableId.ToString(), tableRef, $"rec-{suffix}", "create", "{}", $@"{{""id"":""{suffix}""}}", DateTimeOffset.UtcNow, "SqlAttentionLiveDbEndToEndTests", "required"));
             var candidates = await repo.LoadWatchCandidatesAsync(sourceSetId, basisWindow);
+            Assert.Contains(candidates, candidate => candidate.ChangeDetected);
 
-            Assert.NotEmpty(candidates);
-            Assert.Contains(candidates, c => c.ChangeDetected);
-
-            // ── Step 3: ExploreAsync → hits produced ─────────────────────────────────────
-            var exploreResult = await explorationRuntime.ExploreAsync(
-                candidates, sourceSetId, basisWindow);
-
+            var exploreResult = await explorationRuntime.ExploreAsync(candidates, sourceSetId, basisWindow);
             Assert.Equal(HubAttractorExplorationStatus.Ok, exploreResult.Status);
-            Assert.NotNull(exploreResult.Result);
-            Assert.NotEmpty(exploreResult.Result.Hits);
+            var hit = Assert.Single(exploreResult.Result!.Hits);
+            Assert.Equal(relationId, hit.HubRelationId);
+            Assert.Equal(manifestId, hit.TopologyManifestId);
+            Assert.Equal("hubs.hub_relations", hit.AttractorKey);
 
-            // ── Step 4: WriteLogsAttentionAsync → logs.attention persisted ────────────────
-            var requests = exploreResult.Result.Hits
-                .Select(hit => new LogsAttentionWriteRequest(
-                    CurrentId: hit.CurrentId,
-                    HubCurrentId: hit.HubCurrentId,
-                    SourceSetId: hit.SourceSetId,
-                    HubId: hit.HubId,
-                    AttractorKey: hit.AttractorKey,
-                    HubRelationId: hit.HubRelationId,
-                    RelationRegistryId: hit.RelationRegistryId,
-                    NeighborScore: hit.NeighborScore,
-                    HitRank: hit.HitRank,
-                    ScoreBand: hit.ScoreBand,
-                    PermutationKey: hit.PermutationKey,
-                    L2Norm: hit.L2Norm,
-                    VectorJson: hit.VectorJson,
-                    PhaseVectorJson: hit.PhaseVectorJson,
-                    StatisticsJson: SqlAttentionScheduler.BuildStatisticsJson(hit, basisWindow),
-                    EmaScore: null,
-                    EvidenceJson: hit.EvidenceJson,
-                    ArchivePolicy: "required"))
-                .ToList();
-
-            var rowsWritten = await repo.WriteLogsAttentionAsync(requests);
-            Assert.True(rowsWritten > 0);
+            var generation = await repo.AppendAttentionGenerationAsync(new AttentionGenerationAppendRequest(hit.GenerationLineId, hit.CurrentId, hit.SourceSetId, hit.TopologyManifestId!.Value, hit.HubRelationId!.Value, hit.HubId!.Value, hit.NeighborScore, hit.HitRank, hit.ScoreBand, hit.L2Norm, hit.PhaseVectorJson, hit.EvidenceJson, hit.SourceTopologyManifestIds!, hit.ExpandedHubRelationIds!, hit.ExpandedTopologyManifestIds!, hit.ExpandedHubIds!));
+            var draft = await promotionRuntime.ExecuteAsync(new AttentionLifecycleCommand(generation.PhaseAtAttentionId, AttentionLifecycleOperation.CreateDraft, "e2e-user", $"draft-{suffix}"));
+            Assert.True(draft.Succeeded);
+            var adopted = await promotionRuntime.ExecuteAsync(new AttentionLifecycleCommand(draft.AttentionId!.Value, AttentionLifecycleOperation.AdoptDraft, "e2e-user", $"adopt-{suffix}"));
+            Assert.True(adopted.Succeeded);
+            var rejected = await promotionRuntime.ExecuteAsync(new AttentionLifecycleCommand(generation.PhaseAtAttentionId, AttentionLifecycleOperation.Reject, "e2e-user", $"reject-{suffix}"));
+            Assert.True(rejected.Succeeded);
 
             await using var verifyConn = new NpgsqlConnection(cs);
             await verifyConn.OpenAsync();
-
-            // ── Step 5: Verify logs.attention row persisted with archive_policy = 'required' ──
-            await using (var cmd = new NpgsqlCommand(
-                "SELECT COUNT(*) FROM logs.attention WHERE source_set_id = @sid AND archive_policy = 'required'",
-                verifyConn))
+            await using (var cmd = new NpgsqlCommand(@"
+SELECT evidence_kind, generation_line_id, source_attention_id, phase_vector_json::text
+FROM logs.attention WHERE generation_line_id = @generation_line_id ORDER BY created_at, attention_id", verifyConn))
             {
-                cmd.Parameters.AddWithValue("sid", sourceSetId);
-                var count = Convert.ToInt64(await cmd.ExecuteScalarAsync());
-                Assert.True(count > 0,
-                    "logs.attention must have at least one evidence row with archive_policy='required' after WriteLogsAttentionAsync.");
-            }
-
-            // ── Step 6: Verify phase_vector_json carries w/x/y/z/i/j/k and not_manifest_or_policy_cap ──
-            string phaseVectorJsonStr;
-            await using (var cmd = new NpgsqlCommand(
-                "SELECT phase_vector_json::text FROM logs.attention WHERE source_set_id = @sid LIMIT 1",
-                verifyConn))
-            {
-                cmd.Parameters.AddWithValue("sid", sourceSetId);
-                phaseVectorJsonStr = (string)(await cmd.ExecuteScalarAsync())!;
-            }
-
-            using var phaseDoc = JsonDocument.Parse(phaseVectorJsonStr);
-            var root = phaseDoc.RootElement;
-
-            Assert.True(root.TryGetProperty("w", out _),
-                "phase_vector_json.w (l2_norm basis) must be present per SSOT boundary.");
-            Assert.True(root.TryGetProperty("x", out _),
-                "phase_vector_json.x (hubs.hub_relations count axis) must be present.");
-            Assert.True(root.TryGetProperty("y", out _),
-                "phase_vector_json.y must be present.");
-            Assert.True(root.TryGetProperty("z", out _),
-                "phase_vector_json.z must be present.");
-            Assert.True(root.TryGetProperty("i", out _),
-                "phase_vector_json.i (axis movement amount) must be present.");
-            Assert.True(root.TryGetProperty("j", out _),
-                "phase_vector_json.j must be present.");
-            Assert.True(root.TryGetProperty("k", out _),
-                "phase_vector_json.k must be present.");
-            Assert.True(root.TryGetProperty("meaning_boundary", out var mb),
-                "phase_vector_json.meaning_boundary must be present.");
-            Assert.True(mb.TryGetProperty("phase_movement_source", out var pms),
-                "meaning_boundary.phase_movement_source must be present.");
-            Assert.Equal("not_manifest_or_policy_cap", pms.GetString());
-            Assert.True(mb.TryGetProperty("no_automatic_topology_mutation", out var noMut),
-                "meaning_boundary.no_automatic_topology_mutation must be present.");
-            Assert.True(noMut.GetBoolean(),
-                "no_automatic_topology_mutation must be true per SSOT boundary.");
-
-            // ── Step 7: refresh_hub_current → attractor_vector_json / population updated ──
-            await using (var cmd = new NpgsqlCommand(
-                "SELECT hub_current_id FROM logs.refresh_hub_current(@sid, @bw)", verifyConn))
-            {
-                cmd.Parameters.AddWithValue("sid", sourceSetId);
-                cmd.Parameters.AddWithValue("bw", basisWindow);
+                cmd.Parameters.AddWithValue("generation_line_id", generation.GenerationLineId);
                 await using var reader = await cmd.ExecuteReaderAsync();
-                while (await reader.ReadAsync()) { /* consume refresh results */ }
+                var kinds = new List<string>();
+                string? phaseJson = null;
+                while (await reader.ReadAsync())
+                {
+                    kinds.Add(reader.GetString(0));
+                    Assert.Equal(generation.GenerationLineId, reader.GetGuid(1));
+                    if (reader.GetString(0) == "phaseAT") phaseJson = reader.GetString(3);
+                }
+                Assert.Contains("sql_attention_hit", kinds);
+                Assert.Contains("phaseAT", kinds);
+                Assert.Contains("draft_projection", kinds);
+                Assert.Contains("adoption_result", kinds);
+                Assert.Contains("rejection_result", kinds);
+                using var phaseDoc = JsonDocument.Parse(phaseJson!);
+                var root = phaseDoc.RootElement;
+                Assert.Equal("phaseAT", root.GetProperty("q_kind").GetString());
+                Assert.False(root.GetProperty("q_is_draft").GetBoolean());
+                Assert.Equal(relationId, root.GetProperty("x_hit_hub_relation_id").GetGuid());
+                Assert.Equal(manifestId, root.GetProperty("y_topology_manifest_id").GetGuid());
+                Assert.True(root.TryGetProperty("k_expanded_hub_ids", out _));
             }
 
-            // population_count was 0 at insert; must be > 0 after refresh aggregates attention evidence.
-            await using (var cmd = new NpgsqlCommand(
-                "SELECT population_count, attractor_vector_json::text FROM logs.hub_current WHERE hub_current_id = @hid",
-                verifyConn))
-            {
-                cmd.Parameters.AddWithValue("hid", hubCurrentId);
-                await using var reader = await cmd.ExecuteReaderAsync();
-                Assert.True(await reader.ReadAsync(), "hub_current row must exist after refresh.");
-                var popCount = reader.GetInt64(0);
-                Assert.True(popCount > 0,
-                    "hub_current.population_count must be > 0 after refresh_hub_current aggregates logs.attention evidence.");
-            }
-
-            // ── Step 8: LoadAttentionEvidenceForProjectionAsync → evidence layer separation ──
-            var evidence = await repo.LoadAttentionEvidenceForProjectionAsync(
-                sourceSetId, topK: 10, minNeighborScore: 0.0, recentWindowDays: 30);
-
-            Assert.NotEmpty(evidence);
-            var row = evidence.First();
-
-            // Evidence layer separation per SSOT: statistics / attention / phase_attention must be preserved
-            Assert.False(string.IsNullOrWhiteSpace(row.StatisticsJson),
-                "AttentionEvidenceRecord.StatisticsJson (statistics layer) must be non-empty.");
-            Assert.False(string.IsNullOrWhiteSpace(row.VectorJson),
-                "AttentionEvidenceRecord.VectorJson (attention layer) must be non-empty.");
-            Assert.False(string.IsNullOrWhiteSpace(row.PhaseVectorJson),
-                "AttentionEvidenceRecord.PhaseVectorJson (phase-attention layer) must be non-empty.");
-            Assert.False(string.IsNullOrWhiteSpace(row.EvidenceJson),
-                "AttentionEvidenceRecord.EvidenceJson (scoring provenance) must be non-empty.");
-
-            // ── Step 9: Topology/registry mutation guard ─────────────────────────────────
-            // The SQL Attention pipeline only writes to logs.* tables. This is enforced structurally:
-            //   - ExploreAsync prohibited list: no registry mutation, no topology write.
-            //   - WriteLogsAttentionAsync SQL: INSERT INTO logs.attention only.
-            //   - refresh_hub_current: UPDATE logs.hub_current only.
-            //   - NpgsqlSqlAttentionLogsRepository: no SQL targeting topology.* or hubs.*.
-            // Boundary verification is performed by check-sql-attention-ssot.sh (append-only guard).
-            // No topology.* rows with this test's sourceSetId should exist.
+            var evidence = await repo.LoadAttentionEvidenceForProjectionAsync(sourceSetId, 10, 0.0, 30);
+            Assert.Equal(2, evidence.Count);
         }
         finally
         {
-            // Cleanup in FK dependency order: attention → hub_current → current → diff
             try
             {
-                await using var cleanConn = new NpgsqlConnection(cs);
-                await cleanConn.OpenAsync();
-
-                await using (var cmd = new NpgsqlCommand(
-                    "DELETE FROM logs.attention WHERE source_set_id = @sid", cleanConn))
-                {
-                    cmd.Parameters.AddWithValue("sid", sourceSetId);
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                if (hubCurrentId != Guid.Empty)
-                {
-                    await using (var cmd = new NpgsqlCommand(
-                        "DELETE FROM logs.hub_current WHERE hub_current_id = @hid", cleanConn))
-                    {
-                        cmd.Parameters.AddWithValue("hid", hubCurrentId);
-                        await cmd.ExecuteNonQueryAsync();
-                    }
-                }
-
-                await using (var cmd = new NpgsqlCommand(
-                    "DELETE FROM logs.current WHERE source_set_id = @sid", cleanConn))
-                {
-                    cmd.Parameters.AddWithValue("sid", sourceSetId);
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                await using (var cmd = new NpgsqlCommand(
-                    "DELETE FROM logs.diff WHERE source_set_id = @sid", cleanConn))
-                {
-                    cmd.Parameters.AddWithValue("sid", sourceSetId);
-                    await cmd.ExecuteNonQueryAsync();
-                }
+                await using var conn = new NpgsqlConnection(cs);
+                await conn.OpenAsync();
+                await using var cmd = new NpgsqlCommand(@"
+DELETE FROM logs.attention WHERE source_set_id = @sid;
+DELETE FROM logs.current WHERE source_set_id = @sid;
+DELETE FROM logs.diff WHERE source_set_id = @sid;
+DELETE FROM topology.physical_table_manifest_bindings WHERE topology_manifest_id = @manifest_id;
+DELETE FROM hubs.hub_relations WHERE hub_relation_id = @relation_id;
+DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @manifest_id;
+DELETE FROM hubs.hub WHERE hub_id IN (@hub_id, @related_hub_id);
+DELETE FROM topology.physical_tables WHERE physical_table_id = @physical_table_id", conn);
+                cmd.Parameters.AddWithValue("sid", sourceSetId);
+                cmd.Parameters.AddWithValue("manifest_id", manifestId);
+                cmd.Parameters.AddWithValue("relation_id", relationId);
+                cmd.Parameters.AddWithValue("hub_id", hubId);
+                cmd.Parameters.AddWithValue("related_hub_id", relatedHubId);
+                cmd.Parameters.AddWithValue("physical_table_id", physicalTableId);
+                await cmd.ExecuteNonQueryAsync();
             }
             catch
             {
-                // Cleanup failure does not override test result.
+                // Cleanup failure does not replace the test result.
             }
         }
     }

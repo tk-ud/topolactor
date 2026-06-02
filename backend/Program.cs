@@ -59,6 +59,7 @@ builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
 builder.Services.AddSingleton<CiAttentionGuidanceRepository>(sp =>
     new NpgsqlCiAttentionGuidanceRepository(connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
+builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();
 
 // ---------------------------------------------------------------------------

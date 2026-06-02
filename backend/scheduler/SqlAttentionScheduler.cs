@@ -15,16 +15,15 @@ namespace Topolactor.Scheduler;
 ///   It calls logs.refresh_logs_current_watch via SqlAttentionLogsRepository,
 ///   and when change candidates exist, invokes HubAttractorExplorationRuntime.
 ///   All policy and exploration logic live in HubAttractorExplorationRuntime.
-///   SQL Attention write boundary is WriteLogsAttentionAsync — request-based
-///   append persistence, not exploration execution.
-///   Production evidence filling is tracked as a separate TODO.
+///   SQL Attention write boundary is AppendAttentionGenerationAsync — request-based
+///   append-only SQLAT hit / phaseAT persistence, not exploration execution.
 ///
 /// Route:
 ///   cron trigger
 ///   → SqlAttentionLogsRepository.LoadWatchCandidatesAsync
 ///   → if no change candidates: skip
 ///   → else: HubAttractorExplorationRuntime.ExploreAsync
-///   → if Ok AND hits > 0: SqlAttentionLogsRepository.WriteLogsAttentionAsync
+///   → if Ok AND hits > 0: SqlAttentionLogsRepository.AppendAttentionGenerationAsync
 ///
 /// This scheduler does NOT route through the user-facing dispatch canonical route
 /// (stored_topology_data → user_operation → … → emission_or_projection) because
@@ -168,29 +167,28 @@ public class SqlAttentionScheduler : BackgroundService
                 int rowsWritten;
                 try
                 {
-                    var requests = explorationResult.Hits
-                        .Select(hit => new LogsAttentionWriteRequest(
-                            CurrentId: hit.CurrentId,
-                            HubCurrentId: hit.HubCurrentId,
-                            SourceSetId: hit.SourceSetId,
-                            HubId: hit.HubId,
-                            AttractorKey: hit.AttractorKey,
-                            HubRelationId: hit.HubRelationId,
-                            RelationRegistryId: hit.RelationRegistryId,
-                            NeighborScore: hit.NeighborScore,
-                            HitRank: hit.HitRank,
-                            ScoreBand: hit.ScoreBand,
-                            PermutationKey: hit.PermutationKey,
-                            L2Norm: hit.L2Norm,
-                            VectorJson: hit.VectorJson,
-                            PhaseVectorJson: hit.PhaseVectorJson,
-                            StatisticsJson: BuildStatisticsJson(hit, basisWindow),
-                            EmaScore: null,
-                            EvidenceJson: hit.EvidenceJson,
-                            ArchivePolicy: "required"))
-                        .ToList();
-                    rowsWritten = await _sqlAttentionLogsRepository.WriteLogsAttentionAsync(
-                        requests, ct);
+                    foreach (var hit in explorationResult.Hits)
+                    {
+                        await _sqlAttentionLogsRepository.AppendAttentionGenerationAsync(
+                            new AttentionGenerationAppendRequest(
+                                hit.GenerationLineId,
+                                hit.CurrentId,
+                                hit.SourceSetId,
+                                hit.TopologyManifestId!.Value,
+                                hit.HubRelationId!.Value,
+                                hit.HubId!.Value,
+                                hit.NeighborScore,
+                                hit.HitRank,
+                                hit.ScoreBand,
+                                hit.L2Norm,
+                                hit.PhaseVectorJson,
+                                hit.EvidenceJson,
+                                hit.SourceTopologyManifestIds!,
+                                hit.ExpandedHubRelationIds!,
+                                hit.ExpandedTopologyManifestIds!,
+                                hit.ExpandedHubIds!), ct);
+                    }
+                    rowsWritten = explorationResult.Hits.Count * 2;
                 }
                 catch (OperationCanceledException)
                 {
@@ -199,7 +197,7 @@ public class SqlAttentionScheduler : BackgroundService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex,
-                        "SqlAttentionScheduler: WriteLogsAttentionAsync failed for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
+                        "SqlAttentionScheduler: AppendAttentionGenerationAsync failed for sourceSetId={SourceSetId} basisWindow={BasisWindow}.",
                         sourceSetId, basisWindow);
                     return;
                 }
@@ -217,6 +215,9 @@ public class SqlAttentionScheduler : BackgroundService
 
             case HubAttractorExplorationStatus.MissingPolicy:
             case HubAttractorExplorationStatus.MalformedPolicy:
+            case HubAttractorExplorationStatus.NoRelatedTopologyManifest:
+            case HubAttractorExplorationStatus.NoHubRelations:
+            case HubAttractorExplorationStatus.CanonicalRelationExplorationPending:
                 _logger.LogError(
                     "SqlAttentionScheduler: exploration fail-close — status={Status} detail={Detail}.",
                     result.Status, result.Detail);

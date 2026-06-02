@@ -14,12 +14,13 @@ public record WatchChangeCandidate(
     bool ChangeDetected,
     string? ChangeReason,
     double L2Norm,
-    string BasisVectorJson
+    string BasisVectorJson,
+    string PhysicalTableName = ""
 );
 
 /// <summary>
-/// Hub current candidate loaded from logs.hub_current.
-/// Used as the attractor target for hub-attractor neighbor exploration.
+/// Deprecated diagnostics-only support-cache candidate loaded from logs.hub_current.
+/// It is not a canonical SQL Attention hubs.hub_relations exploration target.
 /// </summary>
 public record HubCurrentCandidate(
     Guid HubCurrentId,
@@ -76,12 +77,112 @@ public record HubAttractorExplorationPolicy(
 );
 
 /// <summary>
+/// Explicit topology manifest binding resolved from one logs.current physical table candidate.
+/// Empty resolution is an explicit no-hit boundary; no implicit or oldest-row fallback is allowed.
+/// </summary>
+public record RelatedTopologyManifestResolution(
+    Guid CurrentId,
+    IReadOnlyList<Guid> TopologyManifestIds,
+    string ResolverEvidenceJson
+);
+
+/// <summary>
+/// Canonical hubs.hub_relations exploration candidate loaded from active manifest scopes.
+/// RelationScore is required data-defined evidence from relation_config.sql_attention_score.
+/// </summary>
+public record HubRelationExplorationCandidate(
+    Guid HubRelationId,
+    Guid TopologyManifestId,
+    Guid HubId,
+    Guid RelatedHubId,
+    int SequencePosition,
+    double RelationScore,
+    string RelationConfigJson
+);
+
+/// <summary>
+/// Dedicated append-only SQLAT -> phaseAT generation request.
+/// </summary>
+public record AttentionGenerationAppendRequest(
+    Guid GenerationLineId,
+    Guid CurrentId,
+    string SourceSetId,
+    Guid TopologyManifestId,
+    Guid HubRelationId,
+    Guid HubId,
+    double NeighborScore,
+    int HitRank,
+    string ScoreBand,
+    double L2Norm,
+    string PhaseVectorJson,
+    string EvidenceJson,
+    IReadOnlyList<Guid> SourceTopologyManifestIds,
+    IReadOnlyList<Guid> ExpandedHubRelationIds,
+    IReadOnlyList<Guid> ExpandedTopologyManifestIds,
+    IReadOnlyList<Guid> ExpandedHubIds,
+    string ArchivePolicy = "required"
+);
+
+public record AttentionGenerationAppendResult(
+    Guid GenerationLineId,
+    Guid SqlAttentionHitAttentionId,
+    Guid PhaseAtAttentionId
+);
+
+public enum AttentionLifecycleOperation
+{
+    CreateDraft,
+    AdoptDraft,
+    Reject
+}
+
+public record AttentionLifecycleCommand(
+    Guid SourceAttentionId,
+    AttentionLifecycleOperation Operation,
+    string ActorOrSource,
+    string CommandId
+);
+
+public record AttentionLifecycleSource(
+    Guid AttentionId,
+    Guid CurrentId,
+    string SourceSetId,
+    Guid GenerationLineId,
+    string EvidenceKind,
+    string PhaseVectorJson,
+    IReadOnlyList<Guid> SourceTopologyManifestIds,
+    IReadOnlyList<Guid> HitHubRelationIds,
+    IReadOnlyList<Guid> ExpandedHubRelationIds,
+    IReadOnlyList<Guid> ExpandedTopologyManifestIds,
+    IReadOnlyList<Guid> ExpandedHubIds
+);
+
+public record AttentionLifecycleAppendRequest(
+    AttentionLifecycleSource Source,
+    string EvidenceKind,
+    string PhaseStatus,
+    string PromotionStatus,
+    string ActorOrSource,
+    string CommandId,
+    string EvidenceJson
+);
+
+public record AttentionLifecycleResult(
+    bool Succeeded,
+    Guid? AttentionId,
+    Guid? GenerationLineId,
+    string Status,
+    string Detail
+);
+
+/// <summary>
 /// A single hub-attractor exploration hit produced by the exploration runtime.
 /// Carries all fields needed for downstream write_logs_attention boundary.
 /// L2Norm = logs.current.l2_norm at scoring time.
 /// VectorJson = convergent neighbor hit vector (dot product component terms, per SSOT).
 /// EvidenceJson = scoring provenance (cosine_score, overlap_score, current_l2_norm, key counts).
-/// PhaseVectorJson carries runtime-generated exploratory evidence for logs.attention persistence.
+/// PhaseVectorJson carries append-only phaseAT evidence; q is not Draft.
+/// Canonical hits come from manifest-scoped hubs.hub_relations exploration. Legacy cache diagnostics remain isolated.
 /// </summary>
 public record HubAttractorExplorationHit(
     Guid CurrentId,
@@ -98,7 +199,14 @@ public record HubAttractorExplorationHit(
     double L2Norm,
     string VectorJson,
     string PhaseVectorJson,
-    string EvidenceJson
+    string EvidenceJson,
+    Guid GenerationLineId = default,
+    Guid? TopologyManifestId = null,
+    Guid? RelatedHubId = null,
+    IReadOnlyList<Guid>? SourceTopologyManifestIds = null,
+    IReadOnlyList<Guid>? ExpandedHubRelationIds = null,
+    IReadOnlyList<Guid>? ExpandedTopologyManifestIds = null,
+    IReadOnlyList<Guid>? ExpandedHubIds = null
 );
 
 /// <summary>
@@ -116,14 +224,20 @@ public record HubAttractorExplorationResult(
 /// NoChange: no change candidates detected — exploration skipped.
 /// MissingPolicy: no active function_parameters row found — fail-close.
 /// MalformedPolicy: policy JSON is invalid or required keys are missing/non-positive — fail-close.
-/// Ok: exploration ran successfully (Hits may be empty if no hub current records exist).
+/// NoRelatedTopologyManifest: explicit physical-table binding resolver returned no manifest — fail-close.
+/// NoHubRelations: resolved manifests have no active scored hub relations — fail-close.
+/// CanonicalRelationExplorationPending: retained compatibility status for pre-Step-4 callers.
+/// Ok: canonical relation exploration or explicitly requested diagnostics completed.
 /// </summary>
 public enum HubAttractorExplorationStatus
 {
     Ok,
     NoChange,
     MissingPolicy,
-    MalformedPolicy
+    MalformedPolicy,
+    NoRelatedTopologyManifest,
+    NoHubRelations,
+    CanonicalRelationExplorationPending
 }
 
 /// <summary>
@@ -145,7 +259,7 @@ public record HubAttractorExplorationRunResult(
 /// Evidence layer separation (SSOT):
 ///   statistics layer  : statistics_json, ema_score
 ///   attention layer   : l2_norm, vector_json, neighbor_score
-///   phase-attention   : phase_vector_json (runtime-generated evidence; persisted only)
+///   phase-attention   : phase_vector_json (append-only phaseAT evidence; q is not Draft)
 /// </summary>
 public record LogsAttentionWriteRequest(
     Guid CurrentId,
