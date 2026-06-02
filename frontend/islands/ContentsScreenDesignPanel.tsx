@@ -235,7 +235,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </button>
       </div>
       <p class="mb-2 text-xs text-muted-xs">
-        ③ 有効化（内容確認 → 有効化）は下の「公開・案内」パネルで実行してください。
+        次: 内容確認 → 有効化は下の「公開・案内」パネルで実行してください。
       </p>
 
       <label class="mb-3 block text-xs">
