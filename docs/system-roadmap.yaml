@@ -1168,8 +1168,16 @@ system_roadmap_ssot:
         /admin/contents authors one data-shaped single-page manifest, /admin/ui-builder adds
         projection layout and selectable component wiring, and /admin/manifests owns created-manifest
         hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
-        Legacy/debug/helper wrappers formerly isolated under /dev/admin/* are deleted. Detailed
-        wizard UI and screen_data_shape extension persistence remain implementation gaps.
+        Legacy/debug/helper wrappers formerly isolated under /dev/admin/* are deleted.
+        ContentsScreenDesignPanel normal-view field labels now use user-friendly vocabulary
+        (UX_FIELD_TABLE_REF 参照テーブル名, UX_FIELD_IMPORT_SCHEMA 取り込みデータ定義名,
+        UX_FIELD_NULLABLE 空欄許可); banned-term regression coverage added to adminUxGuard.test.ts.
+        Promote action is consolidated in ContentsPromotionPanel with explicit step flow
+        (① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化); validation gating covers both
+        manifest data shape and promotion metadata before enabling promote.
+        Detailed wizard UI steps, column type select, initial data flow, structured relation/join
+        input, search key selection, aggregation/display group, and screen_data_shape extension
+        persistence remain implementation gaps.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx

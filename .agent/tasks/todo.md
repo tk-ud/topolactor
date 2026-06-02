@@ -40,9 +40,10 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 
 ### User-facing vocabulary and flow cleanup
 
-- [ ] Replace internal normal-view terms in `ContentsScreenDesignPanel.tsx`: `physical table ref` → 「参照テーブル名」, `import schema 名` → 「取り込みデータ定義名」, `nullable` → 「空欄許可」.
-      → Add missing `adminUxTerms.ts` vocabulary and banned-term regression coverage in `adminUxGuard.test.ts`. [ux-vocabulary]
-- [ ] Consolidate promote action in `ContentsPromotionPanel` and present draft creation → design save → promote as explicit steps. [ux-simplification]
+- [x] Replace internal normal-view terms in `ContentsScreenDesignPanel.tsx`: `physical table ref` → 「参照テーブル名」, `import schema 名` → 「取り込みデータ定義名」, `nullable` → 「空欄許可」.
+      → `adminUxTerms.ts` に UX_FIELD_TABLE_REF / UX_FIELD_IMPORT_SCHEMA / UX_FIELD_NULLABLE 追加済み。`adminUxGuard.test.ts` に banned-term regression 追加済み。[ux-vocabulary]
+- [x] Consolidate promote action in `ContentsPromotionPanel` and present draft creation → design save → promote as explicit steps.
+      → promote 導線を ContentsPromotionPanel に集約し、① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化 のステップ表示を追加。validation gating: manifest data shape + promotion metadata の両面で確認し、どちらか blocking なら有効化不可。[ux-simplification]
 
 ## Optional follow-up
 

@@ -72,6 +72,12 @@ Deno.test("ADMIN_HUB_NAVIGATION_GUIDE title does not contain hub_relation", () =
 
 // ─── promoteDisabled logic guard ──────────────────────────────────────────────
 // validate must be run before promote is enabled.
+//
+// ContentsPromotionPanel の「内容を確認」は manifest data shape (validateAdminManifest)
+// と promotion metadata (validateAdminPromotionManifest) の両方を検証する。
+// どちらか一方でも blocking なら { isBlocking: true } となり promote は無効のまま。
+// backend promote は独立した fail-close を持つため、frontend 側の validation state は
+// pre-check として機能する。
 
 function computePromoteDisabled(
   selectedId: string,

@@ -4,6 +4,7 @@ import {
   listAdminManifests,
   getAdminPromotionManifest,
   validateAdminManifest,
+  validateAdminPromotionManifest,
   promoteAdminManifest,
   updateAdminPromotionManifestDraft,
   type AdminManifestListItem,
@@ -83,10 +84,21 @@ export default function ContentsPromotionPanel(): JSX.Element {
     if (!selectedId) return;
     setLoading(true);
     try {
-      const result = await validateAdminManifest(selectedId);
-      const isBlocking = result ? !result.valid : true;
+      // manifest data shape validation + promotion metadata validation の両面を確認する。
+      // どちらか一方でも blocking なら有効化不可。backend promote は独立した fail-close を持つ。
+      const [manifestResult, promotionResult] = await Promise.all([
+        validateAdminManifest(selectedId),
+        validateAdminPromotionManifest(selectedId),
+      ]);
+      const manifestBlocking = manifestResult ? !manifestResult.valid : true;
+      const promotionBlocking = promotionResult ? promotionResult.isBlocking : true;
+      const isBlocking = manifestBlocking || promotionBlocking;
       setValidation({ isBlocking });
-      setStatus(isBlocking ? "内容確認: 要修正（有効化は修正後に再確認してください）" : "内容確認: 問題なし — 有効化が可能です");
+      setStatus(
+        isBlocking
+          ? "内容確認: 要修正 — manifest データまたは公開・案内メタデータに問題があります（修正後に再確認してください）"
+          : "内容確認: 問題なし — 有効化が可能です",
+      );
     } finally {
       setLoading(false);
     }
