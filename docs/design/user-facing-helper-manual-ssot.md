@@ -4,7 +4,7 @@
 
 Topolactor のユーザー向け説明、ヘルパー、マニュアル、サイト内ガイドの **UX-facing policy** を定義する。
 
-内部 runtime SSOT の外向き projection として機能し、以下を非技術ユーザーが理解できるように説明できることを保証する:
+canonical runtime SSOT の外向き projection として機能し、以下を非技術ユーザーが理解できるように説明できることを保証する:
 
 - Desktop AI / CLI / MCP で何ができるか
 - 月次処理・分析自動化・外部出力の考え方

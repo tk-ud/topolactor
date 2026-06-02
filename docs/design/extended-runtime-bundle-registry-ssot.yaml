@@ -171,6 +171,13 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: external_intake_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       google_sheets_bundle:
         id: google_sheets_bundle
@@ -181,6 +188,13 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: external_intake_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       slack_bundle:
         id: slack_bundle
@@ -191,6 +205,13 @@ extended_runtime_bundle_registry_ssot:
         external_role: notification_and_approval_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: notification_or_approval_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       github_issues_bundle:
         id: github_issues_bundle
@@ -201,6 +222,13 @@ extended_runtime_bundle_registry_ssot:
         external_role: intake_and_approval_surface
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: external_intake_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       generic_webhook_bundle:
         id: generic_webhook_bundle
@@ -220,6 +248,13 @@ extended_runtime_bundle_registry_ssot:
           - canonical_runtime_route
         roadmap_ref: M6_external_integration.future_optional_external_surfaces
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: webhook_intake
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: scheduler_intake_required_before_runtime
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       external_rest_api_connector_bundle:
         id: external_rest_api_connector_bundle
@@ -229,6 +264,13 @@ extended_runtime_bundle_registry_ssot:
           外部APIからのデータ取得をconnector_adapter経由でintake_snapshotに変換。
         external_role: intake_and_connector_surface
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: external_intake_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
       dynamic_support_nocode_loop_bundle:
         id: dynamic_support_nocode_loop_bundle
@@ -240,6 +282,13 @@ extended_runtime_bundle_registry_ssot:
         external_role: human_editing_and_intake_surface
         roadmap_ref: product.dynamic_support_nocode_loop
         requires_separate_ssot: true
+        owner: future_separate_bundle_ssot
+        trigger_kind: external_intake_trigger
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
 
   future_bundle_policy:
     rules:
@@ -256,6 +305,24 @@ extended_runtime_bundle_registry_ssot:
       - approval_boundary
       - scheduler_boundary
       - audit_log_boundary
+    placeholder_policy:
+      allowed: true
+      description: >-
+        separate SSOT 未作成のfuture bundle candidateは、
+        公開リポジトリ上で安全な抽象値(public-safe placeholder)を使用してよい。
+        実endpoint・credential・実運用詳細を書いてはならない。
+        ただし、7項目の欄自体を省略することは許可しない。
+      allowed_placeholder_values:
+        owner: future_separate_bundle_ssot
+        intake_snapshot_shape: defined_by_separate_ssot
+        validation_boundary: validate_preview_apply_required
+        approval_boundary: explicit_apply_or_ui_approval_required
+        scheduler_boundary: no_direct_runtime_execution
+        audit_log_boundary: runtime_event_log_or_diff_log_required
+      prohibited:
+        - omit_any_required_declaration_field
+        - write_real_endpoints_or_credentials
+        - mark_placeholder_bundle_as_implemented
 
   change_surface:
     - extended_runtime_bundle_registry

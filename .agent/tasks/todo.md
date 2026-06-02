@@ -72,7 +72,7 @@ SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/ex
 - [ ] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot]
 - [ ] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot]
 - [ ] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot]
-- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSSOTが揃うまで実装しない [future-bundle-ssot-gate]
+- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate]
 
 ## User-facing Helper / Manual — future implementation TODOs
 

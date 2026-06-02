@@ -8,7 +8,7 @@ user_facing_helper_manual_ssot:
     summary: >-
       Topolactor のユーザー向け説明、ヘルパー、マニュアル、サイト内ガイドの
       UX-facing policy を定義する。
-      内部 runtime SSOT の外向き projection として機能し、
+      canonical runtime SSOT の外向き projection として機能し、
       Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界を
       非技術ユーザー向けに説明可能にする。
     goals:

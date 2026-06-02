@@ -86,15 +86,18 @@ roadmap 参照元:
 - `docs/system-roadmap.yaml` → `M6_external_integration.future_optional_external_surfaces`
 - `.agent/tasks/todo.md`
 
-| Bundle | roadmap_ref | 外部サービスとしての役割 |
-|--------|-------------|--------------------------|
-| Notion Bundle | M6_external_integration | human editing / intake surface |
-| Google Sheets Bundle | M6_external_integration | human editing / intake surface |
-| Slack Bundle | M6_external_integration | notification / approval surface |
-| GitHub Issues Bundle | M6_external_integration | intake / approval surface |
-| Generic Webhook Bundle | M6_external_integration | external trigger source |
-| External REST API Connector Bundle | — | intake / connector surface |
-| Dynamic Support No-code Loop Bundle | product.dynamic_support_nocode_loop | human editing / intake surface |
+| Bundle | roadmap_ref | 外部サービスとしての役割 | scheduler_boundary |
+|--------|-------------|--------------------------|-------------------|
+| Notion Bundle | M6_external_integration | human editing / intake surface | no_direct_runtime_execution |
+| Google Sheets Bundle | M6_external_integration | human editing / intake surface | no_direct_runtime_execution |
+| Slack Bundle | M6_external_integration | notification / approval surface | no_direct_runtime_execution |
+| GitHub Issues Bundle | M6_external_integration | intake / approval surface | no_direct_runtime_execution |
+| Generic Webhook Bundle | M6_external_integration | external trigger source | scheduler_intake_required_before_runtime |
+| External REST API Connector Bundle | — | intake / connector surface | no_direct_runtime_execution |
+| Dynamic Support No-code Loop Bundle | product.dynamic_support_nocode_loop | human editing / intake surface | no_direct_runtime_execution |
+
+各 Bundle の必須宣言（`owner` / `trigger_kind` / `intake_snapshot_shape` / `validation_boundary` / `approval_boundary` / `scheduler_boundary` / `audit_log_boundary`）は YAML 側に記載。
+詳細 SSOT 未作成の Bundle は public-safe placeholder 値を使用する（実 endpoint・credential は記載しない）。
 
 ### Generic Webhook Bundle 設計境界
 
@@ -118,14 +121,15 @@ webhook direct runtime execution without scheduler は禁止。
 2. future bundles must not bypass preview / validate / apply
 3. future bundles must not become canonical runtime SSOT
 4. future bundles require **separate SSOT before implementation**
-5. each future bundle must declare:
+5. each future bundle must declare all 7 fields:
    - owner
    - trigger_kind
-   - intake_snapshot shape
-   - validation boundary
-   - approval boundary
-   - scheduler boundary
-   - audit log boundary
+   - intake_snapshot_shape
+   - validation_boundary
+   - approval_boundary
+   - scheduler_boundary
+   - audit_log_boundary
+6. **placeholder policy**: separate SSOT 未作成の Bundle は public-safe placeholder 値を使用してよい。実 endpoint・credential の記載は禁止。7 項目の欄を省略することは禁止。
 
 ---
 
