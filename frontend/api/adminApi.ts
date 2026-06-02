@@ -293,6 +293,12 @@ export type AdminManifestScreenColumnInput = {
   nullable: boolean;
 };
 
+export type RelationIntentInput = {
+  joinTableRef: string;
+  localKey: string;
+  remoteKey: string;
+};
+
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
   tableRef?: string;
@@ -300,9 +306,19 @@ export type AdminManifestScreenDataShapeInput = {
   dbTableName?: string;
   importSchemaName?: string;
   searchTargets?: string[];
+  /** Structured search key columns. Normal-view selection; maps to searchTargets on backend. */
+  searchKeyColumns?: string[];
   aggregationSpec?: string;
+  /** Structured aggregation key. "group by" must not appear in UX vocabulary. */
+  aggregationKey?: string;
+  /** Structured display columns. */
+  displayColumns?: string[];
   columns?: AdminManifestScreenColumnInput[];
   screenOperationKind?: string;
+  /** Structured relation/join intents for draft data-shape only (not created-manifest relations). */
+  relationIntents?: RelationIntentInput[];
+  /** Initial-data candidates as screen-data-shape topology intent. Actual row insertion belongs to content_bundle. */
+  initialDataRows?: Record<string, string>[];
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [

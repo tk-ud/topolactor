@@ -116,6 +116,13 @@ public static class ManifestCanonicalProjection
         manifestKey ??= PromotionManifestValidator.ExtractMetadataDto(detail.Topology)?.ManifestKey;
         manifestKey ??= BuildDefaultManifestKey(summary);
 
+        // Fail closed before either canonical projection table is mutated. The repository
+        // transaction remains the final rollback boundary, but table_ref mismatch is a
+        // validation failure and must not leave a topology_manifests partial write even when
+        // this projection helper is called independently.
+        var wiringPreflightError = await ValidateWiringTableRefAsync(conn, detail, ct);
+        if (wiringPreflightError is not null) return wiringPreflightError;
+
         var topologyJsonb = JsonSerializer.Serialize(new
         {
             manifest_id = detail.ManifestId,
@@ -139,37 +146,31 @@ public static class ManifestCanonicalProjection
         upsert.Parameters.AddWithValue("topo", topologyJsonb);
         await upsert.ExecuteNonQueryAsync(ct);
 
-        await TryProjectWiringAsync(conn, detail, ct);
-        return null;
+        var wiringError = await TryProjectWiringAsync(conn, detail, ct);
+        return wiringError;
     }
 
-    private static async Task TryProjectWiringAsync(
+    /// <summary>
+    /// Projects wiring from screen_data_shape.tableRef into topology.wiring_physical_to_package.
+    /// Returns WIRING_TABLE_REF_NOT_FOUND if tableRef is present but not in topology.physical_tables.
+    /// Returns null on success or when no tableRef is specified (no wiring intent).
+    /// Never silently skips a tableRef mismatch.
+    /// </summary>
+    private static async Task<ValidationError?> TryProjectWiringAsync(
         NpgsqlConnection conn,
         ManifestDetailRecord detail,
         CancellationToken ct)
     {
-        JsonElement? shapeEntry = null;
-        foreach (var entry in detail.Topology)
+        var tableRef = ExtractScreenDataShapeTableRef(detail.Topology);
+        if (string.IsNullOrWhiteSpace(tableRef)) return null;
+
+        var physicalTableId = await FindPhysicalTableIdAsync(conn, tableRef, ct);
+        if (!physicalTableId.HasValue)
         {
-            if (entry.ValueKind != JsonValueKind.Object) continue;
-            if (!entry.TryGetProperty("type", out var typeEl) ||
-                typeEl.ValueKind != JsonValueKind.String ||
-                !string.Equals(typeEl.GetString(), ScreenDataShapeEntryType, StringComparison.Ordinal)) continue;
-            shapeEntry = entry;
-            break;
+            // ProjectOnPromoteAsync performs this preflight before any canonical write. Keep
+            // this guard here as well so future callers cannot silently skip a broken ref.
+            return WiringTableRefNotFound(tableRef);
         }
-
-        if (shapeEntry is null) return;
-        var tableRef = ExtractTableRef(shapeEntry.Value);
-        if (string.IsNullOrWhiteSpace(tableRef)) return;
-
-        await using var lookup = conn.CreateCommand();
-        lookup.CommandText =
-            "SELECT physical_table_id FROM topology.physical_tables " +
-            "WHERE table_ref = @ref AND active = true LIMIT 1";
-        lookup.Parameters.AddWithValue("ref", tableRef);
-        var physicalId = await lookup.ExecuteScalarAsync(ct);
-        if (physicalId is not long physicalTableId) return;
 
         var packageId = detail.ManifestId;
         var wiringDef = JsonSerializer.Serialize(new
@@ -183,20 +184,68 @@ public static class ManifestCanonicalProjection
         exists.CommandText =
             "SELECT 1 FROM topology.wiring_physical_to_package " +
             "WHERE physical_table_id = @pt AND package_id = @pkg AND active = true LIMIT 1";
-        exists.Parameters.AddWithValue("pt", physicalTableId);
+        exists.Parameters.AddWithValue("pt", physicalTableId.Value);
         exists.Parameters.AddWithValue("pkg", packageId);
-        if (await exists.ExecuteScalarAsync(ct) is not null) return;
+        if (await exists.ExecuteScalarAsync(ct) is not null) return null;
 
         await using var insert = conn.CreateCommand();
         insert.CommandText =
             "INSERT INTO topology.wiring_physical_to_package " +
             "(physical_table_id, package_id, wiring_def, active) " +
             "VALUES (@pt, @pkg, @def::jsonb, true)";
-        insert.Parameters.AddWithValue("pt", physicalTableId);
+        insert.Parameters.AddWithValue("pt", physicalTableId.Value);
         insert.Parameters.AddWithValue("pkg", packageId);
         insert.Parameters.AddWithValue("def", wiringDef);
         await insert.ExecuteNonQueryAsync(ct);
+        return null;
     }
+
+    private static async Task<ValidationError?> ValidateWiringTableRefAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        CancellationToken ct)
+    {
+        var tableRef = ExtractScreenDataShapeTableRef(detail.Topology);
+        if (string.IsNullOrWhiteSpace(tableRef)) return null;
+
+        return await FindPhysicalTableIdAsync(conn, tableRef, ct) is null
+            ? WiringTableRefNotFound(tableRef)
+            : null;
+    }
+
+    private static string? ExtractScreenDataShapeTableRef(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), ScreenDataShapeEntryType, StringComparison.Ordinal)) continue;
+
+            return ExtractTableRef(entry);
+        }
+
+        return null;
+    }
+
+    private static async Task<long?> FindPhysicalTableIdAsync(
+        NpgsqlConnection conn,
+        string tableRef,
+        CancellationToken ct)
+    {
+        await using var lookup = conn.CreateCommand();
+        lookup.CommandText =
+            "SELECT physical_table_id FROM topology.physical_tables " +
+            "WHERE table_ref = @ref AND active = true LIMIT 1";
+        lookup.Parameters.AddWithValue("ref", tableRef);
+        return await lookup.ExecuteScalarAsync(ct) is long physicalTableId ? physicalTableId : null;
+    }
+
+    private static ValidationError WiringTableRefNotFound(string tableRef) =>
+        new(
+            "WIRING_TABLE_REF_NOT_FOUND",
+            $"table_ref '{tableRef}' is not registered in topology.physical_tables (active=true). " +
+            "Register the physical table before promoting this manifest, or remove the tableRef intent.");
 
     public static string? ExtractTableRef(JsonElement shapeEntry)
     {

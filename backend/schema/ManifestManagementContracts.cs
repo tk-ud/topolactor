@@ -84,15 +84,26 @@ public record AdminManifestScreenColumnDto(
     [property: JsonPropertyName("nullable")] bool Nullable
 );
 
+public record AdminManifestRelationIntentDto(
+    [property: JsonPropertyName("joinTableRef")] string JoinTableRef,
+    [property: JsonPropertyName("localKey")] string LocalKey,
+    [property: JsonPropertyName("remoteKey")] string RemoteKey
+);
+
 public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("manifestId")] string ManifestId,
     [property: JsonPropertyName("tableRef")] string? TableRef,
     [property: JsonPropertyName("dbTableName")] string? DbTableName,
     [property: JsonPropertyName("importSchemaName")] string? ImportSchemaName,
     [property: JsonPropertyName("searchTargets")] IReadOnlyList<string>? SearchTargets,
+    [property: JsonPropertyName("searchKeyColumns")] IReadOnlyList<string>? SearchKeyColumns,
     [property: JsonPropertyName("aggregationSpec")] string? AggregationSpec,
+    [property: JsonPropertyName("aggregationKey")] string? AggregationKey,
+    [property: JsonPropertyName("displayColumns")] IReadOnlyList<string>? DisplayColumns,
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
-    [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind
+    [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind,
+    [property: JsonPropertyName("relationIntents")] IReadOnlyList<AdminManifestRelationIntentDto>? RelationIntents,
+    [property: JsonPropertyName("initialDataRows")] IReadOnlyList<System.Text.Json.JsonElement>? InitialDataRows
 );
 
 public record AdminManifestUpdateDraftRequestDto(

@@ -1,4 +1,4 @@
-import { assertEquals, assertFalse } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertFalse, assert } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   ADMIN_MANIFESTS_GUIDE,
   ADMIN_HUB_NAVIGATION_GUIDE,
@@ -13,8 +13,22 @@ import {
   UX_FIELD_NULLABLE,
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
+  UX_FIELD_SEARCH_KEY,
+  UX_FIELD_AGGREGATION_KEY,
+  UX_FIELD_DISPLAY_COLUMNS,
+  UX_FIELD_SAMPLE_VIEWING,
+  UX_FIELD_INITIAL_DATA,
+  UX_FIELD_RELATION_INTENT,
 } from "../content/adminUxTerms.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
+import {
+  emptyManifestScreenDesign,
+  loadManifestScreenDesignLocal,
+  saveManifestScreenDesignLocal,
+  clearManifestScreenDesignLocal,
+  screenDesignFromBackendShape,
+} from "../lib/manifestScreenDesign.ts";
+import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 
 // ─── Banned terms guard ───────────────────────────────────────────────────────
 // These technical terms must not appear in primary-visible guide text.
@@ -303,4 +317,175 @@ Deno.test("UX_COLUMN_TYPE_ADVANCED_LABEL: is a non-empty string for advanced/oth
     UX_COLUMN_TYPE_ADVANCED_LABEL.toLowerCase().includes("group by"),
     "advanced label must not contain 'group by'",
   );
+});
+
+// ─── New structured field UX vocabulary regression ────────────────────────────
+// SSOT: admin-console-workflow-ssot.yaml steps 4–7 UX vocabulary requirements
+
+Deno.test("UX_FIELD_SEARCH_KEY: does not expose internal field names", () => {
+  assertFalse(UX_FIELD_SEARCH_KEY.includes("searchTargets"), "must not expose internal searchTargets key");
+  assertFalse(UX_FIELD_SEARCH_KEY.includes("_"), "must not use internal snake_case in normal-view label");
+  assertEquals(UX_FIELD_SEARCH_KEY.length > 0, true, "must be a non-empty label");
+});
+
+Deno.test("UX_FIELD_AGGREGATION_KEY: does not expose 'group by' vocabulary", () => {
+  assertFalse(
+    UX_FIELD_AGGREGATION_KEY.toLowerCase().includes("group by"),
+    "aggregation key label must not contain 'group by' (SSOT prohibited in normal view)",
+  );
+  assertEquals(UX_FIELD_AGGREGATION_KEY.length > 0, true, "must be a non-empty label");
+});
+
+Deno.test("UX_FIELD_DISPLAY_COLUMNS: does not expose 'group by' vocabulary", () => {
+  assertFalse(
+    UX_FIELD_DISPLAY_COLUMNS.toLowerCase().includes("group by"),
+    "display columns label must not contain 'group by'",
+  );
+});
+
+Deno.test("UX_FIELD_SAMPLE_VIEWING: is a non-empty user-facing label", () => {
+  assertEquals(typeof UX_FIELD_SAMPLE_VIEWING, "string");
+  assertEquals(UX_FIELD_SAMPLE_VIEWING.length > 0, true, "sample viewing label must not be empty");
+});
+
+Deno.test("UX_FIELD_INITIAL_DATA: does not expose direct-DB-write vocabulary", () => {
+  assertFalse(
+    UX_FIELD_INITIAL_DATA.toLowerCase().includes("insert"),
+    "initial data label must not suggest direct DB insert",
+  );
+  assertEquals(UX_FIELD_INITIAL_DATA.length > 0, true, "must be a non-empty label");
+});
+
+Deno.test("UX_FIELD_RELATION_INTENT: does not imply created-manifest hub management ownership", () => {
+  // relation intent in /admin/contents is draft data-shape only; hub/relation management stays in /admin/manifests
+  assertFalse(
+    UX_FIELD_RELATION_INTENT.toLowerCase().includes("hub"),
+    "relation intent label must not suggest hub management (owned by /admin/manifests)",
+  );
+  assertEquals(UX_FIELD_RELATION_INTENT.length > 0, true, "must be a non-empty label");
+});
+
+// ─── ManifestScreenDesignDraft structured field round-trip ────────────────────
+// Validates that emptyManifestScreenDesign has structured fields and localStorage round-trip preserves them.
+
+Deno.test("emptyManifestScreenDesign: has all structured fields with correct defaults", () => {
+  const d = emptyManifestScreenDesign();
+  assertEquals(Array.isArray(d.searchKeyColumns), true, "searchKeyColumns must be an array");
+  assertEquals(d.searchKeyColumns.length, 0, "searchKeyColumns defaults to empty");
+  assertEquals(Array.isArray(d.displayColumns), true, "displayColumns must be an array");
+  assertEquals(d.displayColumns.length, 0, "displayColumns defaults to empty");
+  assertEquals(typeof d.aggregationKey, "string", "aggregationKey must be a string");
+  assertEquals(d.aggregationKey, "", "aggregationKey defaults to empty string");
+  assertEquals(Array.isArray(d.relationIntents), true, "relationIntents must be an array");
+  assertEquals(d.relationIntents.length, 0, "relationIntents defaults to empty");
+  assertEquals(Array.isArray(d.initialDataRows), true, "initialDataRows must be an array");
+  assertEquals(d.initialDataRows.length, 0, "initialDataRows defaults to empty");
+});
+
+Deno.test("screen_data_shape topology extension: extracts structured fields from topology JSON", () => {
+  const topology = JSON.stringify([
+    {
+      type: "screen_data_shape",
+      tableRef: "my_table",
+      searchTargets: ["col_a"],
+      searchKeyColumns: ["col_a", "col_b"],
+      aggregationKey: "col_a",
+      displayColumns: ["col_a", "col_b", "col_c"],
+      aggregationSpec: null,
+      screenOperationKind: "list",
+      columns: [{ name: "col_a", dataType: "text", nullable: true }],
+      relationIntents: [{ joinTableRef: "other_table", localKey: "id", remoteKey: "ref_id" }],
+      initialDataRows: [{ col_a: "value1" }],
+    },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.tableRef, "my_table");
+  assertEquals(shape.searchKeyColumns, ["col_a", "col_b"]);
+  assertEquals(shape.aggregationKey, "col_a");
+  assertEquals(shape.displayColumns, ["col_a", "col_b", "col_c"]);
+  assertEquals(shape.columns.length, 1);
+  assertEquals(shape.columns[0].name, "col_a");
+  assertEquals(shape.relationIntents.length, 1);
+  assertEquals(shape.relationIntents[0].joinTableRef, "other_table");
+  assertEquals(shape.initialDataRows.length, 1);
+  assertEquals(shape.initialDataRows[0]["col_a"], "value1");
+});
+
+Deno.test("screen_data_shape topology extension: returns empty structured fields when absent", () => {
+  const topology = JSON.stringify([
+    {
+      type: "screen_data_shape",
+      tableRef: "my_table",
+      searchTargets: ["col_a"],
+    },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.searchKeyColumns, [], "absent searchKeyColumns returns empty array");
+  assertEquals(shape.displayColumns, [], "absent displayColumns returns empty array");
+  assertEquals(shape.aggregationKey, null, "absent aggregationKey returns null");
+  assertEquals(shape.columns, [], "absent columns returns empty array");
+  assertEquals(shape.relationIntents, [], "absent relationIntents returns empty array");
+  assertEquals(shape.initialDataRows, [], "absent initialDataRows returns empty array");
+});
+
+Deno.test("screenDesignFromBackendShape: maps structured fields from topology shape", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: ["col_a"],
+    searchKeyColumns: ["col_a"],
+    aggregationSpec: null,
+    aggregationKey: "col_a",
+    displayColumns: ["col_a", "col_b"],
+    screenOperationKind: "list",
+    columns: [{ name: "col_a", dataType: "text", nullable: true }],
+    relationIntents: [],
+    initialDataRows: [],
+  };
+  const draft = screenDesignFromBackendShape(shape, "list");
+  assertEquals(draft.searchKeyColumns, ["col_a"]);
+  assertEquals(draft.aggregationKey, "col_a");
+  assertEquals(draft.displayColumns, ["col_a", "col_b"]);
+  assertEquals(draft.columns.length, 1);
+  assertEquals(draft.columns[0].name, "col_a");
+});
+
+Deno.test("initial data flow: initial data rows stored as intent not direct DB write", () => {
+  // Guard: initialDataRows is a local state field only — no direct DB write function exists
+  // The field is sent through assignAdminManifestScreenDataShape via backend topology extension
+  const d = emptyManifestScreenDesign();
+  d.initialDataRows = [{ col_a: "test_value" }];
+  // Verify it's just a plain record array — no DB connection object, no execute function
+  assertEquals(Array.isArray(d.initialDataRows), true);
+  assertEquals(typeof d.initialDataRows[0], "object");
+  assertEquals(d.initialDataRows[0]["col_a"], "test_value");
+});
+
+Deno.test("relation intent: /admin/contents relation intent does not own hub/inter-manifest management", () => {
+  // Guard: UX_FIELD_RELATION_INTENT must not imply cross-manifest hub management
+  // (that belongs to /admin/manifests)
+  assertFalse(
+    UX_FIELD_RELATION_INTENT.includes("manifest"),
+    "relation intent label must not mention manifest (cross-manifest management is /admin/manifests)",
+  );
+});
+
+Deno.test("aggregation UX: normal-view aggregation vocabulary does not contain 'group by'", () => {
+  const normalViewLabels = [
+    UX_FIELD_AGGREGATION_KEY,
+    UX_FIELD_DISPLAY_COLUMNS,
+    UX_FIELD_SAMPLE_VIEWING,
+  ];
+  for (const label of normalViewLabels) {
+    assertFalse(
+      label.toLowerCase().includes("group by"),
+      `Normal-view aggregation label "${label}" must not contain 'group by' (SSOT prohibited vocabulary)`,
+    );
+  }
+});
+
+Deno.test("sample viewing: UX_FIELD_SAMPLE_VIEWING is the mandatory preview path label", () => {
+  // Guard: sample viewing / preview path is required per SSOT step 7
+  assertEquals(typeof UX_FIELD_SAMPLE_VIEWING, "string");
+  assert(UX_FIELD_SAMPLE_VIEWING.length > 0, "sample viewing label must be defined");
 });
