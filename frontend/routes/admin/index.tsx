@@ -6,12 +6,13 @@ import AdminHowTo from "../../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../../components/AdminHelpPanel.tsx";
 import AdminMainFlowStepper from "../../islands/AdminMainFlowStepper.tsx";
 import {
+  ACCEPTANCE_CHECKLIST,
+  ACCEPTANCE_FLOW_STEPS,
   ADMIN_INDEX_GUIDE,
   ADMIN_ROUTE_CARDS,
-  ACCEPTANCE_FLOW_STEPS,
-  ACCEPTANCE_CHECKLIST,
 } from "../../content/adminGuides.ts";
 import {
+  UX_CONTENTS,
   UX_HUB_MANIFESTS,
   UX_UI_BUILDER,
 } from "../../content/adminUxTerms.ts";
@@ -25,8 +26,10 @@ export default function AdminIndex() {
         <h1 class="page-title">topolactor — 管理</h1>
 
         <p class="mb-4 text-sm leading-relaxed text-gray-700">
-          新規 manifest 作成 → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS}の順で進めてください。
-          利用には<strong>ログイン</strong>が必要です（未ログイン時はログイン画面が表示されます）。
+          {UX_CONTENTS} → {UX_UI_BUILDER} →{" "}
+          {UX_HUB_MANIFESTS}の順で進めてください。 利用には<strong>
+            ログイン
+          </strong>が必要です（未ログイン時はログイン画面が表示されます）。
         </p>
 
         <AdminMainFlowStepper />
@@ -46,8 +49,12 @@ export default function AdminIndex() {
             {ACCEPTANCE_FLOW_STEPS.map((step) => (
               <li key={step.step} class="card font-mono">
                 <div class="flex flex-wrap items-baseline gap-2">
-                  <span class="badge-info text-xs font-mono">Step {step.step}</span>
-                  <a href={step.href} class="link font-semibold">{step.label}</a>
+                  <span class="badge-info text-xs font-mono">
+                    Step {step.step}
+                  </span>
+                  <a href={step.href} class="link font-semibold">
+                    {step.label}
+                  </a>
                 </div>
                 <p class="mt-1 text-sm">{step.purpose}</p>
                 <p class="text-muted-xs mt-1">
@@ -55,7 +62,9 @@ export default function AdminIndex() {
                 </p>
                 {step.boundaryNote && (
                   <details class="text-muted-xs mt-1">
-                    <summary class="cursor-pointer italic">技術情報（境界）</summary>
+                    <summary class="cursor-pointer italic">
+                      技術情報（境界）
+                    </summary>
                     <p class="mt-1 pl-2">{step.boundaryNote}</p>
                   </details>
                 )}
@@ -75,7 +84,9 @@ export default function AdminIndex() {
           <div class="space-y-3">
             {ACCEPTANCE_CHECKLIST.map((item) => (
               <div key={item.href} class="card font-mono">
-                <a href={item.href} class="link font-semibold text-sm">{item.label}</a>
+                <a href={item.href} class="link font-semibold text-sm">
+                  {item.label}
+                </a>
                 <ul class="mt-2 space-y-0.5">
                   {item.checks.map((check, i) => (
                     <li key={i} class="flex items-start gap-2 text-sm">
@@ -92,8 +103,10 @@ export default function AdminIndex() {
         <section class="mb-8">
           <h2 class="section-title">管理画面一覧</h2>
           <p class="text-muted mb-4 text-sm">
-            正規導線: <strong>新規 manifest 作成 → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS}</strong>。
-            canonical admin route は上記3画面と管理入口のみです。
+            おすすめの順序:{" "}
+            <strong>
+              {UX_CONTENTS} → {UX_UI_BUILDER} → {UX_HUB_MANIFESTS}
+            </strong>。
           </p>
           <ul class="space-y-4">
             {ADMIN_ROUTE_CARDS.map((card) => (
@@ -101,13 +114,13 @@ export default function AdminIndex() {
                 <a href={card.href} class="link font-semibold">{card.label}</a>
                 <p class="mt-1 text-sm">{card.purpose}</p>
                 <ol class="text-muted-xs mt-2 list-decimal list-inside space-y-0.5">
-                  {card.howToSummary.map((step, i) => (
-                    <li key={i}>{step}</li>
-                  ))}
+                  {card.howToSummary.map((step, i) => <li key={i}>{step}</li>)}
                 </ol>
                 <p class="text-muted-xs mt-1">関係: {card.relation}</p>
                 {card.caution && (
-                  <p class="text-muted-xs mt-1 text-yellow-800">⚠ {card.caution}</p>
+                  <p class="text-muted-xs mt-1 text-yellow-800">
+                    ⚠ {card.caution}
+                  </p>
                 )}
               </li>
             ))}
@@ -115,11 +128,14 @@ export default function AdminIndex() {
         </section>
 
         <details class="mb-8 rounded border border-gray-200 bg-gray-50 p-4 text-sm">
-          <summary class="cursor-pointer font-semibold">技術情報（開発者向け・参照データ）</summary>
+          <summary class="cursor-pointer font-semibold">
+            技術情報（開発者向け・参照データ）
+          </summary>
           <section class="mt-4">
             <h3 class="section-title text-base">構造マップ（参照用）</h3>
             <p class="text-muted-xs mb-3">
-              デモ用デフォルトの attractor → package/schema/component 解決。編集は本 UI では行いません。
+              デモ用デフォルトの attractor → package/schema/component
+              解決。編集は本 UI では行いません。
             </p>
             <div class="table-wrap font-mono">
               <table class="table">
@@ -137,7 +153,9 @@ export default function AdminIndex() {
                       <td>{entry.attractorKey}</td>
                       <td class="text-muted-xs">{entry.packageId}</td>
                       <td class="text-muted-xs">{entry.schemaId}</td>
-                      <td class="text-muted-xs">{entry.componentIds.join(", ")}</td>
+                      <td class="text-muted-xs">
+                        {entry.componentIds.join(", ")}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -156,7 +174,9 @@ export default function AdminIndex() {
             </dl>
           </section>
           <section class="mt-6 font-mono">
-            <h3 class="section-title text-base">デフォルトのデータの形（参照）</h3>
+            <h3 class="section-title text-base">
+              デフォルトのデータの形（参照）
+            </h3>
             <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt class="font-semibold">schemaId</dt>
               <dd>{defaultSchema.schemaId}</dd>
@@ -178,7 +198,8 @@ export default function AdminIndex() {
           <p class="text-muted-xs mt-4">
             仕様: <code>docs/registrar-admin-ui-specification.md</code>
             {" · "}
-            Frontend = projection / intent submission。topology 正本は DB + backend runtime。
+            Frontend = projection / intent submission。topology 正本は DB +
+            backend runtime。
           </p>
         </details>
 

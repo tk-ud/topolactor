@@ -2,8 +2,8 @@
  * 管理画面の非開発者向け表示用語（URL・API 名は変更しない）。
  * 内部の manifest / schema 等は技術情報・詳細リファレンスに退避する。
  */
-export const UX_CONTENTS = "ページ作成";
-export const UX_CONTENTS_PAGE = "ページ作成画面";
+export const UX_CONTENTS = "新しいページを作る";
+export const UX_CONTENTS_PAGE = "新しいページを作る画面";
 export const UX_HUB_MANIFESTS = "ページ同士をつなぐ";
 export const UX_HUB_MANIFESTS_PAGE = "ページ同士をつなぐ画面";
 /** @deprecated 互換参照用 — 新規コードは UX_CONTENTS / UX_HUB_MANIFESTS を使用 */
@@ -97,7 +97,30 @@ export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
 /** 推奨フローの Step ラベル（テストとステッパーで共有） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
   "ログイン",
-  "新規 manifest 作成",
+  UX_CONTENTS,
   UX_UI_BUILDER,
   UX_HUB_MANIFESTS,
+] as const;
+
+/** 有効化タイミング（通常表示用。保存値は変更しない） */
+export const UX_ACTIVATION_POLICY_LABELS: Record<string, string> = {
+  manual: "手動で有効化",
+  scheduled: "日時を指定",
+  conditional: "条件を満たしたとき",
+};
+
+/** 通常導線に露出させない実装語彙。詳細・debug surface では表示可。 */
+export const NORMAL_VIEW_BANNED_TERMS = [
+  "manifest",
+  "topology_manifest",
+  "hub_relation",
+  "hub membership",
+  "navigation ordering",
+  "canonical",
+  "projection",
+  "runtime",
+  "payload",
+  "schemaId",
+  "packageId",
+  "componentId",
 ] as const;

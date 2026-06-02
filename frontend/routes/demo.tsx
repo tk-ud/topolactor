@@ -1,23 +1,18 @@
 import { JSX } from "preact";
 import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 
-/**
- * /demo — admin構築済み demo project projection の体験監査 preview 面。
- * UX構築 authority は持たない。構築・編集は /admin で行う。
- * raw runtime 検証は /demo/debug または /demo/debug を利用。
- */
+/** /demo — user-facing preview. Configuration and editing stay under /admin. */
 export default function Demo(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — Demo preview</h1>
+      <h1 class="page-title">topolactor — デモ</h1>
 
       <div class="alert-info mb-6">
-        <strong>Demo preview:</strong> admin で構築した demo project projection を確認できます。
-        先に <a href="/auth" class="link">ログイン</a> してください。
-        raw runtime 検証は{" "}
-        <a href="/demo/debug" class="link">/demo/debug</a> または{" "}
-        <a href="/demo/debug" class="link">/demo/debug</a>、
-        構築・編集は <a href="/admin" class="link">/admin</a> をご利用ください。
+        <strong>デモ:</strong> 設定済みページの表示と操作を確認できます。 先に
+        {" "}
+        <a href="/auth" class="link">ログイン</a> してください。 ページの設定は
+        {" "}
+        <a href="/admin" class="link">管理画面</a> から行えます。
       </div>
 
       <section class="mb-8">
@@ -27,13 +22,11 @@ export default function Demo(): JSX.Element {
       <div class="nav-footer">
         <a href="/" class="link">トップ</a>
         {" · "}
-        <a href="/demo/debug" class="link">raw 検証</a>
-        {" · "}
-        <a href="/demo/debug" class="link">admin runtime</a>
+        <a href="/demo/debug" class="link">開発者向け検証</a>
         {" · "}
         <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}
-        <a href="/admin" class="link">admin</a>
+        <a href="/admin" class="link">管理画面</a>
       </div>
     </main>
   );
