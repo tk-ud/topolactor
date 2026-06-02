@@ -4,6 +4,22 @@
  * SSOT: docs/registrar-admin-ui-specification.md §5
  */
 
+export const RESPONSIVE_BREAKPOINTS = ["sm", "md", "lg", "xl"] as const;
+export type BreakpointKey = (typeof RESPONSIVE_BREAKPOINTS)[number];
+export type ResponsiveTokenRules = Partial<Record<string, string[]>>;
+
+/**
+ * Strip breakpoints with empty token lists from a responsive rule map.
+ * Used before submitting to backend to avoid sending empty breakpoint entries.
+ */
+export function filterEmptyResponsiveRules(rules: ResponsiveTokenRules): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const [bp, tokens] of Object.entries(rules)) {
+    if (tokens && tokens.length > 0) out[bp] = tokens;
+  }
+  return out;
+}
+
 // Minimal node shape for patch builder — compatible with DraftNode in UiBuilderAdmin.tsx.
 export interface VisualNodePayload {
   nodeId: string;

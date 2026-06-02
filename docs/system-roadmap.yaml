@@ -1386,7 +1386,7 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     admin_visual_layout_builder:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1406,6 +1406,13 @@ system_roadmap_ssot:
         authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
         Frontend authority boundary: draft layout state, mouse interaction, visual preview,
         local readiness display, intent submission. No topology judgment, no promotion judgment.
+        layoutId round-trip closed: after successful apply, confirmed layoutId from backend response
+        updates frontend state via setLayoutId; explicit LAYOUT_ID_MISMATCH error raised if backend
+        returns a different layoutId than was sent — no silent fallback.
+        Full responsive token rule UI: per-breakpoint (sm/md/lg/xl) token selection rendered in
+        normal view via ResponsiveTokenRuleEditor with breakpoint tabs; raw JSON textarea isolated
+        under AdvancedManualOverride disclosure; filterEmptyResponsiveRules strips empty breakpoints
+        before backend submission; replaces previous hardcoded { md: selectedTokenRefs } placeholder.
       files:
         - frontend/islands/UiBuilderAdmin.tsx
         - frontend/runtime/visualLayoutUtils.ts
@@ -1421,8 +1428,17 @@ system_roadmap_ssot:
         - frontend_adapter_is_a_stable_projection_surface
         - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
         - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
-      known_gap_ref:
-        - layoutId round-trip from DB and full responsive token rule UI remain follow-up
+        - layoutId_round_trip_from_backend_response_updates_frontend_state_with_explicit_mismatch_error
+        - responsive_token_rule_UI_per_breakpoint_with_empty_rule_filter_before_backend_submission
+      evidence:
+        tests:
+          - visualLayoutBuilder.test.ts (layoutId round-trip: 5 tests)
+          - visualLayoutBuilder.test.ts (filterEmptyResponsiveRules: 5 tests)
+          - visualLayoutBuilder.test.ts (responsive rule per-breakpoint: 4 tests)
+          - visualLayoutBuilder.test.ts (RESPONSIVE_BREAKPOINTS export: sm/md/lg/xl)
+        ci:
+          - frontend-tests
+      known_gap_ref: []
 
     backend.context_route_repository:
       status: partial

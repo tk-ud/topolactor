@@ -43,6 +43,25 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 - [x] Consolidate promote action in `ContentsPromotionPanel` and present draft creation → design save → promote as explicit steps.
       → promote 導線を ContentsPromotionPanel に集約し、① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化 のステップ表示を追加。validation gating: manifest data shape + promotion metadata の両面で確認し、どちらか blocking なら有効化不可。[ux-simplification]
 
+## Implementation gap — `admin_visual_layout_builder` completion bundle
+
+Roadmap entry: `admin_visual_layout_builder`. Status promoted from `partial` → `implemented`.
+
+### layoutId round-trip from DB
+
+- [x] Read confirmed `layoutId`/`routeKey` from backend response after successful apply via `summary.layoutId` (already extracted by `projectLayoutPatchSummary`). [layoutId-round-trip]
+- [x] Call `setLayoutId(confirmedLayoutId)` on successful apply to confirm DB-authoritative identity. [layoutId-round-trip]
+- [x] Raise explicit `LAYOUT_ID_MISMATCH` error (no silent fallback) if backend returns different `layoutId` than was sent; set lifecycle phase to `applied_fail`. [layoutId-round-trip]
+- [x] Tests: 5 layoutId round-trip tests in `frontend/tests/visualLayoutBuilder.test.ts`. [layoutId-round-trip]
+
+### Full responsive token rule UI
+
+- [x] Replace hardcoded `{ md: selectedTokenRefs }` placeholder with `responsiveTokenRules: ResponsiveTokenRules` state. [responsive-token-ui]
+- [x] Add `ResponsiveTokenRuleEditor` component with breakpoint tabs (sm/md/lg/xl) in normal view; raw JSON textarea isolated under `AdvancedManualOverride` disclosure. [responsive-token-ui]
+- [x] Export `RESPONSIVE_BREAKPOINTS`, `BreakpointKey`, `ResponsiveTokenRules`, `filterEmptyResponsiveRules` from `frontend/runtime/visualLayoutUtils.ts`. [responsive-token-ui]
+- [x] `filterEmptyResponsiveRules` strips empty breakpoint entries before backend submission. [responsive-token-ui]
+- [x] Tests: 5 filterEmptyResponsiveRules + 4 responsive rule per-breakpoint tests in `frontend/tests/visualLayoutBuilder.test.ts`. [responsive-token-ui]
+
 ## Optional follow-up
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
