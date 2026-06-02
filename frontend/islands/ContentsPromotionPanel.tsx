@@ -93,7 +93,10 @@ export default function ContentsPromotionPanel(): JSX.Element {
         "公開・案内の下書きを保存しました。内容確認後に有効化してください。",
       );
     } catch (e) {
-      setStatus(String(e));
+      console.error("PROMOTION_DRAFT_SAVE_FAILED", e);
+      setStatus(
+        "公開・案内の下書きを保存できませんでした。接続状態を確認して再度お試しください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -131,7 +134,9 @@ export default function ContentsPromotionPanel(): JSX.Element {
     try {
       const result = await promoteAdminManifest(selectedId);
       if (!result?.ok) {
-        setStatus(`有効化エラー: ${result?.message ?? "promote failed"}`);
+        setStatus(
+          "ページを有効化できませんでした。内容を確認して再度お試しください。",
+        );
         return;
       }
       setStatus(`有効化が完了しました。次: ${UX_HUB_MANIFESTS_PAGE}`);
@@ -139,7 +144,10 @@ export default function ContentsPromotionPanel(): JSX.Element {
       const m = await listAdminManifests("draft");
       if (m) setManifests(m);
     } catch (e) {
-      setStatus(String(e));
+      console.error("PAGE_ACTIVATION_FAILED", e);
+      setStatus(
+        "ページを有効化できませんでした。接続状態を確認して再度お試しください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -168,40 +176,16 @@ export default function ContentsPromotionPanel(): JSX.Element {
           }}
         >
           <option value="">— 選択 —</option>
-          {manifests.map((m) => (
+          {manifests.map((m, index) => (
             <option key={m.manifestId} value={m.manifestId}>
-              {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ??
-                m.status}]
+              下書きページ {index + 1}{" "}
+              [{UX_STATUS_LABELS[m.status] ?? m.status}]
             </option>
           ))}
         </select>
       </label>
 
-      {detail && (
-        <p class="mt-2 text-xs text-muted-xs">
-          {formatPromotionSummary(detail.metadata ?? undefined)}
-        </p>
-      )}
-
       <div class="mt-4 grid gap-2 sm:grid-cols-2">
-        {([
-          ["設定キー", draft.manifestKey, (v: string) =>
-            updateDraft({ manifestKey: v })],
-          ["版ラベル", draft.versionLabel, (v: string) =>
-            updateDraft({ versionLabel: v })],
-          ["配置キー", draft.placementKey, (v: string) =>
-            updateDraft({ placementKey: v })],
-        ] as const).map(([label, value, setter]) => (
-          <label key={label} class="text-xs">
-            {label}
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 font-mono"
-              value={value}
-              onInput={(e) =>
-                setter((e.target as HTMLInputElement).value)}
-            />
-          </label>
-        ))}
         <label class="text-xs sm:col-span-2">
           案内文
           <textarea
@@ -236,8 +220,32 @@ export default function ContentsPromotionPanel(): JSX.Element {
 
       <details class="mt-3 rounded border border-gray-200 bg-gray-50 p-3 text-xs">
         <summary class="cursor-pointer font-semibold">
-          詳細設定 — 内部参照 ID
+          技術情報 — 内部参照 ID と配置設定
         </summary>
+        {detail && (
+          <p class="mt-2 text-muted-xs">
+            {formatPromotionSummary(detail.metadata ?? undefined)}
+          </p>
+        )}
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+          {([
+            ["manifestKey", draft.manifestKey, (v: string) =>
+              updateDraft({ manifestKey: v })],
+            ["versionLabel", draft.versionLabel, (v: string) =>
+              updateDraft({ versionLabel: v })],
+            ["placementKey", draft.placementKey, (v: string) =>
+              updateDraft({ placementKey: v })],
+          ] as const).map(([label, value, setter]) => (
+            <label key={label}>
+              {label}
+              <input
+                class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                value={value}
+                onInput={(e) => setter((e.target as HTMLInputElement).value)}
+              />
+            </label>
+          ))}
+        </div>
         {draft.targetRefs.map((ref, index) => (
           <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
             {(["packageId", "schemaId", "componentId"] as const).map((

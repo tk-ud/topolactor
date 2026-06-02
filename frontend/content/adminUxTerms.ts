@@ -57,7 +57,7 @@ export function toFriendlyLabel(technicalKey: string): string {
 
 /** ContentsScreenDesignPanel フィールドラベル（通常表示用） */
 export const UX_FIELD_TABLE_REF = "参照テーブル名";
-export const UX_FIELD_IMPORT_SCHEMA = "取り込みデータ定義名";
+export const UX_FIELD_IMPORT_SCHEMA = "取り込みルール名";
 export const UX_FIELD_NULLABLE = "空欄許可";
 
 /** 検索キー選択（通常表示）— internal column names must not be directly exposed */
@@ -71,7 +71,7 @@ export const UX_FIELD_SAMPLE_VIEWING = "サンプル表示";
 /** 初期データ（通常表示） */
 export const UX_FIELD_INITIAL_DATA = "初期データ";
 /** テーブル結合意図（任意、通常表示） */
-export const UX_FIELD_RELATION_INTENT = "テーブル結合（任意）";
+export const UX_FIELD_RELATION_INTENT = "参照データの関連付け（任意）";
 
 /**
  * カラム型の通常表示候補（SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates）。
@@ -90,6 +90,20 @@ export const COLUMN_TYPE_NORMAL_VIEW_OPTIONS: readonly string[] = [
   "uuid",
   "varchar",
 ];
+
+/** 項目型の通常表示ラベル。option value は DB/API 契約の型名を維持する。 */
+export const UX_COLUMN_TYPE_LABELS: Record<string, string> = {
+  text: "文字列",
+  integer: "整数",
+  bigint: "大きな整数",
+  boolean: "はい / いいえ",
+  numeric: "数値",
+  "timestamp with time zone": "日時",
+  date: "日付",
+  jsonb: "自由形式データ",
+  uuid: "識別子",
+  varchar: "短い文字列",
+};
 
 /** 通常表示候補外のカスタム型を入力するための advanced/other オプションラベル */
 export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
@@ -112,6 +126,8 @@ export const UX_ACTIVATION_POLICY_LABELS: Record<string, string> = {
 /** 通常導線に露出させない実装語彙。詳細・debug surface では表示可。 */
 export const NORMAL_VIEW_BANNED_TERMS = [
   "manifest",
+  "manifestid",
+  "manifest_key",
   "topology_manifest",
   "hub_relation",
   "hub membership",
@@ -119,8 +135,15 @@ export const NORMAL_VIEW_BANNED_TERMS = [
   "canonical",
   "projection",
   "runtime",
+  "dispatcher",
   "payload",
-  "schemaId",
-  "packageId",
-  "componentId",
+  "backend",
+  "db table",
+  "column",
+  "schema",
+  "package",
+  "component",
+  "grouping intent",
+  "raw",
+  "silent fallback",
 ] as const;

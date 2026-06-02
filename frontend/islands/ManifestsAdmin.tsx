@@ -36,7 +36,11 @@ export default function ManifestsAdmin(): JSX.Element {
       setTopologyManifests(manifests);
       setStatus(`作成済みページ ${manifests.length} 件`);
     } catch (e) {
-      setErrors([{ message: String(e) }]);
+      console.error("PAGE_CONNECTIONS_LOAD_FAILED", e);
+      setErrors([{
+        message:
+          "作成済みページを読み込めませんでした。接続状態を確認して再度お試しください。",
+      }]);
     } finally {
       setLoading(false);
     }

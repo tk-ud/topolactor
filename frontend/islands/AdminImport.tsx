@@ -79,7 +79,7 @@ export default function AdminImport(): JSX.Element {
 
     if (manifestsEmpty) {
       setError(
-        `インポートには先に${UX_CONTENTS}が必要です。${UX_CONTENTS_PAGE}で data shape を定義してください。`,
+        `インポートには先に${UX_CONTENTS}が必要です。${UX_CONTENTS_PAGE}で データの形を設定してください。`,
       );
       return;
     }
@@ -113,7 +113,10 @@ export default function AdminImport(): JSX.Element {
       );
       setPreview(result);
     } catch (e) {
-      setError(String(e));
+      console.error("IMPORT_PREVIEW_FAILED", e);
+      setError(
+        "プレビューを作成できませんでした。ファイル内容と接続状態を確認してください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -128,7 +131,10 @@ export default function AdminImport(): JSX.Element {
       const result = await applyImport(preview.snapshotId);
       setApplyResult(result);
     } catch (e) {
-      setError(String(e));
+      console.error("IMPORT_APPLY_FAILED", e);
+      setError(
+        "取り込みを完了できませんでした。接続状態を確認して再度お試しください。",
+      );
     } finally {
       setLoading(false);
     }
@@ -156,7 +162,7 @@ export default function AdminImport(): JSX.Element {
             <div class="alert-info">
               <p class="text-sm font-medium">
                 取り込み先の画面がありません。まず{UX_CONTENTS_PAGE}で画面の内容と
-                data shape を定義してください。
+                データの形を設定してください。
               </p>
               <p class="text-muted-xs mt-2">
                 ページを有効化しても一覧が空の場合は、管理者にお問い合わせください。
@@ -165,9 +171,9 @@ export default function AdminImport(): JSX.Element {
                   hubs.topology_manifests への projection 状態と
                   .agent/tasks/todo.md を確認してください。
                 </details>
-                silent fallback はしません。
+                代替処理を行わず、問題を明示します。
               </p>
-              <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
+              <a href="/admin/contents" class="btn-primary mt-3 inline-block">
                 {UX_CONTENTS_PAGE}へ
               </a>
             </div>
@@ -182,7 +188,7 @@ export default function AdminImport(): JSX.Element {
                 CSV/JSON
                 の各行に必要な項目を決めます。プレビューには画面と{UX_DATA_SHAPE}の両方が必要です。
               </p>
-              <a href="/admin/manifests" class="btn-primary mt-3 inline-block">
+              <a href="/admin/contents" class="btn-primary mt-3 inline-block">
                 {UX_CONTENTS_PAGE}へ
               </a>
             </div>
@@ -200,10 +206,9 @@ export default function AdminImport(): JSX.Element {
                   class="input-mono mt-1 min-w-[260px]"
                 >
                   <option value="">— 画面を選択 —</option>
-                  {manifests.map((m) => (
+                  {manifests.map((m, index) => (
                     <option key={m.manifestId} value={m.manifestId}>
-                      {m.manifestKey ? `${m.manifestKey} — ` : ""}
-                      {m.manifestId.slice(0, 8)}… [{m.status}]
+                      取り込み先 {index + 1}
                     </option>
                   ))}
                 </select>
@@ -217,9 +222,9 @@ export default function AdminImport(): JSX.Element {
                   class="input-mono mt-1 min-w-[220px]"
                 >
                   <option value="">— {UX_DATA_SHAPE}を選択 —</option>
-                  {schemas.map((s) => (
+                  {schemas.map((s, index) => (
                     <option key={s.schemaId} value={s.schemaId}>
-                      {s.name} ({s.schemaId.slice(0, 8)}…)
+                      {s.name || `データの形 ${index + 1}`}
                     </option>
                   ))}
                 </select>
@@ -337,10 +342,13 @@ export default function AdminImport(): JSX.Element {
                         ? "text-green-700"
                         : "text-red-600"}
                     >
-                      {r.status}
+                      {r.status === "valid" ? "有効" : "要修正"}
                     </td>
-                    <td class="max-w-md truncate">
-                      <code>{JSON.stringify(r.records)}</code>
+                    <td class="max-w-md">
+                      <details>
+                        <summary class="cursor-pointer">入力内容を表示</summary>
+                        <code>{JSON.stringify(r.records)}</code>
+                      </details>
                     </td>
                     <td class="text-red-600">
                       {r.validationErrors.join("; ")}
@@ -362,8 +370,7 @@ export default function AdminImport(): JSX.Element {
               適用 ({preview.validCount} 件有効)
             </button>
             <AdminActionHint>
-              プレビュー済み snapshot の valid レコードのみ canonical DB
-              へ明示反映。取り消しは別運用。
+              プレビューで問題がなかった行だけを取り込みます。取り消しが必要な場合は管理者にお問い合わせください。
             </AdminActionHint>
           </div>
         </section>

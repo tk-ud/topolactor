@@ -4,15 +4,21 @@ import {
   assertFalse,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
+  ACCEPTANCE_CHECKLIST,
+  ADMIN_CONTENTS_GUIDE,
   ADMIN_HUB_NAVIGATION_GUIDE,
+  ADMIN_INDEX_GUIDE,
   ADMIN_MAIN_FLOW_STEPS,
   ADMIN_MANIFESTS_GUIDE,
+  ADMIN_ROUTE_CARDS,
+  ADMIN_UI_BUILDER_GUIDE,
 } from "../content/adminGuides.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
   NORMAL_VIEW_BANNED_TERMS,
   UX_ACTION_LABELS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
+  UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_IMPORT_SCHEMA,
@@ -290,8 +296,8 @@ Deno.test("UX_FIELD_TABLE_REF: uses user-friendly label 参照テーブル名", 
   );
 });
 
-Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みデータ定義名", () => {
-  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みデータ定義名");
+Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みルール名", () => {
+  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みルール名");
   assertFalse(
     UX_FIELD_IMPORT_SCHEMA.includes("import schema"),
     "must not use internal term",
@@ -351,6 +357,15 @@ Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: does not contain banned aggregation 
     ),
     "normal-view column type select must not contain aggregation vocabulary 'group by'",
   );
+});
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: every persisted type has a user-facing label", () => {
+  for (const type of COLUMN_TYPE_NORMAL_VIEW_OPTIONS) {
+    assert(
+      UX_COLUMN_TYPE_LABELS[type],
+      `normal-view label is required for persisted type "${type}"`,
+    );
+  }
 });
 
 Deno.test("UX_COLUMN_TYPE_ADVANCED_LABEL: is a non-empty string for advanced/other isolation", () => {
@@ -623,36 +638,141 @@ Deno.test("sample viewing: UX_FIELD_SAMPLE_VIEWING is the mandatory preview path
 });
 
 // ─── Normal-view source regression guard ─────────────────────────────────────
-// Internal terms are allowed only behind an explicit technical-details disclosure.
+// Scan rendered copy from normal-view sources. Explicit <details> disclosures are
+// removed before extraction so technical information remains available without
+// leaking into the default path.
 
 const NORMAL_VIEW_SOURCE_FILES = [
   "../routes/index.tsx",
   "../routes/demo.tsx",
+  "../routes/runtime-status.tsx",
+  "../routes/admin/index.tsx",
+  "../islands/AdminImport.tsx",
   "../islands/ContentsAdmin.tsx",
-  "../content/adminGuides.ts",
+  "../islands/ContentsPromotionPanel.tsx",
+  "../islands/ContentsScreenDesignPanel.tsx",
+  "../islands/ManifestsAdmin.tsx",
+  "../lib/manifestScreenDesign.ts",
 ];
 
-Deno.test("normal view source guard: primary routes do not regress to internal vocabulary", async () => {
-  const banned = [
-    "canonical admin workflow",
-    "新規 manifest",
-    "作成済み manifest",
-    "hub 所属",
-    "manifest 間 relation",
-    "demo project projection",
-    "raw runtime",
+function stripTechnicalDisclosures(source: string): string {
+  return source
+    .replace(/<details\b[\s\S]*?<\/details>/gi, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
+function extractNormalViewCopy(source: string): string {
+  const visibleSource = stripTechnicalDisclosures(source);
+  const fragments: string[] = [];
+  for (const match of visibleSource.matchAll(/>([^<{]+)</g)) {
+    if (/[ぁ-んァ-ヶ一-龠]/.test(match[1])) fragments.push(match[1]);
+  }
+  for (
+    const match of visibleSource.matchAll(
+      /(?:placeholder|title|aria-label)=(?:"([^"]*)"|'([^']*)')/g,
+    )
+  ) {
+    fragments.push(match[1] ?? match[2] ?? "");
+  }
+  // Status/error labels are normal-view output even though they are not JSX text nodes.
+  for (
+    const match of visibleSource.matchAll(
+      /(?:setStatus|setError)\(\s*(["'`])([^"'`]*)\1/g,
+    )
+  ) {
+    fragments.push(match[2]);
+  }
+  for (const match of visibleSource.matchAll(/message:\s*"([^"]*)"/g)) {
+    fragments.push(match[1]);
+  }
+  // Draft source labels and local-cache notices are interpolated into normal view.
+  for (
+    const match of visibleSource.matchAll(
+      /(?:none|local|backend|merged):\s*"([^"]*)"/g,
+    )
+  ) {
+    fragments.push(match[1]);
+  }
+  for (
+    const match of visibleSource.matchAll(
+      /MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE\s*=\s*"([^"]*)"/g,
+    )
+  ) {
+    fragments.push(match[1]);
+  }
+  return fragments.join(" ").replace(/\$\{[^}]+\}/g, "");
+}
+
+function collectGuideNormalViewCopy(): string {
+  const guides = [
+    ADMIN_INDEX_GUIDE,
+    ADMIN_UI_BUILDER_GUIDE,
+    ADMIN_CONTENTS_GUIDE,
+    ADMIN_MANIFESTS_GUIDE,
+    ADMIN_HUB_NAVIGATION_GUIDE,
   ];
+  return [
+    ...guides.flatMap((guide) => [
+      guide.title,
+      guide.purpose,
+      ...guide.howToSteps,
+      ...(guide.prerequisites ?? []),
+      ...guide.inputs,
+      ...guide.actions,
+      ...guide.outputs,
+      ...(guide.nextSteps ?? []),
+      ...(guide.errorGuide ?? []),
+      guide.caution ?? "",
+    ]),
+    ...ADMIN_ROUTE_CARDS.flatMap((
+      card,
+    ) => [card.label, card.purpose, card.relation, ...card.howToSummary]),
+    ...ADMIN_MAIN_FLOW_STEPS.flatMap((
+      step,
+    ) => [step.label, step.purpose, step.completionSign, step.nextLabel ?? ""]),
+    ...ACCEPTANCE_CHECKLIST.flatMap((item) => [item.label, ...item.checks]),
+  ].join(" ");
+}
+
+Deno.test("normal view guide guard: shared guide copy excludes extracted internal vocabulary", () => {
+  const normalViewCopy = collectGuideNormalViewCopy()
+    .replace(/\/admin\/manifests/g, "")
+    .toLowerCase();
+  for (const term of NORMAL_VIEW_BANNED_TERMS) {
+    assertFalse(
+      normalViewCopy.includes(term.toLowerCase()),
+      `shared guide copy must not expose internal term "${term}"`,
+    );
+  }
+});
+
+Deno.test("normal view source guard: scanned default-path copy excludes extracted internal vocabulary", async () => {
   for (const relativePath of NORMAL_VIEW_SOURCE_FILES) {
     const source = await Deno.readTextFile(
       new URL(relativePath, import.meta.url),
     );
-    for (const term of banned) {
+    const normalViewCopy = extractNormalViewCopy(source).toLowerCase();
+    for (const term of NORMAL_VIEW_BANNED_TERMS) {
       assertFalse(
-        source.includes(term),
-        `${relativePath} must not expose internal term "${term}" in normal-view copy`,
+        normalViewCopy.includes(term.toLowerCase()),
+        `${relativePath} must not expose internal term "${term}" outside technical details`,
       );
     }
   }
+});
+
+Deno.test("normal view source guard: technical disclosures are excluded, adjacent default copy is checked", () => {
+  const source =
+    `<p>ページを設定</p><details><summary>技術情報</summary><code>backend runtime payload</code></details><p>manifest を選択</p>`;
+  const copy = extractNormalViewCopy(source).toLowerCase();
+  assertFalse(copy.includes("backend"));
+  assertFalse(copy.includes("runtime"));
+  assertFalse(copy.includes("payload"));
+  assert(
+    copy.includes("manifest"),
+    "default-path copy after details must remain scannable",
+  );
 });
 
 Deno.test("normal view terms: shared flow labels use user-facing page vocabulary", () => {
@@ -660,21 +780,34 @@ Deno.test("normal view terms: shared flow labels use user-facing page vocabulary
   assertFalse(UX_MAIN_FLOW_STEP_LABELS.join(" ").includes("manifest"));
 });
 
-Deno.test("normal view banned terms: shared regression vocabulary records extracted implementation terms", () => {
+Deno.test("normal view banned terms: shared regression vocabulary covers extracted implementation categories", () => {
   for (
     const term of [
       "manifest",
+      "manifestid",
+      "manifest_key",
       "topology_manifest",
       "canonical",
       "projection",
+      "runtime",
+      "dispatcher",
       "payload",
-      "schemaId",
+      "backend",
+      "db table",
+      "column",
+      "schema",
+      "package",
+      "component",
+      "grouping intent",
+      "raw",
+      "silent fallback",
     ]
   ) {
     assert(
       NORMAL_VIEW_BANNED_TERMS.includes(
         term as typeof NORMAL_VIEW_BANNED_TERMS[number],
       ),
+      `NORMAL_VIEW_BANNED_TERMS must include extracted category term "${term}"`,
     );
   }
 });

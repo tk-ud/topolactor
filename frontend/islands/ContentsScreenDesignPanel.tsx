@@ -30,6 +30,7 @@ import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExten
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
+  UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_IMPORT_SCHEMA,
@@ -221,11 +222,15 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         setStoredScreenLabel(created.manifestId, design.screenLabel.trim());
       }
       saveManifestScreenDesignLocal(created.manifestId, design);
-      setStatus(`下書き manifest を作成: ${created.manifestId}`);
+      setStatus("新しいページの下書きを作成しました。");
       await loadManifests();
       await loadSelectedManifest(created.manifestId);
     } catch (e) {
-      setErrors([{ message: String(e) }]);
+      console.error("PAGE_DRAFT_CREATE_FAILED", e);
+      setErrors([{
+        message:
+          "下書きを作成できませんでした。接続状態を確認して再度お試しください。",
+      }]);
     } finally {
       setLoading(false);
     }
@@ -234,7 +239,8 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
   const handleSaveAuthoring = async () => {
     if (!selectedId) {
       setErrors([{
-        message: "対象 manifest を選択するか、新規下書きを作成してください。",
+        message:
+          "対象の下書きページを選択するか、新しい下書きを作成してください。",
       }]);
       return;
     }
@@ -272,13 +278,15 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           : undefined,
       });
       clearManifestScreenDesignLocal(selectedId);
-      setStatus(
-        "画面設計を backend 下書きに保存しました（canonical は promote 後の topology 投影）。",
-      );
+      setStatus("ページの設定を保存しました。内容確認へ進んでください。");
       await loadManifests();
       await loadSelectedManifest(selectedId);
     } catch (e) {
-      setErrors([{ message: String(e) }]);
+      console.error("PAGE_SETTINGS_SAVE_FAILED", e);
+      setErrors([{
+        message:
+          "ページの設定を保存できませんでした。入力内容と接続状態を確認してください。",
+      }]);
     } finally {
       setLoading(false);
     }
@@ -286,9 +294,9 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
   const draftSourceLabel = {
     none: "未読込",
-    local: "ローカル下書きキャッシュ",
-    backend: "backend 保存済み",
-    merged: "backend + 未保存のローカル差分",
+    local: "この端末の未保存変更",
+    backend: "保存済み",
+    merged: "保存済み + この端末の未反映変更",
   }[draftSource];
 
   /** Columns with non-empty names for structured selection UIs. */
@@ -360,20 +368,28 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
   return (
     <section class="mb-8 rounded border p-4">
-      <h2 class="section-title">画面設計（manifest 単体）</h2>
+      <h2 class="section-title">ページ内容の設定</h2>
       <p class="mb-3 text-xs text-muted-xs">
-        DB table/column・検索・集計・import schema
-        を定義します。ハブ割当・manifest_key は
+        ページに表示する項目、検索、集計、取り込みルールを設定します。
+        作成済みページ同士のつながりや表示順は
         <a href="/admin/manifests" class="link font-semibold">
           {UX_HUB_MANIFESTS_PAGE}
         </a>
-        で確定してください（contents は grouping intent を確定しません）。
+        で設定してください。
       </p>
 
       {errors.length > 0 && (
         <ul class="mb-3 list-inside list-disc text-sm text-red-700">
           {errors.map((e) => (
-            <li key={e.code ?? e.message}>[{e.code}] {e.message}</li>
+            <li key={e.code ?? e.message}>
+              {e.message}
+              {e.code && (
+                <details class="text-xs text-red-500">
+                  <summary class="cursor-pointer">技術情報</summary>
+                  <code>{e.code}</code>
+                </details>
+              )}
+            </li>
           ))}
         </ul>
       )}
@@ -386,28 +402,30 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           : ""}
       </p>
 
-      <div class="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
-        <p class="font-semibold">単体ページ runtime 投影</p>
-        {backendDetail?.summary?.dispatcherMapping && (
+      {backendDetail?.summary?.dispatcherMapping && (
+        <details class="mb-4 rounded border border-slate-200 bg-slate-50 p-3 text-xs">
+          <summary class="cursor-pointer font-semibold">
+            技術情報 — 操作の送信先
+          </summary>
           <p class="mt-2 font-mono text-[10px] text-muted-xs">
             dispatcher: {backendDetail.summary.dispatcherMapping.role}/
             {backendDetail.summary.dispatcherMapping.target}/
             {backendDetail.summary.dispatcherMapping.layer}/
             {backendDetail.summary.dispatcherMapping.action}
           </p>
-        )}
-      </div>
+        </details>
+      )}
 
       <div class="mb-4 rounded border border-blue-100 bg-blue-50 p-3 text-xs">
         <p class="mb-2 font-semibold text-blue-800">作成ステップ</p>
         <ol class="space-y-1 text-blue-900">
           <li>① 下書き作成</li>
           <li>② 参照テーブル設定</li>
-          <li>③ カラム定義</li>
+          <li>③ 表示項目の設定</li>
           <li>④ 初期データ登録</li>
-          <li>⑤ テーブル結合意図（任意）</li>
+          <li>⑤ 参照データの関連付け（任意）</li>
           <li>⑥ 検索キー選択</li>
-          <li>⑦ 集計・表示グループ + サンプル表示</li>
+          <li>⑦ 集計・表示項目 + サンプル表示</li>
           <li>⑧ 内容確認 → 有効化（下の「公開・案内」パネル）</li>
         </ol>
       </div>
@@ -435,17 +453,17 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       </p>
 
       <label class="mb-3 block text-xs">
-        既存 manifest
+        対象の下書きページ
         <select
           class="mt-1 w-full rounded border px-2 py-1 font-mono"
           value={selectedId}
           onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
         >
           <option value="">— 選択 —</option>
-          {manifests.map((m) => (
+          {manifests.map((m, index) => (
             <option key={m.manifestId} value={m.manifestId}>
-              {m.manifestId.slice(0, 8)}… [{UX_STATUS_LABELS[m.status] ??
-                m.status}]
+              下書きページ {index + 1}{" "}
+              [{UX_STATUS_LABELS[m.status] ?? m.status}]
             </option>
           ))}
         </select>
@@ -453,7 +471,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
       <div class="grid gap-2 sm:grid-cols-2">
         <label class="text-xs">
-          画面ラベル（ローカル表示用）
+          ページ名
           <input
             class="mt-1 w-full rounded border px-2 py-1"
             value={design.screenLabel}
@@ -501,13 +519,13 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </label>
       </div>
 
-      {/* ③ カラム定義 */}
-      <h3 class="mt-4 text-xs font-semibold">③ カラム定義</h3>
+      {/* ③ 表示項目の設定 */}
+      <h3 class="mt-4 text-xs font-semibold">③ 表示項目の設定</h3>
       {design.columns.map((col, index) => (
         <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
           <input
             class="rounded border px-2 py-1 text-xs font-mono"
-            placeholder="name"
+            placeholder="項目名"
             value={col.name}
             onInput={(e) => {
               const columns = [...design.columns];
@@ -536,7 +554,9 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
               }}
             >
               {COLUMN_TYPE_NORMAL_VIEW_OPTIONS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {UX_COLUMN_TYPE_LABELS[t] ?? t}
+                </option>
               ))}
               <option value="__advanced__">
                 {UX_COLUMN_TYPE_ADVANCED_LABEL}
@@ -545,7 +565,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
             {!COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType) && (
               <input
                 class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-                placeholder="カスタム型"
+                placeholder="詳細な型名"
                 value={col.dataType}
                 onInput={(e) => {
                   const columns = [...design.columns];
@@ -587,21 +607,20 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
             }],
           })}
       >
-        カラムを追加
+        項目を追加
       </button>
 
       {/* ④ 初期データ登録 */}
       <h3 class="mt-5 text-xs font-semibold">④ {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期データ候補を topology intent
-        として保存します。下のサンプル表示で確認し、内容確認後に manifest
-        を有効化してください。
+        初期表示に使うデータ候補を保存します。下のサンプル表示で確認し、
+        内容確認後にページを有効化してください。
         この画面から実データを直接登録しません。実データ登録は別のコンテンツ登録フローで行います。
       </p>
       {namedColumns.length === 0
         ? (
           <p class="text-xs text-slate-400 italic">
-            カラムを定義してから初期データを追加してください。
+            表示項目を設定してから初期データを追加してください。
           </p>
         )
         : (
@@ -669,7 +688,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       {/* ⑤ テーブル結合意図（任意） */}
       <h3 class="mt-5 text-xs font-semibold">⑤ {UX_FIELD_RELATION_INTENT}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        このページのデータに必要なテーブル結合のみ指定します。
+        このページで参照するデータの関連付けのみ指定します。
         作成済みページ同士のつながりや所属先の設定は
         <a href="/admin/manifests" class="link font-semibold">
           {UX_HUB_MANIFESTS_PAGE}
@@ -682,7 +701,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           class="mb-2 grid gap-2 rounded border border-slate-200 p-2 sm:grid-cols-3"
         >
           <label class="text-xs">
-            結合先テーブル
+            参照先
             <input
               class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
               placeholder="参照テーブル名"
@@ -694,10 +713,10 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
             />
           </label>
           <label class="text-xs">
-            自テーブルキー
+            このページの照合項目
             <input
               class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="local key"
+              placeholder="照合する項目名"
               value={rel.localKey}
               onInput={(e) =>
                 patchRelationIntent(ri, {
@@ -706,10 +725,10 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
             />
           </label>
           <label class="text-xs">
-            結合先キー
+            参照先の照合項目
             <input
               class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="remote key"
+              placeholder="参照先の項目名"
               value={rel.remoteKey}
               onInput={(e) =>
                 patchRelationIntent(ri, {
@@ -733,18 +752,18 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         class="btn-secondary text-xs"
         onClick={addRelationIntent}
       >
-        結合を追加
+        関連付けを追加
       </button>
 
       {/* ⑥ 検索キー選択 */}
       <h3 class="mt-5 text-xs font-semibold">⑥ {UX_FIELD_SEARCH_KEY}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        検索に使うカラムを選択してください（複数選択可）。
+        検索に使う項目を選択してください（複数選択可）。
       </p>
       {namedColumns.length === 0
         ? (
           <p class="text-xs text-slate-400 italic">
-            カラムを定義してから検索キーを選択してください。
+            表示項目を設定してから検索キーを選択してください。
           </p>
         )
         : (
@@ -807,7 +826,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         <div class="text-xs">
           <p class="font-medium mb-1">{UX_FIELD_DISPLAY_COLUMNS}</p>
           {namedColumns.length === 0
-            ? <p class="text-slate-400 italic">カラムを定義してください。</p>
+            ? <p class="text-slate-400 italic">表示項目を設定してください。</p>
             : (
               <div class="flex flex-wrap gap-2">
                 {namedColumns.map((c) => (
