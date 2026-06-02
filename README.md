@@ -119,6 +119,18 @@ Production readiness varies by subsystem. Do not treat this README as the implem
 - relevant SSOT files under `docs/design/`
 - implementation files and tests
 
+## Future SSOT-directed initiatives
+
+Upcoming work is gated by SSOT before implementation. Near-term design lanes:
+
+- **CLI/MCP reader port:** define a safe read and export surface for AI, CLI, and shell readers through approved project boundaries.
+- **Implementation SSOT:** define Context API, Data Reader, export job, manifest, checksum, and audit log contracts before code changes.
+- **Runtime bundle SSOTs:** split optional side-effect surfaces into separate bundle contracts before runtime wiring.
+- **External surface policy:** keep third-party tools as intake, draft, notification, approval, or trigger surfaces rather than runtime authority.
+- **User-facing helper/manual:** document authoring flows and boundary concepts for builders without making help text a runtime authority.
+
+These items are roadmap-facing summaries only. Canonical design authority remains in `docs/system-roadmap.yaml`, `.agent/tasks/todo.md`, and the relevant SSOT files under `docs/design/`.
+
 ## Agent Governance Context Cost
 
 Topolactor uses a route-based governance read path before implementation work, so context cost is intentionally estimated and managed.
