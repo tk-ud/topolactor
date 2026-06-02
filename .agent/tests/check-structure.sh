@@ -239,6 +239,8 @@ check_file "docs/design/cli-model-context-protocols-port-ssot.yaml"
 check_file "docs/design/cli-model-context-protocols-port-ssot.md"
 check_file "docs/design/extended-runtime-bundle-registry-ssot.yaml"
 check_file "docs/design/extended-runtime-bundle-registry-ssot.md"
+check_file "docs/design/user-facing-helper-manual-ssot.yaml"
+check_file "docs/design/user-facing-helper-manual-ssot.md"
 
 check_content ".agent/tests/check-local-ci.sh" "set -euo pipefail"
 check_content ".agent/tests/check-local-ci.sh" "check-unified-test-gate.sh"
@@ -617,6 +619,12 @@ check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "core_run
 check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "future_optional_external_surface_bundles"
 check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "future_bundle_policy"
 check_content "docs/design/extended-runtime-bundle-registry-ssot.yaml" "requires_separate_ssot"
+check_content "docs/design/user-facing-helper-manual-ssot.yaml" "user_facing_helper_manual_ssot"
+check_content "docs/design/user-facing-helper-manual-ssot.yaml" "authority_boundary"
+check_content "docs/design/user-facing-helper-manual-ssot.yaml" "explicitly_out_of_scope"
+check_content "docs/design/user-facing-helper-manual-ssot.yaml" "safety_boundary"
+check_content "docs/design/user-facing-helper-manual-ssot.md" "runtime authority"
+check_content "docs/design/user-facing-helper-manual-ssot.md" "Out of Scope"
 
 # CLI/MCP port out-of-scope boundary guard: email_send must be declared in explicitly_out_of_scope
 if ! grep -qF "email_send" "$REPO_ROOT/docs/design/cli-model-context-protocols-port-ssot.yaml"; then

@@ -1,0 +1,252 @@
+user_facing_helper_manual_ssot:
+  name: user_facing_helper_manual
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/user-facing-helper-manual-ssot.yaml
+
+  purpose:
+    summary: >-
+      Topolactor のユーザー向け説明、ヘルパー、マニュアル、サイト内ガイドの
+      UX-facing policy を定義する。
+      内部 runtime SSOT の外向き projection として機能し、
+      Desktop AI / CLI / MCP / 月次処理 / 分析自動化 / 出力 / 承認境界を
+      非技術ユーザー向けに説明可能にする。
+    goals:
+      - non_technical_user_can_understand_what_topolactor_does
+      - user_can_understand_what_ai_cli_mcp_can_and_cannot_do
+      - user_can_understand_where_human_approval_is_required
+      - helper_manual_precedes_implementation_to_prevent_ux_safety_boundary_drift
+    non_goals:
+      - replace_internal_runtime_ssot
+      - replace_db_manifest_registry_permission_authority
+      - create_site_pages_or_ui_components
+      - create_help_components_or_mcp_tools
+      - rewrite_readme
+
+  authority_boundary:
+    description: >-
+      user-facing helper / manual は runtime authority を持たない。
+      DB / Manifest / Runtime / Bundle / Permission / Audit の正本ではない。
+      ユーザーに約束する操作範囲・安全境界・導線説明の SSOT である。
+    owns:
+      - user_promise
+      - onboarding_policy
+      - safe_operation_boundary_description
+      - helper_manual_category_structure
+      - ux_facing_message_policy
+    does_not_own:
+      - runtime_dispatch_authority
+      - db_schema_authority
+      - permission_enforcement_authority
+      - audit_log_authority
+      - email_send_runtime
+      - payment_runtime
+      - bundle_implementation
+    runtime_authority_source:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/framework-policy.yaml
+
+  user_facing_message_policy:
+    description: >-
+      ユーザーに向けてどのような表現・約束をするかの方針。
+      実際の文言ライティングは各マニュアル/ヘルプ実装時に行う。
+      ここでは「何を伝えるか」の方針を定義する。
+    core_messages:
+      what_topolactor_can_do:
+        - simple_business_app_creation_without_code
+        - form_list_pdf_csv_as_basic_surface
+        - monthly_processing_automation_extension
+        - analysis_and_aggregation_extension
+        - external_output_extension
+        - desktop_ai_assisted_data_search_and_aggregation
+      what_ai_cli_mcp_can_do:
+        - search_business_data_within_permitted_scope
+        - aggregate_and_summarize
+        - analyze_and_find_patterns
+        - export_csv_pdf_zip
+        - read_monthly_context
+        - validate_before_export
+      what_ai_cli_mcp_cannot_do:
+        - send_email_without_human_approval
+        - confirm_payment_without_human_approval
+        - delete_records
+        - execute_final_register_without_human_approval
+        - operate_db_directly
+        - bypass_permission_scope
+    language_policy:
+      principle: use_plain_business_language_not_internal_system_terms
+      avoid:
+        - topology
+        - manifest
+        - runtime_orchestration
+        - ssot
+        - attractor
+      use_instead:
+        topology: 業務アプリの構造
+        manifest: 業務コンテンツ設定
+        runtime: 処理の実行
+        export_job: 搬出処理
+        cli_reader_port: AI/CLIへのデータ読み取り窓口
+
+  helper_manual_category_candidates:
+    description: >-
+      将来作成するヘルパー・マニュアルのカテゴリ候補。
+      実装しない。方針として整理する。
+    categories:
+      getting_started:
+        id: getting_started
+        title: はじめての業務アプリ作成
+        audience: non_technical_business_user
+        status: planned
+
+      basic_surfaces:
+        id: basic_surfaces
+        title: フォーム・一覧・PDF・CSVの基本
+        audience: non_technical_business_user
+        status: planned
+
+      monthly_automation:
+        id: monthly_automation
+        title: 月次処理を自動化する
+        audience: business_user_or_admin
+        status: planned
+
+      desktop_ai_analysis:
+        id: desktop_ai_analysis
+        title: Desktop AIで業務データを分析する
+        audience: business_user_or_power_user
+        status: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+
+      cli_mcp_reader:
+        id: cli_mcp_reader
+        title: CLI / MCP Reader Port を使う
+        audience: technical_user_or_integrator
+        status: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+
+      csv_pdf_zip_export:
+        id: csv_pdf_zip_export
+        title: CSV / PDF / ZIP を出力する
+        audience: business_user_or_admin
+        status: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+
+      email_approval_guide:
+        id: email_approval_guide
+        title: Email送信はUIで承認する
+        audience: business_user
+        status: planned
+        safety_note: >-
+          Email send は UI 上の人間承認に閉じる。
+          AI/CLI/MCP から自動送信しない。
+        related_ssot:
+          - docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+      stripe_payment_guide:
+        id: stripe_payment_guide
+        title: Stripe決済はWebhookで確定する
+        audience: admin_or_integrator
+        status: planned
+        safety_note: >-
+          Stripe paid state は webhook 検証後に確定する。
+          AI/CLI/MCP から直接確定しない。
+        related_ssot:
+          - docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+      admin_permission_export_audit:
+        id: admin_permission_export_audit
+        title: "管理者向け: 権限・搬出・監査設定"
+        audience: admin
+        status: planned
+        related_ssot:
+          - docs/design/cli-model-context-protocols-port-ssot.yaml
+          - docs/design/admin-console-workflow-ssot.yaml
+
+      external_bundle_guide:
+        id: external_bundle_guide
+        title: 外部Bundle連携の考え方
+        audience: admin_or_integrator
+        status: planned
+        note: >-
+          Notion / Sheets / Slack 等は人間編集・intake surface として扱う。
+          Topolactorのruntime SSOTではない。
+        related_ssot:
+          - docs/design/extended-runtime-bundle-registry-ssot.yaml
+
+  safety_boundary:
+    description: >-
+      ユーザー向け説明にも必ず反映すべき安全境界の方針。
+      実装ではなく「ユーザーへの約束」として定義する。
+    user_promises:
+      - ai_does_not_send_email_without_approval
+      - ai_does_not_confirm_payment_without_approval
+      - ai_does_not_delete_records
+      - cli_mcp_does_not_operate_db_directly
+      - stripe_paid_state_requires_webhook_verification
+      - external_service_is_not_topolactor_runtime_ssot
+    approval_required_operations:
+      - email_send
+      - payment_approval
+      - final_register
+      - record_delete
+      - bulk_export_beyond_approved_scope
+    approval_surface:
+      - ui_approval_dialog
+      - admin_approval_flow
+      - requires_ui_approval_port_config
+
+  relation_to_other_ssot:
+    cli_model_context_protocols_port:
+      path: docs/design/cli-model-context-protocols-port-ssot.yaml
+      role: >-
+        CLI/MCP read/export port の runtime 設計正本。
+        本SSOTはその user-facing 説明方針を定義する。
+    extended_runtime_bundle_registry:
+      path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+      role: >-
+        Email / Stripe / 外部Bundle の分類正本。
+        本SSOTはそれらのユーザー向け説明方針を定義する。
+    email_bundle_ssot:
+      path: not_yet_created
+      status: future_bundle_candidate
+      role: Email Bundle の runtime 設計正本（後段）
+    stripe_bundle_ssot:
+      path: not_yet_created
+      status: future_bundle_candidate
+      role: Stripe Bundle の runtime 設計正本（後段）
+    runtime_orchestration_ssot:
+      path: docs/design/runtime-orchestration-ssot.yaml
+      role: canonical runtime route の正本
+    admin_console_workflow_ssot:
+      path: docs/design/admin-console-workflow-ssot.yaml
+      role: admin UI surface の正本
+    system_roadmap:
+      path: docs/system-roadmap.yaml
+      role: 実装状態・マイルストーン参照点
+    todo:
+      path: .agent/tasks/todo.md
+      role: 未実装作業キュー
+
+  explicitly_out_of_scope:
+    - site_page_implementation
+    - ui_component_implementation
+    - help_screen_component_implementation
+    - mcp_tool_implementation
+    - cli_implementation
+    - email_runtime_implementation
+    - stripe_runtime_implementation
+    - large_scale_copywriting
+    - readme_full_rewrite
+
+  change_surface:
+    - user_facing_helper_manual
+    - ux_facing_policy_ssot
+    - helper_manual_category
+    - safety_boundary_user_promise

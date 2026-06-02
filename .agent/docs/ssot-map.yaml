@@ -380,6 +380,26 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: user_facing_helper_manual
+    change_surfaces:
+      - user_facing_helper_manual
+      - ux_facing_policy_ssot
+      - helper_manual_category
+      - safety_boundary_user_promise
+      - docs/design/user-facing-helper-manual-ssot.yaml
+      - docs/design/user-facing-helper-manual-ssot.md
+    required_docs:
+      - docs/design/user-facing-helper-manual-ssot.yaml
+      - docs/design/user-facing-helper-manual-ssot.md
+    supporting_docs:
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
 worktypes:
   ids:
     - audit

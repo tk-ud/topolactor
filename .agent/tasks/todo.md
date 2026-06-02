@@ -74,6 +74,15 @@ SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/ex
 - [ ] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot]
 - [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook）は個別SSSOTが揃うまで実装しない [future-bundle-ssot-gate]
 
+## User-facing Helper / Manual — future implementation TODOs
+
+Added by: user-facing-helper-manual-ssot design_change
+SSOT ref: docs/design/user-facing-helper-manual-ssot.yaml
+
+- [ ] helper/manual category 候補（はじめての業務アプリ作成〜外部Bundle連携の考え方）の実装設計を行う [helper-manual-category-design]
+- [ ] Desktop AI / CLI / MCP Reader 向けユーザー説明文言ライティング方針を確定する [helper-manual-copywriting-policy]
+- [ ] ヘルプコンポーネント実装は user-facing-helper-manual-ssot のカテゴリ構造に基づいて行う [helper-component-impl-gate]
+
 ## Optional follow-up
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
