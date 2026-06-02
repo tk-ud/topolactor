@@ -1,52 +1,50 @@
-# Agent Task List — PR338 admin canonical surface convergence
+# Agent Task List — admin canonical no-code workflow convergence
 
 ## Blocking (resolved in branch — verify on merge)
 
 - [x] Admin route drift corrected against `docs/design/runtime-orchestration-ssot.yaml`: Fresh `/admin/*` registry contains only `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`; legacy/debug/helper `/dev/admin/*` wrappers are deleted.
-- [x] `/admin/contents` is limited to single-page manifest creation; `/admin/manifests` owns created manifest hub membership, inter-manifest relations, and navigation ordering.
+- [x] `/admin/contents` is limited to single-page manifest creation; `/admin/manifests` owns created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
 - [x] Contents promote guard fails closed until validation has executed without blocking issues.
-
 - [x] `TryProjectWiringAsync` uses `topology.physical_tables.table_ref` (SSOT); legacy `dbTableName` accepted at API boundary.
 - [x] Hub membership, manifest relation, and navigation ordering UI is owned by `/admin/manifests`; contents has no draft hub-assignment gate.
 - [x] `ManifestScreenOperationDeriver` uses manifest-scoped target/layer (list vs detail no longer share `admin/default/entity/Read`).
 
-## Implementation gap (explicit — not blocking promote path)
+## Implementation gap — `frontend.admin_routes` completion bundle
 
-- [ ] Contents UI: structured inputs for relation/join, aggregation viewing key, aggregation display columns.
-      → SSOT: `admin-console-workflow-ssot.yaml` db_design; current: tableRef, columns, searchTargets, aggregationSpec string only.
-- [ ] Backend: persist structured relation/join + aggregation display fields on `screen_data_shape` topology extension.
-      → Depends on schema design in `docs/design/db-schema.yaml` + validator updates.
-- [ ] Promote: explicit validation when `table_ref` not found in `topology.physical_tables` (currently skips wiring insert silently).
-      → Prefer explicit skipped status in projection result vs silent no-op.
+Roadmap entry: `frontend.admin_routes`. Detailed workflow authority: `docs/design/admin-console-workflow-ssot.yaml`.
+These are implementation gaps after SSOT clarification; this documentation-only change does not implement them.
+
+### `/admin/contents` authoring wizard
+
+- [ ] Reflect the explicit contents wizard steps in UI: empty draft creation → DB reference → columns → initial data → optional table relation intent → search key → aggregation/display group with sample viewing → validate/preview/register → `/admin/ui-builder` handoff.
+- [ ] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Keep free text isolated under advanced / other.
+- [ ] Add initial-data registration flow with validate → preview → explicit apply or promote; do not add silent/direct DB writes.
+- [ ] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`.
+- [ ] Add user-facing search-key selection for `searchTargets`.
+- [ ] Add aggregation-key and display-group selection with mandatory sample viewing / preview. Do not expose `group by` as primary UX vocabulary.
+
+### Backend persistence and explicit validation
+
+- [ ] Persist structured relation/join and aggregation display fields on the `screen_data_shape` topology extension.
+      → Depends on schema design in `docs/design/db-schema.yaml` and validator updates.
+- [ ] Fail explicitly when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op.
+      → Prefer an explicit skipped/error status in projection result.
+
+### `/admin/ui-builder` projection authoring
+
+- [ ] Add catalog-based component placement on layout canvas / preview with keyboard or button alternatives to drag and drop.
+- [ ] Add selectable CSS / Tailwind / design-token layout settings with visual or before/after preview; isolate advanced raw input.
+- [ ] Add component-level wiring selection from DB / manifest / topology registry references; move raw dispatcher `role / target / layer / action` fields to advanced disclosure.
+- [ ] Preserve validate → preview → explicit apply and prohibit direct DB writes / silent fallback.
+- [ ] Add post-apply handoff to CI / local guard / agent-governance checks for generated-artifact drift, registry drift, and SSOT consistency auditing.
+
+### User-facing vocabulary and flow cleanup
+
+- [ ] Replace internal normal-view terms in `ContentsScreenDesignPanel.tsx`: `physical table ref` → 「参照テーブル名」, `import schema 名` → 「取り込みデータ定義名」, `nullable` → 「空欄許可」.
+      → Add missing `adminUxTerms.ts` vocabulary and banned-term regression coverage in `adminUxGuard.test.ts`. [ux-vocabulary]
+- [ ] Consolidate promote action in `ContentsPromotionPanel` and present draft creation → design save → promote as explicit steps. [ux-simplification]
 
 ## Optional follow-up
 
 - [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
-
 - [ ] `product.dynamic_support_nocode_loop` manual acceptance (unchanged from roadmap).
-
-## Admin Console UX 改善（次フェーズ対象）
-
-- [ ] ユーザー向け語彙の補完（ContentsScreenDesignPanel ほか）
-  → `ContentsScreenDesignPanel.tsx`: "physical table ref（topology.physical_tables.table_ref）" を「参照テーブル名」等に置換
-  → "import schema 名" を「取り込みデータ定義名」相当に
-  → カラム定義の "nullable" を「空欄許可」に
-  → `dispatcher: role/target/layer/action` raw 表示を advanced 開示ブロックに退避
-  → `adminUxTerms.ts` に不足語彙を追加: `UX_TABLE_REF`（参照テーブル名）/ `UX_IMPORT_SCHEMA`（取り込みデータ定義名）/ `UX_NULLABLE`（空欄許可）
-  → 回帰防止: `adminUxGuard.test.ts` の banned terms に追加
-  [ux-vocabulary]
-  SSOT: docs/design/admin-console-workflow-ssot.yaml (admin_contents.domain_ownership)
-
-- [ ] コンテンツ制作フロー単純化（ContentsScreenDesignPanel / ContentsPromotionPanel）
-  → `ContentsScreenDesignPanel.tsx` の「有効化（canonical 投影）」ボタンと `handlePromote` を除去し `ContentsPromotionPanel` に集約（重複排除）
-  → 下書き作成・設計保存・有効化の 3 操作をステップ表示（作成 → 設計保存 → 有効化）で段階整理
-  [ux-simplification]
-  SSOT: docs/design/admin-console-workflow-ssot.yaml (admin_contents.content_bundle_lifecycle)
-
-- [ ] DB カラム型指定を選択式に変更（ContentsScreenDesignPanel カラム定義 dataType）
-  → `ContentsScreenDesignPanel.tsx` line 365–374: `<input type="text" placeholder="type">` を `<select>` に変更
-  → 選択肢（候補）: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar
-  → 定義先: `screenAuthoringIntent.ts` か `adminUxTerms.ts` に `DB_COLUMN_TYPE_OPTIONS` を追加
-  → フリーテキスト入力は「その他（詳細設定）」開示ブロック内に残す
-  [ux-select]
-  SSOT: docs/design/admin-console-workflow-ssot.yaml (admin_contents.db_design)
