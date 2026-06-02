@@ -3,7 +3,9 @@ import { JSX } from "preact";
 import {
   listAdminManifests,
   getAdminPromotionManifest,
+  validateAdminManifest,
   validateAdminPromotionManifest,
+  promoteAdminManifest,
   updateAdminPromotionManifestDraft,
   type AdminManifestListItem,
   type AdminPromotionManifestDetail,
@@ -18,13 +20,16 @@ import {
   type PromotionManifestDraft,
   type PromotionTargetRefDraft,
 } from "../runtime/promotionManifestEditor.ts";
-import { UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
+import { UX_STATUS_LABELS, UX_HUB_MANIFESTS_PAGE } from "../content/adminUxTerms.ts";
+
+type ValidationState = { isBlocking: boolean } | null;
 
 export default function ContentsPromotionPanel(): JSX.Element {
   const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [detail, setDetail] = useState<AdminPromotionManifestDetail | null>(null);
   const [draft, setDraft] = useState<PromotionManifestDraft>(emptyPromotionManifestDraft());
+  const [validation, setValidation] = useState<ValidationState>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -61,12 +66,13 @@ export default function ContentsPromotionPanel(): JSX.Element {
   const handleSave = async () => {
     if (!selectedId) return;
     setLoading(true);
+    setValidation(null);
     try {
       const saved = await updateAdminPromotionManifestDraft(
         buildPromotionUpdatePayload(selectedId, draft) as AdminPromotionManifestUpdateInput,
       );
       setDetail(saved);
-      setStatus("公開・案内の下書きを保存しました。");
+      setStatus("公開・案内の下書きを保存しました。内容確認後に有効化してください。");
     } catch (e) {
       setStatus(String(e));
     } finally {
@@ -78,8 +84,41 @@ export default function ContentsPromotionPanel(): JSX.Element {
     if (!selectedId) return;
     setLoading(true);
     try {
-      const result = await validateAdminPromotionManifest(selectedId);
-      setStatus(result?.valid ? "公開・案内: 問題なし" : "公開・案内: 要修正");
+      // manifest data shape validation + promotion metadata validation の両面を確認する。
+      // どちらか一方でも blocking なら有効化不可。backend promote は独立した fail-close を持つ。
+      const [manifestResult, promotionResult] = await Promise.all([
+        validateAdminManifest(selectedId),
+        validateAdminPromotionManifest(selectedId),
+      ]);
+      const manifestBlocking = manifestResult ? !manifestResult.valid : true;
+      const promotionBlocking = promotionResult ? promotionResult.isBlocking : true;
+      const isBlocking = manifestBlocking || promotionBlocking;
+      setValidation({ isBlocking });
+      setStatus(
+        isBlocking
+          ? "内容確認: 要修正 — manifest データまたは公開・案内メタデータに問題があります（修正後に再確認してください）"
+          : "内容確認: 問題なし — 有効化が可能です",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePromote = async () => {
+    if (!selectedId) return;
+    setLoading(true);
+    try {
+      const result = await promoteAdminManifest(selectedId);
+      if (!result?.ok) {
+        setStatus(`有効化エラー: ${result?.message ?? "promote failed"}`);
+        return;
+      }
+      setStatus(`有効化完了 — topology_manifests へ投影済み。次: ${UX_HUB_MANIFESTS_PAGE}`);
+      setValidation(null);
+      const m = await listAdminManifests("draft");
+      if (m) setManifests(m);
+    } catch (e) {
+      setStatus(String(e));
     } finally {
       setLoading(false);
     }
@@ -87,9 +126,12 @@ export default function ContentsPromotionPanel(): JSX.Element {
 
   return (
     <section class="mb-8 rounded border p-4">
-      <h2 class="section-title">公開・案内（manifest メタデータ）</h2>
+      <h2 class="section-title">③ 公開・案内 — 内容確認 → 有効化</h2>
+      <p class="mb-2 text-xs text-muted-xs">
+        ① 下書き作成 → ② 設計保存（上のパネル） → ③ 内容確認 → 有効化（このパネル）
+      </p>
       <p class="mb-3 text-xs text-muted-xs">
-        案内文・キャンペーン情報は manifest 単体のメタデータとしてここで編集します（旧 Manifests 画面から移行）。
+        案内文・キャンペーン情報を入力して保存し、内容確認が通ったら有効化してください。
       </p>
       {status && <p class="mb-3 text-sm text-muted-xs">{status}</p>}
 
@@ -174,12 +216,20 @@ export default function ContentsPromotionPanel(): JSX.Element {
         </div>
       ))}
 
-      <div class="mt-4 flex gap-2">
+      <div class="mt-4 flex flex-wrap gap-2">
         <button type="button" class="btn-primary" disabled={loading || !selectedId} onClick={handleSave}>
           下書き保存
         </button>
         <button type="button" class="btn-secondary" disabled={loading || !selectedId} onClick={handleValidate}>
           内容を確認
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          disabled={loading || !selectedId || validation === null || validation.isBlocking}
+          onClick={handlePromote}
+        >
+          有効化
         </button>
       </div>
     </section>

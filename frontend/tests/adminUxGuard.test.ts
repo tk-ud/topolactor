@@ -8,6 +8,9 @@ import {
   UX_STATUS_LABELS,
   UX_ACTION_LABELS,
   UX_RUNTIME_DESTINATION_LABELS,
+  UX_FIELD_TABLE_REF,
+  UX_FIELD_IMPORT_SCHEMA,
+  UX_FIELD_NULLABLE,
 } from "../content/adminUxTerms.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 
@@ -69,6 +72,12 @@ Deno.test("ADMIN_HUB_NAVIGATION_GUIDE title does not contain hub_relation", () =
 
 // ─── promoteDisabled logic guard ──────────────────────────────────────────────
 // validate must be run before promote is enabled.
+//
+// ContentsPromotionPanel の「内容を確認」は manifest data shape (validateAdminManifest)
+// と promotion metadata (validateAdminPromotionManifest) の両方を検証する。
+// どちらか一方でも blocking なら { isBlocking: true } となり promote は無効のまま。
+// backend promote は独立した fail-close を持つため、frontend 側の validation state は
+// pre-check として機能する。
 
 function computePromoteDisabled(
   selectedId: string,
@@ -218,4 +227,24 @@ Deno.test("ADMIN_MANIFESTS_GUIDE boundaryNotes can hold implementation notes", (
 
 Deno.test("ADMIN_HUB_NAVIGATION_GUIDE boundaryNotes can hold technical scope notes", () => {
   assertEquals(Array.isArray(ADMIN_HUB_NAVIGATION_GUIDE.boundaryNotes), true);
+});
+
+// ─── ContentsScreenDesignPanel field vocabulary regression ────────────────────
+// Internal technical terms must not appear in the user-facing label constants.
+
+Deno.test("UX_FIELD_TABLE_REF: uses user-friendly label 参照テーブル名", () => {
+  assertEquals(UX_FIELD_TABLE_REF, "参照テーブル名");
+  assertFalse(UX_FIELD_TABLE_REF.includes("physical table ref"), "must not use internal term");
+  assertFalse(UX_FIELD_TABLE_REF.includes("table_ref"), "must not use internal snake_case key");
+});
+
+Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みデータ定義名", () => {
+  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みデータ定義名");
+  assertFalse(UX_FIELD_IMPORT_SCHEMA.includes("import schema"), "must not use internal term");
+  assertFalse(UX_FIELD_IMPORT_SCHEMA.includes("importSchema"), "must not use internal camelCase key");
+});
+
+Deno.test("UX_FIELD_NULLABLE: uses user-friendly label 空欄許可", () => {
+  assertEquals(UX_FIELD_NULLABLE, "空欄許可");
+  assertFalse(UX_FIELD_NULLABLE.includes("nullable"), "must not use internal term");
 });
