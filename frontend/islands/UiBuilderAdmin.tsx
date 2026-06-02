@@ -19,6 +19,7 @@ import {
   wouldCreateVisualParentCycle,
   RESPONSIVE_BREAKPOINTS,
   filterEmptyResponsiveRules,
+  validateResponsiveTokenRulesJson,
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
@@ -354,6 +355,10 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
     suggestion: "レイアウト候補を再読み込みして、正しいレイアウトを選択してください",
     navigateTo: "layout",
   },
+  RESPONSIVE_TOKEN_RULE_JSON_INVALID: {
+    cause: "レスポンシブルール JSON が不正です",
+    suggestion: "形式: {\"sm\": [\"token.key\"], \"md\": [\"token.key\"]}。有効ブレークポイント: sm, md, lg, xl",
+  },
 };
 
 function deriveCandidatesFromPalette(promoted: PromotedPaletteEntry[]): LayoutRouteCandidate[] {
@@ -592,7 +597,9 @@ function ActionableValidationErrorPanel({
           if (fix?.navigateTo && !shownNavigateTabs.has(fix.navigateTo)) {
             shownNavigateTabs.add(fix.navigateTo);
             const tab = fix.navigateTo;
-            const label = tab === "bucket" ? "→ 部品登録タブへ移動" : "→ CSS設定タブへ移動";
+            const label = tab === "bucket" ? "→ 部品登録タブへ移動"
+              : tab === "layout" ? "→ レイアウト選択へ移動"
+              : "→ CSS設定タブへ移動";
             navButtons.push(
               <button
                 key={tab}
@@ -2774,6 +2781,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
   // ── CSS / layout class refs ──────────────────────────────────────────────
   const [selectedTokenRefs, setSelectedTokenRefs] = useState<string[]>([]);
   const [responsiveTokenRules, setResponsiveTokenRules] = useState<ResponsiveTokenRules>({});
+  const [responsiveJsonError, setResponsiveJsonError] = useState<{ code: string; message: string } | null>(null);
   const [selectedLayoutClassRefs, setSelectedLayoutClassRefs] = useState<string[]>([]);
   const [manualLayoutClassRef, setManualLayoutClassRef] = useState("");
   const [layoutClassRefError, setLayoutClassRefError] = useState<string | null>(null);
@@ -2920,6 +2928,10 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
     if (!canPatch) {
       setPatchErrors([{ code: "NO_ROUTE_LAYOUT", message: "ルートとレイアウトを選択してください。" }]);
+      return;
+    }
+    if (responsiveJsonError) {
+      setPatchErrors([responsiveJsonError]);
       return;
     }
     if (action === "apply") {
@@ -3430,20 +3442,31 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
           </p>
           <textarea
             rows={3}
-            class="input-mono w-full text-xs"
+            class={`input-mono w-full text-xs${responsiveJsonError ? " border-red-400" : ""}`}
             placeholder={`{"sm": [], "md": [], "lg": [], "xl": []}`}
             aria-label="レスポンシブルール JSON 手入力"
+            aria-invalid={responsiveJsonError ? "true" : undefined}
             onBlur={(e) => {
               const raw = (e.target as HTMLTextAreaElement).value.trim();
-              if (!raw) return;
-              try {
-                const parsed = JSON.parse(raw) as Record<string, string[]>;
-                setResponsiveTokenRules(parsed);
-              } catch {
-                // malformed — ignore silently; backend validate will catch issues
+              if (!raw) {
+                setResponsiveJsonError(null);
+                return;
               }
+              const result = validateResponsiveTokenRulesJson(raw);
+              if (!result.ok) {
+                setResponsiveJsonError({ code: result.errorCode, message: result.message });
+                return;
+              }
+              setResponsiveJsonError(null);
+              setResponsiveTokenRules(result.rules);
             }}
           />
+          {responsiveJsonError && (
+            <div role="alert" class="mt-1 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
+              <span class="font-medium">{responsiveJsonError.message}</span>
+              <span class="ml-2 font-mono text-[0.65rem] text-gray-400">[{responsiveJsonError.code}]</span>
+            </div>
+          )}
         </AdvancedManualOverride>
       </Accordion>
 
@@ -3461,7 +3484,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       <div class="mb-1 flex flex-wrap gap-2">
         <button
           onClick={() => callLayoutPatch("preview")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn-secondary min-w-[100px]"
           aria-label="プレビュー実行 — DBへの変更なし"
         >
@@ -3469,7 +3492,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </button>
         <button
           onClick={() => callLayoutPatch("validate")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
           aria-label="バリデート実行 — ref整合チェック"
         >
@@ -3477,7 +3500,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
         </button>
         <button
           onClick={() => callLayoutPatch("apply")}
-          disabled={loading || !canPatch}
+          disabled={loading || !canPatch || !!responsiveJsonError}
           class="btn-success min-w-[100px]"
           aria-label="適用実行 — DBへ反映"
         >

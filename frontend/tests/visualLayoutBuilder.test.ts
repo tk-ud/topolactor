@@ -7,6 +7,7 @@ import {
   wouldCreateVisualParentCycle,
   RESPONSIVE_BREAKPOINTS,
   filterEmptyResponsiveRules,
+  validateResponsiveTokenRulesJson,
   type VisualNodePayload,
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
@@ -527,4 +528,86 @@ Deno.test("responsive rule: payload uses filterEmptyResponsiveRules — no empty
   // Payload should not include sm (empty)
   assertFalse("sm" in payload);
   assertEquals("md" in payload, true);
+});
+
+// ─── validateResponsiveTokenRulesJson ────────────────────────────────────────
+
+Deno.test("validateResponsiveTokenRulesJson: empty string returns ok with empty rules", () => {
+  const result = validateResponsiveTokenRulesJson("");
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.rules, {});
+});
+
+Deno.test("validateResponsiveTokenRulesJson: whitespace-only string returns ok with empty rules", () => {
+  const result = validateResponsiveTokenRulesJson("   ");
+  assertEquals(result.ok, true);
+  if (result.ok) assertEquals(result.rules, {});
+});
+
+Deno.test("validateResponsiveTokenRulesJson: valid object parses correctly", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": ["color.action.primary.background"], "lg": ["spacing.sm"]}');
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.rules["md"], ["color.action.primary.background"]);
+    assertEquals(result.rules["lg"], ["spacing.sm"]);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: malformed JSON returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson("{not json}");
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("解析"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: JSON array returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('["sm", "md"]');
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: null JSON returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson("null");
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: JSON string (non-object) returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('"hello"');
+  assertEquals(result.ok, false);
+  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+});
+
+Deno.test("validateResponsiveTokenRulesJson: unknown breakpoint key returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"xxl": ["spacing.sm"]}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("xxl"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: non-array value returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": "spacing.sm"}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("md"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: non-string array item returns structured error", () => {
+  const result = validateResponsiveTokenRulesJson('{"md": [1, 2]}');
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+    assertEquals(result.message.includes("md"), true);
+  }
+});
+
+Deno.test("validateResponsiveTokenRulesJson: empty arrays per breakpoint are valid", () => {
+  const result = validateResponsiveTokenRulesJson('{"sm": [], "md": []}');
+  assertEquals(result.ok, true);
 });
