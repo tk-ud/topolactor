@@ -139,11 +139,17 @@ public static class ManifestCanonicalProjection
         upsert.Parameters.AddWithValue("topo", topologyJsonb);
         await upsert.ExecuteNonQueryAsync(ct);
 
-        await TryProjectWiringAsync(conn, detail, ct);
-        return null;
+        var wiringError = await TryProjectWiringAsync(conn, detail, ct);
+        return wiringError;
     }
 
-    private static async Task TryProjectWiringAsync(
+    /// <summary>
+    /// Projects wiring from screen_data_shape.tableRef into topology.wiring_physical_to_package.
+    /// Returns WIRING_TABLE_REF_NOT_FOUND if tableRef is present but not in topology.physical_tables.
+    /// Returns null on success or when no tableRef is specified (no wiring intent).
+    /// Never silently skips a tableRef mismatch.
+    /// </summary>
+    private static async Task<ValidationError?> TryProjectWiringAsync(
         NpgsqlConnection conn,
         ManifestDetailRecord detail,
         CancellationToken ct)
@@ -159,9 +165,9 @@ public static class ManifestCanonicalProjection
             break;
         }
 
-        if (shapeEntry is null) return;
+        if (shapeEntry is null) return null;
         var tableRef = ExtractTableRef(shapeEntry.Value);
-        if (string.IsNullOrWhiteSpace(tableRef)) return;
+        if (string.IsNullOrWhiteSpace(tableRef)) return null;
 
         await using var lookup = conn.CreateCommand();
         lookup.CommandText =
@@ -169,7 +175,14 @@ public static class ManifestCanonicalProjection
             "WHERE table_ref = @ref AND active = true LIMIT 1";
         lookup.Parameters.AddWithValue("ref", tableRef);
         var physicalId = await lookup.ExecuteScalarAsync(ct);
-        if (physicalId is not long physicalTableId) return;
+
+        if (physicalId is not long physicalTableId)
+        {
+            return new ValidationError(
+                "WIRING_TABLE_REF_NOT_FOUND",
+                $"table_ref '{tableRef}' is not registered in topology.physical_tables (active=true). " +
+                "Register the physical table before promoting this manifest, or remove the tableRef intent.");
+        }
 
         var packageId = detail.ManifestId;
         var wiringDef = JsonSerializer.Serialize(new
@@ -185,7 +198,7 @@ public static class ManifestCanonicalProjection
             "WHERE physical_table_id = @pt AND package_id = @pkg AND active = true LIMIT 1";
         exists.Parameters.AddWithValue("pt", physicalTableId);
         exists.Parameters.AddWithValue("pkg", packageId);
-        if (await exists.ExecuteScalarAsync(ct) is not null) return;
+        if (await exists.ExecuteScalarAsync(ct) is not null) return null;
 
         await using var insert = conn.CreateCommand();
         insert.CommandText =
@@ -196,6 +209,7 @@ public static class ManifestCanonicalProjection
         insert.Parameters.AddWithValue("pkg", packageId);
         insert.Parameters.AddWithValue("def", wiringDef);
         await insert.ExecuteNonQueryAsync(ct);
+        return null;
     }
 
     public static string? ExtractTableRef(JsonElement shapeEntry)

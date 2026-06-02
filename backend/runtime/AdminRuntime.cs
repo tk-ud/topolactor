@@ -1883,9 +1883,14 @@ public class AdminRuntime
             dbTableName = tableRef,
             importSchemaName = request.ImportSchemaName,
             searchTargets = request.SearchTargets ?? Array.Empty<string>(),
+            searchKeyColumns = request.SearchKeyColumns ?? Array.Empty<string>(),
             aggregationSpec = request.AggregationSpec,
+            aggregationKey = request.AggregationKey,
+            displayColumns = request.DisplayColumns ?? Array.Empty<string>(),
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
             screenOperationKind = request.ScreenOperationKind,
+            relationIntents = request.RelationIntents ?? Array.Empty<AdminManifestRelationIntentDto>(),
+            initialDataRows = request.InitialDataRows ?? Array.Empty<System.Text.Json.JsonElement>(),
         });
 
         var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(

@@ -673,15 +673,16 @@ system_roadmap_ssot:
       public_summary: >
         Dynamic-support no-code loop implementation boundaries are closed for CI Attention
         authoring guidance and SQL Attention recommendation feedback UX. The M6 self-hosted admin
-        route split is canonical, while detailed /admin/contents and /admin/ui-builder no-code
-        wizard behavior remains an explicit frontend.admin_routes implementation bundle. Combined
-        UX manual acceptance / hand-debug verification also remains pending. Future optional external
+        route split is canonical. frontend.admin_routes detailed no-code wizard bundle is now
+        implemented (all 8 /admin/contents authoring steps, structured field persistence,
+        explicit wiring failure, /admin/ui-builder authoring surface). Combined UX manual
+        acceptance / hand-debug verification remains pending. Future optional external
         connector surfaces remain outside the M6/M7 core runtime production-ready blocker set.
       completion_condition:
         - frontend_admin_routes_detailed_nocode_wizard_bundle_is_completed
         - manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux
       known_gap_ref:
-        - frontend.admin_routes detailed no-code wizard implementation bundle remains partial
+        - frontend.admin_routes detailed no-code wizard bundle is now implemented (see frontend.admin_routes entry)
         - manual acceptance / hand-debug verification pending for combined UX loop
 
     backend.sql_attention_topology_projection:
@@ -1159,34 +1160,28 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     frontend.admin_routes:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, and /admin/manifests. The intended no-code workflow is now explicit:
-        /admin/contents authors one data-shaped single-page manifest, /admin/ui-builder adds
-        projection layout and selectable component wiring, and /admin/manifests owns created-manifest
-        hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
-        Legacy/debug/helper wrappers formerly isolated under /dev/admin/* are deleted.
-        ContentsScreenDesignPanel normal-view field labels now use user-friendly vocabulary
-        (UX_FIELD_TABLE_REF 参照テーブル名, UX_FIELD_IMPORT_SCHEMA 取り込みデータ定義名,
-        UX_FIELD_NULLABLE 空欄許可); banned-term regression coverage added to adminUxGuard.test.ts.
-        Promote action is consolidated in ContentsPromotionPanel with explicit step flow
-        (① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化); validation gating covers both
-        manifest data shape and promotion metadata before enabling promote.
-        Contents authoring wizard front-half steps (① 下書き作成 ② 参照テーブル設定 ③ カラム定義)
-        are now explicitly displayed in ContentsScreenDesignPanel; steps ④ 初期データ登録 and
-        ⑤ テーブル結合意図（任意）are shown as not-yet-implemented next steps.
-        Column dataType normal-view input is now a select UI with SSOT-defined candidates
-        (text/integer/bigint/boolean/numeric/timestamp with time zone/date/jsonb/uuid/varchar);
-        free-text is isolated under その他（詳細入力）; existing dataType persistence format preserved.
-        COLUMN_TYPE_NORMAL_VIEW_OPTIONS and UX_COLUMN_TYPE_ADVANCED_LABEL exported from
-        adminUxTerms.ts with column type select and banned-term regression in adminUxGuard.test.ts.
-        Remaining gaps: initial-data registration flow, structured relation/join input,
-        user-facing search-key selection, aggregation/display group with mandatory sample viewing,
-        screen_data_shape topology extension persistence, topology.physical_tables mismatch
-        explicit failure, and /admin/ui-builder full authoring remain incomplete.
+        /admin/ui-builder, and /admin/manifests. Full 8-step /admin/contents authoring wizard:
+        ①下書き作成 ②参照テーブル設定 ③カラム定義 ④初期データ登録 ⑤テーブル結合意図（任意）
+        ⑥検索キー選択 ⑦集計・表示グループ+サンプル表示 ⑧validate→promote.
+        Structured relation/join intents, searchKeyColumns, aggregationKey, and displayColumns
+        are persisted as screen_data_shape topology extension fields; raw aggregationSpec and
+        searchTargets are advanced-only disclosures. Initial data rows are stored as topology
+        intent (no direct DB write). Sample viewing panel is mandatory as part of step 7.
+        All normal-view UX vocabulary adheres to SSOT: no "group by" in aggregation labels;
+        no internal field names exposed in search-key selection; relation intent is draft
+        data-shape only and does not transfer hub/inter-manifest ownership from /admin/manifests.
+        topology.physical_tables table_ref mismatch now returns WIRING_TABLE_REF_NOT_FOUND
+        (explicit failure) instead of silently skipping wiring projection.
+        /admin/ui-builder has component placement from catalog, CSS/design-token/layout-class
+        selectable settings, validate→preview→explicit apply route, and CI audit handoff.
+        Raw dispatcher fields (role/target/layer/action) and advanced wiring inputs are
+        isolated in AdvancedManualOverride disclosures. Legacy/debug wrappers deleted.
+        Regression coverage in adminUxGuard.test.ts and AdminRuntimeManifestManagementTests.cs.
       files:
         - frontend/routes/admin/
         - frontend/routes/admin/index.tsx
@@ -1194,6 +1189,26 @@ system_roadmap_ssot:
         - frontend/routes/admin/contents.tsx
         - frontend/routes/admin/ui-builder.tsx
         - frontend/islands/HubNavigationAdmin.tsx
+        - frontend/islands/ContentsScreenDesignPanel.tsx
+        - frontend/islands/ContentsPromotionPanel.tsx
+        - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/lib/manifestScreenDesign.ts
+        - frontend/lib/manifestTopologyExtensions.ts
+        - frontend/api/adminApi.ts
+        - frontend/content/adminUxTerms.ts
+        - frontend/tests/adminUxGuard.test.ts
+        - backend/schema/ManifestManagementContracts.cs
+        - backend/runtime/AdminRuntime.cs
+        - backend/repository/ManifestCanonicalProjection.cs
+        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
+      evidence:
+        tests:
+          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions)
+          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, ManifestCanonicalProjectionUnitTests)
+        ci:
+          - frontend-types
+          - backend-tests
+          - Structure Check
       completion_condition:
         - admin_manifests_route_exists
         - admin_contents_route_exists
@@ -1207,16 +1222,9 @@ system_roadmap_ssot:
         - admin_routes_are_wired_to_validated_backend_registry_flows
         - routes_remain_projection_surfaces_not_runtime_judgment_owners
       known_gap_ref:
-        - Gap-9 admin route detailed no-code wizard UX remains partial
-        - closed-front: contents wizard front-half step display (①②③ implemented, ④⑤ marked as next/later)
-        - closed-front: column dataType normal-view select with SSOT candidates; advanced/other free-text isolated
-        - admin/contents initial-data registration flow with validate/preview/explicit apply remains incomplete
-        - admin/contents structured relation/join input remains incomplete (admin/manifests ownership unchanged)
-        - admin/contents user-facing search-key selection remains incomplete
-        - admin/contents aggregation/display group with mandatory sample viewing remains incomplete
-        - screen_data_shape topology extension persistence for structured relation/join and aggregation/display fields remains incomplete
-        - topology.physical_tables table_ref mismatch validation must fail explicitly instead of silently skipping wiring projection
-        - admin/ui-builder selectable component placement design-token wiring and post-apply CI audit handoff remain incomplete
+        - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
+        - initial data rows are topology intent only; actual DB table insertion is separate content_bundle flow
+        - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml

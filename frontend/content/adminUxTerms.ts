@@ -60,6 +60,19 @@ export const UX_FIELD_TABLE_REF = "参照テーブル名";
 export const UX_FIELD_IMPORT_SCHEMA = "取り込みデータ定義名";
 export const UX_FIELD_NULLABLE = "空欄許可";
 
+/** 検索キー選択（通常表示）— internal column names must not be directly exposed */
+export const UX_FIELD_SEARCH_KEY = "検索キー";
+/** 集計キー（通常表示）— "group by" must not appear as primary vocabulary */
+export const UX_FIELD_AGGREGATION_KEY = "集計キー";
+/** 表示列（通常表示） */
+export const UX_FIELD_DISPLAY_COLUMNS = "表示列";
+/** サンプル表示（通常表示） */
+export const UX_FIELD_SAMPLE_VIEWING = "サンプル表示";
+/** 初期データ（通常表示） */
+export const UX_FIELD_INITIAL_DATA = "初期データ";
+/** テーブル結合意図（任意、通常表示） */
+export const UX_FIELD_RELATION_INTENT = "テーブル結合（任意）";
+
 /**
  * カラム型の通常表示候補（SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates）。
  * free-text は UX_COLUMN_TYPE_ADVANCED_LABEL 経由で隔離する。

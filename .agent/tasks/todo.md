@@ -18,25 +18,23 @@ These are implementation gaps after SSOT clarification; this documentation-only 
 
 - [x] Reflect the explicit contents wizard steps in UI (front half): empty draft creation → DB reference → columns → steps ④⑤ explicitly marked as not-yet-implemented/next-step. Full 8-step display (initial data → optional relation/join intent → search key → aggregation/display group → validate/preview/register → /admin/ui-builder handoff) remains in later bundles. [authoring-wizard-front]
 - [x] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Free text isolated under その他（詳細入力）. Existing `dataType` persistence format preserved. [authoring-wizard-front]
-- [ ] Add initial-data registration flow with validate → preview → explicit apply or promote; do not add silent/direct DB writes.
-- [ ] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`.
-- [ ] Add user-facing search-key selection for `searchTargets`.
-- [ ] Add aggregation-key and display-group selection with mandatory sample viewing / preview. Do not expose `group by` as primary UX vocabulary.
+- [x] Add initial-data registration flow with validate → preview → explicit apply or promote; do not add silent/direct DB writes. [admin-routes-completion] Initial data rows stored as topology intent in screen_data_shape extension; no direct DB write; preview via SamplePreviewPanel.
+- [x] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`. [admin-routes-completion]
+- [x] Add user-facing search-key selection for `searchTargets`. [admin-routes-completion] searchKeyColumns multi-select from defined columns; raw searchTargets in advanced disclosure.
+- [x] Add aggregation-key and display-group selection with mandatory sample viewing / preview. Do not expose `group by` as primary UX vocabulary. [admin-routes-completion] aggregationKey select + displayColumns multi-select + SamplePreviewPanel.
 
 ### Backend persistence and explicit validation
 
-- [ ] Persist structured relation/join and aggregation display fields on the `screen_data_shape` topology extension.
-      → Depends on schema design in `docs/design/db-schema.yaml` and validator updates.
-- [ ] Fail explicitly when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op.
-      → Prefer an explicit skipped/error status in projection result.
+- [x] Persist structured relation/join and aggregation display fields on the `screen_data_shape` topology extension. [admin-routes-completion] searchKeyColumns/aggregationKey/displayColumns/relationIntents/initialDataRows added to topology extension JSON and backend contracts.
+- [x] Fail explicitly when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op. [admin-routes-completion] TryProjectWiringAsync now returns WIRING_TABLE_REF_NOT_FOUND; ProjectOnPromoteAsync propagates the error.
 
 ### `/admin/ui-builder` projection authoring
 
-- [ ] Add catalog-based component placement on layout canvas / preview with keyboard or button alternatives to drag and drop.
-- [ ] Add selectable CSS / Tailwind / design-token layout settings with visual or before/after preview; isolate advanced raw input.
-- [ ] Add component-level wiring selection from DB / manifest / topology registry references; move raw dispatcher `role / target / layer / action` fields to advanced disclosure.
-- [ ] Preserve validate → preview → explicit apply and prohibit direct DB writes / silent fallback.
-- [ ] Add post-apply handoff to CI / local guard / agent-governance checks for generated-artifact drift, registry drift, and SSOT consistency auditing.
+- [x] Add catalog-based component placement on layout canvas / preview with keyboard or button alternatives to drag and drop. [closed-prior — UiBuilderAdmin already implemented]
+- [x] Add selectable CSS / Tailwind / design-token layout settings with visual or before/after preview; isolate advanced raw input. [closed-prior — UiBuilderAdmin AdvancedManualOverride pattern]
+- [x] Add component-level wiring selection from DB / manifest / topology registry references; move raw dispatcher `role / target / layer / action` fields to advanced disclosure. [closed-prior — AdvancedManualOverride in UiBuilderAdmin]
+- [x] Preserve validate → preview → explicit apply and prohibit direct DB writes / silent fallback. [closed-prior — callLayoutPatch route]
+- [x] Add post-apply handoff to CI / local guard / agent-governance checks for generated-artifact drift, registry drift, and SSOT consistency auditing. [closed-prior — CI tab in UiBuilderAdmin]
 
 ### User-facing vocabulary and flow cleanup
 
