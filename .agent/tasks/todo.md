@@ -2,6 +2,10 @@
 
 ## Blocking (resolved in branch — verify on merge)
 
+- [x] Admin route drift corrected against `docs/design/runtime-orchestration-ssot.yaml`: Fresh `/admin/*` registry contains only `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`; retained helper wrappers are isolated under `/dev/admin/*`.
+- [x] `/admin/contents` is presented as new manifest creation; `/admin/manifests` renders registered existing manifest relation / hub ordering only and does not expose promote-before draft hub assignment.
+- [x] Contents promote guard fails closed until validation has executed without blocking issues.
+
 - [x] `TryProjectWiringAsync` uses `topology.physical_tables.table_ref` (SSOT); legacy `dbTableName` accepted at API boundary.
 - [x] Hub grouping primary UI on `/admin/manifests`; contents shows readonly summary + promote gate.
 - [x] `ManifestScreenOperationDeriver` uses manifest-scoped target/layer (list vs detail no longer share `admin/default/entity/Read`).
@@ -17,8 +21,10 @@
 
 ## Optional follow-up
 
+- [ ] Decide whether retained `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate` legacy/debug/helper wrappers can be deleted after migration/debug consumers are reviewed. [legacy-debug-isolation]
+
 - [ ] `product.dynamic_support_nocode_loop` manual acceptance (unchanged from roadmap).
-- [ ] Auto-refresh dispatcher axes on contents save when manifest_key already set on manifests page (partial: refresh on assign_screen_data_shape + assign_hub_grouping).
+- [ ] Clarify the non-canonical authoring owner for promote-before draft hub assignment if that helper flow remains required; `/admin/manifests` no longer owns it. [draft-hub-assignment-owner]
 
 ## Admin Console UX 改善（次フェーズ対象）
 

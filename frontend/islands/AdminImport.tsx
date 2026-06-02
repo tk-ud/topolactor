@@ -304,7 +304,7 @@ export default function AdminImport(): JSX.Element {
           <p class="mt-2 text-xs text-muted-xs">
             次のステップ:{" "}
             <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a> で画面を準備する、または{" "}
-            <a href="/admin/runtime" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
+            <a href="/demo/debug" class="link">{UX_RUNTIME_CHECK}</a> で動作を確認してください。
           </p>
           <details class="mt-1">
             <summary class="cursor-pointer text-xs text-green-700">技術情報</summary>

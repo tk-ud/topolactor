@@ -28,7 +28,7 @@ export default function AuthPage(): JSX.Element {
         {" · "}
         <a href="/admin" class="link">管理（登録）</a>
         {" · "}
-        <a href="/admin/runtime" class="link">ランタイム検証</a>
+        <a href="/demo/debug" class="link">ランタイム検証</a>
         {" · "}
         <a href="/demo" class="link">デモ</a>
       </div>

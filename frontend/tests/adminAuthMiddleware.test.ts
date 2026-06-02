@@ -25,12 +25,12 @@ function restoreFetch(): void {
 }
 
 Deno.test("admin middleware: missing cookie redirects to /auth with redirect param", async () => {
-  const req = new Request("https://example.com/admin/import?x=1");
+  const req = new Request("https://example.com/admin/contents?x=1");
   const res = await handler(req, mockRouteContext());
   assertEquals(res.status, 302);
   assertEquals(
     res.headers.get("location"),
-    "https://example.com/auth?redirect=%2Fadmin%2Fimport%3Fx%3D1",
+    "https://example.com/auth?redirect=%2Fadmin%2Fcontents%3Fx%3D1",
   );
 });
 
@@ -79,7 +79,7 @@ Deno.test("admin middleware: valid backend session probe passes through", async 
   };
 
   try {
-    const req = new Request("https://example.com/admin/runtime", {
+    const req = new Request("https://example.com/admin/manifests", {
       headers: { cookie: `${SESSION_TOKEN_KEY}=${encodeURIComponent("eyJ.demo.token")}` },
     });
     const res = await handler(req, mockRouteContext("route-ok"));

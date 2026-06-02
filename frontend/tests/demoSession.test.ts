@@ -66,9 +66,9 @@ Deno.test("sessionTokenClearCookieHeader expires cookie", () => {
 });
 
 Deno.test("buildAuthRedirectUrl: preserves admin path in redirect param", () => {
-  const req = new Request("https://example.com/admin/import?x=1");
+  const req = new Request("https://example.com/admin/contents?x=1");
   const url = buildAuthRedirectUrl(req);
-  assertEquals(url, "https://example.com/auth?redirect=%2Fadmin%2Fimport%3Fx%3D1");
+  assertEquals(url, "https://example.com/auth?redirect=%2Fadmin%2Fcontents%3Fx%3D1");
 });
 
 Deno.test("buildAuthRedirectResponse: clearSession sets Set-Cookie on mutable headers", () => {
