@@ -34,6 +34,11 @@
 --     demo_session:                00000000-0000-0000-0000-000000000031
 --     demo_event_overview:         00000000-0000-0000-0000-000000000051
 --     demo_event_entity_list:      00000000-0000-0000-0000-000000000052
+--     demo_dispatch_manifest_hub_overview:  00000000-0000-0000-0000-000000000080
+--     demo_dispatch_manifest_entity_list:   00000000-0000-0000-0000-000000000081
+--     demo_dispatch_manifest_entity_detail: 00000000-0000-0000-0000-000000000082
+--     demo_dispatch_manifest_entity_create: 00000000-0000-0000-0000-000000000083
+--     demo_dispatch_manifest_entity_advance: 00000000-0000-0000-0000-000000000084
 --
 -- HOW TO RUN (after seed_empty.sql):
 --   psql -d <database> -f db/schema.sql
@@ -198,6 +203,67 @@ VALUES
     ('00000000-0000-0000-0000-00000000001b','demo_entity_create','demo:entity:create','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true),
     ('00000000-0000-0000-0000-00000000001c','demo_entity_advance','demo:entity:advance','00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012',ARRAY['00000000-0000-0000-0000-000000000015','00000000-0000-0000-0000-000000000017']::uuid[],'{"context_route_policy_ref":"demo_policy"}',true)
 ON CONFLICT (structure_map_id) DO NOTHING;
+
+
+-- ---------------------------------------------------------------------------
+-- manifest — demo dispatch routes (IDs 80-84)
+-- Required when ManifestDispatcher uses DB manifest resolution (production path).
+-- Maps demo OperationPanel presets to topology_transform_runtime (canonical pipeline).
+-- Without these rows, POST /dispatch returns MANIFEST_NOT_FOUND for demo presets.
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES
+    (
+        '00000000-0000-0000-0000-000000000080',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"demo","layer":"hub","action":"overview"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000081',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"demo","layer":"entity","action":"list"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000082',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"demo","layer":"entity","action":"detail"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000083',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"demo","layer":"entity","action":"create"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-000000000084',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"demo","layer":"entity","action":"advance"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"topology_transform_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    )
+ON CONFLICT (manifest_id) DO NOTHING;
 
 
 -- ---------------------------------------------------------------------------

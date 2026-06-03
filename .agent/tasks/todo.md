@@ -1,5 +1,19 @@
 # Agent Task List — admin canonical no-code workflow convergence
 
+## Owner comment
+- 全体的にイベントsubmit後に画面変化がないので正常に動いているのかわからない
+- 保存、更新、削除のアクション時はconfirmをデフォルトで表示させてほしい
+###　ページ内容の設定 http://localhost:8000/admin/contents　
+- サンプル表示が集計カラムが集計されない
+
+- 設計を保存ボタンが画面上部にあるため、下部まで入力を行うと迷います。下部にも保存ボタンを設置
+
+- 型指定のselectの表記は非開発者user向けで素晴らしい。 だが、表示名の隣にカッコで正式なDB型名を表示してほしい
+
+### ③公開・案内 — 内容確認 → 有効化
+- 設計保存後に対象の下書きページを選択しても候補が表示されない（同期問題）
+
+
 ## Blocking (resolved in branch — verify on merge)
 
 - [x] Admin route drift corrected against `docs/design/runtime-orchestration-ssot.yaml`: Fresh `/admin/*` registry contains only `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`; legacy/debug/helper `/dev/admin/*` wrappers are deleted.
