@@ -543,6 +543,30 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: cli_mcp_port_implementation_ssot
+    change_surfaces:
+      - cli_mcp_port_implementation
+      - data_reader_contract
+      - context_api_contract
+      - export_job_schema_contract
+      - mcp_tool_wiring
+      - mcp_resource_wiring
+      - audit_log_persistence
+      - docs/design/cli-mcp-port-implementation-ssot.yaml
+      - docs/design/cli-mcp-port-implementation-ssot.md
+    required_docs:
+      - docs/design/cli-mcp-port-implementation-ssot.yaml
+      - docs/design/cli-mcp-port-implementation-ssot.md
+    supporting_docs:
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/runtime-bundle-file-storage-ssot.yaml
+      - docs/design/runtime-bundle-export-sftp-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: user_facing_helper_manual
     change_surfaces:
       - user_facing_helper_manual

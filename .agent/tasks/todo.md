@@ -67,7 +67,7 @@ Roadmap entry: `admin_visual_layout_builder`. Status promoted from `partial` →
 Added by: CLI Model Context Protocols Port SSOT design_change
 SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/extended-runtime-bundle-registry-ssot.yaml
 
-- [ ] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot]
+- [x] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot] → docs/design/cli-mcp-port-implementation-ssot.yaml / .md
 - [x] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot] → docs/design/runtime-bundle-email-ssot.yaml
 - [x] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot] → docs/design/runtime-bundle-stripe-ssot.yaml
 - [x] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot] → docs/design/runtime-bundle-file-storage-ssot.yaml
