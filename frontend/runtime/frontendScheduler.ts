@@ -245,7 +245,7 @@ type UserOpEntry = {
 
 type AdminDispatchEntry = {
   kind: "admin_dispatch";
-  req: DispatchRequest;
+  req: Omit<DispatchRequest, "triggerKind" | "role">;
   token?: string;
   resolve: (result: ScheduledCommandResult) => void;
   reject: (error: unknown) => void;
@@ -265,7 +265,9 @@ async function drainClientCommandQueue(): Promise<void> {
       try {
         let result: ScheduledCommandResult;
         if (entry.kind === "admin_dispatch") {
-          result = await dispatchOperation({ ...entry.req, triggerKind: "client" }, entry.token);
+          // deno-lint-ignore no-unused-vars
+          const { role: _role, triggerKind: _tk, ...safeReq } = entry.req as DispatchRequest;
+          result = await dispatchOperation({ ...safeReq, triggerKind: "client" }, entry.token);
         } else {
           const vector = resolveOperationVector(entry.op);
           result = await dispatchOperation(
@@ -315,7 +317,7 @@ export async function queueClientCommand(
  * Use for admin UI operations that cannot be expressed as UserOperation.
  */
 export async function queueAdminClientCommand(
-  req: Omit<DispatchRequest, "triggerKind">,
+  req: Omit<DispatchRequest, "triggerKind" | "role">,
   token?: string,
 ): Promise<ScheduledCommandResult> {
   return new Promise<ScheduledCommandResult>((resolve, reject) => {

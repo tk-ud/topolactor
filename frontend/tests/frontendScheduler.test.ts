@@ -1,5 +1,6 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { __testOnly, queueAdminClientCommand, queueClientCommand } from "../runtime/frontendScheduler.ts";
+import type { DispatchRequest } from "../api/dispatch.ts";
 
 // ─── frontend.runtime_scheduler — Gap-13 closure tests ───────────────────────
 // Verifies completion condition: frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
@@ -179,6 +180,33 @@ Deno.test("scheduler: queueAdminClientCommand must NOT include role in dispatch 
     globalThis.fetch = originalFetch;
     __testOnly.resetCommandQueue();
   }
+});
+
+Deno.test("scheduler: queueAdminClientCommand strips role from dispatch body even when passed via runtime cast", async () => {
+  __testOnly.resetCommandQueue();
+  let capturedBody: Record<string, unknown> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return new Response(JSON.stringify({ success: true, errors: null }), { status: 200 });
+  };
+  try {
+    // Bypass type safety to simulate a caller accidentally injecting role at runtime
+    await queueAdminClientCommand(
+      { operationType: "admin", target: "admin", layer: "seed_runtime", action: "load", role: "admin" } as unknown as Omit<DispatchRequest, "triggerKind" | "role">,
+    );
+    assertEquals("role" in capturedBody, false, "role must be stripped from dispatch body even when injected via runtime cast");
+    assertEquals(capturedBody.triggerKind, "client");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("scheduler: queueAdminClientCommand type regression — role rejected at compile time", () => {
+  // @ts-expect-error — role must not be assignable to the req parameter; this line must remain a TS error
+  const _bad: Parameters<typeof queueAdminClientCommand>[0] = { operationType: "admin", target: "admin", layer: "x", action: "y", role: "admin" };
+  void _bad;
 });
 
 // ─── Source guard: direct fetch("/api/dispatch") bypass detection ─────────────
