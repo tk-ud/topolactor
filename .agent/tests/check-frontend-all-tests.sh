@@ -15,7 +15,7 @@ fi
 cd "${REPO_ROOT}"
 
 echo "=== [FRONTEND_ALL_TESTS] Running all frontend tests in frontend/tests/ ==="
-deno test frontend/tests/ --allow-read
+deno test frontend/tests/ --allow-read --allow-env
 
 echo ""
 echo "=== [FRONTEND_ALL_TESTS] PASSED ==="

@@ -139,6 +139,20 @@ else
   fail "[SSOT_VOCABULARY_CONTRACT] vocabulary contract checks failed"
 fi
 
+# ─── FRONTEND_ALL_TESTS ───────────────────────────────────────────────────────
+
+echo ""
+echo "=== [FRONTEND_ALL_TESTS] All frontend tests (full suite) ==="
+echo "    Scope: all tests in frontend/tests/ (includes UI handler behavior, event SSOT,"
+echo "           lane distinction, and any new tests added to frontend/tests/)"
+echo "    Note: --allow-read required for source guard and SSOT readers"
+
+if bash .agent/tests/check-frontend-all-tests.sh; then
+  echo "OK  [FRONTEND_ALL_TESTS] full frontend test suite passed"
+else
+  fail "[FRONTEND_ALL_TESTS] full frontend test suite failed"
+fi
+
 # ─── NOT_COVERED ──────────────────────────────────────────────────────────────
 
 echo ""
