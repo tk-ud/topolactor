@@ -1,0 +1,190 @@
+runtime_bundle_webhook_inbox_ssot:
+  name: runtime_bundle_webhook_inbox
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+
+  purpose:
+    summary: >-
+      Webhook Inbox BundleのSSOT。
+      外部からのwebhookをscheduler / runtime route境界を通して受信する。
+      webhook から直接 runtime execution することは禁止。
+      intake_snapshot → validate → preview → explicit_apply → canonical_runtime_route
+      の境界を本SSOTで定義する。
+    non_goals:
+      - webhook_direct_runtime_execution_without_scheduler
+      - webhook_provider_credential_specification
+      - webhook_signing_key_specification
+      - runtime_destination_selection_by_this_bundle
+      - silent_event_fallback
+
+  authority_boundary:
+    webhook_execution_authority: scheduler_then_runtime_route_only
+    prohibited_authorities:
+      - direct_runtime_execution_from_webhook
+      - webhook_inline_state_mutation
+      - ai_autonomous_webhook_processing
+      - unauthenticated_webhook_intake
+
+  trigger_kind:
+    allowed:
+      - webhook_intake_with_signature_verification
+      - scheduler_driven_event_processing
+    prohibited:
+      - webhook_direct_runtime_execution
+      - unverified_webhook_direct_execution
+      - client_side_webhook_trigger
+
+  allowed_side_effects:
+    - intake_snapshot_write_after_signature_verification
+    - runtime_event_log_write_on_intake
+    - scheduler_queue_enqueue_after_intake
+    - validated_candidate_forwarding_to_runtime_route
+
+  prohibited_operations:
+    - webhook_direct_runtime_execution_without_scheduler
+    - intake_without_signature_verification
+    - silent_fallback_on_intake_failure
+    - webhook_signing_key_in_public_ssot
+    - webhook_endpoint_secret_in_public_ssot
+    - runtime_destination_selection_by_webhook_inbox
+    - state_mutation_before_validation
+
+  public_safe_config_policy:
+    allowed_in_public_ssot:
+      - webhook_intake_flow_boundary_definition
+      - scheduler_boundary_definition
+      - signature_verification_requirement
+      - failure_policy_definition
+    prohibited_in_public_ssot:
+      - webhook_signing_key
+      - webhook_endpoint_secret
+      - webhook_provider_url
+      - webhook_provider_credentials
+      - rate_limit_values
+
+  secret_credential_boundary:
+    location: runtime_secret_store_not_in_public_ssot
+    policy: >-
+      webhook signing key / endpoint secret / provider URL は
+      公開SSOTに記載しない。runtime環境変数またはsecret store経由で注入する。
+
+  webhook_intake_flow:
+    intake:
+      description: >-
+        外部からのwebhook受信。署名検証前はデータを信頼しない。
+      prohibited:
+        - state_mutation_before_verification
+        - direct_runtime_execution
+    signature_verification:
+      description: >-
+        webhook署名の検証。検証成功後のみintake snapshotへの変換を許可する。
+      required: true
+      failure_behavior: explicit_rejection_no_silent_fallback
+    intake_snapshot:
+      description: >-
+        検証済みwebhook payloadのintake snapshot化。
+        canonical runtime routeへの入力候補として保存する。
+      requires: signature_verified
+    validate:
+      description: intake snapshotのvalidation。候補変換前に必須。
+      requires: intake_snapshot_created
+    preview:
+      description: runtime effect candidateの確認。explicit apply前に必須。
+      requires: validation_passed
+    explicit_apply:
+      description: >-
+        明示的なcanonical_runtime_route経由での適用。
+        scheduler経由で実行する。
+      requires: preview_confirmed
+      executes_via: scheduler_then_runtime_route
+
+  scheduler_boundary:
+    policy: >-
+      webhook eventのruntime executionは必ずscheduler経由で行う。
+      webhook_direct_runtime_execution_without_schedulerは禁止。
+    required_flow:
+      - webhook_inbox
+      - scheduler
+      - runtime_route
+
+  approval_boundary:
+    policy: >-
+      webhook eventからのcanonical runtime mutationは
+      validate → preview → explicit apply の境界を維持する。
+      silent implicit application は禁止。
+
+  audit_log_boundary:
+    required: runtime_event_log
+    scope:
+      - webhook_received
+      - signature_verification_success
+      - signature_verification_failure
+      - intake_snapshot_created
+      - scheduler_enqueued
+      - validation_completed
+      - preview_generated
+      - explicit_apply_initiated
+      - apply_completed
+      - apply_failed
+
+  failure_policy:
+    on_signature_verification_failure:
+      - reject_webhook_explicitly
+      - record_failure_to_runtime_event_log
+      - do_not_fallback_to_unverified_processing
+    on_intake_snapshot_failure:
+      - expose_failure_explicitly
+      - record_to_runtime_event_log
+    on_apply_failure:
+      - expose_failure_explicitly
+      - do_not_silently_fallback
+
+  idempotency_policy:
+    policy: >-
+      同一webhook event IDに対するintake snapshotは冪等に扱う。
+      重複受信時は既存snapshotを返し、二重処理を防ぐ。
+      実装詳細は後段実装SSOTで定義する。
+
+  relation_to_extended_runtime_bundle_registry:
+    registry_entry: webhook_inbox_bundle
+    registry_path: docs/design/extended-runtime-bundle-registry-ssot.yaml
+    owner_status: assigned_to_design_ssot
+    core_bundle_status: not_started
+
+  relation_to_cli_mcp_port:
+    ssot_path: docs/design/cli-model-context-protocols-port-ssot.yaml
+    boundary: webhook_execution_is_not_a_cli_mcp_read_export_operation
+    policy: >-
+      CLI/MCP read/export portはwebhook executionをout_of_scopeとして扱う。
+      このBundleはそのboundaryを尊重し、CLI/MCP経由のwebhook execution経路を提供しない。
+
+  relation_to_runtime_orchestration:
+    ssot_path: docs/design/runtime-orchestration-ssot.yaml
+    boundary: webhook_enters_scheduler_as_hook_trigger
+    policy: >-
+      webhook eventはruntime_orchestration_ssotのhook trigger kindとして
+      scheduler → manifest_dispatcher → runtime_route 経由で処理する。
+      runtime_destination_selectionはmanifest_dispatcherが所有する。
+
+  explicitly_out_of_scope:
+    - webhook_provider_credential_specification
+    - webhook_endpoint_routing_configuration
+    - runtime_destination_selection
+    - direct_database_write_from_webhook_without_scheduler
+    - cli_mcp_webhook_execution
+    - ai_autonomous_webhook_processing
+    - webhook_retry_policy_implementation_detail
+
+  future_implementation_requirements:
+    items:
+      - webhook_intake_schema_design
+      - webhook_event_signature_verification_service_design
+      - intake_snapshot_schema_design
+      - scheduler_hook_trigger_wiring_design
+      - runtime_event_log_schema_for_webhook_intake
+      - idempotency_key_schema
+      - webhook_provider_adapter_design
+    policy: >-
+      実装はこのSSOTの境界定義に基づいて別途実装SSOTを作成してから行う。
+      signing key / endpoint secret実体はこのSSOTに含めない。

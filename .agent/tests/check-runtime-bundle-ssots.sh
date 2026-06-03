@@ -61,6 +61,14 @@ BUNDLE_SSOTS=(
   "docs/design/runtime-bundle-file-storage-ssot.md"
   "docs/design/runtime-bundle-export-sftp-ssot.yaml"
   "docs/design/runtime-bundle-export-sftp-ssot.md"
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml"
+  "docs/design/runtime-bundle-webhook-inbox-ssot.md"
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml"
+  "docs/design/runtime-bundle-job-scheduler-ssot.md"
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml"
+  "docs/design/runtime-bundle-audit-approval-ssot.md"
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"
+  "docs/design/runtime-bundle-secret-credential-ssot.md"
 )
 
 for f in "${BUNDLE_SSOTS[@]}"; do
@@ -93,7 +101,11 @@ for yaml in \
   "docs/design/runtime-bundle-email-ssot.yaml" \
   "docs/design/runtime-bundle-stripe-ssot.yaml" \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
-  "docs/design/runtime-bundle-export-sftp-ssot.yaml"; do
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   for key in "${REQUIRED_KEYS[@]}"; do
     check_content "$yaml" "$key"
   done
@@ -132,13 +144,54 @@ check_content "$REGISTRY" "requires_future_specific_bundle_ssot"
 check_content "$REGISTRY" "implementation_gate"
 
 echo ""
+echo "=== Webhook inbox bundle: scheduler boundary required ==="
+
+check_content "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" "webhook_direct_runtime_execution_without_scheduler"
+check_content "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" "scheduler_then_runtime_route_only"
+check_content "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" "signature_verification"
+
+echo ""
+echo "=== Job/Scheduler bundle: runtime destination selection not owned ==="
+
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "runtime_destination_selection_by_scheduler"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "trigger_alignment_and_runtime_queue_only"
+check_content "docs/design/runtime-bundle-job-scheduler-ssot.yaml" "manifest_dispatcher"
+
+echo ""
+echo "=== Audit/Approval bundle: CLI/MCP boundary preserved ==="
+
+check_content "docs/design/runtime-bundle-audit-approval-ssot.yaml" "cli_mcp_read_export_boundary_violation"
+check_content "docs/design/runtime-bundle-audit-approval-ssot.yaml" "ui_human_explicit_action_only"
+check_content "docs/design/runtime-bundle-audit-approval-ssot.yaml" "export_job_approval_boundary"
+
+echo ""
+echo "=== Secret/Credential bundle: no real credential in SSOT ==="
+
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "runtime_secret_store_not_in_public_ssot"
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "real_credential_in_public_ssot"
+check_content "docs/design/runtime-bundle-secret-credential-ssot.yaml" "credential_in_audit_log_plaintext"
+
+echo ""
+echo "=== Extended registry: core bundle owner assignments (all 8) ==="
+
+REGISTRY="docs/design/extended-runtime-bundle-registry-ssot.yaml"
+check_content "$REGISTRY" "runtime-bundle-webhook-inbox-ssot"
+check_content "$REGISTRY" "runtime-bundle-job-scheduler-ssot"
+check_content "$REGISTRY" "runtime-bundle-audit-approval-ssot"
+check_content "$REGISTRY" "runtime-bundle-secret-credential-ssot"
+
+echo ""
 echo "=== Secret/credential boundary declared in each SSOT ==="
 
 for yaml in \
   "docs/design/runtime-bundle-email-ssot.yaml" \
   "docs/design/runtime-bundle-stripe-ssot.yaml" \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
-  "docs/design/runtime-bundle-export-sftp-ssot.yaml"; do
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   check_content "$yaml" "secret_credential_boundary"
   check_content "$yaml" "prohibited_in_public_ssot"
   check_content "$yaml" "runtime_secret_store_not_in_public_ssot"
@@ -165,7 +218,11 @@ for yaml in \
   "docs/design/runtime-bundle-email-ssot.yaml" \
   "docs/design/runtime-bundle-stripe-ssot.yaml" \
   "docs/design/runtime-bundle-file-storage-ssot.yaml" \
-  "docs/design/runtime-bundle-export-sftp-ssot.yaml"; do
+  "docs/design/runtime-bundle-export-sftp-ssot.yaml" \
+  "docs/design/runtime-bundle-webhook-inbox-ssot.yaml" \
+  "docs/design/runtime-bundle-job-scheduler-ssot.yaml" \
+  "docs/design/runtime-bundle-audit-approval-ssot.yaml" \
+  "docs/design/runtime-bundle-secret-credential-ssot.yaml"; do
   for pat in "${FORBIDDEN_PATTERNS[@]}"; do
     check_absent "$yaml" "$pat"
   done
