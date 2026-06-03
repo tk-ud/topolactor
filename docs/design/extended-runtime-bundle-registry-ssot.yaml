@@ -137,8 +137,10 @@ extended_runtime_bundle_registry_ssot:
           - scheduler
           - runtime_route
         requires_separate_ssot: true
-        owner_status: unresolved_by_design
-        implementation_gate: separate_ssot_required
+        owner: runtime-bundle-webhook-inbox-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-webhook-inbox-ssot.yaml
 
       job_scheduler_bundle:
         id: job_scheduler_bundle
@@ -148,8 +150,10 @@ extended_runtime_bundle_registry_ssot:
         related_ssot:
           - docs/design/runtime-orchestration-ssot.yaml
         requires_separate_ssot: true
-        owner_status: unresolved_by_design
-        implementation_gate: separate_ssot_required
+        owner: runtime-bundle-job-scheduler-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-job-scheduler-ssot.yaml
 
       audit_approval_bundle:
         id: audit_approval_bundle
@@ -161,8 +165,10 @@ extended_runtime_bundle_registry_ssot:
         related_ssot:
           - docs/design/cli-model-context-protocols-port-ssot.yaml
         requires_separate_ssot: true
-        owner_status: unresolved_by_design
-        implementation_gate: separate_ssot_required
+        owner: runtime-bundle-audit-approval-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-audit-approval-ssot.yaml
 
       secret_credential_bundle:
         id: secret_credential_bundle
@@ -170,8 +176,10 @@ extended_runtime_bundle_registry_ssot:
         description: Secret / Credential Bundle。外部連携に必要な認証情報を管理。
         trigger_kind: api_or_admin_config
         requires_separate_ssot: true
-        owner_status: unresolved_by_design
-        implementation_gate: separate_ssot_required
+        owner: runtime-bundle-secret-credential-ssot
+        owner_resolution: covered_by_this_pr
+        owner_status: assigned_to_design_ssot
+        separate_ssot_path: docs/design/runtime-bundle-secret-credential-ssot.yaml
 
   future_optional_external_surface_bundles:
     description: >-

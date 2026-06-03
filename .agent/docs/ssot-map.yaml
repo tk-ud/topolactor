@@ -465,6 +465,84 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: runtime_bundle_webhook_inbox_ssot
+    change_surfaces:
+      - runtime_bundle_webhook_inbox
+      - webhook_inbox_bundle
+      - webhook_scheduler_boundary
+      - intake_snapshot_boundary
+      - scheduler_route_boundary
+      - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+      - docs/design/runtime-bundle-webhook-inbox-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+      - docs/design/runtime-bundle-webhook-inbox-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_job_scheduler_ssot
+    change_surfaces:
+      - runtime_bundle_job_scheduler
+      - job_scheduler_bundle
+      - cron_hook_client_trigger_boundary
+      - scheduler_queue_contract
+      - trigger_alignment_boundary
+      - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+      - docs/design/runtime-bundle-job-scheduler-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-job-scheduler-ssot.yaml
+      - docs/design/runtime-bundle-job-scheduler-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_audit_approval_ssot
+    change_surfaces:
+      - runtime_bundle_audit_approval
+      - audit_approval_bundle
+      - approval_flow_boundary
+      - export_job_approval_boundary
+      - audit_log_boundary
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-audit-approval-ssot.yaml
+      - docs/design/runtime-bundle-audit-approval-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
+  - work_type: runtime_bundle_secret_credential_ssot
+    change_surfaces:
+      - runtime_bundle_secret_credential
+      - secret_credential_bundle
+      - credential_management_boundary
+      - secret_store_injection_pattern
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+      - docs/design/runtime-bundle-secret-credential-ssot.md
+    required_docs:
+      - docs/design/runtime-bundle-secret-credential-ssot.yaml
+      - docs/design/runtime-bundle-secret-credential-ssot.md
+    supporting_docs:
+      - docs/design/extended-runtime-bundle-registry-ssot.yaml
+      - docs/design/cli-model-context-protocols-port-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: user_facing_helper_manual
     change_surfaces:
       - user_facing_helper_manual

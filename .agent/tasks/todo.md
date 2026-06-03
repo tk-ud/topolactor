@@ -74,15 +74,15 @@ SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/ex
 - [x] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot] → docs/design/runtime-bundle-export-sftp-ssot.yaml
 - [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook/REST-API-Connector/NoCode-Loop）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate] — owner_status: unresolved_by_design として明示済み
 
-## Core Runtime Bundle SSOT — 残タスク（PR348未作成分）
+## Core Runtime Bundle SSOT — 完了
 
 SSOT ref: docs/design/extended-runtime-bundle-registry-ssot.yaml (core_runtime_bundles)
-Registry state: owner_status: unresolved_by_design / implementation_gate: separate_ssot_required
+Registry state: owner_status: assigned_to_design_ssot（全4bundle解決済み）
 
-- [ ] Webhook Inbox Bundle の別SSOT作成（scheduler境界・direct execution禁止・runtime route境界設計）[webhook-inbox-bundle-ssot]
-- [ ] Job/Scheduler Bundle の別SSOT作成（cron/hook/client trigger統合・scheduler境界設計）[job-scheduler-bundle-ssot]
-- [ ] Audit/Approval Bundle の別SSOT作成（承認フロー・監査ログ・export job approval境界設計）[audit-approval-bundle-ssot]
-- [ ] Secret/Credential Bundle の別SSOT作成（外部連携認証情報管理・credential非公開境界設計）[secret-credential-bundle-ssot]
+- [x] Webhook Inbox Bundle の別SSOT作成（scheduler境界・direct execution禁止・runtime route境界設計）[webhook-inbox-bundle-ssot] → docs/design/runtime-bundle-webhook-inbox-ssot.yaml
+- [x] Job/Scheduler Bundle の別SSOT作成（cron/hook/client trigger統合・scheduler境界設計）[job-scheduler-bundle-ssot] → docs/design/runtime-bundle-job-scheduler-ssot.yaml
+- [x] Audit/Approval Bundle の別SSOT作成（承認フロー・監査ログ・export job approval境界設計）[audit-approval-bundle-ssot] → docs/design/runtime-bundle-audit-approval-ssot.yaml
+- [x] Secret/Credential Bundle の別SSOT作成（外部連携認証情報管理・credential非公開境界設計）[secret-credential-bundle-ssot] → docs/design/runtime-bundle-secret-credential-ssot.yaml
 
 ## User-facing Helper / Manual — future implementation TODOs
 
