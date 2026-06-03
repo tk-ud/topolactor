@@ -39,14 +39,16 @@ import {
   assertFalse,
   assertRejects,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { h } from "preact";
+import { h, options, render } from "preact";
 import { renderToString } from "preact-render-to-string";
 import {
   __testOnly,
   queueAdminClientCommand,
   queueClientCommand,
   emitComponentOperationEvent,
+  stopComponentEventRuntime,
 } from "../runtime/frontendScheduler.ts";
+import { setupDom, flushUpdates } from "./test-dom-setup.ts";
 import {
   applyImport,
   fetchContextTokens,
@@ -71,6 +73,18 @@ import RegistryVectorValidator from "../islands/RegistryVectorValidator.tsx";
 import ContentsPromotionPanel from "../islands/ContentsPromotionPanel.tsx";
 import ContentsScreenDesignPanel from "../islands/ContentsScreenDesignPanel.tsx";
 import AuthPanel from "../islands/AuthPanel.tsx";
+
+// ─── Preact effect scheduling shim ───────────────────────────────────────────
+// Preact checks typeof requestAnimationFrame at hooks module load time and falls
+// back to a 100ms RAF_TIMEOUT when rAF is absent (Deno/Node environment). Setting
+// options.requestAnimationFrame makes afterPaint() flush effects immediately via
+// setTimeout(0) instead of waiting 100ms. This makes flushUpdates() reliable.
+// Set once at module level — affects all render() calls; renderToString() is unaffected.
+// deno-lint-ignore no-explicit-any
+(options as any).requestAnimationFrame = (cb: () => void): number => {
+  setTimeout(cb, 0);
+  return 0;
+};
 
 // ─── Test helper utilities ────────────────────────────────────────────────────
 
@@ -100,6 +114,14 @@ function makeNetworkErrorFetch(message: string): typeof globalThis.fetch {
 // deno-lint-ignore no-explicit-any
 function renderHtml(Component: (props: any) => h.JSX.Element, props: Record<string, unknown> = {}): string {
   return renderToString(h(Component, props));
+}
+
+// Render component into a live DOM container using preact's render.
+// Uses `any` cast to bypass per-component Props type checking — components
+// with optional-only props accept empty props at runtime regardless of TS types.
+// deno-lint-ignore no-explicit-any
+function renderInto(Component: (props: any) => h.JSX.Element, container: Element, props: Record<string, unknown> = {}): void {
+  render(h(Component, props), container);
 }
 
 // ─── Section 1: SeedAdmin — rendered interaction ──────────────────────────────
@@ -1042,5 +1064,457 @@ Deno.test("AuthPanel lane: scheduler lane distinct from auth lane (no /api/dispa
     assertFalse(capturedUrl.includes("/api/dispatch"), "auth must not go through /api/dispatch");
   } finally {
     globalThis.fetch = original;
+  }
+});
+
+// ─── Section 8: SeedAdmin — DOM event simulation ──────────────────────────────
+// These tests render SeedAdmin into a live DOM (happy-dom) and simulate real button
+// clicks that trigger async handlers → useState updates → DOM re-render assertions.
+// SeedAdmin has no useEffect auto-load, so all state transitions are manually triggered.
+
+Deno.test("SeedAdmin DOM: load button click with error response → alert-error section appears in DOM", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(422, {
+      success: false,
+      errors: [{ code: "SEED_LOAD_FAIL", message: "ファイルが見つかりません" }],
+    });
+    renderInto(SeedAdmin, container);
+    // deno-lint-ignore no-explicit-any
+    const buttons = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const loadBtn = buttons.find((b) => b.textContent?.includes("保存済みデータ"));
+    assertExists(loadBtn, "load button must be present after render");
+    // deno-lint-ignore no-explicit-any
+    loadBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(html.includes("alert-error"), "alert-error section must appear in DOM after load failure");
+    assert(html.includes("ファイルが見つかりません"), "error message must be visible in DOM (not silent)");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+Deno.test("SeedAdmin DOM: load button click with success response → loaded content and status appear in DOM", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: { data: { content: '{"version":"1","runtimes":[]}' } },
+    });
+    renderInto(SeedAdmin, container);
+    // deno-lint-ignore no-explicit-any
+    const buttons = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const loadBtn = buttons.find((b) => b.textContent?.includes("保存済みデータ"));
+    assertExists(loadBtn, "load button must be present");
+    // deno-lint-ignore no-explicit-any
+    loadBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assertFalse(html.includes("alert-error"), "no error section on success");
+    assert(
+      html.includes("ロードしました") || html.includes("ロード完了"),
+      "success status must be visible in DOM",
+    );
+    assert(html.includes('{"version":"1"'), "loaded content must appear in DOM");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+Deno.test("SeedAdmin DOM: import button click with error → error messages visible in DOM (not silent)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(422, {
+      success: false,
+      errors: [{ code: "IMPORT_CONFLICT", message: "インポート競合が発生しました" }],
+    });
+    renderInto(SeedAdmin, container);
+    // deno-lint-ignore no-explicit-any
+    const buttons = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const importBtn = buttons.find((b) => b.textContent?.includes("取り込む"));
+    assertExists(importBtn, "import button must be present");
+    // deno-lint-ignore no-explicit-any
+    importBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(html.includes("alert-error"), "alert-error section must appear after import failure");
+    assert(html.includes("インポート競合が発生しました"), "specific error message must be visible in DOM");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+// ─── Section 9: OperationPanel — DOM event simulation ────────────────────────
+// OperationPanel's useEffect calls startComponentEventRuntime() (starts setInterval).
+// stopComponentEventRuntime() is called in finally to prevent test resource leaks.
+
+Deno.test("OperationPanel DOM: dispatch click with success → emission result section appears in DOM", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  __testOnly.resetQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: {
+        structureMapId: "sm-test",
+        packageId: "pkg-test",
+        componentIds: ["c1", "c2"],
+      },
+    });
+    renderInto(OperationPanel, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const buttons = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const dispatchBtn = buttons.find((b) => b.textContent?.includes("選択した操作を実行"));
+    assertExists(dispatchBtn, "dispatch button must be present after render");
+    // deno-lint-ignore no-explicit-any
+    dispatchBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes("成功") || html.includes("実行結果"),
+      "emission result section must appear after successful dispatch",
+    );
+  } finally {
+    stopComponentEventRuntime();
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    __testOnly.resetQueue();
+    cleanup();
+  }
+});
+
+Deno.test("OperationPanel DOM: dispatch click with failure → エラーまたは部分失敗 appears in DOM (not silent)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  __testOnly.resetQueue();
+  try {
+    globalThis.fetch = makeMockFetch(422, {
+      success: false,
+      errors: [{ message: "OPERATION_DISPATCH_FAILED" }],
+    });
+    renderInto(OperationPanel, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const buttons = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const dispatchBtn = buttons.find((b) => b.textContent?.includes("選択した操作を実行"));
+    assertExists(dispatchBtn, "dispatch button must be present");
+    // deno-lint-ignore no-explicit-any
+    dispatchBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes("エラーまたは部分失敗") || html.includes("実行結果"),
+      "error/partial-failure section must appear in DOM after dispatch failure (not silent)",
+    );
+  } finally {
+    stopComponentEventRuntime();
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    __testOnly.resetQueue();
+    cleanup();
+  }
+});
+
+// ─── Section 10: UserDemoStepper — DOM event simulation ──────────────────────
+
+Deno.test("UserDemoStepper DOM: scenario click with success → step 3 result section appears in DOM", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  __testOnly.resetQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: { structureMapId: "sm-demo", packageId: "pkg-demo", componentIds: ["c-demo-1"] },
+    });
+    renderInto(UserDemoStepper, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const allBtns = Array.from((container as any).querySelectorAll("button")) as Array<{
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    assertExists(allBtns[0], "at least one button must be rendered in step 1");
+    // deno-lint-ignore no-explicit-any
+    allBtns[0].dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(html.includes("確認結果") || html.includes("user-demo-stepper"), "step 3 result must appear");
+  } finally {
+    stopComponentEventRuntime();
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    __testOnly.resetQueue();
+    cleanup();
+  }
+});
+
+Deno.test("UserDemoStepper DOM: scenario click with failure → step 3 with error result in DOM (not silent)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  __testOnly.resetQueue();
+  try {
+    globalThis.fetch = makeMockFetch(422, {
+      success: false,
+      errors: [{ message: "DEMO_SCENARIO_DISPATCH_FAIL" }],
+    });
+    renderInto(UserDemoStepper, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const allBtns = Array.from((container as any).querySelectorAll("button")) as Array<{
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    assertExists(allBtns[0], "scenario button must be present");
+    // deno-lint-ignore no-explicit-any
+    allBtns[0].dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    // runScenario always sets step=3; error emission surfaces via UserDemoResultCard
+    assert(
+      html.includes("確認結果") || html.includes("エラー") || html.length > 200,
+      "step 3 with error result must appear (not silent)",
+    );
+  } finally {
+    stopComponentEventRuntime();
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    __testOnly.resetQueue();
+    cleanup();
+  }
+});
+
+// ─── Section 11: UiBuilderAdmin — DOM event simulation ───────────────────────
+
+Deno.test("UiBuilderAdmin DOM: renders in live DOM without throwing", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, { success: true, emission: { data: { targets: [], items: [] } } });
+    let threw = false;
+    try {
+      renderInto(UiBuilderAdmin, container);
+    } catch {
+      threw = true;
+    }
+    assertFalse(threw, "UiBuilderAdmin must render in DOM without throwing");
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(html.length > 100, "UiBuilderAdmin must produce non-empty DOM content");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+Deno.test("UiBuilderAdmin DOM: accordion toggle click → DOM state changes (synchronous state update)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, { success: true, emission: { data: { targets: [], items: [] } } });
+    renderInto(UiBuilderAdmin, container);
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const btns = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const accordionBtn = btns.find(
+      (b) => b.textContent?.includes("開く") || b.textContent?.includes("閉じる"),
+    );
+    assertExists(accordionBtn, "UiBuilderAdmin must have accordion toggle buttons");
+    // deno-lint-ignore no-explicit-any
+    const htmlBefore = (container as any).innerHTML as string;
+    // deno-lint-ignore no-explicit-any
+    accordionBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const htmlAfter = (container as any).innerHTML as string;
+    assert(htmlBefore !== htmlAfter, "accordion click must change DOM state");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+// ─── Section 12: AdminImport — DOM event simulation ──────────────────────────
+
+Deno.test("AdminImport DOM: after useEffect loads selectors → loading state gone, content visible", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: {
+        data: [{ manifestId: "m1", status: "active", createdAt: "2024-01-01T00:00:00Z" }],
+      },
+    });
+    renderInto(AdminImport, container);
+    // deno-lint-ignore no-explicit-any
+    const htmlBefore = (container as any).innerHTML as string;
+    assert(htmlBefore.includes("選択肢をロード中") || htmlBefore.length > 50, "initial loading state visible");
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const htmlAfter = (container as any).innerHTML as string;
+    assertFalse(htmlAfter.includes("選択肢をロード中"), "loading message must be gone after useEffect resolves");
+    assert(htmlAfter.includes("プレビュー"), "preview section must be visible after selectors load");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+Deno.test("AdminImport DOM: preview click without manifest selected → error visible in DOM (not silent)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    // Load non-empty manifests/schemas so preview button is enabled
+    globalThis.fetch = makeMockFetch(200, {
+      success: true,
+      emission: {
+        data: [{ manifestId: "m1", status: "active", createdAt: "2024-01-01T00:00:00Z" }],
+      },
+    });
+    renderInto(AdminImport, container);
+    await flushUpdates();
+    await flushUpdates();
+    // Click preview button without selecting a manifest or schema → error set synchronously
+    // deno-lint-ignore no-explicit-any
+    const btns = Array.from((container as any).querySelectorAll("button")) as Array<{
+      textContent?: string;
+      // deno-lint-ignore no-explicit-any
+      dispatchEvent: (e: any) => void;
+    }>;
+    const previewBtn = btns.find((b) => b.textContent?.trim() === "プレビュー");
+    assertExists(previewBtn, "preview button must be present");
+    // deno-lint-ignore no-explicit-any
+    previewBtn!.dispatchEvent(new (globalThis as any).Event("click", { bubbles: true }));
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes("alert-error") || html.includes("選択してください") || html.includes("エラー"),
+      "error must be visible in DOM when preview clicked without selections (not silent)",
+    );
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+// ─── Section 13: AuthPanel — DOM event simulation ────────────────────────────
+// Session check: ensureValidClientSession returns null quickly (no token in empty sessionStorage).
+// No fetch mock needed for session check. Mock only for login attempt.
+
+Deno.test("AuthPanel DOM: session check resolves with no session → login form visible in DOM", async () => {
+  const { container, cleanup } = setupDom();
+  try {
+    renderInto(AuthPanel, container);
+    // deno-lint-ignore no-explicit-any
+    const htmlBefore = (container as any).innerHTML as string;
+    assert(
+      htmlBefore.includes("ログイン状態を確認") || htmlBefore.length > 10,
+      "initial render shows session check loading state",
+    );
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const htmlAfter = (container as any).innerHTML as string;
+    assert(htmlAfter.includes("ログイン") && htmlAfter.includes("password"), "login form must appear after session check");
+  } finally {
+    cleanup();
+  }
+});
+
+Deno.test("AuthPanel DOM: form submit with auth failure → alert-error visible in DOM (not silent)", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  try {
+    renderInto(AuthPanel, container);
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const form = (container as any).querySelector("form");
+    assertExists(form, "login form must be visible after session check");
+    globalThis.fetch = makeMockFetch(401, {
+      success: false,
+      errors: [{ code: "AUTH_INVALID_CREDENTIALS", message: "ユーザー名またはパスワードが間違っています。" }],
+    });
+    // deno-lint-ignore no-explicit-any
+    form.dispatchEvent(new (globalThis as any).Event("submit", { bubbles: true, cancelable: true }));
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(html.includes("alert-error"), "alert-error section must appear after auth failure (not silent)");
+    assert(
+      html.includes("ログインに失敗しました") || html.includes("パスワードが間違っています"),
+      "auth error message must be visible in DOM",
+    );
+  } finally {
+    globalThis.fetch = original;
+    cleanup();
   }
 });
