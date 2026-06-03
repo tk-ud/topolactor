@@ -2,38 +2,23 @@ import type { DispatchRequest, Emission, ValidationError } from "./dispatch.ts";
 import { validationErrorText } from "./dispatch.ts";
 
 import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
+import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
 
-function getAuthHeaders(): Record<string, string> {
-  const token =
-    typeof globalThis.sessionStorage !== "undefined"
-      ? sessionStorage.getItem(SESSION_TOKEN_KEY)
-      : null;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
+function getToken(): string | undefined {
+  if (typeof globalThis.sessionStorage === "undefined") return undefined;
+  return sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined;
 }
 
-async function callAdminDispatch(request: DispatchRequest): Promise<Emission | null> {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify(request),
-  });
-
-  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
-
-  const body = await res.json() as { success?: boolean; emission?: Emission | null; errors?: ValidationError[] };
-  if (res.status === 501) {
-    const code = body.errors?.[0]?.code ?? body.errors?.[0]?.Code;
+async function callAdminDispatch(request: Omit<DispatchRequest, "triggerKind">): Promise<Emission | null> {
+  const result = await queueAdminClientCommand(request, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
     if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
-  }
-
-  if (!res.ok || !body.success || !body.emission) {
-    const msg = body.errors?.[0]?.message ?? body.errors?.[0]?.Message ?? `HTTP ${res.status}`;
+    const msg = result.errors?.[0]?.message ?? result.errors?.[0]?.Message ?? "dispatch failed";
     throw new Error(msg);
   }
-
-  return body.emission;
+  if (!result.emission) throw new Error("dispatch: no emission in response");
+  return result.emission;
 }
 
 export type ContextToken = {
@@ -333,39 +318,20 @@ async function callAdminManifestOp(
   action: string,
   payload?: unknown,
 ): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      operationType: "admin",
-      target: "admin",
-      layer: "manifest",
-      action,
-      payload: payload ?? null,
-    }),
-  });
-
-  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
-
-  const body = await res.json() as {
-    success?: boolean;
-    emission?: { data?: unknown } | null;
-    errors?: ValidationError[];
-  };
-  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
-    return null;
-  }
-  if (!res.ok || body.success === false) {
-    const msg = body.errors?.[0]
-      ? validationErrorText(body.errors[0])
-      : `manifest ${action} failed (HTTP ${res.status})`;
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "manifest",
+    action,
+    payload: payload != null ? payload as Record<string, unknown> : undefined,
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg = result.errors?.[0] ? validationErrorText(result.errors[0]) : `manifest ${action} failed`;
     throw new Error(msg);
   }
-  return {
-    success: body.success ?? true,
-    emission: body.emission,
-    errors: body.errors,
-  };
+  return { success: result.success ?? true, emission: result.emission, errors: result.errors };
 }
 
 export async function listAdminManifests(status?: string): Promise<AdminManifestListItem[] | null> {
@@ -507,25 +473,18 @@ async function callAdminPromotionManifestOp(
   action: string,
   payload?: unknown,
 ): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      operationType: "admin",
-      target: "admin",
-      layer: "promotion_manifest",
-      action,
-      payload: payload ?? null,
-    }),
-  });
-
-  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
-
-  const body = await res.json();
-  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
-    return null;
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "promotion_manifest",
+    action,
+    payload: payload != null ? payload as Record<string, unknown> : undefined,
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
   }
-  return body;
+  return result as { success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] };
 }
 
 export async function listAdminPromotionManifests(
@@ -693,25 +652,18 @@ async function callAdminContentBundleOp(
   action: string,
   payload?: unknown,
 ): Promise<{ success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] } | null> {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      operationType: "admin",
-      target: "admin",
-      layer: "content_bundle",
-      action,
-      payload: payload ?? null,
-    }),
-  });
-
-  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
-
-  const body = await res.json();
-  if (res.status === 501 && body?.errors?.[0]?.code === "DISPATCH_BACKEND_NOT_CONFIGURED") {
-    return null;
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "content_bundle",
+    action,
+    payload: payload != null ? payload as Record<string, unknown> : undefined,
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
   }
-  return body;
+  return result as { success: boolean; emission?: { data?: unknown } | null; errors?: { code?: string; message?: string }[] };
 }
 
 export async function listContentHubs(): Promise<ContentBundleListItem[] | null> {
@@ -856,24 +808,18 @@ async function callHubNavigation(
   action: string,
   payload?: unknown,
 ): Promise<{ success?: boolean; emission?: { data?: unknown } | null; errors?: { message?: string; Message?: string }[] } | null> {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      operationType: "admin",
-      target: "admin",
-      layer: "hub_navigation",
-      action,
-      ...(payload !== undefined ? { payload } : {}),
-    }),
-  });
-  if (!res.ok && res.status === 401) throw new Error(`HTTP ${res.status}`);
-  const body = await res.json() as { success?: boolean; emission?: { data?: unknown } | null; errors?: { message?: string; Message?: string; code?: string; Code?: string }[] };
-  if (res.status === 501) {
-    const code = body.errors?.[0]?.code ?? body.errors?.[0]?.Code;
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "hub_navigation",
+    action,
+    ...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}),
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
     if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
   }
-  return body;
+  return result as { success?: boolean; emission?: { data?: unknown } | null; errors?: { message?: string; Message?: string }[] };
 }
 
 export async function listHubNavigationManifests(): Promise<HubNavigationManifestItem[] | null> {

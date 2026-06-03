@@ -1,5 +1,5 @@
 import { dispatchOperation } from "../api/dispatch.ts";
-import type { DispatchResponse } from "../api/dispatch.ts";
+import type { DispatchRequest, DispatchResponse } from "../api/dispatch.ts";
 import { resolveOperationVector } from "./resolveOperationVector.ts";
 import type { UserOperation } from "./resolveOperationVector.ts";
 
@@ -234,13 +234,24 @@ export function stopComponentEventRuntime(): void {
 
 export type ScheduledCommandResult = DispatchResponse;
 
-type PendingCommandEntry = {
+type UserOpEntry = {
+  kind: "user_op";
   op: UserOperation;
   token?: string;
   context?: Record<string, string>;
   resolve: (result: ScheduledCommandResult) => void;
   reject: (error: unknown) => void;
 };
+
+type AdminDispatchEntry = {
+  kind: "admin_dispatch";
+  req: DispatchRequest;
+  token?: string;
+  resolve: (result: ScheduledCommandResult) => void;
+  reject: (error: unknown) => void;
+};
+
+type PendingCommandEntry = UserOpEntry | AdminDispatchEntry;
 
 const clientCommandQueue: PendingCommandEntry[] = [];
 let clientCommandQueueRunning = false;
@@ -252,18 +263,24 @@ async function drainClientCommandQueue(): Promise<void> {
     while (clientCommandQueue.length > 0) {
       const entry = clientCommandQueue.shift()!;
       try {
-        const vector = resolveOperationVector(entry.op);
-        const result = await dispatchOperation(
-          {
-            operationType: entry.op.operationType,
-            target: vector.target,
-            layer: vector.layer,
-            action: vector.action,
-            payload: entry.op.payload,
-            context: entry.context && Object.keys(entry.context).length > 0 ? entry.context : undefined,
-          },
-          entry.token,
-        );
+        let result: ScheduledCommandResult;
+        if (entry.kind === "admin_dispatch") {
+          result = await dispatchOperation({ ...entry.req, triggerKind: "client" }, entry.token);
+        } else {
+          const vector = resolveOperationVector(entry.op);
+          result = await dispatchOperation(
+            {
+              operationType: entry.op.operationType,
+              target: vector.target,
+              layer: vector.layer,
+              action: vector.action,
+              payload: entry.op.payload,
+              triggerKind: "client",
+              context: entry.context && Object.keys(entry.context).length > 0 ? entry.context : undefined,
+            },
+            entry.token,
+          );
+        }
         entry.resolve(result);
       } catch (err) {
         entry.reject(err);
@@ -285,7 +302,24 @@ export async function queueClientCommand(
   context?: Record<string, string>,
 ): Promise<ScheduledCommandResult> {
   return new Promise<ScheduledCommandResult>((resolve, reject) => {
-    clientCommandQueue.push({ op, token, context, resolve, reject });
+    clientCommandQueue.push({ kind: "user_op", op, token, context, resolve, reject });
+    if (!clientCommandQueueRunning) {
+      void drainClientCommandQueue();
+    }
+  });
+}
+
+/**
+ * Queues an admin dispatch request through the same FIFO client_command_lane.
+ * Injects triggerKind="client" unconditionally — callers must not set role.
+ * Use for admin UI operations that cannot be expressed as UserOperation.
+ */
+export async function queueAdminClientCommand(
+  req: Omit<DispatchRequest, "triggerKind">,
+  token?: string,
+): Promise<ScheduledCommandResult> {
+  return new Promise<ScheduledCommandResult>((resolve, reject) => {
+    clientCommandQueue.push({ kind: "admin_dispatch", req: { ...req }, token, resolve, reject });
     if (!clientCommandQueueRunning) {
       void drainClientCommandQueue();
     }

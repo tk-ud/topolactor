@@ -210,10 +210,14 @@ Deno.test("applyImport throws on SNAPSHOT_NOT_FOUND error", async () => {
 Deno.test("admin import API functions go through /api/dispatch not direct DB", async () => {
   const original = globalThis.fetch;
   const capturedUrls: string[] = [];
+  const capturedBodies: string[] = [];
   globalThis.fetch = makeFetch(
     200,
     { success: true, emission: { data: [] } },
-    (u) => { capturedUrls.push(String(u)); },
+    (u, i) => {
+      capturedUrls.push(String(u));
+      capturedBodies.push(String(i?.body ?? ""));
+    },
   );
   try {
     await listImportManifests();
@@ -225,6 +229,12 @@ Deno.test("admin import API functions go through /api/dispatch not direct DB", a
         true,
         `URL should be /api/dispatch, got: ${url}`,
       );
+    }
+    // All requests must include triggerKind='client' and must not contain role
+    for (const bodyStr of capturedBodies) {
+      const body = JSON.parse(bodyStr);
+      assertEquals(body.triggerKind, "client", "admin import ops must include triggerKind='client' (client_command_lane SSOT)");
+      assertEquals("role" in body, false, "role must NOT be in frontend dispatch body; JWT claim is authoritative");
     }
   } finally {
     globalThis.fetch = original;

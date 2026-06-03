@@ -23,6 +23,7 @@ deno check \
   frontend/routes/runtime-status.tsx \
   frontend/islands/OperationPanel.tsx \
   frontend/islands/ReplyPanel.tsx \
+  frontend/islands/SeedAdmin.tsx \
   frontend/components/ProjectionView.tsx \
   frontend/components/EmissionView.tsx \
   frontend/package/defaultPackage.ts \
@@ -33,5 +34,7 @@ deno check \
   frontend/runtime/restoreResume.ts \
   frontend/runtime/projectionConstructor.ts \
   frontend/runtime/projectionRuntime.ts \
+  frontend/runtime/frontendScheduler.ts \
   frontend/api/dispatch.ts \
+  frontend/api/adminApi.ts \
   frontend/structure_map.ts

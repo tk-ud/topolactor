@@ -77,6 +77,8 @@ Deno.test("frontendScheduler: queueClientCommand shape matches DispatchRequest c
     assertEquals(body.target, "default");
     assertEquals(body.layer, "entity");
     assertEquals(body.action, "Search");
+    assertEquals(body.triggerKind, "client", "queueClientCommand must inject triggerKind='client' per client_command_lane SSOT");
+    assertEquals("role" in body, false, "role must NOT be in frontend dispatch body");
   } finally {
     globalThis.fetch = originalFetch;
   }

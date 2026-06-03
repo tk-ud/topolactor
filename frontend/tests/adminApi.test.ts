@@ -54,6 +54,19 @@ Deno.test("validateRegistryVector: dispatch 501 not configured -> null", async (
   } finally { globalThis.fetch = original; }
 });
 
+Deno.test("fetchContextTokens: dispatch body must include triggerKind='client' and must not contain role", async () => {
+  const original = globalThis.fetch;
+  let reqBody: Record<string, unknown> = {};
+  globalThis.fetch = makeFetch(200, { success: true, emission: { data: [] } }, (_u, i) => {
+    reqBody = JSON.parse(String(i?.body ?? "{}"));
+  });
+  try {
+    await fetchContextTokens();
+    assertEquals(reqBody.triggerKind, "client", "admin dispatch must include triggerKind='client' (client_command_lane SSOT)");
+    assertEquals("role" in reqBody, false, "role must NOT be in frontend dispatch body; JWT claim is authoritative");
+  } finally { globalThis.fetch = original; }
+});
+
 Deno.test("create/deprecate: dispatch 501 not configured -> explicit throw", async () => {
   const original = globalThis.fetch;
   globalThis.fetch = makeFetch(501, { success: false, errors: [{ code: "DISPATCH_BACKEND_NOT_CONFIGURED", message: "not configured" }] });

@@ -75,18 +75,37 @@ fi
 
 echo ""
 echo "=== [FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests ==="
-echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
-echo "           uiBuilderStepper.test.ts"
+echo "    Scope: adminApi.test.ts, adminImport.test.ts, adminUxGuard.test.ts,"
+echo "           defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
+echo "           userDemoStepper.test.ts, uiBuilderStepper.test.ts"
 
 if deno test \
     frontend/tests/adminApi.test.ts \
+    frontend/tests/adminImport.test.ts \
+    frontend/tests/adminUxGuard.test.ts \
     frontend/tests/defaultEntitySearch.test.ts \
     frontend/tests/pipelineContinuity.test.ts \
+    frontend/tests/userDemoStepper.test.ts \
     frontend/tests/uiBuilderStepper.test.ts \
     --allow-read; then
   echo "OK  [FRONTEND_CONTRACT] frontend contract tests passed"
 else
   fail "[FRONTEND_CONTRACT] frontend contract tests failed"
+fi
+
+# ─── CLIENT_COMMAND_LANE ──────────────────────────────────────────────────────
+
+echo ""
+echo "=== [CLIENT_COMMAND_LANE] Frontend scheduler and source guard tests ==="
+echo "    Scope: frontendScheduler.test.ts"
+echo "    Note: --allow-read required for source guard (scans frontend/**/*.ts)"
+
+if deno test \
+    frontend/tests/frontendScheduler.test.ts \
+    --allow-read; then
+  echo "OK  [CLIENT_COMMAND_LANE] client command lane tests passed"
+else
+  fail "[CLIENT_COMMAND_LANE] client command lane tests failed"
 fi
 
 # ─── CATALOG_SSOT_ALIGNMENT ───────────────────────────────────────────────────

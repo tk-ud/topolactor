@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { __testOnly, queueClientCommand } from "../runtime/frontendScheduler.ts";
+import { __testOnly, queueAdminClientCommand, queueClientCommand } from "../runtime/frontendScheduler.ts";
 
 // ─── frontend.runtime_scheduler — Gap-13 closure tests ───────────────────────
 // Verifies completion condition: frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
@@ -114,4 +114,112 @@ Deno.test("scheduler: getCommandQueueLength reflects pending queue depth before 
   __testOnly.resetCommandQueue();
   assertEquals(__testOnly.getCommandQueueLength(), 0);
   assertEquals(__testOnly.isCommandQueueRunning(), false);
+});
+
+// ─── triggerKind=client enforcement — client_command_lane SSOT ────────────────
+// Completion condition: queueClientCommand and queueAdminClientCommand must both
+// inject triggerKind="client" per pipeline-continuity-ssot.yaml (api_command_lane).
+
+Deno.test("scheduler: queueClientCommand injects triggerKind='client' in dispatch body", async () => {
+  __testOnly.resetCommandQueue();
+  let capturedBody: Record<string, unknown> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return new Response(JSON.stringify({ success: true, errors: null }), { status: 200 });
+  };
+  try {
+    await queueClientCommand({ operationType: "Search", target: "t", layer: "entity", action: "search" });
+    assertEquals(capturedBody.triggerKind, "client", "queueClientCommand must inject triggerKind='client'");
+    assertEquals("role" in capturedBody, false, "role must NOT be set by frontend");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("scheduler: queueAdminClientCommand routes through FIFO queue with triggerKind='client'", async () => {
+  __testOnly.resetCommandQueue();
+  let capturedBody: Record<string, unknown> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return new Response(JSON.stringify({ success: true, errors: null }), { status: 200 });
+  };
+  try {
+    const result = await queueAdminClientCommand({
+      operationType: "admin",
+      target: "admin",
+      layer: "seed_runtime",
+      action: "load",
+    });
+    assertEquals(result.success, true);
+    assertEquals(capturedBody.triggerKind, "client", "queueAdminClientCommand must inject triggerKind='client'");
+    assertEquals(capturedBody.operationType, "admin");
+    assertEquals(capturedBody.layer, "seed_runtime");
+    assertEquals(capturedBody.action, "load");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("scheduler: queueAdminClientCommand must NOT include role in dispatch body", async () => {
+  __testOnly.resetCommandQueue();
+  let capturedBody: Record<string, unknown> = {};
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_input: unknown, init?: RequestInit) => {
+    capturedBody = JSON.parse(init!.body as string);
+    return new Response(JSON.stringify({ success: true, errors: null }), { status: 200 });
+  };
+  try {
+    await queueAdminClientCommand({ operationType: "admin", target: "admin", layer: "seed_runtime", action: "load" });
+    assertEquals("role" in capturedBody, false, "role must NOT be in frontend dispatch body; JWT claim is authoritative");
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+// ─── Source guard: direct fetch("/api/dispatch") bypass detection ─────────────
+// Allowed: frontend/api/dispatch.ts, frontend/routes/api/dispatch.ts
+// Forbidden: all other .ts/.tsx files in frontend/
+
+Deno.test("source guard: direct fetch('/api/dispatch') forbidden outside allowed files", async () => {
+  const repoRoot = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+  const frontendDir = repoRoot + "/frontend";
+
+  const allowedRelPaths = [
+    "frontend/api/dispatch.ts",
+    "frontend/routes/api/dispatch.ts",
+  ];
+
+  const violations: string[] = [];
+
+  async function scanDir(dir: string): Promise<void> {
+    for await (const entry of Deno.readDir(dir)) {
+      const fullPath = `${dir}/${entry.name}`;
+      if (entry.isDirectory) {
+        if (entry.name === "_fresh" || entry.name.startsWith(".") || entry.name === "node_modules") continue;
+        await scanDir(fullPath);
+      } else if (entry.isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))) {
+        if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) continue;
+        const relPath = fullPath.replace(repoRoot + "/", "");
+        if (allowedRelPaths.includes(relPath)) continue;
+        const content = await Deno.readTextFile(fullPath);
+        if (content.includes('fetch("/api/dispatch"') || content.includes("fetch('/api/dispatch'")) {
+          violations.push(relPath);
+        }
+      }
+    }
+  }
+
+  await scanDir(frontendDir);
+
+  assertEquals(
+    violations,
+    [],
+    `direct fetch("/api/dispatch") found outside allowed files:\n  ${violations.join("\n  ")}\n` +
+      `All client commands must go through queueClientCommand or queueAdminClientCommand → frontend/api/dispatch.ts`,
+  );
 });
