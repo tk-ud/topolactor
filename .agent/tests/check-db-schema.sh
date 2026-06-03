@@ -245,6 +245,16 @@ query_equals_one "structure_maps contains attractor_key='admin:registry_vector:v
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:registry_vector:validate';"
 query_equals_one "structure_maps contains attractor_key='admin:package_generator:generate'" \
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:generate';"
+query_equals_one "structure_maps contains attractor_key='admin:ui_topology:layout_candidates'" \
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:ui_topology:layout_candidates';"
+query_equals_one "structure_maps contains attractor_key='admin:ui_topology:promoted_palette'" \
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:ui_topology:promoted_palette';"
+query_equals_one "structure_maps contains attractor_key='admin:package_generator:promote'" \
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:promote';"
+query_equals_one "manifest dispatcher_mapping for ui_topology layout_candidates" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='layout_candidates';"
+query_equals_one "manifest dispatcher_mapping for ui_topology promoted_palette" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='promoted_palette';"
 
 echo "=== Validating hubs.hub_relations FK chain ==="
 query_equals_one "column exists: hubs.hub_relations.topology_manifest_id" \

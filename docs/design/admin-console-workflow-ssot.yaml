@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.6.0
+  version: 0.7.2
   status: subordinate_design_document
 
   authority:
@@ -16,9 +16,10 @@ admin_console_workflow_ssot:
 
   purpose:
     - keep the admin authoring workflow aligned with runtime-orchestration route authority
-    - define /admin/contents as the data-shaped single-page manifest authoring surface
-    - define /admin/ui-builder as the UI projection, layout, and component-wiring surface
-    - define /admin/manifests as the created manifest hub membership, relation, navigation ordering, and page-group continuity surface
+    - define the canonical sequential authoring pipeline (single submit per numbered step, sequential DB persistence)
+    - define /admin/contents as steps 1–3 of that pipeline (manifest shell through physical page binding)
+    - define /admin/ui-builder as step 4 (component select → package; then package-only authoring of layout and component design children)
+    - define /admin/manifests as post-pipeline page-group hub / relation / navigation management (outside steps 1–4)
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
   does_not_own:
@@ -27,218 +28,263 @@ admin_console_workflow_ssot:
     - db_schema: docs/design/db-schema.yaml
     - css_vocabulary: docs/design/css-dictionary-ssot.yaml
     - ui_ux_primitive_catalog: docs/design/ui-ux-primitive-catalog-ssot.yaml
+    - ui_topology_bucket_package_tensor_persistence: docs/framework-policy.yaml ui_topology_tensor_persistence
+
+  # ---------------------------------------------------------------------------
+  # Canonical sequential pipeline (owner authority for admin authoring order)
+  # ---------------------------------------------------------------------------
+
+  canonical_sequential_authoring_pipeline:
+    name: admin_no_code_sequential_authoring
+    persistence_model: single_submit_per_numbered_step_sequential_db_update
+    rule: >
+      Each numbered step exposes one primary submit. Submit sends intent to backend admin_runtime;
+      backend performs the DB updates for that step only, in order. Frontend does not write DB
+      directly and does not merge unrelated steps into one submit. Later steps assume earlier
+      step persistence succeeded; failures are explicit (no silent fallback).
+    optional_within_step_readiness:
+      note: >
+        Read-only validate or preview may exist inside a step before submit, but they do not
+        replace the single submit that persists the step. Legacy validate→preview→promote as three
+        separate persistence gates across steps 1–3 is superseded by this pipeline for new work.
+    steps:
+      - step: 1
+        label: manifest_empty_register
+        route: /admin/contents
+        user_facing_goal: マニフェストを空登録し、わかりやすいトポロジー名を最低限登録する
+        submit_persists:
+          - empty manifest draft shell
+          - user_facing_topology_label_minimum
+        backend_targets:
+          - manifest row with draft lifecycle
+          - topology naming fields sufficient for later steps to reference the manifest
+        prohibited:
+          - requiring full screen_data_shape before first submit
+          - silent_skip_when_topology_label_missing
+
+      - step: 2
+        label: logical_table_definitions
+        route: /admin/contents
+        user_facing_goal: テーブル定義（jsonb 内カラム名と型）を登録する。複数テーブル登録可
+        submit_persists:
+          - one_or_more logical table definitions
+          - per_table column definitions inside jsonb shape intent
+          - column types from normal-view candidates (text, integer, bigint, boolean, numeric, timestamp with time zone, date, jsonb, uuid, varchar)
+        column_type_UI:
+          normal_view: select
+          advanced_or_other: isolate_free_text_input
+        multi_table_policy: multiple_tables_per_submit_allowed
+        prohibited:
+          - collapsing step 1 and step 2 into one submit unless backend explicitly implements an atomic bundle action registered in manifest dispatcher
+
+      - step: 2.5
+        label: relationship_configuration
+        route: /admin/contents
+        user_facing_goal: テーブル間の relationship を設定する
+        submit_persists:
+          - structured relation or join intent between logical tables authored in step 2
+          - minimum relation_config needed for screen_data_shape and later physical binding
+        boundary:
+          manifest_to_manifest_hub_navigation: remains_on_admin_manifests_not_step_2_5
+
+      - step: 3
+        label: physical_table_and_page_binding
+        route: /admin/contents
+        user_facing_goal: 物理テーブル割り当て・ページ名・操作種別（複数選択可）
+        submit_persists:
+          - physical_tables assignment (table_ref against topology.physical_tables)
+          - page display name / screen label
+          - screen_operation_kinds as multi_select (not radio single-select)
+          - per_operation entity binding at event time (entity target specified when the operation fires, not only at layout time)
+        form_submit_semantics:
+          default_entity_mutation: add_only
+          note: >
+            Form submit in the default no-code path is semantically add (create entity) only.
+            update/delete/edit flows require explicit separate operations or advanced surfaces;
+            they must not be implied by the default single-page authoring submit.
+        search_aggregation_display:
+          may_be_same_submit_or_follow_up_submit:
+            - search key selection
+            - aggregation key and display group with sample viewing
+          UX_vocabulary:
+            normal_view_prohibited: [group by]
+            normal_view_preferred: [aggregation key, display group, sample viewing]
+        fail_close:
+          - unresolved topology.physical_tables table_ref mismatch must not silent_no_op
+        handoff_after_success: /admin/ui-builder
+
+      - step: 4
+        label: ui_topology_select_package_then_edit_package_children
+        route: /admin/ui-builder
+        user_facing_goal: 部品を選んでパッケージ化し、パッケージだけを対象に子階層の layout と component design を編集する
+        edit_target_contract:
+          sole_authoring_target: package
+          rule: >
+            After packaging, the UI Builder authoring surface selects and mutates packages only.
+            Bucket rows, bare component catalog entries, and unpackaged component ids are not
+            parallel edit targets. Layout and component design are child concerns under the
+            selected package, not separate top-level authoring objects.
+          child_hierarchy_under_package:
+            - child: layout
+              user_facing: UI 配置場所
+              persists_under: topology.components_layout_design and package-linked layout composition (ui_topology_tensor layout axis)
+              responsibility:
+                - canvas placement, slots, order, responsive layout class refs, route-bound layout identity
+            - child: component_design
+              user_facing: UI の色・形・リアクション等
+              persists_under: topology.components_style_design and package layout vector pairs (componentId + designId)
+              responsibility:
+                - color, shape, styling tokens, interaction/reaction presentation intent per component within the package
+                - cssTokenRefs and responsive token rules where vocabulary SSOT applies
+        ux_phases:
+          - phase: select_and_package
+            user_facing: 部品選択 → パッケージ化
+            note: >
+              Authors select component candidates (components_bucket / catalog, TS source_path).
+              Packaging submit creates or updates the package entity and its registry links.
+          - phase: edit_package_children
+            user_facing: パッケージを選び、layout と component design を編集
+            note: >
+              Author picks one package (per route or manifest binding). All edits are scoped to that
+              package's layout child and component_design child only.
+        authority_ref:
+          - docs/framework-policy.yaml ui_topology_tensor_persistence
+          - docs/design/db-schema.yaml packages / components_layout_design / components_style_design
+        internal_sequential_submits:
+          note: >
+            Step 4 uses two user-facing phases with single submits. Phase B never authors bucket,
+            catalog-only, or free-floating components as the primary object.
+          sub_steps:
+            - sub_step: 4.1
+              label: component_select_and_package
+              user_facing_label: 部品選択でパッケージ化
+              responsibility:
+                - present components_bucket as staging for TS component candidates (component_key, source_path, component_kind)
+                - user selects one or more components; packaging submit follows for route_key
+                - backend: package_generator generate then promote; yields package_id and linked layout_id, wiring_id, component_id set
+              prohibited:
+                - separate author-facing register step before packaging
+                - opening layout or component_design editors before a package exists
+            - sub_step: 4.2
+              label: edit_package_layout_and_component_design
+              user_facing_label: パッケージの layout / component design 編集
+              responsibility:
+                - require package selection as the only edit root
+                - layout child submit: persist UI placement for the selected package (layout_patch preview, validate, apply or equivalent backend bundle)
+                - component_design child submit: persist styling and reaction intent for components bound inside that package
+                - optional per-component wiring remains under package scope; raw dispatcher fields in advanced disclosure only
+              prohibited:
+                - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
+                - treating promoted_palette component list as the edit root instead of package
+        prohibited:
+          - non_package_roots_for_layout_or_design_authoring
+          - ui_topology_component_catalog_only_interpretation_without_db_persistence
+          - direct_DB_write_from_frontend
+
+    post_pipeline_surfaces:
+      - route: /admin/manifests
+        label: created_manifest_hub_relation_navigation
+        note: >
+          Hub membership, manifest-to-manifest relations, and navigation ordering for already-created
+          manifests are not part of sequential steps 1–4. They remain on /admin/manifests.
 
   shared_authoring_boundary:
-    explicit_stage_order:
-      - validate
-      - preview
-      - explicit_promote_register_or_apply
+    persistence_model_ref: canonical_sequential_authoring_pipeline.persistence_model
     prohibited:
       - direct_DB_write_from_admin_UI
       - silent_fallback_or_silent_write
       - adding_noncanonical_admin_or_dev_admin_helper_routes
       - treating_frontend_projection_as_runtime_judgment_owner
+      - merging pipeline steps 1, 2, 2.5, 3 into one frontend submit unless backend exposes one registered bundle action for that atomicity
 
   page_responsibility:
     admin_index:
       route: /admin
-      responsibility: canonical admin workflow entry
+      responsibility: canonical admin workflow entry; presents sequential pipeline steps 1→4 then post-pipeline /admin/manifests
 
     admin_contents:
       route: /admin/contents
       island: frontend/islands/ContentsAdmin.tsx
-      ux_label: データ構造付きの単独ページ manifest 作成
+      ux_label: マニフェスト登録・テーブル定義・物理テーブル割当（パイプライン step 1–3）
+      pipeline_steps: [1, 2, 2.5, 3]
       domain_ownership:
-        - create one new empty manifest draft
-        - define the new manifest content and screen_data_shape intent
-        - author DB reference, column shape, initial-data topology intent, optional table relation intent, search key, aggregation key, and display group
-        - validate and preview topology intent before explicit manifest promote or register
-        - hand off a successfully registered manifest to /admin/ui-builder
+        - step 1 manifest empty register with user-facing topology label minimum
+        - step 2 logical table definitions (jsonb columns and types, multiple tables)
+        - step 2.5 relationship configuration between logical tables
+        - step 3 physical table assignment, page name, multi-select operation kinds, event-time entity binding, add-only default form submit semantics
+        - optional search key, aggregation, display group (same step 3 submit or explicit follow-up submit documented in UI)
+        - hand off to /admin/ui-builder after step 3 success
       explicitly_out_of_scope:
-        - created manifest hub membership management as a page-group operation
-        - manifest-to-manifest relation management between already-created manifests
-        - navigation ordering or hub_navigation_ordering
-        - page-group continuity management
-        - actual initial-data business-row insertion, which belongs to the separate content_bundle validated draft -> preview -> explicit promote route
+        - component bucket, package_generator, layout_patch (step 4 — /admin/ui-builder only)
+        - created manifest hub membership and inter-manifest navigation (post-pipeline — /admin/manifests)
+        - actual initial-data business-row insertion (content_bundle explicit route, not default form submit)
         - presenting file import as a canonical admin route
-      note: >
-        This surface creates one data-shaped single-page manifest. Optional relation or join
-        intent for the draft's data shape does not transfer ownership of created-manifest
-        relation, hub, or navigation operations from /admin/manifests.
-      authoring_workflow:
-        - step: 1
-          label: create_new_page
-          responsibility:
-            - create an empty manifest draft
-            - do not configure page-to-page navigation or inter-manifest relations at this stage
-        - step: 2
-          label: configure_DB_reference
-          responsibility:
-            - select or input the referenced or newly created table_ref or table name
-            - validate later against topology.physical_tables
-        - step: 3
-          label: define_columns
-          responsibility:
-            - define each column name
-            - select column type from normal-view candidates
-            - converge imported schema into the same data-shape intent
-          column_type_UI:
-            normal_view: select
-            candidates:
-              - text
-              - integer
-              - bigint
-              - boolean
-              - numeric
-              - timestamp with time zone
-              - date
-              - jsonb
-              - uuid
-              - varchar
-            advanced_or_other: isolate_free_text_input
-        - step: 4
-          label: register_initial_data
-          responsibility:
-            - author initial-data candidates as screen_data_shape topology intent
-            - preview the authored candidates before explicit manifest promote or register
-            - keep actual business-row insertion in the separate content_bundle validated draft -> preview -> explicit promote route
-          prohibited:
-            - silent_direct_DB_write
-            - treating_manifest_promote_as_actual_initial_data_business_row_insertion
-        - step: 5
-          label: configure_optional_table_relation_intent
-          responsibility:
-            - accept structured relation or join intent for existing tables
-            - retain only the minimum hubs.hub or relation-config information needed by the draft data-shape intent
-          boundary:
-            remains_owned_by_admin_manifests:
-              - created manifest hub membership management
-              - manifest-to-manifest relation management
-              - navigation ordering
-              - page-group continuity management
-        - step: 6
-          label: select_search_key
-          responsibility:
-            - select searchTargets or search key through user-facing UX vocabulary
-            - do not require users to understand internal structure names
-        - step: 7
-          label: select_aggregation_and_display_group
-          responsibility:
-            - select aggregation key
-            - select display columns or display group
-            - require a sample-viewing or preview path
-            - persist aggregation settings as structured fields in a screen_data_shape topology extension
-          UX_vocabulary:
-            normal_view_prohibited:
-              - group by
-            normal_view_preferred:
-              - aggregation key
-              - display group
-              - sample viewing
-        - step: 8
-          label: register_manifest
-          responsibility:
-            - execute validate, preview, then explicit manifest promote or register
-            - treat initial-data candidates as topology intent only; actual business-row insertion remains a separate content_bundle operation
-            - hand off successful registration to /admin/ui-builder
-          guard_ref: contents_promote_guard
+      implementation_convergence_note: >
+        Current multi-panel draft/promotion UX is legacy projection. Converge on one submit per
+        pipeline step 1, 2, 2.5, 3 with sequential backend persistence.
 
     admin_ui_builder:
       route: /admin/ui-builder
       island: frontend/islands/UiBuilderAdmin.tsx
-      ux_label: manifest の見た目と操作配線
+      ux_label: 部品選択でパッケージ化 → パッケージの layout / component design 編集（step 4）
+      pipeline_step: 4
       domain_ownership:
-        - component catalog reference and component placement
-        - layout canvas or preview projection
-        - selectable design, layout, and design-token settings
-        - component-level wiring selected from DB, manifest, or topology registry references
-        - validation, visual preview, and explicit apply
-        - post-apply handoff to CI, local guard, and agent-governance audit checks
+        - phase A — component select then package (components_bucket staging + package_generator)
+        - phase B — package-only edit root; child layout (UI 配置) and child component_design (色・形・リアクション等)
+      edit_target_contract_ref: canonical_sequential_authoring_pipeline.steps[4].edit_target_contract
+        - component-level wiring from registry references
+        - post-apply CI / guard handoff (does not change runtime semantics)
       explicitly_out_of_scope:
+        - manifest empty register and logical/physical table authoring (steps 1–3 — /admin/contents)
         - runtime judgment ownership
         - direct_DB_write_from_frontend
-        - silent_fallback
         - raw dispatcher fields as the normal-view authoring path
-      note: >
-        This surface projects selectable presentation and operation-wiring intent onto a
-        manifest. It is a frontend projection surface, not a runtime semantics or runtime
-        judgment owner.
       authoring_workflow:
-        - step: 1
-          label: place_components
-          responsibility:
-            - select components from the component catalog
-            - place components on a layout canvas or preview
-            - preserve keyboard or button alternatives to drag and drop
-        - step: 2
-          label: configure_design_and_layout
-          responsibility:
-            - select CSS, Tailwind, or design-token settings where supported by their vocabulary SSOT
-            - emphasize visual preview or before-and-after preview
-          input_policy:
-            normal_view: prefer_selectable_options
-            advanced_raw_input: isolated
-        - step: 3
-          label: configure_component_wiring
-          responsibility:
-            - configure wiring per component
-            - select wiring from DB, manifest, or topology-registry references instead of requiring free text
-            - keep role, target, layer, and action raw dispatcher fields in advanced disclosure
-          boundary:
-            - wiring_is_frontend_projection_intent
-            - runtime_judgment_remains_outside_UI_builder
-        - step: 4
-          label: apply_UI_projection
-          responsibility:
-            - execute validate, preview, then explicit apply
-          prohibited:
-            - direct_DB_write
-            - silent_fallback
-        - step: 5
-          label: continue_to_CI_audit
-          responsibility:
-            - proceed to CI, local guard, and agent-governance checks after apply
-            - detect generated-artifact drift, registry drift, and SSOT inconsistency
-          boundary:
-            - CI_audit_does_not_change_runtime_semantics
+        ref: canonical_sequential_authoring_pipeline.steps[4].internal_sequential_submits
 
     admin_manifests:
       route: /admin/manifests
       island: frontend/islands/ManifestsAdmin.tsx
       ux_label: 作成済みページ群の hub / relation / navigation 管理
+      pipeline_role: post_pipeline_only
       domain_ownership:
         - created topology_manifest registry display
         - created manifest hub membership management
         - manifest-to-manifest relation management
-        - navigation ordering and hub_navigation_ordering inside the canonical manifests page
+        - navigation ordering and hub_navigation_ordering
         - page-group continuity management across created manifests
       explicitly_out_of_scope:
-        - new manifest content draft creation
-        - per-manifest DB table, column, and type editing
+        - pipeline steps 1–4 (manifest shell, tables, relationships, physical bind, ui bucket/package/layout)
         - raw manifest JSON editing in the default path
-        - moving page-group operations back into /admin/contents
-      note: >
-        Relation, hub membership, navigation ordering, and page-group continuity operations
-        for created manifests are part of this canonical page. They MUST NOT require a separate
-        canonical /admin/hub-navigation route and MUST NOT move back into /admin/contents.
 
   canonical_workflow:
+    note: >
+      Primary authoring order is canonical_sequential_authoring_pipeline (steps 1, 2, 2.5, 3, 4).
+      /admin/manifests is after page exists, not a substitute for steps 1–3.
     - step: 1
-      label: create_data_shaped_single_page_manifest
+      label: manifest_empty_register
       route: /admin/contents
-      description: Create one data-shaped manifest draft, validate it, preview it, and explicitly promote or register it.
+      submit: single_submit_sequential_db_update
     - step: 2
-      label: build_manifest_UI_projection
-      route: /admin/ui-builder
-      description: Place UI components, select design and layout settings, wire components, preview, and explicitly apply the validated UI projection.
+      label: logical_table_definitions
+      route: /admin/contents
+      submit: single_submit_sequential_db_update
+    - step: 2.5
+      label: relationship_configuration
+      route: /admin/contents
+      submit: single_submit_sequential_db_update
     - step: 3
-      label: audit_UI_projection
-      handoff_target: CI_local_guard_and_agent_governance_checks
-      description: Detect generated-artifact drift, registry drift, and SSOT inconsistency without changing runtime semantics.
+      label: physical_table_and_page_binding
+      route: /admin/contents
+      submit: single_submit_sequential_db_update
     - step: 4
-      label: operate_created_manifest_relations_and_hubs
+      label: ui_topology_select_package_then_edit_package_children
+      route: /admin/ui-builder
+      submit: internal_sequential_submits_per_4_1_select_and_package_4_2_package_layout_and_component_design
+    - step: post
+      label: hub_relation_navigation
       route: /admin/manifests
-      description: Review created manifests and manage their hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
+      note: optional after steps 1–4; not part of ui-builder discussion scope
 
   removed_legacy_wrapper_routes:
     policy: deleted
@@ -253,7 +299,9 @@ admin_console_workflow_ssot:
       - /dev/admin/context-token-registry
       - /dev/admin/registry-vector-validate
 
+  # Legacy guard — applies only where promotion-manifest editor path remains until converged to step 3 submit
   contents_promote_guard:
+    status: legacy_until_step_3_single_submit_convergence
     required_before_promote:
       - draft exists
       - draft status is draft

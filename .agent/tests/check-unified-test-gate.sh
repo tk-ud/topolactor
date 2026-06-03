@@ -113,12 +113,13 @@ fi
 echo ""
 echo "=== [CATALOG_SSOT_ALIGNMENT] Frontend catalog / seed / SSOT drift detection tests ==="
 echo "    Scope: componentCatalogSeedRegistration.test.ts, documentCanvasCatalogCheck.test.ts,"
-echo "           ssotReaderCatalog.test.ts"
+echo "           adminDispatchManifestSeed.test.ts, ssotReaderCatalog.test.ts"
 echo "    Note: requires --allow-read (reads db/seed_empty.sql, docs/design/*.yaml)"
 
 if deno test \
     frontend/tests/componentCatalogSeedRegistration.test.ts \
     frontend/tests/documentCanvasCatalogCheck.test.ts \
+    frontend/tests/adminDispatchManifestSeed.test.ts \
     frontend/tests/ssotReaderCatalog.test.ts \
     --allow-read; then
   echo "OK  [CATALOG_SSOT_ALIGNMENT] catalog/seed/SSOT alignment tests passed"

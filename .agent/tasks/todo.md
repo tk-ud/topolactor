@@ -1,121 +1,106 @@
-# Agent Task List — admin canonical no-code workflow convergence
+# Agent Task List
 
-## Owner comment
-- 全体的にイベントsubmit後に画面変化がないので正常に動いているのかわからない
-- 保存、更新、削除のアクション時はconfirmをデフォルトで表示させてほしい
-###　ページ内容の設定 http://localhost:8000/admin/contents　
-- サンプル表示が集計カラムが集計されない
+未処理は **bundle 単位**で実装・レビューする。完了済みは末尾アーカイブ。
 
-- 設計を保存ボタンが画面上部にあるため、下部まで入力を行うと迷います。下部にも保存ボタンを設置
+## 未処理 bundle 索引
 
-- 型指定のselectの表記は非開発者user向けで素晴らしい。 だが、表示名の隣にカッコで正式なDB型名を表示してほしい
+| Bundle ID | 名称 | 件数 | 主 SSOT |
+|-----------|------|------|---------|
+| `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
+| `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 
-### ③公開・案内 — 内容確認 → 有効化
-- 設計保存後に対象の下書きページを選択しても候補が表示されない（同期問題）
+---
 
+## 共通参照（全 admin bundle）
 
-## Blocking (resolved in branch — verify on merge)
+**方針（owner）:** SSOT 準拠でよい。設計意図に反する語彙・UI の残存は危険。収束は**反意図の削除・置換**を優先。
 
-- [x] Admin route drift corrected against `docs/design/runtime-orchestration-ssot.yaml`: Fresh `/admin/*` registry contains only `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests`; legacy/debug/helper `/dev/admin/*` wrappers are deleted.
-- [x] `/admin/contents` is limited to single-page manifest creation; `/admin/manifests` owns created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity.
-- [x] Contents promote guard fails closed until validation has executed without blocking issues.
-- [x] `TryProjectWiringAsync` uses `topology.physical_tables.table_ref` (SSOT); legacy `dbTableName` accepted at API boundary.
-- [x] Hub membership, manifest relation, and navigation ordering UI is owned by `/admin/manifests`; contents has no draft hub-assignment gate.
-- [x] `ManifestScreenOperationDeriver` uses manifest-scoped target/layer (list vs detail no longer share `admin/default/entity/Read`).
+| パス | 読む節 |
+|------|--------|
+| `docs/design/admin-console-workflow-ssot.yaml` | v0.7.2 — `canonical_sequential_authoring_pipeline`, `edit_target_contract`, `admin_contents`, `admin_ui_builder` |
+| `docs/design/runtime-orchestration-ssot.yaml` | `frontend_routes.admin` |
+| `docs/framework-policy.yaml` | `ui_topology_tensor_persistence` |
+| `docs/design/db-schema.yaml` | `manifest`, `packages`, `components_layout_design`, `components_style_design`, `ui_component_bucket` |
+| `docs/design/component-catalog-classification-ssot.yaml` | catalog / registration |
+| `docs/design/css-dictionary-ssot.yaml` | component design トークン |
+| `docs/registrar-admin-ui-specification.md` | **従属**（主正本にしない） |
 
-## Implementation gap — `frontend.admin_routes` completion bundle
+**実装サーフェス:** `frontend/routes/admin/*`, `ContentsAdmin.tsx`, `ContentsScreenDesignPanel.tsx`, `ContentsPromotionPanel.tsx`, `UiBuilderAdmin.tsx`, `UiBuilderFlowStepper.tsx`, `adminGuides.ts`, `adminUxTerms.ts`, `adminUxGuard.test.ts`, `adminMainFlow.test.ts`
 
-Roadmap entry: `frontend.admin_routes`. Detailed workflow authority: `docs/design/admin-console-workflow-ssot.yaml`.
-These are implementation gaps after SSOT clarification; this documentation-only change does not implement them.
+---
 
-### `/admin/contents` authoring wizard
+## Bundle `future-external-bundle-gate`
 
-- [x] Reflect the explicit contents wizard steps in UI (front half): empty draft creation → DB reference → columns → steps ④⑤ explicitly marked as not-yet-implemented/next-step. Full 8-step display (initial data → optional relation/join intent → search key → aggregation/display group → validate/preview/register → /admin/ui-builder handoff) remains in later bundles. [authoring-wizard-front]
-- [x] Replace normal-view free-text DB column type input with select UI. Candidates: text / integer / bigint / boolean / numeric / timestamp with time zone / date / jsonb / uuid / varchar. Free text isolated under その他（詳細入力）. Existing `dataType` persistence format preserved. [authoring-wizard-front]
-- [x] Add initial-data topology-intent authoring flow with validate → sample preview → explicit manifest promote/register; do not add silent/direct DB writes. [admin-routes-completion] Initial-data candidates are stored in the screen_data_shape extension; actual business-row insertion is explicitly the separate content_bundle validated draft → preview → explicit promote route and is not a frontend.admin_routes completion condition.
-- [x] Add structured relation/join input for a draft's data-shape intent without moving created-manifest hub membership, inter-manifest relations, or navigation ordering out of `/admin/manifests`. [admin-routes-completion]
-- [x] Add user-facing search-key selection for `searchTargets`. [admin-routes-completion] searchKeyColumns multi-select from defined columns; raw searchTargets in advanced disclosure.
-- [x] Add aggregation-key and display-group selection with mandatory sample viewing / preview. Do not expose `group by` as primary UX vocabulary. [admin-routes-completion] aggregationKey select + displayColumns multi-select + SamplePreviewPanel.
+**SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
-### Backend persistence and explicit validation
+- [ ] Notion/Sheets/Slack/GitHub/Webhook/REST-API-Connector/NoCode-Loop — 個別 SSOT 揃うまで実装しない
 
-- [x] Persist structured relation/join and aggregation display fields on the `screen_data_shape` topology extension. [admin-routes-completion] searchKeyColumns/aggregationKey/displayColumns/relationIntents/initialDataRows added to topology extension JSON and backend contracts.
-- [x] Fail explicitly without partial canonical writes when `table_ref` is not found in `topology.physical_tables`; current wiring projection skip must not remain a silent no-op. [admin-routes-completion] ProjectOnPromoteAsync preflights before canonical upsert and returns WIRING_TABLE_REF_NOT_FOUND; live-DB regression asserts no hubs.topology_manifests or topology.wiring_physical_to_package residue.
+---
 
-### `/admin/ui-builder` projection authoring
+## Bundle `helper-manual`
 
-- [x] Add catalog-based component placement on layout canvas / preview with keyboard or button alternatives to drag and drop. [closed-prior — UiBuilderAdmin already implemented]
-- [x] Add selectable CSS / Tailwind / design-token layout settings with visual or before/after preview; isolate advanced raw input. [closed-prior — UiBuilderAdmin AdvancedManualOverride pattern]
-- [x] Add component-level wiring selection from DB / manifest / topology registry references; move raw dispatcher `role / target / layer / action` fields to advanced disclosure. [closed-prior — AdvancedManualOverride in UiBuilderAdmin]
-- [x] Preserve validate → preview → explicit apply and prohibit direct DB writes / silent fallback. [closed-prior — callLayoutPatch route]
-- [x] Add post-apply handoff to CI / local guard / agent-governance checks for generated-artifact drift, registry drift, and SSOT consistency auditing. [closed-prior — CI tab in UiBuilderAdmin]
+**SSOT:** `docs/design/user-facing-helper-manual-ssot.yaml`
 
-### User-facing vocabulary and flow cleanup
+- [ ] helper/manual category 候補の実装設計
+- [ ] Desktop AI / CLI / MCP Reader 向けライティング方針
+- [ ] ヘルプコンポーネント実装（SSOT カテゴリ構造ゲート）
 
-- [x] Replace internal normal-view terms in `ContentsScreenDesignPanel.tsx`: `physical table ref` → 「参照テーブル名」, `import schema 名` → 「取り込みデータ定義名」, `nullable` → 「空欄許可」.
-      → `adminUxTerms.ts` に UX_FIELD_TABLE_REF / UX_FIELD_IMPORT_SCHEMA / UX_FIELD_NULLABLE 追加済み。`adminUxGuard.test.ts` に banned-term regression 追加済み。[ux-vocabulary]
-- [x] Consolidate promote action in `ContentsPromotionPanel` and present draft creation → design save → promote as explicit steps.
-      → promote 導線を ContentsPromotionPanel に集約し、① 下書き作成 → ② 設計保存 → ③ 内容確認 → 有効化 のステップ表示を追加。validation gating: manifest data shape + promotion metadata の両面で確認し、どちらか blocking なら有効化不可。[ux-simplification]
+---
 
-## Implementation gap — `admin_visual_layout_builder` completion bundle
+## Bundle `product-nocode-loop-acceptance`
 
-Roadmap entry: `admin_visual_layout_builder`. Status promoted from `partial` → `implemented`.
+- [ ] `product.dynamic_support_nocode_loop` 手動受入（roadmap 追従）
 
-### layoutId round-trip from DB
+---
 
-- [x] Read confirmed `layoutId`/`routeKey` from backend response after successful apply via `summary.layoutId` (already extracted by `projectLayoutPatchSummary`). [layoutId-round-trip]
-- [x] Call `setLayoutId(confirmedLayoutId)` on successful apply to confirm DB-authoritative identity. [layoutId-round-trip]
-- [x] Raise explicit `LAYOUT_ID_MISMATCH` error (no silent fallback) if backend returns different `layoutId` than was sent; set lifecycle phase to `applied_fail`. [layoutId-round-trip]
-- [x] Tests: 5 layoutId round-trip tests in `frontend/tests/visualLayoutBuilder.test.ts`. [layoutId-round-trip]
+## 完了済みアーカイブ
 
-### Full responsive token rule UI
+### `admin-v072-audit-followup`（2026-06）
 
-- [x] Replace hardcoded `{ md: selectedTokenRefs }` placeholder with `responsiveTokenRules: ResponsiveTokenRules` state. [responsive-token-ui]
-- [x] Add `ResponsiveTokenRuleEditor` component with breakpoint tabs (sm/md/lg/xl) in normal view; raw JSON textarea isolated under `AdvancedManualOverride` disclosure. [responsive-token-ui]
-- [x] Export `RESPONSIVE_BREAKPOINTS`, `BreakpointKey`, `ResponsiveTokenRules`, `filterEmptyResponsiveRules` from `frontend/runtime/visualLayoutUtils.ts`. [responsive-token-ui]
-- [x] `filterEmptyResponsiveRules` strips empty breakpoint entries before backend submission. [responsive-token-ui]
-- [x] Tests: 5 filterEmptyResponsiveRules + 4 responsive rule per-breakpoint tests in `frontend/tests/visualLayoutBuilder.test.ts`. [responsive-token-ui]
+- [x] `audit-component-design-ui` — PackageDesignPanel: classname / tailwind / cssTokenRefs / reactionIntent + upsert payload
+- [x] `audit-contents-step-payload` — `contentsAssign.ts` step 専用 payload（existing から非ステップ項目を保持）
+- [x] `audit-ui-builder-aux-tabs` — catalog / CI を `<details>` 参照専用化、編集ルートバナー常設
+- [x] `audit-layout-patch-package-gate` — `layout_patch` に `packageId`、tensor 所属検証、apply WHERE に package 固定
+- [x] `audit-docs-v072-sync` — `adminGuides` / `UiBuilderFlowStepper` v0.7.2 文言同期
 
-## CLI/MCP Port SSOT — future implementation TODOs
+### `admin-v072-convergence`（2026-06 — plan WU1–WU5 + 続き）
 
-Added by: CLI Model Context Protocols Port SSOT design_change
-SSOT ref: docs/design/cli-model-context-protocols-port-ssot.yaml, docs/design/extended-runtime-bundle-registry-ssot.yaml
+- [x] `admin-ux-feedback` — `adminSubmitUx.ts` / `AdminSubmitStatus`、confirm・loading・status 統一
+- [x] `admin-contents-v072` — Contents pipeline stepper 1/2/2.5/3、multi-op、operationEntityBindings、legacy promote を details へ
+- [x] `admin-ui-builder-v072` — FlowStepper 4.1/4.2、複数選択パッケージ化、package スコープ layout、wiring 編集 API/UI、`component_style_design` dispatch（design 通常 UI の深度は `admin-v072-audit-followup` へ）
+- [x] `admin-guides-regression` — `adminGuides.ts` / `ADMIN_MAIN_FLOW_STEPS` / `ADMIN_ROUTE_CARDS` v0.7.2、ux guard・mainFlow テスト拡張
+- [x] `HubNavigationAdmin` — create/update/delete confirm
 
-- [x] CLI/MCP Port の実装SSOT（Data Reader / Context API / export job DB schema）を別SSOTとして作成する [cli-mcp-port-implementation-ssot] → docs/design/cli-mcp-port-implementation-ssot.yaml / .md
-- [x] Email Bundle の別SSOT作成（UI catalog / backend dispatch / runtime 設計）[email-bundle-ssot] → docs/design/runtime-bundle-email-ssot.yaml
-- [x] Stripe Bundle の別SSOT作成（webhook verification / paid state 設計）[stripe-bundle-ssot] → docs/design/runtime-bundle-stripe-ssot.yaml
-- [x] File/Storage Bundle の別SSOT作成 [file-storage-bundle-ssot] → docs/design/runtime-bundle-file-storage-ssot.yaml
-- [x] Export/SFTP Bundle の別SSOT作成 [export-sftp-bundle-ssot] → docs/design/runtime-bundle-export-sftp-ssot.yaml
-- [ ] future_optional_external_surface_bundles（Notion/Sheets/Slack/GitHub/Webhook/REST-API-Connector/NoCode-Loop）は個別SSOTが揃うまで実装しない [future-bundle-ssot-gate] — owner_status: unresolved_by_design として明示済み
+### `admin-blocking-verify`（merge 時確認）
 
-## Core Runtime Bundle SSOT — 完了
+- [x] `/admin/*` ルート registry — `runtime-orchestration-ssot.yaml`
+- [x] contents / manifests 責務分割
+- [x] contents promote guard fail-close
+- [x] `table_ref` SSOT wiring
+- [x] hub navigation on `/admin/manifests`
+- [x] `ManifestScreenOperationDeriver` manifest-scoped axes
 
-SSOT ref: docs/design/extended-runtime-bundle-registry-ssot.yaml (core_runtime_bundles)
-Registry state: owner_status: assigned_to_design_ssot（全4bundle解決済み）
+### `frontend.admin_routes`（旧 roadmap bundle — 実装済みだが v0.7.2 と乖離あり）
 
-- [x] Webhook Inbox Bundle の別SSOT作成（scheduler境界・direct execution禁止・runtime route境界設計）[webhook-inbox-bundle-ssot] → docs/design/runtime-bundle-webhook-inbox-ssot.yaml
-- [x] Job/Scheduler Bundle の別SSOT作成（cron/hook/client trigger統合・scheduler境界設計）[job-scheduler-bundle-ssot] → docs/design/runtime-bundle-job-scheduler-ssot.yaml
-- [x] Audit/Approval Bundle の別SSOT作成（承認フロー・監査ログ・export job approval境界設計）[audit-approval-bundle-ssot] → docs/design/runtime-bundle-audit-approval-ssot.yaml
-- [x] Secret/Credential Bundle の別SSOT作成（外部連携認証情報管理・credential非公開境界設計）[secret-credential-bundle-ssot] → docs/design/runtime-bundle-secret-credential-ssot.yaml
+- [x] contents wizard 前半・列型 select・初期データ・relation・search・集計 UI
+- [x] backend `screen_data_shape` 拡張・`WIRING_TABLE_REF_NOT_FOUND`
+- [x] ui-builder catalog/CSS/wiring/apply/CI（**v0.7.2 package ルートへ再収束は未処理 bundle 参照**）
+- [x] UX 語彙・ContentsPromotionPanel ステップ表示
 
-## User-facing Helper / Manual — future implementation TODOs
+### `admin_visual_layout_builder`
 
-Added by: user-facing-helper-manual-ssot design_change
-SSOT ref: docs/design/user-facing-helper-manual-ssot.yaml
+- [x] layoutId round-trip・responsive token UI・tests
 
-- [ ] helper/manual category 候補（はじめての業務アプリ作成〜外部Bundle連携の考え方）の実装設計を行う [helper-manual-category-design]
-- [ ] Desktop AI / CLI / MCP Reader 向けユーザー説明文言ライティング方針を確定する [helper-manual-copywriting-policy]
-- [ ] ヘルプコンポーネント実装は user-facing-helper-manual-ssot のカテゴリ構造に基づいて行う [helper-component-impl-gate]
+### `cli-mcp-port-ssot` / `core-runtime-bundle-ssot`
 
-## Optional follow-up
+- [x] CLI/MCP 実装 SSOT・Email/Stripe/File/Export bundle SSOT
+- [x] Webhook/Job/Audit/Secret bundle SSOT
 
-- [x] Delete legacy/debug/helper wrappers `/dev/admin/import`, `/dev/admin/hub-navigation`, `/dev/admin/runtime`, `/dev/admin/seed`, `/dev/admin/context-token-registry`, and `/dev/admin/registry-vector-validate`; future useful implementation converges on canonical surfaces. [legacy-debug-isolation]
-- [ ] `product.dynamic_support_nocode_loop` manual acceptance (unchanged from roadmap).
+### `legacy-debug-isolation`
 
-## SQL Attention / Phase Attention Bundle carry-over
+- [x] `/dev/admin/*` wrapper 削除
 
-Roadmap milestone: `M7_sql_attention_observation_runtime`. Detailed authority: `docs/design/sql-attention-logs-ssot.md` / `docs/design/sql-attention-logs-ssot.yaml`.
+### `sql-attention-m7`
 
-- [x] **Step 3 — SQLA-IDSPACE-STEP3 existing semantic mismatch removal.** Before Step 4, production `HubAttractorExplorationRuntime.ExploreAsync` failed close with an explicit pending status instead of silently treating `logs.hub_current` cosine diagnostics as canonical SQL Attention exploration. SQL/runtime phase-vector compatibility payloads expose deprecated diagnostics-only ID-space phaseAT evidence (`q` is append-only evidence, not Draft); legacy count scalars remain only as deprecated support-cache statistics. Existing regression tests cover the isolated diagnostics path and the production fail-close boundary.
-- [x] **Step 4 — SQLA-IDSPACE-STEP4 canonical relation exploration runtime.** Implemented related `topology_manifest_id[]` resolution from `logs.current`-triggered physical tables, explore `hubs.hub_relations`, produce resolved `hub_relation_id / topology_manifest_id / hub_id` hits and bounded ID-space `i/j/k` expansions, and replaced the Step-3 pending boundary. Added schema/runtime/repository/test surfaces in the bundle implementation change.
-- [x] **Step 4 — SQLA-GENERATION-STEP4 append-only evidence generation line and explicit promotion boundary.** Aligned `backend.sql_attention_logs_attention_persistence` and `backend.sql_attention_explicit_evidence_promotion_line` so SQLAT hit rows and phaseAT rows preserve lineage and resolved identity. Added explicit command/user-operation Draft promotion and explicit adopted reflection boundaries; prohibit non-adopted evidence from mutating topology, registry, manifests, or hub relations. Added the required schema/migration/runtime/test surfaces in the bundle implementation change.
+- [x] SQLA-IDSPACE-STEP3/4・SQLA-GENERATION-STEP4

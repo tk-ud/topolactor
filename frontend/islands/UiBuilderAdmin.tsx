@@ -29,6 +29,11 @@ import {
   serializeLabelValueMetadataJson,
   type LabelValueEditorRow,
 } from "../runtime/labelValueEditor.ts";
+import {
+  mergeWiringKindSuggestions,
+  PACKAGE_WIRING_TARGET_SURFACES,
+} from "../lib/packageWiringOptions.ts";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -40,7 +45,7 @@ import {
  *   local readiness display, intent submission, backend result display.
  * Forbidden: direct DB write, backend validate bypass, topology judgment,
  *   promotion judgment, draft-only node apply allow.
- * SSOT: docs/registrar-admin-ui-specification.md §2.5, §7
+ * SSOT: docs/design/admin-console-workflow-ssot.yaml (step 4 package-only edit route)
  */
 
 import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
@@ -803,9 +808,12 @@ function RouteLayoutSelector({
         <ValidationErrorPanel errors={loadError} title="候補ロードエラー" />
       )}
       {candidates.length === 0 && !loadError?.length && (
-        <p class="text-sm text-yellow-700">
-          候補なし — 先に部品登録タブで部品を配置可能にしてください。
-        </p>
+        <div class="w-full rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p class="font-semibold">ルート・レイアウト候補がまだありません</p>
+          <p class="mt-1 text-xs">
+            部品登録タブで「ページルートを直接入力」→「パッケージ化」→「配置可能にする」を完了すると、ここに候補が表示されます。
+          </p>
+        </div>
       )}
     </div>
   );
@@ -1305,6 +1313,7 @@ function PrimitiveCatalog(): JSX.Element {
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
 function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
+  const { confirm, ConfirmDialogHost } = useConfirm();
   const [items, setItems] = useState<BucketItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationError[]>([]);
@@ -1312,6 +1321,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
   const [routeKey, setRouteKey] = useState("");
   const [manualRouteKey, setManualRouteKey] = useState("");
   const [selectedId, setSelectedId] = useState("");
+  const [selectedCatalogKeys, setSelectedCatalogKeys] = useState<Set<string>>(new Set());
   const [selectedCatalogKey, setSelectedCatalogKey] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
@@ -1377,13 +1387,67 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
   const catalogKinds = [...new Set(COMPONENT_CATALOG_ENTRIES.filter((c) => c.registrationRequired).map((c) => c.componentKind))].sort();
   const routeOptions = uniqueRouteKeys(layoutCandidates);
 
-  const selectCatalog = (key: string) => {
+  const toggleCatalogKey = (key: string) => {
+    setSelectedCatalogKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
     setSelectedCatalogKey(key);
-    const entry = COMPONENT_CATALOG_ENTRIES.find((c) => c.componentKey === key);
-    if (!entry) return;
     const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
-    if (bucketStatus.bucketItemId) {
-      setSelectedId(bucketStatus.bucketItemId);
+    if (bucketStatus.bucketItemId) setSelectedId(bucketStatus.bucketItemId);
+  };
+
+  const handlePackageSelected = async () => {
+    if (!effectiveRouteKey) {
+      setStatus("ページルートを指定してください。");
+      return;
+    }
+    const keys = [...selectedCatalogKeys];
+    if (keys.length === 0 && selectedCatalogKey) keys.push(selectedCatalogKey);
+    if (keys.length === 0) {
+      setStatus("パッケージ化する部品を1件以上選択してください。");
+      return;
+    }
+    if (!(await confirm(`選択した ${keys.length} 件をパッケージ化します。よろしいですか？`))) {
+      return;
+    }
+    setLoading(true);
+    setErrors([]);
+    try {
+      for (const key of keys) {
+        const entry = COMPONENT_CATALOG_ENTRIES.find((c) => c.componentKey === key);
+        if (!entry) continue;
+        let bucketId = resolveBucketStatus(key, items, promotedKeys).bucketItemId;
+        if (!bucketId) {
+          const body = await dispatchAdminOp("ui_component_bucket", "create", {
+            componentKey: entry.componentKey,
+            sourcePath: entry.sourcePath,
+            componentKind: entry.componentKind,
+            metadataJson: "{}",
+          });
+          bucketId = body?.emission?.data?.bucketItemId;
+          if (!bucketId) continue;
+        }
+        await dispatchAdminOp("package_generator", "generate", {
+          bucketItemId: bucketId,
+          routeKey: effectiveRouteKey,
+        });
+        await dispatchAdminOp("package_generator", "promote", {
+          bucketItemId: bucketId,
+          routeKey: effectiveRouteKey,
+        });
+      }
+      setStatus(`${keys.length} 件のパッケージ化が完了しました。layout / design タブでパッケージを選んで編集してください。`);
+      await loadBucket();
+      const { candidates } = await loadLayoutCandidatesFromBackend();
+      setLayoutCandidates(candidates);
+      onNavigate?.("layout");
+    } catch (e) {
+      setStatus(`エラー: ${e}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1504,14 +1568,14 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
   return (
     <div>
       <p class="text-muted mb-3">
-        カタログから部品を選んで登録し、パッケージ化・配置可能化の順で進めます。
+        部品を複数選択し、1 回の submit でパッケージ化します（編集ルートは package のみ）。
       </p>
 
       {candidateErrors.length > 0 && (
         <ValidationErrorPanel errors={candidateErrors} title="候補ロードエラー" />
       )}
 
-      <Accordion title="カタログから部品を登録" defaultOpen={true}>
+      <Accordion title="部品選択でパッケージ化" defaultOpen={true}>
         <div class="mb-2 flex flex-wrap gap-2">
           <input
             value={catalogFilter}
@@ -1549,10 +1613,9 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
                   >
                     <td>
                       <input
-                        type="radio"
-                        name="catalogEntry"
-                        checked={selectedCatalogKey === c.componentKey}
-                        onChange={() => selectCatalog(c.componentKey)}
+                        type="checkbox"
+                        checked={selectedCatalogKeys.has(c.componentKey)}
+                        onChange={() => toggleCatalogKey(c.componentKey)}
                       />
                     </td>
                     <td><code>{c.componentKey}</code></td>
@@ -1570,11 +1633,12 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             <strong>選択中:</strong> <code>{selectedCatalog.componentKey}</code>
             <span class="ml-2 text-muted-xs">{selectedCatalog.componentKind}</span>
             <button
-              onClick={handleCreateFromCatalog}
-              disabled={loading || resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys).status !== "unregistered"}
+              type="button"
+              onClick={handlePackageSelected}
+              disabled={loading || !effectiveRouteKey}
               class="btn-primary mt-2"
             >
-              部品を登録する
+              選択した部品をパッケージ化
             </button>
             <details class="mt-1">
               <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
@@ -1589,7 +1653,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
       </Accordion>
 
       {(items.length > 0 || selectedId) && (
-        <Accordion title="パッケージ化・配置可能化" defaultOpen={true}>
+        <Accordion title="詳細 — バケット行単位の操作" defaultOpen={false}>
           <div class="table-wrap mb-3">
             <table class="table font-mono text-sm">
               <thead>
@@ -1643,16 +1707,30 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
           </label>
 
           {routeOptions.length === 0 && candidateErrors.length === 0 && (
-            <p class="text-sm text-yellow-700 mb-2">
-              ルート候補なし — 下の「詳細設定」で新規ルートを直接入力してください。
-            </p>
+            <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <p class="font-semibold">① ページルートを指定してください（候補はまだありません）</p>
+              <p class="mt-1 text-xs">
+                初回は下の入力欄にルート名を入れ、続けて「パッケージ化」→「配置可能にする」です。
+                完了後、レイアウトビルダーにルート候補が出ます。
+              </p>
+            </div>
           )}
+
+          <label class="mb-2 flex flex-col gap-0.5 text-sm">
+            ページルート（直接入力・初回はこちら）
+            <input
+              value={manualRouteKey}
+              onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
+              placeholder="例: admin_demo_screen_list"
+              class="input-mono w-full text-xs"
+            />
+          </label>
 
           <AdvancedManualOverride title="詳細設定 — 新規ページルートを直接入力">
             <input
               value={manualRouteKey}
               onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
-              placeholder="例: /admin/ui-builder"
+              placeholder="例: admin_demo_screen_list"
               class="input-mono w-full text-xs"
             />
           </AdvancedManualOverride>
@@ -1670,14 +1748,14 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
               disabled={loading || !selectedId || !effectiveRouteKey}
               class="btn-primary"
             >
-              パッケージ化する
+              パッケージ化（単体）
             </button>
             <button
               onClick={handlePromote}
               disabled={loading || !selectedId || !effectiveRouteKey}
               class="btn-success"
             >
-              配置可能にする
+              promote（単体）
             </button>
           </div>
           <AdminActionHint>
@@ -1693,6 +1771,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
         </p>
       )}
       {errors.length > 0 && <ActionableValidationErrorPanel errors={errors} title="操作エラー" onNavigate={onNavigate} />}
+      <ConfirmDialogHost />
     </div>
   );
 }
@@ -2120,6 +2199,7 @@ function VisualLayoutCanvas({
   onKeyboardResizeNode,
   onDeleteNode,
   onAddFromEmptyState,
+  allowEmptyStateTemplates = true,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -2141,6 +2221,8 @@ function VisualLayoutCanvas({
   onKeyboardResizeNode: (nodeId: string, dir: ResizeDir) => void;
   onDeleteNode: (nodeId: string) => void;
   onAddFromEmptyState?: (templateId: string) => void;
+  /** false のとき空キャンバスのクイックスタート（ドラフト部品混入）を非表示 */
+  allowEmptyStateTemplates?: boolean;
 }): JSX.Element {
   const gridStyle = showGrid
     ? {
@@ -2172,10 +2254,12 @@ function VisualLayoutCanvas({
           <div>
             <p class="text-base font-semibold text-gray-500">キャンバスが空です</p>
             <p class="mt-1 text-sm text-gray-400">
-              左のパレットからドラッグするか、下のボタンでコンポーネントを追加してください
+              {allowEmptyStateTemplates
+                ? "左のパレットからドラッグするか、下のボタンでコンポーネントを追加してください"
+                : "左のパレット（パッケージ内プロモート済み）からドラッグして追加してください"}
             </p>
           </div>
-          {onAddFromEmptyState && (
+          {onAddFromEmptyState && allowEmptyStateTemplates && (
             <div class="flex flex-wrap justify-center gap-2">
               <button
                 type="button"
@@ -2651,19 +2735,23 @@ function LayoutPalette({
   onAddToCanvas,
   entries,
   status,
+  packageOnly = false,
 }: {
   onDragStart: (entry: PaletteEntry) => void;
   onAddToCanvas: (entry: PaletteEntry) => void;
   entries: PaletteEntry[];
   status: string | null;
+  /** パッケージスコープ時はプロモート済みのみ（ドラフト catalog 非表示） */
+  packageOnly?: boolean;
 }): JSX.Element {
   const [filter, setFilter] = useState("");
+  const scopeEntries = packageOnly ? entries.filter((e) => !e.isDraftOnly) : entries;
   const filtered = filter
-    ? entries.filter((e) =>
+    ? scopeEntries.filter((e) =>
         e.componentKey.toLowerCase().includes(filter.toLowerCase()) ||
         e.componentKind.toLowerCase().includes(filter.toLowerCase())
       )
-    : entries;
+    : scopeEntries;
 
   return (
     <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[480px]">
@@ -2737,7 +2825,17 @@ function LayoutPalette({
 
 // ─── レイアウトビルダーセクション v2 + UX強化 ─────────────────────────────────
 
-function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
+function LayoutBuilderSection({
+  onNavigate,
+  scopedPackageId,
+  scopedRouteKey,
+  scopedLayoutId,
+}: {
+  onNavigate?: (tab: TabId) => void;
+  scopedPackageId?: string;
+  scopedRouteKey?: string | null;
+  scopedLayoutId?: string | null;
+}): JSX.Element {
   // ── route/layout selection ───────────────────────────────────────────────
   const [layoutId, setLayoutId] = useState("");
   const [routeKey, setRouteKey] = useState("");
@@ -2804,8 +2902,27 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
   );
   const dbSlotKeys = selectedLayout?.slotKeys ?? [];
   const slotKeyCandidates = buildSlotKeyCandidates(draftNodes, dbSlotKeys);
-  const selectorsDisabled = candidateErrors.length > 0 || paletteLoadFailed;
-  const canPatch = Boolean(effectiveLayoutId && effectiveRouteKey);
+  const packageScopedLayout = Boolean(scopedPackageId?.trim());
+  const displayCandidates =
+    packageScopedLayout && scopedRouteKey && scopedLayoutId
+      ? layoutCandidates.filter(
+        (c) => c.routeKey === scopedRouteKey && c.layoutId === scopedLayoutId,
+      )
+      : layoutCandidates;
+  const layoutSelectorsLocked =
+    packageScopedLayout && Boolean(scopedRouteKey && scopedLayoutId);
+  const selectorsDisabled =
+    candidateErrors.length > 0 || paletteLoadFailed || !packageScopedLayout;
+  const canPatch =
+    packageScopedLayout && Boolean(effectiveLayoutId && effectiveRouteKey);
+
+  const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
+    if (entry.isDraftOnly) {
+      announce("この部品はパッケージにプロモートされていません。部品登録タブで配置可能化してください。");
+      return true;
+    }
+    return false;
+  };
   const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ?? null;
   const canvasPreviewClass = topologyPreviewClasses?.ok ? topologyPreviewClasses.className : "";
 
@@ -2859,6 +2976,17 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
     return () => globalThis.removeEventListener("keydown", handler);
   }, []);
 
+  useEffect(() => {
+    if (scopedPackageId && scopedRouteKey) {
+      setRouteKey(scopedRouteKey);
+      setManualRouteKey("");
+    }
+    if (scopedPackageId && scopedLayoutId) {
+      setLayoutId(scopedLayoutId);
+      setManualLayoutId("");
+    }
+  }, [scopedPackageId, scopedRouteKey, scopedLayoutId]);
+
   // ── initial load ─────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
@@ -2866,7 +2994,13 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       setPaletteLoadFailed(false);
       setCandidateErrors([]);
       const { candidates, errors: candErr } = await loadLayoutCandidatesFromBackend();
-      setLayoutCandidates(candidates);
+      const scopedCandidates =
+        scopedPackageId && scopedRouteKey && scopedLayoutId
+          ? candidates.filter(
+            (c) => c.routeKey === scopedRouteKey && c.layoutId === scopedLayoutId,
+          )
+          : candidates;
+      setLayoutCandidates(scopedCandidates.length > 0 ? scopedCandidates : candidates);
       if (candErr.length) setCandidateErrors(candErr);
       try {
         const body = await dispatchAdminOp("ui_topology", "promoted_palette");
@@ -2888,14 +3022,33 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
           setPaletteStatus("プロモートパレットのロードに失敗しました。");
           return;
         }
-        const promotedEntries = promoted.map((p) => ({ ...p, isDraftOnly: false } satisfies PaletteEntry));
+        const scopedPromoted = scopedPackageId
+          ? promoted.filter((p) => p.packageId === scopedPackageId)
+          : promoted;
+        const promotedEntries = scopedPromoted.map((p) => ({
+          ...p,
+          isDraftOnly: false,
+        } satisfies PaletteEntry));
         const promotedKeys = new Set(promotedEntries.map((p) => p.componentKey));
-        const draftCatalog = COMPONENT_CATALOG_ENTRIES
-          .filter((c) => isDraftOnlyEntry(c) && !promotedKeys.has(c.componentKey))
-          .map((c) => ({ componentKey: c.componentKey, componentKind: c.componentKind, isDraftOnly: true } satisfies PaletteEntry));
+        const draftCatalog = scopedPackageId
+          ? []
+          : COMPONENT_CATALOG_ENTRIES
+            .filter((c) => isDraftOnlyEntry(c) && !promotedKeys.has(c.componentKey))
+            .map((c) => ({
+              componentKey: c.componentKey,
+              componentKind: c.componentKind,
+              isDraftOnly: true,
+            } satisfies PaletteEntry));
         setPaletteEntries([...promotedEntries, ...draftCatalog]);
-        setPaletteStatus(`プロモート済み ${promotedEntries.length} 件 / ドラフト ${draftCatalog.length} 件`);
-        if (candidates.length === 0 && promoted.length > 0) setLayoutCandidates(deriveCandidatesFromPalette(promoted));
+        setPaletteStatus(
+          scopedPackageId
+            ? `パッケージ内 ${promotedEntries.length} 件`
+            : `プロモート済み ${promotedEntries.length} 件 / ドラフト ${draftCatalog.length} 件`,
+        );
+        const layoutSource = scopedPromoted.length > 0 ? scopedPromoted : promoted;
+        if (candidates.length === 0 && layoutSource.length > 0) {
+          setLayoutCandidates(deriveCandidatesFromPalette(layoutSource));
+        }
         if (!routeKey && candidates.length > 0) {
           setRouteKey(candidates[0].routeKey);
           setLayoutId(candidates[0].layoutId);
@@ -2908,7 +3061,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       }
     };
     load();
-  }, []);
+  }, [scopedPackageId, scopedRouteKey, scopedLayoutId]);
 
   // ── layout patch (preview / validate / apply) ────────────────────────────
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
@@ -2945,8 +3098,19 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
     setLoading(true);
     announce(`${action === "preview" ? "プレビュー" : action === "validate" ? "バリデート" : "適用"}を実行中...`);
 
+    if (!scopedPackageId?.trim()) {
+      setPatchErrors([{
+        code: "PACKAGE_REQUIRED",
+        message: "layout を保存する前にパッケージを選択してください。",
+      }]);
+      setLoading(false);
+      setLifecyclePhase("idle");
+      return;
+    }
+
     try {
       const body = await dispatchAdminOp("layout_patch", action, {
+        packageId: scopedPackageId.trim(),
         layoutId: effectiveLayoutId,
         routeKey: effectiveRouteKey,
         tensorPatchJson,
@@ -3029,6 +3193,14 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
   // ── node operations (all push to history) ────────────────────────────────
   const addNode = (newNode: DraftNode) => {
+    if (!packageScopedLayout) {
+      announce("先に上のパッケージを選択してください。");
+      return;
+    }
+    if (newNode.isDraftOnly) {
+      announce("ドラフト部品はキャンバスに配置できません。");
+      return;
+    }
     const next = [...draftNodes, newNode];
     setDraftNodes(next);
     pushHistory(next, `追加: ${friendlyComponentLabel(newNode.componentKey)}`);
@@ -3112,6 +3284,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
     const src = dragSrc.current;
     dragSrc.current = null;
     if (!src || src.kind !== "palette") return;
+    if (rejectDraftPaletteEntry(src.entry)) return;
     const de = e as unknown as DragEvent;
     const rect = canvasRef.current?.getBoundingClientRect();
     const dropX = rect ? snapToGrid(Math.max(0, de.clientX - rect.left), SNAP_SIZE) : 20;
@@ -3123,6 +3296,7 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
   // Gap 5: Non-drag add from palette button
   const handleAddFromPalette = (entry: PaletteEntry) => {
+    if (rejectDraftPaletteEntry(entry)) return;
     const count = draftNodes.length;
     const x = snapToGrid(20 + (count % 5) * 160, SNAP_SIZE);
     const y = snapToGrid(20 + Math.floor(count / 5) * 80, SNAP_SIZE);
@@ -3133,7 +3307,8 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
   // Gap 7: Quick-start templates from empty state
   const handleAddFromEmptyState = (templateId: string) => {
-    const catalog = paletteEntries;
+    if (!packageScopedLayout) return;
+    const catalog = paletteEntries.filter((e) => !e.isDraftOnly);
     const pick = (key: string) => catalog.find((e) => e.componentKey.includes(key)) ?? catalog[0];
 
     let nodes: DraftNode[] = [];
@@ -3269,6 +3444,18 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       {/* Gap 1: Lifecycle step indicator */}
       <LifecycleStepIndicator phase={lifecyclePhase} />
 
+      {!packageScopedLayout && (
+        <p class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          先に上のパッケージを選択してください。layout 編集はパッケージにスコープされます。
+        </p>
+      )}
+      {packageScopedLayout && layoutSelectorsLocked && (
+        <p class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+          ルート <code class="font-mono text-xs">{scopedRouteKey}</code> / レイアウト{" "}
+          <code class="font-mono text-xs">{scopedLayoutId?.slice(0, 8)}…</code>（選択パッケージに固定）
+        </p>
+      )}
+
       <details class="mb-3.5">
         <summary class="cursor-pointer text-xs text-gray-500 hover:text-gray-700">技術情報</summary>
         <div class="alert-warn mt-1 text-xs">
@@ -3278,21 +3465,41 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
       </details>
 
       <RouteLayoutSelector
-        candidates={layoutCandidates}
+        candidates={displayCandidates}
         routeKey={routeKey}
         layoutId={layoutId}
-        onRouteChange={(r) => { setRouteKey(r); setManualRouteKey(""); const first = layoutsForRoute(layoutCandidates, r)[0]; setLayoutId(first?.layoutId ?? ""); setManualLayoutId(""); }}
+        onRouteChange={(r) => { setRouteKey(r); setManualRouteKey(""); const first = layoutsForRoute(displayCandidates, r)[0]; setLayoutId(first?.layoutId ?? ""); setManualLayoutId(""); }}
         onLayoutChange={(l) => { setLayoutId(l); setManualLayoutId(""); }}
-        disabled={selectorsDisabled}
+        disabled={selectorsDisabled || layoutSelectorsLocked}
         loadError={candidateErrors}
       />
 
-      <AdvancedManualOverride title="詳細設定 — レイアウト・ルートを直接指定">
-        <div class="flex flex-wrap gap-2">
-          <input value={manualRouteKey} onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey 手入力" class="input-mono flex-1 text-xs" />
-          <input value={manualLayoutId} onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId UUID 手入力" class="input-mono flex-[2] text-xs" />
+      {displayCandidates.length === 0 && candidateErrors.length === 0 && packageScopedLayout && (
+        <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p class="font-semibold">部品登録タブで配置可能化が必要です</p>
+          <p class="mt-1 text-xs">
+            ルート候補は DB の配置可能化（promote）後に載ります。部品登録タブでルート入力 → パッケージ化 → 配置可能にする、の順で進めてください。
+          </p>
+          <label class="mt-2 flex flex-col gap-0.5 text-xs">
+            ページルート（手入力で先に進める場合）
+            <input
+              value={manualRouteKey}
+              onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
+              placeholder="部品登録タブと同じ routeKey"
+              class="input-mono w-full text-xs"
+            />
+          </label>
         </div>
-      </AdvancedManualOverride>
+      )}
+
+      {!layoutSelectorsLocked && (
+        <AdvancedManualOverride title="詳細設定 — レイアウト・ルートを直接指定">
+          <div class="flex flex-wrap gap-2">
+            <input value={manualRouteKey} onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)} placeholder="routeKey 手入力" class="input-mono flex-1 text-xs" />
+            <input value={manualLayoutId} onInput={(e) => setManualLayoutId((e.target as HTMLInputElement).value)} placeholder="layoutId UUID 手入力" class="input-mono flex-[2] text-xs" />
+          </div>
+        </AdvancedManualOverride>
+      )}
 
       {!canPatch && !selectorsDisabled && (
         <p class="text-sm text-yellow-700 mb-2">ルートとレイアウトを選択してから操作してください。</p>
@@ -3352,12 +3559,19 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 
       {/* v2 main canvas area: palette + canvas + layer/inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
-        <LayoutPalette
-          onDragStart={handleDragStartPalette}
-          onAddToCanvas={handleAddFromPalette}
-          entries={paletteEntries}
-          status={paletteStatus}
-        />
+        {packageScopedLayout ? (
+          <LayoutPalette
+            onDragStart={handleDragStartPalette}
+            onAddToCanvas={handleAddFromPalette}
+            entries={paletteEntries}
+            status={paletteStatus}
+            packageOnly={true}
+          />
+        ) : (
+          <div class="w-44 shrink-0 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
+            パッケージ選択後にパレットが有効になります
+          </div>
+        )}
 
         <div class="min-w-0 flex-1">
           <VisualLayoutCanvas
@@ -3379,7 +3593,8 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
             onKeyboardMoveNode={handleKeyboardMoveNode}
             onKeyboardResizeNode={handleKeyboardResizeNode}
             onDeleteNode={removeNode}
-            onAddFromEmptyState={handleAddFromEmptyState}
+            onAddFromEmptyState={packageScopedLayout ? handleAddFromEmptyState : undefined}
+            allowEmptyStateTemplates={!packageScopedLayout}
           />
         </div>
 
@@ -3527,17 +3742,386 @@ function LayoutBuilderSection({ onNavigate }: { onNavigate?: (tab: TabId) => voi
 // ─── タブナビゲーション ───────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
-  { id: "bucket", label: "部品登録", hint: "部品を選んで登録 → 配置可能にする" },
-  { id: "layout", label: "レイアウトビルダー", hint: "キャンバスに配置 → 確認 → 保存反映" },
-  { id: "catalog", label: "コンポーネントカタログ" },
+  { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
+  { id: "layout", label: "パッケージ layout / design", hint: "パッケージ選択後に配置・スタイル" },
   { id: "css", label: "CSS トークン" },
-  { id: "ci", label: "CI ガイダンス" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
 
+type AdminPackageRow = {
+  packageId: string;
+  packageKey: string;
+  routeKey?: string | null;
+  layoutId?: string | null;
+  wiringId?: string | null;
+};
+
+type AdminPackageComponentRow = {
+  componentId: string;
+  componentKey: string;
+  componentKind: string;
+};
+
+type AdminPackageWiringRow = {
+  wiringId: string;
+  wiringKey: string;
+  wiringKind: string;
+  targetSurface: string;
+  targetRef?: string | null;
+};
+
+function PackageWiringEditor({
+  selectedPackageId,
+  packageComponents,
+  onWiringSaved,
+}: {
+  selectedPackageId: string;
+  packageComponents: AdminPackageComponentRow[];
+  onWiringSaved?: (wiring: AdminPackageWiringRow) => void;
+}): JSX.Element {
+  const { confirm, ConfirmDialogHost } = useConfirm();
+  const [wiring, setWiring] = useState<AdminPackageWiringRow | null>(null);
+  const [wiringKind, setWiringKind] = useState("");
+  const [targetSurface, setTargetSurface] = useState("route");
+  const [targetRef, setTargetRef] = useState("");
+  const [loadStatus, setLoadStatus] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const kindSuggestions = mergeWiringKindSuggestions(
+    packageComponents.map((c) => c.componentKind),
+  );
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setWiring(null);
+      setWiringKind("");
+      setTargetSurface("route");
+      setTargetRef("");
+      setLoadStatus(null);
+      setSaveStatus(null);
+      return;
+    }
+    (async () => {
+      setLoadStatus("配線を読み込み中...");
+      setSaveStatus(null);
+      const body = await dispatchAdminOp("ui_topology", "get_package_wiring", {
+        packageId: selectedPackageId,
+      });
+      const data = body?.emission?.data as AdminPackageWiringRow | undefined;
+      if (data?.wiringId) {
+        setWiring(data);
+        setWiringKind(data.wiringKind);
+        setTargetSurface(data.targetSurface);
+        setTargetRef(data.targetRef ?? "");
+        setLoadStatus(null);
+      } else {
+        setWiring(null);
+        setLoadStatus(
+          body?.errors?.[0]?.message ??
+            "このパッケージに配線がありません。先に部品登録タブで配置可能化してください。",
+        );
+      }
+    })();
+  }, [selectedPackageId]);
+
+  const handleSaveWiring = async () => {
+    if (!selectedPackageId || !wiring?.wiringId || !wiringKind.trim() || !targetSurface) {
+      setSaveStatus("配線種別と接続先サーフェスを入力してください。");
+      return;
+    }
+    if (!(await confirm("パッケージ配線を保存します。よろしいですか？"))) {
+      return;
+    }
+    setSaving(true);
+    setSaveStatus(null);
+    try {
+      const body = await dispatchAdminOp("ui_topology", "update_package_wiring", {
+        packageId: selectedPackageId,
+        wiringId: wiring.wiringId,
+        wiringKind: wiringKind.trim(),
+        targetSurface,
+        targetRef: targetRef.trim() || null,
+      });
+      const refreshed = body?.emission?.data?.wiring as AdminPackageWiringRow | undefined;
+      if (body?.success && refreshed?.wiringId) {
+        setWiring(refreshed);
+        setWiringKind(refreshed.wiringKind);
+        setTargetSurface(refreshed.targetSurface);
+        setTargetRef(refreshed.targetRef ?? "");
+        setSaveStatus("パッケージ配線を保存しました。");
+        onWiringSaved?.(refreshed);
+      } else {
+        setSaveStatus(body?.errors?.[0]?.message ?? "配線の保存に失敗しました。");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section class="mt-3 rounded border border-indigo-100 bg-indigo-50/40 p-3 text-xs">
+      <h4 class="font-semibold text-indigo-900">パッケージ配線（編集）</h4>
+      <p class="text-muted-xs mb-2">
+        イベント配線の種別と接続先サーフェスを編集します。dispatcher の raw フィールドは詳細設定のみです。
+      </p>
+      {loadStatus && <p class="mb-2 text-slate-600">{loadStatus}</p>}
+      {wiring && (
+        <>
+          <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
+            wiring: {wiring.wiringId.slice(0, 8)}… / key: {wiring.wiringKey}
+          </p>
+          <div class="grid gap-2 sm:grid-cols-2">
+            <label class="block">
+              配線種別 (wiring_kind)
+              <input
+                list="wiring-kind-suggestions"
+                class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                value={wiringKind}
+                onInput={(e) => setWiringKind((e.target as HTMLInputElement).value)}
+              />
+              <datalist id="wiring-kind-suggestions">
+                {kindSuggestions.map((k) => <option key={k} value={k} />)}
+              </datalist>
+            </label>
+            <label class="block">
+              接続先サーフェス
+              <select
+                class="mt-1 w-full rounded border px-2 py-1 text-xs"
+                value={targetSurface}
+                onChange={(e) => setTargetSurface((e.target as HTMLSelectElement).value)}
+              >
+                {PACKAGE_WIRING_TARGET_SURFACES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </label>
+            <label class="block sm:col-span-2">
+              接続先参照 (target_ref、任意)
+              <input
+                class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                value={targetRef}
+                placeholder="例: manifest:my-page / route:admin:demo"
+                onInput={(e) => setTargetRef((e.target as HTMLInputElement).value)}
+              />
+            </label>
+          </div>
+          <button
+            type="button"
+            class="btn-primary mt-2 text-xs"
+            disabled={saving}
+            onClick={handleSaveWiring}
+          >
+            {saving ? "保存中…" : "配線を保存"}
+          </button>
+        </>
+      )}
+      {saveStatus && <p class="mt-2">{saveStatus}</p>}
+      <details class="mt-2 text-[0.65rem] text-slate-500">
+        <summary class="cursor-pointer">技術情報（dispatcher raw）</summary>
+        <p class="mt-1">
+          wiring_id は <code>ui_topology_tensor</code> 経由でパッケージに紐づきます。
+          保存は <code>ui_topology:update_package_wiring</code> のみ。直接 DB 書き込みは行いません。
+        </p>
+      </details>
+      <ConfirmDialogHost />
+    </section>
+  );
+}
+
+function PackageDesignPanel({
+  packages,
+  selectedPackageId,
+  onSelectPackage,
+}: {
+  packages: AdminPackageRow[];
+  selectedPackageId: string;
+  onSelectPackage: (id: string) => void;
+}): JSX.Element {
+  const { confirm, ConfirmDialogHost } = useConfirm();
+  const [componentId, setComponentId] = useState("");
+  const [designName, setDesignName] = useState("");
+  const [classname, setClassname] = useState("");
+  const [tailwind, setTailwind] = useState("");
+  const [reactionIntent, setReactionIntent] = useState("");
+  const [cssTokenRefs, setCssTokenRefs] = useState<string[]>([]);
+  const [status, setStatus] = useState<string | null>(null);
+  const [packageComponents, setPackageComponents] = useState<AdminPackageComponentRow[]>([]);
+  const [componentsLoadStatus, setComponentsLoadStatus] = useState<string | null>(null);
+  const selected = packages.find((p) => p.packageId === selectedPackageId);
+
+  const toggleCssToken = (tokenKey: string) => {
+    setCssTokenRefs((prev) =>
+      prev.includes(tokenKey) ? prev.filter((k) => k !== tokenKey) : [...prev, tokenKey]
+    );
+  };
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setPackageComponents([]);
+      setComponentId("");
+      setComponentsLoadStatus(null);
+      return;
+    }
+    (async () => {
+      setComponentsLoadStatus("部品一覧を読み込み中...");
+      const body = await dispatchAdminOp("ui_topology", "list_package_components", {
+        packageId: selectedPackageId,
+      });
+      const data = body?.emission?.data;
+      if (Array.isArray(data)) {
+        const rows = data as AdminPackageComponentRow[];
+        setPackageComponents(rows);
+        setComponentsLoadStatus(rows.length === 0 ? "このパッケージに部品がありません。" : null);
+        if (rows.length > 0 && !rows.some((r) => r.componentId === componentId)) {
+          setComponentId(rows[0].componentId);
+        }
+      } else {
+        setPackageComponents([]);
+        setComponentsLoadStatus("部品一覧の取得に失敗しました。");
+      }
+    })();
+  }, [selectedPackageId]);
+
+  const handleUpsertDesign = async () => {
+    if (!selectedPackageId || !componentId || !designName) {
+      setStatus("パッケージ・部品 ID・デザイン名を入力してください。");
+      return;
+    }
+    if (!(await confirm("component design を保存します。よろしいですか？"))) {
+      return;
+    }
+    const body = await dispatchAdminOp("component_style_design", "upsert", {
+      packageId: selectedPackageId,
+      componentId,
+      name: designName,
+      classname: classname.trim(),
+      tailwind: tailwind.trim(),
+      cssTokenRefs,
+      reactionIntent: reactionIntent.trim(),
+    });
+    setStatus(body?.success ? "component design を保存しました。" : "保存に失敗しました。");
+  };
+
+  return (
+    <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
+      <h3 class="font-semibold">パッケージ選択（編集ルート）</h3>
+      <p class="text-muted-xs mb-2 text-amber-800">
+        色・形・トークン・リアクション意図は component design として保存します（CSS 辞書トークンが正本）。
+      </p>
+      <p class="text-muted-xs mb-2">
+        layout / component design / 配線は選択したパッケージにスコープします。
+      </p>
+      <label class="block text-xs mb-2">
+        パッケージ
+        <select
+          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+          value={selectedPackageId}
+          onChange={(e) => onSelectPackage((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">— 選択 —</option>
+          {packages.map((p) => (
+            <option key={p.packageId} value={p.packageId}>
+              {p.packageKey}{p.routeKey ? ` (${p.routeKey})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected && (
+        <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
+          package: {selected.packageId.slice(0, 8)}…
+          {selected.layoutId && <> / layout: {selected.layoutId.slice(0, 8)}…</>}
+        </p>
+      )}
+      {selectedPackageId && (
+        <PackageWiringEditor
+          selectedPackageId={selectedPackageId}
+          packageComponents={packageComponents}
+        />
+      )}
+      {componentsLoadStatus && (
+        <p class="mb-2 text-xs text-slate-500">{componentsLoadStatus}</p>
+      )}
+      <div class="grid gap-2 sm:grid-cols-2">
+        <label class="text-xs">
+          部品
+          <select
+            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+            value={componentId}
+            disabled={packageComponents.length === 0}
+            onChange={(e) => setComponentId((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">— 部品を選択 —</option>
+            {packageComponents.map((c) => (
+              <option key={c.componentId} value={c.componentId}>
+                {c.componentKey} ({c.componentKind})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label class="text-xs">
+          デザイン名
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 text-xs"
+            value={designName}
+            onInput={(e) => setDesignName((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label class="text-xs sm:col-span-2">
+          classname（補助）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+            value={classname}
+            onInput={(e) => setClassname((e.target as HTMLInputElement).value)}
+            placeholder="例: btn-primary"
+          />
+        </label>
+        <label class="text-xs sm:col-span-2">
+          tailwind（非正本・補助メモ）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+            value={tailwind}
+            onInput={(e) => setTailwind((e.target as HTMLInputElement).value)}
+            placeholder="辞書トークンを優先してください"
+          />
+        </label>
+        <label class="text-xs sm:col-span-2">
+          リアクション意図（hover / focus 等の説明）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 text-xs"
+            value={reactionIntent}
+            onInput={(e) => setReactionIntent((e.target as HTMLInputElement).value)}
+            placeholder="例: ホバーで背景を primary に"
+          />
+        </label>
+      </div>
+      <div class="mt-3 rounded border border-slate-100 bg-slate-50 p-2">
+        <p class="mb-1 text-xs font-medium text-slate-700">cssTokenRefs（CSS 辞書）</p>
+        <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
+      </div>
+      <button type="button" class="btn-primary mt-2 text-xs" onClick={handleUpsertDesign}>
+        component design を保存
+      </button>
+      {status && <p class="mt-2 text-xs">{status}</p>}
+      <ConfirmDialogHost />
+    </section>
+  );
+}
+
 export default function UiBuilderAdmin(): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>("bucket");
+  const [packages, setPackages] = useState<AdminPackageRow[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState("");
+  const selectedPackage = packages.find((p) => p.packageId === selectedPackageId);
+
+  useEffect(() => {
+    (async () => {
+      const body = await dispatchAdminOp("ui_topology", "list_packages");
+      const data = body?.emission?.data;
+      if (Array.isArray(data)) setPackages(data as AdminPackageRow[]);
+    })();
+  }, []);
 
   return (
     <main class="page-main-wide">
@@ -3556,15 +4140,58 @@ export default function UiBuilderAdmin(): JSX.Element {
       {/* Stepper: bucket → generate → promote → layout → preview → validate → apply → runtime */}
       <UiBuilderFlowStepper activeTab={activeTab} onNavigate={setActiveTab} />
 
+      <div
+        class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+        role="note"
+      >
+        Step 4 の編集ルートは<strong> パッケージのみ</strong>です。layout / component design / 配線は
+        パッケージ選択後に編集してください。カタログ・CI は参照専用（編集ルートではありません）。
+      </div>
+
       <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
 
       <div>
-        {activeTab === "ci" && <CiAttentionGuidanceSection />}
-        {activeTab === "catalog" && <PrimitiveCatalog />}
         {activeTab === "bucket" && <BucketSection onNavigate={setActiveTab} />}
         {activeTab === "css" && <CssTokenSelectorSection />}
-        {activeTab === "layout" && <LayoutBuilderSection onNavigate={setActiveTab} />}
+        {activeTab === "layout" && (
+          <>
+            <PackageDesignPanel
+              packages={packages}
+              selectedPackageId={selectedPackageId}
+              onSelectPackage={setSelectedPackageId}
+            />
+            <LayoutBuilderSection
+              onNavigate={setActiveTab}
+              scopedPackageId={selectedPackageId}
+              scopedRouteKey={selectedPackage?.routeKey}
+              scopedLayoutId={selectedPackage?.layoutId}
+            />
+          </>
+        )}
       </div>
+
+      <details class="mb-3 mt-6 rounded border border-slate-200 p-3 text-sm">
+        <summary class="cursor-pointer font-medium text-slate-700">
+          参照専用: コンポーネントカタログ（編集ルートではない）
+        </summary>
+        <p class="mt-2 text-xs text-slate-500">
+          部品の正本登録は step 4.1 のバケット → パッケージ化です。ここは分類・候補の参照のみです。
+        </p>
+        <div class="mt-2">
+          <PrimitiveCatalog />
+        </div>
+      </details>
+      <details class="mb-4 rounded border border-slate-200 p-3 text-sm">
+        <summary class="cursor-pointer font-medium text-slate-700">
+          参照専用: CI ガイダンス（編集ルートではない）
+        </summary>
+        <p class="mt-2 text-xs text-slate-500">
+          昇格・layout 保存前の注意喚起です。パッケージ layout の編集は上の「パッケージ layout / design」タブで行います。
+        </p>
+        <div class="mt-2">
+          <CiAttentionGuidanceSection />
+        </div>
+      </details>
     </main>
   );
 }

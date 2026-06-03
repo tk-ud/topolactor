@@ -8,8 +8,20 @@ import {
   getAdminManifest,
   listAdminManifests,
 } from "../api/adminApi.ts";
+import { AdminSubmitStatus } from "../components/AdminSubmitStatus.tsx";
+import ContentsPipelineStepper, {
+  type ContentsPipelineStep,
+} from "../components/ContentsPipelineStepper.tsx";
+import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
+import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
-  buildDraftInputFromScreenIntent,
+  initialAdminSubmitStatus,
+  runAdminSubmit,
+  type AdminSubmitStatusState,
+} from "../lib/adminSubmitUx.ts";
+import {
+  buildStep1DraftInput,
   getStoredScreenLabel,
   SCREEN_OPERATION_OPTIONS,
   type ScreenOperationKind,
@@ -37,6 +49,7 @@ import {
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
+  UX_FIELD_OPERATION_ENTITY,
   UX_FIELD_SAMPLE_VIEWING,
   UX_FIELD_SEARCH_KEY,
   UX_FIELD_TABLE_REF,
@@ -47,7 +60,7 @@ import {
 type PanelError = { code?: string; message: string };
 type DraftSource = "none" | "local" | "backend" | "merged";
 
-/** Sample preview row: renders initial data rows or column-based preview. */
+/** Sample preview: groups rows by aggregation key when set. */
 function SamplePreviewPanel({
   columns,
   aggregationKey,
@@ -63,6 +76,42 @@ function SamplePreviewPanel({
     ? displayColumns
     : columns.map((c) => c.name).filter(Boolean);
   const hasRows = initialDataRows.length > 0;
+
+  const groups = new Map<string, Record<string, string>[]>();
+  if (aggregationKey && hasRows) {
+    for (const row of initialDataRows) {
+      const key = row[aggregationKey]?.trim() || "(空)";
+      const list = groups.get(key) ?? [];
+      list.push(row);
+      groups.set(key, list);
+    }
+  }
+
+  const renderTable = (rows: Record<string, string>[]) => (
+    <table class="min-w-full text-left text-xs">
+      <thead>
+        <tr>
+          {activeCols.map((c) => (
+            <th key={c} class="border-b px-2 py-1 font-semibold text-slate-600">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr key={i} class="border-b last:border-0">
+            {activeCols.map((c) => (
+              <td key={c} class="px-2 py-1 font-mono text-slate-700">
+                {row[c] ?? ""}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
   return (
     <div class="rounded border border-slate-200 bg-slate-50 p-3 text-xs">
       <p class="mb-2 font-semibold text-slate-700">{UX_FIELD_SAMPLE_VIEWING}</p>
@@ -78,48 +127,51 @@ function SamplePreviewPanel({
           <span class="font-mono">{activeCols.join(", ")}</span>
         </p>
       )}
-      {hasRows
+      {hasRows && aggregationKey && groups.size > 0
         ? (
-          <div class="mt-2 overflow-x-auto">
-            <table class="min-w-full text-left text-xs">
-              <thead>
-                <tr>
-                  {activeCols.map((c) => (
-                    <th
-                      key={c}
-                      class="border-b px-2 py-1 font-semibold text-slate-600"
-                    >
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {initialDataRows.map((row, i) => (
-                  <tr key={i} class="border-b last:border-0">
-                    {activeCols.map((c) => (
-                      <td key={c} class="px-2 py-1 font-mono text-slate-700">
-                        {row[c] ?? ""}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div class="mt-2 space-y-3">
+            {[...groups.entries()].map(([groupKey, rows]) => (
+              <div key={groupKey}>
+                <p class="mb-1 font-semibold text-slate-600">
+                  {aggregationKey} = <span class="font-mono">{groupKey}</span>
+                  {" "}（{rows.length} 件）
+                </p>
+                <div class="overflow-x-auto">{renderTable(rows)}</div>
+              </div>
+            ))}
           </div>
         )
+        : hasRows
+        ? <div class="mt-2 overflow-x-auto">{renderTable(initialDataRows)}</div>
         : (
           <p class="mt-1 italic text-slate-400">
-            初期データ行がありません（④ 初期データで追加してください）
+            初期データ行がありません（step 3 で追加してください）
           </p>
         )}
     </div>
   );
 }
 
-export default function ContentsScreenDesignPanel(): JSX.Element {
-  const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+export type ContentsScreenDesignPanelProps = {
+  sharedManifestId: string;
+  onSharedManifestIdChange: (id: string) => void;
+  manifests: AdminManifestListItem[];
+  onManifestsChange: (m: AdminManifestListItem[]) => void;
+  manifestsVersion: number;
+  onManifestsReload: () => void;
+};
+
+export default function ContentsScreenDesignPanel({
+  sharedManifestId,
+  onSharedManifestIdChange,
+  manifests,
+  onManifestsChange,
+  manifestsVersion,
+  onManifestsReload,
+}: ContentsScreenDesignPanelProps): JSX.Element {
+  const selectedId = sharedManifestId;
+  const setSelectedId = onSharedManifestIdChange;
+  const [activeStep, setActiveStep] = useState<ContentsPipelineStep>(1);
   const [backendDetail, setBackendDetail] = useState<
     AdminManifestDetail | null
   >(null);
@@ -128,14 +180,20 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
   );
   const [draftSource, setDraftSource] = useState<DraftSource>("none");
   const [errors, setErrors] = useState<PanelError[]>([]);
-  const [status, setStatus] = useState<string | null>(null);
+  const [submitStatus, setSubmitStatus] = useState<AdminSubmitStatusState>(
+    initialAdminSubmitStatus(),
+  );
   const [loading, setLoading] = useState(false);
+  const [nextLink, setNextLink] = useState<{ href: string; label: string } | null>(
+    null,
+  );
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showAdvancedAggregation, setShowAdvancedAggregation] = useState(false);
+  const { confirm, ConfirmDialogHost } = useConfirm();
 
   const loadManifests = async () => {
-    const m = await listAdminManifests();
-    if (m) setManifests(m);
+    const m = await listAdminManifests("draft");
+    if (m) onManifestsChange(m);
   };
 
   const loadSelectedManifest = async (manifestId: string) => {
@@ -162,7 +220,12 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       (summaryLayer.includes("detail") ? "detail" : "list");
 
     const fromBackend = screenDesignFromBackendShape(shape, operationKind);
-    fromBackend.screenLabel = getStoredScreenLabel(manifestId) ?? "";
+    fromBackend.screenLabel = shape.userFacingTopologyLabel ??
+      getStoredScreenLabel(manifestId) ?? "";
+    if (shape.screenOperationKinds.length > 0) {
+      fromBackend.operationKinds = shape.screenOperationKinds as ScreenOperationKind[];
+      fromBackend.operationKind = fromBackend.operationKinds[0];
+    }
 
     const local = loadManifestScreenDesignLocal(manifestId);
     if (local) {
@@ -182,7 +245,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
 
   useEffect(() => {
     loadManifests();
-  }, []);
+  }, [manifestsVersion]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -205,91 +268,121 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
     });
   };
 
-  const handleCreateDraft = async () => {
-    setLoading(true);
-    setErrors([]);
-    try {
-      const draftInput = buildDraftInputFromScreenIntent({
-        operationKind: design.operationKind,
-        manifestId: null,
-      });
-      const created = await createAdminManifestDraft({
-        ...draftInput,
-        screenOperationKind: design.operationKind,
-      });
-      setSelectedId(created.manifestId);
-      if (design.screenLabel.trim()) {
-        setStoredScreenLabel(created.manifestId, design.screenLabel.trim());
-      }
-      saveManifestScreenDesignLocal(created.manifestId, design);
-      setStatus("新しいページの下書きを作成しました。");
-      await loadManifests();
-      await loadSelectedManifest(created.manifestId);
-    } catch (e) {
-      console.error("PAGE_DRAFT_CREATE_FAILED", e);
-      setErrors([{
-        message:
-          "下書きを作成できませんでした。接続状態を確認して再度お試しください。",
-      }]);
-    } finally {
-      setLoading(false);
+  const handleStep1Submit = async () => {
+    if (!design.screenLabel.trim()) {
+      setErrors([{ message: "トポロジー表示名（ページ名）を入力してください。" }]);
+      return;
     }
+    setErrors([]);
+    const created = await runAdminSubmit(
+      setSubmitStatus,
+      setLoading,
+      {
+        confirmFn: confirm,
+        confirmKind: "create",
+        successMessage: "Step 1: 空の下書きを登録しました。",
+        errorMessage: "下書きを作成できませんでした。",
+        onSuccess: async (result) => {
+          setSelectedId(result.manifestId);
+          setStoredScreenLabel(result.manifestId, design.screenLabel.trim());
+          saveManifestScreenDesignLocal(result.manifestId, design);
+          onManifestsReload();
+          await loadManifests();
+          await loadSelectedManifest(result.manifestId);
+          setActiveStep(2);
+          setNextLink(null);
+        },
+        run: async () => {
+          const draftInput = buildStep1DraftInput(null);
+          return await createAdminManifestDraft(draftInput);
+        },
+      },
+    );
+    void created;
   };
 
-  const handleSaveAuthoring = async () => {
+  const handleStepAssign = async (step: ContentsPipelineStep) => {
     if (!selectedId) {
+      setErrors([{ message: "先に Step 1 で下書きを作成するか、下書きページを選択してください。" }]);
+      return;
+    }
+    if (!canSaveDesign) {
       setErrors([{
-        message:
-          "対象の下書きページを選択するか、新しい下書きを作成してください。",
+        code: "MANIFEST_NOT_DRAFT",
+        message: "有効状態のページは保存できません。下書きを選択してください。",
       }]);
       return;
     }
-    setLoading(true);
     setErrors([]);
-    try {
-      if (design.screenLabel.trim()) {
-        setStoredScreenLabel(selectedId, design.screenLabel.trim());
-      }
-      await assignAdminManifestScreenDataShape({
-        manifestId: selectedId,
-        tableRef: design.tableRef || undefined,
-        dbTableName: design.tableRef || undefined,
-        importSchemaName: design.importSchemaName || undefined,
-        searchTargets: design.searchKeyColumns.length > 0
-          ? design.searchKeyColumns
-          : parseSearchTargets(design.searchTargets),
-        searchKeyColumns: design.searchKeyColumns.length > 0
-          ? design.searchKeyColumns
-          : undefined,
-        aggregationSpec: design.aggregationSpec || undefined,
-        aggregationKey: design.aggregationKey || undefined,
-        displayColumns: design.displayColumns.length > 0
-          ? design.displayColumns
-          : undefined,
-        columns: design.columns.filter((c) => c.name.trim()),
-        screenOperationKind: design.operationKind,
-        relationIntents: design.relationIntents.filter((r) =>
-            r.joinTableRef.trim()
-          ).length > 0
-          ? design.relationIntents.filter((r) => r.joinTableRef.trim())
-          : undefined,
-        initialDataRows: design.initialDataRows.length > 0
-          ? design.initialDataRows
-          : undefined,
-      });
-      clearManifestScreenDesignLocal(selectedId);
-      setStatus("ページの設定を保存しました。内容確認へ進んでください。");
-      await loadManifests();
-      await loadSelectedManifest(selectedId);
-    } catch (e) {
-      console.error("PAGE_SETTINGS_SAVE_FAILED", e);
-      setErrors([{
-        message:
-          "ページの設定を保存できませんでした。入力内容と接続状態を確認してください。",
-      }]);
-    } finally {
-      setLoading(false);
-    }
+    const shape = backendDetail
+      ? extractScreenDataShapeFromTopology(backendDetail.topologyRawJson)
+      : null;
+    const payload = buildAssignPayloadForStep(step, selectedId, design, shape);
+    const ok = await runAdminSubmit(
+      setSubmitStatus,
+      setLoading,
+      {
+        confirmFn: confirm,
+        confirmKind: "save",
+        successMessage: `Step ${step} を保存しました。`,
+        onSuccess: async () => {
+          if (design.screenLabel.trim()) {
+            setStoredScreenLabel(selectedId, design.screenLabel.trim());
+          }
+          clearManifestScreenDesignLocal(selectedId);
+          onManifestsReload();
+          await loadManifests();
+          await loadSelectedManifest(selectedId);
+          if (step === 2) setActiveStep(2.5);
+          else if (step === 2.5) setActiveStep(3);
+          else if (step === 3) {
+            setNextLink({ href: "/admin/ui-builder", label: "画面づくり (step 4) へ" });
+          }
+        },
+        run: async () => {
+          await assignAdminManifestScreenDataShape(payload);
+        },
+      },
+    );
+    void ok;
+  };
+
+  const selectedManifest = manifests.find((m) => m.manifestId === selectedId);
+  const selectedStatus = backendDetail?.status ?? selectedManifest?.status ?? "";
+  const canSaveDesign = Boolean(selectedId) &&
+    selectedStatus.toLowerCase() === "draft";
+
+  const toggleOperationKind = (kind: ScreenOperationKind) => {
+    const has = design.operationKinds.includes(kind);
+    const next = has
+      ? design.operationKinds.filter((k) => k !== kind)
+      : [...design.operationKinds, kind];
+    const nextBindings = has
+      ? design.operationEntityBindings.filter((b) => b.operationKind !== kind)
+      : [
+        ...design.operationEntityBindings,
+        { operationKind: kind, entityTargetColumn: "" },
+      ];
+    patchDesign({
+      operationKinds: next.length > 0 ? next : ["list"],
+      operationKind: (next[0] ?? "list") as ScreenOperationKind,
+      operationEntityBindings: nextBindings,
+    });
+  };
+
+  const patchEntityBinding = (
+    kind: ScreenOperationKind,
+    entityTargetColumn: string,
+  ) => {
+    const existing = design.operationEntityBindings.find((b) =>
+      b.operationKind === kind
+    );
+    const next = existing
+      ? design.operationEntityBindings.map((b) =>
+        b.operationKind === kind ? { ...b, entityTargetColumn } : b
+      )
+      : [...design.operationEntityBindings, { operationKind: kind, entityTargetColumn }];
+    patchDesign({ operationEntityBindings: next });
   };
 
   const draftSourceLabel = {
@@ -378,22 +471,21 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         で設定してください。
       </p>
 
-      {errors.length > 0 && (
-        <ul class="mb-3 list-inside list-disc text-sm text-red-700">
-          {errors.map((e) => (
-            <li key={e.code ?? e.message}>
-              {e.message}
-              {e.code && (
-                <details class="text-xs text-red-500">
-                  <summary class="cursor-pointer">技術情報</summary>
-                  <code>{e.code}</code>
-                </details>
-              )}
-            </li>
-          ))}
-        </ul>
+      <ValidationErrorPanel
+        errors={errors.map((e) => ({ message: e.message, code: e.code }))}
+        title="入力・保存エラー"
+      />
+      <AdminSubmitStatus status={submitStatus} />
+      {nextLink && submitStatus.outcome === "success" && (
+        <p class="mb-3 text-sm">
+          <a href={nextLink.href} class="link font-semibold">{nextLink.label}</a>
+        </p>
       )}
-      {status && <p class="mb-3 text-sm text-muted-xs">{status}</p>}
+
+      <ContentsPipelineStepper
+        activeStep={activeStep}
+        onStepChange={setActiveStep}
+      />
 
       <p class="mb-2 text-xs text-muted-xs">
         データ出所: <strong>{draftSourceLabel}</strong>
@@ -416,62 +508,37 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </details>
       )}
 
-      <div class="mb-4 rounded border border-blue-100 bg-blue-50 p-3 text-xs">
-        <p class="mb-2 font-semibold text-blue-800">作成ステップ</p>
-        <ol class="space-y-1 text-blue-900">
-          <li>① 下書き作成</li>
-          <li>② 参照テーブル設定</li>
-          <li>③ 表示項目の設定</li>
-          <li>④ 初期データ登録</li>
-          <li>⑤ 参照データの関連付け（任意）</li>
-          <li>⑥ 検索キー選択</li>
-          <li>⑦ 集計・表示項目 + サンプル表示</li>
-          <li>⑧ 内容確認 → 有効化（下の「公開・案内」パネル）</li>
-        </ol>
-      </div>
-
       <div class="mb-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          class="btn-secondary"
-          disabled={loading}
-          onClick={handleCreateDraft}
-        >
-          ① 下書き作成
-        </button>
-        <button
-          type="button"
-          class="btn-primary"
-          disabled={loading || !selectedId}
-          onClick={handleSaveAuthoring}
-        >
-          ② 設計を保存
-        </button>
+        {activeStep === 1 && (
+          <button
+            type="button"
+            class="btn-primary"
+            disabled={loading}
+            onClick={handleStep1Submit}
+          >
+            Step 1 を登録
+          </button>
+        )}
+        {(activeStep === 2 || activeStep === 2.5 || activeStep === 3) && (
+          <button
+            type="button"
+            class="btn-primary"
+            disabled={loading || !canSaveDesign}
+            onClick={() => handleStepAssign(activeStep)}
+          >
+            Step {activeStep} を保存
+          </button>
+        )}
       </div>
-      <p class="mb-2 text-xs text-muted-xs">
-        次: 内容確認 → 有効化は下の「公開・案内」パネルで実行してください。
-      </p>
+      {selectedId && !canSaveDesign && (
+        <p class="mb-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          選択中のページは<strong>有効</strong>です。下書きのみ編集できます。
+        </p>
+      )}
 
-      <label class="mb-3 block text-xs">
-        対象の下書きページ
-        <select
-          class="mt-1 w-full rounded border px-2 py-1 font-mono"
-          value={selectedId}
-          onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">— 選択 —</option>
-          {manifests.map((m, index) => (
-            <option key={m.manifestId} value={m.manifestId}>
-              下書きページ {index + 1}{" "}
-              [{UX_STATUS_LABELS[m.status] ?? m.status}]
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <div class="grid gap-2 sm:grid-cols-2">
-        <label class="text-xs">
-          ページ名
+      {(activeStep === 1 || activeStep === 3) && (
+        <label class="mb-3 block text-xs">
+          {activeStep === 1 ? "トポロジー表示名（必須）" : "ページ名"}
           <input
             class="mt-1 w-full rounded border px-2 py-1"
             value={design.screenLabel}
@@ -481,46 +548,107 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
               })}
           />
         </label>
-        <label class="text-xs">
-          操作種別
+      )}
+
+      {activeStep !== 1 && (
+        <label class="mb-3 block text-xs">
+          対象の下書きページ（draft のみ）
           <select
-            class="mt-1 w-full rounded border px-2 py-1"
-            value={design.operationKind}
-            onChange={(e) =>
-              patchDesign({
-                operationKind: (e.target as HTMLSelectElement)
-                  .value as ScreenOperationKind,
-              })}
+            class="mt-1 w-full rounded border px-2 py-1 font-mono"
+            value={selectedId}
+            onChange={(e) => setSelectedId((e.target as HTMLSelectElement).value)}
           >
-            {SCREEN_OPERATION_OPTIONS.map((o) => (
-              <option key={o.kind} value={o.kind}>{o.label}</option>
+            <option value="">— 選択 —</option>
+            {manifests.map((m, index) => (
+              <option key={m.manifestId} value={m.manifestId}>
+                下書き {index + 1} [{UX_STATUS_LABELS[m.status] ?? m.status}]
+              </option>
             ))}
           </select>
         </label>
-        <label class="text-xs">
-          {UX_FIELD_TABLE_REF}
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono"
-            value={design.tableRef}
-            onInput={(e) =>
-              patchDesign({ tableRef: (e.target as HTMLInputElement).value })}
-          />
-        </label>
-        <label class="text-xs">
-          {UX_FIELD_IMPORT_SCHEMA}
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono"
-            value={design.importSchemaName}
-            onInput={(e) =>
-              patchDesign({
-                importSchemaName: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      </div>
+      )}
 
-      {/* ③ 表示項目の設定 */}
-      <h3 class="mt-4 text-xs font-semibold">③ 表示項目の設定</h3>
+      {activeStep === 3 && (
+        <div class="mb-4 grid gap-2 sm:grid-cols-2">
+          <label class="text-xs">
+            {UX_FIELD_TABLE_REF}
+            <input
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              value={design.tableRef}
+              onInput={(e) =>
+                patchDesign({ tableRef: (e.target as HTMLInputElement).value })}
+            />
+          </label>
+          <label class="text-xs">
+            {UX_FIELD_IMPORT_SCHEMA}
+            <input
+              class="mt-1 w-full rounded border px-2 py-1 font-mono"
+              value={design.importSchemaName}
+              onInput={(e) =>
+                patchDesign({
+                  importSchemaName: (e.target as HTMLInputElement).value,
+                })}
+            />
+          </label>
+          <div class="sm:col-span-2 text-xs">
+            <p class="font-medium mb-1">操作種別（複数選択可）</p>
+            <div class="flex flex-wrap gap-2">
+              {SCREEN_OPERATION_OPTIONS.map((o) => (
+                <label key={o.kind} class="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={design.operationKinds.includes(o.kind)}
+                    onChange={() => toggleOperationKind(o.kind)}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div class="sm:col-span-2 mt-2 text-xs">
+            <p class="font-medium mb-1">{UX_FIELD_OPERATION_ENTITY}</p>
+            <p class="text-muted-xs mb-2">
+              各操作が実行されるときに使う項目を指定します（フォーム送信は追加のみ）。
+            </p>
+            {design.operationKinds.length === 0
+              ? <p class="italic text-slate-400">操作種別を1つ以上選択してください。</p>
+              : (
+                <div class="space-y-2">
+                  {design.operationKinds.map((kind) => {
+                    const binding = design.operationEntityBindings.find((b) =>
+                      b.operationKind === kind
+                    );
+                    return (
+                      <label key={kind} class="flex flex-wrap items-center gap-2">
+                        <span class="w-20 font-medium">
+                          {SCREEN_OPERATION_OPTIONS.find((o) => o.kind === kind)?.label ?? kind}
+                        </span>
+                        <select
+                          class="rounded border px-2 py-1 font-mono"
+                          value={binding?.entityTargetColumn ?? ""}
+                          onChange={(e) =>
+                            patchEntityBinding(
+                              kind,
+                              (e.target as HTMLSelectElement).value,
+                            )}
+                        >
+                          <option value="">— 項目 —</option>
+                          {namedColumns.map((c) => (
+                            <option key={c.name} value={c.name}>{c.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
+        </div>
+      )}
+
+      {(activeStep === 2 || activeStep === 3) && (
+        <>
+      <h3 class="mt-4 text-xs font-semibold">表示項目の設定</h3>
       {design.columns.map((col, index) => (
         <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
           <input
@@ -555,7 +683,7 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
             >
               {COLUMN_TYPE_NORMAL_VIEW_OPTIONS.map((t) => (
                 <option key={t} value={t}>
-                  {UX_COLUMN_TYPE_LABELS[t] ?? t}
+                  {UX_COLUMN_TYPE_LABELS[t] ?? t} ({t})
                 </option>
               ))}
               <option value="__advanced__">
@@ -610,90 +738,14 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         項目を追加
       </button>
 
-      {/* ④ 初期データ登録 */}
-      <h3 class="mt-5 text-xs font-semibold">④ {UX_FIELD_INITIAL_DATA}</h3>
-      <p class="mb-2 text-xs text-muted-xs">
-        初期表示に使うデータ候補を保存します。下のサンプル表示で確認し、
-        内容確認後にページを有効化してください。
-        この画面から実データを直接登録しません。実データ登録は別のコンテンツ登録フローで行います。
-      </p>
-      {namedColumns.length === 0
-        ? (
-          <p class="text-xs text-slate-400 italic">
-            表示項目を設定してから初期データを追加してください。
-          </p>
-        )
-        : (
-          <>
-            {design.initialDataRows.length > 0 && (
-              <div class="mb-2 overflow-x-auto rounded border border-slate-200">
-                <table class="min-w-full text-left text-xs">
-                  <thead>
-                    <tr>
-                      {namedColumns.map((c) => (
-                        <th
-                          key={c.name}
-                          class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
-                        >
-                          {c.name}
-                        </th>
-                      ))}
-                      <th class="border-b px-2 py-1 bg-slate-50" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {design.initialDataRows.map((row, ri) => (
-                      <tr key={ri} class="border-b last:border-0">
-                        {namedColumns.map((c) => (
-                          <td key={c.name} class="px-1 py-1">
-                            <input
-                              class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                              value={row[c.name] ?? ""}
-                              onInput={(e) =>
-                                patchInitialDataRow(
-                                  ri,
-                                  c.name,
-                                  (e.target as HTMLInputElement).value,
-                                )}
-                            />
-                          </td>
-                        ))}
-                        <td class="px-1 py-1">
-                          <button
-                            type="button"
-                            class="text-xs text-red-500 hover:text-red-700"
-                            onClick={() =>
-                              removeInitialDataRow(ri)}
-                            aria-label="削除"
-                          >
-                            削除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <button
-              type="button"
-              class="btn-secondary text-xs"
-              onClick={addInitialDataRow}
-            >
-              行を追加
-            </button>
-          </>
-        )}
+        </>
+      )}
 
-      {/* ⑤ テーブル結合意図（任意） */}
-      <h3 class="mt-5 text-xs font-semibold">⑤ {UX_FIELD_RELATION_INTENT}</h3>
+      {activeStep === 2.5 && (
+        <>
+      <h3 class="mt-4 text-xs font-semibold">{UX_FIELD_RELATION_INTENT}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        このページで参照するデータの関連付けのみ指定します。
-        作成済みページ同士のつながりや所属先の設定は
-        <a href="/admin/manifests" class="link font-semibold">
-          {UX_HUB_MANIFESTS_PAGE}
-        </a>
-        で管理します。
+        テーブル間の relationship を設定します（独立 submit）。
       </p>
       {design.relationIntents.map((rel, ri) => (
         <div
@@ -754,9 +806,83 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
       >
         関連付けを追加
       </button>
+        </>
+      )}
 
-      {/* ⑥ 検索キー選択 */}
-      <h3 class="mt-5 text-xs font-semibold">⑥ {UX_FIELD_SEARCH_KEY}</h3>
+      {activeStep === 3 && (
+        <>
+      <h3 class="mt-5 text-xs font-semibold">{UX_FIELD_INITIAL_DATA}</h3>
+      <p class="mb-2 text-xs text-muted-xs">
+        初期表示のデータ候補（add のみの既定セマンティクス）。
+      </p>
+      {namedColumns.length === 0
+        ? (
+          <p class="text-xs text-slate-400 italic">
+            表示項目を設定してから初期データを追加してください（step 2）。
+          </p>
+        )
+        : (
+          <>
+            {design.initialDataRows.length > 0 && (
+              <div class="mb-2 overflow-x-auto rounded border border-slate-200">
+                <table class="min-w-full text-left text-xs">
+                  <thead>
+                    <tr>
+                      {namedColumns.map((c) => (
+                        <th
+                          key={c.name}
+                          class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
+                        >
+                          {c.name}
+                        </th>
+                      ))}
+                      <th class="border-b px-2 py-1 bg-slate-50" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {design.initialDataRows.map((row, ri) => (
+                      <tr key={ri} class="border-b last:border-0">
+                        {namedColumns.map((c) => (
+                          <td key={c.name} class="px-1 py-1">
+                            <input
+                              class="w-full rounded border px-1 py-0.5 text-xs font-mono"
+                              value={row[c.name] ?? ""}
+                              onInput={(e) =>
+                                patchInitialDataRow(
+                                  ri,
+                                  c.name,
+                                  (e.target as HTMLInputElement).value,
+                                )}
+                            />
+                          </td>
+                        ))}
+                        <td class="px-1 py-1">
+                          <button
+                            type="button"
+                            class="text-xs text-red-500 hover:text-red-700"
+                            onClick={() => removeInitialDataRow(ri)}
+                            aria-label="削除"
+                          >
+                            削除
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              onClick={addInitialDataRow}
+            >
+              行を追加
+            </button>
+          </>
+        )}
+
+      <h3 class="mt-5 text-xs font-semibold">{UX_FIELD_SEARCH_KEY}</h3>
       <p class="mb-2 text-xs text-muted-xs">
         検索に使う項目を選択してください（複数選択可）。
       </p>
@@ -799,9 +925,8 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </label>
       </details>
 
-      {/* ⑦ 集計・表示グループ + サンプル表示 */}
       <h3 class="mt-5 text-xs font-semibold">
-        ⑦ {UX_FIELD_AGGREGATION_KEY} / {UX_FIELD_DISPLAY_COLUMNS}
+        {UX_FIELD_AGGREGATION_KEY} / {UX_FIELD_DISPLAY_COLUMNS}
       </h3>
       <p class="mb-2 text-xs text-muted-xs">
         集計・表示の設定をします。サンプル表示で確認してから保存してください。
@@ -862,7 +987,6 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
         </label>
       </details>
 
-      {/* サンプル表示 */}
       <div class="mt-3">
         <SamplePreviewPanel
           columns={namedColumns}
@@ -871,6 +995,22 @@ export default function ContentsScreenDesignPanel(): JSX.Element {
           initialDataRows={design.initialDataRows}
         />
       </div>
+        </>
+      )}
+
+      {(activeStep === 2 || activeStep === 2.5 || activeStep === 3) && (
+        <div class="mt-6 flex flex-wrap gap-2 border-t pt-4">
+          <button
+            type="button"
+            class="btn-primary"
+            disabled={loading || !canSaveDesign}
+            onClick={() => handleStepAssign(activeStep)}
+          >
+            Step {activeStep} を保存（フォーム下部）
+          </button>
+        </div>
+      )}
+      <ConfirmDialogHost />
     </section>
   );
 }
