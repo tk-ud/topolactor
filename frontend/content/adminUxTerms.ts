@@ -72,6 +72,8 @@ export const UX_FIELD_SAMPLE_VIEWING = "サンプル表示";
 export const UX_FIELD_INITIAL_DATA = "初期データ";
 /** テーブル結合意図（任意、通常表示） */
 export const UX_FIELD_RELATION_INTENT = "参照データの関連付け（任意）";
+/** 操作ごとの対象項目（イベント時、通常表示） */
+export const UX_FIELD_OPERATION_ENTITY = "操作ごとの対象項目";
 
 /**
  * カラム型の通常表示候補（SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates）。

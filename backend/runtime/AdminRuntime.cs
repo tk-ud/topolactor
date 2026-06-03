@@ -208,6 +208,12 @@ public class AdminRuntime
             "package_generator:promote"        => await DataPromoteAsync(vector, ct),
             "ui_topology:promoted_palette"     => await DataPromotedPaletteAsync(ct),
             "ui_topology:layout_candidates"    => await DataLayoutCandidatesAsync(ct),
+            "ui_topology:list_packages"        => await DataListAdminPackagesAsync(ct),
+            "ui_topology:list_package_components" => await DataListPackageComponentsAsync(vector, ct),
+            "ui_topology:get_package_wiring"   => await DataGetPackageWiringAsync(vector, ct),
+            "ui_topology:update_package_wiring" => await DataUpdatePackageWiringAsync(vector, ct),
+            "component_style_design:list"      => await DataListComponentStyleDesignsAsync(vector, ct),
+            "component_style_design:upsert"    => await DataUpsertComponentStyleDesignAsync(vector, ct),
             "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
             "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
             "layout_patch:apply"               => await DataLayoutPatchApplyAsync(vector, ct),
@@ -672,10 +678,22 @@ public class AdminRuntime
             return false;
         }
         if (request is null) { error = new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"); return false; }
+        if (string.IsNullOrWhiteSpace(request.PackageId) || !Guid.TryParse(request.PackageId, out _))
+        {
+            error = new ValidationError("PACKAGE_ID_REQUIRED", "packageId is required.");
+            return false;
+        }
         if (string.IsNullOrWhiteSpace(request.LayoutId)) { error = new ValidationError("LAYOUT_ID_REQUIRED", "layoutId is required"); return false; }
         if (string.IsNullOrWhiteSpace(request.RouteKey)) { error = new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"); return false; }
         if (!Guid.TryParse(request.LayoutId, out _)) { error = new ValidationError("MALFORMED_LAYOUT_ID", "layoutId must be valid UUID"); return false; }
         return true;
+    }
+
+    private async Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(LayoutPatchRequestDto request, CancellationToken ct)
+    {
+        var packageId = Guid.Parse(request.PackageId);
+        var layoutId = Guid.Parse(request.LayoutId);
+        return await _uiTopologyRepository.VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, request.RouteKey, ct);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataPromotedPaletteAsync(CancellationToken ct)
@@ -706,15 +724,195 @@ public class AdminRuntime
         }
     }
 
+    private async Task<(JsonElement? data, ValidationError? error)> DataListPackageComponentsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null ||
+            !vector.Payload.Value.TryGetProperty("packageId", out var pkgEl) ||
+            !Guid.TryParse(pkgEl.GetString(), out var packageId))
+        {
+            return (null, new ValidationError("PACKAGE_ID_REQUIRED", "packageId is required."));
+        }
+        try
+        {
+            var components = await _uiTopologyRepository.ListPackageComponentsAsync(packageId, ct);
+            return (JsonSerializer.SerializeToElement(components), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataListPackageComponentsAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataGetPackageWiringAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null ||
+            !vector.Payload.Value.TryGetProperty("packageId", out var pkgEl) ||
+            !Guid.TryParse(pkgEl.GetString(), out var packageId))
+        {
+            return (null, new ValidationError("PACKAGE_ID_REQUIRED", "packageId is required."));
+        }
+        try
+        {
+            var wiring = await _uiTopologyRepository.GetPackageWiringAsync(packageId, ct);
+            if (wiring is null)
+            {
+                return (null, new ValidationError(
+                    "PACKAGE_WIRING_NOT_FOUND",
+                    $"No wiring tensor linked to package {packageId}."));
+            }
+            return (JsonSerializer.SerializeToElement(wiring), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataGetPackageWiringAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataUpdatePackageWiringAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for ui_topology:update_package_wiring"));
+        PackageWiringUpdateRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<PackageWiringUpdateRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (request is null ||
+            !Guid.TryParse(request.PackageId, out var packageId) ||
+            !Guid.TryParse(request.WiringId, out var wiringId) ||
+            string.IsNullOrWhiteSpace(request.WiringKind) ||
+            string.IsNullOrWhiteSpace(request.TargetSurface))
+        {
+            return (null, new ValidationError(
+                "PACKAGE_WIRING_PAYLOAD_INVALID",
+                "packageId, wiringId, wiringKind, and targetSurface are required."));
+        }
+        try
+        {
+            var error = await _uiTopologyRepository.UpdatePackageWiringAsync(
+                packageId,
+                wiringId,
+                request.WiringKind.Trim(),
+                request.TargetSurface.Trim(),
+                string.IsNullOrWhiteSpace(request.TargetRef) ? null : request.TargetRef.Trim(),
+                ct);
+            if (error is not null) return (null, error);
+            var wiring = await _uiTopologyRepository.GetPackageWiringAsync(packageId, ct);
+            return (JsonSerializer.SerializeToElement(new { ok = true, wiring }), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataUpdatePackageWiringAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataListAdminPackagesAsync(CancellationToken ct)
+    {
+        try
+        {
+            var packages = await _uiTopologyRepository.ListAdminPackagesAsync(ct);
+            return (JsonSerializer.SerializeToElement(packages), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataListAdminPackagesAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataListComponentStyleDesignsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        Guid? packageId = null;
+        if (vector.Payload.HasValue &&
+            vector.Payload.Value.TryGetProperty("packageId", out var pkgEl) &&
+            Guid.TryParse(pkgEl.GetString(), out var parsed))
+        {
+            packageId = parsed;
+        }
+        try
+        {
+            var designs = await _uiTopologyRepository.ListComponentStyleDesignsAsync(packageId, ct);
+            return (JsonSerializer.SerializeToElement(designs), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataListComponentStyleDesignsAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataUpsertComponentStyleDesignAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for component_style_design:upsert"));
+        ComponentStyleDesignUpsertRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ComponentStyleDesignUpsertRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (request is null ||
+            !Guid.TryParse(request.PackageId, out var packageId) ||
+            !Guid.TryParse(request.ComponentId, out var componentId) ||
+            string.IsNullOrWhiteSpace(request.Name))
+        {
+            return (null, new ValidationError(
+                "COMPONENT_DESIGN_PAYLOAD_INVALID",
+                "packageId, componentId, and name are required."));
+        }
+        var designObj = new
+        {
+            componentId = componentId.ToString(),
+            classname = request.Classname ?? "",
+            tailwind = request.Tailwind ?? "",
+            cssTokenRefs = request.CssTokenRefs ?? Array.Empty<string>(),
+            reactionIntent = request.ReactionIntent ?? "",
+        };
+        var designJson = JsonSerializer.Serialize(designObj);
+        try
+        {
+            var (designId, error) = await _uiTopologyRepository.UpsertComponentStyleDesignForPackageAsync(
+                packageId, componentId, request.Name.Trim(), designJson, ct);
+            if (error is not null) return (null, error);
+            return (JsonSerializer.SerializeToElement(new { ok = true, designId = designId.ToString() }), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataUpsertComponentStyleDesignAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchPreviewAsync(OperationVector vector, CancellationToken ct)
     {
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var bindingError = await VerifyLayoutPatchPackageBindingAsync(req!, ct);
+        if (bindingError is not null) return (null, bindingError);
         var result = await _uiTopologyRepository.PreviewLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
         return (JsonSerializer.SerializeToElement(result), null);
     }
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchValidateAsync(OperationVector vector, CancellationToken ct)
     {
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var bindingError = await VerifyLayoutPatchPackageBindingAsync(req!, ct);
+        if (bindingError is not null) return (null, bindingError);
         var result = await _uiTopologyRepository.ValidateLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_VALIDATION_FAILED", result.Message));
         return (JsonSerializer.SerializeToElement(result), null);
@@ -722,9 +920,18 @@ public class AdminRuntime
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchApplyAsync(OperationVector vector, CancellationToken ct)
     {
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
+        var bindingError = await VerifyLayoutPatchPackageBindingAsync(req!, ct);
+        if (bindingError is not null) return (null, bindingError);
         var gateError = await CheckCiAttentionPromotionGateAsync(ResolveAuthoringSurface(vector), ct);
         if (gateError is not null) return (null, gateError);
-        var result = await _uiTopologyRepository.ApplyConfirmedLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        var result = await _uiTopologyRepository.ApplyConfirmedLayoutPatchAsync(
+            Guid.Parse(req!.PackageId),
+            Guid.Parse(req.LayoutId),
+            req.RouteKey,
+            req.TensorPatchJson,
+            req.CssTokenRefs,
+            req.ResponsiveTokenRefs,
+            ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_APPLY_FAILED", result.Message));
         return (JsonSerializer.SerializeToElement(result), null);
     }
@@ -1876,6 +2083,17 @@ public class AdminRuntime
             ? request.TableRef.Trim()
             : request.DbTableName?.Trim();
 
+        var primaryOp = !string.IsNullOrWhiteSpace(request.ScreenOperationKind)
+            ? request.ScreenOperationKind.Trim()
+            : request.ScreenOperationKinds is { Count: > 0 }
+                ? request.ScreenOperationKinds[0].Trim()
+                : null;
+        var operationKinds = request.ScreenOperationKinds is { Count: > 0 }
+            ? request.ScreenOperationKinds
+            : !string.IsNullOrWhiteSpace(primaryOp)
+                ? new[] { primaryOp! }
+                : Array.Empty<string>();
+
         var entry = JsonSerializer.SerializeToElement(new
         {
             type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
@@ -1888,8 +2106,12 @@ public class AdminRuntime
             aggregationKey = request.AggregationKey,
             displayColumns = request.DisplayColumns ?? Array.Empty<string>(),
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
-            screenOperationKind = request.ScreenOperationKind,
+            screenOperationKind = primaryOp,
+            screenOperationKinds = operationKinds,
+            userFacingTopologyLabel = request.UserFacingTopologyLabel,
             relationIntents = request.RelationIntents ?? Array.Empty<AdminManifestRelationIntentDto>(),
+            operationEntityBindings = request.OperationEntityBindings ??
+                Array.Empty<AdminManifestOperationEntityBindingDto>(),
             initialDataRows = request.InitialDataRows ?? Array.Empty<System.Text.Json.JsonElement>(),
         });
 
@@ -1918,6 +2140,11 @@ public class AdminRuntime
             return (detail, null);
 
         var screenOp = ManifestCanonicalProjection.ExtractScreenOperationKind(detail.Topology);
+        if (string.IsNullOrWhiteSpace(screenOp))
+        {
+            var kinds = ManifestCanonicalProjection.ExtractScreenOperationKinds(detail.Topology);
+            screenOp = kinds.Count > 0 ? kinds[0] : null;
+        }
         if (string.IsNullOrWhiteSpace(screenOp))
             return (detail, null);
 

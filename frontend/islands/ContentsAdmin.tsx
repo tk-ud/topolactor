@@ -1,13 +1,21 @@
+import { useState } from "preact/hooks";
 import { JSX } from "preact";
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ADMIN_CONTENTS_GUIDE } from "../content/adminGuides.ts";
 import { UX_CONTENTS, UX_HUB_MANIFESTS_PAGE } from "../content/adminUxTerms.ts";
+import type { AdminManifestListItem } from "../api/adminApi.ts";
 import ContentsScreenDesignPanel from "./ContentsScreenDesignPanel.tsx";
 import ContentsPromotionPanel from "./ContentsPromotionPanel.tsx";
 
-/** Canonical single-page manifest authoring surface. */
+/** Canonical single-page manifest authoring surface (SSOT pipeline steps 1–3). */
 export default function ContentsAdmin(): JSX.Element {
+  const [sharedManifestId, setSharedManifestId] = useState("");
+  const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
+  const [manifestsVersion, setManifestsVersion] = useState(0);
+
+  const bumpManifests = () => setManifestsVersion((v) => v + 1);
+
   return (
     <main class="page-main font-mono">
       <h1 class="page-title">topolactor — 管理 / {UX_CONTENTS}</h1>
@@ -16,10 +24,12 @@ export default function ContentsAdmin(): JSX.Element {
       </p>
 
       <section class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-        <p class="font-semibold">この画面でできること: 新しいページを作る</p>
+        <p class="font-semibold">この画面でできること: 新しいページを作る（step 1 → 3）</p>
         <p class="mt-1 text-xs">
-          画面内容とデータの形を設定し、下書き・内容確認・プレビュー・有効化を行います。
-          作成済みページの所属先、ページ間のつながり、表示順は
+          正規フローは step 1（空登録）→ 2（テーブル定義）→ 2.5（関連）→ 3（物理割当・ページ）です。
+          完了後は
+          <a href="/admin/ui-builder" class="link font-semibold"> 画面づくり </a>
+          へ進みます。ページ間のつながりは
           <a href="/admin/manifests" class="link font-semibold">
             {UX_HUB_MANIFESTS_PAGE}
           </a>
@@ -30,8 +40,28 @@ export default function ContentsAdmin(): JSX.Element {
       <AdminHowTo steps={ADMIN_CONTENTS_GUIDE.howToSteps} />
       <AdminHelpPanel {...ADMIN_CONTENTS_GUIDE} />
 
-      <ContentsScreenDesignPanel />
-      <ContentsPromotionPanel />
+      <ContentsScreenDesignPanel
+        sharedManifestId={sharedManifestId}
+        onSharedManifestIdChange={setSharedManifestId}
+        manifests={manifests}
+        onManifestsChange={setManifests}
+        manifestsVersion={manifestsVersion}
+        onManifestsReload={bumpManifests}
+      />
+
+      <details class="mb-8 rounded border border-slate-200 p-4">
+        <summary class="cursor-pointer text-sm font-semibold text-slate-700">
+          詳細 — 旧経路（内容確認 → 有効化）
+        </summary>
+        <p class="mb-3 mt-2 text-xs text-muted-xs">
+          正規フローは step 3 の保存後に画面づくりへ進みます。以下はレガシー promote 経路です。
+        </p>
+        <ContentsPromotionPanel
+          sharedManifestId={sharedManifestId}
+          onSharedManifestIdChange={setSharedManifestId}
+          manifestsVersion={manifestsVersion}
+        />
+      </details>
     </main>
   );
 }

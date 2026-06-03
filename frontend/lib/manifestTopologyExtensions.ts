@@ -6,6 +6,11 @@ export type RelationIntentShape = {
   remoteKey: string;
 };
 
+export type OperationEntityBindingShape = {
+  operationKind: string;
+  entityTargetColumn: string;
+};
+
 export type ColumnShape = {
   name: string;
   dataType: string;
@@ -21,8 +26,11 @@ export type ScreenDataShapeSummary = {
   aggregationKey: string | null;
   displayColumns: string[];
   screenOperationKind: string | null;
+  screenOperationKinds: string[];
+  userFacingTopologyLabel: string | null;
   columns: ColumnShape[];
   relationIntents: RelationIntentShape[];
+  operationEntityBindings: OperationEntityBindingShape[];
   initialDataRows: Record<string, string>[];
 };
 
@@ -55,6 +63,13 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       typeof entry.aggregationKey === "string" ? entry.aggregationKey : null;
     const screenOperationKind =
       typeof entry.screenOperationKind === "string" ? entry.screenOperationKind : null;
+    const screenOperationKinds = Array.isArray(entry.screenOperationKinds)
+      ? entry.screenOperationKinds.filter((t): t is string => typeof t === "string")
+      : screenOperationKind ? [screenOperationKind] : [];
+    const userFacingTopologyLabel =
+      typeof entry.userFacingTopologyLabel === "string"
+        ? entry.userFacingTopologyLabel
+        : null;
     const searchTargets = Array.isArray(entry.searchTargets)
       ? entry.searchTargets.filter((t): t is string => typeof t === "string")
       : [];
@@ -82,6 +97,16 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
             remoteKey: typeof r.remoteKey === "string" ? r.remoteKey : "",
           }))
       : [];
+    const operationEntityBindings = Array.isArray(entry.operationEntityBindings)
+      ? entry.operationEntityBindings
+          .filter((b): b is Record<string, unknown> => typeof b === "object" && b !== null)
+          .map((b) => ({
+            operationKind: typeof b.operationKind === "string" ? b.operationKind : "",
+            entityTargetColumn: typeof b.entityTargetColumn === "string"
+              ? b.entityTargetColumn
+              : "",
+          }))
+      : [];
     const initialDataRows = Array.isArray(entry.initialDataRows)
       ? entry.initialDataRows
           .filter((row): row is Record<string, unknown> => typeof row === "object" && row !== null)
@@ -102,8 +127,11 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       aggregationKey,
       displayColumns,
       screenOperationKind,
+      screenOperationKinds,
+      userFacingTopologyLabel,
       columns,
       relationIntents,
+      operationEntityBindings,
       initialDataRows,
     };
   }
@@ -116,8 +144,11 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     aggregationKey: null,
     displayColumns: [],
     screenOperationKind: null,
+    screenOperationKinds: [],
+    userFacingTopologyLabel: null,
     columns: [],
     relationIntents: [],
+    operationEntityBindings: [],
     initialDataRows: [],
   };
 }

@@ -652,6 +652,10 @@ const NORMAL_VIEW_SOURCE_FILES = [
   "../islands/ContentsPromotionPanel.tsx",
   "../islands/ContentsScreenDesignPanel.tsx",
   "../islands/ManifestsAdmin.tsx",
+  "../islands/HubNavigationAdmin.tsx",
+  "../islands/UiBuilderAdmin.tsx",
+  "../components/ContentsPipelineStepper.tsx",
+  "../components/UiBuilderFlowStepper.tsx",
   "../lib/manifestScreenDesign.ts",
 ];
 
@@ -760,6 +764,23 @@ Deno.test("normal view source guard: scanned default-path copy excludes extracte
       );
     }
   }
+});
+
+Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy ⑧ promote", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../components/ContentsPipelineStepper.tsx", import.meta.url),
+  );
+  assertEquals(source.includes("Step 1"), true);
+  assertEquals(source.includes("空登録"), true);
+  assertFalse(source.includes("⑧"), "legacy numbered promote step must not appear");
+});
+
+Deno.test("v0.7.2: UiBuilderFlowStepper uses package packaging label", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
+  );
+  assertEquals(source.includes("部品選択でパッケージ化"), true);
+  assertFalse(source.includes("配置できる状態にする"), "legacy placement-ready goal removed");
 });
 
 Deno.test("normal view source guard: technical disclosures are excluded, adjacent default copy is checked", () => {

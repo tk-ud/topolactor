@@ -1,0 +1,157 @@
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
+using Topolactor.Repository;
+using Topolactor.Runtime;
+using Topolactor.Schema;
+using Xunit;
+
+namespace Topolactor.Runtime.Tests;
+
+public class AdminRuntimePackageWiringTests
+{
+    [Fact]
+    public async Task ExecuteDataAsync_GetPackageWiring_ReturnsWiringDto()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var wiring = new AdminPackageWiringDto(
+            wiringId.ToString(),
+            "admin:ui-builder:button:wiring",
+            "button",
+            "route",
+            null);
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(wiring));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "get_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new { packageId = packageId.ToString() }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.Equal(wiringId.ToString(), data!.Value.GetProperty("wiringId").GetString());
+        Assert.Equal("route", data.Value.GetProperty("targetSurface").GetString());
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_GetPackageWiring_WhenMissing_ReturnsNotFound()
+    {
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(null));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "get_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new { packageId = Guid.NewGuid().ToString() }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.Equal("PACKAGE_WIRING_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_ReturnsOkWithRefreshedWiring()
+    {
+        var packageId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var initial = new AdminPackageWiringDto(
+            wiringId.ToString(),
+            "admin:ui-builder:button:wiring",
+            "button",
+            "route",
+            null);
+        var refreshed = initial with { WiringKind = "evt", TargetSurface = "ui", TargetRef = "manifest:demo" };
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(initial, refreshed));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = packageId.ToString(),
+                wiringId = wiringId.ToString(),
+                wiringKind = "evt",
+                targetSurface = "ui",
+                targetRef = "manifest:demo",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal("evt", data.Value.GetProperty("wiring").GetProperty("wiringKind").GetString());
+        Assert.Equal("ui", data.Value.GetProperty("wiring").GetProperty("targetSurface").GetString());
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_UpdatePackageWiring_MapsRepositoryError()
+    {
+        var runtime = CreateRuntime(new WiringStubUiTopologyRepository(
+            new AdminPackageWiringDto(Guid.NewGuid().ToString(), "k", "button", "route", null),
+            updateError: new ValidationError("PACKAGE_WIRING_NOT_FOUND", "not linked")));
+
+        var vector = new OperationVector(
+            "admin", "ui_topology", "update_package_wiring", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                packageId = Guid.NewGuid().ToString(),
+                wiringId = Guid.NewGuid().ToString(),
+                wiringKind = "button",
+                targetSurface = "route",
+            }),
+            null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("PACKAGE_WIRING_NOT_FOUND", error!.Code);
+    }
+
+    private static AdminRuntime CreateRuntime(UiTopologyRepository uiRepo)
+    {
+        var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
+        var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var vecRuntime = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
+        var registrar = new RegistrarValidationService(NullLogger<RegistrarValidationService>.Instance, topoRepo, vecRuntime);
+        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
+        return new AdminRuntime(NullLogger<AdminRuntime>.Instance, ctxRepo, registrar, pkg, uiRepo, null);
+    }
+
+    private sealed class WiringStubUiTopologyRepository : UiTopologyRepository
+    {
+        private AdminPackageWiringDto? _wiring;
+        private readonly AdminPackageWiringDto? _afterUpdate;
+        private readonly ValidationError? _updateError;
+
+        public WiringStubUiTopologyRepository(
+            AdminPackageWiringDto? wiring,
+            AdminPackageWiringDto? afterUpdate = null,
+            ValidationError? updateError = null)
+            : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
+        {
+            _wiring = wiring;
+            _afterUpdate = afterUpdate ?? wiring;
+            _updateError = updateError;
+        }
+
+        public override Task<AdminPackageWiringDto?> GetPackageWiringAsync(Guid packageId, CancellationToken ct = default)
+            => Task.FromResult(_wiring);
+
+        public override Task<ValidationError?> UpdatePackageWiringAsync(
+            Guid packageId,
+            Guid wiringId,
+            string wiringKind,
+            string targetSurface,
+            string? targetRef,
+            CancellationToken ct = default)
+        {
+            if (_updateError is not null) return Task.FromResult<ValidationError?>(_updateError);
+            _wiring = _afterUpdate;
+            return Task.FromResult<ValidationError?>(null);
+        }
+    }
+}

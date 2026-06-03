@@ -90,6 +90,11 @@ public record AdminManifestRelationIntentDto(
     [property: JsonPropertyName("remoteKey")] string RemoteKey
 );
 
+public record AdminManifestOperationEntityBindingDto(
+    [property: JsonPropertyName("operationKind")] string OperationKind,
+    [property: JsonPropertyName("entityTargetColumn")] string EntityTargetColumn
+);
+
 public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("manifestId")] string ManifestId,
     [property: JsonPropertyName("tableRef")] string? TableRef,
@@ -102,7 +107,10 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("displayColumns")] IReadOnlyList<string>? DisplayColumns,
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
     [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind,
+    [property: JsonPropertyName("screenOperationKinds")] IReadOnlyList<string>? ScreenOperationKinds,
+    [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel,
     [property: JsonPropertyName("relationIntents")] IReadOnlyList<AdminManifestRelationIntentDto>? RelationIntents,
+    [property: JsonPropertyName("operationEntityBindings")] IReadOnlyList<AdminManifestOperationEntityBindingDto>? OperationEntityBindings,
     [property: JsonPropertyName("initialDataRows")] IReadOnlyList<System.Text.Json.JsonElement>? InitialDataRows
 );
 

@@ -25,12 +25,24 @@ import {
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
 } from "../content/adminUxTerms.ts";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 
 type ValidationState = { isBlocking: boolean } | null;
 
-export default function ContentsPromotionPanel(): JSX.Element {
+export type ContentsPromotionPanelProps = {
+  sharedManifestId: string;
+  onSharedManifestIdChange: (id: string) => void;
+  manifestsVersion: number;
+};
+
+export default function ContentsPromotionPanel({
+  sharedManifestId,
+  onSharedManifestIdChange,
+  manifestsVersion,
+}: ContentsPromotionPanelProps): JSX.Element {
   const [manifests, setManifests] = useState<AdminManifestListItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
+  const selectedId = sharedManifestId;
+  const setSelectedId = onSharedManifestIdChange;
   const [detail, setDetail] = useState<AdminPromotionManifestDetail | null>(
     null,
   );
@@ -40,13 +52,14 @@ export default function ContentsPromotionPanel(): JSX.Element {
   const [validation, setValidation] = useState<ValidationState>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const { confirm, ConfirmDialogHost } = useConfirm();
 
   useEffect(() => {
     (async () => {
       const m = await listAdminManifests("draft");
       if (m) setManifests(m);
     })();
-  }, []);
+  }, [manifestsVersion]);
 
   const loadDetail = async (manifestId: string) => {
     setSelectedId(manifestId);
@@ -79,6 +92,9 @@ export default function ContentsPromotionPanel(): JSX.Element {
 
   const handleSave = async () => {
     if (!selectedId) return;
+    if (!(await confirm("公開・案内の下書きを保存します。よろしいですか？"))) {
+      return;
+    }
     setLoading(true);
     setValidation(null);
     try {
@@ -130,6 +146,9 @@ export default function ContentsPromotionPanel(): JSX.Element {
 
   const handlePromote = async () => {
     if (!selectedId) return;
+    if (!(await confirm("ページを有効化します。よろしいですか？"))) {
+      return;
+    }
     setLoading(true);
     try {
       const result = await promoteAdminManifest(selectedId);
@@ -294,6 +313,7 @@ export default function ContentsPromotionPanel(): JSX.Element {
           有効化
         </button>
       </div>
+      <ConfirmDialogHost />
     </section>
   );
 }

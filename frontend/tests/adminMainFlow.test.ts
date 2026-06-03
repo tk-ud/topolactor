@@ -68,6 +68,18 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
 });
 
 
+Deno.test("ADMIN_MAIN_FLOW_STEPS: contents step uses v0.7.2 pipeline wording", () => {
+  const contents = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/contents")!;
+  assertEquals(contents.purpose.includes("step 1"), true);
+  assertEquals(contents.purpose.includes("step 3"), true);
+});
+
+Deno.test("ADMIN_MAIN_FLOW_STEPS: ui-builder step references package route", () => {
+  const ui = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/ui-builder")!;
+  assertEquals(ui.purpose.includes("step 4"), true);
+  assertEquals(ui.purpose.includes("package"), true);
+});
+
 Deno.test("Fresh registry does not retain deleted /dev/admin helper wrappers", async () => {
   const generatedManifest = await Deno.readTextFile(new URL("../fresh.gen.ts", import.meta.url));
   for (const route of DELETED_DEV_ADMIN_HELPER_ROUTES) {

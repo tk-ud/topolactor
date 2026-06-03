@@ -573,8 +573,51 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return Task.FromResult(normalized with { Message = "Layout patch validation passed." });
     }
 
-    public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+    public override async Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        CancellationToken ct = default)
     {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT 1 FROM topology.ui_topology_tensor
+            WHERE package_id = @pkg AND layout_id = @layout AND route_key = @route
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("layout", layoutId);
+        cmd.Parameters.AddWithValue("route", routeKey);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null)
+        {
+            return new ValidationError(
+                "LAYOUT_PATCH_PACKAGE_MISMATCH",
+                $"layout {layoutId} on route {routeKey} is not linked to package {packageId}.");
+        }
+        return null;
+    }
+
+    public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        string? tensorPatchJson,
+        IReadOnlyList<string>? cssTokenRefs,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+        CancellationToken ct = default)
+    {
+        var bindingError = await VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, routeKey, ct);
+        if (bindingError is not null)
+        {
+            return new LayoutPatchResult(
+                false, false, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(),
+                bindingError.Message);
+        }
+
         var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
         if (!valid.Ok || !valid.Valid) return valid;
 
@@ -596,7 +639,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
 
         var updateTensor = new NpgsqlCommand(
-            "UPDATE topology.ui_topology_tensor SET layout_patch_json=@patch::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE layout_id=@layoutId AND route_key=@routeKey", conn, tx);
+            "UPDATE topology.ui_topology_tensor SET layout_patch_json=@patch::jsonb, css_token_refs=@css::jsonb, responsive_token_refs=@resp::jsonb, updated_at=now() WHERE package_id=@pkg AND layout_id=@layoutId AND route_key=@routeKey", conn, tx);
+        updateTensor.Parameters.AddWithValue("pkg", packageId);
         updateTensor.Parameters.AddWithValue("patch", valid.TensorPatchJson);
         updateTensor.Parameters.AddWithValue("css", System.Text.Json.JsonSerializer.Serialize(valid.CssTokenRefs));
         updateTensor.Parameters.AddWithValue("resp", responsiveJson);
@@ -610,5 +654,227 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         }
         await tx.CommitAsync(ct);
         return valid with { Message = "Layout patch applied." };
+    }
+
+    public override async Task<IReadOnlyList<AdminPackageListItemDto>> ListAdminPackagesAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT DISTINCT p.package_id::text, p.package_key, t.route_key, t.layout_id::text, t.wiring_id::text " +
+            "FROM topology.ui_component_package p " +
+            "LEFT JOIN topology.ui_topology_tensor t ON t.package_id = p.package_id " +
+            "ORDER BY p.package_key ASC";
+        var list = new List<AdminPackageListItemDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new AdminPackageListItemDto(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
+        }
+        return list;
+    }
+
+    public override async Task<IReadOnlyList<ComponentStyleDesignListItemDto>> ListComponentStyleDesignsAsync(
+        Guid? packageId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT design_id::text, name, design->>'componentId' FROM topology.components_style_design ORDER BY name ASC";
+        var list = new List<ComponentStyleDesignListItemDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new ComponentStyleDesignListItemDto(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2)));
+        }
+        return list;
+    }
+
+    public override async Task<(Guid DesignId, ValidationError? Error)> UpsertComponentStyleDesignForPackageAsync(
+        Guid packageId,
+        Guid componentId,
+        string name,
+        string designJson,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using var pkgCheck = conn.CreateCommand();
+        pkgCheck.Transaction = tx;
+        pkgCheck.CommandText = "SELECT 1 FROM topology.ui_component_package WHERE package_id = @id LIMIT 1";
+        pkgCheck.Parameters.AddWithValue("id", packageId);
+        if (await pkgCheck.ExecuteScalarAsync(ct) is null)
+        {
+            await tx.RollbackAsync(ct);
+            return (Guid.Empty, new ValidationError("PACKAGE_NOT_FOUND", $"package {packageId} not found"));
+        }
+
+        Guid designId;
+        await using var upsert = conn.CreateCommand();
+        upsert.Transaction = tx;
+        upsert.CommandText =
+            "INSERT INTO topology.components_style_design (name, design) VALUES (@name, @design::jsonb) " +
+            "ON CONFLICT (name) DO UPDATE SET design = EXCLUDED.design, updated_at = now() " +
+            "RETURNING design_id";
+        upsert.Parameters.AddWithValue("name", name);
+        upsert.Parameters.AddWithValue("design", designJson);
+        designId = (Guid)(await upsert.ExecuteScalarAsync(ct))!;
+
+        var pairJson = System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            new { componentId = componentId.ToString(), designId = designId.ToString() },
+        });
+
+        await using var pkgMeta = conn.CreateCommand();
+        pkgMeta.Transaction = tx;
+        pkgMeta.CommandText =
+            "SELECT package_key FROM topology.ui_component_package WHERE package_id = @id LIMIT 1";
+        pkgMeta.Parameters.AddWithValue("id", packageId);
+        var packageKey = (string?)(await pkgMeta.ExecuteScalarAsync(ct));
+        if (packageKey is null)
+        {
+            await tx.RollbackAsync(ct);
+            return (Guid.Empty, new ValidationError("PACKAGE_NOT_FOUND", $"package {packageId} not found"));
+        }
+
+        await using var mergeLayout = conn.CreateCommand();
+        mergeLayout.Transaction = tx;
+        mergeLayout.CommandText =
+            """
+            INSERT INTO topology.components_package_design (package_id, name, state, layout)
+            VALUES (@pkg, @name, 'draft', @pair::jsonb)
+            ON CONFLICT (package_id) DO UPDATE SET
+              layout = (
+                SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+                FROM (
+                  SELECT DISTINCT ON ((elem->>'componentId')) elem
+                  FROM jsonb_array_elements(
+                    COALESCE(topology.components_package_design.layout, '[]'::jsonb) || @pair::jsonb
+                  ) AS elem
+                  ORDER BY (elem->>'componentId'), (elem->>'designId')
+                ) AS sub
+              ),
+              updated_at = now()
+            """;
+        mergeLayout.Parameters.AddWithValue("pkg", packageId);
+        mergeLayout.Parameters.AddWithValue("name", packageKey);
+        mergeLayout.Parameters.AddWithValue("pair", pairJson);
+        await mergeLayout.ExecuteNonQueryAsync(ct);
+
+        await tx.CommitAsync(ct);
+        return (designId, null);
+    }
+
+    public override async Task<IReadOnlyList<AdminPackageComponentDto>> ListPackageComponentsAsync(
+        Guid packageId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT m.component_id::text, r.component_key, r.component_kind
+            FROM topology.ui_package_component_map m
+            JOIN topology.ui_component_registry r ON r.component_id = m.component_id
+            WHERE m.package_id = @pkg
+            ORDER BY r.component_key ASC
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        var list = new List<AdminPackageComponentDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            list.Add(new AdminPackageComponentDto(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2)));
+        }
+        return list;
+    }
+
+    public override async Task<AdminPackageWiringDto?> GetPackageWiringAsync(
+        Guid packageId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT w.wiring_id::text, w.wiring_key, w.wiring_kind, w.target_surface, w.target_ref
+            FROM topology.ui_topology_tensor t
+            INNER JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id
+            WHERE t.package_id = @pkg
+            ORDER BY t.updated_at DESC
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return new AdminPackageWiringDto(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4));
+    }
+
+    public override async Task<ValidationError?> UpdatePackageWiringAsync(
+        Guid packageId,
+        Guid wiringId,
+        string wiringKind,
+        string targetSurface,
+        string? targetRef,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(wiringKind))
+            return new ValidationError("WIRING_KIND_REQUIRED", "wiringKind is required.");
+        if (string.IsNullOrWhiteSpace(targetSurface))
+            return new ValidationError("TARGET_SURFACE_REQUIRED", "targetSurface is required.");
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            UPDATE topology.ui_wiring_registry w
+            SET wiring_kind = @kind,
+                target_surface = @surface,
+                target_ref = @ref,
+                updated_at = now()
+            WHERE w.wiring_id = @wid
+              AND EXISTS (
+                SELECT 1 FROM topology.ui_topology_tensor t
+                WHERE t.package_id = @pkg AND t.wiring_id = w.wiring_id
+              )
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("wid", wiringId);
+        cmd.Parameters.AddWithValue("kind", wiringKind.Trim());
+        cmd.Parameters.AddWithValue("surface", targetSurface.Trim());
+        cmd.Parameters.AddWithValue("ref", (object?)targetRef?.Trim() ?? DBNull.Value);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        if (rows != 1)
+        {
+            return new ValidationError(
+                "PACKAGE_WIRING_NOT_FOUND",
+                $"No wiring {wiringId} linked to package {packageId}.");
+        }
+        return null;
     }
 }

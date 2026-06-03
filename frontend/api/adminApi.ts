@@ -284,6 +284,11 @@ export type RelationIntentInput = {
   remoteKey: string;
 };
 
+export type OperationEntityBindingInput = {
+  operationKind: string;
+  entityTargetColumn: string;
+};
+
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
   tableRef?: string;
@@ -299,9 +304,16 @@ export type AdminManifestScreenDataShapeInput = {
   /** Structured display columns. */
   displayColumns?: string[];
   columns?: AdminManifestScreenColumnInput[];
+  /** Primary kind for dispatcher refresh (first of screenOperationKinds when set). */
   screenOperationKind?: string;
+  /** Multi-select operation kinds (SSOT step 3). */
+  screenOperationKinds?: string[];
+  /** User-facing topology label (SSOT step 1 minimum). */
+  userFacingTopologyLabel?: string;
   /** Structured relation/join intents for draft data-shape only (not created-manifest relations). */
   relationIntents?: RelationIntentInput[];
+  /** Per-operation entity target at event time (SSOT step 3). */
+  operationEntityBindings?: OperationEntityBindingInput[];
   /** Initial-data candidates as screen-data-shape topology intent. Actual row insertion belongs to content_bundle. */
   initialDataRows?: Record<string, string>[];
 };

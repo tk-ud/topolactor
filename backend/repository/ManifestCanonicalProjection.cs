@@ -286,6 +286,36 @@ public static class ManifestCanonicalProjection
         return null;
     }
 
+    public static IReadOnlyList<string> ExtractScreenOperationKinds(IReadOnlyList<JsonElement> topology)
+    {
+        foreach (var entry in topology)
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            if (!entry.TryGetProperty("type", out var typeEl) ||
+                typeEl.ValueKind != JsonValueKind.String ||
+                !string.Equals(typeEl.GetString(), ScreenDataShapeEntryType, StringComparison.Ordinal)) continue;
+
+            if (entry.TryGetProperty("screenOperationKinds", out var kindsEl) &&
+                kindsEl.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var item in kindsEl.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String &&
+                        !string.IsNullOrWhiteSpace(item.GetString()))
+                        list.Add(item.GetString()!.Trim());
+                }
+                if (list.Count > 0) return list;
+            }
+
+            var single = ExtractScreenOperationKind(topology);
+            if (!string.IsNullOrWhiteSpace(single))
+                return new[] { single! };
+        }
+
+        return Array.Empty<string>();
+    }
+
     public static IReadOnlyList<JsonElement> WithDispatcherMapping(
         IReadOnlyList<JsonElement> topology,
         string role,

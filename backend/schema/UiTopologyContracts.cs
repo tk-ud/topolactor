@@ -99,6 +99,7 @@ public record UiComponentBucketRecord(
 );
 
 public record LayoutPatchRequestDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("layoutId")] string LayoutId,
     [property: JsonPropertyName("routeKey")] string RouteKey,
     [property: JsonPropertyName("tensorPatchJson")] string? TensorPatchJson,
@@ -138,4 +139,50 @@ public record LayoutCandidateDto(
     [property: JsonPropertyName("routeKey")] string RouteKey,
     [property: JsonPropertyName("layoutKind")] string LayoutKind,
     [property: JsonPropertyName("slotKeys")] IReadOnlyList<string> SlotKeys
+);
+
+public record AdminPackageListItemDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("packageKey")] string PackageKey,
+    [property: JsonPropertyName("routeKey")] string? RouteKey,
+    [property: JsonPropertyName("layoutId")] string? LayoutId,
+    [property: JsonPropertyName("wiringId")] string? WiringId
+);
+
+public record AdminPackageComponentDto(
+    [property: JsonPropertyName("componentId")] string ComponentId,
+    [property: JsonPropertyName("componentKey")] string ComponentKey,
+    [property: JsonPropertyName("componentKind")] string ComponentKind
+);
+
+public record ComponentStyleDesignListItemDto(
+    [property: JsonPropertyName("designId")] string DesignId,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("componentId")] string? ComponentId
+);
+
+public record ComponentStyleDesignUpsertRequestDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("componentId")] string ComponentId,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("classname")] string? Classname,
+    [property: JsonPropertyName("tailwind")] string? Tailwind,
+    [property: JsonPropertyName("cssTokenRefs")] IReadOnlyList<string>? CssTokenRefs,
+    [property: JsonPropertyName("reactionIntent")] string? ReactionIntent
+);
+
+public record AdminPackageWiringDto(
+    [property: JsonPropertyName("wiringId")] string WiringId,
+    [property: JsonPropertyName("wiringKey")] string WiringKey,
+    [property: JsonPropertyName("wiringKind")] string WiringKind,
+    [property: JsonPropertyName("targetSurface")] string TargetSurface,
+    [property: JsonPropertyName("targetRef")] string? TargetRef
+);
+
+public record PackageWiringUpdateRequestDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("wiringId")] string WiringId,
+    [property: JsonPropertyName("wiringKind")] string WiringKind,
+    [property: JsonPropertyName("targetSurface")] string TargetSurface,
+    [property: JsonPropertyName("targetRef")] string? TargetRef
 );

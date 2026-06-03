@@ -1,4 +1,4 @@
-/** Static copy for /admin help panels — aligned with docs/registrar-admin-ui-specification.md */
+/** Static copy for /admin help panels — aligned with docs/design/admin-console-workflow-ssot.yaml v0.7.2 */
 
 import {
   UX_CONTENTS,
@@ -30,8 +30,8 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     `${UX_CONTENTS} → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} の順で設定を進めます。`,
   prerequisites: ["先にログインしてください"],
   howToSteps: [
-    `${UX_CONTENTS_PAGE}で下書きを作成し、内容確認・プレビュー・有効化を行う`,
-    `${UX_UI_BUILDER}で部品を登録し、レイアウトを保存反映する`,
+    `${UX_CONTENTS_PAGE}で step 1→3（空登録・テーブル・関連・物理割当）を順に保存する`,
+    `${UX_UI_BUILDER}で step 4（部品選択でパッケージ化 → package の layout / design）を行う`,
     `${UX_HUB_MANIFESTS_PAGE}で作成済みページの所属先、ページ間のつながり、表示順を管理する`,
     `必要に応じてデモ画面で表示と操作を確認する`,
   ],
@@ -56,14 +56,17 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     `${UX_CONTENTS_PAGE}でページ内容と${UX_DATA_SHAPE}を用意してください`,
   ],
   howToSteps: [
-    "「部品登録」で使いたい部品を選び、配置できる状態にする",
-    "「レイアウトビルダー」で対象ページとレイアウトを選ぶ",
-    "キャンバスへ部品を配置し、必要に応じて見た目を調整する",
-    "プレビュー → 内容確認 → 保存反映の順で進める",
-    "まだ登録していない部品が残る場合は、先に登録するかキャンバスから外す",
+    "部品を複数選択し、1 回でパッケージ化する（step 4.1）",
+    "パッケージを選び、layout（配置）・component design（色・形）・配線（イベント接続）を編集する（step 4.2）",
+    "プレビュー → 検証 → 保存反映の順で layout を確定する",
+    "デモ画面で動作を確認する",
   ],
-  inputs: ["使用する部品、対象ページ、レイアウト、キャンバス上の配置"],
-  actions: ["部品を登録する", "レイアウトを確認して保存反映する"],
+  inputs: ["選択する部品、パッケージ、layout / design の意図"],
+  actions: [
+    "部品選択でパッケージ化（step 4.1）",
+    "パッケージの layout / component design / 配線を保存（step 4.2）",
+    "layout: プレビュー → 検証 → 保存反映（パッケージ選択必須）",
+  ],
   outputs: ["配置可能な部品", "保存反映されたレイアウト"],
   nextSteps: ["デモ画面で表示を確認する"],
   boundaryNotes: [
@@ -83,16 +86,17 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
     `ページの下書きを作成し、画面内容と${UX_DATA_SHAPE}を整え、内容確認・プレビュー後に有効化する画面です。ページ同士のつながりや表示順は ${UX_HUB_MANIFESTS_PAGE} で管理します。`,
   prerequisites: ["先にログインしてください"],
   howToSteps: [
-    "新しいページの下書きを作成する",
-    `ページの内容と${UX_DATA_SHAPE}を入力して保存する`,
-    "内容確認 → プレビュー → 有効化の順で進める",
-    `ページ同士のつながりや表示順は ${UX_HUB_MANIFESTS_PAGE} で管理する`,
+    "Step 1: 空の下書きとトポロジー表示名を登録する",
+    "Step 2: テーブル定義（項目名と型）を保存する",
+    "Step 2.5: テーブル間の関連を保存する（任意）",
+    "Step 3: 参照テーブル・ページ名・操作種別（複数可）・検索・集計を保存する",
+    `完了後は ${UX_UI_BUILDER} へ。ページ間のつながりは ${UX_HUB_MANIFESTS_PAGE}`,
   ],
   inputs: [
     `ページの内容と${UX_DATA_SHAPE}`,
     "表示・操作に必要なページ単体の設定",
   ],
-  actions: ["下書き作成 / 設計保存 / 内容確認 / プレビュー / 有効化"],
+  actions: ["Step 1–3 の保存", "（詳細）レガシー有効化"],
   outputs: [
     "ページの下書き",
     "修正が必要な項目",
@@ -141,30 +145,28 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/contents",
     label: UX_CONTENTS,
-    purpose: "新しいページの下書き作成・内容確認・プレビュー・有効化",
-    relation: "Step 1",
+    purpose: "step 1–3 の逐次保存（パイプライン）",
+    relation: "パイプライン step 1–3",
     howToSummary: [
-      "新規ドラフトを作成",
-      "内容確認 → プレビュー",
-      "明示的に有効化",
+      "空登録 → テーブル定義 → 関連 → 物理割当",
+      "保存後は画面づくりへ",
     ],
   },
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
-    purpose: "画面部品の登録とレイアウトの準備",
-    relation: "Step 2",
+    purpose: "step 4 — パッケージ化と layout / design",
+    relation: "パイプライン step 4",
     howToSummary: [
-      "部品を登録",
-      "レイアウトを配置",
-      "プレビュー → 検証 → 保存反映",
+      "部品を複数選択してパッケージ化",
+      "パッケージの layout / design を編集",
     ],
   },
   {
     href: "/admin/manifests",
     label: UX_HUB_MANIFESTS,
     purpose: "作成済みページの所属先、ページ間のつながり、表示順を管理する",
-    relation: "Step 3",
+    relation: "post-pipeline",
     howToSummary: [
       "作成済みページを確認",
       "遷移先を追加・編集・並び替え",
@@ -174,8 +176,7 @@ export const ADMIN_ROUTE_CARDS: {
 
 export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
   title: "ナビ順序設定",
-  purpose: "設定単位のページ遷移順序を設定します。" +
-    "画面間ナビゲーションの順序を管理する画面です。",
+  purpose: `${UX_HUB_MANIFESTS_PAGE} 内で、作成済みページの遷移順序を設定します。`,
   prerequisites: [
     "/auth でログイン済みであること",
     "先にページを作成していること",
@@ -236,16 +237,16 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_CONTENTS,
     href: "/admin/contents",
-    purpose: "新しいページの下書き・内容確認・プレビュー・有効化",
-    completionSign: "新しいページが有効化されていること",
+    purpose: "step 1–3（空登録・テーブル・関連・物理割当）を順に保存",
+    completionSign: "step 3 まで保存済みであること",
     nextLabel: `${UX_UI_BUILDER}へ`,
   },
   {
     step: 3,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "部品、配置、見た目を設定する",
-    completionSign: "レイアウトの保存反映が完了していること",
+    purpose: "step 4（部品選択でパッケージ化 → package の layout / design）",
+    completionSign: "パッケージの layout 保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
   {
@@ -272,17 +273,17 @@ export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
     label: UX_CONTENTS,
     href: "/admin/contents",
     checks: [
-      "ドラフトを作成できること",
-      "内容確認の前には有効化できないこと",
-      "内容確認 → プレビュー → 有効化ができること",
+      "step 1–3 を順に保存できること",
+      "操作種別を複数選択できること",
+      "保存後に画面づくりへ進めること",
     ],
   },
   {
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
     checks: [
-      "部品を登録できること",
-      "レイアウトのプレビュー・検証・保存反映ができること",
+      "部品を複数選択してパッケージ化できること",
+      "パッケージ選択後に layout / design を編集できること",
     ],
   },
   {

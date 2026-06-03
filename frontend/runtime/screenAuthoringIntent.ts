@@ -104,6 +104,21 @@ export function dispatcherAxesToScreenOperationKind(axes: {
   return "list";
 }
 
+export function primaryOperationKind(draft: {
+  operationKinds?: ScreenOperationKind[];
+  operationKind: ScreenOperationKind;
+}): ScreenOperationKind {
+  return draft.operationKinds?.[0] ?? draft.operationKind;
+}
+
+/** Step 1: empty manifest shell with default list axes until step 3 assigns kinds. */
+export function buildStep1DraftInput(manifestId?: string | null): AdminManifestDraftInput {
+  return buildDraftInputFromScreenIntent({
+    operationKind: "list",
+    manifestId,
+  });
+}
+
 export function buildDraftInputFromScreenIntent(input: {
   operationKind: ScreenOperationKind;
   manifestKey?: string | null;

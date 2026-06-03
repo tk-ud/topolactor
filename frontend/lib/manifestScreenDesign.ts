@@ -14,13 +14,22 @@ export type RelationIntentDraft = {
   remoteKey: string;
 };
 
+/** Per-operation entity target at event time (SSOT step 3). */
+export type OperationEntityBindingDraft = {
+  operationKind: ScreenOperationKind;
+  entityTargetColumn: string;
+};
+
 /** Initial data row as key-value record intent. No direct DB write — stored as topology extension intent. */
 export type InitialDataRowDraft = Record<string, string>;
 
 /** Local draft cache only — not canonical. Backend topology extensions are SSOT after save. */
 export type ManifestScreenDesignDraft = {
   screenLabel: string;
+  /** @deprecated use operationKinds — kept for local cache compat */
   operationKind: ScreenOperationKind;
+  /** SSOT step 3: multi-select operation kinds. */
+  operationKinds: ScreenOperationKind[];
   tableRef: string;
   importSchemaName: string;
   /** @deprecated raw comma-separated — preserved for advanced/raw disclosure only */
@@ -36,6 +45,8 @@ export type ManifestScreenDesignDraft = {
   columns: ManifestScreenColumnDraft[];
   /** Structured relation/join intents for this draft's data-shape only. */
   relationIntents: RelationIntentDraft[];
+  /** Per-operation entity column binding at event time. */
+  operationEntityBindings: OperationEntityBindingDraft[];
   /** Initial data rows as topology intent (not direct DB write). */
   initialDataRows: InitialDataRowDraft[];
 };
@@ -48,6 +59,7 @@ export const MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE =
 export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   screenLabel: "",
   operationKind: "list",
+  operationKinds: ["list"],
   tableRef: "",
   importSchemaName: "",
   searchTargets: "",
@@ -57,6 +69,7 @@ export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   displayColumns: [],
   columns: [{ name: "", dataType: "text", nullable: true }],
   relationIntents: [],
+  operationEntityBindings: [],
   initialDataRows: [],
 });
 
@@ -77,9 +90,15 @@ export function loadManifestScreenDesignLocal(
 ): ManifestScreenDesignDraft | null {
   const entry = readAll()[manifestId];
   if (!entry) return null;
+  const opKind = entry.operationKind ?? "list";
+  const kinds = Array.isArray(entry.operationKinds) && entry.operationKinds.length > 0
+    ? entry.operationKinds
+    : [opKind];
   return {
     ...emptyManifestScreenDesign(),
     ...entry,
+    operationKind: opKind,
+    operationKinds: kinds,
     tableRef: entry.tableRef ??
       (entry as { dbTableName?: string }).dbTableName ?? "",
     searchKeyColumns: Array.isArray(entry.searchKeyColumns)
@@ -93,6 +112,9 @@ export function loadManifestScreenDesignLocal(
       : [],
     initialDataRows: Array.isArray(entry.initialDataRows)
       ? entry.initialDataRows
+      : [],
+    operationEntityBindings: Array.isArray(entry.operationEntityBindings)
+      ? entry.operationEntityBindings
       : [],
   };
 }
@@ -118,10 +140,14 @@ export function screenDesignFromBackendShape(
   shape: ScreenDataShapeSummary,
   operationKind: ScreenOperationKind,
 ): ManifestScreenDesignDraft {
+  const kinds = Array.isArray(shape.screenOperationKinds) &&
+      shape.screenOperationKinds.length > 0
+    ? shape.screenOperationKinds as ScreenOperationKind[]
+    : [(shape.screenOperationKind as ScreenOperationKind) ?? operationKind];
   return {
-    screenLabel: "",
-    operationKind: (shape.screenOperationKind as ScreenOperationKind) ??
-      operationKind,
+    screenLabel: shape.userFacingTopologyLabel ?? "",
+    operationKind: kinds[0],
+    operationKinds: kinds,
     tableRef: shape.tableRef ?? "",
     importSchemaName: shape.importSchemaName ?? "",
     searchTargets: shape.searchTargets.join(", "),
@@ -138,6 +164,12 @@ export function screenDesignFromBackendShape(
       : [{ name: "", dataType: "text", nullable: true }],
     relationIntents: Array.isArray(shape.relationIntents)
       ? shape.relationIntents
+      : [],
+    operationEntityBindings: Array.isArray(shape.operationEntityBindings)
+      ? shape.operationEntityBindings.map((b) => ({
+        operationKind: (b.operationKind as ScreenOperationKind) ?? "list",
+        entityTargetColumn: b.entityTargetColumn ?? "",
+      }))
       : [],
     initialDataRows: Array.isArray(shape.initialDataRows)
       ? shape.initialDataRows

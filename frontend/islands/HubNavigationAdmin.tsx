@@ -1,4 +1,6 @@
+/** @jsxImportSource preact */
 import { useEffect, useState } from "preact/hooks";
+import { Fragment } from "preact";
 import { JSX } from "preact";
 import {
   listHubNavigationManifests,
@@ -18,6 +20,7 @@ import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_HUB_NAVIGATION_GUIDE } from "../content/adminGuides.ts";
 import { UX_STATUS_LABELS } from "../content/adminUxTerms.ts";
+import { useConfirm } from "../hooks/useConfirm.tsx";
 
 type PanelError = { code?: string; message: string };
 
@@ -38,6 +41,7 @@ export default function HubNavigationAdmin(): JSX.Element {
   const [errors, setErrors] = useState<PanelError[]>([]);
   const [loading, setLoading] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
+  const { confirm, ConfirmDialogHost } = useConfirm();
 
   const loadManifests = async () => {
     const [m, h] = await Promise.all([listHubNavigationManifests(), listContentHubs()]);
@@ -74,6 +78,9 @@ export default function HubNavigationAdmin(): JSX.Element {
       setErrors([{ message: "設定と遷移先の画面を選択してください。" }]);
       return;
     }
+    if (!(await confirm("ナビ遷移を登録します。よろしいですか？"))) {
+      return;
+    }
     setLoading(true);
     setErrors([]);
     try {
@@ -95,6 +102,9 @@ export default function HubNavigationAdmin(): JSX.Element {
 
   const handleUpdate = async () => {
     if (editing.mode !== "edit") return;
+    if (!(await confirm("ナビ遷移を更新します。よろしいですか？"))) {
+      return;
+    }
     setLoading(true);
     setErrors([]);
     try {
@@ -114,6 +124,12 @@ export default function HubNavigationAdmin(): JSX.Element {
   };
 
   const handleDeprecate = async (hubRelationId: string) => {
+    if (!(await confirm("ナビ遷移を削除（無効化）します。よろしいですか？", {
+      variant: "danger",
+      confirmLabel: "無効化する",
+    }))) {
+      return;
+    }
     setLoading(true);
     setErrors([]);
     try {
@@ -204,7 +220,7 @@ export default function HubNavigationAdmin(): JSX.Element {
       </section>
 
       {selectedManifestId && (
-        <>
+        <Fragment>
           {/* Current hub_relations */}
           <section class="rounded-lg border border-gray-200 bg-white p-4">
             <div class="mb-3 flex items-center justify-between">
@@ -363,7 +379,7 @@ export default function HubNavigationAdmin(): JSX.Element {
               </div>
             </section>
           )}
-        </>
+        </Fragment>
       )}
 
       {/* Result / Error */}
@@ -381,6 +397,7 @@ export default function HubNavigationAdmin(): JSX.Element {
       {errors.length > 0 && <ValidationErrorPanel errors={errors} />}
 
       <AdminHelpPanel {...ADMIN_HUB_NAVIGATION_GUIDE} />
+      <ConfirmDialogHost />
     </div>
   );
 }
