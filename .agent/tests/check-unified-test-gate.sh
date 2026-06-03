@@ -75,18 +75,37 @@ fi
 
 echo ""
 echo "=== [FRONTEND_CONTRACT] Frontend API proxy and dispatch contract tests ==="
-echo "    Scope: adminApi.test.ts, defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
-echo "           uiBuilderStepper.test.ts"
+echo "    Scope: adminApi.test.ts, adminImport.test.ts, adminUxGuard.test.ts,"
+echo "           defaultEntitySearch.test.ts, pipelineContinuity.test.ts,"
+echo "           userDemoStepper.test.ts, uiBuilderStepper.test.ts"
 
 if deno test \
     frontend/tests/adminApi.test.ts \
+    frontend/tests/adminImport.test.ts \
+    frontend/tests/adminUxGuard.test.ts \
     frontend/tests/defaultEntitySearch.test.ts \
     frontend/tests/pipelineContinuity.test.ts \
+    frontend/tests/userDemoStepper.test.ts \
     frontend/tests/uiBuilderStepper.test.ts \
     --allow-read; then
   echo "OK  [FRONTEND_CONTRACT] frontend contract tests passed"
 else
   fail "[FRONTEND_CONTRACT] frontend contract tests failed"
+fi
+
+# ─── CLIENT_COMMAND_LANE ──────────────────────────────────────────────────────
+
+echo ""
+echo "=== [CLIENT_COMMAND_LANE] Frontend scheduler and source guard tests ==="
+echo "    Scope: frontendScheduler.test.ts"
+echo "    Note: --allow-read required for source guard (scans frontend/**/*.ts)"
+
+if deno test \
+    frontend/tests/frontendScheduler.test.ts \
+    --allow-read; then
+  echo "OK  [CLIENT_COMMAND_LANE] client command lane tests passed"
+else
+  fail "[CLIENT_COMMAND_LANE] client command lane tests failed"
 fi
 
 # ─── CATALOG_SSOT_ALIGNMENT ───────────────────────────────────────────────────
@@ -118,6 +137,20 @@ if bash .agent/tests/check-ssot-vocabulary-contract.sh; then
   echo "OK  [SSOT_VOCABULARY_CONTRACT] vocabulary contract checks passed"
 else
   fail "[SSOT_VOCABULARY_CONTRACT] vocabulary contract checks failed"
+fi
+
+# ─── FRONTEND_ALL_TESTS ───────────────────────────────────────────────────────
+
+echo ""
+echo "=== [FRONTEND_ALL_TESTS] All frontend tests (full suite) ==="
+echo "    Scope: all tests in frontend/tests/ (includes UI handler behavior, event SSOT,"
+echo "           lane distinction, and any new tests added to frontend/tests/)"
+echo "    Note: --allow-read required for source guard and SSOT readers"
+
+if bash .agent/tests/check-frontend-all-tests.sh; then
+  echo "OK  [FRONTEND_ALL_TESTS] full frontend test suite passed"
+else
+  fail "[FRONTEND_ALL_TESTS] full frontend test suite failed"
 fi
 
 # ─── NOT_COVERED ──────────────────────────────────────────────────────────────

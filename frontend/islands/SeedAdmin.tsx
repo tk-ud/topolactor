@@ -1,32 +1,21 @@
 import { useState } from "preact/hooks";
 import { JSX } from "preact";
 import { AdminActionHint } from "../components/AdminHelpPanel.tsx";
+import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
-function getAuthHeaders(): Record<string, string> {
-  const token =
-    typeof globalThis.sessionStorage !== "undefined"
-      ? sessionStorage.getItem(SESSION_TOKEN_KEY)
-      : null;
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  return headers;
-}
-
-async function dispatchSeedOp(layer: string, action: string, payload?: unknown) {
-  const res = await fetch("/api/dispatch", {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: JSON.stringify({
-      operationType: "admin",
-      target: "admin",
-      layer,
-      action,
-      payload: payload ?? null,
-    }),
-  });
-  return await res.json();
+// deno-lint-ignore no-explicit-any
+async function dispatchSeedOp(layer: string, action: string, payload?: unknown): Promise<any> {
+  const token = typeof globalThis.sessionStorage !== "undefined"
+    ? sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined : undefined;
+  return queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer,
+    action,
+    payload: payload != null ? payload as Record<string, unknown> : undefined,
+  }, token);
 }
 
 type SeedValidationError = { code: string; message: string };
