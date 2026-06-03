@@ -142,9 +142,10 @@ public class CiAttentionPromotionGateTests
                 Guid.NewGuid(), "break_boundary", "layout", Guid.NewGuid().ToString(),
                 "Layout break boundary.", "Resolve before applying layout patch.")
         ]);
-        var runtime = CreateAdminRuntime(blockingRepo);
+        var uiRepo = new StubPreviewUiTopologyRepository();
+        var runtime = CreateAdminRuntime(blockingRepo, uiRepo);
         var vector = new OperationVector("admin", "layout_patch", "apply", null, "admin",
-            JsonSerializer.SerializeToElement(new { layoutId = Guid.NewGuid().ToString(), routeKey = "admin:ui-builder" }), null);
+            JsonSerializer.SerializeToElement(new { packageId = Guid.NewGuid().ToString(), layoutId = Guid.NewGuid().ToString(), routeKey = "admin:ui-builder" }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
 
@@ -166,7 +167,7 @@ public class CiAttentionPromotionGateTests
         var uiRepo = new StubPreviewUiTopologyRepository();
         var runtime = CreateAdminRuntime(blockingRepo, uiRepo);
         var vector = new OperationVector("admin", "layout_patch", "preview", null, "admin",
-            JsonSerializer.SerializeToElement(new { layoutId = Guid.NewGuid().ToString(), routeKey = "admin:ui-builder" }), null);
+            JsonSerializer.SerializeToElement(new { packageId = Guid.NewGuid().ToString(), layoutId = Guid.NewGuid().ToString(), routeKey = "admin:ui-builder" }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
 
@@ -322,9 +323,13 @@ public class CiAttentionPromotionGateTests
     {
         public StubPreviewUiTopologyRepository() : base(NullLogger<UiTopologyRepository>.Instance, "test-double") { }
 
+        public override Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
+            Guid packageId, Guid layoutId, string routeKey, CancellationToken ct = default)
+            => Task.FromResult<ValidationError?>(null);
+
         public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(
-            Guid layoutId, string routeKey, string tensorPatchJson,
-            IReadOnlyList<string> cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>> responsiveTokenRefs,
+            Guid layoutId, string routeKey, string? tensorPatchJson,
+            IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
             CancellationToken ct = default)
             => Task.FromResult(new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, tensorPatchJson ?? "{}", cssTokenRefs ?? [], responsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>(), "preview ok"));
     }

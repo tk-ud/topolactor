@@ -74,7 +74,8 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         }
         """;
 
-        var result = await repo.ApplyConfirmedLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
+        var result = await repo.ApplyConfirmedLayoutPatchAsync(
+            Guid.NewGuid(), Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, ["color.action.primary.background"], null);
         Assert.False(result.Ok);
         Assert.False(result.Valid);
         Assert.Equal("DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED", result.Message);

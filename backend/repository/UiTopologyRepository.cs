@@ -118,6 +118,7 @@ public class UiTopologyRepository
     }
 
     public virtual Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
+        Guid packageId,
         Guid layoutId,
         string routeKey,
         string? tensorPatchJson,
@@ -126,6 +127,19 @@ public class UiTopologyRepository
         CancellationToken ct = default)
     {
         throw new NotImplementedException("UiTopologyRepository.ApplyConfirmedLayoutPatchAsync must be overridden by a production implementation.");
+    }
+
+    /// <summary>
+    /// Ensures layout_id + route_key belong to the given package via ui_topology_tensor.
+    /// </summary>
+    public virtual Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.VerifyLayoutPatchPackageBindingAsync must be overridden by a production implementation.");
     }
 
     public virtual Task<IReadOnlyList<PromotedPaletteEntryDto>> ListPromotedPaletteEntriesAsync(
@@ -142,5 +156,53 @@ public class UiTopologyRepository
         CancellationToken ct = default)
     {
         throw new NotImplementedException("UiTopologyRepository.ListLayoutCandidatesAsync must be overridden by a production implementation.");
+    }
+
+    public virtual Task<IReadOnlyList<AdminPackageListItemDto>> ListAdminPackagesAsync(
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListAdminPackagesAsync must be overridden.");
+    }
+
+    public virtual Task<IReadOnlyList<ComponentStyleDesignListItemDto>> ListComponentStyleDesignsAsync(
+        Guid? packageId,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListComponentStyleDesignsAsync must be overridden.");
+    }
+
+    public virtual Task<(Guid DesignId, ValidationError? Error)> UpsertComponentStyleDesignForPackageAsync(
+        Guid packageId,
+        Guid componentId,
+        string name,
+        string designJson,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.UpsertComponentStyleDesignForPackageAsync must be overridden.");
+    }
+
+    public virtual Task<IReadOnlyList<AdminPackageComponentDto>> ListPackageComponentsAsync(
+        Guid packageId,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.ListPackageComponentsAsync must be overridden.");
+    }
+
+    public virtual Task<AdminPackageWiringDto?> GetPackageWiringAsync(
+        Guid packageId,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.GetPackageWiringAsync must be overridden.");
+    }
+
+    public virtual Task<ValidationError?> UpdatePackageWiringAsync(
+        Guid packageId,
+        Guid wiringId,
+        string wiringKind,
+        string targetSurface,
+        string? targetRef,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.UpdatePackageWiringAsync must be overridden.");
     }
 }

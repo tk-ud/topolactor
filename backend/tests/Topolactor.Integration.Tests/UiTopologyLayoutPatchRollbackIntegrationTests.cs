@@ -63,9 +63,10 @@ public class UiTopologyLayoutPatchRollbackIntegrationTests
             await c3.ExecuteNonQueryAsync();
         }
 
-        var res = await repo.ApplyConfirmedLayoutPatchAsync(layoutId, "route-mismatch", "{\"after\":2}", ["color.action.primary.background"], null);
+        var res = await repo.ApplyConfirmedLayoutPatchAsync(
+            packageId, layoutId, "route-mismatch", "{\"after\":2}", ["color.action.primary.background"], null);
         Assert.False(res.Ok);
-        Assert.Equal("TOPOLOGY_TENSOR_NOT_FOUND", res.Message);
+        Assert.Contains("package", res.Message, StringComparison.OrdinalIgnoreCase);
 
         await using var verify = conn.CreateCommand();
         verify.CommandText = "SELECT layout_schema_json::text FROM ui_layout_registry WHERE layout_id=@id";

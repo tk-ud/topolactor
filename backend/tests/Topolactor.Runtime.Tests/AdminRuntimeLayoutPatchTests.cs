@@ -54,11 +54,22 @@ public class AdminRuntimeLayoutPatchTests
     }
 
     [Fact]
+    public async Task LayoutPatchValidate_MissingPackageId_ReturnsExplicitError()
+    {
+        var runtime = CreateRuntime(new StubUiRepo(false));
+        var (data, error) = await runtime.ExecuteDataAsync(new OperationVector("admin", "layout_patch", "validate", null, "admin",
+            System.Text.Json.JsonSerializer.SerializeToElement(new { layoutId = Guid.NewGuid().ToString(), routeKey = "/admin/ui-builder" }), null), default);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("PACKAGE_ID_REQUIRED", error!.Code);
+    }
+
+    [Fact]
     public async Task LayoutPatchValidate_InvalidToken_ReturnsExplicitError()
     {
         var runtime = CreateRuntime(new StubUiRepo(false));
         var (data, error) = await runtime.ExecuteDataAsync(new OperationVector("admin","layout_patch","validate",null,"admin",
-            System.Text.Json.JsonSerializer.SerializeToElement(new { layoutId = Guid.NewGuid().ToString(), routeKey = "/admin/ui-builder" }), null), default);
+            System.Text.Json.JsonSerializer.SerializeToElement(new { packageId = Guid.NewGuid().ToString(), layoutId = Guid.NewGuid().ToString(), routeKey = "/admin/ui-builder" }), null), default);
         Assert.Null(data);
         Assert.NotNull(error);
         Assert.Equal("LAYOUT_PATCH_VALIDATION_FAILED", error!.Code);
@@ -69,7 +80,7 @@ public class AdminRuntimeLayoutPatchTests
     {
         var runtime = CreateRuntime(new StubUiRepo(true));
         var (data, error) = await runtime.ExecuteDataAsync(new OperationVector("admin","layout_patch","apply",null,"admin",
-            System.Text.Json.JsonSerializer.SerializeToElement(new { layoutId = Guid.NewGuid().ToString(), routeKey = "/admin/ui-builder" }), null), default);
+            System.Text.Json.JsonSerializer.SerializeToElement(new { packageId = Guid.NewGuid().ToString(), layoutId = Guid.NewGuid().ToString(), routeKey = "/admin/ui-builder" }), null), default);
         Assert.Null(error);
         Assert.True(data.HasValue);
     }
@@ -95,7 +106,12 @@ public class AdminRuntimeLayoutPatchTests
             => Task.FromResult(new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(), "ok"));
         public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
             => Task.FromResult(new LayoutPatchResult(valid, valid, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(), valid ? "ok" : "bad"));
-        public override Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
+        public override Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
+            Guid packageId, Guid layoutId, string routeKey, CancellationToken ct = default)
+            => Task.FromResult<ValidationError?>(null);
+
+        public override Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
+            Guid packageId, Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
             => Task.FromResult(new LayoutPatchResult(valid, valid, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(), valid ? "ok" : "bad"));
         public override Task<IReadOnlyList<PromotedPaletteEntryDto>> ListPromotedPaletteEntriesAsync(CancellationToken ct = default)
             => Task.FromResult(_palette);
