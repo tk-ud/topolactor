@@ -374,6 +374,59 @@ function deriveCandidatesFromPalette(promoted: PromotedPaletteEntry[]): LayoutRo
   return out;
 }
 
+type PackagedHandoff = {
+  packageId: string;
+  routeKey: string;
+  layoutId: string;
+};
+
+function dispatchOpFailed(
+  body: { success?: boolean; errors?: ValidationError[] } | null | undefined,
+): boolean {
+  return !body?.success || (Array.isArray(body?.errors) && body.errors.length > 0);
+}
+
+function parsePackagedHandoff(
+  body: { success?: boolean; emission?: { data?: unknown } } | null | undefined,
+  fallbackRouteKey: string,
+): PackagedHandoff | null {
+  if (dispatchOpFailed(body)) return null;
+  const data = body?.emission?.data as Record<string, unknown> | undefined;
+  if (!data) return null;
+  const packageId = typeof data.packageId === "string" ? data.packageId : null;
+  const layoutId = typeof data.layoutId === "string" ? data.layoutId : null;
+  const routeKey = typeof data.routeKey === "string" ? data.routeKey : fallbackRouteKey;
+  if (!packageId || !layoutId) return null;
+  return { packageId, routeKey, layoutId };
+}
+
+function layoutCandidateForPackage(
+  routeKey: string,
+  layoutId: string,
+  packageKey?: string,
+): LayoutRouteCandidate {
+  return {
+    layoutId,
+    layoutKey: packageKey ? `${packageKey}:layout` : `${routeKey}:layout`,
+    routeKey,
+    layoutKind: "package",
+    slotKeys: [],
+  };
+}
+
+/** Inject selected package route/layout when layout_candidates query omits the new row yet. */
+function ensureScopedLayoutCandidates(
+  candidates: LayoutRouteCandidate[],
+  scopedRouteKey?: string | null,
+  scopedLayoutId?: string | null,
+): LayoutRouteCandidate[] {
+  if (!scopedRouteKey?.trim() || !scopedLayoutId?.trim()) return candidates;
+  const rk = scopedRouteKey.trim();
+  const lid = scopedLayoutId.trim();
+  if (candidates.some((c) => c.routeKey === rk && c.layoutId === lid)) return candidates;
+  return [...candidates, layoutCandidateForPackage(rk, lid)];
+}
+
 function uniqueRouteKeys(candidates: LayoutRouteCandidate[]): string[] {
   return [...new Set(candidates.map((c) => c.routeKey))].sort();
 }
@@ -1310,9 +1363,127 @@ function PrimitiveCatalog(): JSX.Element {
   );
 }
 
+function BucketPackageRouteFields({
+  routeKey,
+  manualRouteKey,
+  routeOptions,
+  candidateErrors,
+  onRouteKeyChange,
+  onManualRouteKeyChange,
+}: {
+  routeKey: string;
+  manualRouteKey: string;
+  routeOptions: string[];
+  candidateErrors: ValidationError[];
+  onRouteKeyChange: (routeKey: string) => void;
+  onManualRouteKeyChange: (manualRouteKey: string) => void;
+}): JSX.Element {
+  const effectiveRouteKey = manualRouteKey.trim() || routeKey;
+  return (
+    <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3">
+      <p class="mb-2 text-xs font-semibold text-slate-700">
+        ページルート（パッケージ化に必須）
+      </p>
+      <label class="mb-2 flex flex-col gap-0.5 text-sm">
+        候補から選択
+        <select
+          value={routeKey}
+          onChange={(e) => {
+            onRouteKeyChange((e.target as HTMLSelectElement).value);
+            onManualRouteKeyChange("");
+          }}
+          disabled={routeOptions.length === 0}
+          class="input font-mono text-xs"
+        >
+          <option value="">— ルートを選択 —</option>
+          {routeOptions.map((r) => (
+            <option key={r} value={r}>{r}</option>
+          ))}
+        </select>
+      </label>
+      {routeOptions.length === 0 && candidateErrors.length === 0 && (
+        <p class="mb-2 text-xs text-amber-900">
+          初回は下の直接入力にルート名を入れてください（例: <code>admin_demo_screen_list</code>）。
+          パッケージ化後、候補から選べるようになります。
+        </p>
+      )}
+      <label class="flex flex-col gap-0.5 text-sm">
+        直接入力（初回はこちら）
+        <input
+          value={manualRouteKey}
+          onInput={(e) => onManualRouteKeyChange((e.target as HTMLInputElement).value)}
+          placeholder="例: admin_demo_screen_list"
+          class="input-mono w-full text-xs"
+        />
+      </label>
+      {effectiveRouteKey && (
+        <p class="mt-2 text-xs text-slate-600">
+          使用中のルート: <code class="font-mono">{effectiveRouteKey}</code>
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
-function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): JSX.Element {
+async function packageBucketItem(
+  bucketItemId: string,
+  routeKey: string,
+  status: BucketStatusResult["status"],
+  componentKey?: string,
+): Promise<{ handoff: PackagedHandoff | null; error?: ValidationError[] }> {
+  if (status === "promoted") {
+    const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
+    const promoted = paletteBody?.emission?.data as PromotedPaletteEntry[] | undefined;
+    const row = Array.isArray(promoted)
+      ? promoted.find((p) =>
+        componentKey ? p.componentKey === componentKey : p.routeKey === routeKey
+      )
+      : undefined;
+    if (row?.packageId && row.layoutId) {
+      return { handoff: { packageId: row.packageId, routeKey: row.routeKey, layoutId: row.layoutId } };
+    }
+    return {
+      handoff: null,
+      error: [{ code: "ALREADY_PROMOTED", message: "既に配置可能です。layout タブでパッケージを選択してください。" }],
+    };
+  }
+  if (status === "bucketed") {
+    const genBody = await dispatchAdminOp("package_generator", "generate", {
+      bucketItemId,
+      routeKey,
+    });
+    if (dispatchOpFailed(genBody)) {
+      return { handoff: null, error: genBody?.errors ?? [{ code: "GENERATE_FAILED", message: "パッケージ化（generate）に失敗しました。" }] };
+    }
+  } else if (status !== "packaging") {
+    return {
+      handoff: null,
+      error: [{ code: "INVALID_BUCKET_STATUS", message: `バケット状態が不正です: ${status}` }],
+    };
+  }
+  const promBody = await dispatchAdminOp("package_generator", "promote", {
+    bucketItemId,
+    routeKey,
+  });
+  const handoff = parsePackagedHandoff(promBody, routeKey);
+  if (!handoff) {
+    return {
+      handoff: null,
+      error: promBody?.errors ?? [{ code: "PROMOTE_FAILED", message: "配置可能化（promote）に失敗しました。" }],
+    };
+  }
+  return { handoff };
+}
+
+function BucketSection({
+  onNavigate,
+  onPackaged,
+}: {
+  onNavigate?: (tab: TabId) => void;
+  onPackaged?: (handoff: PackagedHandoff) => void;
+}): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [items, setItems] = useState<BucketItem[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -1416,10 +1587,13 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
     setLoading(true);
     setErrors([]);
     try {
+      let lastHandoff: PackagedHandoff | null = null;
       for (const key of keys) {
         const entry = COMPONENT_CATALOG_ENTRIES.find((c) => c.componentKey === key);
         if (!entry) continue;
-        let bucketId = resolveBucketStatus(key, items, promotedKeys).bucketItemId;
+        const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
+        let bucketId = bucketStatus.bucketItemId;
+        let itemStatus = bucketStatus.status;
         if (!bucketId) {
           const body = await dispatchAdminOp("ui_component_bucket", "create", {
             componentKey: entry.componentKey,
@@ -1427,22 +1601,44 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             componentKind: entry.componentKind,
             metadataJson: "{}",
           });
-          bucketId = body?.emission?.data?.bucketItemId;
-          if (!bucketId) continue;
+          if (dispatchOpFailed(body)) {
+            setErrors(body?.errors ?? [{ code: "BUCKET_CREATE_FAILED", message: `${key} の登録に失敗しました。` }]);
+            setStatus("部品の登録に失敗しました。");
+            return;
+          }
+          bucketId = body?.emission?.data?.bucketItemId as string | undefined;
+          if (!bucketId) {
+            setErrors([{ code: "BUCKET_CREATE_FAILED", message: `${key} の bucketItemId が取得できませんでした。` }]);
+            setStatus("部品の登録に失敗しました。");
+            return;
+          }
+          itemStatus = "bucketed";
         }
-        await dispatchAdminOp("package_generator", "generate", {
-          bucketItemId: bucketId,
-          routeKey: effectiveRouteKey,
-        });
-        await dispatchAdminOp("package_generator", "promote", {
-          bucketItemId: bucketId,
-          routeKey: effectiveRouteKey,
-        });
+        const { handoff, error: pkgErr } = await packageBucketItem(
+          bucketId,
+          effectiveRouteKey,
+          itemStatus,
+          key,
+        );
+        if (pkgErr?.length) {
+          setErrors(pkgErr);
+          setStatus(pkgErr[0]?.message ?? "パッケージ化に失敗しました。");
+          return;
+        }
+        if (handoff) lastHandoff = handoff;
       }
-      setStatus(`${keys.length} 件のパッケージ化が完了しました。layout / design タブでパッケージを選んで編集してください。`);
+      if (!lastHandoff) {
+        setStatus("パッケージ化結果を取得できませんでした。");
+        return;
+      }
+      setStatus(`${keys.length} 件のパッケージ化が完了しました。layout タブで編集を続けます。`);
       await loadBucket();
-      const { candidates } = await loadLayoutCandidatesFromBackend();
-      setLayoutCandidates(candidates);
+      const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
+      const promoted = paletteBody?.emission?.data;
+      if (Array.isArray(promoted)) {
+        setPromotedKeys(new Set(promoted.map((p: PromotedPaletteEntry) => p.componentKey)));
+      }
+      onPackaged?.(lastHandoff);
       onNavigate?.("layout");
     } catch (e) {
       setStatus(`エラー: ${e}`);
@@ -1564,6 +1760,7 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
   };
 
   const selectedItem = items.find((i) => i.bucketItemId === selectedId);
+  const hasCatalogSelection = selectedCatalogKeys.size > 0;
 
   return (
     <div>
@@ -1628,10 +1825,24 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
           </table>
         </div>
 
-        {selectedCatalog && (
+        <BucketPackageRouteFields
+          routeKey={routeKey}
+          manualRouteKey={manualRouteKey}
+          routeOptions={routeOptions}
+          candidateErrors={candidateErrors}
+          onRouteKeyChange={setRouteKey}
+          onManualRouteKeyChange={setManualRouteKey}
+        />
+
+        {hasCatalogSelection && (
           <div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm">
-            <strong>選択中:</strong> <code>{selectedCatalog.componentKey}</code>
-            <span class="ml-2 text-muted-xs">{selectedCatalog.componentKind}</span>
+            <strong>選択中:</strong>{" "}
+            {[...selectedCatalogKeys].map((k) => (
+              <code key={k} class="mr-2">{k}</code>
+            ))}
+            {selectedCatalog && (
+              <span class="text-muted-xs">{selectedCatalog.componentKind}</span>
+            )}
             <button
               type="button"
               onClick={handlePackageSelected}
@@ -1640,10 +1851,17 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             >
               選択した部品をパッケージ化
             </button>
-            <details class="mt-1">
-              <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
-              <div class="mt-0.5 font-mono text-xs text-gray-500">{selectedCatalog.sourcePath}</div>
-            </details>
+            {!effectiveRouteKey && (
+              <p class="mt-1 text-xs text-amber-800">
+                上のページルートを選択または入力するとボタンが有効になります。
+              </p>
+            )}
+            {selectedCatalog && (
+              <details class="mt-1">
+                <summary class="cursor-pointer text-xs text-gray-400 hover:text-gray-600">技術詳細</summary>
+                <div class="mt-0.5 font-mono text-xs text-gray-500">{selectedCatalog.sourcePath}</div>
+              </details>
+            )}
           </div>
         )}
 
@@ -1688,52 +1906,14 @@ function BucketSection({ onNavigate }: { onNavigate?: (tab: TabId) => void }): J
             </table>
           </div>
 
-          <label class="mb-2 flex flex-col gap-0.5 text-sm">
-            ページルート（候補から選択）
-            <select
-              value={routeKey}
-              onChange={(e) => {
-                setRouteKey((e.target as HTMLSelectElement).value);
-                setManualRouteKey("");
-              }}
-              disabled={routeOptions.length === 0}
-              class="input font-mono text-xs"
-            >
-              <option value="">— ルートを選択 —</option>
-              {routeOptions.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </label>
-
-          {routeOptions.length === 0 && candidateErrors.length === 0 && (
-            <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-              <p class="font-semibold">① ページルートを指定してください（候補はまだありません）</p>
-              <p class="mt-1 text-xs">
-                初回は下の入力欄にルート名を入れ、続けて「パッケージ化」→「配置可能にする」です。
-                完了後、レイアウトビルダーにルート候補が出ます。
-              </p>
-            </div>
-          )}
-
-          <label class="mb-2 flex flex-col gap-0.5 text-sm">
-            ページルート（直接入力・初回はこちら）
-            <input
-              value={manualRouteKey}
-              onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
-              placeholder="例: admin_demo_screen_list"
-              class="input-mono w-full text-xs"
-            />
-          </label>
-
-          <AdvancedManualOverride title="詳細設定 — 新規ページルートを直接入力">
-            <input
-              value={manualRouteKey}
-              onInput={(e) => setManualRouteKey((e.target as HTMLInputElement).value)}
-              placeholder="例: admin_demo_screen_list"
-              class="input-mono w-full text-xs"
-            />
-          </AdvancedManualOverride>
+          <BucketPackageRouteFields
+            routeKey={routeKey}
+            manualRouteKey={manualRouteKey}
+            routeOptions={routeOptions}
+            candidateErrors={candidateErrors}
+            onRouteKeyChange={setRouteKey}
+            onManualRouteKeyChange={setManualRouteKey}
+          />
 
           {selectedItem && effectiveRouteKey && (
             <p class="text-muted-xs mt-2">
@@ -2994,13 +3174,23 @@ function LayoutBuilderSection({
       setPaletteLoadFailed(false);
       setCandidateErrors([]);
       const { candidates, errors: candErr } = await loadLayoutCandidatesFromBackend();
-      const scopedCandidates =
+      let scopedCandidates =
         scopedPackageId && scopedRouteKey && scopedLayoutId
           ? candidates.filter(
             (c) => c.routeKey === scopedRouteKey && c.layoutId === scopedLayoutId,
           )
           : candidates;
-      setLayoutCandidates(scopedCandidates.length > 0 ? scopedCandidates : candidates);
+      scopedCandidates = ensureScopedLayoutCandidates(
+        scopedCandidates,
+        scopedRouteKey,
+        scopedLayoutId,
+      );
+      const nextCandidates = ensureScopedLayoutCandidates(
+        scopedCandidates.length > 0 ? scopedCandidates : candidates,
+        scopedRouteKey,
+        scopedLayoutId,
+      );
+      setLayoutCandidates(nextCandidates);
       if (candErr.length) setCandidateErrors(candErr);
       try {
         const body = await dispatchAdminOp("ui_topology", "promoted_palette");
@@ -3049,9 +3239,16 @@ function LayoutBuilderSection({
         if (candidates.length === 0 && layoutSource.length > 0) {
           setLayoutCandidates(deriveCandidatesFromPalette(layoutSource));
         }
-        if (!routeKey && candidates.length > 0) {
-          setRouteKey(candidates[0].routeKey);
-          setLayoutId(candidates[0].layoutId);
+        const routeLayoutSource = nextCandidates.length > 0 ? nextCandidates : candidates;
+        if (!routeKey && routeLayoutSource.length > 0) {
+          setRouteKey(routeLayoutSource[0].routeKey);
+          setLayoutId(routeLayoutSource[0].layoutId);
+        }
+        if (scopedRouteKey && scopedLayoutId) {
+          setRouteKey(scopedRouteKey);
+          setLayoutId(scopedLayoutId);
+          setManualRouteKey("");
+          setManualLayoutId("");
         }
       } catch (e) {
         setPaletteLoadFailed(true);
@@ -4028,6 +4225,11 @@ function PackageDesignPanel({
           ))}
         </select>
       </label>
+      {selected && (!selected.routeKey || !selected.layoutId) && (
+        <p class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          このパッケージに route / layout が未連携です。step 4.1 でパッケージ化（promote まで完了）をやり直してください。
+        </p>
+      )}
       {selected && (
         <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
           package: {selected.packageId.slice(0, 8)}…
@@ -4115,13 +4317,26 @@ export default function UiBuilderAdmin(): JSX.Element {
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const selectedPackage = packages.find((p) => p.packageId === selectedPackageId);
 
+  const reloadPackages = async (): Promise<AdminPackageRow[]> => {
+    const body = await dispatchAdminOp("ui_topology", "list_packages");
+    const data = body?.emission?.data;
+    const list = Array.isArray(data) ? data as AdminPackageRow[] : [];
+    setPackages(list);
+    return list;
+  };
+
   useEffect(() => {
-    (async () => {
-      const body = await dispatchAdminOp("ui_topology", "list_packages");
-      const data = body?.emission?.data;
-      if (Array.isArray(data)) setPackages(data as AdminPackageRow[]);
-    })();
+    reloadPackages();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "layout") reloadPackages();
+  }, [activeTab]);
+
+  const handlePackaged = (handoff: PackagedHandoff) => {
+    setSelectedPackageId(handoff.packageId);
+    reloadPackages();
+  };
 
   return (
     <main class="page-main-wide">
@@ -4151,7 +4366,9 @@ export default function UiBuilderAdmin(): JSX.Element {
       <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
 
       <div>
-        {activeTab === "bucket" && <BucketSection onNavigate={setActiveTab} />}
+        {activeTab === "bucket" && (
+          <BucketSection onNavigate={setActiveTab} onPackaged={handlePackaged} />
+        )}
         {activeTab === "css" && <CssTokenSelectorSection />}
         {activeTab === "layout" && (
           <>

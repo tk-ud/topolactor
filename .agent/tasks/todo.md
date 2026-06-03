@@ -6,6 +6,7 @@
 
 | Bundle ID | 名称 | 件数 | 主 SSOT |
 |-----------|------|------|---------|
+| `ui-topology-package-bucket-vector` | Step 4 package = bucket_item_id ベクトル | 6 | `admin-console-workflow-ssot.yaml` step 4.1 / `framework-policy.yaml` `ui_topology_tensor_persistence` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
@@ -27,6 +28,32 @@
 | `docs/registrar-admin-ui-specification.md` | **従属**（主正本にしない） |
 
 **実装サーフェス:** `frontend/routes/admin/*`, `ContentsAdmin.tsx`, `ContentsScreenDesignPanel.tsx`, `ContentsPromotionPanel.tsx`, `UiBuilderAdmin.tsx`, `UiBuilderFlowStepper.tsx`, `adminGuides.ts`, `adminUxTerms.ts`, `adminUxGuard.test.ts`, `adminMainFlow.test.ts`
+
+---
+
+## Bundle `ui-topology-package-bucket-vector`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`（step 4.1 — `component_id set` on one package）、`docs/framework-policy.yaml`（`ui_topology_tensor_persistence`）、`docs/design/db-schema.yaml`（`ui_component_package` / `ui_package_component_map` / `ui_topology_tensor`）、`articles/ui-topology-tensor.md`（relation `child_ids[]` = package_ids）
+
+**現状ギャップ（2026-06 調査）:** `PromoteBucketItemAsync` が **部品 1 件 → package 1 件**（`package_key = {routeKey}:{componentKey}:pkg`）。Step 4.1 複数選択は promote をループし **package が散在**。package に **`bucket_item_id[]`（部品の使われ方ベクトル）** が載らず、Step 4.2 の編集ルートと SSOT の「1 画面 1 package + component_id set」が一致しない。
+
+**あるべきモデル:**
+
+- `route_key` あたり **1 package**
+- package 正本: **`bucket_item_ids[]`**（staging 由来）→ promote 後 **`component_ids[]`**（`ui_package_component_map` + 任意 `order_index`）
+- **`ui_topology_tensor` 1 行**（その package の layout / wiring）
+- hub / relation 側は **`child_ids[]` = package_id[]**（使われ方の比較はベクトル化可能）
+
+**実装サーフェス:** `backend/repository/NpgsqlUiTopologyRepository.cs`、`backend/runtime/AdminRuntime.cs`、`PackageGeneratorRuntime.cs`、`backend/schema/UiTopologyContracts.cs`、`frontend/islands/UiBuilderAdmin.tsx`、`frontend/tests/*`（package generate / admin flow）
+
+**UX 暫定対応済み（本 bundle の本修正ではない）:** 4.1 ルート入力のメイン露出、4.1 後の `list_packages` 再読込・自動選択、4.2 layout 候補フォールバック — データモデル修正後に再確認すること。
+
+- [ ] **設計固定:** `package_schema_json.bucketItemIds`（または同等）と 1 route = 1 `package_key`（例 `{routeKey}:pkg`）を SSOT / db-schema に明記
+- [ ] **Backend:** `package_generator:promote_package`（`routeKey` + `bucketItemIds[]`）— 1 トランザクションで 1 package・複数 `ui_package_component_map`・1 tensor；既存単体 promote は互換または内部委譲
+- [ ] **Backend:** `generate` を全 `bucketItemIds` に対して実行してから promote（`packaging` 前提の整合）
+- [ ] **API 応答:** `PackageGenerateResponseDto` に `bucketItemIds` / `componentIds`（配列）を返し、`list_packages` / `promoted_palette` がメンバー集合を投影
+- [ ] **Frontend:** Step 4.1 複数選択 → **1 回の submit**（ループ promote 廃止）；Step 4.2 は返却 `packageId` 1 件を編集ルートに固定
+- [ ] **検証:** 統合テスト（2 bucket → 1 package、map 2 行、tensor 1 行）+ `adminUxGuard` / package generate テスト更新
 
 ---
 
@@ -85,7 +112,7 @@
 
 - [x] contents wizard 前半・列型 select・初期データ・relation・search・集計 UI
 - [x] backend `screen_data_shape` 拡張・`WIRING_TABLE_REF_NOT_FOUND`
-- [x] ui-builder catalog/CSS/wiring/apply/CI（**v0.7.2 package ルートへ再収束は未処理 bundle 参照**）
+- [x] ui-builder catalog/CSS/wiring/apply/CI（**v0.7.2 package ルート・bucket ベクトルは `ui-topology-package-bucket-vector` bundle**）
 - [x] UX 語彙・ContentsPromotionPanel ステップ表示
 
 ### `admin_visual_layout_builder`

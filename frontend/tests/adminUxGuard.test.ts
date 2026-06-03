@@ -475,6 +475,16 @@ Deno.test("emptyManifestScreenDesign: has all structured fields with correct def
   );
   assertEquals(d.displayColumns.length, 0, "displayColumns defaults to empty");
   assertEquals(
+    Array.isArray(d.aggregationColumns),
+    true,
+    "aggregationColumns must be an array",
+  );
+  assertEquals(
+    Array.isArray(d.logicalTables),
+    true,
+    "logicalTables must be an array",
+  );
+  assertEquals(
     typeof d.aggregationKey,
     "string",
     "aggregationKey must be a string",
@@ -510,15 +520,23 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
       searchTargets: ["col_a"],
       searchKeyColumns: ["col_a", "col_b"],
       aggregationKey: "col_a",
+      aggregationFunction: "sum",
+      aggregationColumns: ["col_b"],
       displayColumns: ["col_a", "col_b", "col_c"],
       aggregationSpec: null,
+      logicalTables: [{
+        tableName: "my_table",
+        columns: [{ name: "col_a", dataType: "text", nullable: true }],
+      }],
       screenOperationKind: "list",
       columns: [{ name: "col_a", dataType: "text", nullable: true }],
       relationIntents: [{
+        localTableRef: "my_table",
         joinTableRef: "other_table",
         localKey: "id",
         remoteKey: "ref_id",
       }],
+      aggregationMeasures: [{ column: "col_b", function: "sum" }],
       initialDataRows: [{ col_a: "value1" }],
     },
   ]);
@@ -526,11 +544,16 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
   assertEquals(shape.tableRef, "my_table");
   assertEquals(shape.searchKeyColumns, ["col_a", "col_b"]);
   assertEquals(shape.aggregationKey, "col_a");
+  assertEquals(shape.aggregationFunction, "sum");
+  assertEquals(shape.aggregationColumns, ["col_b"]);
   assertEquals(shape.displayColumns, ["col_a", "col_b", "col_c"]);
+  assertEquals(shape.logicalTables.length, 1);
   assertEquals(shape.columns.length, 1);
   assertEquals(shape.columns[0].name, "col_a");
   assertEquals(shape.relationIntents.length, 1);
+  assertEquals(shape.relationIntents[0].localTableRef, "my_table");
   assertEquals(shape.relationIntents[0].joinTableRef, "other_table");
+  assertEquals(shape.aggregationMeasures[0].column, "col_b");
   assertEquals(shape.initialDataRows.length, 1);
   assertEquals(shape.initialDataRows[0]["col_a"], "value1");
 });
@@ -580,7 +603,10 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
     searchKeyColumns: ["col_a"],
     aggregationSpec: null,
     aggregationKey: "col_a",
+    aggregationFunction: "avg",
+    aggregationColumns: ["col_b"],
     displayColumns: ["col_a", "col_b"],
+    logicalTables: [],
     screenOperationKind: "list",
     columns: [{ name: "col_a", dataType: "text", nullable: true }],
     relationIntents: [],
@@ -589,6 +615,7 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
   const draft = screenDesignFromBackendShape(shape, "list");
   assertEquals(draft.searchKeyColumns, ["col_a"]);
   assertEquals(draft.aggregationKey, "col_a");
+  assertEquals(draft.aggregationFunction, "avg");
   assertEquals(draft.displayColumns, ["col_a", "col_b"]);
   assertEquals(draft.columns.length, 1);
   assertEquals(draft.columns[0].name, "col_a");

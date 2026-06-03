@@ -104,11 +104,23 @@ admin_console_workflow_ssot:
             they must not be implied by the default single-page authoring submit.
         search_aggregation_display:
           may_be_same_submit_or_follow_up_submit:
-            - search key selection
-            - aggregation key and display group with sample viewing
+            - search_key_columns multi_select
+            - aggregation_group_key optional single column for sample grouping
+            - aggregation_measures multi_row column plus function pairs e.g. salary sum and salary max
+            - display_columns multi_select
+            - sample_viewing mandatory preview before save
+          structured_fields:
+            search_key_columns: items used for search operation targets
+            aggregation_key: optional group-by column for preview grouping not group by label in UX
+            aggregation_measures: array of column and function not limited to one measure
+            display_columns: columns shown in list or detail sample tables
           UX_vocabulary:
             normal_view_prohibited: [group by]
-            normal_view_preferred: [aggregation key, display group, sample viewing]
+            normal_view_preferred: [search key, aggregation key, aggregation measures, display columns, sample viewing]
+          relation_intent_step_2_5:
+            local_side: local_table_ref plus local_key column select
+            remote_side: join_table_ref plus remote_key column select
+            example: user table id column links to employee table user_id column
         fail_close:
           - unresolved topology.physical_tables table_ref mismatch must not silent_no_op
         handoff_after_success: /admin/ui-builder

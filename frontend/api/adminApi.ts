@@ -278,15 +278,28 @@ export type AdminManifestScreenColumnInput = {
   nullable: boolean;
 };
 
+export type AggregationMeasureInput = {
+  column: string;
+  function: string;
+};
+
 export type RelationIntentInput = {
+  localTableRef?: string;
   joinTableRef: string;
   localKey: string;
   remoteKey: string;
 };
 
+export type LogicalTableInput = {
+  tableName: string;
+  columns: AdminManifestScreenColumnInput[];
+};
+
 export type OperationEntityBindingInput = {
   operationKind: string;
-  entityTargetColumn: string;
+  /** @deprecated use entityTargetColumns */
+  entityTargetColumn?: string;
+  entityTargetColumns?: string[];
 };
 
 export type AdminManifestScreenDataShapeInput = {
@@ -301,8 +314,16 @@ export type AdminManifestScreenDataShapeInput = {
   aggregationSpec?: string;
   /** Structured aggregation key. "group by" must not appear in UX vocabulary. */
   aggregationKey?: string;
+  /** Aggregation function (sum, avg, max, min, count, …). @deprecated use aggregationMeasures */
+  aggregationFunction?: string;
+  /** @deprecated use aggregationMeasures */
+  aggregationColumns?: string[];
+  /** Multiple aggregation measures (column + function). */
+  aggregationMeasures?: AggregationMeasureInput[];
   /** Structured display columns. */
   displayColumns?: string[];
+  /** Step 2 logical tables (multiple per manifest). */
+  logicalTables?: LogicalTableInput[];
   columns?: AdminManifestScreenColumnInput[];
   /** Primary kind for dispatcher refresh (first of screenOperationKinds when set). */
   screenOperationKind?: string;

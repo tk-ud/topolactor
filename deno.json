@@ -1,7 +1,7 @@
 {
   "nodeModulesDir": "auto",
   "tasks": {
-    "dev": "deno run -A --env-file=frontend/.env --watch=frontend/static/,frontend/routes/,frontend/islands/ frontend/dev.ts",
+    "dev": "deno run -A --env-file=frontend/.env frontend/dev.ts",
     "build": "deno run -A --env-file=frontend/.env frontend/dev.ts build",
     "start": "deno run -A --env-file=frontend/.env frontend/main.ts",
     "preview": "deno run -A --env-file=frontend/.env frontend/main.ts"

@@ -1,5 +1,18 @@
 import type { ScreenOperationKind } from "../runtime/screenAuthoringIntent.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
+import {
+  normalizeAggregationMeasures,
+  type AggregationMeasure,
+} from "./aggregationMeasures.ts";
+import {
+  logicalTablesFromLegacyColumns,
+  normalizeLogicalTables,
+  normalizeRelationKeyColumn,
+  primaryTableColumns,
+  qualifyScreenDesignColumnKeys,
+} from "./manifestLogicalTables.ts";
+
+export type { AggregationMeasure };
 
 export type ManifestScreenColumnDraft = {
   name: string;
@@ -7,17 +20,24 @@ export type ManifestScreenColumnDraft = {
   nullable: boolean;
 };
 
-/** Structured relation/join intent for draft data-shape only. admin/manifests owns created-manifest relations. */
+/** Step 2 logical table (SSOT: multiple tables per manifest). */
+export type LogicalTableDraft = {
+  tableName: string;
+  columns: ManifestScreenColumnDraft[];
+};
+
+/** Structured relation/join intent: local table.column → remote table.column */
 export type RelationIntentDraft = {
-  joinTableRef: string;
+  localTableRef: string;
   localKey: string;
+  joinTableRef: string;
   remoteKey: string;
 };
 
-/** Per-operation entity target at event time (SSOT step 3). */
+/** Per-operation entity targets at event time (SSOT step 3, multi-select). */
 export type OperationEntityBindingDraft = {
   operationKind: ScreenOperationKind;
-  entityTargetColumn: string;
+  entityTargetColumns: string[];
 };
 
 /** Initial data row as key-value record intent. No direct DB write — stored as topology extension intent. */
@@ -42,6 +62,15 @@ export type ManifestScreenDesignDraft = {
   aggregationKey: string;
   /** Structured display columns (normal-view multi-select). */
   displayColumns: string[];
+  /** Multiple measures e.g. salary+sum, salary+max (SSOT step 3). */
+  aggregationMeasures: AggregationMeasure[];
+  /** @deprecated use aggregationMeasures */
+  aggregationFunction: string;
+  /** @deprecated use aggregationMeasures */
+  aggregationColumns: string[];
+  /** Step 2: one or more logical tables. */
+  logicalTables: LogicalTableDraft[];
+  /** @deprecated flat columns — mirrors primary logical table for compat */
   columns: ManifestScreenColumnDraft[];
   /** Structured relation/join intents for this draft's data-shape only. */
   relationIntents: RelationIntentDraft[];
@@ -67,6 +96,12 @@ export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   aggregationSpec: "",
   aggregationKey: "",
   displayColumns: [],
+  aggregationMeasures: [],
+  aggregationColumns: [],
+  aggregationFunction: "",
+  logicalTables: logicalTablesFromLegacyColumns([
+    { name: "", dataType: "text", nullable: true },
+  ]),
   columns: [{ name: "", dataType: "text", nullable: true }],
   relationIntents: [],
   operationEntityBindings: [],
@@ -94,7 +129,7 @@ export function loadManifestScreenDesignLocal(
   const kinds = Array.isArray(entry.operationKinds) && entry.operationKinds.length > 0
     ? entry.operationKinds
     : [opKind];
-  return {
+  const draft: ManifestScreenDesignDraft = {
     ...emptyManifestScreenDesign(),
     ...entry,
     operationKind: opKind,
@@ -107,15 +142,62 @@ export function loadManifestScreenDesignLocal(
     displayColumns: Array.isArray(entry.displayColumns)
       ? entry.displayColumns
       : [],
-    relationIntents: Array.isArray(entry.relationIntents)
-      ? entry.relationIntents
+    aggregationColumns: Array.isArray(entry.aggregationColumns)
+      ? entry.aggregationColumns
       : [],
+    aggregationFunction: typeof entry.aggregationFunction === "string"
+      ? entry.aggregationFunction
+      : "",
+    logicalTables: normalizeLogicalTables(
+      Array.isArray(entry.logicalTables) ? entry.logicalTables : undefined,
+      entry.columns,
+    ),
+    columns: primaryTableColumns(
+      normalizeLogicalTables(
+        Array.isArray(entry.logicalTables) ? entry.logicalTables : undefined,
+        entry.columns,
+      ),
+    ),
+    relationIntents: Array.isArray(entry.relationIntents)
+      ? entry.relationIntents.map(normalizeRelationIntent)
+      : [],
+    aggregationMeasures: normalizeAggregationMeasures({
+      aggregationMeasures: entry.aggregationMeasures,
+      aggregationFunction: entry.aggregationFunction,
+      aggregationColumns: entry.aggregationColumns,
+    }),
     initialDataRows: Array.isArray(entry.initialDataRows)
       ? entry.initialDataRows
       : [],
     operationEntityBindings: Array.isArray(entry.operationEntityBindings)
-      ? entry.operationEntityBindings
+      ? entry.operationEntityBindings.map(normalizeOperationEntityBinding)
       : [],
+  };
+  return qualifyScreenDesignColumnKeys(draft);
+}
+
+function normalizeRelationIntent(
+  r: RelationIntentDraft & { localTableRef?: string },
+): RelationIntentDraft {
+  return {
+    localTableRef: r.localTableRef ?? "",
+    joinTableRef: r.joinTableRef ?? "",
+    localKey: normalizeRelationKeyColumn(r.localKey ?? ""),
+    remoteKey: normalizeRelationKeyColumn(r.remoteKey ?? ""),
+  };
+}
+
+function normalizeOperationEntityBinding(
+  b: OperationEntityBindingDraft & { entityTargetColumn?: string },
+): OperationEntityBindingDraft {
+  const cols = Array.isArray(b.entityTargetColumns) && b.entityTargetColumns.length > 0
+    ? b.entityTargetColumns
+    : typeof b.entityTargetColumn === "string" && b.entityTargetColumn.trim()
+    ? [b.entityTargetColumn.trim()]
+    : [];
+  return {
+    operationKind: b.operationKind,
+    entityTargetColumns: cols,
   };
 }
 
@@ -144,7 +226,7 @@ export function screenDesignFromBackendShape(
       shape.screenOperationKinds.length > 0
     ? shape.screenOperationKinds as ScreenOperationKind[]
     : [(shape.screenOperationKind as ScreenOperationKind) ?? operationKind];
-  return {
+  return qualifyScreenDesignColumnKeys({
     screenLabel: shape.userFacingTopologyLabel ?? "",
     operationKind: kinds[0],
     operationKinds: kinds,
@@ -159,22 +241,45 @@ export function screenDesignFromBackendShape(
     displayColumns: Array.isArray(shape.displayColumns)
       ? shape.displayColumns
       : [],
-    columns: shape.columns && shape.columns.length > 0
-      ? shape.columns
-      : [{ name: "", dataType: "text", nullable: true }],
+    aggregationColumns: Array.isArray(shape.aggregationColumns)
+      ? shape.aggregationColumns
+      : [],
+    aggregationFunction: shape.aggregationFunction ?? "",
+    aggregationMeasures: normalizeAggregationMeasures({
+      aggregationMeasures: shape.aggregationMeasures,
+      aggregationFunction: shape.aggregationFunction,
+      aggregationColumns: shape.aggregationColumns,
+    }),
+    logicalTables: normalizeLogicalTables(shape.logicalTables, shape.columns),
+    columns: primaryTableColumns(
+      normalizeLogicalTables(shape.logicalTables, shape.columns),
+    ),
     relationIntents: Array.isArray(shape.relationIntents)
-      ? shape.relationIntents
+      ? shape.relationIntents.map((r) => normalizeRelationIntent({
+        localTableRef: r.localTableRef ?? "",
+        joinTableRef: r.joinTableRef,
+        localKey: r.localKey,
+        remoteKey: r.remoteKey,
+      }))
       : [],
     operationEntityBindings: Array.isArray(shape.operationEntityBindings)
-      ? shape.operationEntityBindings.map((b) => ({
-        operationKind: (b.operationKind as ScreenOperationKind) ?? "list",
-        entityTargetColumn: b.entityTargetColumn ?? "",
-      }))
+      ? shape.operationEntityBindings.map((b) => {
+        const legacy = b.entityTargetColumn?.trim();
+        const cols = Array.isArray(b.entityTargetColumns) && b.entityTargetColumns.length > 0
+          ? b.entityTargetColumns
+          : legacy
+          ? [legacy]
+          : [];
+        return {
+          operationKind: (b.operationKind as ScreenOperationKind) ?? "list",
+          entityTargetColumns: cols,
+        };
+      })
       : [],
     initialDataRows: Array.isArray(shape.initialDataRows)
       ? shape.initialDataRows
       : [],
-  };
+  });
 }
 
 export function parseSearchTargets(raw: string): string[] {

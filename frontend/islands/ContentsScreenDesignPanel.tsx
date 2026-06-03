@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   type AdminManifestDetail,
@@ -9,11 +9,26 @@ import {
   listAdminManifests,
 } from "../api/adminApi.ts";
 import { AdminSubmitStatus } from "../components/AdminSubmitStatus.tsx";
+import ContentsAggregationMeasuresEditor from "../components/ContentsAggregationMeasuresEditor.tsx";
+import ContentsStepCompletionBanner from "../components/ContentsStepCompletionBanner.tsx";
 import ContentsPipelineStepper, {
   type ContentsPipelineStep,
 } from "../components/ContentsPipelineStepper.tsx";
+import ContentsStep3FieldMatrix from "../components/ContentsStep3FieldMatrix.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
+import { formatMeasureLabel } from "../lib/aggregationMeasures.ts";
+import {
+  normalizeRelationKeyColumn,
+  relationKeyColumnOptionsForTableRef,
+  defaultLocalTableRef,
+  emptyLogicalTable,
+  qualifiedColumnKey,
+  qualifiedColumnsFromLogicalTables,
+  qualifyScreenDesignColumnKeys,
+  namedLogicalTableRefs,
+  primaryTableColumns,
+} from "../lib/manifestLogicalTables.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   initialAdminSubmitStatus,
@@ -32,6 +47,7 @@ import {
   emptyManifestScreenDesign,
   loadManifestScreenDesignLocal,
   MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
+  type LogicalTableDraft,
   type ManifestScreenDesignDraft,
   parseSearchTargets,
   type RelationIntentDraft,
@@ -44,37 +60,59 @@ import {
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
+  UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
-  UX_FIELD_OPERATION_ENTITY,
   UX_FIELD_SAMPLE_VIEWING,
   UX_FIELD_SEARCH_KEY,
   UX_FIELD_TABLE_REF,
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
+  UX_UI_BUILDER,
 } from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
 type DraftSource = "none" | "local" | "backend" | "merged";
 
 /** Sample preview: groups rows by aggregation key when set. */
+function computeMeasure(
+  values: number[],
+  fn: string,
+): number | null {
+  if (values.length === 0) return null;
+  switch (fn) {
+    case "sum":
+      return values.reduce((a, b) => a + b, 0);
+    case "avg":
+      return values.reduce((a, b) => a + b, 0) / values.length;
+    case "max":
+      return Math.max(...values);
+    case "min":
+      return Math.min(...values);
+    case "count":
+      return values.length;
+    default:
+      return null;
+  }
+}
+
 function SamplePreviewPanel({
   columns,
   aggregationKey,
+  aggregationMeasures,
   displayColumns,
   initialDataRows,
 }: {
   columns: { name: string; dataType: string }[];
   aggregationKey: string;
+  aggregationMeasures: { column: string; function: string }[];
   displayColumns: string[];
   initialDataRows: Record<string, string>[];
 }): JSX.Element {
-  const activeCols = displayColumns.length > 0
-    ? displayColumns
-    : columns.map((c) => c.name).filter(Boolean);
+  const activeCols = displayColumns;
   const hasRows = initialDataRows.length > 0;
 
   const groups = new Map<string, Record<string, string>[]>();
@@ -121,12 +159,47 @@ function SamplePreviewPanel({
           <span class="font-mono">{aggregationKey}</span>
         </p>
       )}
-      {activeCols.length > 0 && (
+      {aggregationMeasures.length > 0 && (
         <p class="mb-1 text-slate-500">
-          {UX_FIELD_DISPLAY_COLUMNS}:{" "}
-          <span class="font-mono">{activeCols.join(", ")}</span>
+          {UX_FIELD_AGGREGATION_MEASURES}:{" "}
+          <span class="font-mono">
+            {aggregationMeasures.map(formatMeasureLabel).join(", ")}
+          </span>
         </p>
       )}
+      {aggregationMeasures.length > 0 && hasRows && (
+        <ul class="mb-2 list-inside list-disc text-slate-600">
+          {(aggregationKey
+            ? [...groups.entries()]
+            : [["(全体)", initialDataRows] as const]
+          ).map(([groupKey, rows]) =>
+            aggregationMeasures.map((m) => {
+              const nums = rows
+                .map((r) => Number(r[m.column]))
+                .filter((n) => !Number.isNaN(n));
+              const val = computeMeasure(nums, m.function);
+              return (
+                <li key={`${groupKey}-${m.column}-${m.function}`}>
+                  {aggregationKey ? `${aggregationKey}=${groupKey}: ` : ""}
+                  {formatMeasureLabel(m)} = {val ?? "—"}
+                </li>
+              );
+            })
+          )}
+        </ul>
+      )}
+      {activeCols.length > 0
+        ? (
+          <p class="mb-1 text-slate-500">
+            {UX_FIELD_DISPLAY_COLUMNS}:{" "}
+            <span class="font-mono">{activeCols.join(", ")}</span>
+          </p>
+        )
+        : (
+          <p class="mb-1 italic text-slate-400">
+            {UX_FIELD_DISPLAY_COLUMNS}: 未選択（全体集計のプレビュー）
+          </p>
+        )}
       {hasRows && aggregationKey && groups.size > 0
         ? (
           <div class="mt-2 space-y-3">
@@ -140,6 +213,14 @@ function SamplePreviewPanel({
               </div>
             ))}
           </div>
+        )
+        : hasRows && activeCols.length > 0
+        ? <div class="mt-2 overflow-x-auto">{renderTable(initialDataRows)}</div>
+        : hasRows && aggregationKey
+        ? (
+          <p class="mt-1 italic text-slate-400">
+            表示列を選ばないと集計キー単位の表は出ません（全体集計は表示列なしで保存可能）
+          </p>
         )
         : hasRows
         ? <div class="mt-2 overflow-x-auto">{renderTable(initialDataRows)}</div>
@@ -184,16 +265,49 @@ export default function ContentsScreenDesignPanel({
     initialAdminSubmitStatus(),
   );
   const [loading, setLoading] = useState(false);
-  const [nextLink, setNextLink] = useState<{ href: string; label: string } | null>(
-    null,
-  );
+  const [completedThroughStep, setCompletedThroughStep] = useState<
+    ContentsPipelineStep | null
+  >(null);
+  const [showStep3Completion, setShowStep3Completion] = useState(false);
+  const step3CompletionRef = useRef<HTMLDivElement>(null);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showAdvancedAggregation, setShowAdvancedAggregation] = useState(false);
   const { confirm, ConfirmDialogHost } = useConfirm();
+  const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
+
+  const loadManifestLabels = async (items: AdminManifestListItem[]) => {
+    const labels: Record<string, string> = {};
+    await Promise.all(
+      items.map(async (item) => {
+        const stored = getStoredScreenLabel(item.manifestId);
+        if (stored) {
+          labels[item.manifestId] = stored;
+          return;
+        }
+        const detail = await getAdminManifest(item.manifestId);
+        if (!detail) return;
+        const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
+        const label = shape.userFacingTopologyLabel?.trim();
+        if (label) labels[item.manifestId] = label;
+      }),
+    );
+    setManifestLabels(labels);
+  };
 
   const loadManifests = async () => {
     const m = await listAdminManifests("draft");
-    if (m) onManifestsChange(m);
+    if (m) {
+      onManifestsChange(m);
+      await loadManifestLabels(m);
+    }
+  };
+
+  const draftOptionLabel = (m: AdminManifestListItem, index: number): string => {
+    const label = manifestLabels[m.manifestId] ??
+      getStoredScreenLabel(m.manifestId);
+    const status = UX_STATUS_LABELS[m.status] ?? m.status;
+    if (label) return `${label} [${status}]`;
+    return `下書き ${index + 1} [${status}]`;
   };
 
   const loadSelectedManifest = async (manifestId: string) => {
@@ -229,11 +343,11 @@ export default function ContentsScreenDesignPanel({
 
     const local = loadManifestScreenDesignLocal(manifestId);
     if (local) {
-      setDesign({
+      setDesign(qualifyScreenDesignColumnKeys({
         ...fromBackend,
         ...local,
         screenLabel: local.screenLabel || fromBackend.screenLabel,
-      });
+      }));
       setDraftSource("merged");
     } else {
       setDesign(fromBackend);
@@ -252,10 +366,20 @@ export default function ContentsScreenDesignPanel({
       setDesign(emptyManifestScreenDesign());
       setBackendDetail(null);
       setDraftSource("none");
+      setCompletedThroughStep(null);
+      setShowStep3Completion(false);
       return;
     }
     loadSelectedManifest(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!showStep3Completion) return;
+    step3CompletionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [showStep3Completion]);
 
   const patchDesign = (patch: Partial<ManifestScreenDesignDraft>) => {
     setDesign((prev) => {
@@ -283,14 +407,23 @@ export default function ContentsScreenDesignPanel({
         successMessage: "Step 1: 空の下書きを登録しました。",
         errorMessage: "下書きを作成できませんでした。",
         onSuccess: async (result) => {
+          const label = design.screenLabel.trim();
           setSelectedId(result.manifestId);
-          setStoredScreenLabel(result.manifestId, design.screenLabel.trim());
+          setStoredScreenLabel(result.manifestId, label);
           saveManifestScreenDesignLocal(result.manifestId, design);
+          if (label) {
+            await assignAdminManifestScreenDataShape({
+              manifestId: result.manifestId,
+              userFacingTopologyLabel: label,
+            });
+          }
+          setManifestLabels((prev) => ({ ...prev, [result.manifestId]: label }));
           onManifestsReload();
           await loadManifests();
           await loadSelectedManifest(result.manifestId);
           setActiveStep(2);
-          setNextLink(null);
+          setCompletedThroughStep(1);
+          setShowStep3Completion(false);
         },
         run: async () => {
           const draftInput = buildStep1DraftInput(null);
@@ -314,6 +447,7 @@ export default function ContentsScreenDesignPanel({
       return;
     }
     setErrors([]);
+    setShowStep3Completion(false);
     const shape = backendDetail
       ? extractScreenDataShapeFromTopology(backendDetail.topologyRawJson)
       : null;
@@ -324,19 +458,33 @@ export default function ContentsScreenDesignPanel({
       {
         confirmFn: confirm,
         confirmKind: "save",
-        successMessage: `Step ${step} を保存しました。`,
+        successMessage: step === 3
+          ? "Step 3 を保存しました。Step 1〜3 が完了しました。"
+          : step === 2.5
+          ? "Step 2.5 を保存しました。続けて Step 3 を設定してください。"
+          : step === 2
+          ? "Step 2 を保存しました。続けて Step 2.5（関連）へ進みます。"
+          : `Step ${step} を保存しました。`,
         onSuccess: async () => {
           if (design.screenLabel.trim()) {
-            setStoredScreenLabel(selectedId, design.screenLabel.trim());
+            const label = design.screenLabel.trim();
+            setStoredScreenLabel(selectedId, label);
+            setManifestLabels((prev) => ({ ...prev, [selectedId]: label }));
           }
           clearManifestScreenDesignLocal(selectedId);
           onManifestsReload();
           await loadManifests();
           await loadSelectedManifest(selectedId);
-          if (step === 2) setActiveStep(2.5);
-          else if (step === 2.5) setActiveStep(3);
-          else if (step === 3) {
-            setNextLink({ href: "/admin/ui-builder", label: "画面づくり (step 4) へ" });
+          setDraftSource("backend");
+          if (step === 2) {
+            setCompletedThroughStep(2);
+            setActiveStep(2.5);
+          } else if (step === 2.5) {
+            setCompletedThroughStep(2.5);
+            setActiveStep(3);
+          } else if (step === 3) {
+            setCompletedThroughStep(3);
+            setShowStep3Completion(true);
           }
         },
         run: async () => {
@@ -361,7 +509,7 @@ export default function ContentsScreenDesignPanel({
       ? design.operationEntityBindings.filter((b) => b.operationKind !== kind)
       : [
         ...design.operationEntityBindings,
-        { operationKind: kind, entityTargetColumn: "" },
+        { operationKind: kind, entityTargetColumns: [] },
       ];
     patchDesign({
       operationKinds: next.length > 0 ? next : ["list"],
@@ -370,18 +518,25 @@ export default function ContentsScreenDesignPanel({
     });
   };
 
-  const patchEntityBinding = (
+  const toggleEntityBindingColumn = (
     kind: ScreenOperationKind,
-    entityTargetColumn: string,
+    colName: string,
   ) => {
     const existing = design.operationEntityBindings.find((b) =>
       b.operationKind === kind
     );
+    const current = existing?.entityTargetColumns ?? [];
+    const nextCols = current.includes(colName)
+      ? current.filter((c) => c !== colName)
+      : [...current, colName];
     const next = existing
       ? design.operationEntityBindings.map((b) =>
-        b.operationKind === kind ? { ...b, entityTargetColumn } : b
+        b.operationKind === kind ? { ...b, entityTargetColumns: nextCols } : b
       )
-      : [...design.operationEntityBindings, { operationKind: kind, entityTargetColumn }];
+      : [...design.operationEntityBindings, {
+        operationKind: kind,
+        entityTargetColumns: nextCols,
+      }];
     patchDesign({ operationEntityBindings: next });
   };
 
@@ -392,8 +547,10 @@ export default function ContentsScreenDesignPanel({
     merged: "保存済み + この端末の未反映変更",
   }[draftSource];
 
-  /** Columns with non-empty names for structured selection UIs. */
-  const namedColumns = design.columns.filter((c) => c.name.trim());
+  /** Step 3 keys: `tableRef.columnName` when table is named (e.g. employees.name). */
+  const qualifiedColumns = qualifiedColumnsFromLogicalTables(design.logicalTables);
+  const columnKeys = qualifiedColumns.map((q) => q.key);
+  const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
 
   const toggleSearchKey = (colName: string) => {
     const next = design.searchKeyColumns.includes(colName)
@@ -409,14 +566,103 @@ export default function ContentsScreenDesignPanel({
     patchDesign({ displayColumns: next });
   };
 
+  const patchLogicalTables = (logicalTables: LogicalTableDraft[]) => {
+    patchDesign(qualifyScreenDesignColumnKeys({
+      ...design,
+      logicalTables,
+      columns: primaryTableColumns(logicalTables),
+    }));
+  };
+
+  const patchLogicalTable = (
+    tableIndex: number,
+    patch: Partial<LogicalTableDraft>,
+  ) => {
+    const next = design.logicalTables.map((t, i) =>
+      i === tableIndex ? { ...t, ...patch } : t
+    );
+    patchLogicalTables(next);
+  };
+
+  const patchLogicalTableColumn = (
+    tableIndex: number,
+    colIndex: number,
+    patch: Partial<ManifestScreenDesignDraft["columns"][number]>,
+  ) => {
+    const table = design.logicalTables[tableIndex];
+    if (!table) return;
+    const columns = table.columns.map((c, i) =>
+      i === colIndex ? { ...c, ...patch } : c
+    );
+    patchLogicalTable(tableIndex, { columns });
+  };
+
+  const addLogicalTable = () => {
+    patchLogicalTables([...design.logicalTables, emptyLogicalTable()]);
+  };
+
+  const removeLogicalTable = (tableIndex: number) => {
+    const next = design.logicalTables.filter((_, i) => i !== tableIndex);
+    patchLogicalTables(next.length > 0 ? next : [emptyLogicalTable()]);
+  };
+
+  const removeLogicalTableColumn = (tableIndex: number, colIndex: number) => {
+    const table = design.logicalTables[tableIndex];
+    if (!table || table.columns.length <= 1) return;
+    const removedName = table.columns[colIndex]?.name.trim();
+    const columns = table.columns.filter((_, i) => i !== colIndex);
+    const nextTables = design.logicalTables.map((t, i) =>
+      i === tableIndex ? { ...t, columns } : t
+    );
+    const patch: Partial<ManifestScreenDesignDraft> = {
+      logicalTables: nextTables,
+      columns: primaryTableColumns(nextTables),
+    };
+    if (removedName) {
+      const tableRef = table.tableName.trim();
+      const removedKey = qualifiedColumnKey(tableRef, removedName);
+      const drop = (k: string) =>
+        k !== removedKey && k !== removedName &&
+        !(tableRef && k === `${tableRef}.${removedName}`);
+      patch.searchKeyColumns = design.searchKeyColumns.filter(drop);
+      patch.displayColumns = design.displayColumns.filter(drop);
+      patch.aggregationColumns = design.aggregationColumns.filter(drop);
+      patch.operationEntityBindings = design.operationEntityBindings.map((b) => ({
+        ...b,
+        entityTargetColumns: b.entityTargetColumns.filter(drop),
+      }));
+      patch.initialDataRows = design.initialDataRows.map((row) => {
+        const next = { ...row };
+        delete next[removedKey];
+        delete next[removedName];
+        return next;
+      });
+      if (patch.aggregationKey === removedKey || patch.aggregationKey === removedName) {
+        patch.aggregationKey = "";
+      }
+      patch.aggregationMeasures = design.aggregationMeasures.filter((m) =>
+        drop(m.column)
+      );
+    }
+    patchDesign(patch);
+  };
+
   const addRelationIntent = () => {
     patchDesign({
       relationIntents: [
         ...design.relationIntents,
-        { joinTableRef: "", localKey: "", remoteKey: "" },
+        {
+          localTableRef: defaultLocalTableRef(design.logicalTables, design.tableRef),
+          joinTableRef: "",
+          localKey: "",
+          remoteKey: "",
+        },
       ],
     });
   };
+
+  const relationKeyOptionsFor = (tableRef: string) =>
+    relationKeyColumnOptionsForTableRef(design.logicalTables, tableRef);
 
   const patchRelationIntent = (
     index: number,
@@ -436,19 +682,19 @@ export default function ContentsScreenDesignPanel({
 
   const addInitialDataRow = () => {
     const emptyRow: Record<string, string> = {};
-    namedColumns.forEach((c) => {
-      emptyRow[c.name] = "";
+    qualifiedColumns.forEach((q) => {
+      emptyRow[q.key] = "";
     });
     patchDesign({ initialDataRows: [...design.initialDataRows, emptyRow] });
   };
 
   const patchInitialDataRow = (
     rowIndex: number,
-    colName: string,
+    colKey: string,
     value: string,
   ) => {
     const next = design.initialDataRows.map((row, i) =>
-      i === rowIndex ? { ...row, [colName]: value } : row
+      i === rowIndex ? { ...row, [colKey]: value } : row
     );
     patchDesign({ initialDataRows: next });
   };
@@ -476,15 +722,25 @@ export default function ContentsScreenDesignPanel({
         title="入力・保存エラー"
       />
       <AdminSubmitStatus status={submitStatus} />
-      {nextLink && submitStatus.outcome === "success" && (
-        <p class="mb-3 text-sm">
-          <a href={nextLink.href} class="link font-semibold">{nextLink.label}</a>
-        </p>
+      {showStep3Completion && submitStatus.outcome === "success" && (
+        <div ref={step3CompletionRef}>
+          <ContentsStepCompletionBanner
+            title="Step 3 まで完了しました"
+            body={`「${design.screenLabel.trim() || "このページ"}」の物理割当・検索・集計の設定を保存しました。次は ${UX_UI_BUILDER} で部品とレイアウトを作成します。`}
+            primaryHref="/admin/ui-builder"
+            primaryLabel={`${UX_UI_BUILDER}（Step 4）へ進む`}
+            onDismiss={() => setShowStep3Completion(false)}
+          />
+        </div>
       )}
 
       <ContentsPipelineStepper
         activeStep={activeStep}
-        onStepChange={setActiveStep}
+        completedThroughStep={completedThroughStep}
+        onStepChange={(s) => {
+          setShowStep3Completion(false);
+          setActiveStep(s);
+        }}
       />
 
       <p class="mb-2 text-xs text-muted-xs">
@@ -561,7 +817,7 @@ export default function ContentsScreenDesignPanel({
             <option value="">— 選択 —</option>
             {manifests.map((m, index) => (
               <option key={m.manifestId} value={m.manifestId}>
-                下書き {index + 1} [{UX_STATUS_LABELS[m.status] ?? m.status}]
+                {draftOptionLabel(m, index)}
               </option>
             ))}
           </select>
@@ -605,190 +861,263 @@ export default function ContentsScreenDesignPanel({
               ))}
             </div>
           </div>
-          <div class="sm:col-span-2 mt-2 text-xs">
-            <p class="font-medium mb-1">{UX_FIELD_OPERATION_ENTITY}</p>
-            <p class="text-muted-xs mb-2">
-              各操作が実行されるときに使う項目を指定します（フォーム送信は追加のみ）。
-            </p>
+          <div class="sm:col-span-2 mt-3">
             {design.operationKinds.length === 0
-              ? <p class="italic text-slate-400">操作種別を1つ以上選択してください。</p>
+              ? (
+                <p class="text-xs italic text-slate-400">
+                  操作種別を1つ以上選択すると、下の表で検索・操作・表示を設定できます。
+                </p>
+              )
               : (
-                <div class="space-y-2">
-                  {design.operationKinds.map((kind) => {
-                    const binding = design.operationEntityBindings.find((b) =>
-                      b.operationKind === kind
-                    );
-                    return (
-                      <label key={kind} class="flex flex-wrap items-center gap-2">
-                        <span class="w-20 font-medium">
-                          {SCREEN_OPERATION_OPTIONS.find((o) => o.kind === kind)?.label ?? kind}
-                        </span>
-                        <select
-                          class="rounded border px-2 py-1 font-mono"
-                          value={binding?.entityTargetColumn ?? ""}
-                          onChange={(e) =>
-                            patchEntityBinding(
-                              kind,
-                              (e.target as HTMLSelectElement).value,
-                            )}
-                        >
-                          <option value="">— 項目 —</option>
-                          {namedColumns.map((c) => (
-                            <option key={c.name} value={c.name}>{c.name}</option>
-                          ))}
-                        </select>
-                      </label>
-                    );
-                  })}
-                </div>
+                <ContentsStep3FieldMatrix
+                  columnNames={columnKeys}
+                  operationKinds={design.operationKinds}
+                  searchKeyColumns={design.searchKeyColumns}
+                  displayColumns={design.displayColumns}
+                  operationEntityBindings={design.operationEntityBindings}
+                  onToggleSearch={toggleSearchKey}
+                  onToggleDisplay={toggleDisplayColumn}
+                  onToggleOperation={toggleEntityBindingColumn}
+                />
               )}
           </div>
         </div>
       )}
 
-      {(activeStep === 2 || activeStep === 3) && (
+      {activeStep === 2 && (
         <>
-      <h3 class="mt-4 text-xs font-semibold">表示項目の設定</h3>
-      {design.columns.map((col, index) => (
-        <div key={index} class="mt-2 grid gap-2 sm:grid-cols-3">
-          <input
-            class="rounded border px-2 py-1 text-xs font-mono"
-            placeholder="項目名"
-            value={col.name}
-            onInput={(e) => {
-              const columns = [...design.columns];
-              columns[index] = {
-                ...columns[index],
-                name: (e.target as HTMLInputElement).value,
-              };
-              patchDesign({ columns });
-            }}
-          />
-          <div>
-            <select
-              class="w-full rounded border px-2 py-1 text-xs font-mono"
-              value={COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType)
-                ? col.dataType
-                : "__advanced__"}
-              onChange={(e) => {
-                const val = (e.target as HTMLSelectElement).value;
-                const columns = [...design.columns];
-                if (val === "__advanced__") {
-                  columns[index] = { ...columns[index], dataType: "" };
-                } else {
-                  columns[index] = { ...columns[index], dataType: val };
-                }
-                patchDesign({ columns });
+      <h3 class="mt-4 text-xs font-semibold">テーブル定義（複数登録可）</h3>
+      <p class="mb-2 text-xs text-muted-xs">
+        1つの下書きに複数テーブルを登録できます。Step 2.5 の関連設定で参照先テーブル名を使います。
+      </p>
+      {design.logicalTables.map((table, tableIndex) => (
+        <div
+          key={tableIndex}
+          class="mb-4 rounded border border-slate-200 p-3"
+        >
+          <label class="mb-2 block text-xs font-semibold">
+            テーブル名
+            <input
+              class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
+              placeholder="例: employees"
+              value={table.tableName}
+              onInput={(e) =>
+                patchLogicalTable(tableIndex, {
+                  tableName: (e.target as HTMLInputElement).value,
+                })}
+            />
+          </label>
+          {table.columns.map((col, colIndex) => (
+            <div
+              key={colIndex}
+              class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-start"
+            >
+              <input
+                class="rounded border px-2 py-1 text-xs font-mono"
+                placeholder="項目名"
+                value={col.name}
+                onInput={(e) =>
+                  patchLogicalTableColumn(tableIndex, colIndex, {
+                    name: (e.target as HTMLInputElement).value,
+                  })}
+              />
+              <div>
+                <select
+                  class="w-full rounded border px-2 py-1 text-xs font-mono"
+                  value={COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType)
+                    ? col.dataType
+                    : "__advanced__"}
+                  onChange={(e) => {
+                    const val = (e.target as HTMLSelectElement).value;
+                    if (val === "__advanced__") {
+                      patchLogicalTableColumn(tableIndex, colIndex, { dataType: "" });
+                    } else {
+                      patchLogicalTableColumn(tableIndex, colIndex, { dataType: val });
+                    }
+                  }}
+                >
+                  {COLUMN_TYPE_NORMAL_VIEW_OPTIONS.map((t) => (
+                    <option key={t} value={t}>
+                      {UX_COLUMN_TYPE_LABELS[t] ?? t} ({t})
+                    </option>
+                  ))}
+                  <option value="__advanced__">
+                    {UX_COLUMN_TYPE_ADVANCED_LABEL}
+                  </option>
+                </select>
+                {!COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType) && (
+                  <input
+                    class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
+                    placeholder="詳細な型名"
+                    value={col.dataType}
+                    onInput={(e) =>
+                      patchLogicalTableColumn(tableIndex, colIndex, {
+                        dataType: (e.target as HTMLInputElement).value,
+                      })}
+                  />
+                )}
+              </div>
+              <label class="flex items-center gap-2 text-xs sm:pt-1">
+                <input
+                  type="checkbox"
+                  checked={col.nullable}
+                  onChange={(e) =>
+                    patchLogicalTableColumn(tableIndex, colIndex, {
+                      nullable: (e.target as HTMLInputElement).checked,
+                    })}
+                />
+                {UX_FIELD_NULLABLE}
+              </label>
+              {table.columns.length > 1 && (
+                <button
+                  type="button"
+                  class="text-xs text-red-500 hover:text-red-700 sm:pt-1"
+                  onClick={() => removeLogicalTableColumn(tableIndex, colIndex)}
+                  aria-label={`項目 ${col.name || colIndex + 1} を削除`}
+                >
+                  削除
+                </button>
+              )}
+            </div>
+          ))}
+          <div class="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              onClick={() => {
+                const columns = [
+                  ...table.columns,
+                  { name: "", dataType: "text", nullable: true },
+                ];
+                patchLogicalTable(tableIndex, { columns });
               }}
             >
-              {COLUMN_TYPE_NORMAL_VIEW_OPTIONS.map((t) => (
-                <option key={t} value={t}>
-                  {UX_COLUMN_TYPE_LABELS[t] ?? t} ({t})
-                </option>
-              ))}
-              <option value="__advanced__">
-                {UX_COLUMN_TYPE_ADVANCED_LABEL}
-              </option>
-            </select>
-            {!COLUMN_TYPE_NORMAL_VIEW_OPTIONS.includes(col.dataType) && (
-              <input
-                class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-                placeholder="詳細な型名"
-                value={col.dataType}
-                onInput={(e) => {
-                  const columns = [...design.columns];
-                  columns[index] = {
-                    ...columns[index],
-                    dataType: (e.target as HTMLInputElement).value,
-                  };
-                  patchDesign({ columns });
-                }}
-              />
+              項目を追加
+            </button>
+            {design.logicalTables.length > 1 && (
+              <button
+                type="button"
+                class="text-xs text-red-500 hover:text-red-700"
+                onClick={() => removeLogicalTable(tableIndex)}
+              >
+                このテーブルを削除
+              </button>
             )}
           </div>
-          <label class="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={col.nullable}
-              onChange={(e) => {
-                const columns = [...design.columns];
-                columns[index] = {
-                  ...columns[index],
-                  nullable: (e.target as HTMLInputElement).checked,
-                };
-                patchDesign({ columns });
-              }}
-            />
-            {UX_FIELD_NULLABLE}
-          </label>
         </div>
       ))}
       <button
         type="button"
-        class="btn-secondary mt-2 text-xs"
-        onClick={() =>
-          patchDesign({
-            columns: [...design.columns, {
-              name: "",
-              dataType: "text",
-              nullable: true,
-            }],
-          })}
+        class="btn-secondary text-xs"
+        onClick={addLogicalTable}
       >
-        項目を追加
+        テーブルを追加
       </button>
-
         </>
+      )}
+
+      {activeStep === 3 && qualifiedColumns.length > 0 && (
+        <p class="mt-4 text-xs text-muted-xs">
+          表示項目は Step 2 で定義済み（{columnKeys.join(", ")}）。
+          変更する場合は Step 2 に戻ってください。
+        </p>
       )}
 
       {activeStep === 2.5 && (
         <>
       <h3 class="mt-4 text-xs font-semibold">{UX_FIELD_RELATION_INTENT}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        テーブル間の relationship を設定します（独立 submit）。
+        テーブルと項目のペアで接続を指定します（例: user / id → employee / user_id）。
       </p>
-      {design.relationIntents.map((rel, ri) => (
+      {design.relationIntents.map((rel, ri) => {
+        const localTable = rel.localTableRef ||
+          defaultLocalTableRef(design.logicalTables, design.tableRef);
+        const localKeyOptions = relationKeyOptionsFor(localTable);
+        const remoteKeyOptions = relationKeyOptionsFor(rel.joinTableRef);
+        return (
         <div
           key={ri}
-          class="mb-2 grid gap-2 rounded border border-slate-200 p-2 sm:grid-cols-3"
+          class="mb-2 rounded border border-slate-200 p-3 text-xs"
         >
-          <label class="text-xs">
-            参照先
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="参照テーブル名"
-              value={rel.joinTableRef}
-              onInput={(e) =>
-                patchRelationIntent(ri, {
-                  joinTableRef: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <label class="text-xs">
-            このページの照合項目
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="照合する項目名"
-              value={rel.localKey}
-              onInput={(e) =>
-                patchRelationIntent(ri, {
-                  localKey: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <label class="text-xs">
-            参照先の照合項目
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
-              placeholder="参照先の項目名"
-              value={rel.remoteKey}
-              onInput={(e) =>
-                patchRelationIntent(ri, {
-                  remoteKey: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <div class="sm:col-span-3 flex justify-end">
+          <div class="grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+            <div class="space-y-2">
+              <p class="font-semibold text-slate-600">参照元（このページ側）</p>
+              <label class="block">
+                テーブル
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={localTable}
+                  onChange={(e) => {
+                    const table = (e.target as HTMLSelectElement).value;
+                    patchRelationIntent(ri, { localTableRef: table, localKey: "" });
+                  }}
+                >
+                  <option value="">— 選択 —</option>
+                  {logicalTableRefs.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="block">
+                項目
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={normalizeRelationKeyColumn(rel.localKey)}
+                  onChange={(e) =>
+                    patchRelationIntent(ri, {
+                      localKey: (e.target as HTMLSelectElement).value,
+                    })}
+                >
+                  <option value="">— 選択 —</option>
+                  {localKeyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <p class="hidden py-2 text-center font-bold text-slate-400 sm:block">→</p>
+            <div class="space-y-2">
+              <p class="font-semibold text-slate-600">参照先</p>
+              <label class="block">
+                テーブル
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={rel.joinTableRef}
+                  onChange={(e) => {
+                    patchRelationIntent(ri, {
+                      joinTableRef: (e.target as HTMLSelectElement).value,
+                      remoteKey: "",
+                    });
+                  }}
+                >
+                  <option value="">— 選択 —</option>
+                  {logicalTableRefs.filter((n) => n !== localTable).map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </label>
+              <label class="block">
+                項目
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono"
+                  value={normalizeRelationKeyColumn(rel.remoteKey)}
+                  onChange={(e) =>
+                    patchRelationIntent(ri, {
+                      remoteKey: (e.target as HTMLSelectElement).value,
+                    })}
+                >
+                  <option value="">— 選択 —</option>
+                  {remoteKeyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+          <p class="mt-2 font-mono text-[10px] text-slate-500">
+            {localTable || "?"}.{rel.localKey || "?"} → {rel.joinTableRef || "?"}.{rel.remoteKey || "?"}
+          </p>
+          <div class="mt-2 flex justify-end">
             <button
               type="button"
               class="text-xs text-red-500 hover:text-red-700"
@@ -798,7 +1127,8 @@ export default function ContentsScreenDesignPanel({
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
       <button
         type="button"
         class="btn-secondary text-xs"
@@ -815,7 +1145,7 @@ export default function ContentsScreenDesignPanel({
       <p class="mb-2 text-xs text-muted-xs">
         初期表示のデータ候補（add のみの既定セマンティクス）。
       </p>
-      {namedColumns.length === 0
+      {qualifiedColumns.length === 0
         ? (
           <p class="text-xs text-slate-400 italic">
             表示項目を設定してから初期データを追加してください（step 2）。
@@ -828,12 +1158,12 @@ export default function ContentsScreenDesignPanel({
                 <table class="min-w-full text-left text-xs">
                   <thead>
                     <tr>
-                      {namedColumns.map((c) => (
+                      {qualifiedColumns.map((q) => (
                         <th
-                          key={c.name}
+                          key={q.key}
                           class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
                         >
-                          {c.name}
+                          {q.key}
                         </th>
                       ))}
                       <th class="border-b px-2 py-1 bg-slate-50" />
@@ -842,15 +1172,15 @@ export default function ContentsScreenDesignPanel({
                   <tbody>
                     {design.initialDataRows.map((row, ri) => (
                       <tr key={ri} class="border-b last:border-0">
-                        {namedColumns.map((c) => (
-                          <td key={c.name} class="px-1 py-1">
+                        {qualifiedColumns.map((q) => (
+                          <td key={q.key} class="px-1 py-1">
                             <input
                               class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                              value={row[c.name] ?? ""}
+                              value={row[q.key] ?? ""}
                               onInput={(e) =>
                                 patchInitialDataRow(
                                   ri,
-                                  c.name,
+                                  q.key,
                                   (e.target as HTMLInputElement).value,
                                 )}
                             />
@@ -882,38 +1212,23 @@ export default function ContentsScreenDesignPanel({
           </>
         )}
 
-      <h3 class="mt-5 text-xs font-semibold">{UX_FIELD_SEARCH_KEY}</h3>
+      <h3 class="mt-5 text-xs font-semibold">集計・サンプル</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        検索に使う項目を選択してください（複数選択可）。
+        {UX_FIELD_SEARCH_KEY}・{UX_FIELD_DISPLAY_COLUMNS} は上の表で設定済みです。ここで集計式を複数登録できます。
       </p>
-      {namedColumns.length === 0
-        ? (
-          <p class="text-xs text-slate-400 italic">
-            表示項目を設定してから検索キーを選択してください。
-          </p>
-        )
-        : (
-          <div class="flex flex-wrap gap-2">
-            {namedColumns.map((c) => (
-              <label key={c.name} class="flex items-center gap-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={design.searchKeyColumns.includes(c.name)}
-                  onChange={() =>
-                    toggleSearchKey(c.name)}
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        )}
-      {/* Advanced: raw comma-separated input in disclosure */}
+      <ContentsAggregationMeasuresEditor
+        columnNames={columnKeys}
+        aggregationKey={design.aggregationKey}
+        measures={design.aggregationMeasures}
+        onAggregationKeyChange={(aggregationKey) => patchDesign({ aggregationKey })}
+        onMeasuresChange={(aggregationMeasures) => patchDesign({ aggregationMeasures })}
+      />
       <details class="mt-2">
         <summary class="cursor-pointer text-xs text-slate-500">
-          詳細 / raw 入力
+          詳細 / raw 入力（検索・集計）
         </summary>
         <label class="mt-1 block text-xs text-slate-500">
-          検索対象（カンマ区切り、上のチェックと独立）
+          検索対象（カンマ区切り）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             value={design.searchTargets}
@@ -924,51 +1239,6 @@ export default function ContentsScreenDesignPanel({
           />
         </label>
       </details>
-
-      <h3 class="mt-5 text-xs font-semibold">
-        {UX_FIELD_AGGREGATION_KEY} / {UX_FIELD_DISPLAY_COLUMNS}
-      </h3>
-      <p class="mb-2 text-xs text-muted-xs">
-        集計・表示の設定をします。サンプル表示で確認してから保存してください。
-      </p>
-      <div class="grid gap-2 sm:grid-cols-2">
-        <label class="text-xs">
-          {UX_FIELD_AGGREGATION_KEY}
-          <select
-            class="mt-1 w-full rounded border px-2 py-1 text-xs"
-            value={design.aggregationKey}
-            onChange={(e) =>
-              patchDesign({
-                aggregationKey: (e.target as HTMLSelectElement).value,
-              })}
-          >
-            <option value="">— なし —</option>
-            {namedColumns.map((c) => (
-              <option key={c.name} value={c.name}>{c.name}</option>
-            ))}
-          </select>
-        </label>
-        <div class="text-xs">
-          <p class="font-medium mb-1">{UX_FIELD_DISPLAY_COLUMNS}</p>
-          {namedColumns.length === 0
-            ? <p class="text-slate-400 italic">表示項目を設定してください。</p>
-            : (
-              <div class="flex flex-wrap gap-2">
-                {namedColumns.map((c) => (
-                  <label key={c.name} class="flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={design.displayColumns.includes(c.name)}
-                      onChange={() =>
-                        toggleDisplayColumn(c.name)}
-                    />
-                    {c.name}
-                  </label>
-                ))}
-              </div>
-            )}
-        </div>
-      </div>
       {/* Advanced: raw aggregationSpec in disclosure */}
       <details class="mt-2">
         <summary class="cursor-pointer text-xs text-slate-500">
@@ -989,12 +1259,28 @@ export default function ContentsScreenDesignPanel({
 
       <div class="mt-3">
         <SamplePreviewPanel
-          columns={namedColumns}
+          columns={qualifiedColumns.map((q) => ({
+            name: q.key,
+            dataType: q.column.dataType,
+          }))}
           aggregationKey={design.aggregationKey}
+          aggregationMeasures={design.aggregationMeasures}
           displayColumns={design.displayColumns}
           initialDataRows={design.initialDataRows}
         />
       </div>
+
+      {showStep3Completion && submitStatus.outcome === "success" && (
+        <div class="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <span class="font-medium">保存済み — 次は Step 4 です</span>
+          <a
+            href="/admin/ui-builder"
+            class="btn-primary text-sm no-underline"
+          >
+            {UX_UI_BUILDER}へ進む
+          </a>
+        </div>
+      )}
         </>
       )}
 

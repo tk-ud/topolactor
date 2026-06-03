@@ -2,6 +2,21 @@ import { JSX } from "preact";
 
 export type ContentsPipelineStep = 1 | 2 | 2.5 | 3;
 
+const STEP_ORDER: ContentsPipelineStep[] = [1, 2, 2.5, 3];
+
+function stepOrdinal(step: ContentsPipelineStep): number {
+  return STEP_ORDER.indexOf(step);
+}
+
+/** True when this step was saved in the current pipeline run. */
+export function isPipelineStepComplete(
+  completedThrough: ContentsPipelineStep | null,
+  step: ContentsPipelineStep,
+): boolean {
+  if (completedThrough === null) return false;
+  return stepOrdinal(step) <= stepOrdinal(completedThrough);
+}
+
 const STEPS: { id: ContentsPipelineStep; label: string; detail: string }[] = [
   {
     id: 1,
@@ -27,9 +42,12 @@ const STEPS: { id: ContentsPipelineStep; label: string; detail: string }[] = [
 
 export default function ContentsPipelineStepper({
   activeStep,
+  completedThroughStep = null,
   onStepChange,
 }: {
   activeStep: ContentsPipelineStep;
+  /** Highest step successfully saved this session (visual progress). */
+  completedThroughStep?: ContentsPipelineStep | null;
   onStepChange: (step: ContentsPipelineStep) => void;
 }): JSX.Element {
   return (
@@ -44,6 +62,7 @@ export default function ContentsPipelineStepper({
       <div class="flex flex-wrap items-start gap-2" role="list">
         {STEPS.map((step) => {
           const isActive = activeStep === step.id;
+          const isComplete = isPipelineStepComplete(completedThroughStep, step.id);
           return (
             <button
               key={String(step.id)}
@@ -52,18 +71,26 @@ export default function ContentsPipelineStepper({
               class={`rounded border px-2 py-1 text-left text-xs transition-colors ${
                 isActive
                   ? "border-blue-600 bg-blue-600 text-white"
+                  : isComplete
+                  ? "border-green-500 bg-green-100 text-green-900 hover:border-green-600"
                   : "border-blue-200 bg-white text-blue-800 hover:border-blue-400"
               }`}
               aria-current={isActive ? "step" : undefined}
               onClick={() => onStepChange(step.id)}
             >
-              <span class="font-bold">Step {step.id}</span> {step.label}
+              <span class="font-bold">
+                Step {step.id}
+                {isComplete && !isActive ? " ✓" : ""}
+              </span>{" "}
+              {step.label}
             </button>
           );
         })}
       </div>
       <p class="mt-2 text-xs text-blue-900">
-        {STEPS.find((s) => s.id === activeStep)?.detail}
+        {completedThroughStep === 3
+          ? "Step 1〜3 は保存済みです。次は画面づくり（Step 4）へ進んでください。"
+          : STEPS.find((s) => s.id === activeStep)?.detail}
       </p>
     </div>
   );

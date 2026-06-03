@@ -1,14 +1,26 @@
 /** Parse manifest topology extension entries from AdminManifestDetail.topologyRawJson */
 
+export type AggregationMeasureShape = {
+  column: string;
+  function: string;
+};
+
 export type RelationIntentShape = {
+  localTableRef: string;
   joinTableRef: string;
   localKey: string;
   remoteKey: string;
 };
 
+export type LogicalTableShape = {
+  tableName: string;
+  columns: ColumnShape[];
+};
+
 export type OperationEntityBindingShape = {
   operationKind: string;
-  entityTargetColumn: string;
+  entityTargetColumn: string | null;
+  entityTargetColumns: string[];
 };
 
 export type ColumnShape = {
@@ -25,6 +37,10 @@ export type ScreenDataShapeSummary = {
   aggregationSpec: string | null;
   aggregationKey: string | null;
   displayColumns: string[];
+  aggregationColumns: string[];
+  aggregationFunction: string | null;
+  aggregationMeasures: AggregationMeasureShape[];
+  logicalTables: LogicalTableShape[];
   screenOperationKind: string | null;
   screenOperationKinds: string[];
   userFacingTopologyLabel: string | null;
@@ -79,6 +95,38 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     const displayColumns = Array.isArray(entry.displayColumns)
       ? entry.displayColumns.filter((t): t is string => typeof t === "string")
       : [];
+    const aggregationColumns = Array.isArray(entry.aggregationColumns)
+      ? entry.aggregationColumns.filter((t): t is string => typeof t === "string")
+      : [];
+    const aggregationFunction =
+      typeof entry.aggregationFunction === "string" ? entry.aggregationFunction : null;
+    const aggregationMeasures = Array.isArray(entry.aggregationMeasures)
+      ? entry.aggregationMeasures
+          .filter((m): m is Record<string, unknown> => typeof m === "object" && m !== null)
+          .map((m) => ({
+            column: typeof m.column === "string" ? m.column : "",
+            function: typeof m.function === "string" ? m.function : "",
+          }))
+          .filter((m) => m.column && m.function)
+      : [];
+    const logicalTables = Array.isArray(entry.logicalTables)
+      ? entry.logicalTables
+          .filter((t): t is Record<string, unknown> => typeof t === "object" && t !== null)
+          .map((t) => ({
+            tableName: typeof t.tableName === "string" ? t.tableName : "",
+            columns: Array.isArray(t.columns)
+              ? t.columns
+                  .filter((c): c is Record<string, unknown> =>
+                    typeof c === "object" && c !== null
+                  )
+                  .map((c) => ({
+                    name: typeof c.name === "string" ? c.name : "",
+                    dataType: typeof c.dataType === "string" ? c.dataType : "text",
+                    nullable: typeof c.nullable === "boolean" ? c.nullable : true,
+                  }))
+              : [],
+          }))
+      : [];
     const columns = Array.isArray(entry.columns)
       ? entry.columns
           .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
@@ -92,6 +140,7 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       ? entry.relationIntents
           .filter((r): r is Record<string, unknown> => typeof r === "object" && r !== null)
           .map((r) => ({
+            localTableRef: typeof r.localTableRef === "string" ? r.localTableRef : "",
             joinTableRef: typeof r.joinTableRef === "string" ? r.joinTableRef : "",
             localKey: typeof r.localKey === "string" ? r.localKey : "",
             remoteKey: typeof r.remoteKey === "string" ? r.remoteKey : "",
@@ -100,12 +149,21 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     const operationEntityBindings = Array.isArray(entry.operationEntityBindings)
       ? entry.operationEntityBindings
           .filter((b): b is Record<string, unknown> => typeof b === "object" && b !== null)
-          .map((b) => ({
-            operationKind: typeof b.operationKind === "string" ? b.operationKind : "",
-            entityTargetColumn: typeof b.entityTargetColumn === "string"
+          .map((b) => {
+            const legacyCol = typeof b.entityTargetColumn === "string"
               ? b.entityTargetColumn
-              : "",
-          }))
+              : null;
+            const cols = Array.isArray(b.entityTargetColumns)
+              ? b.entityTargetColumns.filter((t): t is string => typeof t === "string")
+              : legacyCol
+              ? [legacyCol]
+              : [];
+            return {
+              operationKind: typeof b.operationKind === "string" ? b.operationKind : "",
+              entityTargetColumn: legacyCol,
+              entityTargetColumns: cols,
+            };
+          })
       : [];
     const initialDataRows = Array.isArray(entry.initialDataRows)
       ? entry.initialDataRows
@@ -126,6 +184,10 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       aggregationSpec,
       aggregationKey,
       displayColumns,
+      aggregationColumns,
+      aggregationFunction,
+      aggregationMeasures,
+      logicalTables,
       screenOperationKind,
       screenOperationKinds,
       userFacingTopologyLabel,
@@ -143,6 +205,10 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     aggregationSpec: null,
     aggregationKey: null,
     displayColumns: [],
+    aggregationColumns: [],
+    aggregationFunction: null,
+    aggregationMeasures: [],
+    logicalTables: [],
     screenOperationKind: null,
     screenOperationKinds: [],
     userFacingTopologyLabel: null,

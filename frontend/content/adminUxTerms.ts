@@ -66,12 +66,34 @@ export const UX_FIELD_SEARCH_KEY = "検索キー";
 export const UX_FIELD_AGGREGATION_KEY = "集計キー";
 /** 表示列（通常表示） */
 export const UX_FIELD_DISPLAY_COLUMNS = "表示列";
+/** 集計列（通常表示） */
+export const UX_FIELD_AGGREGATION_COLUMNS = "集計列";
+/** 集計関数（通常表示） */
+export const UX_FIELD_AGGREGATION_FUNCTION = "集計関数";
+/** 集計式（列＋関数の複数行） */
+export const UX_FIELD_AGGREGATION_MEASURES = "集計式";
+/** Step 3 項目の使い分け（検索・操作・表示を1表に） */
+export const UX_FIELD_STEP3_COLUMN_USAGE = "項目の使い分け";
+
+/** 集計関数候補（topology intent; JsonbManifestRuntime 系と整合） */
+export const AGGREGATION_FUNCTION_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "", label: "— なし —" },
+  { value: "sum", label: "合計 (sum)" },
+  { value: "avg", label: "平均 (avg)" },
+  { value: "max", label: "最大 (max)" },
+  { value: "min", label: "最小 (min)" },
+  { value: "count", label: "件数 (count)" },
+];
 /** サンプル表示（通常表示） */
 export const UX_FIELD_SAMPLE_VIEWING = "サンプル表示";
 /** 初期データ（通常表示） */
 export const UX_FIELD_INITIAL_DATA = "初期データ";
 /** テーブル結合意図（任意、通常表示） */
 export const UX_FIELD_RELATION_INTENT = "参照データの関連付け（任意）";
+
+/** 行 ID（主キー）— relation 項目の保存値は id、表示はこのラベル */
+export const UX_RELATION_ROW_ID_KEY = "id";
+export const UX_RELATION_ROW_ID_LABEL = "id (record id)";
 /** 操作ごとの対象項目（イベント時、通常表示） */
 export const UX_FIELD_OPERATION_ENTITY = "操作ごとの対象項目";
 

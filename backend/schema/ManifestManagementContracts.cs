@@ -84,7 +84,13 @@ public record AdminManifestScreenColumnDto(
     [property: JsonPropertyName("nullable")] bool Nullable
 );
 
+public record AdminManifestAggregationMeasureDto(
+    [property: JsonPropertyName("column")] string Column,
+    [property: JsonPropertyName("function")] string Function
+);
+
 public record AdminManifestRelationIntentDto(
+    [property: JsonPropertyName("localTableRef")] string? LocalTableRef,
     [property: JsonPropertyName("joinTableRef")] string JoinTableRef,
     [property: JsonPropertyName("localKey")] string LocalKey,
     [property: JsonPropertyName("remoteKey")] string RemoteKey
@@ -92,7 +98,13 @@ public record AdminManifestRelationIntentDto(
 
 public record AdminManifestOperationEntityBindingDto(
     [property: JsonPropertyName("operationKind")] string OperationKind,
-    [property: JsonPropertyName("entityTargetColumn")] string EntityTargetColumn
+    [property: JsonPropertyName("entityTargetColumn")] string? EntityTargetColumn,
+    [property: JsonPropertyName("entityTargetColumns")] IReadOnlyList<string>? EntityTargetColumns
+);
+
+public record AdminManifestLogicalTableDto(
+    [property: JsonPropertyName("tableName")] string TableName,
+    [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto> Columns
 );
 
 public record AdminManifestAssignScreenDataShapeRequestDto(
@@ -104,7 +116,11 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("searchKeyColumns")] IReadOnlyList<string>? SearchKeyColumns,
     [property: JsonPropertyName("aggregationSpec")] string? AggregationSpec,
     [property: JsonPropertyName("aggregationKey")] string? AggregationKey,
+    [property: JsonPropertyName("aggregationFunction")] string? AggregationFunction,
+    [property: JsonPropertyName("aggregationColumns")] IReadOnlyList<string>? AggregationColumns,
+    [property: JsonPropertyName("aggregationMeasures")] IReadOnlyList<AdminManifestAggregationMeasureDto>? AggregationMeasures,
     [property: JsonPropertyName("displayColumns")] IReadOnlyList<string>? DisplayColumns,
+    [property: JsonPropertyName("logicalTables")] IReadOnlyList<AdminManifestLogicalTableDto>? LogicalTables,
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
     [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind,
     [property: JsonPropertyName("screenOperationKinds")] IReadOnlyList<string>? ScreenOperationKinds,

@@ -12,7 +12,11 @@ const existing: ScreenDataShapeSummary = {
   searchKeyColumns: ["id"],
   aggregationSpec: null,
   aggregationKey: null,
+  aggregationColumns: [],
+  aggregationFunction: null,
+  aggregationMeasures: [],
   displayColumns: ["id"],
+  logicalTables: [],
   screenOperationKind: "read",
   screenOperationKinds: ["read"],
   userFacingTopologyLabel: "注文",
@@ -22,16 +26,21 @@ const existing: ScreenDataShapeSummary = {
   initialDataRows: [],
 };
 
-Deno.test("buildAssignPayloadForStep step 2: columns from draft, preserves existing relations", () => {
+Deno.test("buildAssignPayloadForStep step 2: logicalTables from draft, preserves existing relations", () => {
   const design = emptyManifestScreenDesign();
-  design.columns = [
-    { name: "sku", dataType: "text", nullable: false },
-    { name: "qty", dataType: "integer", nullable: false },
-  ];
+  design.logicalTables = [{
+    tableName: "lines",
+    columns: [
+      { name: "sku", dataType: "text", nullable: false },
+      { name: "qty", dataType: "integer", nullable: false },
+    ],
+  }];
   design.relationIntents = [];
   design.tableRef = "ignored_table";
 
   const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  assertEquals(payload.logicalTables?.length, 1);
+  assertEquals(payload.logicalTables?.[0].columns.map((c) => c.name), ["sku", "qty"]);
   assertEquals(payload.columns?.map((c) => c.name), ["sku", "qty"]);
   assertEquals(payload.relationIntents, existing.relationIntents);
   assertEquals(payload.tableRef, "orders");
@@ -56,12 +65,28 @@ Deno.test("buildAssignPayloadForStep step 3: binding fields from draft, columns 
   design.tableRef = "order_lines";
   design.operationKinds = ["create", "read"];
   design.searchKeyColumns = ["sku"];
+  design.displayColumns = [];
+  design.aggregationMeasures = [
+    { column: "qty", function: "sum" },
+    { column: "qty", function: "max" },
+  ];
+  design.operationEntityBindings = [{
+    operationKind: "create",
+    entityTargetColumns: ["sku", "qty"],
+  }];
   design.columns = [{ name: "should_not_win", dataType: "text", nullable: true }];
 
   const payload = buildAssignPayloadForStep(3, manifestId, design, existing);
   assertEquals(payload.tableRef, "order_lines");
   assertEquals(payload.screenOperationKinds, ["create", "read"]);
   assertEquals(payload.searchKeyColumns, ["sku"]);
+  assertEquals(payload.displayColumns, []);
+  assertEquals(payload.aggregationMeasures?.length, 2);
+  assertEquals(payload.aggregationMeasures?.[0].function, "sum");
+  assertEquals(
+    payload.operationEntityBindings?.[0].entityTargetColumns,
+    ["sku", "qty"],
+  );
   assertEquals(payload.columns, existing.columns);
   assertEquals(payload.relationIntents, existing.relationIntents);
 });

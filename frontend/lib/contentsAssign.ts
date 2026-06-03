@@ -1,9 +1,11 @@
 import type { AdminManifestScreenDataShapeInput } from "../api/adminApi.ts";
 import type { ManifestScreenDesignDraft } from "./manifestScreenDesign.ts";
 import { parseSearchTargets } from "./manifestScreenDesign.ts";
+import { normalizeRelationKeyColumn } from "./manifestLogicalTables.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
 import type { ContentsPipelineStep } from "../components/ContentsPipelineStepper.tsx";
 import { primaryOperationKind } from "../runtime/screenAuthoringIntent.ts";
+import { primaryTableColumns } from "./manifestLogicalTables.ts";
 
 /** Base payload from persisted backend shape (full entry replace on assign). */
 function shapePayloadFromExisting(
@@ -28,12 +30,27 @@ function shapePayloadFromExisting(
     aggregationSpec: existing.aggregationSpec || undefined,
     aggregationKey: existing.aggregationKey || undefined,
     displayColumns: existing.displayColumns,
+    aggregationColumns: existing.aggregationColumns,
+    aggregationFunction: existing.aggregationFunction || undefined,
+    aggregationMeasures: existing.aggregationMeasures.length > 0
+      ? existing.aggregationMeasures
+      : undefined,
+    logicalTables: existing.logicalTables.length > 0
+      ? existing.logicalTables
+      : undefined,
     columns: existing.columns,
     screenOperationKind: kinds[0],
     screenOperationKinds: kinds,
     userFacingTopologyLabel: existing.userFacingTopologyLabel || undefined,
     relationIntents: existing.relationIntents,
-    operationEntityBindings: existing.operationEntityBindings,
+    operationEntityBindings: existing.operationEntityBindings.map((b) => ({
+      operationKind: b.operationKind,
+      entityTargetColumns: b.entityTargetColumns.length > 0
+        ? b.entityTargetColumns
+        : b.entityTargetColumn
+        ? [b.entityTargetColumn]
+        : [],
+    })),
     initialDataRows: existing.initialDataRows,
   };
 }
@@ -51,9 +68,16 @@ export function buildAssignPayloadForStep(
   const base = shapePayloadFromExisting(manifestId, existing);
 
   if (step === 2) {
+    const logicalTables = design.logicalTables.map((t) => ({
+      tableName: t.tableName.trim(),
+      columns: t.columns.filter((c) => c.name.trim()),
+    })).filter((t) => t.columns.length > 0);
+    const legacyColumns = primaryTableColumns(design.logicalTables)
+      .filter((c) => c.name.trim());
     return {
       manifestId,
-      columns: design.columns.filter((c) => c.name.trim()),
+      logicalTables: logicalTables.length > 0 ? logicalTables : undefined,
+      columns: legacyColumns.length > 0 ? legacyColumns : undefined,
       userFacingTopologyLabel: design.screenLabel.trim() || base.userFacingTopologyLabel,
       tableRef: base.tableRef,
       dbTableName: base.dbTableName,
@@ -74,7 +98,14 @@ export function buildAssignPayloadForStep(
   if (step === 2.5) {
     return {
       ...base,
-      relationIntents: design.relationIntents.filter((r) => r.joinTableRef.trim()),
+      relationIntents: design.relationIntents
+        .filter((r) => r.joinTableRef.trim() && r.localKey.trim() && r.remoteKey.trim())
+        .map((r) => ({
+          localTableRef: r.localTableRef.trim(),
+          joinTableRef: r.joinTableRef.trim(),
+          localKey: normalizeRelationKeyColumn(r.localKey),
+          remoteKey: normalizeRelationKeyColumn(r.remoteKey),
+        })),
     };
   }
 
@@ -94,26 +125,23 @@ export function buildAssignPayloadForStep(
       : parseSearchTargets(design.searchTargets).length > 0
       ? parseSearchTargets(design.searchTargets)
       : base.searchTargets,
-    searchKeyColumns: design.searchKeyColumns.length > 0
-      ? design.searchKeyColumns
-      : parseSearchTargets(design.searchTargets).length > 0
-      ? parseSearchTargets(design.searchTargets)
-      : base.searchKeyColumns,
+    searchKeyColumns: design.searchKeyColumns,
     aggregationSpec: design.aggregationSpec || base.aggregationSpec,
-    aggregationKey: design.aggregationKey || base.aggregationKey,
-    displayColumns: design.displayColumns.length > 0
-      ? design.displayColumns
-      : base.displayColumns,
+    aggregationKey: design.aggregationKey,
+    aggregationMeasures: design.aggregationMeasures.filter((m) =>
+      m.column.trim() && m.function.trim()
+    ),
+    displayColumns: design.displayColumns,
     columns: base.columns,
+    logicalTables: base.logicalTables,
     relationIntents: base.relationIntents,
     screenOperationKind: kinds[0],
     screenOperationKinds: kinds,
     userFacingTopologyLabel: design.screenLabel.trim() || base.userFacingTopologyLabel,
-    operationEntityBindings: design.operationEntityBindings.filter((b) =>
-      b.entityTargetColumn.trim()
-    ).length > 0
-      ? design.operationEntityBindings.filter((b) => b.entityTargetColumn.trim())
-      : base.operationEntityBindings,
+    operationEntityBindings: design.operationEntityBindings.map((b) => ({
+      operationKind: b.operationKind,
+      entityTargetColumns: b.entityTargetColumns.filter((c) => c.trim()),
+    })),
     initialDataRows: design.initialDataRows.length > 0
       ? design.initialDataRows
       : base.initialDataRows,
