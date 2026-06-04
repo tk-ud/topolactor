@@ -25,7 +25,7 @@ const INTERACTIVE_ISLANDS: string[] = [
   "SeedAdmin.tsx",
   "OperationPanel.tsx",
   "AdminImport.tsx",
-  "AuthPanel.tsx",
+  "SuperAuthPanel.tsx",
   "UserDemoStepper.tsx",
   "UiBuilderAdmin.tsx",
   "ContentsPromotionPanel.tsx",
@@ -344,7 +344,7 @@ Deno.test(
   "lane: AuthPanel does not use scheduler lanes (uses authApi only)",
   async () => {
     const content = await Deno.readTextFile(
-      new URL("../islands/AuthPanel.tsx", import.meta.url),
+      new URL("../islands/SuperAuthPanel.tsx", import.meta.url),
     );
     assertFalse(
       content.includes("queueClientCommand"),

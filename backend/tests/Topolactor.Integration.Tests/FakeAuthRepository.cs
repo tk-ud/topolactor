@@ -11,7 +11,10 @@ internal sealed class FakeAuthRepository : AuthRepository
         IEnumerable<(string Username, Guid UserId, string PasswordHash, string Role, string Realm)> users)
         : base("fake")
     {
-        _users = users.ToDictionary(u => u.Username, StringComparer.OrdinalIgnoreCase);
+        _users = users.ToDictionary(
+            u => u.Username,
+            u => (u.UserId, u.PasswordHash, u.Role, u.Realm),
+            StringComparer.OrdinalIgnoreCase);
     }
 
     public override Task<AuthUserRecord?> FindUserByUsernameAsync(string username, CancellationToken ct = default)
