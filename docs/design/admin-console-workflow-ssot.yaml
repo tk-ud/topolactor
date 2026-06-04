@@ -130,6 +130,13 @@ admin_console_workflow_ssot:
             aggregation_key: optional group-by column for preview grouping not group by label in UX
             aggregation_measures: array of column and function not limited to one measure
             display_columns: columns shown in list or detail sample tables
+          progressive_disclosure_ui:
+            basic_first: [displayColumnMode, display_columns, aggregation_key, aggregation_measures, sample_viewing]
+            advanced_disclosed: [searchConditions_editor, havingConditions_editor]
+            pro_disclosed: [logicalConnector_and_or_not, raw_searchTargets, raw_aggregationSpec]
+            searchConditions_zero_state: show_add_search_condition_call_to_action_only_no_operator_or_value_inputs
+            logicalConnector_visibility: show_only_from_second_condition_onward
+            havingConditions_visibility: show_only_when_aggregation_measures_exist
           UX_vocabulary:
             normal_view_prohibited: [group by]
             normal_view_preferred: [search key, aggregation key, aggregation measures, display columns, sample viewing]

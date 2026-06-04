@@ -23,11 +23,14 @@ import {
   UX_ACTION_LABELS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
+  UX_FIELD_ADD_SEARCH_CONDITION,
+  UX_FIELD_ADVANCED_SEARCH_CONDITIONS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_DISPLAY_MODE,
   UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
+  UX_FIELD_LOGICAL_CONDITION,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
@@ -1169,4 +1172,47 @@ Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from back
   assertEquals(Array.isArray(payload.havingConditions), true, "havingConditions must be preserved");
   assertEquals((payload.havingConditions ?? []).length, 1, "one havingCondition must survive step 2 re-save");
   assertEquals(payload.displayColumnMode, "none", "displayColumnMode must survive step 2 re-save");
+});
+
+
+Deno.test("Step3 progressive disclosure: raw inputs remain disclosed", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(
+    source.includes("プロ向け / raw 入力（検索・集計）") &&
+      source.includes("value={design.searchTargets}"),
+    "raw searchTargets must stay behind a pro-facing disclosure",
+  );
+  assert(
+    source.includes("プロ向け / raw 集計仕様") &&
+      source.includes("value={design.aggregationSpec}"),
+    "raw aggregationSpec must stay behind a pro-facing disclosure",
+  );
+});
+
+Deno.test("Step3 progressive disclosure: search operator UI is not primary", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  const advancedStart = source.indexOf(`{UX_FIELD_ADVANCED_SEARCH_CONDITIONS}`);
+  const operatorStart = source.indexOf("SEARCH_OPERATOR_OPTIONS.map", advancedStart);
+  assert(advancedStart >= 0, "advanced search disclosure summary must exist");
+  assert(operatorStart > advancedStart, "search operator select must live inside the advanced disclosure block");
+  assert(
+    source.includes("design.searchConditions.length === 0") &&
+      source.includes(`{UX_FIELD_ADD_SEARCH_CONDITION}`),
+    "zero-condition state must show only the add-search-condition path before condition rows",
+  );
+  assert(
+    source.includes("{ci > 0 && (") && source.includes(`{UX_FIELD_LOGICAL_CONDITION}`),
+    "AND/OR/NOT logical connector UI must only appear from the second condition onward",
+  );
+});
+
+Deno.test("adminUxTerms: Step3 progressive disclosure labels are non-empty", () => {
+  assertEquals(UX_FIELD_ADVANCED_SEARCH_CONDITIONS, "詳細条件を設定");
+  assertEquals(UX_FIELD_ADD_SEARCH_CONDITION, "検索条件を追加");
+  assertEquals(UX_FIELD_LOGICAL_CONDITION, "論理条件");
+  assertEquals(UX_FIELD_HAVING_CONDITIONS, "集計後の絞り込み（詳細）");
 });

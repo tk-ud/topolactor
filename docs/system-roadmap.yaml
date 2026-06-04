@@ -1195,7 +1195,9 @@ system_roadmap_ssot:
         Structured relation/join intents, searchKeyColumns, aggregationKey, displayColumns,
         aggregationMeasures, searchConditions (15 operators incl. <> alias), havingConditions,
         and displayColumnMode (selected/all/none) are all persisted as screen_data_shape topology
-        extension fields; raw aggregationSpec and searchTargets are advanced-only disclosures.
+        extension fields. Step3 uses progressive disclosure: display mode/columns, aggregation key/measures,
+        and sample preview are the basic path; searchConditions and havingConditions are advanced disclosures;
+        raw aggregationSpec/searchTargets and AND/OR/NOT logical connectors are pro-facing disclosures.
         searchConditions use logicalConnector (and/or/not) joining each condition to the next.
         displayColumnMode eliminates the legacy ambiguous empty-displayColumns=all behavior.
         Initial data rows are stored as topology intent (no direct DB write).
@@ -1232,7 +1234,7 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
       evidence:
         tests:
-          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields)
+          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, progressive disclosure/raw input guards, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields)
           - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
         ci:
           - frontend-types
