@@ -26,8 +26,14 @@ Apply files in this order (this is the standard local `psql` path):
 psql -d <database> -f db/schema.sql
 psql -d <database> -f db/topology_tables.sql
 psql -d <database> -f db/promotion_tables.sql
+psql -d <database> -f db/sql_attention_logs_tables.sql
+psql -d <database> -f db/ci_attention_guidance_tables.sql
 psql -d <database> -f db/context_route_tables.sql
 psql -d <database> -f db/ui_topology_tables.sql
+psql -d <database> -f db/manifest_tables.sql
+psql -d <database> -f db/auth_tables.sql
+psql -d <database> -f db/auth_seed.sql
+psql -d <database> -f db/legacy_mirror_tables.sql
 psql -d <database> -f db/seed_empty.sql
 ```
 
@@ -35,8 +41,11 @@ psql -d <database> -f db/seed_empty.sql
 `topology_tables.sql` creates `hubs`, `entities`, `hub_relations`, `structure_maps`.
 `promotion_tables.sql` creates `usage_metrics`, `promotion_candidates`.
 `context_route_tables.sql` creates the context route recommendation runtime tables.
+`manifest_tables.sql` creates manifest draft/active storage.
+`auth_tables.sql` creates the canonical `auth.*` identity, credential, session, refresh token, login event, role, scope, and grant tables.
+`auth_seed.sql` inserts demo-only user/admin credentials into `auth.*`; credentials are not stored in topology or manifest rows.
 `seed_empty.sql` inserts the minimum default topology rows including the
-`default:entity:search` structure map and the context route recommendation policy
+`default:entity:search` structure map, the user login seed manifest, and the context route recommendation policy
 row in `function_parameters` needed for the dummy canonical flow.
 
 To also load the public scaffold demo data (fake data only, no real business data):
@@ -45,16 +54,15 @@ To also load the public scaffold demo data (fake data only, no real business dat
 psql -d <database> -f db/demo_seed.sql
 ```
 
-`demo_seed.sql` adds demo hub / entities / context tokens / demo policy, demo structure maps,
-and demo auth credentials (bcrypt-hashed) for the JWT login scaffold.
+`demo_seed.sql` adds demo hub / entities / context tokens / demo policy and demo structure maps.
 It is safe to apply after `seed_empty.sql`. All rows use `ON CONFLICT DO NOTHING`.
 See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
 
 **docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
 executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`. This file is **compose/container-path specific** (`/db/...`) and assumes `infra/docker-compose.yml` mounts `../db` to `/db`.
-It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
 For normal host-side `psql` usage, use the ordered per-file commands above (not `psql -f db/init.sql`).
-On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
+On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql`, `psql -d topolactor_demo -f db/auth_seed.sql`, and `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
 
 ---
 
@@ -66,7 +74,10 @@ On an existing volume, run `psql -d topolactor_demo -f db/demo_seed.sql` manuall
 | `topology_tables.sql` | Topology definition tables (`hub_relations`, `structure_maps`) and converged entity data tables (`hubs`, `entities`). |
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. Optional cluster/drift tables isolated at bottom. |
-| `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`. No real business data. |
+| `manifest_tables.sql` | Manifest draft/active storage and promotion lifecycle tables. |
+| `auth_tables.sql` | Canonical auth store for identities, password hashes, sessions, refresh-token hashes, login events, roles, scopes, and grants. |
+| `auth_seed.sql` | Demo-only credentials in `auth.*` for user/admin realm login. Apply after `auth_tables.sql`. |
+| `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`, admin dispatch manifests, and the user login seed manifest. No real business data. |
 | `demo_seed.sql` | Public scaffold demo seed. Fake/demo data only: hub, entities, context tokens, demo_policy, demo structure maps. Apply after `seed_empty.sql`. |
 | `init.sql` | Docker/demo initialization SSOT. Uses psql meta commands to execute all SQL files in explicit order with fail-fast behavior. |
 
@@ -90,6 +101,17 @@ here alter topology behaviour for all future canonical flow traversals.
 - `structure_maps` — binds `attractor_key` → package → schema → components; the central topology definition artifact
 - `hub_relations` — manifest-scoped hub sequence entries under `hubs.topology_manifests`
 - `function_parameters` — data-driven configuration parameters for canonical flow functions
+
+### Auth boundary tables
+
+These are not topology authoring tables. They are the credential/session security boundary.
+
+- `auth.users` — canonical user identity
+- `auth.credentials` — password hash store
+- `auth.sessions` — logical session store
+- `auth.refresh_tokens` — refresh-token hash store
+- `auth.login_events` — auth audit trail
+- `auth.roles`, `auth.scopes`, `auth.grants` — realm/role/scope binding
 
 ### Converged entity data tables
 
