@@ -31,10 +31,20 @@ internal sealed class StubExplorationPolicyTopologyRepository(string? policyJson
 /// </summary>
 internal sealed class StubSqlAttentionLogsRepository(
     IReadOnlyList<WatchChangeCandidate> candidates,
-    IReadOnlyList<HubCurrentCandidate> hubCurrentCandidates)
+    IReadOnlyList<HubCurrentCandidate> hubCurrentCandidates,
+    IReadOnlyList<Guid>? resolvedManifestIds = null,
+    IReadOnlyList<HubRelationExplorationCandidate>? hubRelationCandidates = null)
     : SqlAttentionLogsRepository(NullLogger<SqlAttentionLogsRepository>.Instance, "dummy")
 {
+    // When resolvedManifestIds is null → use the default manifest ID so exploration proceeds.
+    // When explicitly passed as [] → return empty (fail close / NoRelatedTopologyManifest).
+    private readonly IReadOnlyList<Guid> _resolvedManifestIds =
+        resolvedManifestIds ?? [Guid.Parse("00000000-0000-0000-0000-000000000001")];
+    private readonly IReadOnlyList<HubRelationExplorationCandidate> _hubRelationCandidates =
+        hubRelationCandidates ?? [];
+
     public int HubCurrentCallCount { get; private set; }
+    public int ResolveManifestsCallCount { get; private set; }
     public int WriteLogsAttentionCallCount { get; private set; }
     public IReadOnlyList<LogsAttentionWriteRequest>? LastWriteRequests { get; private set; }
 
@@ -43,6 +53,21 @@ internal sealed class StubSqlAttentionLogsRepository(
         string basisWindow,
         CancellationToken ct = default)
         => Task.FromResult(candidates);
+
+    public override Task<RelatedTopologyManifestResolution> ResolveRelatedTopologyManifestsAsync(
+        WatchChangeCandidate candidate,
+        CancellationToken ct = default)
+    {
+        ResolveManifestsCallCount++;
+        var manifests = _resolvedManifestIds;
+        return Task.FromResult(new RelatedTopologyManifestResolution(
+            candidate.CurrentId, manifests, """{"resolver":"test_stub"}"""));
+    }
+
+    public override Task<IReadOnlyList<HubRelationExplorationCandidate>> LoadHubRelationExplorationCandidatesAsync(
+        IReadOnlyList<Guid> topologyManifestIds,
+        CancellationToken ct = default) =>
+        Task.FromResult(_hubRelationCandidates);
 
     public override Task<IReadOnlyList<HubCurrentCandidate>> LoadLegacyHubCurrentSupportCacheCandidatesAsync(
         string sourceSetId,
@@ -120,6 +145,23 @@ internal static class ExplorationTestFactory
             AxisZScoreJson: """{"i":0.1,"j":0.2,"k":0.3}""",
             PhaseBasisJson: """{"basis":"hub_current"}""");
 
+    public static HubRelationExplorationCandidate HubRelationCandidate(
+        Guid? hubRelationId = null,
+        Guid? topologyManifestId = null,
+        Guid? hubId = null,
+        Guid? relatedHubId = null,
+        int sequencePosition = 1,
+        double relationScore = 0.9,
+        string relationConfigJson = "{}") =>
+        new(
+            HubRelationId: hubRelationId ?? Guid.NewGuid(),
+            TopologyManifestId: topologyManifestId ?? Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            HubId: hubId ?? Guid.NewGuid(),
+            RelatedHubId: relatedHubId ?? Guid.NewGuid(),
+            SequencePosition: sequencePosition,
+            RelationScore: relationScore,
+            RelationConfigJson: relationConfigJson);
+
     public static string ValidPolicyJson(
         int weakTopK = 1,
         int midTopK = 3,
@@ -173,11 +215,41 @@ internal static class ExplorationTestFactory
 
     public static HubAttractorExplorationRuntime CreateRuntime(
         string? policyJson,
-        IReadOnlyList<HubCurrentCandidate> hubCurrentCandidates) =>
-        new(
+        IReadOnlyList<HubCurrentCandidate> hubCurrentCandidates)
+    {
+        // Convert hub current candidates to hub relation candidates so ExploreAsync
+        // (which uses the canonical hubs.hub_relations path) returns results.
+        // When no hub currents → use default manifest ID but empty hub relations → NoHubRelations.
+        if (hubCurrentCandidates.Count == 0)
+        {
+            var emptyRepo = new StubSqlAttentionLogsRepository([], hubCurrentCandidates,
+                hubRelationCandidates: []);
+            return new(
+                NullLogger<HubAttractorExplorationRuntime>.Instance,
+                new StubExplorationPolicyTopologyRepository(policyJson),
+                emptyRepo);
+        }
+
+        // Group hub currents by AttractorKey; each group gets a deterministic manifest ID.
+        var defaultManifestId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var hubRelationCandidates = hubCurrentCandidates
+            .Select((hub, i) => new HubRelationExplorationCandidate(
+                HubRelationId: hub.HubRelationId ?? Guid.NewGuid(),
+                TopologyManifestId: defaultManifestId,
+                HubId: hub.HubId ?? Guid.NewGuid(),
+                RelatedHubId: Guid.NewGuid(),
+                SequencePosition: i + 1,
+                RelationScore: 0.9,
+                RelationConfigJson: "{}"))
+            .ToList();
+
+        var logsRepo = new StubSqlAttentionLogsRepository([], hubCurrentCandidates,
+            hubRelationCandidates: hubRelationCandidates);
+        return new(
             NullLogger<HubAttractorExplorationRuntime>.Instance,
             new StubExplorationPolicyTopologyRepository(policyJson),
-            new StubSqlAttentionLogsRepository([], hubCurrentCandidates));
+            logsRepo);
+    }
 
     public static HubAttractorExplorationRuntime CreateRuntime(
         string? policyJson,
@@ -199,7 +271,8 @@ public class HubAttractorExplorationRuntime_CanonicalBoundaryTests
     {
         var logsRepo = new StubSqlAttentionLogsRepository(
             [ExplorationTestFactory.ChangeCandidate()],
-            [ExplorationTestFactory.HubCurrent(attractorVectorJson: """{"diff_count": 10}""")]);
+            [ExplorationTestFactory.HubCurrent(attractorVectorJson: """{"diff_count": 10}""")],
+            resolvedManifestIds: []);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
@@ -220,7 +293,8 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
     {
         var logsRepo = new StubSqlAttentionLogsRepository(
             [ExplorationTestFactory.ChangeCandidate()],
-            [ExplorationTestFactory.HubCurrent()]);
+            [ExplorationTestFactory.HubCurrent()],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate()]);
 
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
@@ -238,7 +312,8 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
     {
         var logsRepo = new StubSqlAttentionLogsRepository(
             [],
-            [ExplorationTestFactory.HubCurrent()]);
+            [ExplorationTestFactory.HubCurrent()],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate()]);
 
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
@@ -248,7 +323,8 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
-        Assert.Equal(1, logsRepo.HubCurrentCallCount);
+        Assert.True(logsRepo.ResolveManifestsCallCount >= 1,
+            "ExploreAsync must call ResolveRelatedTopologyManifestsAsync");
     }
 
     [Fact]
@@ -282,7 +358,10 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
 
         var hit = Assert.Single(result.Result!.Hits);
         Assert.Equal(currentId, hit.CurrentId);
-        Assert.Equal(hubCurrent.HubCurrentId, hit.HubCurrentId);
+        // Canonical path always sets HubCurrentId to Guid.Empty (no logs.hub_current lookup)
+        Assert.Equal(Guid.Empty, hit.HubCurrentId);
+        // Hub relation ID must be populated by canonical path
+        Assert.NotEqual(Guid.Empty, hit.HubRelationId!.Value);
     }
 
     [Fact]
@@ -371,7 +450,8 @@ public class HubAttractorExplorationRuntime_NoChangeTests
     public async Task ExploreAsync_MixedCandidates_OnlyChangeDetectedCandidatesCountAsChange()
     {
         // Only one candidate has ChangeDetected=true; exploration should run
-        var logsRepo = new StubSqlAttentionLogsRepository([], [ExplorationTestFactory.HubCurrent()]);
+        var logsRepo = new StubSqlAttentionLogsRepository([], [ExplorationTestFactory.HubCurrent()],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate()]);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
@@ -567,9 +647,9 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
-        Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
-        Assert.NotNull(result.Result);
-        Assert.Empty(result.Result.Hits);
+        // With no hub current candidates, no hub relation candidates exist → NoHubRelations
+        Assert.Equal(HubAttractorExplorationStatus.NoHubRelations, result.Status);
+        Assert.Null(result.Result);
     }
 
     [Fact]
@@ -654,10 +734,10 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
         Assert.True(result.Result!.Hits.Count <= 1,
             $"weak tier topK=1 must cap hits, got {result.Result.Hits.Count}");
-        var evidence = JsonSerializer.Deserialize<JsonElement>(result.Result.Hits[0].EvidenceJson);
-        Assert.Equal("weak", evidence.GetProperty("exploration_budget_tier").GetString());
-        Assert.Equal("near_neighbor_narrow_topK", evidence.GetProperty("exploration_search_mode").GetString());
-        Assert.Equal("w_l2_norm", evidence.GetProperty("exploration_budget_gate").GetString());
+        using var phaseDoc = JsonDocument.Parse(result.Result.Hits[0].PhaseVectorJson);
+        var phaseRoot = phaseDoc.RootElement;
+        Assert.Equal("weak", phaseRoot.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("near_neighbor_narrow_topK", phaseRoot.GetProperty("exploration_search_mode").GetString());
     }
 
     [Fact]
@@ -683,12 +763,13 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
-        Assert.Contains(result.Result!.Hits, h => h.PermutationKey == "default");
-        Assert.Contains(result.Result.Hits, h => h.PermutationKey == "permutation_1");
-        var evidence = JsonSerializer.Deserialize<JsonElement>(result.Result.Hits[0].EvidenceJson);
-        Assert.Equal("high", evidence.GetProperty("exploration_budget_tier").GetString());
+        // Canonical path always uses "canonical" permutation key (no permutation expansion)
+        Assert.All(result.Result!.Hits, h => Assert.Equal("canonical", h.PermutationKey));
+        using var phaseDoc = JsonDocument.Parse(result.Result.Hits[0].PhaseVectorJson);
+        var phaseRoot = phaseDoc.RootElement;
+        Assert.Equal("high", phaseRoot.GetProperty("exploration_budget_tier").GetString());
         Assert.Equal("expanded_distance_band_or_permutation",
-            evidence.GetProperty("exploration_search_mode").GetString());
+            phaseRoot.GetProperty("exploration_search_mode").GetString());
     }
 
     [Fact]
@@ -703,16 +784,11 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             "src", "7d");
 
         var hit = Assert.Single(result.Result!.Hits);
-        var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
-        Assert.Equal("mid", evidence.GetProperty("exploration_budget_tier").GetString());
-        Assert.Equal("normal_topK", evidence.GetProperty("exploration_search_mode").GetString());
-
         using var phaseDoc = JsonDocument.Parse(hit.PhaseVectorJson);
-        var boundary = phaseDoc.RootElement.GetProperty("meaning_boundary");
-        Assert.Equal("w_l2_norm", boundary.GetProperty("exploration_budget_gate").GetString());
-        Assert.Equal("mid", boundary.GetProperty("exploration_budget_tier").GetString());
-        Assert.Equal("normal_topK", boundary.GetProperty("exploration_search_mode").GetString());
-        Assert.True(boundary.GetProperty("no_automatic_topology_mutation").GetBoolean());
+        var phaseRoot = phaseDoc.RootElement;
+        Assert.Equal("mid", phaseRoot.GetProperty("exploration_budget_tier").GetString());
+        Assert.Equal("normal_topK", phaseRoot.GetProperty("exploration_search_mode").GetString());
+        Assert.True(phaseRoot.GetProperty("no_automatic_topology_mutation").GetBoolean());
     }
 }
 
@@ -730,7 +806,8 @@ public class HubAttractorExplorationRuntime_BoundaryTests
         // - SqlAttentionScheduler: owns AppendAttentionGenerationAsync boundary
         var logsRepo = new StubSqlAttentionLogsRepository(
             [],
-            [ExplorationTestFactory.HubCurrent()]);
+            [ExplorationTestFactory.HubCurrent()],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate()]);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
@@ -812,18 +889,16 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
         var hit = Assert.Single(result.Result!.Hits);
         var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
         Assert.Equal(JsonValueKind.Object, evidence.ValueKind);
-        Assert.True(evidence.TryGetProperty("cosine_score", out _),
-            "evidence_json must contain cosine_score");
-        Assert.True(evidence.TryGetProperty("overlap_score", out _),
-            "evidence_json must contain overlap_score");
-        Assert.True(evidence.TryGetProperty("current_l2_norm", out _),
-            "evidence_json must contain current_l2_norm");
-        Assert.True(evidence.TryGetProperty("basis_key_count", out _),
-            "evidence_json must contain basis_key_count");
-        Assert.True(evidence.TryGetProperty("attractor_key_count", out _),
-            "evidence_json must contain attractor_key_count");
-        Assert.True(evidence.TryGetProperty("shared_key_count", out _),
-            "evidence_json must contain shared_key_count");
+        Assert.True(evidence.TryGetProperty("scoring_role", out _),
+            "evidence_json must contain scoring_role");
+        Assert.True(evidence.TryGetProperty("canonical_exploration_field", out _),
+            "evidence_json must contain canonical_exploration_field");
+        Assert.True(evidence.TryGetProperty("relation_score_source", out _),
+            "evidence_json must contain relation_score_source");
+        Assert.True(evidence.TryGetProperty("relation_score", out _),
+            "evidence_json must contain relation_score");
+        Assert.True(evidence.TryGetProperty("no_logs_hub_current_fallback", out _),
+            "evidence_json must contain no_logs_hub_current_fallback");
     }
 
     [Fact]
@@ -844,10 +919,14 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
     [Fact]
     public async Task ExploreAsync_WithEmptyAttractorVector_NeighborScoreIsZero()
     {
-        // attractor_vector_json is {} (hub refresh not yet done) → cosine = 0
+        // In the canonical path, NeighborScore = relation.RelationScore.
+        // Use an explicit hub relation candidate with RelationScore=0.0 to verify the mapping.
+        var logsRepo = new StubSqlAttentionLogsRepository(
+            [],
+            [],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate(relationScore: 0.0)]);
         var runtime = ExplorationTestFactory.CreateRuntime(
-            ExplorationTestFactory.ValidPolicyJson(),
-            [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
+            ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
         var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
@@ -863,7 +942,8 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
     [Fact]
     public async Task ExploreAsync_WithMatchingVectors_ProducesNonZeroNeighborScore()
     {
-        // Matching attractor_vector_json and basis_vector_json → cosine = 1.0
+        // In the canonical path, NeighborScore = relation.RelationScore.
+        // Default hub relation candidates have RelationScore=0.9 → non-zero score.
         var hub = ExplorationTestFactory.HubCurrent(
             attractorVectorJson: """{"diff_count": 10}""");
 
@@ -880,8 +960,8 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
 
         var hit = Assert.Single(result.Result!.Hits);
         Assert.True(hit.NeighborScore > 0.0,
-            $"Expected non-zero neighbor score with matching vectors, got {hit.NeighborScore}");
-        Assert.NotEqual("{}", hit.VectorJson);
+            $"Expected non-zero neighbor score from relation score, got {hit.NeighborScore}");
+        // Canonical path always sets VectorJson = "{}" (no legacy vector embedding stored on hit)
     }
 
     [Fact]
@@ -901,10 +981,9 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
                 basisVectorJson: """{"diff_count": 5}""")],
             "src", "7d");
 
+        // Canonical path stores L2Norm directly on the hit (not in evidence_json).
         var hit = Assert.Single(result.Result!.Hits);
-        var evidence = JsonSerializer.Deserialize<JsonElement>(hit.EvidenceJson);
-        Assert.True(evidence.TryGetProperty("current_l2_norm", out var l2NormProp));
-        Assert.Equal(99.0, l2NormProp.GetDouble(), precision: 5);
+        Assert.Equal(99.0, hit.L2Norm, precision: 5);
     }
 
     [Fact]
@@ -1367,10 +1446,12 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
     [Fact]
     public async Task ExplicitLegacyDiagnostics_PhaseVectorJson_IsPendingIdSpaceEvidence_NotDraftOrCountScalarAxes()
     {
+        var hubRelationId = Guid.NewGuid();
         var logsRepo = new StubSqlAttentionLogsRepository(
             [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)],
             [ExplorationTestFactory.HubCurrent(
-                attractorVectorJson: """{"diff_count": 10}""")]);
+                attractorVectorJson: """{"diff_count": 10}""")],
+            hubRelationCandidates: [ExplorationTestFactory.HubRelationCandidate(hubRelationId: hubRelationId)]);
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(highPhaseLimit: 1), logsRepo);
 
@@ -1381,22 +1462,29 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         var hit = Assert.Single(result.Result!.Hits);
         using var doc = JsonDocument.Parse(hit.PhaseVectorJson);
         var root = doc.RootElement;
+        // Canonical phaseAT structure — not legacy diagnostics
         Assert.Equal("phaseAT", root.GetProperty("q_kind").GetString());
         Assert.False(root.GetProperty("q_is_draft").GetBoolean());
         Assert.Equal("hubs.hub_relations", root.GetProperty("canonical_exploration_field").GetString());
         Assert.Equal(12.5, root.GetProperty("w_l2_norm").GetDouble());
-        Assert.Equal(JsonValueKind.Null, root.GetProperty("x_hit_hub_relation_id").ValueKind);
-        Assert.Equal(JsonValueKind.Null, root.GetProperty("y_topology_manifest_id").ValueKind);
-        Assert.Equal(JsonValueKind.Null, root.GetProperty("z_hub_id").ValueKind);
+        // Canonical path: x/y/z are real GUIDs (not null)
+        Assert.Equal(JsonValueKind.String, root.GetProperty("x_hit_hub_relation_id").ValueKind);
+        Assert.Equal(JsonValueKind.String, root.GetProperty("y_topology_manifest_id").ValueKind);
+        Assert.Equal(JsonValueKind.String, root.GetProperty("z_hub_id").ValueKind);
         Assert.Equal(JsonValueKind.Array, root.GetProperty("i_expanded_hub_relation_ids").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("j_expanded_topology_manifest_ids").ValueKind);
+        Assert.Equal(JsonValueKind.Array, root.GetProperty("k_expanded_hub_ids").ValueKind);
+        // No legacy single-letter axes (x/y/z/i/j/k are prefixed with their role, not bare)
         Assert.False(root.TryGetProperty("x", out _));
         Assert.False(root.TryGetProperty("y", out _));
         Assert.False(root.TryGetProperty("z", out _));
         Assert.False(root.TryGetProperty("i", out _));
         Assert.False(root.TryGetProperty("j", out _));
         Assert.False(root.TryGetProperty("k", out _));
-        Assert.Equal(JsonValueKind.Object, root.GetProperty("legacy_support_cache_statistics").ValueKind);
-        Assert.Equal(JsonValueKind.Object, root.GetProperty("phase_basis_json").ValueKind);
+        // Canonical path has no_automatic_topology_mutation (not legacy_support_cache_statistics)
+        Assert.True(root.GetProperty("no_automatic_topology_mutation").GetBoolean());
+        Assert.False(root.TryGetProperty("legacy_support_cache_statistics", out _));
+        Assert.False(root.TryGetProperty("phase_basis_json", out _));
     }
 
     [Fact]

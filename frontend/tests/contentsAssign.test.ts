@@ -24,6 +24,9 @@ const existing: ScreenDataShapeSummary = {
   relationIntents: [{ localTableRef: "orders", joinTableRef: "customers", localKey: "customer_id", remoteKey: "id" }],
   operationEntityBindings: [],
   initialDataRows: [],
+  searchConditions: [],
+  havingConditions: [],
+  displayColumnMode: null,
 };
 
 Deno.test("buildAssignPayloadForStep step 2: logicalTables from draft, preserves existing relations", () => {

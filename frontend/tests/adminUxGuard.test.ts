@@ -15,16 +15,23 @@ import {
 } from "../content/adminGuides.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  DISPLAY_COLUMN_MODE_LABELS,
+  HAVING_OPERATOR_OPTIONS,
+  LOGICAL_CONNECTOR_OPTIONS,
   NORMAL_VIEW_BANNED_TERMS,
+  SEARCH_OPERATOR_OPTIONS,
   UX_ACTION_LABELS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
+  UX_FIELD_DISPLAY_MODE,
+  UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
+  UX_FIELD_SEARCH_CONDITIONS,
   UX_FIELD_SEARCH_KEY,
   UX_MAIN_FLOW_STEP_LABELS,
   UX_RUNTIME_DESTINATION_LABELS,
@@ -39,6 +46,11 @@ import {
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import {
+  applySearchConditions,
+  applyHavingConditions,
+} from "../lib/searchConditionEval.ts";
+import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
 
 // ─── Banned terms guard ───────────────────────────────────────────────────────
 // These technical terms must not appear in primary-visible guide text.
@@ -626,6 +638,9 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
     relationIntents: [],
     operationEntityBindings: [],
     initialDataRows: [],
+    searchConditions: [],
+    havingConditions: [],
+    displayColumnMode: null,
   };
   const draft = screenDesignFromBackendShape(shape, "list");
   assertEquals(draft.searchKeyColumns, ["col_a"]);
@@ -873,4 +888,285 @@ Deno.test("normal view banned terms: shared regression vocabulary covers extract
       `NORMAL_VIEW_BANNED_TERMS must include extracted category term "${term}"`,
     );
   }
+});
+
+// ─── SearchCondition / HavingCondition / DisplayColumnMode round-trip ─────────
+
+Deno.test("emptyManifestScreenDesign: has searchConditions, havingConditions, displayColumnMode", () => {
+  const d = emptyManifestScreenDesign();
+  assertEquals(Array.isArray(d.searchConditions), true, "searchConditions must be an array");
+  assertEquals(d.searchConditions.length, 0, "searchConditions defaults to empty");
+  assertEquals(Array.isArray(d.havingConditions), true, "havingConditions must be an array");
+  assertEquals(d.havingConditions.length, 0, "havingConditions defaults to empty");
+  assertEquals(typeof d.displayColumnMode, "string", "displayColumnMode must be a string");
+  assertEquals(d.displayColumnMode, "selected", "displayColumnMode defaults to selected");
+});
+
+Deno.test("screen_data_shape topology extension: extracts searchConditions and havingConditions", () => {
+  const topology = JSON.stringify([
+    {
+      type: "screen_data_shape",
+      tableRef: "my_table",
+      searchTargets: [],
+      searchConditions: [
+        { column: "col_a", operator: "=", value: "test", logicalConnector: "and" },
+        { column: "col_b", operator: "between", value: "1", valueTo: "10" },
+        { column: "col_c", operator: "in", values: ["x", "y"] },
+        { column: "col_d", operator: "is null" },
+      ],
+      havingConditions: [
+        { column: "salary", function: "sum", operator: ">", value: "1000" },
+      ],
+      displayColumnMode: "none",
+    },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.searchConditions.length, 4);
+  assertEquals(shape.searchConditions[0].column, "col_a");
+  assertEquals(shape.searchConditions[0].operator, "=");
+  assertEquals(shape.searchConditions[0].value, "test");
+  assertEquals(shape.searchConditions[1].operator, "between");
+  assertEquals(shape.searchConditions[1].valueTo, "10");
+  assertEquals(shape.searchConditions[2].operator, "in");
+  assertEquals(shape.searchConditions[2].values?.length, 2);
+  assertEquals(shape.searchConditions[3].operator, "is null");
+  assertEquals(shape.havingConditions.length, 1);
+  assertEquals(shape.havingConditions[0].column, "salary");
+  assertEquals(shape.havingConditions[0].function, "sum");
+  assertEquals(shape.havingConditions[0].operator, ">");
+  assertEquals(shape.havingConditions[0].value, "1000");
+  assertEquals(shape.displayColumnMode, "none");
+});
+
+Deno.test("screen_data_shape topology extension: displayColumnMode defaults null when absent", () => {
+  const topology = JSON.stringify([
+    { type: "screen_data_shape", tableRef: "t" },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.searchConditions, []);
+  assertEquals(shape.havingConditions, []);
+  assertEquals(shape.displayColumnMode, null);
+});
+
+Deno.test("screenDesignFromBackendShape: maps searchConditions, havingConditions, displayColumnMode", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: [],
+    searchKeyColumns: [],
+    aggregationSpec: null,
+    aggregationKey: null,
+    aggregationFunction: null,
+    aggregationColumns: [],
+    aggregationMeasures: [],
+    displayColumns: [],
+    logicalTables: [],
+    screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
+    columns: [],
+    relationIntents: [],
+    operationEntityBindings: [],
+    initialDataRows: [],
+    searchConditions: [{ column: "col_a", operator: "like", value: "test%" }],
+    havingConditions: [{ column: "salary", function: "avg", operator: ">=", value: "500" }],
+    displayColumnMode: "none",
+  };
+  const draft = screenDesignFromBackendShape(shape, "list");
+  assertEquals(draft.searchConditions.length, 1);
+  assertEquals(draft.searchConditions[0].operator, "like");
+  assertEquals(draft.havingConditions.length, 1);
+  assertEquals(draft.havingConditions[0].function, "avg");
+  assertEquals(draft.displayColumnMode, "none");
+});
+
+Deno.test("DISPLAY_COLUMN_MODE_LABELS: covers selected/all/none", () => {
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["selected"], "string");
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["all"], "string");
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["none"], "string");
+});
+
+Deno.test("SEARCH_OPERATOR_OPTIONS: includes all required operators including <> alias", () => {
+  const ops = SEARCH_OPERATOR_OPTIONS.map((o) => o.value);
+  const required = ["=", "!=", "<>", "like", "ilike", "not like", ">", ">=", "<", "<=", "between", "in", "not in", "is null", "is not null"];
+  for (const op of required) {
+    assert(ops.includes(op), `SEARCH_OPERATOR_OPTIONS must include operator "${op}"`);
+  }
+});
+
+Deno.test("UX_FIELD_SEARCH_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
+  assertEquals(typeof UX_FIELD_SEARCH_CONDITIONS, "string");
+  assert(UX_FIELD_SEARCH_CONDITIONS.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_SEARCH_CONDITIONS.includes("searchConditions"), "must not expose internal field name");
+});
+
+Deno.test("UX_FIELD_HAVING_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
+  assertEquals(typeof UX_FIELD_HAVING_CONDITIONS, "string");
+  assert(UX_FIELD_HAVING_CONDITIONS.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_HAVING_CONDITIONS.toLowerCase().includes("having"), "must not expose SQL HAVING keyword in primary label");
+});
+
+Deno.test("displayColumnMode: none mode means aggregate-only display without row columns", () => {
+  const d = emptyManifestScreenDesign();
+  d.displayColumnMode = "none";
+  assertEquals(d.displayColumnMode, "none");
+  // none mode is intended for aggregate-only display — row columns excluded
+});
+
+Deno.test("LOGICAL_CONNECTOR_OPTIONS: covers and/or/not", () => {
+  const vals = LOGICAL_CONNECTOR_OPTIONS.map((o) => o.value);
+  assert(vals.includes("and"), "must include and");
+  assert(vals.includes("or"), "must include or");
+  assert(vals.includes("not"), "must include not");
+});
+
+Deno.test("HAVING_OPERATOR_OPTIONS: covers comparison operators including <> alias", () => {
+  const vals = HAVING_OPERATOR_OPTIONS.map((o) => o.value);
+  assert(vals.includes("="), "must include =");
+  assert(vals.includes("!="), "must include !=");
+  assert(vals.includes("<>"), "must include <> alias");
+  assert(vals.includes(">"), "must include >");
+  assert(vals.includes(">="), "must include >=");
+  assert(vals.includes("<"), "must include <");
+  assert(vals.includes("<="), "must include <=");
+});
+
+Deno.test("UX_FIELD_DISPLAY_MODE: is a non-empty user-facing label", () => {
+  assertEquals(typeof UX_FIELD_DISPLAY_MODE, "string");
+  assert(UX_FIELD_DISPLAY_MODE.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_DISPLAY_MODE.includes("displayColumnMode"), "must not expose internal field name");
+});
+
+// ─── applySearchConditions: AND/OR/NOT evaluation contract ───────────────────
+// SSOT: conditions[i].logicalConnector joins conditions[i] to conditions[i+1].
+// Connector is stored on the source row, evaluated when combining with the next.
+
+Deno.test("applySearchConditions: single condition = filters correctly", () => {
+  const rows = [{ col: "a" }, { col: "b" }, { col: "c" }] as Record<string, string>[];
+  const result = applySearchConditions(rows, [{ column: "col", operator: "=", value: "b" }]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["col"], "b");
+});
+
+Deno.test("applySearchConditions: <> operator matches != semantics", () => {
+  const rows = [{ col: "a" }, { col: "b" }] as Record<string, string>[];
+  const result = applySearchConditions(rows, [{ column: "col", operator: "<>", value: "a" }]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["col"], "b");
+});
+
+Deno.test("applySearchConditions: AND connector — both conditions must match", () => {
+  const rows = [
+    { name: "Alice", dept: "Eng" },
+    { name: "Bob", dept: "Eng" },
+    { name: "Carol", dept: "HR" },
+  ] as Record<string, string>[];
+  // conditions[0].logicalConnector=and joins condition 0 to condition 1
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "and" },
+    { column: "name", operator: "=", value: "Alice" },
+  ]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["name"], "Alice");
+});
+
+Deno.test("applySearchConditions: OR connector — either condition matches", () => {
+  const rows = [
+    { name: "Alice", dept: "Eng" },
+    { name: "Bob", dept: "HR" },
+    { name: "Carol", dept: "Finance" },
+  ] as Record<string, string>[];
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "or" },
+    { column: "dept", operator: "=", value: "HR" },
+  ]);
+  assertEquals(result.length, 2);
+  assert(result.some((r) => r["name"] === "Alice"), "Alice (Eng) must be included");
+  assert(result.some((r) => r["name"] === "Bob"), "Bob (HR) must be included");
+});
+
+Deno.test("applySearchConditions: NOT connector — excludes rows where next condition matches", () => {
+  const rows = [
+    { dept: "Eng" },
+    { dept: "HR" },
+    { dept: "Finance" },
+  ] as Record<string, string>[];
+  // NOT: result = result && !match_of_next_condition
+  // cond[0]=dept=Eng (match=true for Eng row only)
+  // cond[1]=dept=Finance, conn from cond[0]=not → result=true && !match_of_finance
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "not" },
+    { column: "dept", operator: "=", value: "Finance" },
+  ]);
+  // Only Eng row passes: result=true (match=Eng), not Finance → true && !false = true
+  // HR row: result=false (not Eng), not Finance → false && !false = false
+  // Finance row: result=false (not Eng), not Finance → false && !true = false
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["dept"], "Eng");
+});
+
+Deno.test("applySearchConditions: three conditions with AND connector chain", () => {
+  const rows = [
+    { a: "1", b: "2", c: "3" },
+    { a: "1", b: "2", c: "X" },
+    { a: "1", b: "Y", c: "3" },
+  ] as Record<string, string>[];
+  const result = applySearchConditions(rows, [
+    { column: "a", operator: "=", value: "1", logicalConnector: "and" },
+    { column: "b", operator: "=", value: "2", logicalConnector: "and" },
+    { column: "c", operator: "=", value: "3" },
+  ]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["a"], "1");
+  assertEquals(result[0]["c"], "3");
+});
+
+Deno.test("applyHavingConditions: <> operator on measure result", () => {
+  const groups = new Map<string, Record<string, string>[]>([
+    ["a", [{ salary: "100" }, { salary: "200" }] as Record<string, string>[]],
+    ["b", [{ salary: "500" }] as Record<string, string>[]],
+  ]);
+  const result = applyHavingConditions(groups, [
+    { column: "salary", function: "sum", operator: "<>", value: "300" },
+  ]);
+  assertEquals(result.size, 1, "only group b (sum=500) should survive");
+  assert(result.has("b"), "group b must be kept");
+});
+
+// ─── Step 2 re-save preserves Step 3 structured fields ───────────────────────
+// Regression: buildAssignPayloadForStep(step=2) must preserve searchConditions,
+// havingConditions, and displayColumnMode from the existing backend shape.
+
+Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from backend shape", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: [],
+    searchKeyColumns: [],
+    aggregationSpec: null,
+    aggregationKey: null,
+    aggregationFunction: null,
+    aggregationColumns: [],
+    aggregationMeasures: [],
+    displayColumns: [],
+    logicalTables: [],
+    screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
+    columns: [],
+    relationIntents: [],
+    operationEntityBindings: [],
+    initialDataRows: [],
+    searchConditions: [{ column: "col_a", operator: "=", value: "test" }],
+    havingConditions: [{ column: "salary", function: "sum", operator: ">", value: "1000" }],
+    displayColumnMode: "none",
+  };
+  const design = emptyManifestScreenDesign();
+  const payload = buildAssignPayloadForStep(2, "manifest-id", design, shape as Parameters<typeof buildAssignPayloadForStep>[3]);
+  assertEquals(Array.isArray(payload.searchConditions), true, "searchConditions must be preserved");
+  assertEquals((payload.searchConditions ?? []).length, 1, "one searchCondition must survive step 2 re-save");
+  assertEquals((payload.searchConditions ?? [])[0].column, "col_a");
+  assertEquals(Array.isArray(payload.havingConditions), true, "havingConditions must be preserved");
+  assertEquals((payload.havingConditions ?? []).length, 1, "one havingCondition must survive step 2 re-save");
+  assertEquals(payload.displayColumnMode, "none", "displayColumnMode must survive step 2 re-save");
 });

@@ -1,5 +1,9 @@
 import type { ScreenOperationKind } from "../runtime/screenAuthoringIntent.ts";
-import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
+import type {
+  HavingConditionShape,
+  ScreenDataShapeSummary,
+  SearchConditionShape,
+} from "./manifestTopologyExtensions.ts";
 import {
   normalizeAggregationMeasures,
   type AggregationMeasure,
@@ -13,6 +17,75 @@ import {
 } from "./manifestLogicalTables.ts";
 
 export type { AggregationMeasure };
+
+/** Search operator vocabulary (SSOT step 3 searchConditions). */
+export type SearchOperator =
+  | "=" | "!=" | "<>" | "like" | "ilike" | "not like"
+  | ">" | ">=" | "<" | "<="
+  | "between" | "in" | "not in"
+  | "is null" | "is not null";
+
+/** Logical connector joining adjacent search conditions. */
+export type LogicalConnector = "and" | "or" | "not";
+
+/** Structured search condition (SSOT step 3 searchConditions). */
+export type SearchCondition = {
+  column: string;
+  operator: SearchOperator;
+  /** Single value for =, !=, <>, like, ilike, not like, >, >=, <, <=. */
+  value?: string;
+  /** Upper bound for between. */
+  valueTo?: string;
+  /** Value list for in / not in. */
+  values?: string[];
+  /** Connects to next condition. Default: and. */
+  logicalConnector?: LogicalConnector;
+};
+
+/** HAVING condition on an aggregation measure result. */
+export type HavingCondition = {
+  column: string;
+  function: string;
+  operator: "=" | "!=" | "<>" | ">" | ">=" | "<" | "<=";
+  value: string;
+};
+
+/** Explicit display column mode (SSOT step 3 displayColumnMode_ambiguity_resolution). */
+export type DisplayColumnMode = "selected" | "all" | "none";
+
+const SEARCH_OPERATORS: readonly SearchOperator[] = [
+  "=", "!=", "<>", "like", "ilike", "not like",
+  ">", ">=", "<", "<=", "between", "in", "not in",
+  "is null", "is not null",
+];
+const HAVING_OPERATORS: readonly HavingCondition["operator"][] = [
+  "=", "!=", "<>", ">", ">=", "<", "<=",
+];
+const LOGICAL_CONNECTORS: readonly LogicalConnector[] = ["and", "or", "not"];
+
+function normalizeSearchConditionShape(s: SearchConditionShape): SearchCondition | null {
+  if (!s.column || !SEARCH_OPERATORS.includes(s.operator as SearchOperator)) return null;
+  return {
+    column: s.column,
+    operator: s.operator as SearchOperator,
+    value: s.value,
+    valueTo: s.valueTo,
+    values: s.values,
+    logicalConnector: LOGICAL_CONNECTORS.includes(s.logicalConnector as LogicalConnector)
+      ? s.logicalConnector as LogicalConnector
+      : undefined,
+  };
+}
+
+function normalizeHavingConditionShape(h: HavingConditionShape): HavingCondition | null {
+  if (!h.column || !h.function || !HAVING_OPERATORS.includes(h.operator as HavingCondition["operator"])) return null;
+  return {
+    column: h.column,
+    function: h.function,
+    operator: h.operator as HavingCondition["operator"],
+    value: h.value,
+  };
+}
 
 export type ManifestScreenColumnDraft = {
   name: string;
@@ -80,6 +153,12 @@ export type ManifestScreenDesignDraft = {
   operationEntityBindings: OperationEntityBindingDraft[];
   /** Initial data rows as topology intent (not direct DB write). */
   initialDataRows: InitialDataRowDraft[];
+  /** Structured search conditions with operator/value/logical-connector (SSOT step 3). */
+  searchConditions: SearchCondition[];
+  /** HAVING conditions on aggregation measure results (SSOT step 3). */
+  havingConditions: HavingCondition[];
+  /** Explicit display column mode (SSOT step 3 displayColumnMode_ambiguity_resolution). */
+  displayColumnMode: DisplayColumnMode;
 };
 
 const STORAGE_KEY = "topolactor_manifest_screen_design_v2";
@@ -108,6 +187,9 @@ export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   relationIntents: [],
   operationEntityBindings: [],
   initialDataRows: [],
+  searchConditions: [],
+  havingConditions: [],
+  displayColumnMode: "selected",
 });
 
 function readAll(): Record<string, ManifestScreenDesignDraft> {
@@ -174,6 +256,15 @@ export function loadManifestScreenDesignLocal(
     operationEntityBindings: Array.isArray(entry.operationEntityBindings)
       ? entry.operationEntityBindings.map(normalizeOperationEntityBinding)
       : [],
+    searchConditions: Array.isArray(entry.searchConditions)
+      ? entry.searchConditions
+      : [],
+    havingConditions: Array.isArray(entry.havingConditions)
+      ? entry.havingConditions
+      : [],
+    displayColumnMode: (entry.displayColumnMode === "selected" || entry.displayColumnMode === "all" || entry.displayColumnMode === "none")
+      ? entry.displayColumnMode
+      : (Array.isArray(entry.displayColumns) && entry.displayColumns.length > 0 ? "selected" : "all"),
   };
   return qualifyScreenDesignColumnKeys(draft);
 }
@@ -284,6 +375,19 @@ export function screenDesignFromBackendShape(
     initialDataRows: Array.isArray(shape.initialDataRows)
       ? shape.initialDataRows
       : [],
+    searchConditions: Array.isArray(shape.searchConditions)
+      ? shape.searchConditions
+        .map(normalizeSearchConditionShape)
+        .filter((c): c is SearchCondition => c !== null)
+      : [],
+    havingConditions: Array.isArray(shape.havingConditions)
+      ? shape.havingConditions
+        .map(normalizeHavingConditionShape)
+        .filter((h): h is HavingCondition => h !== null)
+      : [],
+    displayColumnMode: (shape.displayColumnMode === "selected" || shape.displayColumnMode === "all" || shape.displayColumnMode === "none")
+      ? shape.displayColumnMode
+      : (Array.isArray(shape.displayColumns) && shape.displayColumns.length > 0 ? "selected" : "all"),
   });
 }
 

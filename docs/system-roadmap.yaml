@@ -1185,26 +1185,27 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     frontend.admin_routes:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, and /admin/manifests. Full 8-step /admin/contents authoring wizard:
-        ①下書き作成 ②参照テーブル設定 ③カラム定義 ④初期データ登録 ⑤テーブル結合意図（任意）
-        ⑥検索キー選択 ⑦集計・表示グループ+サンプル表示 ⑧validate→promote.
-        Structured relation/join intents, searchKeyColumns, aggregationKey, and displayColumns
-        are persisted as screen_data_shape topology extension fields; raw aggregationSpec and
-        searchTargets are advanced-only disclosures. Initial data rows are stored as topology
-        intent (no direct DB write); actual business-row insertion is explicitly owned by the
-        separate content_bundle validated draft → preview → explicit promote route and is not a
-        frontend.admin_routes completion condition. Sample viewing panel is mandatory as part of step 7.
+        /admin/ui-builder, and /admin/manifests. Full 4-step /admin/contents authoring wizard:
+        Step 1 空登録, Step 2 テーブル定義, Step 2.5 relationship, Step 3 物理割当・ページ.
+        Structured relation/join intents, searchKeyColumns, aggregationKey, displayColumns,
+        aggregationMeasures, searchConditions (15 operators incl. <> alias), havingConditions,
+        and displayColumnMode (selected/all/none) are all persisted as screen_data_shape topology
+        extension fields; raw aggregationSpec and searchTargets are advanced-only disclosures.
+        searchConditions use logicalConnector (and/or/not) joining each condition to the next.
+        displayColumnMode eliminates the legacy ambiguous empty-displayColumns=all behavior.
+        Initial data rows are stored as topology intent (no direct DB write).
+        Sample viewing panel applies searchConditions, havingConditions, and displayColumnMode
+        in the frontend preview; backend runtime entity execution of these fields is tracked
+        separately (see known_gap_ref search-aggregation-runtime-operator-contract).
         All normal-view UX vocabulary adheres to SSOT: no "group by" in aggregation labels;
-        no internal field names exposed in search-key selection; relation intent is draft
-        data-shape only and does not transfer hub/inter-manifest ownership from /admin/manifests.
-        topology.physical_tables table_ref mismatch now returns WIRING_TABLE_REF_NOT_FOUND
-        (explicit failure) before canonical projection writes, so mismatch cannot leave a partial
-        hubs.topology_manifests or topology.wiring_physical_to_package row.
+        no internal field names exposed; relation intent is draft data-shape only.
+        topology.physical_tables table_ref mismatch returns WIRING_TABLE_REF_NOT_FOUND
+        (explicit failure, no silent fallback) before canonical projection writes.
         /admin/ui-builder has component placement from catalog, CSS/design-token/layout-class
         selectable settings, validate→preview→explicit apply route, and CI audit handoff.
         Raw dispatcher fields (role/target/layer/action) and advanced wiring inputs are
@@ -1231,8 +1232,8 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
       evidence:
         tests:
-          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions)
-          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
+          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields)
+          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
         ci:
           - frontend-types
           - backend-tests
@@ -1245,6 +1246,11 @@ system_roadmap_ssot:
         - admin_contents_wizard_supports_DB_reference_columns_initial_data_optional_table_relation_search_key_aggregation_display_group_sample_preview_and_explicit_register
         - admin_ui_builder_supports_component_placement_selectable_design_layout_and_wiring_preview_explicit_apply_and_CI_audit_handoff
         - screen_data_shape_topology_extension_persists_structured_relation_join_and_aggregation_display_fields
+        - screen_data_shape_persists_searchConditions_with_15_operators_and_logicalConnector
+        - screen_data_shape_persists_havingConditions_with_7_operators_including_ne_alias
+        - screen_data_shape_persists_displayColumnMode_selected_all_none
+        - step2_re_save_does_not_drop_step3_structured_fields
+        - logicalConnector_stored_on_source_condition_evaluated_as_join_to_next_condition
         - topology_physical_tables_table_ref_mismatch_fails_explicitly
         - noncanonical_admin_wrappers_are_deleted_and_future_ui_converges_on_canonical_surfaces
         - admin_routes_are_wired_to_validated_backend_registry_flows
@@ -1252,6 +1258,7 @@ system_roadmap_ssot:
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
+        - search-aggregation-runtime-operator-contract runtime entity execution of searchConditions/havingConditions/displayColumnMode as abstract operators is not yet implemented; tracked in .agent/tasks/todo.md
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml

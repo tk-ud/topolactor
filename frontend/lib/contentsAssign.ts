@@ -55,6 +55,9 @@ function shapePayloadFromExisting(
         : [],
     })),
     initialDataRows: existing.initialDataRows,
+    searchConditions: existing.searchConditions ?? [],
+    havingConditions: existing.havingConditions ?? [],
+    displayColumnMode: existing.displayColumnMode ?? undefined,
   };
 }
 
@@ -95,6 +98,9 @@ export function buildAssignPayloadForStep(
       relationIntents: base.relationIntents,
       operationEntityBindings: base.operationEntityBindings,
       initialDataRows: base.initialDataRows,
+      searchConditions: base.searchConditions,
+      havingConditions: base.havingConditions,
+      displayColumnMode: base.displayColumnMode,
     };
   }
 
@@ -153,5 +159,8 @@ export function buildAssignPayloadForStep(
     initialDataRows: design.initialDataRows.length > 0
       ? design.initialDataRows
       : base.initialDataRows,
+    searchConditions: design.searchConditions,
+    havingConditions: design.havingConditions,
+    displayColumnMode: design.displayColumnMode,
   };
 }

@@ -115,7 +115,7 @@ public class AdminRuntimeLayoutPatchTests
         return new AdminRuntime(NullLogger<AdminRuntime>.Instance, ctxRepo, registrar, pkg, uiRepo, null);
     }
 
-    private sealed class StubUiRepo(
+    private class StubUiRepo(
         bool valid,
         IReadOnlyList<PromotedPaletteEntryDto>? palette = null,
         IReadOnlyList<LayoutCandidateDto>? candidates = null) : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")

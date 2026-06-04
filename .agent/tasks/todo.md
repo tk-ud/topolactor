@@ -11,6 +11,7 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
 | `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
+| `search-aggregation-runtime-operator-contract` | searchConditions/havingConditions/displayColumnMode runtime entity 実行契約 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
 
@@ -24,6 +25,30 @@
 | `docs/design/runtime-orchestration-ssot.yaml` | `frontend_routes.admin` |
 | `docs/framework-policy.yaml` | `ui_topology_tensor_persistence` |
 | `docs/design/db-schema.yaml` | `manifest`, `packages`, `components_layout_design`, `components_style_design`, `ui_component_bucket` |
+
+---
+
+## Bundle `search-aggregation-runtime-operator-contract`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (step 3 `search_conditions` block)
+
+**実行前:** AGENTS.md を読む。
+
+**残差の性質:** `screen_data_shape` に保存された `searchConditions` / `havingConditions` / `displayColumnMode` は現在 Admin 投影（保存・topology intent round-trip）のみ実装済み。フロントエンド sample preview は評価を実施しているが、runtime entity（topology_transform_runtime）では WHERE 相当・HAVING 相当・displayColumnMode 反映が未実装。
+
+**未実装 todo:**
+- [ ] runtime entity 側で `searchConditions` を抽象演算子として解釈する契約をSSOT化する（`docs/design/admin-console-workflow-ssot.yaml` に `runtime_execution_contract` セクションを追加）
+- [ ] `topology_transform_runtime` が `screen_data_shape.searchConditions` を読んで WHERE 相当のフィルタリングを実施する（SQL直書き禁止・operator vocabulary 経由）
+- [ ] `topology_transform_runtime` が `screen_data_shape.havingConditions` を読んで集計後フィルタリングを実施する
+- [ ] `topology_transform_runtime` が `screen_data_shape.displayColumnMode` に従って返却列を制限する（none=集計値のみ、selected=displayColumns、all=全列）
+- [ ] 上記 runtime entity 実装に対する backend 統合テストを追加する
+
+**完了条件:**
+- `screen_data_shape.searchConditions` が runtime entity 実行時に WHERE 相当として解釈される
+- `screen_data_shape.havingConditions` が集計後フィルタとして解釈される
+- `screen_data_shape.displayColumnMode` が結果列の制御に反映される
+- runtime execution に対応する backend テストが通る
+- `docs/system-roadmap.yaml` の `frontend.admin_routes` / `known_gap_ref` から `search-aggregation-runtime-operator-contract` が除去される
 
 ---
 
@@ -168,3 +193,4 @@
 ### `sql-attention-m7`
 
 - [x] SQLA-IDSPACE-STEP3/4
+- [ ] phase_vector generation implementation（manifest / policy cap 由来ではない phase shift 候補ベクトル生成 — hubs 空間探索結果のみ使用）

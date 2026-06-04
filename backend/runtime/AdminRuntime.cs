@@ -2216,6 +2216,9 @@ public class AdminRuntime
             operationEntityBindings = request.OperationEntityBindings ??
                 Array.Empty<AdminManifestOperationEntityBindingDto>(),
             initialDataRows = request.InitialDataRows ?? Array.Empty<System.Text.Json.JsonElement>(),
+            searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
+            havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
+            displayColumnMode = request.DisplayColumnMode,
         });
 
         var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(

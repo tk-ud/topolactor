@@ -315,6 +315,22 @@ export type OperationEntityBindingInput = {
   entityTargetColumns?: string[];
 };
 
+export type SearchConditionInput = {
+  column: string;
+  operator: string;
+  value?: string;
+  valueTo?: string;
+  values?: string[];
+  logicalConnector?: string;
+};
+
+export type HavingConditionInput = {
+  column: string;
+  function: string;
+  operator: string;
+  value: string;
+};
+
 export type AdminManifestScreenDataShapeInput = {
   manifestId: string;
   tableRef?: string;
@@ -350,6 +366,12 @@ export type AdminManifestScreenDataShapeInput = {
   operationEntityBindings?: OperationEntityBindingInput[];
   /** Initial-data candidates as screen-data-shape topology intent. Actual row insertion belongs to content_bundle. */
   initialDataRows?: Record<string, string>[];
+  /** Structured search conditions with operator/value/logical-connector. */
+  searchConditions?: SearchConditionInput[];
+  /** HAVING conditions on aggregation measure results. */
+  havingConditions?: HavingConditionInput[];
+  /** Explicit display column mode: selected | all | none. */
+  displayColumnMode?: string;
 };
 
 const RUNTIME_DESTINATION_OPTIONS = [
