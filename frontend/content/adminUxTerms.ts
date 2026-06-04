@@ -113,6 +113,7 @@ export const DISPLAY_COLUMN_MODE_LABELS: Record<string, string> = {
 export const SEARCH_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "=", label: "= (一致)" },
   { value: "!=", label: "≠ (不一致)" },
+  { value: "<>", label: "<> (不一致 alias)" },
   { value: "like", label: "like (部分一致)" },
   { value: "ilike", label: "ilike (大小無視)" },
   { value: "not like", label: "not like (不含)" },
@@ -138,6 +139,7 @@ export const LOGICAL_CONNECTOR_OPTIONS: readonly { value: string; label: string 
 export const HAVING_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
   { value: "=", label: "= (一致)" },
   { value: "!=", label: "≠ (不一致)" },
+  { value: "<>", label: "<> (不一致 alias)" },
   { value: ">", label: "> (より大)" },
   { value: ">=", label: "≥ (以上)" },
   { value: "<", label: "< (より小)" },

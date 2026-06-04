@@ -62,6 +62,11 @@ import {
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import {
+  applyHavingConditions,
+  applySearchConditions,
+  computeMeasure,
+} from "../lib/searchConditionEval.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
@@ -89,97 +94,6 @@ import {
 type PanelError = { code?: string; message: string };
 type DraftSource = "none" | "local" | "backend" | "merged";
 
-/** Sample preview: groups rows by aggregation key when set. */
-function computeMeasure(
-  values: number[],
-  fn: string,
-): number | null {
-  if (values.length === 0) return null;
-  switch (fn) {
-    case "sum":
-      return values.reduce((a, b) => a + b, 0);
-    case "avg":
-      return values.reduce((a, b) => a + b, 0) / values.length;
-    case "max":
-      return Math.max(...values);
-    case "min":
-      return Math.min(...values);
-    case "count":
-      return values.length;
-    default:
-      return null;
-  }
-}
-
-function applySearchConditions(
-  rows: Record<string, string>[],
-  conditions: SearchCondition[],
-): Record<string, string>[] {
-  if (conditions.length === 0) return rows;
-  return rows.filter((row) => {
-    let result = true;
-    for (let i = 0; i < conditions.length; i++) {
-      const cond = conditions[i];
-      const cellVal = row[cond.column] ?? "";
-      let match = false;
-      switch (cond.operator) {
-        case "=": match = cellVal === (cond.value ?? ""); break;
-        case "!=": case "<>": match = cellVal !== (cond.value ?? ""); break;
-        case "like": case "ilike": match = cellVal.toLowerCase().includes((cond.value ?? "").toLowerCase()); break;
-        case "not like": match = !cellVal.toLowerCase().includes((cond.value ?? "").toLowerCase()); break;
-        case ">": match = Number(cellVal) > Number(cond.value ?? 0); break;
-        case ">=": match = Number(cellVal) >= Number(cond.value ?? 0); break;
-        case "<": match = Number(cellVal) < Number(cond.value ?? 0); break;
-        case "<=": match = Number(cellVal) <= Number(cond.value ?? 0); break;
-        case "between":
-          match = Number(cellVal) >= Number(cond.value ?? 0) && Number(cellVal) <= Number(cond.valueTo ?? 0);
-          break;
-        case "in": match = (cond.values ?? []).includes(cellVal); break;
-        case "not in": match = !(cond.values ?? []).includes(cellVal); break;
-        case "is null": match = cellVal === "" || cellVal == null; break;
-        case "is not null": match = cellVal !== "" && cellVal != null; break;
-        default: match = true;
-      }
-      if (i === 0) {
-        result = match;
-      } else {
-        const conn = conditions[i - 1].logicalConnector ?? "and";
-        if (conn === "and") result = result && match;
-        else if (conn === "or") result = result || match;
-        else if (conn === "not") result = result && !match;
-      }
-    }
-    return result;
-  });
-}
-
-function applyHavingConditions(
-  groups: Map<string, Record<string, string>[]>,
-  havingConditions: HavingCondition[],
-): Map<string, Record<string, string>[]> {
-  if (havingConditions.length === 0) return groups;
-  const filtered = new Map<string, Record<string, string>[]>();
-  for (const [key, rows] of groups) {
-    let keep = true;
-    for (const hc of havingConditions) {
-      const nums = rows.map((r) => Number(r[hc.column])).filter((n) => !Number.isNaN(n));
-      const measureVal = computeMeasure(nums, hc.function);
-      if (measureVal === null) { keep = false; break; }
-      const threshold = Number(hc.value);
-      switch (hc.operator) {
-        case "=": keep = measureVal === threshold; break;
-        case "!=": case "<>": keep = measureVal !== threshold; break;
-        case ">": keep = measureVal > threshold; break;
-        case ">=": keep = measureVal >= threshold; break;
-        case "<": keep = measureVal < threshold; break;
-        case "<=": keep = measureVal <= threshold; break;
-      }
-      if (!keep) break;
-    }
-    if (keep) filtered.set(key, rows);
-  }
-  return filtered;
-}
 
 function SamplePreviewPanel({
   columns,
@@ -1159,10 +1073,10 @@ export default function ContentsScreenDesignPanel({
               {ci > 0 && (
                 <select
                   class="rounded border px-1 py-0.5 text-xs"
-                  value={cond.logicalConnector ?? "and"}
+                  value={design.searchConditions[ci - 1].logicalConnector ?? "and"}
                   onChange={(e) => {
                     const next = design.searchConditions.map((c, i) =>
-                      i === ci
+                      i === ci - 1
                         ? { ...c, logicalConnector: (e.target as HTMLSelectElement).value as SearchCondition["logicalConnector"] }
                         : c
                     );

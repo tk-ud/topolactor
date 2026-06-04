@@ -46,6 +46,11 @@ import {
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import {
+  applySearchConditions,
+  applyHavingConditions,
+} from "../lib/searchConditionEval.ts";
+import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
 
 // ─── Banned terms guard ───────────────────────────────────────────────────────
 // These technical terms must not appear in primary-visible guide text.
@@ -978,9 +983,9 @@ Deno.test("DISPLAY_COLUMN_MODE_LABELS: covers selected/all/none", () => {
   assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["none"], "string");
 });
 
-Deno.test("SEARCH_OPERATOR_OPTIONS: includes all required operators", () => {
+Deno.test("SEARCH_OPERATOR_OPTIONS: includes all required operators including <> alias", () => {
   const ops = SEARCH_OPERATOR_OPTIONS.map((o) => o.value);
-  const required = ["=", "!=", "like", "ilike", "not like", ">", ">=", "<", "<=", "between", "in", "not in", "is null", "is not null"];
+  const required = ["=", "!=", "<>", "like", "ilike", "not like", ">", ">=", "<", "<=", "between", "in", "not in", "is null", "is not null"];
   for (const op of required) {
     assert(ops.includes(op), `SEARCH_OPERATOR_OPTIONS must include operator "${op}"`);
   }
@@ -1012,9 +1017,11 @@ Deno.test("LOGICAL_CONNECTOR_OPTIONS: covers and/or/not", () => {
   assert(vals.includes("not"), "must include not");
 });
 
-Deno.test("HAVING_OPERATOR_OPTIONS: covers comparison operators", () => {
+Deno.test("HAVING_OPERATOR_OPTIONS: covers comparison operators including <> alias", () => {
   const vals = HAVING_OPERATOR_OPTIONS.map((o) => o.value);
   assert(vals.includes("="), "must include =");
+  assert(vals.includes("!="), "must include !=");
+  assert(vals.includes("<>"), "must include <> alias");
   assert(vals.includes(">"), "must include >");
   assert(vals.includes(">="), "must include >=");
   assert(vals.includes("<"), "must include <");
@@ -1025,4 +1032,138 @@ Deno.test("UX_FIELD_DISPLAY_MODE: is a non-empty user-facing label", () => {
   assertEquals(typeof UX_FIELD_DISPLAY_MODE, "string");
   assert(UX_FIELD_DISPLAY_MODE.length > 0, "must be non-empty");
   assertFalse(UX_FIELD_DISPLAY_MODE.includes("displayColumnMode"), "must not expose internal field name");
+});
+
+// ─── applySearchConditions: AND/OR/NOT evaluation contract ───────────────────
+// SSOT: conditions[i].logicalConnector joins conditions[i] to conditions[i+1].
+// Connector is stored on the source row, evaluated when combining with the next.
+
+Deno.test("applySearchConditions: single condition = filters correctly", () => {
+  const rows = [{ col: "a" }, { col: "b" }, { col: "c" }] as Record<string, string>[];
+  const result = applySearchConditions(rows, [{ column: "col", operator: "=", value: "b" }]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["col"], "b");
+});
+
+Deno.test("applySearchConditions: <> operator matches != semantics", () => {
+  const rows = [{ col: "a" }, { col: "b" }] as Record<string, string>[];
+  const result = applySearchConditions(rows, [{ column: "col", operator: "<>", value: "a" }]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["col"], "b");
+});
+
+Deno.test("applySearchConditions: AND connector — both conditions must match", () => {
+  const rows = [
+    { name: "Alice", dept: "Eng" },
+    { name: "Bob", dept: "Eng" },
+    { name: "Carol", dept: "HR" },
+  ] as Record<string, string>[];
+  // conditions[0].logicalConnector=and joins condition 0 to condition 1
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "and" },
+    { column: "name", operator: "=", value: "Alice" },
+  ]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["name"], "Alice");
+});
+
+Deno.test("applySearchConditions: OR connector — either condition matches", () => {
+  const rows = [
+    { name: "Alice", dept: "Eng" },
+    { name: "Bob", dept: "HR" },
+    { name: "Carol", dept: "Finance" },
+  ] as Record<string, string>[];
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "or" },
+    { column: "dept", operator: "=", value: "HR" },
+  ]);
+  assertEquals(result.length, 2);
+  assert(result.some((r) => r["name"] === "Alice"), "Alice (Eng) must be included");
+  assert(result.some((r) => r["name"] === "Bob"), "Bob (HR) must be included");
+});
+
+Deno.test("applySearchConditions: NOT connector — excludes rows where next condition matches", () => {
+  const rows = [
+    { dept: "Eng" },
+    { dept: "HR" },
+    { dept: "Finance" },
+  ] as Record<string, string>[];
+  // NOT: result = result && !match_of_next_condition
+  // cond[0]=dept=Eng (match=true for Eng row only)
+  // cond[1]=dept=Finance, conn from cond[0]=not → result=true && !match_of_finance
+  const result = applySearchConditions(rows, [
+    { column: "dept", operator: "=", value: "Eng", logicalConnector: "not" },
+    { column: "dept", operator: "=", value: "Finance" },
+  ]);
+  // Only Eng row passes: result=true (match=Eng), not Finance → true && !false = true
+  // HR row: result=false (not Eng), not Finance → false && !false = false
+  // Finance row: result=false (not Eng), not Finance → false && !true = false
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["dept"], "Eng");
+});
+
+Deno.test("applySearchConditions: three conditions with AND connector chain", () => {
+  const rows = [
+    { a: "1", b: "2", c: "3" },
+    { a: "1", b: "2", c: "X" },
+    { a: "1", b: "Y", c: "3" },
+  ] as Record<string, string>[];
+  const result = applySearchConditions(rows, [
+    { column: "a", operator: "=", value: "1", logicalConnector: "and" },
+    { column: "b", operator: "=", value: "2", logicalConnector: "and" },
+    { column: "c", operator: "=", value: "3" },
+  ]);
+  assertEquals(result.length, 1);
+  assertEquals(result[0]["a"], "1");
+  assertEquals(result[0]["c"], "3");
+});
+
+Deno.test("applyHavingConditions: <> operator on measure result", () => {
+  const groups = new Map<string, Record<string, string>[]>([
+    ["a", [{ salary: "100" }, { salary: "200" }] as Record<string, string>[]],
+    ["b", [{ salary: "500" }] as Record<string, string>[]],
+  ]);
+  const result = applyHavingConditions(groups, [
+    { column: "salary", function: "sum", operator: "<>", value: "300" },
+  ]);
+  assertEquals(result.size, 1, "only group b (sum=500) should survive");
+  assert(result.has("b"), "group b must be kept");
+});
+
+// ─── Step 2 re-save preserves Step 3 structured fields ───────────────────────
+// Regression: buildAssignPayloadForStep(step=2) must preserve searchConditions,
+// havingConditions, and displayColumnMode from the existing backend shape.
+
+Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from backend shape", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: [],
+    searchKeyColumns: [],
+    aggregationSpec: null,
+    aggregationKey: null,
+    aggregationFunction: null,
+    aggregationColumns: [],
+    aggregationMeasures: [],
+    displayColumns: [],
+    logicalTables: [],
+    screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
+    columns: [],
+    relationIntents: [],
+    operationEntityBindings: [],
+    initialDataRows: [],
+    searchConditions: [{ column: "col_a", operator: "=", value: "test" }],
+    havingConditions: [{ column: "salary", function: "sum", operator: ">", value: "1000" }],
+    displayColumnMode: "none",
+  };
+  const design = emptyManifestScreenDesign();
+  const payload = buildAssignPayloadForStep(2, "manifest-id", design, shape as Parameters<typeof buildAssignPayloadForStep>[3]);
+  assertEquals(Array.isArray(payload.searchConditions), true, "searchConditions must be preserved");
+  assertEquals((payload.searchConditions ?? []).length, 1, "one searchCondition must survive step 2 re-save");
+  assertEquals((payload.searchConditions ?? [])[0].column, "col_a");
+  assertEquals(Array.isArray(payload.havingConditions), true, "havingConditions must be preserved");
+  assertEquals((payload.havingConditions ?? []).length, 1, "one havingCondition must survive step 2 re-save");
+  assertEquals(payload.displayColumnMode, "none", "displayColumnMode must survive step 2 re-save");
 });

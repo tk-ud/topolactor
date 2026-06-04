@@ -98,6 +98,9 @@ export function buildAssignPayloadForStep(
       relationIntents: base.relationIntents,
       operationEntityBindings: base.operationEntityBindings,
       initialDataRows: base.initialDataRows,
+      searchConditions: base.searchConditions,
+      havingConditions: base.havingConditions,
+      displayColumnMode: base.displayColumnMode,
     };
   }
 
