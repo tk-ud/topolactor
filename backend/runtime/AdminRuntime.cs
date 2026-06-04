@@ -760,6 +760,14 @@ public class AdminRuntime
         return await _uiTopologyRepository.VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, request.RouteKey, ct);
     }
 
+    /// <summary>layout_patch persists placement/tensor only; design tokens use component_style_design:upsert.</summary>
+    private static IReadOnlyList<string> LayoutPatchCssTokenRefsStripped(IReadOnlyList<string>? _) =>
+        Array.Empty<string>();
+
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> LayoutPatchResponsiveTokenRefsStripped(
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? _) =>
+        new Dictionary<string, IReadOnlyList<string>>();
+
     private async Task<(JsonElement? data, ValidationError? error)> DataPromotedPaletteAsync(CancellationToken ct)
     {
         try
@@ -969,7 +977,10 @@ public class AdminRuntime
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
         var bindingError = await VerifyLayoutPatchPackageBindingAsync(req!, ct);
         if (bindingError is not null) return (null, bindingError);
-        var result = await _uiTopologyRepository.PreviewLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        var result = await _uiTopologyRepository.PreviewLayoutPatchAsync(
+            Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson,
+            LayoutPatchCssTokenRefsStripped(req.CssTokenRefs),
+            LayoutPatchResponsiveTokenRefsStripped(req.ResponsiveTokenRefs), ct);
         return (JsonSerializer.SerializeToElement(result), null);
     }
     private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchValidateAsync(OperationVector vector, CancellationToken ct)
@@ -977,7 +988,10 @@ public class AdminRuntime
         if (!TryParseLayoutPatchRequest(vector, out var req, out var err)) return (null, err);
         var bindingError = await VerifyLayoutPatchPackageBindingAsync(req!, ct);
         if (bindingError is not null) return (null, bindingError);
-        var result = await _uiTopologyRepository.ValidateLayoutPatchAsync(Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson, req.CssTokenRefs, req.ResponsiveTokenRefs, ct);
+        var result = await _uiTopologyRepository.ValidateLayoutPatchAsync(
+            Guid.Parse(req!.LayoutId), req.RouteKey, req.TensorPatchJson,
+            LayoutPatchCssTokenRefsStripped(req.CssTokenRefs),
+            LayoutPatchResponsiveTokenRefsStripped(req.ResponsiveTokenRefs), ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_VALIDATION_FAILED", result.Message));
         return (JsonSerializer.SerializeToElement(result), null);
     }
@@ -993,8 +1007,8 @@ public class AdminRuntime
             Guid.Parse(req.LayoutId),
             req.RouteKey,
             req.TensorPatchJson,
-            req.CssTokenRefs,
-            req.ResponsiveTokenRefs,
+            LayoutPatchCssTokenRefsStripped(req.CssTokenRefs),
+            LayoutPatchResponsiveTokenRefsStripped(req.ResponsiveTokenRefs),
             ct);
         if (!result.Ok || !result.Valid) return (null, new ValidationError("LAYOUT_PATCH_APPLY_FAILED", result.Message));
         return (JsonSerializer.SerializeToElement(result), null);

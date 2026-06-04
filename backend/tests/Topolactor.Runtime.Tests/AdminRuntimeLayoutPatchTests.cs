@@ -85,6 +85,26 @@ public class AdminRuntimeLayoutPatchTests
         Assert.True(data.HasValue);
     }
 
+    [Fact]
+    public async Task LayoutPatchValidate_CssTokenRefsInPayload_AreStrippedBeforeRepository()
+    {
+        var capturedCss = new List<string>();
+        var repo = new CapturingLayoutPatchUiRepo(true, capturedCss);
+        var runtime = CreateRuntime(repo);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutId = Guid.NewGuid().ToString(),
+            routeKey = "/admin/ui-builder",
+            cssTokenRefs = new[] { "color.primary" },
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "layout_patch", "validate", null, "admin", payload, null), default);
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Empty(capturedCss);
+    }
+
     private static AdminRuntime CreateRuntime(UiTopologyRepository uiRepo)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "Host=localhost");
@@ -117,6 +137,24 @@ public class AdminRuntimeLayoutPatchTests
             => Task.FromResult(_palette);
         public override Task<IReadOnlyList<LayoutCandidateDto>> ListLayoutCandidatesAsync(CancellationToken ct = default)
             => Task.FromResult(_candidates);
+    }
+
+    private sealed class CapturingLayoutPatchUiRepo(
+        bool valid,
+        List<string> capturedCss) : StubUiRepo(valid)
+    {
+        public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(
+            Guid layoutId,
+            string routeKey,
+            string? tensorPatchJson,
+            IReadOnlyList<string>? cssTokenRefs,
+            IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+            CancellationToken ct = default)
+        {
+            if (cssTokenRefs is not null)
+                capturedCss.AddRange(cssTokenRefs);
+            return base.ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
+        }
     }
 
     private sealed class ThrowingUiRepo() : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")

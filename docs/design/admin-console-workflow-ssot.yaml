@@ -225,7 +225,17 @@ admin_console_workflow_ssot:
         - step 2.5 relationship configuration between logical tables
         - step 3 physical table assignment, page name, multi-select operation kinds, event-time entity binding, add-only default form submit semantics
         - optional search key, aggregation, display group (same step 3 submit or explicit follow-up submit documented in UI)
+        - step 3 data input subfeature: manual initial-data rows and CSV/JSON import (preview → explicit apply via admin_csv_json_import; not a canonical /admin/import route)
         - hand off to /admin/ui-builder after step 3 success
+      data_input_subfeature:
+        route: /admin/contents
+        modes:
+          - manual_initial_data_rows
+          - csv_json_import_preview_then_apply
+        backend_layer: admin_csv_json_import
+        prohibited:
+          - canonical_admin_route_/admin/import
+          - frontend_db_direct_write
       explicitly_out_of_scope:
         - component bucket, package_generator, layout_patch (step 4 — /admin/ui-builder only)
         - created manifest hub membership and inter-manifest navigation (post-pipeline — /admin/manifests)

@@ -6,49 +6,52 @@ using Xunit;
 
 namespace Topolactor.Runtime.Tests;
 
-public class LegacyChangeIntakeMappingTests
+public class ExistingSystemChangeIntakeMappingTests
 {
+    private const string TestRole = "existing_system_operator";
+
     [Fact]
-    public void BuildLegacyHookRequest_MapsTableNameAsTargetAndHookTrigger()
+    public void BuildExistingSystemHookRequest_MapsTableNameAsTargetAndHookTrigger()
     {
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
-        var intake = new LegacyChangeIntakeRequestDto(
+        var intake = new ExistingSystemChangeIntakeRequestDto(
             TableName: "orders",
             RowId: "42",
             Operation: "update",
             ChangedDataJsonb: System.Text.Json.JsonDocument.Parse("{\"status\":\"done\"}").RootElement,
             DiffJsonb: null,
             Actor: "system",
-            Source: "legacy_api",
-            OccurredAt: null,
-            Role: null);
+            Source: "existing_system_api",
+            OccurredAt: null);
 
-        var (request, errors) = dispatcher.BuildLegacyHookRequest(intake);
+        var (request, errors) = dispatcher.BuildExistingSystemHookRequest(intake, TestRole);
 
         Assert.Empty(errors);
         Assert.NotNull(request);
         Assert.Equal("orders", request!.Target);
         Assert.Equal("hook", request.TriggerKind);
-        Assert.Equal("legacy_mirror", request.Layer);
+        Assert.Equal("existing_system_intake", request.Layer);
         Assert.Equal("update", request.Action);
+        Assert.Equal(TestRole, request.Role);
+        Assert.Equal("ExistingSystemChangeIntake", request.OperationType);
     }
 
     [Fact]
-    public void BuildLegacyHookRequest_ReturnsExplicitValidationErrors_WhenIdentityMissing()
+    public void BuildExistingSystemHookRequest_ReturnsExplicitValidationErrors_WhenIdentityMissing()
     {
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
-        var intake = new LegacyChangeIntakeRequestDto(
+        var intake = new ExistingSystemChangeIntakeRequestDto(
             TableName: null,
             RowId: null,
             Operation: null,
             ChangedDataJsonb: null,
             DiffJsonb: null);
 
-        var (request, errors) = dispatcher.BuildLegacyHookRequest(intake);
+        var (request, errors) = dispatcher.BuildExistingSystemHookRequest(intake, TestRole);
 
         Assert.Null(request);
         Assert.Contains(errors, e => e.Code == "LEGACY_TABLE_NAME_REQUIRED");
@@ -58,19 +61,19 @@ public class LegacyChangeIntakeMappingTests
     }
 
     [Fact]
-    public void BuildLegacyHookRequest_ReturnsExplicitValidationError_WhenOperationUnsupported()
+    public void BuildExistingSystemHookRequest_ReturnsExplicitValidationError_WhenOperationUnsupported()
     {
         var topologyRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var dispatcher = RuntimeExecutorTests.CreateDispatcher(topologyRepo);
 
-        var intake = new LegacyChangeIntakeRequestDto(
+        var intake = new ExistingSystemChangeIntakeRequestDto(
             TableName: "orders",
             RowId: "42",
             Operation: "upsert",
             ChangedDataJsonb: System.Text.Json.JsonDocument.Parse("{\"status\":\"done\"}").RootElement,
             DiffJsonb: null);
 
-        var (request, errors) = dispatcher.BuildLegacyHookRequest(intake);
+        var (request, errors) = dispatcher.BuildExistingSystemHookRequest(intake, TestRole);
 
         Assert.Null(request);
         Assert.Contains(errors, e => e.Code == "LEGACY_OPERATION_UNSUPPORTED");

@@ -507,10 +507,12 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs)
     {
         var patch = string.IsNullOrWhiteSpace(tensorPatchJson) ? "{}" : tensorPatchJson!;
-        var css = (cssTokenRefs ?? []).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
-        var responsive = (responsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>())
-            .ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value.Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList());
-        return new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, patch, css, responsive, "Layout patch normalized.");
+        // layout_patch owns placement/tensor only; design tokens use component_style_design:upsert.
+        _ = cssTokenRefs;
+        _ = responsiveTokenRefs;
+        var css = new List<string>();
+        var responsive = new Dictionary<string, IReadOnlyList<string>>();
+        return new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, patch, css, responsive, "Layout patch normalized (placement only).");
     }
 
     private static bool ContainsDraftOnlyNode(string tensorPatchJson)
@@ -545,16 +547,6 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         {
             return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TENSOR_PATCH_JSON_MALFORMED" });
         }
-        var vocab = LoadCssTokenVocabulary();
-        if (vocab.Count == 0)
-            return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "CSS_TOKEN_VOCABULARY_UNAVAILABLE" });
-        foreach (var t in normalized.CssTokenRefs)
-            if (!vocab.Contains(t))
-                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"CSS_TOKEN_REF_UNKNOWN:{t}" });
-        foreach (var (_, refs) in normalized.ResponsiveTokenRefs)
-            foreach (var t in refs)
-                if (!vocab.Contains(t))
-                    return Task.FromResult(normalized with { Ok = false, Valid = false, Message = $"RESPONSIVE_TOKEN_REF_UNKNOWN:{t}" });
         var layoutClassVocab = LoadTopologyLayoutClassVocabulary();
         if (layoutClassVocab.Count == 0)
             return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" });

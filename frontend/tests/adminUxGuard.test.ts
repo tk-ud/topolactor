@@ -281,6 +281,32 @@ Deno.test("ADMIN_HUB_NAVIGATION_GUIDE boundaryNotes can hold technical scope not
   assertEquals(Array.isArray(ADMIN_HUB_NAVIGATION_GUIDE.boundaryNotes), true);
 });
 
+// ─── UiBuilderAdmin layout_patch placement-only boundary ──────────────────────
+
+Deno.test("UiBuilderAdmin: layout_patch dispatch omits cssTokenRefs from normal path", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const patchBlock = src.slice(src.indexOf('dispatchAdminOp("layout_patch"'));
+  assert(patchBlock.length > 0, "layout_patch dispatch must exist");
+  assertEquals(patchBlock.includes("cssTokenRefs:"), false);
+});
+
+// ─── ContentsScreenDesignPanel data input + import wiring ─────────────────────
+
+Deno.test("ContentsScreenDesignPanel: step 3 mounts embedded CSV/JSON import subfeature", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(src.includes("AdminImportPanel"), "must embed AdminImportPanel");
+  assert(src.includes('dataInputMode === "import"'), "must offer import tab");
+  assert(src.includes("admin_csv_json_import") === false, "panel must use adminApi not raw layer strings");
+  const adminApiSrc = await Deno.readTextFile(
+    new URL("../api/adminApi.ts", import.meta.url),
+  );
+  assert(adminApiSrc.includes('"admin_csv_json_import"'), "adminApi owns import layer");
+});
+
 // ─── ContentsScreenDesignPanel field vocabulary regression ────────────────────
 // Internal technical terms must not appear in the user-facing label constants.
 
@@ -828,7 +854,7 @@ Deno.test("normal view source guard: technical disclosures are excluded, adjacen
 });
 
 Deno.test("normal view terms: shared flow labels use user-facing page vocabulary", () => {
-  assertEquals(UX_MAIN_FLOW_STEP_LABELS[1], "新しいページを作る");
+  assertEquals(UX_MAIN_FLOW_STEP_LABELS[0], "新しいページを作る");
   assertFalse(UX_MAIN_FLOW_STEP_LABELS.join(" ").includes("manifest"));
 });
 

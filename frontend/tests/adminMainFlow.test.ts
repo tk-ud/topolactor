@@ -30,8 +30,15 @@ Deno.test("ADMIN_MAIN_FLOW_STEPS matches canonical admin workflow", () => {
   ]);
   assertEquals(
     ADMIN_MAIN_FLOW_STEPS.map((s) => s.href),
-    ["/auth", "/admin/contents", "/admin/ui-builder", "/admin/manifests"],
+    ["/admin/contents", "/admin/ui-builder", "/admin/manifests"],
   );
+});
+
+Deno.test("ADMIN_MAIN_FLOW_STEPS: /auth is not a canonical admin workflow step", () => {
+  const hrefs = ADMIN_MAIN_FLOW_STEPS.map((s) => s.href);
+  assertEquals(hrefs.includes("/auth"), false);
+  const labels = ADMIN_MAIN_FLOW_STEPS.map((s) => s.label);
+  assertEquals(labels.includes("ログイン"), false);
 });
 
 Deno.test("ACCEPTANCE_FLOW_STEPS matches main flow order", () => {

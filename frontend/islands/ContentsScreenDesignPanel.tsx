@@ -55,6 +55,7 @@ import {
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import { AdminImportPanel } from "./AdminImport.tsx";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
@@ -272,6 +273,7 @@ export default function ContentsScreenDesignPanel({
   const step3CompletionRef = useRef<HTMLDivElement>(null);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showAdvancedAggregation, setShowAdvancedAggregation] = useState(false);
+  const [dataInputMode, setDataInputMode] = useState<"manual" | "import">("manual");
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
 
@@ -1141,75 +1143,113 @@ export default function ContentsScreenDesignPanel({
 
       {activeStep === 3 && (
         <>
-      <h3 class="mt-5 text-xs font-semibold">{UX_FIELD_INITIAL_DATA}</h3>
+      <h3 class="mt-5 text-xs font-semibold">データ入力 — {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期表示のデータ候補（add のみの既定セマンティクス）。
+        初期表示のデータ候補（add のみの既定セマンティクス）。手入力または CSV・JSON 取り込み（プレビュー → 明示適用）を選べます。
       </p>
-      {qualifiedColumns.length === 0
+      <div class="mb-3 flex gap-2" role="tablist" aria-label="データ入力方法">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={dataInputMode === "manual"}
+          class={`rounded px-3 py-1 text-xs ${
+            dataInputMode === "manual"
+              ? "bg-blue-100 font-semibold text-blue-900"
+              : "border border-slate-200 text-slate-600"
+          }`}
+          onClick={() => setDataInputMode("manual")}
+        >
+          手入力
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={dataInputMode === "import"}
+          class={`rounded px-3 py-1 text-xs ${
+            dataInputMode === "import"
+              ? "bg-blue-100 font-semibold text-blue-900"
+              : "border border-slate-200 text-slate-600"
+          }`}
+          onClick={() => setDataInputMode("import")}
+        >
+          CSV・JSON 取り込み
+        </button>
+      </div>
+      {dataInputMode === "manual"
         ? (
-          <p class="text-xs text-slate-400 italic">
-            表示項目を設定してから初期データを追加してください（step 2）。
-          </p>
+          qualifiedColumns.length === 0
+            ? (
+              <p class="text-xs text-slate-400 italic">
+                表示項目を設定してから初期データを追加してください（step 2）。
+              </p>
+            )
+            : (
+              <>
+                {design.initialDataRows.length > 0 && (
+                  <div class="mb-2 overflow-x-auto rounded border border-slate-200">
+                    <table class="min-w-full text-left text-xs">
+                      <thead>
+                        <tr>
+                          {qualifiedColumns.map((q) => (
+                            <th
+                              key={q.key}
+                              class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
+                            >
+                              {q.key}
+                            </th>
+                          ))}
+                          <th class="border-b px-2 py-1 bg-slate-50" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {design.initialDataRows.map((row, ri) => (
+                          <tr key={ri} class="border-b last:border-0">
+                            {qualifiedColumns.map((q) => (
+                              <td key={q.key} class="px-1 py-1">
+                                <input
+                                  class="w-full rounded border px-1 py-0.5 text-xs font-mono"
+                                  value={row[q.key] ?? ""}
+                                  onInput={(e) =>
+                                    patchInitialDataRow(
+                                      ri,
+                                      q.key,
+                                      (e.target as HTMLInputElement).value,
+                                    )}
+                                />
+                              </td>
+                            ))}
+                            <td class="px-1 py-1">
+                              <button
+                                type="button"
+                                class="text-xs text-red-500 hover:text-red-700"
+                                onClick={() => removeInitialDataRow(ri)}
+                                aria-label="削除"
+                              >
+                                削除
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  class="btn-secondary text-xs"
+                  onClick={addInitialDataRow}
+                >
+                  行を追加
+                </button>
+              </>
+            )
         )
         : (
-          <>
-            {design.initialDataRows.length > 0 && (
-              <div class="mb-2 overflow-x-auto rounded border border-slate-200">
-                <table class="min-w-full text-left text-xs">
-                  <thead>
-                    <tr>
-                      {qualifiedColumns.map((q) => (
-                        <th
-                          key={q.key}
-                          class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
-                        >
-                          {q.key}
-                        </th>
-                      ))}
-                      <th class="border-b px-2 py-1 bg-slate-50" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {design.initialDataRows.map((row, ri) => (
-                      <tr key={ri} class="border-b last:border-0">
-                        {qualifiedColumns.map((q) => (
-                          <td key={q.key} class="px-1 py-1">
-                            <input
-                              class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                              value={row[q.key] ?? ""}
-                              onInput={(e) =>
-                                patchInitialDataRow(
-                                  ri,
-                                  q.key,
-                                  (e.target as HTMLInputElement).value,
-                                )}
-                            />
-                          </td>
-                        ))}
-                        <td class="px-1 py-1">
-                          <button
-                            type="button"
-                            class="text-xs text-red-500 hover:text-red-700"
-                            onClick={() => removeInitialDataRow(ri)}
-                            aria-label="削除"
-                          >
-                            削除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <button
-              type="button"
-              class="btn-secondary text-xs"
-              onClick={addInitialDataRow}
-            >
-              行を追加
-            </button>
-          </>
+          <AdminImportPanel
+            embedded
+            defaultManifestId={selectedId}
+            lockManifestId={!!selectedId}
+          />
         )}
 
       <h3 class="mt-5 text-xs font-semibold">集計・サンプル</h3>

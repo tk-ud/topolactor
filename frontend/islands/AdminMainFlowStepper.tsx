@@ -13,7 +13,7 @@ export default function AdminMainFlowStepper(): JSX.Element {
     >
       <p class="mb-3 text-sm text-blue-900">
         <strong>作業の流れ（この順で進めてください）</strong>
-        {" "}— データ取り込みの前にコンテンツ設定を進めてください。
+        {" "}— step 3 では手入力または CSV・JSON 取り込みでデータ候補を登録できます。
       </p>
       <ol class="flex flex-wrap items-start gap-2" role="list">
         {ADMIN_MAIN_FLOW_STEPS.map((step, i) => {

@@ -96,14 +96,16 @@ public class RuntimeTimelineScheduler : BackgroundService
     /// Accepts legacy change intake and enqueues as hook trigger.
     /// table_name is preserved as registry resolution key candidate (Target).
     /// </summary>
-    public LegacyChangeIntakeResponseDto EnqueueLegacyChangeTrigger(LegacyChangeIntakeRequestDto intake)
+    public ExistingSystemChangeIntakeResponseDto EnqueueExistingSystemChangeTrigger(
+        ExistingSystemChangeIntakeRequestDto intake,
+        string roleFromJwtClaim)
     {
         ArgumentNullException.ThrowIfNull(intake);
 
-        var (request, errors) = _manifestDispatcher.BuildLegacyHookRequest(intake);
+        var (request, errors) = _manifestDispatcher.BuildExistingSystemHookRequest(intake, roleFromJwtClaim);
         if (errors.Count > 0 || request is null)
         {
-            return new LegacyChangeIntakeResponseDto(
+            return new ExistingSystemChangeIntakeResponseDto(
                 Accepted: false,
                 QueueStatus: null,
                 Errors: errors);
@@ -111,13 +113,13 @@ public class RuntimeTimelineScheduler : BackgroundService
 
         if (!EnqueueHookTrigger(request))
         {
-            return new LegacyChangeIntakeResponseDto(
+            return new ExistingSystemChangeIntakeResponseDto(
                 Accepted: false,
                 QueueStatus: "hook_trigger_queue_full",
                 Errors: [new ValidationError("SCHEDULER_QUEUE_FULL", "runtime queue is full; hook trigger rejected.")]);
         }
 
-        return new LegacyChangeIntakeResponseDto(
+        return new ExistingSystemChangeIntakeResponseDto(
             Accepted: true,
             QueueStatus: "hook_trigger_enqueued",
             Errors: []);

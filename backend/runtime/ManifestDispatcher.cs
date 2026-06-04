@@ -294,7 +294,9 @@ public class ManifestDispatcher
     /// table_name is preserved as Target for registry resolution.
     /// Returns explicit validation errors when minimum identity is missing.
     /// </summary>
-    public (EndpointRequestDto? Request, IReadOnlyList<ValidationError> Errors) BuildLegacyHookRequest(LegacyChangeIntakeRequestDto intake)
+    public (EndpointRequestDto? Request, IReadOnlyList<ValidationError> Errors) BuildExistingSystemHookRequest(
+        ExistingSystemChangeIntakeRequestDto intake,
+        string roleFromJwtClaim)
     {
         ArgumentNullException.ThrowIfNull(intake);
 
@@ -326,15 +328,15 @@ public class ManifestDispatcher
         });
 
         return (new EndpointRequestDto(
-            OperationType: "LegacyChangeIntake",
+            OperationType: "ExistingSystemChangeIntake",
             Target: intake.TableName,
-            Layer: "legacy_mirror",
+            Layer: "existing_system_intake",
             Action: intake.Operation,
             IdOrHubId: null,
             Payload: payload,
             Context: null,
             TriggerKind: "hook",
-            Role: intake.Role ?? "legacy_system"
+            Role: roleFromJwtClaim
         ), []);
     }
 

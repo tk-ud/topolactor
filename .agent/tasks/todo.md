@@ -9,15 +9,10 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
-| `ssot-old-vocabulary-cleanup` | SSOT旧語彙 / 不要 production surface cleanup | 4 | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/sql-attention-logs-ssot.yaml` |
-| `main-data-wiring-ssot-audit` | main データ配線 SSOT 監査 follow-up | 1 | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
-| `ui-builder-layout-design-boundary` | UI Builder layout/design 責務分離 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
-| `admin-main-flow-step-ssot-alignment` | admin top step 表示のSSOT整合 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
-| `admin-contents-data-input-import-subfeature` | admin contents データ入力/import サブ機能接続 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 
 ---
 
-## 共通参照（全 admin bundle）
+## 共通参照（完了 admin bundle の回帰時）
 
 **方針（owner）:** SSOT 準拠でよい。設計意図に反する語彙・UI の残存は危険。収束は**反意図の削除・置換**を優先。
 
@@ -27,13 +22,6 @@
 | `docs/design/runtime-orchestration-ssot.yaml` | `frontend_routes.admin` |
 | `docs/framework-policy.yaml` | `ui_topology_tensor_persistence` |
 | `docs/design/db-schema.yaml` | `manifest`, `packages`, `components_layout_design`, `components_style_design`, `ui_component_bucket` |
-| `docs/design/component-catalog-classification-ssot.yaml` | catalog / registration |
-| `docs/design/css-dictionary-ssot.yaml` | component design トークン |
-| `docs/registrar-admin-ui-specification.md` | **従属**（主正本にしない） |
-
-**実装サーフェス:** `frontend/routes/admin/*`, `ContentsAdmin.tsx`, `ContentsScreenDesignPanel.tsx`, `ContentsPromotionPanel.tsx`, `UiBuilderAdmin.tsx`, `UiBuilderFlowStepper.tsx`, `adminGuides.ts`, `adminUxTerms.ts`, `adminUxGuard.test.ts`, `adminMainFlow.test.ts`
-
----
 
 ---
 
@@ -61,65 +49,27 @@
 
 ---
 
-## Bundle `ssot-old-vocabulary-cleanup`
-
-**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/framework-policy.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-- [ ] `dispatcher_legacy_alias: dispatchar` を削除し、必要なら migration / negative-check に限定して旧語彙を隔離
-- [ ] `LegacyChangeIntake*` / `legacy_mirror` / `legacy_system` を SSOT 準拠の existing-system / external-intake 語彙へ収束、または design SSOT に明示し、`/intake/legacy-change` の role は JWT claim 由来に固定して body 由来 role を manifest axis に使わない
-- [ ] `HubAttractorExplorationRuntime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync` と related legacy support-cache cosine diagnostics / compatibility payload を削除または test-only / negative-check に隔離し、canonical scheduler route が `hubs.hub_relations` 探索のみであることをテスト更新
-- [ ] `runtime_jump_event_contract` の `from` / `to` 形と実装の `PastAddress` / `CurrentAddress` / `PlannedAddress` 形を突合し、SSOT・DTO・テストの canonical jump event shape を一本化
-
----
-
-## Bundle `admin-main-flow-step-ssot-alignment`
-
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-- [ ] `/admin` トップの `ADMIN_MAIN_FLOW_STEPS` / `AdminMainFlowStepper` / `adminMainFlow.test.ts` を canonical admin workflow の step 番号へ再整合する
-  - 問題: SSOT の canonical admin routes は `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests` で、`/auth` は利用前提であって admin authoring pipeline の Step 1 ではない。一方、現状は `ADMIN_MAIN_FLOW_STEPS` と `UX_MAIN_FLOW_STEP_LABELS` が「ログイン」を Step 1 として表示・テスト固定し、`/admin/contents` を Step 2 にずらしている。
-  - 目的: `/admin/contents` の step 1/2/2.5/3、`/admin/ui-builder` の Step 4、`/admin/manifests` の post-pipeline を SSOT 通りに投影し、frontend の step 表示が DB/manifest topology authoring pipeline の意味境界を壊さないようにする。
-  - 改善方針: ログインは prerequisite/注意文に隔離し、`ADMIN_MAIN_FLOW_STEPS` は canonical admin workflow のみを表す。必要なら contents step を subSteps で 1/2/2.5/3 表示し、ui-builder は Step 4、manifests は post-pipeline として扱う。`adminMainFlow.test.ts` は `/auth` を canonical main flow に含めない assertion に更新する。
-  - 対象ファイル: `frontend/content/adminGuides.ts`, `frontend/content/adminUxTerms.ts`, `frontend/islands/AdminMainFlowStepper.tsx`, `frontend/routes/admin/index.tsx`, `frontend/tests/adminMainFlow.test.ts`。
-  - 完了条件: `/auth` が canonical admin workflow step として表示/テスト固定されず、SSOT の step 1/2/2.5/3/4/post-pipeline 境界と admin route registry が一致する。
-
----
-
-## Bundle `admin-contents-data-input-import-subfeature`
-
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-- [ ] `/admin/contents` のデータ入力 section に CSV・JSON import をサブ機能として接続する
-  - 問題: `frontend/islands/AdminImport.tsx` は `listImportManifests` / `listImportSchemas` / `uploadImportPreview` / `applyImport` を持つ import UI として存在するが、canonical `/admin/contents` のデータ入力 section には mount されていない。`frontend/routes/admin/contents.tsx` は `ContentsAdmin` のみを表示するため、Step2/データ入力 or import の作業面が canonical admin flow 上に存在しない。また現行 SSOT は `/admin/import` route 不要までは示すが、「/admin/contents のデータ入力サブ機能として manual input と CSV/JSON import を持つ」ことを十分に明文化していない。
-  - 目的: データ駆動OSとして、データの形定義だけでなく、ユーザーが実データ候補を手入力または CSV/JSON import できる surface を `/admin/contents` の正規導線へ接続する。
-  - 改善方針: まず `docs/design/admin-console-workflow-ssot.yaml` に、import は `/admin/import` ではなく `/admin/contents` の data input subfeature であり、手入力と CSV/JSON import は同一データ入力 section の入力モードであることを追記する。その後、既存 `AdminImport.tsx` の preview → apply UI/ロジックを、`/admin/contents` 内の「データ入力」サブ機能へ統合する。backend の `admin_csv_json_import` preview → explicit apply 経路を使い、`/admin/import` route は作らない。
-  - 対象ファイル: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsAdmin.tsx`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/islands/AdminImport.tsx`, `frontend/routes/admin/contents.tsx`, `frontend/tests/adminMainFlow.test.ts`, `frontend/tests/adminUxGuard.test.ts`。
-  - 完了条件: SSOT に `/admin/contents` data input subfeature として manual input / CSV・JSON import が明文化され、`/admin/contents` 上でデータ入力または CSV/JSON import surface が到達可能になり、import は preview → explicit apply を経由し、frontend が DB 直書き・topology判断を持たないことをテストで固定する。`/admin/import` route は追加しない。
-
----
-
-## Bundle `ui-builder-layout-design-boundary`
-
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/framework-policy.yaml`, `docs/design/css-dictionary-ssot.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-- [ ] `/admin/ui-builder` の layout/design 編集境界を SSOT 通りに再分離する
-  - 問題: SSOT は layout を「UI 配置場所（canvas placement / slots / order / responsive layout class refs）」、component_design を「色・形・styling tokens・reaction presentation intent」と分けるが、`frontend/islands/UiBuilderAdmin.tsx` は `layout` タブ内で `PackageDesignPanel` と `LayoutBuilderSection` を同列表示し、さらに `layout_patch` 経路で `cssTokenRefs` / `responsiveTokenRefs` を `components_layout_design` / `ui_topology_tensor` へ保存している。これにより色・余白・トークン設定が layout 編集の保存責務に混入して見える。
-  - 目的: データ駆動OSの正本である DB authority に合わせ、layout はフレーム配置図、component_design は色・形・プロパティ設定として UI と保存経路を明確に分離する。
-  - 改善方針: `UiBuilderAdmin.tsx` の通常導線を `package selection` → `layout child editor` → `component design child editor` の明示サブセクションに分け、layout_patch は配置・slot・order・layout class refs に限定する。色・余白・フォント・CSS token refs・reactionIntent は `component_style_design:upsert` / `components_style_design` 側へ寄せる。既存 DB カラムに互換保存が必要な場合は advanced/debug か migration TODO として明示し、通常 UI で layout と design を混同させない。
-  - 対象ファイル: `frontend/islands/UiBuilderAdmin.tsx`, `backend/runtime/AdminRuntime.cs`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeLayoutPatchTests.cs`, frontend UI builder tests。
-  - 完了条件: 通常 UI で layout は配置図編集のみ、design は色等プロパティ編集のみになり、layout_patch request/DB write と component_style_design upsert の責務境界をテストで固定する。
-
----
-
 ## 完了済みアーカイブ
+
+### `admin-main-flow-step-ssot-alignment`（2026-06）
+
+- [x] `/admin` トップの `ADMIN_MAIN_FLOW_STEPS` / `AdminMainFlowStepper` / `adminMainFlow.test.ts` を canonical admin workflow へ再整合（`/auth` 除外、contents subSteps 1/2/2.5/3）
+
+### `admin-contents-data-input-import-subfeature`（2026-06）
+
+- [x] `/admin/contents` step 3 データ入力に手入力 + `AdminImportPanel`（CSV/JSON preview→apply）を統合
+- [x] `admin-console-workflow-ssot.yaml` に data_input_subfeature を明文化
+
+### `ui-builder-layout-design-boundary`（2026-06）
+
+- [x] `UiBuilderAdmin` layout / design タブ分離、`layout_patch` から cssTokenRefs 除去、backend strip + テスト
+
+### `ssot-old-vocabulary-cleanup`（2026-06）
+
+- [x] `dispatcher_legacy_alias: dispatchar` 削除（runtime-orchestration-ssot.yaml）
+- [x] `ExistingSystemChangeIntake*` / `existing_system_intake` 語彙、JWT role claim 固定
+- [x] `ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync` 削除、テストは `ExploreAsync`（hubs.hub_relations）へ
+- [x] `RuntimeJumpEvent` JSON `from`/`to`/`planned` 投影と SSOT 突合
 
 ### `main-data-wiring-ssot-audit`（2026-06）
 

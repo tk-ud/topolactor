@@ -141,7 +141,7 @@ type PaletteEntry = {
   routeKey?: string;
 };
 
-type TabId = "ci" | "catalog" | "bucket" | "css" | "layout";
+type TabId = "ci" | "catalog" | "bucket" | "css" | "layout" | "design";
 
 // Gap 1: Lifecycle state machine
 type LifecyclePhase =
@@ -692,7 +692,6 @@ function ApplyReadinessPanel({
   effectiveRouteKey,
   effectiveLayoutId,
   draftNodes,
-  selectedTokenRefs,
   layoutClassRefError,
   onNavigate,
 }: {
@@ -700,7 +699,6 @@ function ApplyReadinessPanel({
   effectiveRouteKey: string;
   effectiveLayoutId: string;
   draftNodes: DraftNode[];
-  selectedTokenRefs: string[];
   layoutClassRefError: string | null;
   onNavigate?: (tab: TabId) => void;
 }): JSX.Element {
@@ -769,8 +767,7 @@ function ApplyReadinessPanel({
         <li class="flex items-start gap-2">
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
-            CSS トークン: {selectedTokenRefs.length} 件選択済み。
-            設定エラーはバックエンド検証結果に表示されます。
+            色・余白トークンは「component design」タブで保存します（layout 保存では配置のみ）。
           </span>
         </li>
       </ul>
@@ -3025,10 +3022,7 @@ function LayoutBuilderSection({
   const dragState = useRef<CanvasDragState>(null);
   const resizeState = useRef<CanvasResizeState>(null);
 
-  // ── CSS / layout class refs ──────────────────────────────────────────────
-  const [selectedTokenRefs, setSelectedTokenRefs] = useState<string[]>([]);
-  const [responsiveTokenRules, setResponsiveTokenRules] = useState<ResponsiveTokenRules>({});
-  const [responsiveJsonError, setResponsiveJsonError] = useState<{ code: string; message: string } | null>(null);
+  // ── layout class refs (placement only; design tokens → component design tab) ─
   const [selectedLayoutClassRefs, setSelectedLayoutClassRefs] = useState<string[]>([]);
   const [manualLayoutClassRef, setManualLayoutClassRef] = useState("");
   const [layoutClassRefError, setLayoutClassRefError] = useState<string | null>(null);
@@ -3249,10 +3243,6 @@ function LayoutBuilderSection({
       setPatchErrors([{ code: "NO_ROUTE_LAYOUT", message: "ルートとレイアウトを選択してください。" }]);
       return;
     }
-    if (responsiveJsonError) {
-      setPatchErrors([responsiveJsonError]);
-      return;
-    }
     if (action === "apply") {
       const draftOnlyNodes = draftNodes.filter((n) => n.isDraftOnly);
       if (draftOnlyNodes.length > 0) {
@@ -3290,11 +3280,9 @@ function LayoutBuilderSection({
         layoutId: effectiveLayoutId,
         routeKey: effectiveRouteKey,
         tensorPatchJson,
-        cssTokenRefs: selectedTokenRefs,
-        responsiveTokenRefs: filterEmptyResponsiveRules(responsiveTokenRules),
       });
       setDebugJson(JSON.stringify(body, null, 2));
-      const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedTokenRefs.length, selectedLayout?.layoutKey);
+      const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedLayoutClassRefs.length, selectedLayout?.layoutKey);
       setPatchSummary(summary);
 
       // Failure phases are scoped to the action: preview/validate errors stay in their
@@ -3586,11 +3574,6 @@ function LayoutBuilderSection({
     return null;
   };
 
-  // ── CSS / layout class token handlers ────────────────────────────────────
-  const toggleTokenRef = (tokenKey: string) => {
-    setSelectedTokenRefs((prev) => prev.includes(tokenKey) ? prev.filter((k) => k !== tokenKey) : [...prev, tokenKey]);
-  };
-
   const toggleLayoutClassRef = (classKey: string) => {
     setLayoutClassRefError(null);
     setSelectedLayoutClassRefs((prev) => {
@@ -3808,55 +3791,19 @@ function LayoutBuilderSection({
         </AdvancedManualOverride>
       </Accordion>
 
-      <Accordion title="色・余白の設定（CSSトークン）" defaultOpen={false}>
-        <CssTokenPicker selectedTokenRefs={selectedTokenRefs} onToggle={toggleTokenRef} />
-      </Accordion>
-
-      <Accordion title="レスポンシブ設定（画面幅別トークン）" defaultOpen={false}>
-        <ResponsiveTokenRuleEditor
-          rules={responsiveTokenRules}
-          onChange={setResponsiveTokenRules}
-        />
-        <AdvancedManualOverride title="詳細設定 — レスポンシブルール JSON を直接入力">
-          <p class="text-muted-xs mb-1">
-            形式: <code>{`{"sm": ["token.key"], "md": ["token.key"]}`}</code>
-          </p>
-          <textarea
-            rows={3}
-            class={`input-mono w-full text-xs${responsiveJsonError ? " border-red-400" : ""}`}
-            placeholder={`{"sm": [], "md": [], "lg": [], "xl": []}`}
-            aria-label="レスポンシブルール JSON 手入力"
-            aria-invalid={responsiveJsonError ? "true" : undefined}
-            onBlur={(e) => {
-              const raw = (e.target as HTMLTextAreaElement).value.trim();
-              if (!raw) {
-                setResponsiveJsonError(null);
-                return;
-              }
-              const result = validateResponsiveTokenRulesJson(raw);
-              if (!result.ok) {
-                setResponsiveJsonError({ code: result.errorCode, message: result.message });
-                return;
-              }
-              setResponsiveJsonError(null);
-              setResponsiveTokenRules(result.rules);
-            }}
-          />
-          {responsiveJsonError && (
-            <div role="alert" class="mt-1 rounded border border-red-300 bg-red-50 px-2 py-1 text-xs text-red-700">
-              <span class="font-medium">{responsiveJsonError.message}</span>
-              <span class="ml-2 font-mono text-[0.65rem] text-gray-400">[{responsiveJsonError.code}]</span>
-            </div>
-          )}
-        </AdvancedManualOverride>
-      </Accordion>
+      <p class="mb-3 text-xs text-slate-600">
+        色・余白・CSS 辞書トークン・レスポンシブは
+        <button type="button" class="link" onClick={() => onNavigate?.("design")}>
+          component design タブ
+        </button>
+        で保存してください。
+      </p>
 
       <ApplyReadinessPanel
         canPatch={canPatch}
         effectiveRouteKey={effectiveRouteKey}
         effectiveLayoutId={effectiveLayoutId}
         draftNodes={draftNodes}
-        selectedTokenRefs={selectedTokenRefs}
         layoutClassRefError={layoutClassRefError}
         onNavigate={onNavigate}
       />
@@ -3865,7 +3812,7 @@ function LayoutBuilderSection({
       <div class="mb-1 flex flex-wrap gap-2">
         <button
           onClick={() => callLayoutPatch("preview")}
-          disabled={loading || !canPatch || !!responsiveJsonError}
+          disabled={loading || !canPatch}
           class="btn-secondary min-w-[100px]"
           aria-label="プレビュー実行 — DBへの変更なし"
         >
@@ -3873,7 +3820,7 @@ function LayoutBuilderSection({
         </button>
         <button
           onClick={() => callLayoutPatch("validate")}
-          disabled={loading || !canPatch || !!responsiveJsonError}
+          disabled={loading || !canPatch}
           class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
           aria-label="バリデート実行 — ref整合チェック"
         >
@@ -3881,7 +3828,7 @@ function LayoutBuilderSection({
         </button>
         <button
           onClick={() => callLayoutPatch("apply")}
-          disabled={loading || !canPatch || !!responsiveJsonError}
+          disabled={loading || !canPatch}
           class="btn-success min-w-[100px]"
           aria-label="適用実行 — DBへ反映"
         >
@@ -3919,8 +3866,9 @@ function LayoutBuilderSection({
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
   { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
-  { id: "layout", label: "パッケージ layout / design", hint: "パッケージ選択後に配置・スタイル" },
-  { id: "css", label: "CSS トークン" },
+  { id: "layout", label: "パッケージ layout（配置）", hint: "canvas 配置・slot・layout class refs" },
+  { id: "design", label: "component design（色・形）", hint: "cssTokenRefs・reactionIntent・配線" },
+  { id: "css", label: "CSS トークン辞書" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
@@ -4106,6 +4054,54 @@ function PackageWiringEditor({
   );
 }
 
+function PackageScopeSelector({
+  packages,
+  selectedPackageId,
+  onSelectPackage,
+  heading = "パッケージ選択（編集ルート）",
+}: {
+  packages: AdminPackageRow[];
+  selectedPackageId: string;
+  onSelectPackage: (id: string) => void;
+  heading?: string;
+}): JSX.Element {
+  const selected = packages.find((p) => p.packageId === selectedPackageId);
+  return (
+    <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
+      <h3 class="font-semibold">{heading}</h3>
+      <p class="text-muted-xs mb-2">
+        layout / デザイン設定 / 配線は選択したパッケージにスコープします。
+      </p>
+      <label class="block text-xs mb-2">
+        パッケージ
+        <select
+          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+          value={selectedPackageId}
+          onChange={(e) => onSelectPackage((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">— 選択 —</option>
+          {packages.map((p) => (
+            <option key={p.packageId} value={p.packageId}>
+              {p.packageKey}{p.routeKey ? ` (${p.routeKey})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected && (!selected.routeKey || !selected.layoutId) && (
+        <p class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+          このパッケージに route / layout が未連携です。step 4.1 でパッケージ化（promote まで完了）をやり直してください。
+        </p>
+      )}
+      {selected && (
+        <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
+          package: {selected.packageId.slice(0, 8)}…
+          {selected.layoutId && <> / layout: {selected.layoutId.slice(0, 8)}…</>}
+        </p>
+      )}
+    </section>
+  );
+}
+
 function PackageDesignPanel({
   packages,
   selectedPackageId,
@@ -4125,7 +4121,6 @@ function PackageDesignPanel({
   const [status, setStatus] = useState<string | null>(null);
   const [packageComponents, setPackageComponents] = useState<AdminPackageComponentRow[]>([]);
   const [componentsLoadStatus, setComponentsLoadStatus] = useState<string | null>(null);
-  const selected = packages.find((p) => p.packageId === selectedPackageId);
 
   const toggleCssToken = (tokenKey: string) => {
     setCssTokenRefs((prev) =>
@@ -4182,39 +4177,16 @@ function PackageDesignPanel({
 
   return (
     <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
-      <h3 class="font-semibold">パッケージ選択（編集ルート）</h3>
+      <PackageScopeSelector
+        packages={packages}
+        selectedPackageId={selectedPackageId}
+        onSelectPackage={onSelectPackage}
+        heading="component design（色・形・トークン）"
+      />
       <p class="text-muted-xs mb-2 text-amber-800">
-        色・形・トークン・リアクション意図はデザイン設定として保存します（CSS 辞書トークンが正本）。
+        色・形・トークン・リアクション意図は component_style_design:upsert で保存します。
+        layout タブでは配置のみ編集してください。
       </p>
-      <p class="text-muted-xs mb-2">
-        layout / デザイン設定 / 配線は選択したパッケージにスコープします。
-      </p>
-      <label class="block text-xs mb-2">
-        パッケージ
-        <select
-          class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-          value={selectedPackageId}
-          onChange={(e) => onSelectPackage((e.target as HTMLSelectElement).value)}
-        >
-          <option value="">— 選択 —</option>
-          {packages.map((p) => (
-            <option key={p.packageId} value={p.packageId}>
-              {p.packageKey}{p.routeKey ? ` (${p.routeKey})` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      {selected && (!selected.routeKey || !selected.layoutId) && (
-        <p class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-          このパッケージに route / layout が未連携です。step 4.1 でパッケージ化（promote まで完了）をやり直してください。
-        </p>
-      )}
-      {selected && (
-        <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
-          package: {selected.packageId.slice(0, 8)}…
-          {selected.layoutId && <> / layout: {selected.layoutId.slice(0, 8)}…</>}
-        </p>
-      )}
       {selectedPackageId && (
         <PackageWiringEditor
           selectedPackageId={selectedPackageId}
@@ -4309,7 +4281,7 @@ export default function UiBuilderAdmin(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "layout") reloadPackages();
+    if (activeTab === "layout" || activeTab === "design") reloadPackages();
   }, [activeTab]);
 
   const handlePackaged = (handoff: PackagedHandoff) => {
@@ -4351,10 +4323,11 @@ export default function UiBuilderAdmin(): JSX.Element {
         {activeTab === "css" && <CssTokenSelectorSection />}
         {activeTab === "layout" && (
           <>
-            <PackageDesignPanel
+            <PackageScopeSelector
               packages={packages}
               selectedPackageId={selectedPackageId}
               onSelectPackage={setSelectedPackageId}
+              heading="パッケージ layout（配置図）"
             />
             <LayoutBuilderSection
               onNavigate={setActiveTab}
@@ -4363,6 +4336,13 @@ export default function UiBuilderAdmin(): JSX.Element {
               scopedLayoutId={selectedPackage?.layoutId}
             />
           </>
+        )}
+        {activeTab === "design" && (
+          <PackageDesignPanel
+            packages={packages}
+            selectedPackageId={selectedPackageId}
+            onSelectPackage={setSelectedPackageId}
+          />
         )}
       </div>
 

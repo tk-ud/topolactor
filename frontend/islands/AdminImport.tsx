@@ -19,10 +19,25 @@ import {
   UX_UI_BUILDER,
 } from "../content/adminUxTerms.ts";
 
-export default function AdminImport(): JSX.Element {
+export type AdminImportPanelProps = {
+  /** When true, omit page chrome (for /admin/contents data-input section). */
+  embedded?: boolean;
+  /** Pre-select manifest when authoring on contents step 3. */
+  defaultManifestId?: string;
+  /** Lock manifest selector to the shared manifest id. */
+  lockManifestId?: boolean;
+};
+
+export function AdminImportPanel({
+  embedded = false,
+  defaultManifestId = "",
+  lockManifestId = false,
+}: AdminImportPanelProps): JSX.Element {
   const [manifests, setManifests] = useState<AdminImportManifestItem[]>([]);
   const [schemas, setSchemas] = useState<AdminImportSchemaItem[]>([]);
-  const [selectedManifestId, setSelectedManifestId] = useState<string>("");
+  const [selectedManifestId, setSelectedManifestId] = useState<string>(
+    defaultManifestId,
+  );
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>("");
   const [sourceType, setSourceType] = useState<"csv" | "json">("csv");
   const [fileName, setFileName] = useState<string>("");
@@ -34,6 +49,12 @@ export default function AdminImport(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingSelectors, setLoadingSelectors] = useState(true);
+
+  useEffect(() => {
+    if (defaultManifestId) {
+      setSelectedManifestId(defaultManifestId);
+    }
+  }, [defaultManifestId]);
 
   useEffect(() => {
     (async () => {
@@ -140,17 +161,26 @@ export default function AdminImport(): JSX.Element {
     }
   };
 
+  const sectionTitleClass = embedded ? "text-xs font-semibold mt-3" : "section-title";
+  const Wrapper = embedded ? "div" : "main";
+  const wrapperClass = embedded ? "rounded border border-slate-200 bg-white p-3 text-sm" : "page-main font-mono";
+
   return (
-    <main class="page-main font-mono">
-      <h1 class="page-title">topolactor — 管理 / インポート</h1>
-      <p class="mb-4">
-        <a href="/admin" class="link">&larr; 管理インデックス</a>
-      </p>
+    <Wrapper class={wrapperClass}>
+      {!embedded && (
+        <>
+          <h1 class="page-title">topolactor — 管理 / インポート</h1>
+          <p class="mb-4">
+            <a href="/admin" class="link">&larr; 管理インデックス</a>
+          </p>
+          <hr class="mb-6 border-gray-200" />
+        </>
+      )}
 
-      <hr class="mb-6 border-gray-200" />
-
-      <section class="mb-6">
-        <h2 class="section-title">1. 画面と{UX_DATA_SHAPE}を選択</h2>
+      <section class={embedded ? "mb-4" : "mb-6"}>
+        <h2 class={sectionTitleClass}>
+          {embedded ? "画面と取り込みルール" : `1. 画面と${UX_DATA_SHAPE}を選択`}
+        </h2>
         <AdminActionHint>
           {UX_CONTENTS}で定義した画面（取り込み先）と、{UX_DATA_SHAPE}（各行の項目）を選びます。
           未登録の場合は下の案内に従ってください。
@@ -161,36 +191,17 @@ export default function AdminImport(): JSX.Element {
           ? (
             <div class="alert-info">
               <p class="text-sm font-medium">
-                取り込み先の画面がありません。まず{UX_CONTENTS_PAGE}で画面の内容と
+                取り込み先の画面がありません。まず step 1–2 で画面の内容と
                 データの形を設定してください。
               </p>
-              <p class="text-muted-xs mt-2">
-                ページを有効化しても一覧が空の場合は、管理者にお問い合わせください。
-                <details class="mt-2">
-                  <summary class="cursor-pointer">開発者向け情報</summary>
-                  hubs.topology_manifests への projection 状態と
-                  .agent/tasks/todo.md を確認してください。
-                </details>
-                代替処理を行わず、問題を明示します。
-              </p>
-              <a href="/admin/contents" class="btn-primary mt-3 inline-block">
-                {UX_CONTENTS_PAGE}へ
-              </a>
             </div>
           )
           : schemasEmpty
           ? (
             <div class="alert-info">
               <p class="text-sm font-medium">
-                取り込み用の{UX_DATA_SHAPE}がまだありません。{UX_CONTENTS_PAGE}でデータの形を整えてください。
+                取り込み用の{UX_DATA_SHAPE}がまだありません。step 2 でデータの形を整えてください。
               </p>
-              <p class="text-muted-xs mt-2">
-                CSV/JSON
-                の各行に必要な項目を決めます。プレビューには画面と{UX_DATA_SHAPE}の両方が必要です。
-              </p>
-              <a href="/admin/contents" class="btn-primary mt-3 inline-block">
-                {UX_CONTENTS_PAGE}へ
-              </a>
             </div>
           )
           : (
@@ -199,6 +210,7 @@ export default function AdminImport(): JSX.Element {
                 画面
                 <select
                   value={selectedManifestId}
+                  disabled={lockManifestId && !!defaultManifestId}
                   onChange={(e) =>
                     setSelectedManifestId(
                       (e.target as HTMLSelectElement).value,
@@ -233,8 +245,10 @@ export default function AdminImport(): JSX.Element {
           )}
       </section>
 
-      <section class="mb-6">
-        <h2 class="section-title">2. CSV または JSON ファイルをアップロード</h2>
+      <section class={embedded ? "mb-4" : "mb-6"}>
+        <h2 class={sectionTitleClass}>
+          {embedded ? "CSV または JSON ファイル" : "2. CSV または JSON ファイルをアップロード"}
+        </h2>
         {!canSelectInputs
           ? (
             <p class="text-muted text-sm">
@@ -258,8 +272,10 @@ export default function AdminImport(): JSX.Element {
           )}
       </section>
 
-      <section class="mb-6">
-        <h2 class="section-title">3. プレビュー（内容確認）</h2>
+      <section class={embedded ? "mb-4" : "mb-6"}>
+        <h2 class={sectionTitleClass}>
+          {embedded ? "プレビュー（内容確認）" : "3. プレビュー（内容確認）"}
+        </h2>
         <button
           onClick={handlePreview}
           disabled={loading || !canSelectInputs}
@@ -268,7 +284,7 @@ export default function AdminImport(): JSX.Element {
           プレビュー
         </button>
         <AdminActionHint>
-          まだ保存はしません。{UX_CONTENTS}で定義した{UX_DATA_SHAPE}に沿って各行を確認し、有効/無効の件数を表示します。
+          まだ保存はしません。{UX_DATA_SHAPE}に沿って各行を確認し、有効/無効の件数を表示します。
         </AdminActionHint>
         {!canSelectInputs && (
           <p class="text-muted-xs mt-2">
@@ -285,22 +301,12 @@ export default function AdminImport(): JSX.Element {
           <p>
             <strong>エラー:</strong> {error}
           </p>
-          <p class="text-muted-xs mt-2">
-            ファイル形式の誤り・画面/{UX_DATA_SHAPE}の未選択はここに表示されます。
-            無効行はプレビュー表を修正してから再プレビューしてください。
-          </p>
-          <details class="text-muted-xs mt-1">
-            <summary class="cursor-pointer">技術情報</summary>
-            <p class="mt-1">
-              サーバー未接続時は接続設定と認証を確認してください。
-            </p>
-          </details>
         </div>
       )}
 
       {preview && (
-        <section class="mb-6">
-          <h2 class="section-title">プレビュー結果</h2>
+        <section class={embedded ? "mb-4" : "mb-6"}>
+          <h2 class={sectionTitleClass}>プレビュー結果</h2>
           <p class="mb-3 text-sm">
             <span class="text-green-700">有効: {preview.validCount}</span>
             {" | "}
@@ -311,13 +317,7 @@ export default function AdminImport(): JSX.Element {
             >
               無効: {preview.invalidCount}
             </span>
-            {" | "}合計: {preview.records.length}{" "}
-            <details class="mt-1 inline-block">
-              <summary class="cursor-pointer text-xs text-muted-xs">
-                技術情報
-              </summary>
-              <code class="text-xs">{preview.snapshotId}</code>
-            </details>
+            {" | "}合計: {preview.records.length}
           </p>
 
           <div class="table-wrap max-h-96 overflow-y-auto">
@@ -360,7 +360,9 @@ export default function AdminImport(): JSX.Element {
           </div>
 
           <div class="mt-4">
-            <h2 class="section-title">4. 適用</h2>
+            <h2 class={sectionTitleClass}>
+              {embedded ? "適用（明示操作）" : "4. 適用"}
+            </h2>
             <button
               onClick={handleApply}
               disabled={loading || preview.validCount === 0 ||
@@ -370,30 +372,31 @@ export default function AdminImport(): JSX.Element {
               適用 ({preview.validCount} 件有効)
             </button>
             <AdminActionHint>
-              プレビューで問題がなかった行だけを取り込みます。取り消しが必要な場合は管理者にお問い合わせください。
+              プレビューで問題がなかった行だけを取り込みます。
             </AdminActionHint>
           </div>
         </section>
       )}
 
       {applyResult && (
-        <section class="alert-success mb-6">
-          <h2 class="mb-1 font-semibold">取り込み完了</h2>
-          <p class="mt-2 text-xs text-muted-xs">
-            次のステップ:{" "}
-            <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a>{" "}
-            で画面を準備する、または{" "}
-            <a href="/demo/debug" class="link">{UX_RUNTIME_CHECK}</a>{" "}
-            で動作を確認してください。
-          </p>
-          <details class="mt-1">
-            <summary class="cursor-pointer text-xs text-green-700">
-              技術情報
-            </summary>
-            <code class="text-xs">{applyResult.applyLogId}</code>
-          </details>
+        <section class="alert-success mb-4">
+          <h2 class="mb-1 font-semibold text-sm">取り込み完了</h2>
+          {!embedded && (
+            <p class="mt-2 text-xs text-muted-xs">
+              次のステップ:{" "}
+              <a href="/admin/ui-builder" class="link">{UX_UI_BUILDER}</a>{" "}
+              で画面を準備する、または{" "}
+              <a href="/demo/debug" class="link">{UX_RUNTIME_CHECK}</a>{" "}
+              で動作を確認してください。
+            </p>
+          )}
         </section>
       )}
-    </main>
+    </Wrapper>
   );
+}
+
+/** Standalone island (legacy mount surface; canonical path is /admin/contents embedded panel). */
+export default function AdminImport(): JSX.Element {
+  return <AdminImportPanel />;
 }

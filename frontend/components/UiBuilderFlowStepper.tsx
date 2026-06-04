@@ -1,7 +1,7 @@
 import { JSX } from "preact";
 
 /** Tab IDs for /admin/ui-builder — must stay in sync with UiBuilderAdmin.tsx TabId */
-export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "css" | "layout";
+export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "css" | "layout" | "design";
 
 type StepSpec = {
   id: number;
@@ -24,10 +24,17 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
   },
   {
     id: 2,
-    label: "パッケージの layout / design",
+    label: "パッケージ layout（配置）",
     detail:
-      "パッケージを選び、子階層の UI 配置（layout）と色・形・トークン・リアクション（component design）・配線を編集します。layout 保存には packageId が必須です。",
+      "パッケージを選び、canvas 上の配置・slot・layout class refs を保存します（layout_patch）。色・形は design タブです。",
     tabTarget: "layout",
+  },
+  {
+    id: 2.5,
+    label: "component design（色・形）",
+    detail:
+      "cssTokenRefs・classname・reactionIntent・配線を component_style_design:upsert で保存します。",
+    tabTarget: "design",
   },
   {
     id: 3,
@@ -39,7 +46,9 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
 
 export function getActiveStepIds(activeTab: UiBuilderTabId): number[] {
   if (activeTab === "bucket") return [1];
-  if (activeTab === "layout" || activeTab === "css") return [2];
+  if (activeTab === "layout") return [2];
+  if (activeTab === "design") return [2.5];
+  if (activeTab === "css") return [2, 2.5];
   return [];
 }
 

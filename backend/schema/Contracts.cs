@@ -101,10 +101,14 @@ public record Emission(
     IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null
 );
 
+/// <summary>SSOT runtime_jump_event_contract: scope, from, to, reason (+ planned for user_action).</summary>
 public record RuntimeJumpEvent(
     string Scope,
+    [property: System.Text.Json.Serialization.JsonPropertyName("from")]
     int PastAddress,
+    [property: System.Text.Json.Serialization.JsonPropertyName("to")]
     int CurrentAddress,
+    [property: System.Text.Json.Serialization.JsonPropertyName("planned")]
     int PlannedAddress,
     string Reason
 );
@@ -129,11 +133,12 @@ public record ValidationError(
 
 
 /// <summary>
-/// Minimal legacy change intake contract for existing-system island embedding.
+/// Existing-system change intake contract (external hook boundary).
 /// table_name is the registry resolution key candidate.
 /// changed_data_jsonb or diff_jsonb must be present.
+/// Role is taken from JWT claim at the endpoint — not from request body.
 /// </summary>
-public record LegacyChangeIntakeRequestDto(
+public record ExistingSystemChangeIntakeRequestDto(
     string? TableName,
     string? RowId,
     string? Operation,
@@ -141,11 +146,10 @@ public record LegacyChangeIntakeRequestDto(
     JsonElement? DiffJsonb,
     string? Actor = null,
     string? Source = null,
-    DateTimeOffset? OccurredAt = null,
-    string? Role = null
+    DateTimeOffset? OccurredAt = null
 );
 
-public record LegacyChangeIntakeResponseDto(
+public record ExistingSystemChangeIntakeResponseDto(
     bool Accepted,
     string? QueueStatus,
     IReadOnlyList<ValidationError> Errors

@@ -7,44 +7,55 @@ namespace Topolactor.Endpoint;
 /// <summary>
 /// Intake boundary for existing-system forked change events.
 /// Accepts minimal change shape and forwards as hook trigger through scheduler.
+/// Role is supplied from JWT claim — never from request body.
 /// </summary>
-public class LegacyChangeIntakeEndpoint
+public class ExistingSystemChangeIntakeEndpoint
 {
-    private readonly ILogger<LegacyChangeIntakeEndpoint> _logger;
+    private readonly ILogger<ExistingSystemChangeIntakeEndpoint> _logger;
     private readonly RuntimeTimelineScheduler _scheduler;
 
-    public LegacyChangeIntakeEndpoint(
-        ILogger<LegacyChangeIntakeEndpoint> logger,
+    public ExistingSystemChangeIntakeEndpoint(
+        ILogger<ExistingSystemChangeIntakeEndpoint> logger,
         RuntimeTimelineScheduler scheduler)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
     }
 
-    public LegacyChangeIntakeResponseDto Handle(LegacyChangeIntakeRequestDto request)
+    public ExistingSystemChangeIntakeResponseDto Handle(
+        ExistingSystemChangeIntakeRequestDto request,
+        string roleFromJwtClaim)
     {
         if (request is null)
         {
-            return new LegacyChangeIntakeResponseDto(
+            return new ExistingSystemChangeIntakeResponseDto(
                 Accepted: false,
                 QueueStatus: null,
                 Errors: [new ValidationError("REQUEST_NULL", "Request must not be null.")]);
         }
 
-        var result = _scheduler.EnqueueLegacyChangeTrigger(request);
+        if (string.IsNullOrWhiteSpace(roleFromJwtClaim))
+        {
+            return new ExistingSystemChangeIntakeResponseDto(
+                Accepted: false,
+                QueueStatus: null,
+                Errors: [new ValidationError("ROLE_CLAIM_REQUIRED", "JWT role claim is required for existing-system intake.")]);
+        }
+
+        var result = _scheduler.EnqueueExistingSystemChangeTrigger(request, roleFromJwtClaim);
         if (!result.Accepted)
         {
-            return new LegacyChangeIntakeResponseDto(
+            return new ExistingSystemChangeIntakeResponseDto(
                 Accepted: false,
                 QueueStatus: null,
                 Errors: result.Errors);
         }
 
         _logger.LogInformation(
-            "LegacyChangeIntake accepted table={TableName} row={RowId} operation={Operation}",
-            request.TableName, request.RowId, request.Operation);
+            "ExistingSystemChangeIntake accepted table={TableName} row={RowId} operation={Operation} role={Role}",
+            request.TableName, request.RowId, request.Operation, roleFromJwtClaim);
 
-        return new LegacyChangeIntakeResponseDto(
+        return new ExistingSystemChangeIntakeResponseDto(
             Accepted: true,
             QueueStatus: "hook_trigger_enqueued",
             Errors: []);

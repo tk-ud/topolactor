@@ -226,7 +226,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -244,7 +244,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
@@ -258,7 +258,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -276,7 +276,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hubCurrent]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(currentId: currentId, normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -292,7 +292,7 @@ public class HubAttractorExplorationRuntime_ChangeCandidateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate()],
             "my_source_set", "7d");
 
@@ -318,7 +318,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -332,7 +332,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync([], "src", "7d");
+        var result = await runtime.ExploreAsync([], "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.NoChange, result.Status);
     }
@@ -347,7 +347,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        await runtime.ExploreAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -360,7 +360,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.NoChangeCandidate()],
             "src", "7d");
 
@@ -375,7 +375,7 @@ public class HubAttractorExplorationRuntime_NoChangeTests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(), logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.NoChangeCandidate(), ExplorationTestFactory.ChangeCandidate()],
             "src", "7d");
 
@@ -394,7 +394,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -406,7 +406,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(null, []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -418,7 +418,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -433,7 +433,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
             """{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""",
             []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -450,7 +450,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime(policyJson, []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -462,7 +462,7 @@ public class HubAttractorExplorationRuntime_PolicyTests
     {
         var runtime = ExplorationTestFactory.CreateRuntime("not-valid-json", []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -497,7 +497,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 2, maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -521,7 +521,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(highTopK: 5, maxKinds: 10, highMaxTables: 10, highPhaseLimit: 1, maxRows: 3),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -546,7 +546,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 1, maxKinds: 2, midMaxTables: 5, midPhaseLimit: 1, maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -563,7 +563,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(),
             []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -585,7 +585,7 @@ public class HubAttractorExplorationRuntime_BudgetCapTests
             ExplorationTestFactory.ValidPolicyJson(midTopK: 2),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -647,7 +647,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             ExplorationTestFactory.ValidPolicyJson(weakTopK: 1, weakMaxTables: 2),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "low", l2Norm: 0.5)],
             "src", "7d");
 
@@ -678,7 +678,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
                 maxRows: 100),
             hubs);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -698,7 +698,7 @@ public class HubAttractorExplorationRuntime_ExplorationBudgetGateTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -735,7 +735,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             ExplorationTestFactory.ValidPolicyJson(),
             logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -754,7 +754,7 @@ public class HubAttractorExplorationRuntime_BoundaryTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -805,7 +805,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 5.0)],
             "src", "7d");
 
@@ -833,7 +833,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent()]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "medium", l2Norm: 42.5)],
             "src", "7d");
 
@@ -849,7 +849,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [ExplorationTestFactory.HubCurrent(attractorVectorJson: "{}")]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 5.0,
@@ -871,7 +871,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hub]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 5.0,
@@ -894,7 +894,7 @@ public class HubAttractorExplorationRuntime_VectorScoringTests
             ExplorationTestFactory.ValidPolicyJson(),
             [hub]);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(
                 normLevel: "medium",
                 l2Norm: 99.0,
@@ -1074,7 +1074,7 @@ public class HubAttractorExplorationRuntime_ScoreBandTests
             """{ "norm_level_high": 10.0, "norm_level_medium": 1.0, "exploration_budget_tiers": { "weak": { "topK_per_hub_kind": 1, "max_hub_tables_per_kind": 2, "phase_expansion_limit": 1, "search_mode": "near_neighbor_narrow_topK" }, "mid": { "topK_per_hub_kind": 3, "max_hub_tables_per_kind": 5, "phase_expansion_limit": 1, "search_mode": "normal_topK" }, "high": { "topK_per_hub_kind": 5, "max_hub_tables_per_kind": 10, "phase_expansion_limit": 3, "search_mode": "expanded_distance_band_or_permutation" } }, "max_hub_kinds_per_current": 5, "max_attention_rows_saved": 20 }""";
         var runtime = ExplorationTestFactory.CreateRuntime(policyWithoutThresholds, []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -1096,7 +1096,7 @@ public class HubAttractorExplorationRuntime_ScoreBandTests
             exploratoryHitThreshold: exploratory);
         var runtime = ExplorationTestFactory.CreateRuntime(policyJson, []);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(normLevel: "high", l2Norm: 15.0)],
             "src", "7d");
 
@@ -1374,7 +1374,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         var runtime = ExplorationTestFactory.CreateRuntime(
             ExplorationTestFactory.ValidPolicyJson(highPhaseLimit: 1), logsRepo);
 
-        var result = await runtime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync(
+        var result = await runtime.ExploreAsync(
             [ExplorationTestFactory.ChangeCandidate(l2Norm: 12.5)], "src", "7d");
 
         Assert.Equal(HubAttractorExplorationStatus.Ok, result.Status);
@@ -1418,7 +1418,8 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
         Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
         Assert.Contains("RunCanonicalHubRelationsExploration", runtimeCode);
-        Assert.Contains("ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync", runtimeCode);
+        Assert.DoesNotContain("ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync", runtimeCode);
+        Assert.DoesNotContain("RunLegacyHubCurrentSupportCacheExploration", runtimeCode);
         // Score band thresholds must not be hardcoded in runtime — resolved from policy only.
         Assert.DoesNotContain(">= 0.95", runtimeCode);
         Assert.DoesNotContain(">= 0.90", runtimeCode);

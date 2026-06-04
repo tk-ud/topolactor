@@ -184,7 +184,7 @@ builder.Services.AddSingleton<SseEndpoint>(sp =>
         sp.GetRequiredService<ILogger<SseEndpoint>>(),
         sp.GetRequiredService<SseEventBroadcaster>()));
 builder.Services.AddSingleton<AuthEndpoint>();
-builder.Services.AddSingleton<LegacyChangeIntakeEndpoint>();
+builder.Services.AddSingleton<ExistingSystemChangeIntakeEndpoint>();
 builder.Services.AddSingleton<ComponentEventAppendEndpoint>();
 builder.Services.AddSingleton<JwtGuard>();
 
@@ -272,19 +272,20 @@ app.MapPost("/component-events/append", async (
     return Results.Json(result, statusCode: result.Success ? 202 : 422);
 });
 
-// POST /intake/legacy-change — existing-system change-event intake boundary.
+// POST /intake/legacy-change — existing-system change-event intake boundary (URL stable; vocabulary canonical).
 app.MapPost("/intake/legacy-change", (
     HttpContext ctx,
-    LegacyChangeIntakeRequestDto request,
-    LegacyChangeIntakeEndpoint intake,
+    ExistingSystemChangeIntakeRequestDto request,
+    ExistingSystemChangeIntakeEndpoint intake,
     JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);
     var authErrors = jwtGuard.Validate(token);
     if (authErrors.Count > 0)
-        return Results.Json(new LegacyChangeIntakeResponseDto(false, null, authErrors), statusCode: 401);
+        return Results.Json(new ExistingSystemChangeIntakeResponseDto(false, null, authErrors), statusCode: 401);
 
-    var result = intake.Handle(request);
+    var role = jwtGuard.TryGetRole(token);
+    var result = intake.Handle(request, role ?? string.Empty);
     return Results.Json(result, statusCode: result.Accepted ? 202 : 422);
 });
 

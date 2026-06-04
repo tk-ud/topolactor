@@ -132,12 +132,19 @@ export const UX_COLUMN_TYPE_LABELS: Record<string, string> = {
 /** 通常表示候補外のカスタム型を入力するための advanced/other オプションラベル */
 export const UX_COLUMN_TYPE_ADVANCED_LABEL = "その他（詳細入力）";
 
-/** 推奨フローの Step ラベル（テストとステッパーで共有） */
+/** 推奨フローの Step ラベル（canonical admin workflow のみ。ログインは prerequisite） */
 export const UX_MAIN_FLOW_STEP_LABELS = [
-  "ログイン",
   UX_CONTENTS,
   UX_UI_BUILDER,
   UX_HUB_MANIFESTS,
+] as const;
+
+/** /admin/contents パイプライン sub-step ラベル（管理トップステッパー用） */
+export const UX_CONTENTS_PIPELINE_SUBSTEP_LABELS = [
+  "空登録",
+  "テーブル定義",
+  "関連付け",
+  "物理割当・ページ",
 ] as const;
 
 /** 有効化タイミング（通常表示用。保存値は変更しない） */

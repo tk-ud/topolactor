@@ -45,7 +45,6 @@ runtime_orchestration_ssot:
     scheduler: runtime_timeline_scheduler
     scheduler_alias: runtime_queue_scheduler
     dispatcher: manifest_dispatcher
-    dispatcher_legacy_alias: dispatchar
     frontend_api_lane: client_command_lane
     frontend_sse_lane: projection_event_lane
     frontend_projection_runtime: projection_runtime
@@ -682,6 +681,14 @@ runtime_orchestration_ssot:
         - from
         - to
         - reason
+      implementation_projection:
+        planned: optional; used for user_action jumps when a planned hub/topology address is known
+      json_shape:
+        scope: string
+        from: integer
+        to: integer
+        planned: integer
+        reason: string
       scope_enum:
         - hub
         - topology
