@@ -14,8 +14,8 @@
 | `search-aggregation-runtime-operator-contract` | Step3 read/query wiring runtime実行契約 / UIイベント接続 | not_started | 6 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | not_started | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `sql-attention-m7` | SQL Attention phase_vector 生成 | partial | 1 | `docs/design/sql-attention-logs-ssot.yaml` |
-| `enum-dictionary-canonicalization` | enum辞書正本化 | not_started | 9 | `docs/design/enum-dictionary-ssot.yaml` |
-| `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 27 | `docs/design/admin-master-roster-management-ssot.yaml` |
+| `enum-dictionary-canonicalization` | enum辞書正本化 | not_started | 14 | `docs/design/enum-dictionary-ssot.yaml` |
+| `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 38 | `docs/design/admin-master-roster-management-ssot.yaml` |
 ---
 ## Bundle `enum-dictionary-canonicalization`
 
@@ -51,14 +51,27 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 - [ ] `docs/design/enum-dictionary-ssot.yaml` を作成し、enum item / enum group / index_num / uuid / group items の正本境界を定義する
 - [ ] `docs/design/db-schema.yaml` に `enum_table` / `enum_group` 相当の物理テーブル定義を追記する
 - [ ] `docs/design/admin-console-workflow-ssot.yaml` に、Step 2 テーブル定義の column が enum_group を参照できる契約を追記する
+- [ ] `docs/design/runtime-orchestration-ssot.yaml` に enum 正本は `enum-dictionary-ssot.yaml` 参照とし、topology / manifest / screen_data_shape へ enum item 定義を散らさない境界を追記する
 - [ ] frontend の Step 2 column 定義 UI に enum_group 選択を追加する
 - [ ] frontend の Step 3 初期データ入力で enum_group 参照付き column を select 入力にする
 - [ ] backend 保存/投影で column enum_group 参照を `screen_data_shape` または対応 topology intent に保持する
 - [ ] enum_group 未解決時は silent fallback せず blocking error にする
 - [ ] enum item / enum_group / column enum_group 参照 / select 入力化の regression test を追加する
 - [ ] enum_group `items[enum index num]` を検索・近傍探索に使うための projection/read model 方針をSSOT化する
+- [ ] `.agent/docs/ssot-map.yaml` に `enum_dictionary_canonicalization` work_type（change_surfaces / required_docs / protocols）を追加する
+- [ ] `.agent/docs/design-ssot-index.md` に enum dictionary SSOT 節を追加する
+- [ ] `.agent/docs/required-paths.yaml` と `.agent/tests/check-structure.sh` に `docs/design/enum-dictionary-ssot.yaml` 必須パス・必須語彙・`.agent/tests/check-enum-dictionary.sh` subcheck を配線する
+- [ ] `db/enum_tables.sql` を作成し `db/init.sql` チェーンへ組み込む（`check-bootstrap-validation.sh` 経由で適用可能であること）
 
 **対象ファイル候補:**
+- `.agent/docs/ssot-map.yaml`
+- `.agent/docs/design-ssot-index.md`
+- `.agent/docs/required-paths.yaml`
+- `.agent/tests/check-enum-dictionary.sh`
+- `.agent/tests/check-structure.sh`
+- `.agent/tests/check-bootstrap-validation.sh`
+- `db/enum_tables.sql`
+- `db/init.sql`
 - `docs/design/enum-dictionary-ssot.yaml`
 - `docs/design/db-schema.yaml`
 - `docs/design/admin-console-workflow-ssot.yaml`
@@ -82,6 +95,9 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 - enum_group 未解決時に silent fallback しない
 - enum index_num 群が属性候補集合ベクトルとして検索/近傍探索に利用可能な形で保存・投影される
 - SSOT / DB schema / frontend / backend / tests が同じ enum 正本境界を参照している
+- `admin-console-workflow-ssot.yaml` / `runtime-orchestration-ssot.yaml` が `enum-dictionary-ssot.yaml` を参照し、workflow・runtime 側の enum 境界と矛盾しない
+- `.agent/docs`（ssot-map / design-ssot-index / required-paths）と `check-structure.sh` subcheck が `enum-dictionary-ssot.yaml` を発見・検証できる
+- `db/init.sql` → `enum_tables.sql` が bootstrap validation で適用可能
 
 ---
 ## Bundle `admin-master-roster-management-ui`
@@ -96,9 +112,10 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 **実装順序:**
 
 1. 前提: `enum-dictionary-canonicalization` 完了
-2. enum seed（名簿管理UI・users 向け）
-3. `/admin/enums` 名簿 CRUD UI
-4. `/admin/users` 名簿・状態管理 UI
+2. admin 関連 SSOT 整備（名簿管理・route・auth 境界・DB 投影）
+3. enum seed（名簿管理UI・users 向け）
+4. `/admin/enums` 名簿 CRUD UI
+5. `/admin/users` 名簿・状態管理 UI
 
 **設計方針（名簿管理・seed 固有）:**
 
@@ -110,11 +127,22 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 
 **未実装 todo:**
 
+* [ ] `docs/design/admin-master-roster-management-ssot.yaml` を作成し、`/admin/enums`・`/admin/users` 名簿 CRUD・user状態・`logs.diff` 監査・enum seed 依存の正本境界を定義する
+* [ ] `docs/design/admin-console-workflow-ssot.yaml` に `/admin/enums`・`/admin/users` の route 責務・導線（検索 / 全件 / Modal / inline / confirm）を追記する
+* [ ] `docs/design/runtime-orchestration-ssot.yaml` の `frontend_routes.admin` に `/admin/enums`・`/admin/users` を canonical 登録する
+* [ ] `docs/design/auth-db-session-credential-ssot.yaml` に `approve` / `status`（enum_group 参照）/ 停止期間と auth・runtime 境界・`last_login_at` readonly 投影を追記する
+* [ ] `docs/design/db-schema.yaml` に auth.users 状態管理列・名簿操作の `logs.diff` 監査投影（admin-master SSOT 参照）を追記する
+* [ ] `.agent/docs/ssot-map.yaml` に `admin_master_roster_management` work_type を追加し、`registrar_admin_ui_registry_registration` の change_surfaces に `/admin/enums`・`/admin/users` を追記する
+* [ ] `.agent/docs/design-ssot-index.md` に admin master roster SSOT 節を追加する
+* [ ] `.agent/docs/required-paths.yaml` と `.agent/tests/check-structure.sh` に `docs/design/admin-master-roster-management-ssot.yaml` 必須パス・必須語彙・専用 subcheck（例: `check-admin-master-roster.sh`）を配線する
+* [ ] `docs/registrar-admin-ui-specification.md` に `/admin/enums`・`/admin/users` の canonical route 責務を追記する
+* [ ] `docs/system-roadmap.yaml` の `frontend.admin_routes` / 関連 `known_gap_ref` を bundle 完了時に整合させる（`.agent/protocols/todo-carry-over.md` Roadmap gate 適用）
 * [ ] enum seed は再実行しても重複・破壊しない idempotent seed とする
 * [ ] users に必要な enum_group / enum item を seed 化する
 * [ ] users 用 enum seed に user status enum_group を含める
 
   * 例: `active`, `inactive`, `suspended`, `archived`
+* [ ] `db/enum_seed.sql` を作成し `db/init.sql` チェーンへ idempotent seed として組み込む（users 向け enum は `/admin/users` 実装より前）
 * [ ] `/admin/enums` を追加し、enum名簿CRUDを扱う
 * [ ] `/admin/enums` トップに Text検索欄を設置する
 * [ ] `/admin/enums` トップに 全件出力 ボタンを設置する
@@ -152,6 +180,15 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 
 **対象ファイル候補:**
 
+* `.agent/docs/ssot-map.yaml`
+* `.agent/docs/design-ssot-index.md`
+* `.agent/docs/required-paths.yaml`
+* `.agent/protocols/todo-carry-over.md`
+* `.agent/tests/check-admin-master-roster.sh`
+* `.agent/tests/check-structure.sh`
+* `.agent/tests/check-bootstrap-validation.sh`
+* `docs/registrar-admin-ui-specification.md`
+* `docs/system-roadmap.yaml`
 * `docs/design/admin-master-roster-management-ssot.yaml`
 * `docs/design/enum-dictionary-ssot.yaml`
 * `docs/design/auth-db-session-credential-ssot.yaml`
@@ -177,6 +214,9 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 **完了条件:**
 
 * 前提: `enum-dictionary-canonicalization` の完了条件を満たしている（enum 正本・DB・Step2/Step3 select 化は当 bundle で検証）
+* `admin-master-roster-management-ssot.yaml` / `admin-console-workflow-ssot.yaml` / `runtime-orchestration-ssot.yaml` / `auth-db-session-credential-ssot.yaml` / `db-schema.yaml` が名簿管理・route・auth 境界・監査投影で整合している
+* `.agent/docs`（ssot-map / design-ssot-index / required-paths）・`registrar-admin-ui-specification.md`・`check-structure.sh` subcheck が名簿管理 SSOT / route を発見・検証できる
+* `db/init.sql` → `enum_seed.sql` が bootstrap validation で適用可能
 * enum seed が idempotent である
 * users に必要な enum が seed として先に投入される
 * `/admin/enums` で enum名簿CRUDができる
