@@ -121,20 +121,29 @@ public record AdminManifestOperationEntityBindingDto(
     [property: JsonPropertyName("entityTargetColumns")] IReadOnlyList<string>? EntityTargetColumns
 );
 
+public record AdminManifestConditionValueSourceDto(
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("key")] string? Key,
+    [property: JsonPropertyName("sampleValue")] string? SampleValue
+);
+
 public record AdminManifestSearchConditionDto(
     [property: JsonPropertyName("column")] string Column,
     [property: JsonPropertyName("operator")] string Operator,
     [property: JsonPropertyName("value")] string? Value,
     [property: JsonPropertyName("valueTo")] string? ValueTo,
     [property: JsonPropertyName("values")] IReadOnlyList<string>? Values,
-    [property: JsonPropertyName("logicalConnector")] string? LogicalConnector
+    [property: JsonPropertyName("logicalConnector")] string? LogicalConnector,
+    [property: JsonPropertyName("valueSource")] AdminManifestConditionValueSourceDto? ValueSource = null,
+    [property: JsonPropertyName("valueToSource")] AdminManifestConditionValueSourceDto? ValueToSource = null
 );
 
 public record AdminManifestHavingConditionDto(
     [property: JsonPropertyName("column")] string Column,
     [property: JsonPropertyName("function")] string Function,
     [property: JsonPropertyName("operator")] string Operator,
-    [property: JsonPropertyName("value")] string Value
+    [property: JsonPropertyName("value")] string Value,
+    [property: JsonPropertyName("valueSource")] AdminManifestConditionValueSourceDto? ValueSource = null
 );
 
 public record AdminManifestLogicalTableDto(

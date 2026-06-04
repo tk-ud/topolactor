@@ -65,7 +65,7 @@ export type ScreenDataShapeSummary = {
   columns: ColumnShape[];
   relationIntents: RelationIntentShape[];
   operationEntityBindings: OperationEntityBindingShape[];
-  initialDataRows: Record<string, string>[];
+  initialDataRows: Array<{ values: Record<string, string>; lineage: Record<string, unknown> }>;
   searchConditions: SearchConditionShape[];
   havingConditions: HavingConditionShape[];
   displayColumnMode: string | null;
@@ -199,11 +199,22 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       ? entry.initialDataRows
           .filter((row): row is Record<string, unknown> => typeof row === "object" && row !== null)
           .map((row) => {
+            if ("values" in row && typeof row.values === "object" && row.values !== null) {
+              const values: Record<string, string> = {};
+              for (const [k, v] of Object.entries(row.values as Record<string, unknown>)) {
+                values[k] = typeof v === "string" ? v : String(v);
+              }
+              const lineage = typeof row.lineage === "object" && row.lineage !== null
+                ? row.lineage as Record<string, unknown>
+                : {};
+              return { values, lineage };
+            }
             const record: Record<string, string> = {};
             for (const [k, v] of Object.entries(row)) {
+              if (k === "lineage") continue;
               record[k] = typeof v === "string" ? v : String(v);
             }
-            return record;
+            return { values: record, lineage: { source: "manual" as const } };
           })
       : [];
     const searchConditions = Array.isArray(entry.searchConditions)

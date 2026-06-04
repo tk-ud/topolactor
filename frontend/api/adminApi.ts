@@ -201,6 +201,20 @@ export async function applyImport(snapshotId: string): Promise<AdminImportApplyR
   return emission.data as AdminImportApplyResult;
 }
 
+export async function listImportSnapshotRecords(
+  snapshotId: string,
+): Promise<AdminImportPreviewResult> {
+  const emission = await callAdminDispatch({
+    operationType: "admin",
+    target: "admin",
+    layer: "admin_csv_json_import",
+    action: "list_snapshot_records",
+    payload: { snapshotId },
+  });
+  if (emission === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
+  return emission.data as AdminImportPreviewResult;
+}
+
 // ---------------------------------------------------------------------------
 // Manifest management — admin manifest editor surface
 // ---------------------------------------------------------------------------
@@ -335,6 +349,12 @@ export type OperationEntityBindingInput = {
   entityTargetColumns?: string[];
 };
 
+export type ConditionValueSourceInput = {
+  kind: string;
+  key?: string;
+  sampleValue?: string;
+};
+
 export type SearchConditionInput = {
   column: string;
   operator: string;
@@ -342,6 +362,8 @@ export type SearchConditionInput = {
   valueTo?: string;
   values?: string[];
   logicalConnector?: string;
+  valueSource?: ConditionValueSourceInput;
+  valueToSource?: ConditionValueSourceInput;
 };
 
 export type HavingConditionInput = {
@@ -349,6 +371,7 @@ export type HavingConditionInput = {
   function: string;
   operator: string;
   value: string;
+  valueSource?: ConditionValueSourceInput;
 };
 
 export type AdminManifestScreenDataShapeInput = {
@@ -385,7 +408,8 @@ export type AdminManifestScreenDataShapeInput = {
   /** Per-operation entity target at event time (SSOT step 3). */
   operationEntityBindings?: OperationEntityBindingInput[];
   /** Initial-data candidates as screen-data-shape topology intent. Actual row insertion belongs to content_bundle. */
-  initialDataRows?: Record<string, string>[];
+  /** Values + optional lineage per row (Step3 unified editor). */
+  initialDataRows?: Record<string, unknown>[];
   /** Structured search conditions with operator/value/logical-connector. */
   searchConditions?: SearchConditionInput[];
   /** HAVING conditions on aggregation measure results. */

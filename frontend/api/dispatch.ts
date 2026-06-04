@@ -24,11 +24,13 @@ export type RecommendationCandidate = {
   score: number;
   probability?: number;
   evidence: string[];
+  lane: "ui_pressure" | "state_pressure";
 };
 
 export type ContextRouteRecommendation = {
   nextOperations: RecommendationCandidate[];
   nextTokens: RecommendationCandidate[];
+  nextEnumItems: RecommendationCandidate[];
   nearestPrefixSessionIds: string[];
   contributingTokens: string[];
   status: "ok" | "insufficient_history" | "explicit_error";

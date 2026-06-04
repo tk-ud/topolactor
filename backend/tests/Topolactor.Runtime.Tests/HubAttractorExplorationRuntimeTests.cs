@@ -1466,6 +1466,7 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         Assert.Equal("phaseAT", root.GetProperty("q_kind").GetString());
         Assert.False(root.GetProperty("q_is_draft").GetBoolean());
         Assert.Equal("hubs.hub_relations", root.GetProperty("canonical_exploration_field").GetString());
+        Assert.True(root.GetProperty("phase_movement_is_not_manifest_or_policy_cap_derived").GetBoolean());
         Assert.Equal(12.5, root.GetProperty("w_l2_norm").GetDouble());
         // Canonical path: x/y/z are real GUIDs (not null)
         Assert.Equal(JsonValueKind.String, root.GetProperty("x_hit_hub_relation_id").ValueKind);
@@ -1504,7 +1505,10 @@ public class SqlAttentionScheduler_WriteLogsAttention_Tests
         Assert.DoesNotContain("'x', COALESCE(p_hub_relations_count", sql);
 
         var runtimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/HubAttractorExplorationRuntime.cs"));
-        Assert.Contains("BuildPhaseVectorJson(", runtimeCode);
+        var phaseVectorRuntimeCode = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "../../../../../../backend/runtime/SqlAttentionPhaseVectorRuntime.cs"));
+        Assert.Contains("SqlAttentionPhaseVectorRuntime.GeneratePhaseVector(", runtimeCode);
+        Assert.Contains("BuildPhaseVectorJson(", phaseVectorRuntimeCode);
+        Assert.Contains("GeneratePhaseVector(", phaseVectorRuntimeCode);
         Assert.Contains("RunCanonicalHubRelationsExploration", runtimeCode);
         Assert.DoesNotContain("ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync", runtimeCode);
         Assert.DoesNotContain("RunLegacyHubCurrentSupportCacheExploration", runtimeCode);

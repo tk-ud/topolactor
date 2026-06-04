@@ -1,4 +1,4 @@
-version: 1
+version: 1.1
 id: sql_attention_logs_ssot
 title: SQL Attention Logs SSOT
 status: structural_ssot
@@ -152,6 +152,37 @@ physical_schema_contract:
         - registry_topology_manifest_or_hub_relation_mutation
 public_article: false
 canonical_markdown: docs/design/sql-attention-logs-ssot.md
+
+recommendation_pressure_lane_boundary:
+  role: concept_projection_recommendation_lane
+  lane: sql_attention_projection
+  space:
+    - inter_hub
+    - inter_projection
+    - topology_concept_space
+  recommendation_target: next_hub_projection_candidate
+  output_concept: which_hub_projection_or_topology_to_examine_next
+  canonical_reference:
+    - docs/design/context-route-recommendation.yaml
+    - docs/design/context-route-recommendation.md
+  result_contract:
+    sql_attention_recommendation_result:
+      required_lane: true
+      lane: sql_attention_projection
+  boundaries:
+    parent_definition_not_in_context_route_recommendation: true
+    prohibited:
+      - direct_injection_into_hub_local_ui_pressure_or_state_pressure_results
+      - treating_logs_attention_hit_as_next_operation_or_next_enum_item_within_hub
+      - collapsing_sql_attention_projection_with_hub_local_recommendation_lane
+  context_route_recommendation_relation:
+    role: sibling_lane_not_parent
+    hub_local_lanes:
+      - ui_pressure
+      - state_pressure
+    canonical_reference:
+      - docs/design/context-route-recommendation.yaml
+      - docs/design/context-route-recommendation.md
 
 purpose:
   summary: >-

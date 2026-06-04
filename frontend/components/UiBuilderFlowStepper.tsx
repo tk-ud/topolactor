@@ -3,6 +3,16 @@ import { JSX } from "preact";
 /** Tab IDs for /admin/ui-builder — must stay in sync with UiBuilderAdmin.tsx TabId */
 export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "css" | "layout" | "design";
 
+/** 通常表示用タブラベル（内部 TabId は主導線に出さない） */
+export const UI_BUILDER_TAB_LABELS: Record<UiBuilderTabId, string> = {
+  bucket: "部品選択でパッケージ化",
+  layout: "配置",
+  design: "デザイン設定",
+  css: "スタイル辞書",
+  catalog: "部品カタログ（参照）",
+  ci: "CI ガイダンス（参照）",
+};
+
 type StepSpec = {
   id: number;
   label: string;
@@ -18,28 +28,28 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
     id: 1,
     label: "部品選択でパッケージ化",
     detail:
-      "バケットから部品を複数選択し、1 回の submit でパッケージ化します（内部: generate → promote）。カタログは参照専用です。",
+      "使う部品を複数選択し、1 回の操作でパッケージ化します。カタログは参照専用です。",
     note: "コンポーネントカタログ・CI は画面下部の参照専用セクションにあります。",
     tabTarget: "bucket",
   },
   {
     id: 2,
-    label: "パッケージ layout（配置）",
+    label: "配置",
     detail:
-      "パッケージを選び、canvas 上の配置・slot・layout class refs を保存します（layout_patch）。色・形は design タブです。",
+      "パッケージを選び、画面上の配置・枠・レイアウトクラスを保存します。色・形はデザイン設定タブです。",
     tabTarget: "layout",
   },
   {
     id: 2.5,
-    label: "component design（色・形）",
+    label: "デザイン設定（色・形）",
     detail:
-      "cssTokenRefs・classname・reactionIntent・配線を component_style_design:upsert で保存します。",
+      "色・形・反応・イベント配線を整え、デザイン設定として保存します。",
     tabTarget: "design",
   },
   {
     id: 3,
     label: "動作確認",
-    detail: "保存反映後は Runtime確認 で登録結果を試します。",
+    detail: "保存反映後はデモ画面で登録結果を試します。",
     externalHref: "/demo",
   },
 ];
@@ -61,17 +71,18 @@ export default function UiBuilderFlowStepper({
 }): JSX.Element {
   const activeStepIds = getActiveStepIds(activeTab);
   const activeDetails = UI_BUILDER_FLOW_STEPS.filter((s) => activeStepIds.includes(s.id));
+  const activeTabLabel = UI_BUILDER_TAB_LABELS[activeTab] ?? activeTab;
 
   return (
     <div
       class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3"
       role="navigation"
-      aria-label="UI ビルダー作業フロー"
+      aria-label="画面づくりの作業フロー"
     >
       <div class="mb-2.5 flex items-center gap-2">
-        <span class="text-xs font-semibold text-blue-900">Step 4 — パッケージ編集ルート</span>
+        <span class="text-xs font-semibold text-blue-900">Step 4 — 画面づくり</span>
         <span class="text-[0.65rem] text-blue-600">
-          — 現在: <strong>{activeTab}</strong>
+          — 現在: <strong>{activeTabLabel}</strong>
         </span>
       </div>
 
@@ -119,7 +130,7 @@ export default function UiBuilderFlowStepper({
 
       {activeDetails.map((step) => (
         <div key={step.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
-          <p class="font-semibold text-blue-900">Phase {step.id}: {step.label}</p>
+          <p class="font-semibold text-blue-900">フェーズ {step.id}: {step.label}</p>
           <p class="text-gray-700">{step.detail}</p>
           {step.note && <p class="text-amber-700">{step.note}</p>}
         </div>

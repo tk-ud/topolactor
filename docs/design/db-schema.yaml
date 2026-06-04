@@ -488,6 +488,8 @@ db_schema:
     - sql_attention_target: "SQL Attention resolves related topology_manifest_id arrays and explores hubs.hub_relations; hub_id is derived through hubs.topology_manifests."
     - sql_attention_persistence: "logs.current is a trigger-basis projection, logs.hub_current is not the exploration body, and logs.attention stores append-only evidence generations rather than Draft or adopted canonical state."
     - sql_attention_signal_sources: "logs.diff remains the physical mutation pressure source for logs.current; context_event remains the UI operation pressure source."
+    - recommendation_lane_boundary: "SQL Attention projection recommendation (lane sql_attention_projection) must not inject into hub-local ui_pressure or state_pressure results; see sql-attention-logs-ssot.yaml and context-route-recommendation.yaml hub_local_recommendation_pressure_lanes."
+    - context_transition_stats_vs_enum: "context_transition_stats is operation-only (ui_pressure); context_enum_transition_stats is enum_item-only (state_pressure); mixing prohibited."
     - recommend_target: Recommend target is topology.*, topology.wiring_physical_to_package, topology.components_*, and context_* learning surfaces.
     - public_namespace: public/unqualified tables are drift, not SSOT authority.
     - topologys_namespace: topologys schema has been migrated to topology. All DB SQL and backend use topology.* canonical spelling.
@@ -884,6 +886,39 @@ db_schema:
       category: context_route
       file: db/context_route_tables.sql
       role: operation_transition_frequency_aggregation
+      transition_kind: operation
+      recommendation_lane: ui_pressure
+      prohibited_use:
+        - enum_item_transition_aggregation
+        - state_pressure_inference
+
+    context_enum_transition_event:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: append_only_enum_item_transition_observation_log
+      recommendation_lane: state_pressure
+      transition_kind: enum_item
+      note: logical_enum_transition_logs_surface
+
+    context_enum_transition_stats:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: enum_item_transition_frequency_aggregation_within_enum_group
+      transition_kind: enum_item
+      recommendation_lane: state_pressure
+      physical_ddl_status: implemented
+      ssot_reference: docs/design/context-route-recommendation.yaml
+      prohibited_use:
+        - operation_transition_aggregation
+        - ui_pressure_inference
+      enum_coordinate_reference: docs/design/enum-dictionary-ssot.yaml
+
+    component_operation_event_log:
+      category: context_route
+      file: db/context_route_tables.sql
+      role: append_only_component_operation_pressure_source
+      recommendation_lane: ui_pressure
+      hub_local_lane_source_for: ui_pressure
 
     context_cluster:
       category: context_route

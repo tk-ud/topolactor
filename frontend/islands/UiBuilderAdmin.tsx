@@ -33,6 +33,10 @@ import {
   mergeWiringKindSuggestions,
   PACKAGE_WIRING_TARGET_SURFACES,
 } from "../lib/packageWiringOptions.ts";
+import {
+  buildScreenReadQueryWiringCandidates,
+  type ScreenReadQueryWiringCandidate,
+} from "../lib/screenReadQueryWiring.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 
 /**
@@ -315,7 +319,7 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
   },
   ROUTE_NOT_FOUND: {
     cause: "ルートキーが存在しません",
-    suggestion: "先にコンポーネントをバケット登録してルートを作成してください",
+    suggestion: "先に部品を登録してルートを作成してください",
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
@@ -501,7 +505,7 @@ function projectLayoutPatchSummary(
     if (errors.some((e) => e.code?.includes("CSS") || e.message?.includes("CSS"))) {
       nextAction = "CSS トークン参照を修正してください";
     } else if (draftOnlyCount > 0 && action === "apply") {
-      nextAction = "ドラフトのみノードをプロモートするか削除してください";
+      nextAction = "下書きのみの部品を配置可能化するか削除してください";
     } else {
       nextAction = "エラーを修正してから再実行してください";
     }
@@ -767,7 +771,7 @@ function ApplyReadinessPanel({
         <li class="flex items-start gap-2">
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
-            色・余白トークンは「部品デザイン」タブで保存します（layout 保存では配置のみ）。
+            色・余白トークンは「デザイン設定」タブで保存します（配置の保存では位置のみ）。
           </span>
         </li>
       </ul>
@@ -1572,7 +1576,7 @@ function BucketSection({
 
       if (bucketItemIds.length === 0) {
         if (skippedPromoted > 0) {
-          setStatus("選択した部品は既に配置可能です。layout タブでパッケージを選択してください。");
+          setStatus("選択した部品は既に配置可能です。「配置」タブでパッケージを選択してください。");
         } else {
           setStatus("パッケージ化できる部品が見つかりませんでした。");
         }
@@ -1601,7 +1605,7 @@ function BucketSection({
 
       const newCount = bucketItemIds.length;
       const skipMsg = skippedPromoted > 0 ? `（${skippedPromoted} 件は既配置のためスキップ）` : "";
-      setStatus(`${newCount} 件のパッケージ化が完了しました。layout タブで編集を続けます。${skipMsg}`);
+      setStatus(`${newCount} 件のパッケージ化が完了しました。「配置」タブで編集を続けます。${skipMsg}`);
       await loadBucket();
       const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
       const promoted = paletteBody?.emission?.data;
@@ -1735,7 +1739,7 @@ function BucketSection({
   return (
     <div>
       <p class="text-muted mb-3">
-        部品を複数選択し、1 回の submit でパッケージ化します（編集ルートはパッケージのみ）。
+        部品を複数選択し、1 回の操作でパッケージ化します（編集ルートはパッケージのみ）。
       </p>
 
       {candidateErrors.length > 0 && (
@@ -1841,7 +1845,7 @@ function BucketSection({
       </Accordion>
 
       {(items.length > 0 || selectedId) && (
-        <Accordion title="詳細 — バケット行単位の操作" defaultOpen={false}>
+        <Accordion title="詳細 — 登録済み部品の個別操作" defaultOpen={false}>
           <div class="table-wrap mb-3">
             <table class="table font-mono text-sm">
               <thead>
@@ -1905,7 +1909,7 @@ function BucketSection({
               disabled={loading || !selectedId || !effectiveRouteKey}
               class="btn-success"
             >
-              promote（単体）
+              配置可能化（単体・詳細）
             </button>
           </div>
           <AdminActionHint>
@@ -2412,7 +2416,7 @@ function VisualLayoutCanvas({
             <p class="mt-1 text-sm text-gray-400">
               {allowEmptyStateTemplates
                 ? "左のパレットからドラッグするか、下のボタンでコンポーネントを追加してください"
-                : "左のパレット（パッケージ内プロモート済み）からドラッグして追加してください"}
+                : "左のパレット（パッケージ内の配置可能部品）からドラッグして追加してください"}
             </p>
           </div>
           {onAddFromEmptyState && allowEmptyStateTemplates && (
@@ -3071,7 +3075,7 @@ function LayoutBuilderSection({
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (entry.isDraftOnly) {
-      announce("この部品はパッケージにプロモートされていません。部品登録タブで配置可能化してください。");
+      announce("この部品はまだパッケージに含まれていません。部品選択タブで配置可能化してください。");
       return true;
     }
     return false;
@@ -3171,7 +3175,7 @@ function LayoutBuilderSection({
           setPaletteLoadFailed(true);
           setCandidateErrors((prev) => [...prev, ...body.errors]);
           setPaletteEntries([]);
-          setPaletteStatus("プロモートパレットのロードに失敗しました。");
+          setPaletteStatus("配置可能部品一覧の読み込みに失敗しました。");
           return;
         }
         const promoted = body?.emission?.data as PromotedPaletteEntry[] | undefined;
@@ -3179,10 +3183,10 @@ function LayoutBuilderSection({
           setPaletteLoadFailed(true);
           setCandidateErrors((prev) => [
             ...prev,
-            { code: "PROMOTED_PALETTE_LOAD_FAILED", message: "プロモートパレットデータが取得できませんでした。" },
+            { code: "PROMOTED_PALETTE_LOAD_FAILED", message: "配置可能部品一覧が取得できませんでした。" },
           ]);
           setPaletteEntries([]);
-          setPaletteStatus("プロモートパレットのロードに失敗しました。");
+          setPaletteStatus("配置可能部品一覧の読み込みに失敗しました。");
           return;
         }
         const scopedPromoted = scopedPackageId
@@ -3206,7 +3210,7 @@ function LayoutBuilderSection({
         setPaletteStatus(
           scopedPackageId
             ? `パッケージ内 ${promotedEntries.length} 件`
-            : `プロモート済み ${promotedEntries.length} 件 / ドラフト ${draftCatalog.length} 件`,
+            : `配置可能 ${promotedEntries.length} 件 / 下書き ${draftCatalog.length} 件`,
         );
         const layoutSource = scopedPromoted.length > 0 ? scopedPromoted : promoted;
         if (candidates.length === 0 && layoutSource.length > 0) {
@@ -3227,7 +3231,7 @@ function LayoutBuilderSection({
         setPaletteLoadFailed(true);
         setCandidateErrors((prev) => [...prev, { code: "PROMOTED_PALETTE_LOAD_ERROR", message: String(e) }]);
         setPaletteEntries([]);
-        setPaletteStatus(`プロモートパレットのロードに失敗しました: ${e}`);
+        setPaletteStatus(`配置可能部品一覧の読み込みに失敗しました: ${e}`);
       }
     };
     load();
@@ -3267,7 +3271,7 @@ function LayoutBuilderSection({
     if (!scopedPackageId?.trim()) {
       setPatchErrors([{
         code: "PACKAGE_REQUIRED",
-        message: "layout を保存する前にパッケージを選択してください。",
+        message: "配置を保存する前にパッケージを選択してください。",
       }]);
       setLoading(false);
       setLifecyclePhase("idle");
@@ -3605,7 +3609,7 @@ function LayoutBuilderSection({
 
       {!packageScopedLayout && (
         <p class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          先に上のパッケージを選択してください。layout 編集はパッケージにスコープされます。
+          先に上のパッケージを選択してください。配置の編集は選択したパッケージに紐づきます。
         </p>
       )}
       {packageScopedLayout && layoutSelectorsLocked && (
@@ -3637,7 +3641,7 @@ function LayoutBuilderSection({
         <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           <p class="font-semibold">部品登録タブで配置可能化が必要です</p>
           <p class="mt-1 text-xs">
-            ルート候補は DB の配置可能化（promote）後に載ります。部品登録タブでルート入力 → パッケージ化 → 配置可能にする、の順で進めてください。
+            ルート候補は配置可能化のあとに表示されます。部品選択タブでルート入力 → パッケージ化 → 配置可能化の順で進めてください。
           </p>
           <label class="mt-2 flex flex-col gap-0.5 text-xs">
             ページルート（手入力で先に進める場合）
@@ -3866,9 +3870,9 @@ function LayoutBuilderSection({
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
   { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
-  { id: "layout", label: "パッケージ layout（配置）", hint: "canvas 配置・slot・layout class refs" },
-  { id: "design", label: "部品デザイン（色・形）", hint: "cssTokenRefs・reactionIntent・配線" },
-  { id: "css", label: "CSS トークン辞書" },
+  { id: "layout", label: "配置", hint: "画面上の配置・枠・レイアウトクラス" },
+  { id: "design", label: "デザイン設定（色・形）", hint: "色・形・反応・イベント配線" },
+  { id: "css", label: "スタイル辞書", hint: "色・余白などの共通スタイル" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
@@ -3912,10 +3916,18 @@ function PackageWiringEditor({
   const [loadStatus, setLoadStatus] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [screenWiringCandidates, setScreenWiringCandidates] = useState<
+    ScreenReadQueryWiringCandidate[]
+  >([]);
+  const [manifestIdForWiring, setManifestIdForWiring] = useState("");
 
   const kindSuggestions = mergeWiringKindSuggestions(
     packageComponents.map((c) => c.componentKind),
   );
+  const eventBindingSuggestions = [
+    ...kindSuggestions,
+    ...screenWiringCandidates.map((c) => c.wiringKey),
+  ];
 
   useEffect(() => {
     if (!selectedPackageId) {
@@ -3949,6 +3961,32 @@ function PackageWiringEditor({
       }
     })();
   }, [selectedPackageId]);
+
+  useEffect(() => {
+    if (targetSurface !== "manifest" || !manifestIdForWiring.trim()) {
+      setScreenWiringCandidates([]);
+      return;
+    }
+    (async () => {
+      const body = await dispatchAdminOp("manifest", "list_screen_read_query_wiring", {
+        manifestId: manifestIdForWiring.trim(),
+      });
+      const data = body?.emission?.data as { candidates?: ScreenReadQueryWiringCandidate[] } | undefined;
+      if (Array.isArray(data?.candidates)) {
+        setScreenWiringCandidates(data.candidates);
+        return;
+      }
+      const getBody = await dispatchAdminOp("manifest", "get", {
+        manifestId: manifestIdForWiring.trim(),
+      });
+      const detail = getBody?.emission?.data as { topologyRawJson?: string } | undefined;
+      if (typeof detail?.topologyRawJson === "string") {
+        setScreenWiringCandidates(buildScreenReadQueryWiringCandidates(detail.topologyRawJson));
+      } else {
+        setScreenWiringCandidates([]);
+      }
+    })();
+  }, [targetSurface, manifestIdForWiring]);
 
   const handleSaveWiring = async () => {
     if (!selectedPackageId || !wiring?.wiringId || !wiringKind.trim() || !targetSurface) {
@@ -4006,7 +4044,7 @@ function PackageWiringEditor({
                 onInput={(e) => setWiringKind((e.target as HTMLInputElement).value)}
               />
               <datalist id="wiring-kind-suggestions">
-                {kindSuggestions.map((k) => <option key={k} value={k} />)}
+                {eventBindingSuggestions.map((k) => <option key={k} value={k} />)}
               </datalist>
             </label>
             <label class="block">
@@ -4014,22 +4052,53 @@ function PackageWiringEditor({
               <select
                 class="mt-1 w-full rounded border px-2 py-1 text-xs"
                 value={targetSurface}
-                onChange={(e) => setTargetSurface((e.target as HTMLSelectElement).value)}
+                onChange={(e) => {
+                  const next = (e.target as HTMLSelectElement).value;
+                  setTargetSurface(next);
+                  if (next !== "manifest") setManifestIdForWiring("");
+                }}
               >
                 {PACKAGE_WIRING_TARGET_SURFACES.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>
             </label>
+            {targetSurface === "manifest" && (
+              <label class="block sm:col-span-2">
+                マニフェスト ID（Step3 read/query 配線候補の取得）
+                <input
+                  class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                  value={manifestIdForWiring}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  onInput={(e) => setManifestIdForWiring((e.target as HTMLInputElement).value)}
+                />
+              </label>
+            )}
             <label class="block sm:col-span-2">
               接続先参照 (target_ref、任意)
               <input
                 class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                 value={targetRef}
-                placeholder="例: route:admin:demo"
+                placeholder={targetSurface === "manifest"
+                  ? "screen.searchConditions[0] 等（候補から選択可）"
+                  : "例: route:admin:demo"}
                 onInput={(e) => setTargetRef((e.target as HTMLInputElement).value)}
+                list={targetSurface === "manifest" ? "screen-read-wiring-candidates" : undefined}
               />
+              {targetSurface === "manifest" && (
+                <datalist id="screen-read-wiring-candidates">
+                  {screenWiringCandidates.map((c) => (
+                    <option key={c.wiringKey} value={c.wiringKey}>{c.label}</option>
+                  ))}
+                </datalist>
+              )}
             </label>
+            {targetSurface === "manifest" && screenWiringCandidates.length > 0 && (
+              <p class="sm:col-span-2 text-[0.65rem] text-slate-600">
+                Step3 の read/query 配線 {screenWiringCandidates.length} 件をイベント接続候補として利用できます。
+                条件値は preview 用 literal と runtime 変数（runtimeParam / operationInput / routeQuery / authClaim / formValue）を分離して保存済みです。
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -4070,7 +4139,7 @@ function PackageScopeSelector({
     <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
       <h3 class="font-semibold">{heading}</h3>
       <p class="text-muted-xs mb-2">
-        layout / デザイン設定 / 配線は選択したパッケージにスコープします。
+        配置・デザイン設定・配線は選択したパッケージに紐づきます。
       </p>
       <label class="block text-xs mb-2">
         パッケージ
@@ -4089,7 +4158,7 @@ function PackageScopeSelector({
       </label>
       {selected && (!selected.routeKey || !selected.layoutId) && (
         <p class="mb-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
-          このパッケージに route / layout が未連携です。step 4.1 でパッケージ化（promote まで完了）をやり直してください。
+          このパッケージにページルートや配置が未連携です。step 4.1 でパッケージ化からやり直してください。
         </p>
       )}
       {selected && (
@@ -4181,11 +4250,11 @@ function PackageDesignPanel({
         packages={packages}
         selectedPackageId={selectedPackageId}
         onSelectPackage={onSelectPackage}
-        heading="部品デザイン（色・形・トークン）"
+        heading="デザイン設定（色・形・トークン）"
       />
       <p class="text-muted-xs mb-2 text-amber-800">
         色・形・トークン・リアクション意図を保存します。
-        layout タブでは配置のみ編集してください。
+        「配置」タブでは位置と枠のみ編集してください。
       </p>
       {selectedPackageId && (
         <PackageWiringEditor
@@ -4292,7 +4361,7 @@ export default function UiBuilderAdmin(): JSX.Element {
   return (
     <main class="page-main-wide">
       <h1 class="page-title">
-        topolactor — 管理 / UI ビルダー
+        topolactor — 管理 / 画面づくり
       </h1>
       <p class="mb-1">
         <a href="/admin" class="link">← 管理インデックスへ戻る</a>
@@ -4310,7 +4379,7 @@ export default function UiBuilderAdmin(): JSX.Element {
         class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         role="note"
       >
-        Step 4 の編集ルートは<strong> パッケージのみ</strong>です。layout / デザイン設定 / 配線は
+        Step 4 の編集ルートは<strong> パッケージのみ</strong>です。配置・デザイン設定・配線は
         パッケージ選択後に編集してください。カタログ・CI は参照専用（編集ルートではありません）。
       </div>
 
@@ -4327,7 +4396,7 @@ export default function UiBuilderAdmin(): JSX.Element {
               packages={packages}
               selectedPackageId={selectedPackageId}
               onSelectPackage={setSelectedPackageId}
-              heading="パッケージ layout（配置図）"
+              heading="配置（パッケージ単位）"
             />
             <LayoutBuilderSection
               onNavigate={setActiveTab}
@@ -4351,7 +4420,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           参照専用: コンポーネントカタログ（編集ルートではない）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          部品の正本登録は step 4.1 のバケット → パッケージ化です。ここは分類・候補の参照のみです。
+          部品の登録は step 4.1 の部品選択でパッケージ化から行います。ここは分類・候補の参照のみです。
         </p>
         <div class="mt-2">
           <PrimitiveCatalog />
@@ -4362,7 +4431,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           参照専用: CI ガイダンス（編集ルートではない）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          昇格・layout 保存前の注意喚起です。パッケージ layout の編集は上の「パッケージ layout / design」タブで行います。
+          保存前の注意喚起です。配置・デザインの編集は上の「配置」「デザイン設定」タブで行います。
         </p>
         <div class="mt-2">
           <CiAttentionGuidanceSection />

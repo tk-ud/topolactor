@@ -9,7 +9,11 @@ import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel from "../components/AdminHelpPanel.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { ADMIN_MANIFESTS_GUIDE } from "../content/adminGuides.ts";
-import { UX_CONTENTS_PAGE, UX_HUB_MANIFESTS } from "../content/adminUxTerms.ts";
+import {
+  UX_CONTENTS_PAGE,
+  UX_HUB_MANIFESTS,
+  UX_UI_BUILDER,
+} from "../content/adminUxTerms.ts";
 
 type PanelError = { code?: string; message: string };
 
@@ -101,7 +105,8 @@ export default function ManifestsAdmin(): JSX.Element {
         {topologyManifests.length === 0
           ? (
             <p class="text-sm text-muted-xs">
-              まだページがありません。{UX_CONTENTS_PAGE}で下書きを作成し、有効化してください。
+              まだページがありません。{UX_CONTENTS_PAGE}で step 1–3 を保存し、
+              {UX_UI_BUILDER}で画面を整えてから、この画面でページ同士をつなげてください。
             </p>
           )
           : (

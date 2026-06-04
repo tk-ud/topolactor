@@ -13,6 +13,7 @@ Deno.test("summarizeEmission: success path counts components and recommendation"
       statusDetail: "ready",
       nextOperations: [],
       nextTokens: [],
+      nextEnumItems: [],
       nearestPrefixSessionIds: [],
       contributingTokens: [],
     },

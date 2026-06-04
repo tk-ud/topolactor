@@ -1,6 +1,6 @@
 enum_dictionary_ssot:
   name: topolactor_enum_dictionary_ssot
-  version: 0.1.0
+  version: 0.2.0
   status: ssot_design_document
 
   purpose:
@@ -68,6 +68,24 @@ enum_dictionary_ssot:
     registry_discrete_values: observation_and_recommendation_coordinates_only
     admin_select_authority: enum_dictionary_ssot_and_enum_schema_tables
     rule: context_route_registry_enum_is_not_admin_column_select_ssot
+
+  enum_group_linear_space_coordinate_contract:
+    role: state_pressure_recommendation_coordinate_basis
+    consumers:
+      - docs/design/context-route-recommendation.yaml
+    cross_reference_from:
+      - hub_local_recommendation_pressure_lanes.lanes.state_pressure
+    coordinate_model:
+      enum_group: enum.groups.group_id
+      selected_item_index: enum.group_items.position_ordered_index_num
+      linear_coordinate_formula: >
+        When group item count > 1: position_index / (group_item_count - 1).
+        When group item count <= 1: 0.
+      vector_field_authority: enum.group_items_ordered_by_position
+    prohibited:
+      - using_operation_transition_stats_for_enum_linear_neighborhood
+      - treating_context_token_registry_value_as_enum_index_coordinate
+      - mixing_context_transition_stats_with_enum_item_transition_inference
 
   admin_runtime_actions:
     list_groups: enum_dictionary:list_groups

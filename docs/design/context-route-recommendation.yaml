@@ -1,6 +1,6 @@
 system:
   name: context-route-recommendation
-  version: "6.4"
+  version: "6.5"
   concept: >
     Lightweight, offline-capable topology observation and recommendation engine using
     registry tensor continuity + append-only logs.
@@ -51,6 +51,9 @@ registry_tensor_principle:
       - context_hub_recommendation_current_is_child_projection_current
       - context_hub_recommendation_current_is_not_logs_current
       - context_route_recommendation_is_not_main_attention_route
+      - sql_attention_projection_recommendation_must_not_inject_into_hub_local_candidate_results
+      - hub_local_recommendation_lanes_ui_pressure_and_state_pressure_are_not_sql_attention_parent_definition
+      - logs_attention_hit_evidence_is_not_next_operation_or_next_enum_item_within_current_hub
     may_consume:
       - statistics
       - ema
@@ -379,6 +382,39 @@ entities:
       prob01:         { type: float, note: "count_hits / SUM(count_hits across scope); no hardcoded smoothing" }
       updated_at:     { type: timestamp }
     unique_keys: [[prev_operation, next_operation, role, user_id]]
+    recommendation_lane: ui_pressure
+    transition_kind: operation
+    prohibited_use:
+      - enum_item_transition_aggregation
+      - state_pressure_next_enum_item_inference
+
+  context_enum_transition_stats:
+    description: >
+      Enum item transition probability within an enum_group: P(next_enum_index | prev_enum_index, enum_group_id).
+      Segmented by role and user_id with GLOBAL fallback. Separate from context_transition_stats so
+      operation transition stats and enum item transition stats must not be mixed.
+      Physical DDL is SSOT-defined here; implementation may follow in db/context_route_tables.sql.
+    recommendation_lane: state_pressure
+    transition_kind: enum_item
+    physical_ddl_status: implemented
+    fields:
+      id:             { type: uuid, pk: true }
+      enum_group_id:  { type: uuid, note: "fk enum.groups.group_id" }
+      prev_enum_index: { type: int, note: "enum.items.index_num or group_items position-resolved index" }
+      next_enum_index: { type: int }
+      role:           { type: string, default: "GLOBAL" }
+      user_id:        { type: string, default: "GLOBAL" }
+      count_events:   { type: int, default: 0 }
+      count_hits:     { type: float, default: 0.0 }
+      prob01:         { type: float, note: "count_hits / SUM(count_hits) over same (enum_group_id, prev_enum_index, role, user_id) scope" }
+      updated_at:     { type: timestamp }
+    unique_keys: [[enum_group_id, prev_enum_index, next_enum_index, role, user_id]]
+    prohibited_use:
+      - operation_transition_aggregation
+      - ui_pressure_next_operation_inference
+    enum_coordinate_reference:
+      canonical_reference:
+        - docs/design/enum-dictionary-ssot.yaml
 
   topology_policy_source:
     description: >
@@ -493,6 +529,88 @@ pipelines:
     notes:
       - "External LLM is used ONLY to propose cluster label names — not for runtime logic."
 
+hub_local_recommendation_pressure_lanes:
+  role: hub_internal_next_candidate_recommendation
+  canonical_reference:
+    - docs/design/sql-attention-logs-ssot.yaml
+    - docs/design/sql-attention-logs-ssot.md
+  space: current_hub_internal_operation_and_state_pressure
+  responsibility_boundary:
+    recommendation_engine:
+      role: recommend_next_choice_within_current_hub
+      targets:
+        - operation
+        - enum_item
+        - component
+        - route_action
+      output_concept: what_to_select_press_or_navigate_next_within_current_hub
+    sql_attention:
+      canonical_reference:
+        - docs/design/sql-attention-logs-ssot.yaml
+        - docs/design/sql-attention-logs-ssot.md
+      role: child_projection_consumer_only
+      parent_definition_not_redefined_here: true
+      targets: next_hub_projection_candidate_in_topology_concept_space
+  lanes:
+    ui_pressure:
+      lane_id: ui_pressure
+      description: UI and operation pressure within the current hub
+      sources:
+        - context_event
+        - component_operation_event_log
+      outputs:
+        - next_operation
+        - next_component
+        - next_route_action
+      aggregates:
+        - context_transition_stats
+      prohibited_mixing:
+        - enum_item_transition_stats
+        - sql_attention_projection_direct_injection
+    state_pressure:
+      lane_id: state_pressure
+      description: State and enum transition pressure within the current hub
+      sources:
+        - logs.diff
+        - enum_transition_logs
+      outputs:
+        - next_enum_item
+        - likely_status
+        - state_shift_candidate
+      enum_linear_space:
+        canonical_reference:
+          - docs/design/enum-dictionary-ssot.yaml
+      aggregates:
+        - context_enum_transition_stats
+      prohibited_mixing:
+        - operation_transition_stats_as_enum_evidence
+        - sql_attention_projection_direct_injection
+  result_contract:
+    hub_local_recommendation_result:
+      required_lane: true
+      lane_values:
+        - ui_pressure
+        - state_pressure
+      prohibited_lane_values:
+        - sql_attention_projection
+  transition_stats_separation:
+    context_transition_stats:
+      transition_kind: operation
+      models: prev_operation_to_next_operation
+      recommendation_lane: ui_pressure
+      physical_table: context_transition_stats
+    context_enum_transition_stats:
+      transition_kind: enum_item
+      models: prev_enum_index_to_next_enum_index_within_enum_group
+      recommendation_lane: state_pressure
+      physical_table: context_enum_transition_stats
+      physical_ddl_status: implemented
+      ssot_entity_ref: entities.context_enum_transition_stats
+    prohibited:
+      - using_context_transition_stats_for_enum_item_transitions
+      - using_context_enum_transition_stats_for_operation_transitions
+      - collapsing_operation_and_enum_stats_without_explicit_transition_kind
+
 routing:
   inputs:
     - current_table_name
@@ -604,6 +722,8 @@ topology_vector_runtime:
       - topology_vector_runtime_may_consume_attention_evidence
       - topology_vector_runtime_is_not_main_attention_route
       - quaternion_semantics_are_owned_by_sql_attention_logs_ssot
+      - sql_attention_projection_recommendation_must_not_inject_into_hub_local_candidate_results
+      - hub_local_recommendation_lanes_ui_pressure_and_state_pressure_are_not_sql_attention_parent_definition
 
   design_definitions:
     topology_attention:
@@ -697,7 +817,7 @@ topology_vector_runtime:
         scope_limit:           { type: int, note: "positive int; valid values are policy-defined via function_parameters.hub_attention.scope_limits. Default examples: 1000=UI instant, 3000=normal ops, 10000=wide learning" }
         base_probability:      { type: float, nullable: true }
         cosine_similarity:     { type: float, nullable: true }
-        static_relation_weight:{ type: float, nullable: true }
+        static_relation_weight: { type: float, nullable: true }
         statistical_weight:    { type: float, nullable: true }
         mlp_feature_score:     { type: float, nullable: true }
         feedback_adjustment:   { type: float, nullable: true, default: 0.0 }
@@ -834,6 +954,8 @@ registrar_wide_topology_attention:
     - not_main_attention_route
     - not_phase_attention_or_quaternion_semantics
     - topology_recommendation_and_registrar_projection_scope_only
+    - sql_attention_projection_recommendation_must_not_inject_into_hub_local_candidate_results
+    - hub_local_recommendation_lanes_ui_pressure_and_state_pressure_are_not_sql_attention_parent_definition
   concept: >
     Topology Attention is not limited to screen transition or sequential enum recommendation.
     The entire registrar is treated as a topology-wide Key-Value Memory.

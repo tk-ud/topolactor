@@ -131,7 +131,17 @@ public class HubAttractorExplorationRuntime
             var expandedManifestIds = expandedRelations.Select(r => r.TopologyManifestId).Append(relation.TopologyManifestId).Distinct().ToArray();
             var expandedHubIds = expandedRelations.SelectMany(r => new[] { r.HubId, r.RelatedHubId }).Append(relation.HubId).Append(relation.RelatedHubId).Distinct().ToArray();
             var generationLineId = Guid.NewGuid();
-            var phaseJson = BuildCanonicalPhaseVectorJson(candidate, relation, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds, tier, limits);
+            var phaseJson = SqlAttentionPhaseVectorRuntime.GeneratePhaseVector(new PhaseVectorGenerationRequest(
+                candidate.L2Norm,
+                relation.HubRelationId,
+                relation.TopologyManifestId,
+                relation.HubId,
+                resolution.TopologyManifestIds,
+                expandedRelationIds,
+                expandedManifestIds,
+                expandedHubIds,
+                TierToLabel(tier),
+                limits.SearchMode));
             var evidenceJson = JsonSerializer.Serialize(new
             {
                 scoring_role = "canonical_hubs_hub_relations_manifest_scoped",
@@ -142,39 +152,32 @@ public class HubAttractorExplorationRuntime
                 resolver_evidence_json = NormalizeJsonArrayOrEmpty(resolution.ResolverEvidenceJson),
                 no_logs_hub_current_fallback = true
             });
-            hits.Add(new HubAttractorExplorationHit(candidate.CurrentId, Guid.Empty, sourceSetId, relation.HubId, "hubs.hub_relations", relation.HubRelationId, null, relation.RelationScore, rank + 1, ClassifyScoreBand(relation.RelationScore, policy), "canonical", candidate.L2Norm, "{}", phaseJson, evidenceJson, generationLineId, relation.TopologyManifestId, relation.RelatedHubId, resolution.TopologyManifestIds, expandedRelationIds, expandedManifestIds, expandedHubIds));
+            hits.Add(new HubAttractorExplorationHit(
+                candidate.CurrentId,
+                HubCurrentId: Guid.Empty,
+                sourceSetId,
+                relation.HubId,
+                "hubs.hub_relations",
+                relation.HubRelationId,
+                RelationRegistryId: null,
+                relation.RelationScore,
+                rank + 1,
+                ClassifyScoreBand(relation.RelationScore, policy),
+                "canonical",
+                candidate.L2Norm,
+                VectorJson: "{}",
+                PhaseVectorJson: phaseJson,
+                evidenceJson,
+                generationLineId,
+                relation.TopologyManifestId,
+                relation.RelatedHubId,
+                resolution.TopologyManifestIds,
+                expandedRelationIds,
+                expandedManifestIds,
+                expandedHubIds));
         }
         return hits;
     }
-
-    private static string BuildCanonicalPhaseVectorJson(
-        WatchChangeCandidate candidate,
-        HubRelationExplorationCandidate hit,
-        IReadOnlyList<Guid> sourceManifestIds,
-        IReadOnlyList<Guid> expandedRelationIds,
-        IReadOnlyList<Guid> expandedManifestIds,
-        IReadOnlyList<Guid> expandedHubIds,
-        ExplorationBudgetTier tier,
-        ExplorationBudgetTierLimits limits) =>
-        JsonSerializer.Serialize(new
-        {
-            q_kind = "phaseAT",
-            q_is_draft = false,
-            generation_status = "generated",
-            generated_from = "sql_attention_hit",
-            canonical_exploration_field = "hubs.hub_relations",
-            w_l2_norm = candidate.L2Norm,
-            x_hit_hub_relation_id = hit.HubRelationId,
-            y_topology_manifest_id = hit.TopologyManifestId,
-            z_hub_id = hit.HubId,
-            i_expanded_hub_relation_ids = expandedRelationIds,
-            j_expanded_topology_manifest_ids = expandedManifestIds,
-            k_expanded_hub_ids = expandedHubIds,
-            q_phaseAT_payload = new { evidence_only = true, is_draft = false, source_topology_manifest_ids = sourceManifestIds },
-            exploration_budget_tier = TierToLabel(tier),
-            exploration_search_mode = limits.SearchMode,
-            no_automatic_topology_mutation = true
-        });
 
     private async Task<(HubAttractorExplorationPolicy? Policy, HubAttractorExplorationRunResult? EarlyResult)> LoadValidatedPolicyAsync(
         DateTimeOffset executedAt,
@@ -344,77 +347,6 @@ public class HubAttractorExplorationRuntime
         var unionCount = a.Keys.Union(b.Keys).Count();
 
         return unionCount == 0 ? 0.0 : (double)sharedCount / unionCount;
-    }
-
-    private static string BuildPhaseVectorJson(
-        WatchChangeCandidate candidate,
-        HubCurrentCandidate hub,
-        string vectorJson,
-        ExplorationBudgetTier budgetTier,
-        ExplorationBudgetTierLimits tierLimits)
-    {
-        var legacyAxisPopulation = FlattenVectorJson(hub.AxisPopulationJson);
-        var legacyAxisMovement = FlattenVectorJson(hub.AxisZScoreJson);
-        var vectorBasis = NormalizeJsonObjectOrEmpty(vectorJson);
-        var vectorKeys = FlattenVectorJson(vectorJson).Keys.OrderBy(k => k).ToArray();
-        var phaseBasis = NormalizeJsonObjectOrEmpty(hub.PhaseBasisJson);
-
-        static double GetLegacyValue(Dictionary<string, double> values, string key)
-            => values.TryGetValue(key, out var v) ? v : 0.0;
-
-        return JsonSerializer.Serialize(new
-        {
-            q_kind = "phaseAT",
-            q_is_draft = false,
-            generation_status = "deprecated_support_cache_diagnostics_only",
-            pending_reason = "legacy support-cache helper is deprecated; canonical phaseAT generation is emitted by manifest-scoped hubs.hub_relations exploration",
-            canonical_exploration_field = "hubs.hub_relations",
-            legacy_support_cache_source = "logs.hub_current",
-            meaning_boundary = new
-            {
-                w = "l2_norm",
-                x = "hit_hub_relation_id",
-                y = "topology_manifest_id",
-                z = "hub_id",
-                ijk = "expanded ID arrays",
-                q = "logs.attention.phaseAT append-only evidence row",
-                q_is_draft = false,
-                legacy_count_scalar_axes_deprecated = true,
-                no_automatic_topology_mutation = true,
-                exploration_budget_gate = "w_l2_norm",
-                exploration_budget_tier = TierToLabel(budgetTier),
-                exploration_search_mode = tierLimits.SearchMode
-            },
-            w_l2_norm = candidate.L2Norm,
-            x_hit_hub_relation_id = (string?)null,
-            y_topology_manifest_id = (string?)null,
-            z_hub_id = (string?)null,
-            i_expanded_hub_relation_ids = Array.Empty<string>(),
-            j_expanded_topology_manifest_ids = Array.Empty<string>(),
-            k_expanded_hub_ids = Array.Empty<string>(),
-            q_phaseAT_payload = new
-            {
-                status = "deprecated_support_cache_diagnostics_only",
-                evidence_only = true,
-                is_draft = false
-            },
-            legacy_support_cache_statistics = new
-            {
-                hub_relations_count = GetLegacyValue(legacyAxisPopulation, "hub_relations_count"),
-                hub_count = GetLegacyValue(legacyAxisPopulation, "hub_count"),
-                topology_manifests_count = GetLegacyValue(legacyAxisPopulation, "topology_manifests_count")
-            },
-            legacy_axis_movement_observations = new
-            {
-                i = GetLegacyValue(legacyAxisMovement, "i"),
-                j = GetLegacyValue(legacyAxisMovement, "j"),
-                k = GetLegacyValue(legacyAxisMovement, "k")
-            },
-            generated_from = "legacy_logs_hub_current_support_cache_diagnostics",
-            vector_keys = vectorKeys,
-            vector_basis_json = vectorBasis,
-            phase_basis_json = phaseBasis
-        });
     }
 
     private static JsonElement NormalizeJsonArrayOrEmpty(string? json)

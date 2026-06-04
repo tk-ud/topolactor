@@ -137,7 +137,8 @@ builder.Services.AddSingleton<RuntimeExecutor>(sp =>
         sp.GetRequiredService<RuntimeGuard>(),
         sp.GetRequiredService<ContextRouteRecommendationResolver>(),
         sp.GetRequiredService<OutputLaneRouter>(),
-        sp.GetRequiredService<HubNavigationResolver>()));
+        sp.GetRequiredService<HubNavigationResolver>(),
+        sp.GetRequiredService<ManifestRepository>()));
 builder.Services.AddSingleton<AdminRuntimeDispatchAdapter>(sp =>
     new AdminRuntimeDispatchAdapter(
         sp.GetRequiredService<AdminRuntime>(),

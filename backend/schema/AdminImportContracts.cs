@@ -25,6 +25,13 @@ public record AdminImportApplyRequestDto(
     [property: JsonPropertyName("snapshotId")] string SnapshotId
 );
 
+/// <summary>
+/// Request DTO for admin_csv_json_import:list_snapshot_records.
+/// </summary>
+public record AdminImportListSnapshotRecordsRequestDto(
+    [property: JsonPropertyName("snapshotId")] string SnapshotId
+);
+
 // ---------------------------------------------------------------------------
 // Response DTOs
 // ---------------------------------------------------------------------------
@@ -112,6 +119,17 @@ public record AdminImportPreviewResult(
     string? ErrorMessage,
     int ValidCount,
     int InvalidCount,
+    IReadOnlyList<AdminImportRecordData> Records
+);
+
+/// <summary>
+/// Result of AdminImportRuntime.ListSnapshotRecordsAsync.
+/// </summary>
+public record AdminImportListSnapshotRecordsResult(
+    bool Success,
+    string? SnapshotId,
+    string? ErrorCode,
+    string? ErrorMessage,
     IReadOnlyList<AdminImportRecordData> Records
 );
 

@@ -312,7 +312,12 @@ Deno.test("ContentsScreenDesignPanel: step 3 mounts embedded CSV/JSON import sub
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
   assert(src.includes("AdminImportPanel"), "must embed AdminImportPanel");
-  assert(src.includes('dataInputMode === "import"'), "must offer import tab");
+  assert(src.includes("embedded"), "must use embedded import panel on step 3");
+  assert(
+    src.includes("onMergePreviewToEditor"),
+    "must wire CSV/JSON preview merge into unified editor",
+  );
+  assert(src.includes("ContentsDataEditor"), "must keep unified manual editor grid");
   assert(src.includes("admin_csv_json_import") === false, "panel must use adminApi not raw layer strings");
   const adminApiSrc = await Deno.readTextFile(
     new URL("../api/adminApi.ts", import.meta.url),
@@ -581,7 +586,7 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
   assertEquals(shape.relationIntents[0].joinTableRef, "other_table");
   assertEquals(shape.aggregationMeasures[0].column, "col_b");
   assertEquals(shape.initialDataRows.length, 1);
-  assertEquals(shape.initialDataRows[0]["col_a"], "value1");
+  assertEquals(shape.initialDataRows[0].values["col_a"], "value1");
 });
 
 Deno.test("screen_data_shape topology extension: extracts enumGroupId on columns", () => {
@@ -678,11 +683,13 @@ Deno.test("initial data flow: initial data rows stored as intent not direct DB w
   // Guard: initialDataRows is a local state field only — no direct DB write function exists
   // The field is sent through assignAdminManifestScreenDataShape via backend topology extension
   const d = emptyManifestScreenDesign();
-  d.initialDataRows = [{ col_a: "test_value" }];
-  // Verify it's just a plain record array — no DB connection object, no execute function
+  d.initialDataRows = [{
+    values: { col_a: "test_value" },
+    lineage: { source: "manual" },
+  }];
   assertEquals(Array.isArray(d.initialDataRows), true);
-  assertEquals(typeof d.initialDataRows[0], "object");
-  assertEquals(d.initialDataRows[0]["col_a"], "test_value");
+  assertEquals(d.initialDataRows[0].values["col_a"], "test_value");
+  assertEquals(d.initialDataRows[0].lineage.source, "manual");
 });
 
 Deno.test("relation intent: /admin/contents relation intent does not own hub/inter-manifest management", () => {
@@ -863,6 +870,37 @@ Deno.test("v0.7.2: UiBuilderFlowStepper uses package packaging label", async () 
   assertFalse(source.includes("配置できる状態にする"), "legacy placement-ready goal removed");
 });
 
+Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default path", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
+  );
+  assertFalse(
+    source.includes("現在: <strong>{activeTab}</strong>"),
+    "raw tab id must not be shown in stepper header",
+  );
+  assertEquals(source.includes("UI_BUILDER_TAB_LABELS"), true);
+});
+
+Deno.test("ManifestsAdmin empty state aligns with step3 → ui-builder flow", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/ManifestsAdmin.tsx", import.meta.url),
+  );
+  const emptyStateBlock = source.slice(
+    source.indexOf("topologyManifests.length === 0"),
+    source.indexOf("overflow-x-auto"),
+  );
+  assertFalse(
+    emptyStateBlock.includes("有効化"),
+    "empty state must not suggest legacy promote activation",
+  );
+  assert(
+    emptyStateBlock.includes("step 1") &&
+      emptyStateBlock.includes("UX_UI_BUILDER") &&
+      emptyStateBlock.includes("ページ同士をつなげて"),
+    "empty state should reference contents steps, ui-builder, then linking",
+  );
+});
+
 Deno.test("normal view source guard: technical disclosures are excluded, adjacent default copy is checked", () => {
   const source =
     `<p>ページを設定</p><details><summary>技術情報</summary><code>backend runtime payload</code></details><p>manifest を選択</p>`;
@@ -879,6 +917,16 @@ Deno.test("normal view source guard: technical disclosures are excluded, adjacen
 Deno.test("normal view terms: shared flow labels use user-facing page vocabulary", () => {
   assertEquals(UX_MAIN_FLOW_STEP_LABELS[0], "新しいページを作る");
   assertFalse(UX_MAIN_FLOW_STEP_LABELS.join(" ").includes("manifest"));
+});
+
+Deno.test("normal view guide guard: adminGuides copy excludes pipeline and layout/design jargon", () => {
+  const guideCopy = collectGuideNormalViewCopy().toLowerCase();
+  for (const term of ["pipeline", "post-pipeline", "layout / design", "submit", "component design"]) {
+    assertFalse(
+      guideCopy.includes(term),
+      `adminGuides primary copy must not contain "${term}"`,
+    );
+  }
 });
 
 Deno.test("normal view banned terms: shared regression vocabulary covers extracted implementation categories", () => {
@@ -902,6 +950,14 @@ Deno.test("normal view banned terms: shared regression vocabulary covers extract
       "grouping intent",
       "raw",
       "silent fallback",
+      "pipeline",
+      "post-pipeline",
+      "submit",
+      "layout / design",
+      "component design",
+      "promote",
+      "バケット",
+      "add のみ",
     ]
   ) {
     assert(

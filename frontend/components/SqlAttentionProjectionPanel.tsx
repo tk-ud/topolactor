@@ -22,6 +22,7 @@ export type TopologyProjectionCandidate = {
   hubId: string | null;
   attractorKey: string;
   relationRegistryId: string | null;
+  lane?: "sql_attention_projection";
   attentionScore: number;
   scoreBand: string;
   /** statistics layer: convergence confidence / stability / continuity */

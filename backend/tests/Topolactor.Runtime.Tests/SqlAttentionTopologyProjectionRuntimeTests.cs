@@ -254,6 +254,19 @@ public class SqlAttentionTopologyProjectionRuntimeTests
         Assert.Equal(originalCount, evidence.Count);
         Assert.Equal(originalAttractorKey, evidence[0].AttractorKey);
         Assert.NotEmpty(candidates);
+        Assert.All(candidates, c => Assert.Equal(RecommendationPressureLanes.SqlAttentionProjection, c.Lane));
+    }
+
+    [Fact]
+    public async Task ProjectAsync_OkResult_CarriesSqlAttentionProjectionLane()
+    {
+        var logsRepo = new StubAttentionLogsRepository([MakeEvidence()]);
+        var runtime = CreateRuntime(logsRepo, new StubTopologyRepositoryWithPolicy(ValidPolicyJson));
+
+        var result = await runtime.ProjectAsync("src-1");
+
+        Assert.Equal(TopologyProjectionStatus.Ok, result.Status);
+        Assert.Equal(RecommendationPressureLanes.SqlAttentionProjection, result.Lane);
     }
 
     // ---------------------------------------------------------------------------

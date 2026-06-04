@@ -32,8 +32,8 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
     `${UX_CONTENTS} → ${UX_UI_BUILDER} → ${UX_HUB_MANIFESTS} の順で設定を進めます。`,
   prerequisites: ["先にログインしてください"],
   howToSteps: [
-    `${UX_CONTENTS_PAGE}で step 1→3（空登録・テーブル・関連・物理割当）を順に保存する`,
-    `${UX_UI_BUILDER}で step 4（部品選択でパッケージ化 → パッケージの layout / design）を行う`,
+    `${UX_CONTENTS_PAGE}で step 1→3（空登録・テーブル・関連・ページ設定）を順に保存する`,
+    `${UX_UI_BUILDER}で step 4（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）を行う`,
     `${UX_HUB_MANIFESTS_PAGE}で作成済みページの所属先、ページ間のつながり、表示順を管理する`,
     `必要に応じてデモ画面で表示と操作を確認する`,
   ],
@@ -63,11 +63,11 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],
-  inputs: ["選択する部品、パッケージ、layout / design の意図"],
+  inputs: ["選択する部品、パッケージ、配置とデザインの意図"],
   actions: [
     "部品選択でパッケージ化（step 4.1）",
-    "パッケージの layout / デザイン設定 / 配線を保存（step 4.2）",
-    "layout: プレビュー → 検証 → 保存反映（パッケージ選択必須）",
+    "パッケージの配置・デザイン設定・配線を保存（step 4.2）",
+    "配置: プレビュー → 検証 → 保存反映（パッケージ選択必須）",
   ],
   outputs: ["配置可能な部品", "保存反映されたレイアウト"],
   nextSteps: ["デモ画面で表示を確認する"],
@@ -85,7 +85,7 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
 export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
   title: UX_CONTENTS,
   purpose:
-    `ページの下書きを作成し、画面内容と${UX_DATA_SHAPE}を整え、内容確認・プレビュー後に有効化する画面です。ページ同士のつながりや表示順は ${UX_HUB_MANIFESTS_PAGE} で管理します。`,
+    `ページの下書きを作成し、画面内容と${UX_DATA_SHAPE}を整え、プレビューして保存する画面です。ページ同士のつながりや表示順は ${UX_HUB_MANIFESTS_PAGE} で管理します。`,
   prerequisites: ["先にログインしてください"],
   howToSteps: [
     "Step 1: 空の下書きとトポロジー表示名を登録する",
@@ -98,12 +98,12 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
     `ページの内容と${UX_DATA_SHAPE}`,
     "表示・操作に必要なページ単体の設定",
   ],
-  actions: ["Step 1–3 の保存", "（詳細）レガシー有効化"],
+  actions: ["Step 1–3 の保存"],
   outputs: [
     "ページの下書き",
     "修正が必要な項目",
     "プレビュー結果",
-    "有効化されたページ",
+    "保存済みのページ設定",
   ],
   nextSteps: ["/admin/ui-builder", "/admin/manifests"],
   boundaryNotes: [
@@ -147,8 +147,8 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/contents",
     label: UX_CONTENTS,
-    purpose: "step 1–3 の逐次保存（パイプライン）",
-    relation: "パイプライン step 1–3",
+    purpose: "step 1–3 を順に保存（空登録 → テーブル → 関連 → ページ設定）",
+    relation: "作業順の最初の 3 ステップ",
     howToSummary: [
       "空登録 → テーブル定義 → 関連 → 物理割当",
       "保存後は画面づくりへ",
@@ -157,18 +157,18 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
-    purpose: "step 4 — パッケージ化と layout / design",
-    relation: "パイプライン step 4",
+    purpose: "step 4 — 部品のパッケージ化と配置・デザイン設定",
+    relation: "作業順 step 4",
     howToSummary: [
       "部品を複数選択してパッケージ化",
-      "パッケージの layout / design を編集",
+      "配置とデザイン設定を編集して保存反映",
     ],
   },
   {
     href: "/admin/manifests",
     label: UX_HUB_MANIFESTS,
     purpose: "作成済みページの所属先、ページ間のつながり、表示順を管理する",
-    relation: "post-pipeline",
+    relation: "作業順の最終段階（ページ同士をつなぐ）",
     howToSummary: [
       "作成済みページを確認",
       "遷移先を追加・編集・並び替え",
@@ -253,29 +253,29 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 1,
     label: UX_CONTENTS,
     href: "/admin/contents",
-    purpose: "pipeline step 1 ～ step 3（空登録・テーブル・関連・物理割当）を順に保存",
+    purpose: "step 1 ～ step 3（空登録・テーブル・関連・ページ設定）を順に保存",
     completionSign: "step 3 まで保存済みであること",
     nextLabel: `${UX_UI_BUILDER}へ`,
     subSteps: [
       { label: "1 空登録", href: "/admin/contents" },
       { label: "2 テーブル", href: "/admin/contents" },
       { label: "2.5 関連", href: "/admin/contents" },
-      { label: "3 物理", href: "/admin/contents" },
+      { label: "3 ページ", href: "/admin/contents" },
     ],
   },
   {
     step: 2,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "pipeline step 4（部品選択でパッケージ化 → パッケージの layout / design）",
-    completionSign: "パッケージの layout 保存反映が完了していること",
+    purpose: "step 4（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）",
+    completionSign: "配置の保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
   {
     step: 3,
     label: UX_HUB_MANIFESTS,
     href: "/admin/manifests",
-    purpose: "post-pipeline: 作成済みページの所属先、ページ間のつながり、表示順を管理する",
+    purpose: "作成済みページの所属先、ページ間のつながり、表示順を管理する",
     completionSign: "必要なページ間の導線設定が完了していること",
   },
 ];
@@ -305,7 +305,7 @@ export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
     href: "/admin/ui-builder",
     checks: [
       "部品を複数選択してパッケージ化できること",
-      "パッケージ選択後に layout / design を編集できること",
+      "パッケージ選択後に配置とデザイン設定を編集できること",
     ],
   },
   {

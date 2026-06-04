@@ -88,10 +88,11 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
 });
 
 
-Deno.test("ADMIN_MAIN_FLOW_STEPS: contents step uses v0.7.2 pipeline wording", () => {
+Deno.test("ADMIN_MAIN_FLOW_STEPS: contents step uses user-facing step wording", () => {
   const contents = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/contents")!;
   assertEquals(contents.purpose.includes("step 1"), true);
   assertEquals(contents.purpose.includes("step 3"), true);
+  assertEquals(contents.purpose.toLowerCase().includes("pipeline"), false);
 });
 
 Deno.test("ADMIN_MAIN_FLOW_STEPS: ui-builder step references package route", () => {

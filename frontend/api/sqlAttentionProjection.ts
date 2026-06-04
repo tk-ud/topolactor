@@ -5,6 +5,7 @@ export type SqlAttentionProjectionResult = {
   statusDetail?: string;
   candidates: TopologyProjectionCandidate[];
   evaluatedAt: string;
+  lane: "sql_attention_projection";
 };
 
 export type SqlAttentionProjectionResponse = {

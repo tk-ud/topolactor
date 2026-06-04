@@ -277,6 +277,80 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
         await UpsertTransitionStatAsync(conn, ev, ct);
     }
 
+    /// <summary>
+    /// Appends enum transition event and updates context_enum_transition_stats (state_pressure lane).
+    /// </summary>
+    public override async Task AppendContextEnumTransitionAsync(
+        ContextEnumTransitionEventRecord ev,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ev);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using (var insertCmd = conn.CreateCommand())
+        {
+            insertCmd.CommandText =
+                "INSERT INTO context_enum_transition_event " +
+                "(event_id, enum_group_id, prev_enum_index, next_enum_index, role, user_id, session_id, created_at) " +
+                "VALUES (@eventId, @groupId, @prevIdx, @nextIdx, @role, @userId, @sessionId, @createdAt)";
+            insertCmd.Parameters.AddWithValue("eventId", ev.EventId);
+            insertCmd.Parameters.AddWithValue("groupId", ev.EnumGroupId);
+            insertCmd.Parameters.AddWithValue("prevIdx", ev.PrevEnumIndex);
+            insertCmd.Parameters.AddWithValue("nextIdx", ev.NextEnumIndex);
+            insertCmd.Parameters.AddWithValue("role", ev.Role ?? "GLOBAL");
+            insertCmd.Parameters.AddWithValue("userId", ev.UserId ?? "GLOBAL");
+            insertCmd.Parameters.AddWithValue("sessionId",
+                ev.SessionId.HasValue ? (object)ev.SessionId.Value : DBNull.Value);
+            insertCmd.Parameters.AddWithValue("createdAt", ev.CreatedAt);
+            await insertCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await UpsertEnumTransitionStatAsync(conn, ev, ct);
+    }
+
+    /// <inheritdoc />
+    public override async Task<IReadOnlyList<ContextEnumTransitionStat>> GetEnumTransitionStatsAsync(
+        Guid enumGroupId,
+        int prevEnumIndex,
+        string? role,
+        int candidateLimit,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT enum_group_id, prev_enum_index, next_enum_index, count_events, count_hits, prob01 " +
+            "FROM context_enum_transition_stats " +
+            "WHERE enum_group_id = @groupId AND prev_enum_index = @prevIdx " +
+            "  AND (role = @role OR role = 'GLOBAL') " +
+            "ORDER BY prob01 DESC " +
+            "LIMIT @candidateLimit";
+        cmd.Parameters.AddWithValue("groupId", enumGroupId);
+        cmd.Parameters.AddWithValue("prevIdx", prevEnumIndex);
+        cmd.Parameters.AddWithValue("role", role ?? "GLOBAL");
+        cmd.Parameters.AddWithValue("candidateLimit", candidateLimit);
+
+        var stats = new List<ContextEnumTransitionStat>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            stats.Add(new ContextEnumTransitionStat(
+                EnumGroupId: reader.GetGuid(0),
+                PrevEnumIndex: reader.GetInt32(1),
+                NextEnumIndex: reader.GetInt32(2),
+                CountEvents: reader.GetInt32(3),
+                CountHits: (float)reader.GetDouble(4),
+                Prob01: (float)reader.GetDouble(5)
+            ));
+        }
+
+        return stats;
+    }
+
     // ---------------------------------------------------------------------------
     // context_prefix_vector_cache
     // ---------------------------------------------------------------------------
@@ -641,6 +715,68 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                     "WHERE c.prev_operation = @prev AND c.role = @role AND c.user_id = @userId";
                 step2.Parameters.AddWithValue("prev",   prevOperation);
                 step2.Parameters.AddWithValue("role",   role);
+                step2.Parameters.AddWithValue("userId", userId);
+                await step2.ExecuteNonQueryAsync(ct);
+            }
+
+            await tx.CommitAsync(ct);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    private static async Task UpsertEnumTransitionStatAsync(
+        NpgsqlConnection conn,
+        ContextEnumTransitionEventRecord ev,
+        CancellationToken ct)
+    {
+        var role = ev.Role ?? "GLOBAL";
+        var userId = ev.UserId ?? "GLOBAL";
+
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        try
+        {
+            await using (var step1 = conn.CreateCommand())
+            {
+                step1.Transaction = tx;
+                step1.CommandText =
+                    "INSERT INTO context_enum_transition_stats " +
+                    "(enum_group_id, prev_enum_index, next_enum_index, role, user_id, count_events, count_hits, prob01) " +
+                    "VALUES (@groupId, @prevIdx, @nextIdx, @role, @userId, 0, 1.0, 0.0) " +
+                    "ON CONFLICT (enum_group_id, prev_enum_index, next_enum_index, role, user_id) DO UPDATE " +
+                    "  SET count_hits = context_enum_transition_stats.count_hits + 1, " +
+                    "      updated_at = now()";
+                step1.Parameters.AddWithValue("groupId", ev.EnumGroupId);
+                step1.Parameters.AddWithValue("prevIdx", ev.PrevEnumIndex);
+                step1.Parameters.AddWithValue("nextIdx", ev.NextEnumIndex);
+                step1.Parameters.AddWithValue("role", role);
+                step1.Parameters.AddWithValue("userId", userId);
+                await step1.ExecuteNonQueryAsync(ct);
+            }
+
+            await using (var step2 = conn.CreateCommand())
+            {
+                step2.Transaction = tx;
+                step2.CommandText =
+                    "WITH total AS ( " +
+                    "  SELECT SUM(count_hits)::int AS total_hits " +
+                    "  FROM context_enum_transition_stats " +
+                    "  WHERE enum_group_id = @groupId AND prev_enum_index = @prevIdx " +
+                    "    AND role = @role AND user_id = @userId " +
+                    ") " +
+                    "UPDATE context_enum_transition_stats c " +
+                    "SET count_events = total.total_hits, " +
+                    "    prob01 = c.count_hits::float / NULLIF(total.total_hits, 0), " +
+                    "    updated_at = now() " +
+                    "FROM total " +
+                    "WHERE c.enum_group_id = @groupId AND c.prev_enum_index = @prevIdx " +
+                    "  AND c.role = @role AND c.user_id = @userId";
+                step2.Parameters.AddWithValue("groupId", ev.EnumGroupId);
+                step2.Parameters.AddWithValue("prevIdx", ev.PrevEnumIndex);
+                step2.Parameters.AddWithValue("role", role);
                 step2.Parameters.AddWithValue("userId", userId);
                 await step2.ExecuteNonQueryAsync(ct);
             }

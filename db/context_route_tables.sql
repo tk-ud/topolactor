@@ -291,6 +291,57 @@ CREATE INDEX IF NOT EXISTS idx_cts_prev_role
 
 
 -- ---------------------------------------------------------------------------
+-- context_enum_transition_event
+-- Append-only enum item transition log (state_pressure lane signal source).
+-- Not mixed with context_event operation transitions.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS context_enum_transition_event (
+    event_id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    enum_group_id     UUID        NOT NULL,
+    prev_enum_index   INT         NOT NULL,
+    next_enum_index   INT         NOT NULL,
+    role              TEXT        NOT NULL DEFAULT 'GLOBAL',
+    user_id           TEXT        NOT NULL DEFAULT 'GLOBAL',
+    session_id        UUID        NULL,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE context_enum_transition_event IS
+    'Append-only enum item transition observations for state_pressure recommendation lane. '
+    'Logical enum_transition_logs surface; separate from context_transition_stats operation transitions.';
+
+CREATE INDEX IF NOT EXISTS idx_cete_group_prev_role
+    ON context_enum_transition_event (enum_group_id, prev_enum_index, role, user_id, created_at);
+
+
+-- ---------------------------------------------------------------------------
+-- context_enum_transition_stats
+-- Enum item transition probability: P(next_enum_index | prev_enum_index, enum_group_id).
+-- Segmented by role and user_id with GLOBAL fallback. Must not be used for operation transitions.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS context_enum_transition_stats (
+    id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    enum_group_id     UUID        NOT NULL,
+    prev_enum_index   INT         NOT NULL,
+    next_enum_index   INT         NOT NULL,
+    role              TEXT        NOT NULL DEFAULT 'GLOBAL',
+    user_id           TEXT        NOT NULL DEFAULT 'GLOBAL',
+    count_events      INT         NOT NULL DEFAULT 0,
+    count_hits        FLOAT       NOT NULL DEFAULT 0.0,
+    prob01            FLOAT       NOT NULL DEFAULT 0.0,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (enum_group_id, prev_enum_index, next_enum_index, role, user_id)
+);
+
+COMMENT ON TABLE context_enum_transition_stats IS
+    'Enum transition probability within enum_group. state_pressure lane only. '
+    'prob01 = count_hits / SUM(count_hits) over same (enum_group_id, prev_enum_index, role, user_id) scope.';
+
+CREATE INDEX IF NOT EXISTS idx_cets_group_prev_role
+    ON context_enum_transition_stats (enum_group_id, prev_enum_index, role, user_id);
+
+
+-- ---------------------------------------------------------------------------
 -- context_event_cold
 -- Cold storage for context events moved from context_event when
 -- archive_strategy="archive" is configured in the retention policy.

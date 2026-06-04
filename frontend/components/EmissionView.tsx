@@ -89,6 +89,14 @@ function RecommendationSection({ rec }: RecommendationSectionProps): JSX.Element
             : <pre class="m-0 whitespace-pre-wrap">{JSON.stringify(rec.nextTokens, null, 2)}</pre>}
         </td>
       </tr>
+      <tr>
+        <td class="whitespace-nowrap align-top font-bold">next_enum_items</td>
+        <td>
+          {(rec.nextEnumItems?.length ?? 0) === 0
+            ? <em class="text-gray-400">—</em>
+            : <pre class="m-0 whitespace-pre-wrap">{JSON.stringify(rec.nextEnumItems, null, 2)}</pre>}
+        </td>
+      </tr>
     </>
   );
 }

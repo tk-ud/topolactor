@@ -105,6 +105,34 @@ public class ContextRouteRepository
     }
 
     /// <summary>
+    /// Appends enum transition observation and updates context_enum_transition_stats (state_pressure lane).
+    /// </summary>
+    public virtual Task AppendContextEnumTransitionAsync(
+        ContextEnumTransitionEventRecord ev,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(ev);
+        _logger.LogDebug(
+            "ContextRouteRepository.AppendContextEnumTransitionAsync: in-memory skeleton — no-op for event={EventId}.",
+            ev.EventId);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Loads enum transition statistics for state_pressure recommendations.
+    /// </summary>
+    public virtual Task<IReadOnlyList<ContextEnumTransitionStat>> GetEnumTransitionStatsAsync(
+        Guid enumGroupId,
+        int prevEnumIndex,
+        string? role,
+        int candidateLimit,
+        CancellationToken ct = default)
+    {
+        _logger.LogDebug("ContextRouteRepository.GetEnumTransitionStatsAsync: in-memory skeleton — returning empty.");
+        return Task.FromResult<IReadOnlyList<ContextEnumTransitionStat>>([]);
+    }
+
+    /// <summary>
     /// Upserts an event vector cache entry into context_event_vector_cache.
     /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>

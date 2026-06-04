@@ -185,6 +185,19 @@ public class ContextRouteRecommendationResolver
             return ExplicitError("CONTEXT_EVENT_APPEND_FAILED");
         }
 
+        if (TryBuildEnumTransitionEvent(vector, sessionId, out var enumTransition))
+        {
+            try
+            {
+                await _contextRouteRepository.AppendContextEnumTransitionAsync(enumTransition, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ContextRouteRepository.AppendContextEnumTransitionAsync failed.");
+                return ExplicitError("ENUM_TRANSITION_APPEND_FAILED");
+            }
+        }
+
         // TopologyVectorRuntime extension: evidence extraction, MLP feature crossing, hub attention update.
         // Runs AFTER AppendContextEventAsync so the event is in context before hub attention is updated.
         // enabled=false → no-op (explicit, not silent). Failure → ExplicitError("TVR_EXTENSION_FAILED").
@@ -230,12 +243,14 @@ public class ContextRouteRecommendationResolver
 
         var nextOperations = ResolveNextOperations(neighbors, transitionStats, policy);
         var nextTokens = ResolveNextTokens(neighbors, policy, tokenAttentionByCandidate);
+        var nextEnumItems = await ResolveNextEnumItemsAsync(vector, role, policy, ct);
         var nearestIds = neighbors.Take(policy.MaxCandidatesShown).Select(n => n.SessionId).Distinct().ToList();
         var contributing = GetContributingTokenIds(eventVector);
 
         return new ContextRouteRecommendationResult(
             NextOperations: nextOperations,
             NextTokens: nextTokens,
+            NextEnumItems: nextEnumItems,
             NearestPrefixSessionIds: nearestIds,
             ContributingTokens: contributing,
             Status: RecommendationStatus.Ok,
@@ -447,10 +462,89 @@ public class ContextRouteRecommendationResolver
                     Value: kv.Key,
                     Score: kv.Value,
                     Probability: null,
-                    Evidence: evidence
+                    Evidence: evidence,
+                    Lane: RecommendationPressureLanes.UiPressure
                 );
             })
             .ToList();
+    }
+
+    /// <summary>
+    /// Derives state_pressure lane candidates from context_enum_transition_stats.
+    /// </summary>
+    public async Task<IReadOnlyList<RecommendationCandidate>> ResolveNextEnumItemsAsync(
+        OperationVector vector,
+        string? role,
+        ContextRoutePolicy policy,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(vector);
+        ArgumentNullException.ThrowIfNull(policy);
+
+        if (!Guid.TryParse(vector.ContextEnumGroupId, out var enumGroupId) ||
+            !vector.ContextPrevEnumIndex.HasValue)
+            return [];
+
+        try
+        {
+            var stats = await _contextRouteRepository.GetEnumTransitionStatsAsync(
+                enumGroupId,
+                vector.ContextPrevEnumIndex.Value,
+                role,
+                policy.MaxCandidatesShown,
+                ct);
+
+            return ResolveNextEnumItemsFromStats(stats, policy);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ContextRouteRepository.GetEnumTransitionStatsAsync failed.");
+            throw;
+        }
+    }
+
+    internal static IReadOnlyList<RecommendationCandidate> ResolveNextEnumItemsFromStats(
+        IReadOnlyList<ContextEnumTransitionStat> stats,
+        ContextRoutePolicy policy)
+    {
+        if (stats.Count == 0)
+            return [];
+
+        var ranked = stats
+            .OrderByDescending(s => s.Prob01)
+            .Take(policy.MaxCandidatesShown)
+            .ToList();
+
+        var candidates = new List<RecommendationCandidate>();
+        if (ranked.Count > 0)
+        {
+            var top = ranked[0];
+            candidates.Add(new RecommendationCandidate(
+                Value: top.NextEnumIndex.ToString(),
+                Score: top.Prob01,
+                Probability: top.Prob01,
+                Evidence: [$"output_kind=next_enum_item", $"prob01={top.Prob01:F3}"],
+                Lane: RecommendationPressureLanes.StatePressure));
+            candidates.Add(new RecommendationCandidate(
+                Value: top.NextEnumIndex.ToString(),
+                Score: top.Prob01,
+                Probability: top.Prob01,
+                Evidence: [$"output_kind=likely_status", $"prob01={top.Prob01:F3}"],
+                Lane: RecommendationPressureLanes.StatePressure));
+        }
+
+        if (ranked.Count > 1)
+        {
+            var second = ranked[1];
+            candidates.Add(new RecommendationCandidate(
+                Value: second.NextEnumIndex.ToString(),
+                Score: second.Prob01,
+                Probability: second.Prob01,
+                Evidence: [$"output_kind=state_shift_candidate", $"prob01={second.Prob01:F3}"],
+                Lane: RecommendationPressureLanes.StatePressure));
+        }
+
+        return candidates;
     }
 
     /// <summary>
@@ -504,7 +598,8 @@ public class ContextRouteRecommendationResolver
                 Value: x.Key.ToString(),
                 Score: x.FinalScore,
                 Probability: null,
-                Evidence: [$"neighbor_count={x.Value.Count}", $"total_sim={x.Value.Score:F3}", ..x.BlendEvidence]
+                Evidence: [$"neighbor_count={x.Value.Count}", $"total_sim={x.Value.Score:F3}", ..x.BlendEvidence],
+                Lane: RecommendationPressureLanes.UiPressure
             ))
             .ToList();
     }
@@ -727,10 +822,34 @@ public class ContextRouteRecommendationResolver
         IReadOnlyDictionary<Guid, float> vector) =>
         vector.Keys.Select(id => id.ToString()).ToList();
 
+    private static bool TryBuildEnumTransitionEvent(
+        OperationVector vector,
+        Guid sessionId,
+        out ContextEnumTransitionEventRecord record)
+    {
+        record = null!;
+        if (!Guid.TryParse(vector.ContextEnumGroupId, out var enumGroupId) ||
+            !vector.ContextPrevEnumIndex.HasValue ||
+            !vector.ContextNextEnumIndex.HasValue)
+            return false;
+
+        record = new ContextEnumTransitionEventRecord(
+            EventId: Guid.NewGuid(),
+            EnumGroupId: enumGroupId,
+            PrevEnumIndex: vector.ContextPrevEnumIndex.Value,
+            NextEnumIndex: vector.ContextNextEnumIndex.Value,
+            Role: vector.UserRole,
+            UserId: vector.ContextUserId,
+            SessionId: sessionId,
+            CreatedAt: DateTimeOffset.UtcNow);
+        return true;
+    }
+
     private static ContextRouteRecommendationResult InsufficientHistory(string detail) =>
         new(
             NextOperations: [],
             NextTokens: [],
+            NextEnumItems: [],
             NearestPrefixSessionIds: [],
             ContributingTokens: [],
             Status: RecommendationStatus.InsufficientHistory,
@@ -741,6 +860,7 @@ public class ContextRouteRecommendationResolver
         new(
             NextOperations: [],
             NextTokens: [],
+            NextEnumItems: [],
             NearestPrefixSessionIds: [],
             ContributingTokens: [],
             Status: RecommendationStatus.ExplicitError,

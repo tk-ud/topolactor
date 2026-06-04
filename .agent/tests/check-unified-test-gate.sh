@@ -140,6 +140,14 @@ else
   fail "[SSOT_VOCABULARY_CONTRACT] vocabulary contract checks failed"
 fi
 
+echo ""
+echo "=== [RECOMMENDATION_PRESSURE_LANE] hub-local vs SQL Attention lane boundary SSOT ==="
+if bash .agent/tests/check-recommendation-pressure-lane-boundary.sh; then
+  echo "OK  [RECOMMENDATION_PRESSURE_LANE] lane boundary checks passed"
+else
+  fail "[RECOMMENDATION_PRESSURE_LANE] lane boundary checks failed"
+fi
+
 # ─── FRONTEND_ALL_TESTS ───────────────────────────────────────────────────────
 
 echo ""

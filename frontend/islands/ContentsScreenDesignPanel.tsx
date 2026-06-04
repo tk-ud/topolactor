@@ -19,6 +19,7 @@ import ContentsStepCompletionBanner from "../components/ContentsStepCompletionBa
 import ContentsPipelineStepper, {
   type ContentsPipelineStep,
 } from "../components/ContentsPipelineStepper.tsx";
+import ContentsDataEditor from "../components/ContentsDataEditor.tsx";
 import ContentsStep3FieldMatrix from "../components/ContentsStep3FieldMatrix.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
@@ -30,6 +31,7 @@ import {
   emptyLogicalTable,
   qualifiedColumnKey,
   qualifiedColumnsFromLogicalTables,
+  step3FieldSourceFromDesign,
   qualifyScreenDesignColumnKeys,
   namedLogicalTableRefs,
   primaryLogicalTableRef,
@@ -56,6 +58,8 @@ import {
   loadManifestScreenDesignLocal,
   MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
   type LogicalTableDraft,
+  type ContentDataRowDraft,
+  flattenInitialDataRowsForSample,
   type ManifestScreenDesignDraft,
   parseSearchTargets,
   type RelationIntentDraft,
@@ -70,7 +74,13 @@ import {
   applySearchConditions,
   computeMeasure,
 } from "../lib/searchConditionEval.ts";
+import { importRecordToRowValues } from "../lib/contentDataConformance.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
+import {
+  listImportSnapshotRecords,
+  type AdminImportApplyResult,
+  type AdminImportPreviewResult,
+} from "../api/adminApi.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
   DISPLAY_COLUMN_MODE_LABELS,
@@ -300,7 +310,7 @@ export default function ContentsScreenDesignPanel({
   const step3CompletionRef = useRef<HTMLDivElement>(null);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showAdvancedAggregation, setShowAdvancedAggregation] = useState(false);
-  const [dataInputMode, setDataInputMode] = useState<"manual" | "import">("manual");
+  const [lastImportSnapshotId, setLastImportSnapshotId] = useState<string | null>(null);
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
   const [remoteTargets, setRemoteTargets] = useState<RelationshipRemoteTarget[]>([]);
@@ -337,7 +347,7 @@ export default function ContentsScreenDesignPanel({
   }, [activeStep]);
 
   useEffect(() => {
-    if (activeStep !== 2.5 || !selectedId) return;
+    if ((activeStep !== 2.5 && activeStep !== 3) || !selectedId) return;
     void (async () => {
       const targets = await listRelationshipRemoteTargets(selectedId);
       if (targets === null) {
@@ -539,6 +549,10 @@ export default function ContentsScreenDesignPanel({
         return;
       }
     }
+    if (step === 3 && step3FieldSourceErrors.length > 0) {
+      setErrors(step3FieldSourceErrors.map((message) => ({ message })));
+      return;
+    }
     const shape = backendDetail
       ? extractScreenDataShapeFromTopology(backendDetail.topologyRawJson)
       : null;
@@ -638,8 +652,26 @@ export default function ContentsScreenDesignPanel({
     merged: "保存済み + この端末の未反映変更",
   }[draftSource];
 
-  /** Step 3 keys: `tableRef.columnName` when table is named (e.g. employees.name). */
-  const qualifiedColumns = qualifiedColumnsFromLogicalTables(design.logicalTables);
+  const localQualifiedColumns = qualifiedColumnsFromLogicalTables(design.logicalTables);
+  const step3RemoteTargetManifests = remoteTargets.map((t) => ({
+    manifestId: t.manifestId,
+    logicalTables: t.logicalTables.map((lt) => ({
+      tableName: lt.tableName,
+      columns: lt.columns,
+    })),
+  }));
+  const step3FieldSource = step3FieldSourceFromDesign(
+    design.logicalTables,
+    design.relationIntents,
+    step3RemoteTargetManifests,
+  );
+  /** Step 3 keys: local logical tables + Step 2.5 resolved relation targets. */
+  const qualifiedColumns = activeStep === 3
+    ? step3FieldSource.qualifiedColumns
+    : localQualifiedColumns;
+  const step3FieldSourceErrors = activeStep === 3
+    ? step3FieldSource.unresolvedErrors
+    : [];
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
 
@@ -671,7 +703,8 @@ export default function ContentsScreenDesignPanel({
   }, [activeStep, design.logicalTables]);
 
   const validateEnumGroupResolution = (step: ContentsPipelineStep): string | null => {
-    for (const q of qualifiedColumns) {
+    const cols = step === 3 ? step3FieldSource.qualifiedColumns : localQualifiedColumns;
+    for (const q of cols) {
       const groupId = q.column.enumGroupId?.trim();
       if (!groupId) continue;
       if (step === 2) {
@@ -754,10 +787,10 @@ export default function ContentsScreenDesignPanel({
         entityTargetColumns: b.entityTargetColumns.filter(drop),
       }));
       patch.initialDataRows = design.initialDataRows.map((row) => {
-        const next = { ...row };
+        const next = { ...row.values };
         delete next[removedKey];
         delete next[removedName];
-        return next;
+        return { values: next, lineage: { ...row.lineage } };
       });
       if (patch.aggregationKey === removedKey || patch.aggregationKey === removedName) {
         patch.aggregationKey = "";
@@ -832,29 +865,54 @@ export default function ContentsScreenDesignPanel({
     });
   };
 
-  const addInitialDataRow = () => {
-    const emptyRow: Record<string, string> = {};
-    qualifiedColumns.forEach((q) => {
-      emptyRow[q.key] = "";
-    });
-    patchDesign({ initialDataRows: [...design.initialDataRows, emptyRow] });
-  };
+  const columnKeysForImport = qualifiedColumns.map((q) => q.key);
 
-  const patchInitialDataRow = (
-    rowIndex: number,
-    colKey: string,
-    value: string,
-  ) => {
-    const next = design.initialDataRows.map((row, i) =>
-      i === rowIndex ? { ...row, [colKey]: value } : row
+  const mergeImportPreviewToEditor = (preview: AdminImportPreviewResult) => {
+    setLastImportSnapshotId(preview.snapshotId);
+    mergeSnapshotRowsIntoEditor(
+      preview.snapshotId,
+      rowsFromSnapshotPreview(preview, "import_preview"),
     );
-    patchDesign({ initialDataRows: next });
   };
 
-  const removeInitialDataRow = (rowIndex: number) => {
-    patchDesign({
-      initialDataRows: design.initialDataRows.filter((_, i) => i !== rowIndex),
-    });
+  const rowsFromSnapshotPreview = (
+    preview: AdminImportPreviewResult,
+    source: "import_preview" | "import_applied",
+  ): ContentDataRowDraft[] =>
+    preview.records.map((r) => ({
+      values: importRecordToRowValues(
+        r.records as Record<string, unknown>,
+        columnKeysForImport,
+      ),
+      lineage: {
+        source,
+        snapshotId: preview.snapshotId,
+        rowIndex: r.rowIndex,
+      },
+    }));
+
+  const mergeSnapshotRowsIntoEditor = (
+    snapshotId: string,
+    newRows: ContentDataRowDraft[],
+  ) => {
+    const kept = design.initialDataRows.filter(
+      (r) => r.lineage.snapshotId !== snapshotId,
+    );
+    patchDesign({ initialDataRows: [...kept, ...newRows] });
+  };
+
+  const reloadImportSnapshotToEditor = async (snapshotId: string) => {
+    const preview = await listImportSnapshotRecords(snapshotId);
+    setLastImportSnapshotId(snapshotId);
+    mergeSnapshotRowsIntoEditor(
+      snapshotId,
+      rowsFromSnapshotPreview(preview, "import_applied"),
+    );
+  };
+
+  const handleImportApplied = (result: AdminImportApplyResult) => {
+    setLastImportSnapshotId(result.snapshotId);
+    void reloadImportSnapshotToEditor(result.snapshotId);
   };
 
   return (
@@ -1165,10 +1223,16 @@ export default function ContentsScreenDesignPanel({
         </>
       )}
 
+      {activeStep === 3 && step3FieldSourceErrors.length > 0 && (
+        <ValidationErrorPanel
+          errors={step3FieldSourceErrors.map((message) => ({ message }))}
+        />
+      )}
+
       {activeStep === 3 && qualifiedColumns.length > 0 && (
         <p class="mt-4 text-xs text-muted-xs">
-          表示項目は Step 2 で定義済み（{columnKeys.join(", ")}）。
-          変更する場合は Step 2 に戻ってください。
+          項目候補は Step 2 の論理テーブルと Step 2.5 で接続した参照先テーブルから構成されます（
+          {columnKeys.join(", ")}）。型の変更は Step 2、関連の変更は Step 2.5 で行ってください。
         </p>
       )}
 
@@ -1437,150 +1501,32 @@ export default function ContentsScreenDesignPanel({
         <>
       <h3 class="mt-5 text-xs font-semibold">データ入力 — {UX_FIELD_INITIAL_DATA}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        初期表示のデータ候補（add のみの既定セマンティクス）。手入力または CSV・JSON 取り込み（プレビュー → 明示適用）を選べます。
+        初期表示のデータ候補。手入力・CSV/JSON 取り込み（プレビュー → 適用）のいずれも、下の同一グリッドで編集・保存できます。
       </p>
-      <div class="mb-3 flex gap-2" role="tablist" aria-label="データ入力方法">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={dataInputMode === "manual"}
-          class={`rounded px-3 py-1 text-xs ${
-            dataInputMode === "manual"
-              ? "bg-blue-100 font-semibold text-blue-900"
-              : "border border-slate-200 text-slate-600"
-          }`}
-          onClick={() => setDataInputMode("manual")}
-        >
-          手入力
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={dataInputMode === "import"}
-          class={`rounded px-3 py-1 text-xs ${
-            dataInputMode === "import"
-              ? "bg-blue-100 font-semibold text-blue-900"
-              : "border border-slate-200 text-slate-600"
-          }`}
-          onClick={() => setDataInputMode("import")}
-        >
-          CSV・JSON 取り込み
-        </button>
-      </div>
-      {dataInputMode === "manual"
-        ? (
-          qualifiedColumns.length === 0
-            ? (
-              <p class="text-xs text-slate-400 italic">
-                表示項目を設定してから初期データを追加してください（step 2）。
-              </p>
-            )
-            : (
-              <>
-                {design.initialDataRows.length > 0 && (
-                  <div class="mb-2 overflow-x-auto rounded border border-slate-200">
-                    <table class="min-w-full text-left text-xs">
-                      <thead>
-                        <tr>
-                          {qualifiedColumns.map((q) => (
-                            <th
-                              key={q.key}
-                              class="border-b px-2 py-1 font-semibold text-slate-600 bg-slate-50"
-                            >
-                              {q.key}
-                            </th>
-                          ))}
-                          <th class="border-b px-2 py-1 bg-slate-50" />
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {design.initialDataRows.map((row, ri) => (
-                          <tr key={ri} class="border-b last:border-0">
-                            {qualifiedColumns.map((q) => {
-                              const groupId = q.column.enumGroupId?.trim();
-                              const groupDetail = groupId
-                                ? enumGroupDetails[groupId]
-                                : undefined;
-                              if (groupId && (!groupDetail || groupDetail.items.length === 0)) {
-                                return (
-                                  <td key={q.key} class="px-1 py-1">
-                                    <span class="text-xs text-red-600" role="alert">
-                                      {UX_FIELD_ENUM_GROUP}未解決
-                                    </span>
-                                  </td>
-                                );
-                              }
-                              if (groupId && groupDetail) {
-                                return (
-                                  <td key={q.key} class="px-1 py-1">
-                                    <select
-                                      class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                                      value={row[q.key] ?? ""}
-                                      onChange={(e) =>
-                                        patchInitialDataRow(
-                                          ri,
-                                          q.key,
-                                          (e.target as HTMLSelectElement).value,
-                                        )}
-                                    >
-                                      <option value="">（選択）</option>
-                                      {groupDetail.items.map((item) => (
-                                        <option key={item.indexNum} value={item.name}>
-                                          {item.name}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                );
-                              }
-                              return (
-                                <td key={q.key} class="px-1 py-1">
-                                  <input
-                                    class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                                    value={row[q.key] ?? ""}
-                                    onInput={(e) =>
-                                      patchInitialDataRow(
-                                        ri,
-                                        q.key,
-                                        (e.target as HTMLInputElement).value,
-                                      )}
-                                  />
-                                </td>
-                              );
-                            })}
-                            <td class="px-1 py-1">
-                              <button
-                                type="button"
-                                class="text-xs text-red-500 hover:text-red-700"
-                                onClick={() => removeInitialDataRow(ri)}
-                                aria-label="削除"
-                              >
-                                削除
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  class="btn-secondary text-xs"
-                  onClick={addInitialDataRow}
-                >
-                  行を追加
-                </button>
-              </>
-            )
-        )
-        : (
-          <AdminImportPanel
-            embedded
-            defaultManifestId={selectedId}
-            lockManifestId={!!selectedId}
-          />
-        )}
+      <AdminImportPanel
+        embedded
+        defaultManifestId={selectedId}
+        lockManifestId={!!selectedId}
+        onMergePreviewToEditor={mergeImportPreviewToEditor}
+        onApplied={handleImportApplied}
+      />
+      {lastImportSnapshotId && (
+        <div class="mb-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="btn-secondary text-xs"
+            onClick={() => void reloadImportSnapshotToEditor(lastImportSnapshotId)}
+          >
+            スナップショットから再読込 ({lastImportSnapshotId.slice(0, 8)}…)
+          </button>
+        </div>
+      )}
+      <ContentsDataEditor
+        qualifiedColumns={qualifiedColumns}
+        rows={design.initialDataRows}
+        enumGroupDetails={enumGroupDetails}
+        onRowsChange={(initialDataRows) => patchDesign({ initialDataRows })}
+      />
 
       <h3 class="mt-5 text-xs font-semibold">集計・サンプル</h3>
       <p class="mb-2 text-xs text-muted-xs">
@@ -1605,7 +1551,7 @@ export default function ContentsScreenDesignPanel({
           aggregationMeasures={design.aggregationMeasures}
           displayColumns={design.displayColumns}
           displayColumnMode={design.displayColumnMode}
-          initialDataRows={design.initialDataRows}
+          initialDataRows={flattenInitialDataRowsForSample(design.initialDataRows)}
           searchConditions={design.searchConditions}
           havingConditions={design.havingConditions}
         />

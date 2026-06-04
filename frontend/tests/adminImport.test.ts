@@ -4,6 +4,7 @@ import {
   listImportSchemas,
   uploadImportPreview,
   applyImport,
+  listImportSnapshotRecords,
   type AdminImportManifestItem,
   type AdminImportSchemaItem,
   type AdminImportPreviewResult,
@@ -198,6 +199,39 @@ Deno.test("applyImport throws on SNAPSHOT_NOT_FOUND error", async () => {
   });
   try {
     await assertRejects(() => applyImport("bad-snap"), Error, "SNAPSHOT_NOT_FOUND");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+Deno.test("listImportSnapshotRecords uses admin_csv_json_import:list_snapshot_records", async () => {
+  const original = globalThis.fetch;
+  let reqBody = "";
+  const preview: AdminImportPreviewResult = {
+    ok: true,
+    snapshotId: "snap-1",
+    sourceType: "csv",
+    manifestId: "m-1",
+    schemaId: "s-1",
+    validCount: 1,
+    invalidCount: 0,
+    records: [{
+      rowIndex: 0,
+      records: { name: "Alice" },
+      status: "valid",
+      validationErrors: [],
+    }],
+  };
+  globalThis.fetch = makeFetch(
+    200,
+    { success: true, emission: { data: preview } },
+    (_u, i) => { reqBody = String(i?.body ?? ""); },
+  );
+  try {
+    const result = await listImportSnapshotRecords("snap-1");
+    assertEquals(result.records.length, 1);
+    assertEquals(reqBody.includes('"action":"list_snapshot_records"'), true);
+    assertEquals(reqBody.includes('"snapshotId":"snap-1"'), true);
   } finally {
     globalThis.fetch = original;
   }

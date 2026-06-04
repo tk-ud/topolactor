@@ -4,6 +4,7 @@ export type RecommendationCandidate = {
   value: string;
   score: number;
   evidence: string[];
+  lane: "ui_pressure" | "state_pressure";
 };
 
 export type RecommendationPanelProps = {
@@ -11,6 +12,7 @@ export type RecommendationPanelProps = {
   statusDetail?: string;
   nextOperations: RecommendationCandidate[];
   nextTokens: RecommendationCandidate[];
+  nextEnumItems?: RecommendationCandidate[];
 };
 
 export function RecommendationPanel(props: RecommendationPanelProps): JSX.Element {
@@ -30,6 +32,12 @@ export function RecommendationPanel(props: RecommendationPanelProps): JSX.Elemen
           <CandidateList candidates={props.nextOperations} />
           <h4>Next Token Candidates</h4>
           <CandidateList candidates={props.nextTokens} />
+          {props.nextEnumItems && props.nextEnumItems.length > 0 && (
+            <>
+              <h4>Next Enum Items (state pressure)</h4>
+              <CandidateList candidates={props.nextEnumItems} />
+            </>
+          )}
         </>
       )}
     </section>
@@ -45,6 +53,7 @@ function CandidateList({ candidates }: { candidates: RecommendationCandidate[] }
       {candidates.map((c, i) => (
         <li key={i}>
           <code>{c.value}</code> — score: {c.score.toFixed(3)}
+          {c.lane && <small style={{ color: "#666" }}> [{c.lane}]</small>}
           {c.evidence.length > 0 && (
             <small style={{ color: "#666" }}> ({c.evidence.join(", ")})</small>
           )}

@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.7.2
+  version: 0.7.3
   status: subordinate_design_document
 
   authority:
@@ -192,6 +192,18 @@ admin_console_workflow_ssot:
             remote_side_draft: join_table_ref plus remote_key on editing draft logical tables
             remote_side_active: remote_manifest_id plus join_table_ref plus remote_key on active manifest logical tables
             example: user table id column links to employee table user_id column on another active manifest
+          step3_field_source:
+            rule: >
+              Step 3 operation targets, display columns, search/aggregation keys, initial data grid,
+              and sample preview candidates are built from editing-draft logicalTables plus columns
+              resolved from step 2.5 relationIntents (draft-remote join_table_ref on same draft tables,
+              active-remote via manifest:list_relationship_remote_targets). Draft-only column list
+              when relations point at active manifests is prohibited (no silent fallback).
+            active_remote_key_collision: >
+              When a local qualified key would collide with an active-remote column, disambiguate
+              tableRef with manifest id suffix (e.g. employees@00000000.name) so local and remote
+              homonyms remain distinct.
+            unresolved_relation: blocking_error_on_step_3_submit_and_visible_warning_in_ui
         fail_close:
           - unresolved topology.physical_tables table_ref mismatch must not silent_no_op
         handoff_after_success: /admin/ui-builder
@@ -317,6 +329,9 @@ admin_console_workflow_ssot:
         modes:
           - manual_initial_data_rows
           - csv_json_import_preview_then_apply
+          - unified_contents_data_editor_grid
+          - content_data_conformance_warnings_nonblocking
+          - import_snapshot_lineage_reload_via_list_snapshot_records
         backend_layer: admin_csv_json_import
         prohibited:
           - canonical_admin_route_/admin/import
@@ -408,6 +423,43 @@ admin_console_workflow_ssot:
       - /dev/admin/seed
       - /dev/admin/context-token-registry
       - /dev/admin/registry-vector-validate
+
+  runtime_execution_contract:
+    owner: topology_transform_runtime
+    handler_ref: backend/runtime/RuntimeExecutor.cs
+    evaluator_ref:
+      - backend/runtime/ScreenDataShapeQueryEvaluator.cs
+      - backend/runtime/ScreenDataShapeQueryRuntime.cs
+    applies_when:
+      - manifest topology contains screen_data_shape
+      - dispatcher axes action is Read or Search
+      - layer is screen_list, screen_aggregation, screen_entity, or screen_detail
+    prohibited:
+      - raw_sql_in_search_or_having_evaluation
+      - silent_fallback_on_unknown_operator
+    searchConditions:
+      interpretation: abstract_operator_vocabulary_over_initialDataRows
+      operators_ref: canonical_sequential_authoring_pipeline.steps[2].search_aggregation_display.search_conditions.searchConditions
+      logicalConnector: joins condition[i] to condition[i+1] via conditions[i].logicalConnector (and|or|not)
+    havingConditions:
+      interpretation: filter_aggregation_groups_by_measure_result
+      operators: [=, !=, <>, >, >=, <, <=]
+    displayColumnMode:
+      none: aggregate_results_only_no_row_columns
+      selected: displayColumns_only
+      all: all_columns_from_filtered_rows
+    value_sources:
+      kinds: [literal, runtimeParam, operationInput, routeQuery, authClaim, formValue]
+      rule: >
+        literal.sampleValue is preview-only. Runtime execution resolves non-literal kinds from
+        operation payload and __context map. Assign persists valueSource on each condition binding
+        inside screen_data_shape.screenReadQueryWiring.
+    screen_read_query_wiring:
+      persisted_under: screen_data_shape.screenReadQueryWiring
+      ui_builder_binding:
+        target_surface: manifest
+        admin_action: manifest:list_screen_read_query_wiring
+        candidates: wiringKey per searchConditions, havingConditions, aggregationMeasures, displayColumns, displayColumnMode
 
   # Legacy guard — applies only where promotion-manifest editor path remains until converged to step 3 submit
   contents_promote_guard:

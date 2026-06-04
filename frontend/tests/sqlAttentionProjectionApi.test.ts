@@ -10,6 +10,7 @@ Deno.test("fetchSqlAttentionProjection returns parsed status without fallback", 
       statusDetail: "No policy",
       candidates: [],
       evaluatedAt: "2026-01-01T00:00:00Z",
+      lane: "sql_attention_projection",
     },
   }), { status: 200 }))) as typeof fetch;
 
@@ -17,6 +18,7 @@ Deno.test("fetchSqlAttentionProjection returns parsed status without fallback", 
     const result = await fetchSqlAttentionProjection("src", "token");
     assertEquals(result.success, true);
     assertEquals(result.result?.status, "missing_policy");
+    assertEquals(result.result?.lane, "sql_attention_projection");
   } finally {
     globalThis.fetch = oldFetch;
   }

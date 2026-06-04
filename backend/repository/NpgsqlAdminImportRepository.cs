@@ -218,4 +218,72 @@ public class NpgsqlAdminImportRepository : AdminImportRepository
                 FileName: reader.GetString(2));
         return null;
     }
+
+    public override async Task<IReadOnlyList<AdminImportRecordData>> ListSnapshotRecordsAsync(
+        Guid snapshotId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT records, status, validation_errors_jsonb " +
+            "FROM topology.admin_import_records " +
+            "WHERE snapshot_id = @sid " +
+            "ORDER BY id";
+        cmd.Parameters.AddWithValue("sid", snapshotId);
+        var results = new List<AdminImportRecordData>();
+        int rowIndex = 0;
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            var recordsJson = reader.GetString(0);
+            var status = reader.GetString(1);
+            var errorsJson = reader.GetString(2);
+            Dictionary<string, object?> row;
+            try
+            {
+                using var doc = JsonDocument.Parse(recordsJson);
+                row = new Dictionary<string, object?>();
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        row[prop.Name] = prop.Value.ValueKind switch
+                        {
+                            JsonValueKind.String => prop.Value.GetString(),
+                            JsonValueKind.Number => prop.Value.TryGetDouble(out var d) ? d : prop.Value.GetRawText(),
+                            JsonValueKind.True => true,
+                            JsonValueKind.False => false,
+                            JsonValueKind.Null => null,
+                            _ => prop.Value.GetRawText(),
+                        };
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                row = new Dictionary<string, object?>();
+            }
+
+            List<string> errors;
+            try
+            {
+                errors = JsonSerializer.Deserialize<List<string>>(errorsJson) ?? new List<string>();
+            }
+            catch (JsonException)
+            {
+                errors = new List<string>();
+            }
+
+            results.Add(new AdminImportRecordData(
+                RowIndex: rowIndex,
+                Records: row,
+                Status: status,
+                ValidationErrors: errors));
+            rowIndex++;
+        }
+
+        return results;
+    }
 }

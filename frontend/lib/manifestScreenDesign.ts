@@ -117,8 +117,100 @@ export type OperationEntityBindingDraft = {
   entityTargetColumns: string[];
 };
 
-/** Initial data row as key-value record intent. No direct DB write — stored as topology extension intent. */
+export type DataRowLineageSource =
+  | "manual"
+  | "import_preview"
+  | "import_applied"
+  | "edited";
+
+export type DataRowLineage = {
+  source: DataRowLineageSource;
+  snapshotId?: string;
+  rowIndex?: number;
+  applyLogId?: string;
+};
+
+/** Step3 unified data row with source lineage (manual / import / edited). */
+export type ContentDataRowDraft = {
+  values: Record<string, string>;
+  lineage: DataRowLineage;
+};
+
+/** @deprecated flat map — normalized via normalizeContentDataRow on load. */
 export type InitialDataRowDraft = Record<string, string>;
+
+const LINEAGE_META_KEY = "__lineage";
+
+export function isStructuredContentDataRow(
+  row: unknown,
+): row is ContentDataRowDraft {
+  return typeof row === "object" && row !== null &&
+    "values" in row && typeof (row as ContentDataRowDraft).values === "object" &&
+    "lineage" in row && typeof (row as ContentDataRowDraft).lineage === "object";
+}
+
+export function normalizeContentDataRow(
+  row: Record<string, unknown> | ContentDataRowDraft,
+  defaultSource: DataRowLineageSource = "manual",
+): ContentDataRowDraft {
+  if (isStructuredContentDataRow(row)) {
+    return {
+      values: { ...row.values },
+      lineage: { ...row.lineage },
+    };
+  }
+  const values: Record<string, string> = {};
+  let lineage: DataRowLineage | undefined;
+  for (const [k, v] of Object.entries(row)) {
+    if (k === LINEAGE_META_KEY && typeof v === "object" && v !== null) {
+      lineage = v as DataRowLineage;
+      continue;
+    }
+    values[k] = typeof v === "string" ? v : String(v ?? "");
+  }
+  return {
+    values,
+    lineage: lineage ?? { source: defaultSource },
+  };
+}
+
+export function normalizeContentDataRows(
+  rows: unknown[],
+  defaultSource: DataRowLineageSource = "manual",
+): ContentDataRowDraft[] {
+  return rows
+    .filter((r): r is Record<string, unknown> | ContentDataRowDraft =>
+      typeof r === "object" && r !== null
+    )
+    .map((r) => normalizeContentDataRow(r, defaultSource));
+}
+
+export function dataRowValues(row: ContentDataRowDraft): Record<string, string> {
+  return row.values;
+}
+
+export function markDataRowEdited(row: ContentDataRowDraft): ContentDataRowDraft {
+  return {
+    values: { ...row.values },
+    lineage: { ...row.lineage, source: "edited" },
+  };
+}
+
+export function flattenInitialDataRowsForSample(
+  rows: ContentDataRowDraft[],
+): Record<string, string>[] {
+  return rows.map(dataRowValues);
+}
+
+/** Persist lineage alongside values in screen_data_shape.initialDataRows. */
+export function serializeContentDataRowsForShape(
+  rows: ContentDataRowDraft[],
+): Record<string, unknown>[] {
+  return rows.map((r) => ({
+    values: r.values,
+    lineage: r.lineage,
+  }));
+}
 
 /** Local draft cache only — not canonical. Backend topology extensions are SSOT after save. */
 export type ManifestScreenDesignDraft = {
@@ -154,7 +246,7 @@ export type ManifestScreenDesignDraft = {
   /** Per-operation entity column binding at event time. */
   operationEntityBindings: OperationEntityBindingDraft[];
   /** Initial data rows as topology intent (not direct DB write). */
-  initialDataRows: InitialDataRowDraft[];
+  initialDataRows: ContentDataRowDraft[];
   /** Structured search conditions with operator/value/logical-connector (SSOT step 3). */
   searchConditions: SearchCondition[];
   /** HAVING conditions on aggregation measure results (SSOT step 3). */
@@ -252,9 +344,9 @@ export function loadManifestScreenDesignLocal(
       aggregationFunction: entry.aggregationFunction,
       aggregationColumns: entry.aggregationColumns,
     }),
-    initialDataRows: Array.isArray(entry.initialDataRows)
-      ? entry.initialDataRows
-      : [],
+    initialDataRows: normalizeContentDataRows(
+      Array.isArray(entry.initialDataRows) ? entry.initialDataRows : [],
+    ),
     operationEntityBindings: Array.isArray(entry.operationEntityBindings)
       ? entry.operationEntityBindings.map(normalizeOperationEntityBinding)
       : [],
@@ -374,9 +466,9 @@ export function screenDesignFromBackendShape(
         };
       })
       : [],
-    initialDataRows: Array.isArray(shape.initialDataRows)
-      ? shape.initialDataRows
-      : [],
+    initialDataRows: normalizeContentDataRows(
+      Array.isArray(shape.initialDataRows) ? shape.initialDataRows : [],
+    ),
     searchConditions: Array.isArray(shape.searchConditions)
       ? shape.searchConditions
         .map(normalizeSearchConditionShape)

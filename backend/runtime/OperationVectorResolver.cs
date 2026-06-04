@@ -27,6 +27,9 @@ public class OperationVectorResolver
         string? contextUserId = null;
         string? contextTokenIds = null;
         string? contextRecordId = null;
+        string? contextEnumGroupId = null;
+        int? contextPrevEnumIndex = null;
+        int? contextNextEnumIndex = null;
 
         if (request.Context is not null)
         {
@@ -36,6 +39,13 @@ public class OperationVectorResolver
             request.Context.TryGetValue("ContextUserId", out contextUserId);
             request.Context.TryGetValue("ContextTokenIds", out contextTokenIds);
             request.Context.TryGetValue("ContextRecordId", out contextRecordId);
+            request.Context.TryGetValue("enum_group_id", out contextEnumGroupId);
+            if (request.Context.TryGetValue("prev_enum_index", out var prevRaw) &&
+                int.TryParse(prevRaw, out var prevIdx))
+                contextPrevEnumIndex = prevIdx;
+            if (request.Context.TryGetValue("next_enum_index", out var nextRaw) &&
+                int.TryParse(nextRaw, out var nextIdx))
+                contextNextEnumIndex = nextIdx;
         }
 
         // role from direct field takes precedence over Context["UserRole"]
@@ -54,6 +64,9 @@ public class OperationVectorResolver
             ContextTokenIds: contextTokenIds,
             ContextRecordId: contextRecordId,
             IdOrHubId: request.IdOrHubId,
+            ContextEnumGroupId: contextEnumGroupId,
+            ContextPrevEnumIndex: contextPrevEnumIndex,
+            ContextNextEnumIndex: contextNextEnumIndex,
             TriggerKind: request.TriggerKind
         );
     }

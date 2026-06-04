@@ -305,6 +305,12 @@ public class AdminRuntimeManifestManagementTests
         Assert.Equal("1000", havingConds[0].GetProperty("value").GetString());
 
         Assert.Equal("none", shapeEntry.GetProperty("displayColumnMode").GetString());
+
+        Assert.True(shapeEntry.TryGetProperty("screenReadQueryWiring", out var wiring));
+        Assert.Equal(JsonValueKind.Object, wiring.ValueKind);
+        Assert.True(wiring.TryGetProperty("searchConditions", out var searchWiring));
+        Assert.True(searchWiring.TryGetProperty("bindings", out var bindings));
+        Assert.Equal(4, bindings.GetArrayLength());
     }
 
     private static IReadOnlyList<JsonElement> ValidTopology(

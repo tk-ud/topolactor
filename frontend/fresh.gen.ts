@@ -32,8 +32,8 @@ import * as $super_auth from "./routes/super_auth.tsx";
 import * as $AdminAuthGate from "./islands/AdminAuthGate.tsx";
 import * as $AdminEnumsRoster from "./islands/AdminEnumsRoster.tsx";
 import * as $AdminImport from "./islands/AdminImport.tsx";
-import * as $AdminUsersRoster from "./islands/AdminUsersRoster.tsx";
 import * as $AdminMainFlowStepper from "./islands/AdminMainFlowStepper.tsx";
+import * as $AdminUsersRoster from "./islands/AdminUsersRoster.tsx";
 import * as $AuthPanel from "./islands/AuthPanel.tsx";
 import * as $ContentsAdmin from "./islands/ContentsAdmin.tsx";
 import * as $ContentsPromotionPanel from "./islands/ContentsPromotionPanel.tsx";
@@ -86,8 +86,8 @@ const manifest = {
     "./islands/AdminAuthGate.tsx": $AdminAuthGate,
     "./islands/AdminEnumsRoster.tsx": $AdminEnumsRoster,
     "./islands/AdminImport.tsx": $AdminImport,
-    "./islands/AdminUsersRoster.tsx": $AdminUsersRoster,
     "./islands/AdminMainFlowStepper.tsx": $AdminMainFlowStepper,
+    "./islands/AdminUsersRoster.tsx": $AdminUsersRoster,
     "./islands/AuthPanel.tsx": $AuthPanel,
     "./islands/ContentsAdmin.tsx": $ContentsAdmin,
     "./islands/ContentsPromotionPanel.tsx": $ContentsPromotionPanel,

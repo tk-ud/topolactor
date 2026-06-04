@@ -7,7 +7,15 @@ This markdown is the semantic SSOT for SQL Attention and Phase Attention evidenc
 - Focus: observed signals, recommendation targets, exploration fields, evidence lineage, and mutation boundaries.
 - Structural contracts, policy-source rules, schema responsibilities, runtime boundaries, and staged wiring order are defined in `docs/design/sql-attention-logs-ssot.yaml`.
 
-## 2. SQL Attention Definition
+## 2. Recommendation pressure lane boundary
+
+SQL Attention owns the **concept projection recommendation** lane (`sql_attention_projection`): which hub / projection / topology to examine next across hubs and manifest-scoped relation space.
+
+Hub-local next-candidate recommendation (`ui_pressure`, `state_pressure`) is defined only in `context-route-recommendation.yaml`. SQL Attention must not inject projection hits into hub-local `next_operation` / `next_enum_item` style results.
+
+Canonical cross-reference: `recommendation_pressure_lane_boundary` in `sql-attention-logs-ssot.yaml` and `hub_local_recommendation_pressure_lanes` in `context-route-recommendation.yaml`.
+
+## 3. SQL Attention Definition
 
 SQL Attention observes physical-table pressure and recommends hub-relation evidence. It is not SQL-side Transformer QK dot-product reproduction and it is not an automatic topology authoring route.
 
@@ -26,7 +34,7 @@ The canonical SQL Attention trigger is a policy-qualified change in the `logs.cu
 
 The canonical exploration field is `hubs.hub_relations`. SQL Attention resolves the `topology_manifest_id[]` related to each triggered physical table through explicit active `topology.physical_table_manifest_bindings`, explores `hubs.hub_relations` from those manifest IDs, derives each hit's `hub_id` through `hubs.topology_manifests`, and appends hit evidence to `logs.attention`. Resolution must return an explicit no-hit / failure boundary rather than using an implicit join, nullable fallback, or oldest-row fallback.
 
-## 3. Hubs Space Hierarchy
+## 4. Hubs Space Hierarchy
 
 ```text
 hubs.hub
@@ -39,7 +47,7 @@ hubs.hub
 - `hubs.hub_relations` belongs to one topology manifest, forms a manifest-scoped relation sequence, and is the SQL Attention exploration field.
 - A relation hit resolves its source hub through `hub_relation_id -> topology_manifest_id -> hubs.topology_manifests.hub_id`; `hubs.hub_relations` is not a global hub-to-hub graph.
 
-## 4. Observation and Support Planes
+## 5. Observation and Support Planes
 
 The planes remain semantically separate.
 
@@ -49,7 +57,7 @@ The planes remain semantically separate.
 - `logs.hub_current` = optional support cache / derived hub current. It may accelerate reads, but it is not the SQL Attention exploration body or meaning authority.
 - `logs.attention` = append-only generation log for SQL Attention and Phase Attention evidence.
 
-## 5. SQL Attention Hit Evidence
+## 6. SQL Attention Hit Evidence
 
 A SQL Attention hit records the generation lineage from the triggered physical-table pressure to the explored hub-relation field.
 
@@ -63,7 +71,7 @@ physical_table_id / physical_table_name
 
 A SQL Attention evidence row preserves enough identity to trace the trigger current, resolved manifest, explored relation, derived hub, policy source, rank / score observations, and generation lineage. Evidence rows are append-only observations. They are not canonical topology objects.
 
-## 6. Phase Attention Definition
+## 7. Phase Attention Definition
 
 Phase Attention begins from SQL Attention hit evidence and explores farther through ID spaces. Its canonical axes are IDs, not count scalars.
 
@@ -85,7 +93,7 @@ The expression `q = w + xi + yj + zk` names the Phase Attention generation relat
 
 `w` controls the bounded exploration strength. All threshold values, topN values, rank / norm policies, topK values, and expansion limits are resolved from data-defined policy sources rather than hidden literals.
 
-## 7. Deprecated Count-Scalar Interpretation
+## 8. Deprecated Count-Scalar Interpretation
 
 The following interpretation is legacy / deprecated and is not canonical Phase Attention semantics:
 
@@ -97,7 +105,7 @@ z = topology_manifests_count
 
 Counts, record counts, aggregates, and cache populations may remain statistics or support-cache observations. They must not be treated as the canonical `x / y / z` Phase Attention ID spaces.
 
-## 8. Evidence Generation Line and Promotion Boundary
+## 9. Evidence Generation Line and Promotion Boundary
 
 `logs.attention` is an append-only generation log.
 
@@ -118,7 +126,7 @@ Boundary rules:
 - SQL Attention and Phase Attention never auto-mutate topology, registry, manifests, or hub relations.
 - Evidence generation must preserve its lineage across SQLAT hit rows, phaseAT rows, and any later explicit Draft / adopted operation.
 
-## 9. Evidence Meaning Separation
+## 10. Evidence Meaning Separation
 
 Do not collapse the evidence layers into one score.
 
@@ -130,7 +138,7 @@ Phase Attention = farther ID-space exploration evidence
 
 Statistics, SQL Attention hits, and Phase Attention generations preserve different meanings even when they share one append-only log surface.
 
-## 10. Parent / Child Boundary
+## 11. Parent / Child Boundary
 
 SQL Attention and topology recommendation are related but not identical.
 
@@ -138,7 +146,7 @@ SQL Attention and topology recommendation are related but not identical.
 - Topology recommendation currents = child projection surfaces that consume evidence for discrete ranking.
 - `topology.*` and registry surfaces remain canonical configuration / meaning surfaces; SQL Attention does not author them automatically.
 
-## 11. Write / Mutation Boundary
+## 12. Write / Mutation Boundary
 
 Allowed SQL Attention and Phase Attention writes:
 
@@ -156,7 +164,7 @@ Prohibited automatic writes:
 - Draft creation or promotion
 - adopted reflection
 
-## 12. Policy Boundary
+## 13. Policy Boundary
 
 Policy values are data-defined. Runtime and SQL layers resolve policy values from explicit sources such as `topology.function_parameters`, a manifest policy binding, or a policy table.
 
@@ -172,7 +180,7 @@ This rule applies to:
 - evidence save limits
 - archive policy
 
-## 13. Staged Wiring Order
+## 14. Staged Wiring Order
 
 The contract wiring order is:
 
@@ -183,7 +191,7 @@ The contract wiring order is:
 5. Align backend exploration and repository writes with ID-space Phase Attention evidence.
 6. Align explicit Draft promotion and adopted reflection commands without introducing automatic mutation.
 
-## 14. Non-goals
+## 15. Non-goals
 
 - Reproducing Transformer QK Attention in SQL.
 - Treating `logs.hub_current` as the canonical exploration body.
@@ -191,7 +199,7 @@ The contract wiring order is:
 - Treating `q` as a Draft or adopted topology object.
 - Auto-mutating topology, registry, manifests, or hub relations from evidence.
 
-## 15. Compatibility Vocabulary
+## 16. Compatibility Vocabulary
 
 The canonical route above retains the following structural vocabulary for cross-document continuity:
 

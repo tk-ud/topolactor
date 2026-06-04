@@ -239,6 +239,7 @@ public partial class AdminRuntime
             "admin_csv_json_import:apply"               => await DataImportApplyAsync(vector, ct),
             "admin_csv_json_import:list_manifests"      => await DataImportListManifestsAsync(ct),
             "admin_csv_json_import:list_schemas"        => await DataImportListSchemasAsync(ct),
+            "admin_csv_json_import:list_snapshot_records" => await DataImportListSnapshotRecordsAsync(vector, ct),
             "manifest:list"                             => await DataManifestListAsync(vector, ct),
             "manifest:get"                              => await DataManifestGetAsync(vector, ct),
             "manifest:validate"                         => await DataManifestValidateAsync(vector, ct),
@@ -248,6 +249,7 @@ public partial class AdminRuntime
             "manifest:deprecate"                        => await DataManifestDeprecateAsync(vector, ct),
             "manifest:assign_hub_grouping"                => await DataManifestAssignHubGroupingAsync(vector, ct),
             "manifest:assign_screen_data_shape"           => await DataManifestAssignScreenDataShapeAsync(vector, ct),
+            "manifest:list_screen_read_query_wiring"      => await DataManifestListScreenReadQueryWiringAsync(vector, ct),
             "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
             "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(ct),
             "enum_dictionary:get_group"                   => await DataEnumDictionaryGetGroupAsync(vector, ct),
@@ -1257,6 +1259,51 @@ public partial class AdminRuntime
         return (JsonSerializer.SerializeToElement(dtos), null);
     }
 
+    private async Task<(JsonElement? data, ValidationError? error)> DataImportListSnapshotRecordsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_adminImportRuntime is null) return (null, ImportRuntimeNotAvailable());
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for admin_csv_json_import:list_snapshot_records"));
+
+        AdminImportListSnapshotRecordsRequestDto? req;
+        try
+        {
+            req = JsonSerializer.Deserialize<AdminImportListSnapshotRecordsRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (req is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(req.SnapshotId))
+            return (null, new ValidationError("SNAPSHOT_ID_REQUIRED", "snapshotId is required"));
+        if (!Guid.TryParse(req.SnapshotId, out var snapshotGuid))
+            return (null, new ValidationError("MALFORMED_SNAPSHOT_ID", "snapshotId must be a valid UUID"));
+
+        var result = await _adminImportRuntime.ListSnapshotRecordsAsync(snapshotGuid, ct);
+        if (!result.Success)
+            return (null, new ValidationError(result.ErrorCode!, result.ErrorMessage!));
+
+        var recordDtos = result.Records.Select(r => new AdminImportRecordPreviewDto(
+            r.RowIndex, r.Records, r.Status, r.ValidationErrors)).ToList();
+
+        var response = new AdminImportUploadPreviewResponseDto(
+            Ok: true,
+            SnapshotId: result.SnapshotId!,
+            SourceType: "",
+            ManifestId: "",
+            SchemaId: "",
+            ValidCount: recordDtos.Count(r => r.Status == "valid"),
+            InvalidCount: recordDtos.Count(r => r.Status == "invalid"),
+            Records: recordDtos);
+
+        return (JsonSerializer.SerializeToElement(response), null);
+    }
+
     private ValidationError ManifestRepositoryNotAvailable() =>
         new("MANIFEST_REPOSITORY_NOT_AVAILABLE", "Manifest repository is not registered.");
 
@@ -1301,6 +1348,33 @@ public partial class AdminRuntime
             return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
 
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(detail)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestListScreenReadQueryWiringAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+        if (!TryParseManifestId(vector, out var manifestId, out var parseError))
+            return (null, parseError);
+
+        var detail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (detail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        var shapeEntry = ScreenDataShapeTopologyReader.FindScreenDataShapeEntry(detail.Topology);
+        if (shapeEntry is null)
+        {
+            return (JsonSerializer.SerializeToElement(new { candidates = Array.Empty<object>() }), null);
+        }
+
+        if (!shapeEntry.Value.TryGetProperty("screenReadQueryWiring", out var wiring) ||
+            wiring.ValueKind != JsonValueKind.Object)
+        {
+            return (JsonSerializer.SerializeToElement(new { candidates = Array.Empty<object>() }), null);
+        }
+
+        var candidates = ScreenReadQueryWiringCandidates.Flatten(wiring);
+        return (JsonSerializer.SerializeToElement(new { candidates }), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataManifestValidateAsync(
@@ -2251,6 +2325,12 @@ public partial class AdminRuntime
             searchConditions = request.SearchConditions ?? Array.Empty<AdminManifestSearchConditionDto>(),
             havingConditions = request.HavingConditions ?? Array.Empty<AdminManifestHavingConditionDto>(),
             displayColumnMode = request.DisplayColumnMode,
+            screenReadQueryWiring = ScreenReadQueryWiringBuilder.Build(
+                request.SearchConditions,
+                request.HavingConditions,
+                request.AggregationMeasures,
+                request.DisplayColumns,
+                request.DisplayColumnMode),
         });
 
         var (manifest, error) = await _manifestRepository.MergeTopologyExtensionDraftAsync(

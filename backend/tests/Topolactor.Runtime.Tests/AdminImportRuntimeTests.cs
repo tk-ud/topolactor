@@ -511,6 +511,23 @@ public class AdminImportRuntimeTests
         Assert.Equal("REPOSITORY_UNAVAILABLE", result.ErrorCode);
     }
 
+    [Fact]
+    public async Task ListSnapshotRecordsAsync_afterPreview_returnsPersistedRows()
+    {
+        var manifestId = TrackingAdminImportRepository.DefaultManifestIdForTest;
+        var repo = new TrackingAdminImportRepository(manifestExists: true);
+        var runtime = CreateRuntime(repo);
+        var csv = "name,age\nAlice,30";
+        var preview = await runtime.PreviewAsync(
+            "csv", "test.csv", manifestId, TopologyRepository.DefaultSchemaId, csv);
+        Assert.True(preview.Success);
+        var snapshotId = Guid.Parse(preview.SnapshotId!);
+
+        var listed = await runtime.ListSnapshotRecordsAsync(snapshotId);
+        Assert.True(listed.Success);
+        Assert.Equal(1, listed.Records.Count);
+    }
+
     // -------------------------------------------------------------------------
     // AdminRuntime dispatch wiring
     // -------------------------------------------------------------------------
@@ -610,6 +627,7 @@ public class AdminImportRuntimeTests
         public bool RecordsCreated { get; private set; }
         public bool ApplyLogCreated { get; private set; }
         public JsonElement? CapturedDiffJsonb { get; private set; }
+        private readonly Dictionary<Guid, List<AdminImportRecordData>> _recordsBySnapshot = new();
 
         public TrackingAdminImportRepository(
             bool snapshotExists = true,
@@ -642,7 +660,28 @@ public class AdminImportRuntimeTests
             CancellationToken ct = default)
         {
             RecordsCreated = true;
+            var list = new List<AdminImportRecordData>();
+            int index = 0;
+            foreach (var row in rows)
+            {
+                var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(row.records.GetRawText())
+                    ?? new Dictionary<string, object?>();
+                var errors = JsonSerializer.Deserialize<List<string>>(row.validationErrors.GetRawText())
+                    ?? new List<string>();
+                list.Add(new AdminImportRecordData(index, dict, row.status, errors));
+                index++;
+            }
+            _recordsBySnapshot[snapshotId] = list;
             return Task.FromResult(true);
+        }
+
+        public override Task<IReadOnlyList<AdminImportRecordData>> ListSnapshotRecordsAsync(
+            Guid snapshotId,
+            CancellationToken ct = default)
+        {
+            if (_recordsBySnapshot.TryGetValue(snapshotId, out var list))
+                return Task.FromResult<IReadOnlyList<AdminImportRecordData>>(list);
+            return Task.FromResult<IReadOnlyList<AdminImportRecordData>>(Array.Empty<AdminImportRecordData>());
         }
 
         public override Task<bool> CreateApplyLogAsync(

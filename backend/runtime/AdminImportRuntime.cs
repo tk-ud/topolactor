@@ -113,7 +113,9 @@ public class AdminImportRuntime
         foreach (var parsedRow in parsedRows)
         {
             var preErrors = parsedRow.PreParseErrors ?? Array.Empty<string>();
-            var schemaErrors = ValidateRow(parsedRow.Row, schemaFields);
+            var schemaErrors = ContentDataConformance.ValidateRow(
+                parsedRow.Row,
+                schemaFields.Select(f => new ContentDataConformance.SchemaField(f.Key, f.Type, f.Required)).ToList());
             var allErrors = preErrors.Concat(schemaErrors).ToList();
             var status = allErrors.Count == 0 ? "valid" : "invalid";
 
@@ -289,6 +291,51 @@ public class AdminImportRuntime
     public async Task<IReadOnlyList<AdminImportSchemaSummary>> ListSchemasAsync(
         CancellationToken ct = default)
         => await _repository.ListSchemasAsync(ct);
+
+    /// <summary>
+    /// Reloads persisted import records for contents Step3 re-edit (lineage via snapshotId).
+    /// </summary>
+    public async Task<AdminImportListSnapshotRecordsResult> ListSnapshotRecordsAsync(
+        Guid snapshotId,
+        CancellationToken ct = default)
+    {
+        bool exists;
+        try
+        {
+            exists = await _repository.SnapshotExistsAsync(snapshotId, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "AdminImportRuntime.ListSnapshotRecordsAsync: SnapshotExistsAsync failed for snapshotId={Sid}",
+                snapshotId);
+            return ListRecordsError("REPOSITORY_UNAVAILABLE", "Failed to check snapshot existence.");
+        }
+
+        if (!exists)
+            return ListRecordsError("SNAPSHOT_NOT_FOUND", $"Snapshot not found: {snapshotId}");
+
+        try
+        {
+            var records = await _repository.ListSnapshotRecordsAsync(snapshotId, ct);
+            return new AdminImportListSnapshotRecordsResult(
+                Success: true,
+                SnapshotId: snapshotId.ToString(),
+                ErrorCode: null,
+                ErrorMessage: null,
+                Records: records);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "AdminImportRuntime.ListSnapshotRecordsAsync: ListSnapshotRecordsAsync failed for snapshotId={Sid}",
+                snapshotId);
+            return ListRecordsError("REPOSITORY_UNAVAILABLE", "Failed to load import records.");
+        }
+    }
+
+    private static AdminImportListSnapshotRecordsResult ListRecordsError(string code, string message)
+        => new(false, null, code, message, Array.Empty<AdminImportRecordData>());
 
     // ---------------------------------------------------------------------------
     // CSV parsing
@@ -487,58 +534,6 @@ public class AdminImportRuntime
         }
 
         return new ParseSchemaResult(true, null, null, fields);
-    }
-
-    private static List<string> ValidateRow(
-        Dictionary<string, object?> row,
-        List<SchemaField> fields)
-    {
-        var errors = new List<string>();
-
-        foreach (var field in fields)
-        {
-            row.TryGetValue(field.Key, out var value);
-
-            if (field.Required)
-            {
-                if (value is null || (value is string s && string.IsNullOrWhiteSpace(s)))
-                {
-                    errors.Add($"field '{field.Key}' is required but missing or empty");
-                    continue;
-                }
-            }
-
-            if (value is null) continue;
-
-            var typeError = ValidateFieldType(field.Key, value, field.Type);
-            if (typeError is not null)
-                errors.Add(typeError);
-        }
-
-        return errors;
-    }
-
-    private static string? ValidateFieldType(string key, object value, string type)
-    {
-        var raw = value?.ToString() ?? "";
-
-        return type switch
-        {
-            "number" or "integer" or "float" or "decimal"
-                when !double.TryParse(raw, System.Globalization.NumberStyles.Any,
-                    System.Globalization.CultureInfo.InvariantCulture, out _)
-                => $"field '{key}' expects type '{type}' but value is not numeric: '{raw}'",
-
-            "boolean"
-                when !bool.TryParse(raw, out _) && raw is not ("1" or "0" or "true" or "false")
-                => $"field '{key}' expects type 'boolean' but value is not boolean: '{raw}'",
-
-            "uuid"
-                when !Guid.TryParse(raw, out _)
-                => $"field '{key}' expects type 'uuid' but value is not a valid UUID: '{raw}'",
-
-            _ => null
-        };
     }
 
     // ---------------------------------------------------------------------------

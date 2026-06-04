@@ -141,4 +141,14 @@ public class AdminImportRepository
     {
         return Task.FromResult<AdminImportSnapshotMeta?>(null);
     }
+
+    /// <summary>
+    /// Loads persisted import records for a snapshot (contents Step3 re-edit boundary).
+    /// </summary>
+    public virtual Task<IReadOnlyList<AdminImportRecordData>> ListSnapshotRecordsAsync(
+        Guid snapshotId,
+        CancellationToken ct = default)
+    {
+        return Task.FromResult<IReadOnlyList<AdminImportRecordData>>(Array.Empty<AdminImportRecordData>());
+    }
 }

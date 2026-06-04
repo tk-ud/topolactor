@@ -1,5 +1,6 @@
 import type { AdminManifestScreenDataShapeInput } from "../api/adminApi.ts";
 import type { ManifestScreenDesignDraft } from "./manifestScreenDesign.ts";
+import { serializeContentDataRowsForShape } from "./manifestScreenDesign.ts";
 import { parseSearchTargets } from "./manifestScreenDesign.ts";
 import { normalizeRelationKeyColumn } from "./manifestLogicalTables.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
@@ -9,6 +10,10 @@ import {
   primaryLogicalTableRef,
   primaryTableColumns,
 } from "./manifestLogicalTables.ts";
+import {
+  assignHavingConditionsFromDesign,
+  assignSearchConditionsFromDesign,
+} from "./screenReadQueryWiring.ts";
 
 /** Base payload from persisted backend shape (full entry replace on assign). */
 function shapePayloadFromExisting(
@@ -162,10 +167,10 @@ export function buildAssignPayloadForStep(
       entityTargetColumns: b.entityTargetColumns.filter((c) => c.trim()),
     })),
     initialDataRows: design.initialDataRows.length > 0
-      ? design.initialDataRows
+      ? serializeContentDataRowsForShape(design.initialDataRows)
       : base.initialDataRows,
-    searchConditions: design.searchConditions,
-    havingConditions: design.havingConditions,
+    searchConditions: assignSearchConditionsFromDesign(design),
+    havingConditions: assignHavingConditionsFromDesign(design),
     displayColumnMode: design.displayColumnMode,
   };
 }

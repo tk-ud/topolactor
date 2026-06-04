@@ -49,6 +49,10 @@ public record OperationVector(
     string? ContextTokenIds = null,     // comma-separated Guid list
     string? ContextRecordId = null,
     Guid? IdOrHubId = null,
+    // state_pressure lane: explicit enum transition observation (dispatch context keys)
+    string? ContextEnumGroupId = null,
+    int? ContextPrevEnumIndex = null,
+    int? ContextNextEnumIndex = null,
     // trigger_kind from SSOT minimal_event_shape: cron | hook | client
     string? TriggerKind = null
 );

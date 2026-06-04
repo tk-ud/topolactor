@@ -26,12 +26,18 @@ export type AdminImportPanelProps = {
   defaultManifestId?: string;
   /** Lock manifest selector to the shared manifest id. */
   lockManifestId?: boolean;
+  /** Merge preview rows into contents Step3 unified editor (non-destructive append). */
+  onMergePreviewToEditor?: (preview: AdminImportPreviewResult) => void;
+  /** After apply — parent may reload snapshot records into the editor. */
+  onApplied?: (result: AdminImportApplyResult) => void;
 };
 
 export function AdminImportPanel({
   embedded = false,
   defaultManifestId = "",
   lockManifestId = false,
+  onMergePreviewToEditor,
+  onApplied,
 }: AdminImportPanelProps): JSX.Element {
   const [manifests, setManifests] = useState<AdminImportManifestItem[]>([]);
   const [schemas, setSchemas] = useState<AdminImportSchemaItem[]>([]);
@@ -151,6 +157,7 @@ export function AdminImportPanel({
     try {
       const result = await applyImport(preview.snapshotId);
       setApplyResult(result);
+      if (result.ok) onApplied?.(result);
     } catch (e) {
       console.error("IMPORT_APPLY_FAILED", e);
       setError(
@@ -359,6 +366,21 @@ export function AdminImportPanel({
             </table>
           </div>
 
+          {embedded && onMergePreviewToEditor && (
+            <div class="mt-3">
+              <button
+                type="button"
+                onClick={() => onMergePreviewToEditor(preview)}
+                class="btn-secondary mr-2"
+              >
+                編集グリッドへ追加（全 {preview.records.length} 行）
+              </button>
+              <AdminActionHint>
+                プレビュー行を Step3 の同一グリッドへ追加します（既存行は保持）。型式診断はグリッド上で表示されます。
+              </AdminActionHint>
+            </div>
+          )}
+
           <div class="mt-4">
             <h2 class={sectionTitleClass}>
               {embedded ? "適用（明示操作）" : "4. 適用"}
@@ -372,7 +394,7 @@ export function AdminImportPanel({
               適用 ({preview.validCount} 件有効)
             </button>
             <AdminActionHint>
-              プレビューで問題がなかった行だけを取り込みます。
+              プレビューで問題がなかった行だけを取り込みます。適用後はスナップショットから再読込できます。
             </AdminActionHint>
           </div>
         </section>

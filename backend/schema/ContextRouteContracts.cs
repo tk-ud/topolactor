@@ -84,6 +84,32 @@ public record ContextTransitionStat(
 );
 
 /// <summary>
+/// Enum item transition row from context_enum_transition_stats (state_pressure lane).
+/// </summary>
+public record ContextEnumTransitionStat(
+    Guid EnumGroupId,
+    int PrevEnumIndex,
+    int NextEnumIndex,
+    int CountEvents,
+    float CountHits,
+    float Prob01
+);
+
+/// <summary>
+/// Append-only enum transition observation (logical enum_transition_logs surface).
+/// </summary>
+public record ContextEnumTransitionEventRecord(
+    Guid EventId,
+    Guid EnumGroupId,
+    int PrevEnumIndex,
+    int NextEnumIndex,
+    string? Role,
+    string? UserId,
+    Guid? SessionId,
+    DateTimeOffset CreatedAt
+);
+
+/// <summary>
 /// A ranked recommendation candidate (operation or token).
 /// Evidence carries human-readable signals for explainability.
 /// </summary>
@@ -91,7 +117,8 @@ public record RecommendationCandidate(
     string Value,
     float Score,
     float? Probability,
-    IReadOnlyList<string> Evidence
+    IReadOnlyList<string> Evidence,
+    string Lane
 );
 
 /// <summary>
@@ -117,6 +144,7 @@ public enum RecommendationStatus
 public record ContextRouteRecommendationResult(
     IReadOnlyList<RecommendationCandidate> NextOperations,
     IReadOnlyList<RecommendationCandidate> NextTokens,
+    IReadOnlyList<RecommendationCandidate> NextEnumItems,
     IReadOnlyList<Guid> NearestPrefixSessionIds,
     IReadOnlyList<string> ContributingTokens,
     RecommendationStatus Status,

@@ -38,6 +38,23 @@ SQL Attention logs の canonical 親定義は以下を参照する。
 - `context_hub_recommendation_current` は SQL Attention 本体探索ではない
 - context route recommendation は Main Attention Route ではない
 - context route recommendation は SQL Attention evidence / statistics / EMA / feedback を使い得る child projection / consumer
+- SQL Attention の projection 推薦を hub 内候補（`next_operation` / `next_enum_item` 等）へ直接混入しない
+- hub-local recommendation は `ui_pressure` と `state_pressure` の2 lane に分離する（YAML: `hub_local_recommendation_pressure_lanes`）
+
+### Hub-local recommendation pressure lanes（SSOT）
+
+Recommendation Engine は **現在 hub 内**の次候補推薦を担う。SQL Attention は **hub 間 / projection 間**の概念推薦（次にどの hub projection を見るか）を担う。同一の `recommendation` として混線させない。
+
+| Lane | 圧力の種類 | 主な source | 主な output | result `lane` |
+|------|------------|-------------|-------------|---------------|
+| `ui_pressure` | UI・操作圧力 | `context_event`, `component_operation_event_log` | `next_operation`, `next_component`, `next_route_action` | `ui_pressure` |
+| `state_pressure` | 状態・enum 圧力 | `logs.diff`, enum transition logs | `next_enum_item`, `likely_status`, `state_shift_candidate` | `state_pressure` |
+
+- 操作遷移集計: `context_transition_stats`（`transition_kind: operation`）— **enum 遷移には使わない**
+- enum 遷移集計: `context_enum_transition_stats`（SSOT 定義・DDL は未実装可）— **操作遷移には使わない**
+- enum 線形座標: `enum-dictionary-ssot.yaml` の `enum_group_linear_space_coordinate_contract` を参照
+
+SQL Attention 側の result `lane` は `sql_attention_projection`（`sql-attention-logs-ssot.yaml`）。
 
 ---
 

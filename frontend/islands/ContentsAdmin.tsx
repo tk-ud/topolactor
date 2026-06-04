@@ -26,7 +26,7 @@ export default function ContentsAdmin(): JSX.Element {
       <section class="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
         <p class="font-semibold">この画面でできること: 新しいページを作る（step 1 → 3）</p>
         <p class="mt-1 text-xs">
-          正規フローは step 1（空登録）→ 2（テーブル定義）→ 2.5（関連）→ 3（物理割当・ページ）です。
+          正規フローは step 1（空登録）→ 2（テーブル定義）→ 2.5（関連）→ 3（ページ設定）です。
           完了後は
           <a href="/admin/ui-builder" class="link font-semibold"> 画面づくり </a>
           へ進みます。ページ間のつながりは

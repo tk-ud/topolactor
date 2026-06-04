@@ -3,11 +3,13 @@ import {
   UX_RELATION_ROW_ID_LABEL,
 } from "../content/adminUxTerms.ts";
 import type {
-  InitialDataRowDraft,
+  ContentDataRowDraft,
   LogicalTableDraft,
   ManifestScreenColumnDraft,
   ManifestScreenDesignDraft,
+  RelationIntentDraft,
 } from "./manifestScreenDesign.ts";
+import { dataRowValues } from "./manifestScreenDesign.ts";
 
 /** Physical-table-qualified key: `employees.name` when tableName is set; else bare `name`. */
 export function qualifiedColumnKey(tableRef: string, columnName: string): string {
@@ -31,6 +33,19 @@ export type QualifiedColumnRef = {
   tableRef: string;
   columnName: string;
   column: ManifestScreenColumnDraft;
+  /** Set when column resolves from Step 2.5 active-manifest remote side. */
+  remoteManifestId?: string;
+};
+
+/** Active manifest logical tables for Step 3 relation resolution (from list_relationship_remote_targets). */
+export type Step3RemoteTargetManifest = {
+  manifestId: string;
+  logicalTables: LogicalTableDraft[];
+};
+
+export type Step3FieldSourceResult = {
+  qualifiedColumns: QualifiedColumnRef[];
+  unresolvedErrors: string[];
 };
 
 export function qualifiedColumnsFromLogicalTables(
@@ -47,6 +62,116 @@ export function qualifiedColumnsFromLogicalTables(
     }
   }
   return out;
+}
+
+function logicalTableByRef(
+  tables: LogicalTableDraft[],
+  tableRef: string,
+): LogicalTableDraft | undefined {
+  const ref = tableRef.trim();
+  if (!ref) return undefined;
+  return tables.find((t) => t.tableName.trim() === ref);
+}
+
+function disambiguatedActiveRemoteTableRef(
+  manifestId: string,
+  joinTableRef: string,
+  existingKeys: Set<string>,
+  columnName: string,
+): string {
+  const base = joinTableRef.trim();
+  const candidates = [
+    base,
+    `${base}@${manifestId.slice(0, 8)}`,
+    `${base}@${manifestId}`,
+  ];
+  for (const tableRef of candidates) {
+    const key = qualifiedColumnKey(tableRef, columnName);
+    if (!existingKeys.has(key)) return tableRef;
+  }
+  return `${base}@${manifestId}`;
+}
+
+function pushQualifiedColumn(
+  out: QualifiedColumnRef[],
+  keys: Set<string>,
+  ref: QualifiedColumnRef,
+): void {
+  if (!ref.key || keys.has(ref.key)) return;
+  keys.add(ref.key);
+  out.push(ref);
+}
+
+/**
+ * Step 3 field candidates: local logical tables plus columns from Step 2.5
+ * relationIntents (draft remote tables and active-manifest remote tables).
+ * Unresolved relation targets are reported explicitly (no silent draft-only fallback).
+ */
+export function step3FieldSourceFromDesign(
+  logicalTables: LogicalTableDraft[],
+  relationIntents: RelationIntentDraft[],
+  remoteTargets: Step3RemoteTargetManifest[],
+): Step3FieldSourceResult {
+  const qualifiedColumns = qualifiedColumnsFromLogicalTables(logicalTables);
+  const keys = new Set(qualifiedColumns.map((q) => q.key));
+  const unresolvedErrors: string[] = [];
+
+  for (let i = 0; i < relationIntents.length; i++) {
+    const rel = relationIntents[i];
+    const joinTableRef = rel.joinTableRef.trim();
+    if (!joinTableRef) {
+      unresolvedErrors.push(
+        `関連 ${i + 1}: 参照先テーブルが未設定です。Step 2.5 で参照先を選んでください。`,
+      );
+      continue;
+    }
+
+    const remoteManifestId = rel.remoteManifestId?.trim();
+    if (remoteManifestId) {
+      const manifest = remoteTargets.find((t) => t.manifestId === remoteManifestId);
+      if (!manifest) {
+        unresolvedErrors.push(
+          `関連 ${i + 1}: 有効マニフェスト「${remoteManifestId}」を解決できません。参照先一覧を読み込んでください。`,
+        );
+        continue;
+      }
+      const remoteTable = logicalTableByRef(manifest.logicalTables, joinTableRef);
+      if (!remoteTable) {
+        unresolvedErrors.push(
+          `関連 ${i + 1}: 有効マニフェスト上にテーブル「${joinTableRef}」がありません。`,
+        );
+        continue;
+      }
+      for (const col of remoteTable.columns) {
+        const columnName = col.name.trim();
+        if (!columnName) continue;
+        const tableRef = disambiguatedActiveRemoteTableRef(
+          remoteManifestId,
+          joinTableRef,
+          keys,
+          columnName,
+        );
+        const key = qualifiedColumnKey(tableRef, columnName);
+        pushQualifiedColumn(qualifiedColumns, keys, {
+          key,
+          tableRef,
+          columnName,
+          column: col,
+          remoteManifestId,
+        });
+      }
+      continue;
+    }
+
+    const draftTable = logicalTableByRef(logicalTables, joinTableRef);
+    if (!draftTable) {
+      unresolvedErrors.push(
+        `関連 ${i + 1}: 草稿内に参照先テーブル「${joinTableRef}」がありません。Step 2 で定義するか、有効マニフェスト参照に切り替えてください。`,
+      );
+    }
+  }
+
+  return { qualifiedColumns, unresolvedErrors };
 }
 
 /** Flatten column names from all logical tables (legacy; prefer qualifiedColumnsFromLogicalTables). */
@@ -188,24 +313,25 @@ function qualifyKeyList(
 
 function qualifyInitialDataRow(
   tables: LogicalTableDraft[],
-  row: InitialDataRowDraft,
-): InitialDataRowDraft {
+  row: ContentDataRowDraft,
+): ContentDataRowDraft {
   const qualified = qualifiedColumnsFromLogicalTables(tables);
-  const next: InitialDataRowDraft = {};
+  const flat = dataRowValues(row);
+  const nextValues: Record<string, string> = {};
   for (const q of qualified) {
-    if (row[q.key] !== undefined) {
-      next[q.key] = row[q.key];
+    if (flat[q.key] !== undefined) {
+      nextValues[q.key] = flat[q.key];
       continue;
     }
     const bareMatches = qualified.filter((x) => x.columnName === q.columnName);
-    const bare = row[q.columnName];
+    const bare = flat[q.columnName];
     if (bare !== undefined && bareMatches.length === 1) {
-      next[q.key] = bare;
+      nextValues[q.key] = bare;
     } else {
-      next[q.key] = "";
+      nextValues[q.key] = "";
     }
   }
-  return next;
+  return { values: nextValues, lineage: { ...row.lineage } };
 }
 
 /** Step 3 field keys use `tableRef.columnName` when multiple logical tables are named. */

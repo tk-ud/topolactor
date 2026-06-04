@@ -28,7 +28,9 @@ public class RuntimeExecutorTests
         return new TargetDispatchOverride(NullLogger<TargetDispatchOverride>.Instance, topologyRepository, adminRuntime);
     }
 
-    internal static RuntimeExecutor CreateExecutor(TopologyRepository? topologyRepositoryOverride = null)
+    internal static RuntimeExecutor CreateExecutor(
+        TopologyRepository? topologyRepositoryOverride = null,
+        ManifestRepository? manifestRepository = null)
     {
         var topologyRepository = topologyRepositoryOverride ?? new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
         var contextRoutePolicyRepository = new StubValidPolicyTopologyRepository();
@@ -53,7 +55,8 @@ public class RuntimeExecutorTests
                 new ContextNeighborSearch(),
                 contextRoutePolicyRepository,
                 new SystemOperationCiRuntime(
-                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)));
+                    NullLogger<SystemOperationCiRuntime>.Instance, contextRouteRepository)),
+            manifestRepository: manifestRepository);
     }
 
     /// <summary>
@@ -66,7 +69,7 @@ public class RuntimeExecutorTests
         ManifestRepository? manifestRepository = null,
         IReadOnlyDictionary<string, IDispatchableRuntime>? extraHandlers = null)
     {
-        var executor = CreateExecutor(topologyRepository);
+        var executor = CreateExecutor(topologyRepository, manifestRepository);
         var handlers = new Dictionary<string, IDispatchableRuntime>
         {
             ["topology_transform_runtime"] = executor,

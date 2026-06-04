@@ -340,6 +340,26 @@ public partial class ContextRouteRecommendationResolverTests
         // Both action_a (from neighbors) and action_b (from stats) should appear
         Assert.Contains(result, r => r.Value == "action_a");
         Assert.Contains(result, r => r.Value == "action_b");
+        Assert.All(result, c => Assert.Equal(RecommendationPressureLanes.UiPressure, c.Lane));
+    }
+
+    [Fact]
+    public void ResolveNextEnumItemsFromStats_UsesStatePressureLaneAndOutputKinds()
+    {
+        var policy = ContextRoutePolicyTestFixtures.ValidPolicy();
+        var groupId = Guid.NewGuid();
+        var stats = new List<ContextEnumTransitionStat>
+        {
+            new(groupId, 0, 1, 10, 7f, 0.7f),
+            new(groupId, 0, 2, 10, 3f, 0.3f),
+        };
+
+        var result = ContextRouteRecommendationResolver.ResolveNextEnumItemsFromStats(stats, policy);
+
+        Assert.Equal(3, result.Count);
+        Assert.All(result, c => Assert.Equal(RecommendationPressureLanes.StatePressure, c.Lane));
+        Assert.Contains(result, c => c.Evidence.Any(e => e.Contains("next_enum_item")));
+        Assert.Contains(result, c => c.Evidence.Any(e => e.Contains("state_shift_candidate")));
     }
 
     [Fact]
@@ -414,6 +434,7 @@ public partial class ContextRouteRecommendationResolverTests
         var result = new ContextRouteRecommendationResult(
             NextOperations: [],
             NextTokens: [],
+            NextEnumItems: [],
             NearestPrefixSessionIds: [],
             ContributingTokens: [],
             Status: RecommendationStatus.InsufficientHistory,
@@ -640,7 +661,10 @@ public partial class ContextRouteRecommendationResolverTests
         string? sessionId,
         string? contextTokenIds = null,
         string? statePolicyJson = null,
-        Guid? hubId = null)
+        Guid? hubId = null,
+        string? enumGroupId = null,
+        int? prevEnumIndex = null,
+        int? nextEnumIndex = null)
     {
         var vector = new OperationVector(
             Target: "default",
@@ -654,7 +678,10 @@ public partial class ContextRouteRecommendationResolverTests
             ContextUserId: null,
             ContextTokenIds: contextTokenIds,
             ContextRecordId: null,
-            IdOrHubId: hubId
+            IdOrHubId: hubId,
+            ContextEnumGroupId: enumGroupId,
+            ContextPrevEnumIndex: prevEnumIndex,
+            ContextNextEnumIndex: nextEnumIndex
         );
 
         return new RuntimeWorkingShape(

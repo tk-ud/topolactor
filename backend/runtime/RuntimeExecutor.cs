@@ -29,6 +29,7 @@ public class RuntimeExecutor : IDispatchableRuntime
     private readonly ContextRouteRecommendationResolver _contextRouteRecommendationResolver;
     private readonly OutputLaneRouter? _outputLaneRouter;
     private readonly HubNavigationResolver? _hubNavigationResolver;
+    private readonly ScreenDataShapeQueryRuntime _screenDataShapeQueryRuntime;
 
     public RuntimeExecutor(
         ILogger<RuntimeExecutor> logger,
@@ -44,7 +45,8 @@ public class RuntimeExecutor : IDispatchableRuntime
         RuntimeGuard runtimeGuard,
         ContextRouteRecommendationResolver contextRouteRecommendationResolver,
         OutputLaneRouter? outputLaneRouter = null,
-        HubNavigationResolver? hubNavigationResolver = null)
+        HubNavigationResolver? hubNavigationResolver = null,
+        ManifestRepository? manifestRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _operationVectorResolver = operationVectorResolver ?? throw new ArgumentNullException(nameof(operationVectorResolver));
@@ -60,6 +62,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         _contextRouteRecommendationResolver = contextRouteRecommendationResolver ?? throw new ArgumentNullException(nameof(contextRouteRecommendationResolver));
         _outputLaneRouter = outputLaneRouter;
         _hubNavigationResolver = hubNavigationResolver;
+        _screenDataShapeQueryRuntime = new ScreenDataShapeQueryRuntime(manifestRepository);
     }
 
     /// <summary>
@@ -216,6 +219,7 @@ public class RuntimeExecutor : IDispatchableRuntime
             recommendation = new ContextRouteRecommendationResult(
                 NextOperations: [],
                 NextTokens: [],
+                NextEnumItems: [],
                 NearestPrefixSessionIds: [],
                 ContributingTokens: [],
                 Status: RecommendationStatus.ExplicitError,
@@ -229,6 +233,24 @@ public class RuntimeExecutor : IDispatchableRuntime
 
         // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
+
+        if (manifestId is Guid screenQueryManifestId)
+        {
+            var (screenData, screenErrors) = await _screenDataShapeQueryRuntime.TryExecuteAsync(
+                screenQueryManifestId, vector, ct);
+            if (screenErrors.Count > 0)
+            {
+                return new EndpointResponseDto(
+                    Success: false,
+                    Emission: emission,
+                    Errors: screenErrors);
+            }
+
+            if (screenData is not null)
+            {
+                emission = emission with { Data = screenData };
+            }
+        }
 
         // Step 11: Hub navigation sequence — enrich emission with manifest-scoped hub_relations.
         // Uses the dispatcher-resolved manifestId so a hub with multiple manifests returns

@@ -167,8 +167,10 @@ echo "OK: write_logs_attention and canonical generation-line implementation boun
 phase_vector_impl_ready=1
 grep -qF "CREATE OR REPLACE FUNCTION logs.generate_attention_phase_vector(" db/sql_attention_logs_tables.sql || phase_vector_impl_ready=0
 grep -qF "CREATE OR REPLACE FUNCTION logs.refresh_hub_current(" db/sql_attention_logs_tables.sql || phase_vector_impl_ready=0
-grep -qF "private static string BuildPhaseVectorJson(" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
-grep -qF "PhaseVectorJson: phaseVectorJson" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
+grep -qF "public static string GeneratePhaseVector(" backend/runtime/SqlAttentionPhaseVectorRuntime.cs || phase_vector_impl_ready=0
+grep -qF "SqlAttentionPhaseVectorRuntime.GeneratePhaseVector(" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
+grep -qF "public static string BuildPhaseVectorJson(" backend/runtime/SqlAttentionPhaseVectorRuntime.cs || phase_vector_impl_ready=0
+grep -qF "PhaseVectorJson: phaseJson" backend/runtime/HubAttractorExplorationRuntime.cs || phase_vector_impl_ready=0
 grep -qF "string PhaseVectorJson" backend/schema/SqlAttentionContracts.cs || phase_vector_impl_ready=0
 grep -qF "phase_vector_json" backend/repository/NpgsqlSqlAttentionLogsRepository.cs || phase_vector_impl_ready=0
 

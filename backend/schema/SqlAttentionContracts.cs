@@ -362,7 +362,8 @@ public record TopologyProjectionCandidate(
     string VectorJson,
     string PhaseVectorJson,
     string EvidenceJson,
-    int HitRank
+    int HitRank,
+    string Lane = RecommendationPressureLanes.SqlAttentionProjection
 );
 
 /// <summary>
@@ -374,7 +375,8 @@ public record SqlAttentionTopologyProjectionResult(
     TopologyProjectionStatus Status,
     string? StatusDetail,
     IReadOnlyList<TopologyProjectionCandidate> Candidates,
-    DateTimeOffset EvaluatedAt
+    DateTimeOffset EvaluatedAt,
+    string Lane = RecommendationPressureLanes.SqlAttentionProjection
 );
 
 /// <summary>

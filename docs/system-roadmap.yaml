@@ -1202,8 +1202,9 @@ system_roadmap_ssot:
         displayColumnMode eliminates the legacy ambiguous empty-displayColumns=all behavior.
         Initial data rows are stored as topology intent (no direct DB write).
         Sample viewing panel applies searchConditions, havingConditions, and displayColumnMode
-        in the frontend preview; backend runtime entity execution of these fields is tracked
-        separately (see known_gap_ref search-aggregation-runtime-operator-contract).
+        in the frontend preview; topology_transform_runtime (RuntimeExecutor + ScreenDataShapeQueryRuntime)
+        applies the same operator vocabulary over initialDataRows at manifest-scoped Read/Search.
+        screenReadQueryWiring exposes Step3 read/query keys to UI Builder manifest-target event binding.
         All normal-view UX vocabulary adheres to SSOT: no "group by" in aggregation labels;
         no internal field names exposed; relation intent is draft data-shape only.
         topology.physical_tables table_ref mismatch returns WIRING_TABLE_REF_NOT_FOUND
@@ -1267,7 +1268,8 @@ system_roadmap_ssot:
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
-        - search-aggregation-runtime-operator-contract runtime entity execution of searchConditions/havingConditions/displayColumnMode as abstract operators is not yet implemented; tracked in .agent/tasks/todo.md
+        - screen_data_shape_runtime_query_evaluator_via_topology_transform_runtime
+        - screen_read_query_wiring_ui_builder_manifest_target_binding_candidates
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
