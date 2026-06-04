@@ -76,7 +76,9 @@ CREATE TABLE IF NOT EXISTS topology.ui_package_component_map (
     order_index          INTEGER     NOT NULL DEFAULT 0,
     props_override_json  JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_ui_package_component_map UNIQUE (package_id, component_id, slot_key)
+    -- slot_key='default' is the canonical value when no named slot is used.
+    -- NULLS NOT DISTINCT ensures a NULL slot_key still prevents duplicate (package_id, component_id) rows.
+    CONSTRAINT uq_ui_package_component_map UNIQUE NULLS NOT DISTINCT (package_id, component_id, slot_key)
 );
 
 CREATE TABLE IF NOT EXISTS topology.components_layout_design (

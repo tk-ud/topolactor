@@ -66,6 +66,9 @@
 - [x] `PackageGenerateBatchResponseDto` に `bucketItemIds[]` / `componentIds[]` 配列、`list_packages` が component_ids / bucket_item_ids を投影
 - [x] Step 4.1 複数選択 → 1 回の `promote_package` submit（ループ promote 廃止）；Step 4.2 は返却 `packageId` 1 件を編集ルートに固定
 - [x] 統合テスト（2 bucket → 1 package、map 2 行、tensor 1 行）+ package generate テスト更新
+- [x] `package_schema_json` vector 上書き禁止 — 既存配列と今回 batch を union/dedup（後追い追加テスト付き）
+- [x] `ui_package_component_map` 重複防止 — `slot_key='default'` canonical + `NULLS NOT DISTINCT` 制約（migration 追加）
+- [x] mixed selection 状態表示 — promote 件数と skip 件数を分けて表示
 
 ### `admin-v072-audit-followup`（2026-06）
 

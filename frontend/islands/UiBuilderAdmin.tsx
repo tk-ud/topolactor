@@ -1577,7 +1577,7 @@ function BucketSection({
         if (skippedPromoted > 0) {
           setStatus("選択した部品は既に配置可能です。layout タブでパッケージを選択してください。");
         } else {
-          setStatus("パッケージ化結果を取得できませんでした。");
+          setStatus("パッケージ化できる部品が見つかりませんでした。");
         }
         return;
       }
@@ -1602,7 +1602,9 @@ function BucketSection({
       }
       const lastHandoff: PackagedHandoff = { packageId, routeKey, layoutId };
 
-      setStatus(`${keys.length} 件のパッケージ化が完了しました。layout タブで編集を続けます。`);
+      const newCount = bucketItemIds.length;
+      const skipMsg = skippedPromoted > 0 ? `（${skippedPromoted} 件は既配置のためスキップ）` : "";
+      setStatus(`${newCount} 件のパッケージ化が完了しました。layout タブで編集を続けます。${skipMsg}`);
       await loadBucket();
       const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
       const promoted = paletteBody?.emission?.data;

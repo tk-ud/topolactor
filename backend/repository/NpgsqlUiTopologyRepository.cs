@@ -979,12 +979,53 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 componentIds.Add(componentId);
             }
 
-            // 3. INSERT ui_component_package (1 package per routeKey, ON CONFLICT DO UPDATE schema)
+            // 3. INSERT ui_component_package — union existing schema arrays with this batch (additive promote).
             var packageKey = $"{routeKey}:pkg";
-            var bucketItemIdsJson = System.Text.Json.JsonSerializer.Serialize(bucketItemIds.Select(id => id.ToString()).ToArray());
-            var componentKeysJson = System.Text.Json.JsonSerializer.Serialize(componentInfos.Select(c => c.ComponentKey).ToArray());
-            var schemaJson = $"{{\"bucketItemIds\":{bucketItemIdsJson},\"componentKeys\":{componentKeysJson}}}";
             var packageKind = componentInfos[0].ComponentKind;
+
+            // Read existing schema to merge arrays; null means this is the first promote for this route.
+            var existingBucketIds = new List<string>();
+            var existingComponentKeys = new List<string>();
+            await using (var selPkg = conn.CreateCommand())
+            {
+                selPkg.Transaction = tx;
+                selPkg.CommandText =
+                    "SELECT package_schema_json FROM topology.ui_component_package WHERE package_key = @key";
+                selPkg.Parameters.AddWithValue("key", packageKey);
+                var raw = await selPkg.ExecuteScalarAsync(ct) as string;
+                if (raw is not null)
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(raw);
+                        if (doc.RootElement.TryGetProperty("bucketItemIds", out var bids))
+                            foreach (var el in bids.EnumerateArray())
+                            {
+                                var s = el.GetString();
+                                if (!string.IsNullOrEmpty(s)) existingBucketIds.Add(s);
+                            }
+                        if (doc.RootElement.TryGetProperty("componentKeys", out var ckeys))
+                            foreach (var el in ckeys.EnumerateArray())
+                            {
+                                var s = el.GetString();
+                                if (!string.IsNullOrEmpty(s)) existingComponentKeys.Add(s);
+                            }
+                    }
+                    catch { /* malformed JSON — treat as empty existing */ }
+                }
+            }
+
+            // Union: existing ∪ this-batch, deduplicated.
+            var mergedBucketIds = existingBucketIds
+                .Union(bucketItemIds.Select(id => id.ToString()), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var mergedComponentKeys = existingComponentKeys
+                .Union(componentInfos.Select(c => c.ComponentKey), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var bucketItemIdsJson = System.Text.Json.JsonSerializer.Serialize(mergedBucketIds);
+            var componentKeysJson = System.Text.Json.JsonSerializer.Serialize(mergedComponentKeys);
+            var schemaJson = $"{{\"bucketItemIds\":{bucketItemIdsJson},\"componentKeys\":{componentKeysJson}}}";
 
             await using var pkgCmd = conn.CreateCommand();
             pkgCmd.Transaction = tx;
@@ -998,14 +1039,16 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             pkgCmd.Parameters.AddWithValue("schema", schemaJson);
             var packageId = (Guid)(await pkgCmd.ExecuteScalarAsync(ct))!;
 
-            // 4. INSERT ui_package_component_map for each component (ON CONFLICT DO NOTHING)
+            // 4. INSERT ui_package_component_map — slot_key='default' (canonical non-NULL slot) makes
+            //    ON CONFLICT (package_id, component_id, slot_key) correctly prevent duplicates for
+            //    repeated promotes of the same component into the same package.
             for (var i = 0; i < componentIds.Count; i++)
             {
                 await using var mapCmd = conn.CreateCommand();
                 mapCmd.Transaction = tx;
                 mapCmd.CommandText =
-                    "INSERT INTO topology.ui_package_component_map (package_id, component_id, order_index) " +
-                    "VALUES (@pkg, @comp, @idx) ON CONFLICT (package_id, component_id, slot_key) DO NOTHING";
+                    "INSERT INTO topology.ui_package_component_map (package_id, component_id, slot_key, order_index) " +
+                    "VALUES (@pkg, @comp, 'default', @idx) ON CONFLICT (package_id, component_id, slot_key) DO NOTHING";
                 mapCmd.Parameters.AddWithValue("pkg", packageId);
                 mapCmd.Parameters.AddWithValue("comp", componentIds[i]);
                 mapCmd.Parameters.AddWithValue("idx", i);
