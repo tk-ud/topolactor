@@ -1019,7 +1019,7 @@ Deno.test("AuthPanel render: initial render has login form (session check pendin
 });
 
 Deno.test("AuthPanel render: source has login form and submit handler with e.preventDefault()", async () => {
-  const src = await Deno.readTextFile(new URL("../islands/AuthPanel.tsx", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../islands/SuperAuthPanel.tsx", import.meta.url));
   assert(src.includes("handleSubmit"), "AuthPanel must have handleSubmit");
   assert(src.includes("e.preventDefault()"), "handleSubmit must call e.preventDefault()");
   assert(src.includes("<form"), "AuthPanel must have form element");
@@ -1028,7 +1028,7 @@ Deno.test("AuthPanel render: source has login form and submit handler with e.pre
 });
 
 Deno.test("AuthPanel lane: does not use /api/dispatch (uses /api/auth/login)", async () => {
-  const src = await Deno.readTextFile(new URL("../islands/AuthPanel.tsx", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../islands/SuperAuthPanel.tsx", import.meta.url));
   assertFalse(src.includes('fetch("/api/dispatch"'), "AuthPanel must not call /api/dispatch directly");
   assertFalse(src.includes("queueClientCommand"), "AuthPanel must not use client command lane");
   assertFalse(src.includes("queueAdminClientCommand"), "AuthPanel must not use admin command lane");
@@ -1054,7 +1054,7 @@ Deno.test("AuthPanel auth error: login failure response has errors (not silent)"
 });
 
 Deno.test("AuthPanel render: source has error display for auth failure state", async () => {
-  const src = await Deno.readTextFile(new URL("../islands/AuthPanel.tsx", import.meta.url));
+  const src = await Deno.readTextFile(new URL("../islands/SuperAuthPanel.tsx", import.meta.url));
   // AuthPanel renders error based on state.status === "error"
   assert(src.includes('status: "error"') || src.includes("status === \"error\"") || src.includes("error"), "must handle error state");
   assert(src.includes("authErrorText") || src.includes("errors"), "must display auth errors to user");

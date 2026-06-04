@@ -767,7 +767,7 @@ function ApplyReadinessPanel({
         <li class="flex items-start gap-2">
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
-            色・余白トークンは「component design」タブで保存します（layout 保存では配置のみ）。
+            色・余白トークンは「部品デザイン」タブで保存します（layout 保存では配置のみ）。
           </span>
         </li>
       </ul>
@@ -3794,7 +3794,7 @@ function LayoutBuilderSection({
       <p class="mb-3 text-xs text-slate-600">
         色・余白・CSS 辞書トークン・レスポンシブは
         <button type="button" class="link" onClick={() => onNavigate?.("design")}>
-          component design タブ
+          部品デザイン タブ
         </button>
         で保存してください。
       </p>
@@ -3867,7 +3867,7 @@ function LayoutBuilderSection({
 const TABS: { id: TabId; label: string; hint?: string }[] = [
   { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
   { id: "layout", label: "パッケージ layout（配置）", hint: "canvas 配置・slot・layout class refs" },
-  { id: "design", label: "component design（色・形）", hint: "cssTokenRefs・reactionIntent・配線" },
+  { id: "design", label: "部品デザイン（色・形）", hint: "cssTokenRefs・reactionIntent・配線" },
   { id: "css", label: "CSS トークン辞書" },
 ];
 
@@ -4160,7 +4160,7 @@ function PackageDesignPanel({
       setStatus("パッケージ・部品 ID・デザイン名を入力してください。");
       return;
     }
-    if (!(await confirm("component design を保存します。よろしいですか？"))) {
+    if (!(await confirm("部品デザインを保存します。よろしいですか？"))) {
       return;
     }
     const body = await dispatchAdminOp("component_style_design", "upsert", {
@@ -4172,7 +4172,7 @@ function PackageDesignPanel({
       cssTokenRefs,
       reactionIntent: reactionIntent.trim(),
     });
-    setStatus(body?.success ? "component design を保存しました。" : "保存に失敗しました。");
+    setStatus(body?.success ? "部品デザインを保存しました。" : "保存に失敗しました。");
   };
 
   return (
@@ -4181,10 +4181,10 @@ function PackageDesignPanel({
         packages={packages}
         selectedPackageId={selectedPackageId}
         onSelectPackage={onSelectPackage}
-        heading="component design（色・形・トークン）"
+        heading="部品デザイン（色・形・トークン）"
       />
       <p class="text-muted-xs mb-2 text-amber-800">
-        色・形・トークン・リアクション意図は component_style_design:upsert で保存します。
+        色・形・トークン・リアクション意図を保存します。
         layout タブでは配置のみ編集してください。
       </p>
       {selectedPackageId && (

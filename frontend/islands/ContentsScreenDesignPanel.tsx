@@ -1377,14 +1377,14 @@ export default function ContentsScreenDesignPanel({
               </label>
               {remoteIsActive && remoteTargets.length === 0 && (
                 <p class="text-xs text-amber-700">
-                  有効マニフェストを選べません。一覧が空のときは DB seed（manifest 091）または
+                  有効なページを選べません。一覧が空のときは初期データまたは
                   <code class="rounded bg-gray-100 px-1">db/patches/add_auth_relationship_remote_boundary_manifest.sql</code>
                   を適用してください。
                 </p>
               )}
               {remoteIsActive && remoteTargets.length > 0 && (
                 <label class="block">
-                  有効マニフェスト
+                  有効なページ
                   <select
                     class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                     value={rel.remoteManifestId ?? ""}

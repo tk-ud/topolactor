@@ -25,7 +25,8 @@
 
   <ItemGroup>
     <Compile Include="../../schema/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
-    <Compile Include="../../service/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../service/AuthService.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
+    <Compile Include="../../service/JwtTokenIssuer.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../runtime/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../guard/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />
     <Compile Include="../../mapper/*.cs" Link="RuntimeSource/%(Filename)%(Extension)" />

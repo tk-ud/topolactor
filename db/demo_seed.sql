@@ -507,7 +507,7 @@ ON CONFLICT (session_id, prefix_index) DO UPDATE
 
 -- ---------------------------------------------------------------------------
 -- function_parameters — demo_auth / demo_users (deprecated marker only)
--- Credentials live in auth.credentials (db/auth_seed.sql). No password_hash here.
+-- Credential hashes live only in auth.credentials (db/auth_seed.sql).
 -- ---------------------------------------------------------------------------
 INSERT INTO topology.function_parameters (function_name, parameter_key, parameter_value, active)
 VALUES (
