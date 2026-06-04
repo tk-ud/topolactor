@@ -13,6 +13,7 @@
 | `main-data-wiring-ssot-audit` | main データ配線 SSOT 監査 follow-up | 1 | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
 | `ui-builder-layout-design-boundary` | UI Builder layout/design 責務分離 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 | `admin-main-flow-step-ssot-alignment` | admin top step 表示のSSOT整合 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
+| `admin-contents-import-surface-wiring` | admin contents import / data input surface 接続 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 
 ---
 
@@ -87,6 +88,19 @@
   - 完了条件: `/auth` が canonical admin workflow step として表示/テスト固定されず、SSOT の step 1/2/2.5/3/4/post-pipeline 境界と admin route registry が一致する。
 
 ---
+
+## Bundle `admin-contents-import-surface-wiring`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+- [ ] `/admin/contents` に data input / CSV・JSON import の canonical surface を接続する
+  - 問題: `frontend/islands/AdminImport.tsx` は `listImportManifests` / `listImportSchemas` / `uploadImportPreview` / `applyImport` を持つ import UI として存在するが、canonical `/admin/contents` には mount されていない。`frontend/routes/admin/contents.tsx` は `ContentsAdmin` のみを表示し、Fresh route registry も `/admin/import` を公開していないため、Step2/データ入力 or import の作業面が canonical admin flow 上に存在しない。
+  - 目的: データ駆動OSとして、データの形定義だけでなく、ユーザーが実データ候補を入力または CSV/JSON import できる surface を `/admin/contents` の正規導線へ接続する。
+  - 改善方針: 既存 `AdminImport.tsx` を廃棄せず、`/admin/contents` 内の適切な step/section に統合する。通常導線では「データ入力 / CSV・JSON取り込み」を明示し、backend の `admin_csv_json_import` preview → apply 経路を使う。新規 `/admin/import` route を復活させる場合は runtime-orchestration SSOT と admin route registry の更新を先に行い、canonical route 増設として扱う。
+  - 対象ファイル: `frontend/islands/ContentsAdmin.tsx`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/islands/AdminImport.tsx`, `frontend/routes/admin/contents.tsx`, `frontend/tests/adminMainFlow.test.ts`, `frontend/tests/adminUxGuard.test.ts`, 必要に応じて `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml`。
+  - 完了条件: canonical admin flow 上でデータ入力または CSV/JSON import surface が到達可能になり、import は preview → explicit apply を経由し、frontend が DB 直書き・topology判断を持たないことをテストで固定する。
 
 ---
 
