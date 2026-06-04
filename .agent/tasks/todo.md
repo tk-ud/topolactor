@@ -12,6 +12,7 @@
 | `ssot-old-vocabulary-cleanup` | SSOT旧語彙 / 不要 production surface cleanup | 4 | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/sql-attention-logs-ssot.yaml` |
 | `main-data-wiring-ssot-audit` | main データ配線 SSOT 監査 follow-up | 1 | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
 | `ui-builder-layout-design-boundary` | UI Builder layout/design 責務分離 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
+| `admin-main-flow-step-ssot-alignment` | admin top step 表示のSSOT整合 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
 
 ---
 
@@ -69,6 +70,21 @@
 - [ ] `LegacyChangeIntake*` / `legacy_mirror` / `legacy_system` を SSOT 準拠の existing-system / external-intake 語彙へ収束、または design SSOT に明示し、`/intake/legacy-change` の role は JWT claim 由来に固定して body 由来 role を manifest axis に使わない
 - [ ] `HubAttractorExplorationRuntime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync` と related legacy support-cache cosine diagnostics / compatibility payload を削除または test-only / negative-check に隔離し、canonical scheduler route が `hubs.hub_relations` 探索のみであることをテスト更新
 - [ ] `runtime_jump_event_contract` の `from` / `to` 形と実装の `PastAddress` / `CurrentAddress` / `PlannedAddress` 形を突合し、SSOT・DTO・テストの canonical jump event shape を一本化
+
+---
+
+## Bundle `admin-main-flow-step-ssot-alignment`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+- [ ] `/admin` トップの `ADMIN_MAIN_FLOW_STEPS` / `AdminMainFlowStepper` / `adminMainFlow.test.ts` を canonical admin workflow の step 番号へ再整合する
+  - 問題: SSOT の canonical admin routes は `/admin`, `/admin/contents`, `/admin/ui-builder`, `/admin/manifests` で、`/auth` は利用前提であって admin authoring pipeline の Step 1 ではない。一方、現状は `ADMIN_MAIN_FLOW_STEPS` と `UX_MAIN_FLOW_STEP_LABELS` が「ログイン」を Step 1 として表示・テスト固定し、`/admin/contents` を Step 2 にずらしている。
+  - 目的: `/admin/contents` の step 1/2/2.5/3、`/admin/ui-builder` の Step 4、`/admin/manifests` の post-pipeline を SSOT 通りに投影し、frontend の step 表示が DB/manifest topology authoring pipeline の意味境界を壊さないようにする。
+  - 改善方針: ログインは prerequisite/注意文に隔離し、`ADMIN_MAIN_FLOW_STEPS` は canonical admin workflow のみを表す。必要なら contents step を subSteps で 1/2/2.5/3 表示し、ui-builder は Step 4、manifests は post-pipeline として扱う。`adminMainFlow.test.ts` は `/auth` を canonical main flow に含めない assertion に更新する。
+  - 対象ファイル: `frontend/content/adminGuides.ts`, `frontend/content/adminUxTerms.ts`, `frontend/islands/AdminMainFlowStepper.tsx`, `frontend/routes/admin/index.tsx`, `frontend/tests/adminMainFlow.test.ts`。
+  - 完了条件: `/auth` が canonical admin workflow step として表示/テスト固定されず、SSOT の step 1/2/2.5/3/4/post-pipeline 境界と admin route registry が一致する。
 
 ---
 
