@@ -15,7 +15,7 @@
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | not_started | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `sql-attention-m7` | SQL Attention phase_vector 生成 | partial | 1 | `docs/design/sql-attention-logs-ssot.yaml` |
 | `enum-dictionary-canonicalization` | enum辞書正本化 | not_started | 9 | `docs/design/enum-dictionary-ssot.yaml` |
-| `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 32 | `docs/design/admin-master-roster-management-ssot.yaml` |
+| `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 27 | `docs/design/admin-master-roster-management-ssot.yaml` |
 ---
 ## Bundle `enum-dictionary-canonicalization`
 
@@ -89,33 +89,27 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 **SSOT:** 新規作成予定 `docs/design/admin-master-roster-management-ssot.yaml`
 **関連SSOT:** `docs/design/enum-dictionary-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
 
-**実行前:** AGENTS.md を読む。
+**前提 bundle:** `enum-dictionary-canonicalization`（enum item / enum_group / DB schema / Step2・Step3 参照・select 化の正本定義は当該 bundle のみ。本 bundle では再定義しない）
+
+**実行前:** AGENTS.md を読む。`enum-dictionary-canonicalization` が未完了の場合は先にそちらを実装する。
 
 **実装順序:**
 
-1. enum canonical tables / SSOT
-2. enum seed
-3. enum UI
-4. users UI
+1. 前提: `enum-dictionary-canonicalization` 完了
+2. enum seed（名簿管理UI・users 向け）
+3. `/admin/enums` 名簿 CRUD UI
+4. `/admin/users` 名簿・状態管理 UI
 
-**auth seed 参照後の設計方針:**
+**設計方針（名簿管理・seed 固有）:**
 
-* auth と同様に、enum も topology / manifest / screen_data_shape 内へ正本値を散らさない
-* enum の正本は `enum_table` / `enum_group` 側に置く
-* topology / manifest / screen_data_shape には enum item 定義そのものではなく、enum_group 参照だけを保持する
+* enum 正本境界・物理テーブル・workflow 上の enum_group 参照契約は `enum-dictionary-canonicalization` を参照する
 * seed は `ON CONFLICT` 前提の idempotent seed とする
 * users 用 enum seed は `/admin/users` 実装より先に投入する
-* `/admin/users` の `status` は seed 済み enum_group を参照する
-* enum_group 未解決時は silent fallback せず blocking error にする
+* `/admin/users` の `status` は seed 済み enum_group を参照する（手入力 select 化の契約自体は前提 bundle 側）
 * `logs.diff` は auth.login_events 的な監査面として扱い、登録 / 更新 / 削除 / 状態変更の before/after を保存する
 
 **未実装 todo:**
 
-* [ ] `docs/design/enum-dictionary-ssot.yaml` を作成し、enum item / enum_group / index_num / uuid / group items の正本境界を定義する
-* [ ] `docs/design/db-schema.yaml` に `enum_table` / `enum_group` 相当の物理テーブル定義を追記する
-* [ ] enum item は `uuid,index_num,name` を持つ正本として定義する
-* [ ] enum_group は `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義する
-* [ ] enum_group の `items[enum index num]` を属性候補集合ベクトルとして扱う契約をSSOT化する
 * [ ] enum seed は再実行しても重複・破壊しない idempotent seed とする
 * [ ] users に必要な enum_group / enum item を seed 化する
 * [ ] users 用 enum seed に user status enum_group を含める
@@ -141,7 +135,7 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 * [ ] `last_login_at` は auth/login event 由来の readonly 投影とし、通常の inline edit 対象にしない
 * [ ] 必要に応じて `last_login_ip` / `last_login_user_agent` は詳細情報 disclosure 側に隔離する
 * [ ] 停止理由・管理メモ用に `state_note:text|null` を持たせるか判断し、採用する場合は更新ログ対象にする
-* [ ] user状態の登録・更新時に enum_group 未解決なら silent fallback せず blocking error にする
+* [ ] user状態の登録・更新時に enum_group 未解決なら silent fallback せず blocking error にする（挙動契約は前提 bundle と整合）
 * [ ] 登録 / 更新 / 削除 / user状態変更の差分ログを `logs.diff` に保存する
 * [ ] `logs.diff` の差分形式を定義する
 
@@ -182,11 +176,9 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 
 **完了条件:**
 
-* enum item が `uuid,index_num,name` を持つ正本として定義されている
-* enum_group が `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義されている
+* 前提: `enum-dictionary-canonicalization` の完了条件を満たしている（enum 正本・DB・Step2/Step3 select 化は当 bundle で検証）
 * enum seed が idempotent である
 * users に必要な enum が seed として先に投入される
-* topology / manifest / screen_data_shape には enum item 定義そのものを散らさず、enum_group 参照だけを保持している
 * `/admin/enums` で enum名簿CRUDができる
 * `/admin/users` で user名簿とuser状態管理ができる
 * `/admin/users` の状態管理が seed 済み enum を参照している
