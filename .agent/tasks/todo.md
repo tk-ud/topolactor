@@ -10,6 +10,7 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth SSOT（要追記） |
+| `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 
 ---
 
@@ -63,6 +64,21 @@
   - 作らないもの: topology manifest 内の password_hash、JWT secret、token signing、refresh token 永続化、admin 判定ロジック、credential DB 直書き。
   - 対象ファイル候補: `docs/design/runtime-orchestration-ssot.yaml`, auth/session/credential SSOT（新規または既存）, seed 実装ファイル, auth runtime/API, frontend login manifest/rendering tests。
   - 完了条件: seed によって通常ユーザ向け login manifest が生成され、ログイン submit は既存認証基盤へ委譲される。admin/user realm・audience・scope が分離され、password hash/JWT secret/refresh token が topology/hub/jsonb に保存されないことをテストで固定する。
+
+---
+
+## Bundle `admin-relationship-active-manifest-targets`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+- [ ] Step 2.5 relationship の接続先として有効manifest/tableを選択可能にする
+  - 問題: 現状の Step 2.5 relationship UI/データ配線が編集中 draft manifest 配下のテーブルだけを参照点として扱うと、編集中マニフェストから既存の有効マニフェスト上のテーブルへ接続する関係を作れない。データ駆動OSでは既存有効トポロジへの参照が閉じると、manifest間・既存データ間の連続性を表現できない。
+  - 目的: 編集中 manifest の local side は draft 配下の logical tables のみを参照しつつ、remote/target side は published/active topology manifests とその table refs も選択できるようにする。
+  - 改善方針: まず `docs/design/admin-console-workflow-ssot.yaml` の Step 2.5 relationship_configuration に、local side は current draft manifest scoped、remote side は current draft tables に加えて active/published manifests の table refs を選択可能、という境界を追記する。その後 frontend の relationship selector と backend intent validation/read model を更新し、remote target が active manifest table である場合も fail-close で解決・保存できるようにする。
+  - 対象ファイル候補: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/lib/contentsAssign.ts`, `frontend/api/adminApi.ts`, `backend/runtime/AdminRuntime.cs`, `backend/repository/ManifestRepository.cs`, `backend/repository/NpgsqlManifestRepository.cs`, relationship / manifest management tests。
+  - 完了条件: Step 2.5 UI で local side は編集中 manifest の配下テーブルに限定され、remote side は有効manifest/tableも選択できる。backend は remote target の manifest/table_ref を検証し、未解決時は silent fallback せず blocking error にする。テストで draft-only 固定への退行を防ぐ。
 
 ---
 
@@ -151,4 +167,4 @@
 
 ### `sql-attention-m7`
 
-- [x] SQLA-IDSPACE-STEP3/4・SQLA-GENERATION-STEP4
+- [x] SQLA-IDSPACE-STEP3/4
