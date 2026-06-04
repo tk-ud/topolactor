@@ -251,6 +251,10 @@ query_equals_one "structure_maps contains attractor_key='admin:ui_topology:promo
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:ui_topology:promoted_palette';"
 query_equals_one "structure_maps contains attractor_key='admin:package_generator:promote'" \
   "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:promote';"
+query_equals_one "structure_maps contains attractor_key='admin:package_generator:promote_package'" \
+  "SELECT COUNT(*) FROM topology.structure_maps WHERE attractor_key = 'admin:package_generator:promote_package';"
+query_equals_one "manifest dispatcher_mapping for package_generator promote_package" \
+  "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='package_generator' AND e->>'action'='promote_package';"
 query_equals_one "manifest dispatcher_mapping for ui_topology layout_candidates" \
   "SELECT COUNT(*) FROM manifest m, unnest(m.topology) e WHERE m.status='active' AND e->>'type'='dispatcher_mapping' AND e->>'role'='admin' AND e->>'target'='admin' AND e->>'layer'='ui_topology' AND e->>'action'='layout_candidates';"
 query_equals_one "manifest dispatcher_mapping for ui_topology promoted_palette" \

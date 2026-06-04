@@ -20,6 +20,7 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "ui_component_bucket:list",
   "package_generator:generate",
   "package_generator:promote",
+  "package_generator:promote_package",
   "ui_topology:promoted_palette",
   "ui_topology:layout_candidates",
   "layout_patch:preview",
