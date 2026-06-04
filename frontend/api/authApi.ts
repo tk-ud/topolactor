@@ -44,6 +44,10 @@ export type LoginManifestResponse = {
 
 export const USER_LOGIN_MANIFEST_ID = "00000000-0000-0000-0000-000000000090";
 
+/** Active manifest exposing auth.user for Step 2.5 remote relationship targets. */
+export const AUTH_RELATIONSHIP_BOUNDARY_MANIFEST_ID =
+  "00000000-0000-0000-0000-000000000091";
+
 /** Extract display string from AuthError regardless of casing. */
 export function authErrorText(e: AuthError): string {
   const msg = e.message ?? e.Message;

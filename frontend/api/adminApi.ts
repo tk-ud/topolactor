@@ -392,16 +392,89 @@ export async function getAdminManifest(manifestId: string): Promise<AdminManifes
   return body.emission?.data as AdminManifestDetail;
 }
 
+function manifestKeyFromTopologyRaw(raw: string): string | null {
+  try {
+    const entries = JSON.parse(raw) as unknown;
+    if (!Array.isArray(entries)) return null;
+    for (const entry of entries) {
+      if (
+        typeof entry === "object" && entry !== null &&
+        (entry as { type?: string }).type === "hub_grouping" &&
+        typeof (entry as { manifestKey?: string }).manifestKey === "string"
+      ) {
+        const key = (entry as { manifestKey: string }).manifestKey.trim();
+        if (key) return key;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/** Build remote targets from manifest:list + manifest:get (fallback when dedicated op missing). */
+async function listRelationshipRemoteTargetsFallback(
+  excludeManifestId?: string,
+): Promise<RelationshipRemoteTarget[] | null> {
+  const { extractScreenDataShapeFromTopology } = await import(
+    "../lib/manifestTopologyExtensions.ts"
+  );
+  const items = await listAdminManifests("active");
+  if (items === null) return null;
+
+  const targets: RelationshipRemoteTarget[] = [];
+  await Promise.all(items.map(async (item) => {
+    if (excludeManifestId && item.manifestId === excludeManifestId) return;
+    const detail = await getAdminManifest(item.manifestId);
+    if (!detail) return;
+    const shape = extractScreenDataShapeFromTopology(detail.topologyRawJson);
+    if (shape.logicalTables.length === 0) return;
+    const manifestKey = manifestKeyFromTopologyRaw(detail.topologyRawJson) ??
+      (item.role && item.target && item.layer && item.action
+        ? `${item.role}.${item.target}.${item.layer}.${item.action}`
+        : null);
+    targets.push({
+      manifestId: item.manifestId,
+      status: item.status,
+      manifestKey,
+      logicalTables: shape.logicalTables.map((t) => ({
+        tableName: t.tableName,
+        columns: t.columns.map((c) => ({
+          name: c.name,
+          dataType: c.dataType,
+          nullable: c.nullable,
+        })),
+      })),
+    });
+  }));
+  return targets;
+}
+
 /** Active manifests with logical tables for Step 2.5 remote relationship targets. */
 export async function listRelationshipRemoteTargets(
   excludeManifestId?: string,
 ): Promise<RelationshipRemoteTarget[] | null> {
-  const body = await callAdminManifestOp(
-    "list_relationship_remote_targets",
-    excludeManifestId ? { excludeManifestId } : undefined,
-  );
-  if (body === null) return null;
-  return (body.emission?.data ?? []) as RelationshipRemoteTarget[];
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "manifest",
+    action: "list_relationship_remote_targets",
+    payload: excludeManifestId ? { excludeManifestId } as Record<string, unknown> : undefined,
+  }, getToken());
+
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    if (code === "ADMIN_OPERATION_NOT_FOUND" || code === "MANIFEST_NOT_FOUND") {
+      return await listRelationshipRemoteTargetsFallback(excludeManifestId);
+    }
+    const msg = result.errors?.[0]
+      ? validationErrorText(result.errors[0])
+      : "manifest list_relationship_remote_targets failed";
+    throw new Error(msg);
+  }
+
+  return (result.emission?.data ?? []) as RelationshipRemoteTarget[];
 }
 
 export async function validateAdminManifest(manifestId: string): Promise<AdminManifestValidateResult | null> {

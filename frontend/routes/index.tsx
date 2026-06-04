@@ -12,17 +12,16 @@ export default function Index(): JSX.Element {
       <h1 class="page-title">topolactor</h1>
       <p class="mb-4 leading-relaxed text-gray-700">
         管理画面では、{UX_CONTENTS}、{UX_UI_BUILDER}、{UX_HUB_MANIFESTS}を順に進めます。
-        管理画面を使うには先に<strong>
-          ログイン
-        </strong>が必要です。
+        管理画面を使うには先に<strong>管理ログイン</strong>（
+        <a href="/super_auth" class="link">/super_auth</a>）が必要です。
       </p>
 
       <section class="card mb-6">
         <h2 class="section-title">はじめ方</h2>
         <ol class="list-decimal space-y-2 pl-5 text-sm leading-relaxed">
           <li>
-            <a href="/auth" class="link font-semibold">ログイン</a>{" "}
-            — 管理画面を使う前に認証します
+            <a href="/super_auth" class="link font-semibold">管理ログイン</a>{" "}
+            — 管理画面を使う前に認証します（admin realm）
           </li>
           <li>
             <a href="/admin/contents" class="link font-semibold">
@@ -57,6 +56,10 @@ export default function Index(): JSX.Element {
       </section>
 
       <p class="nav-footer">
+        <a href="/auth" class="link">ユーザログイン</a>
+        {" · "}
+        <a href="/super_auth" class="link">管理ログイン</a>
+        {" · "}
         <a href="/runtime-status" class="link">接続状態</a>
       </p>
     </main>

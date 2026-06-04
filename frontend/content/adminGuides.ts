@@ -178,7 +178,7 @@ export const ADMIN_HUB_NAVIGATION_GUIDE: AdminGuide = {
   title: "ナビ順序設定",
   purpose: `${UX_HUB_MANIFESTS_PAGE} 内で、作成済みページの遷移順序を設定します。`,
   prerequisites: [
-    "/auth でログイン済みであること",
+    "/super_auth で管理ログイン済みであること",
     "先にページを作成していること",
     `${UX_CONTENTS} で画面の内容が定義されていること`,
   ],

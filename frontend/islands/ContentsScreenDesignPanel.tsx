@@ -287,6 +287,11 @@ export default function ContentsScreenDesignPanel({
       if (targets === null) {
         setRemoteTargets([]);
         setRemoteTargetsError("有効マニフェストの参照先一覧を読み込めませんでした。");
+      } else if (targets.length === 0) {
+        setRemoteTargets([]);
+        setRemoteTargetsError(
+          "参照先に使える有効マニフェスト（論理テーブル付き）がありません。DB に auth.user 境界マニフェスト（seed 091）が入っているか確認してください。",
+        );
       } else {
         setRemoteTargets(targets);
         setRemoteTargetsError(null);
@@ -710,6 +715,13 @@ export default function ContentsScreenDesignPanel({
     return key ? `${key} (${t.manifestId.slice(0, 8)}…)` : t.manifestId;
   };
 
+  const defaultRemoteManifestId = (): string => {
+    const authBoundary = remoteTargets.find((t) =>
+      t.logicalTables.some((lt) => lt.tableName === "auth.user")
+    );
+    return authBoundary?.manifestId ?? remoteTargets[0]?.manifestId ?? "";
+  };
+
   const patchRelationIntent = (
     index: number,
     patch: Partial<RelationIntentDraft>,
@@ -1123,9 +1135,14 @@ export default function ContentsScreenDesignPanel({
                   onChange={(e) => {
                     const mode = (e.target as HTMLSelectElement).value;
                     if (mode === "active") {
+                      const manifestId = defaultRemoteManifestId();
+                      const tables = remoteTargets.find((t) =>
+                        t.manifestId === manifestId
+                      )?.logicalTables ?? [];
+                      const authUser = tables.find((t) => t.tableName === "auth.user");
                       patchRelationIntent(ri, {
-                        remoteManifestId: remoteTargets[0]?.manifestId ?? "",
-                        joinTableRef: "",
+                        remoteManifestId: manifestId,
+                        joinTableRef: authUser ? "auth.user" : "",
                         remoteKey: "",
                       });
                     } else {
@@ -1141,7 +1158,14 @@ export default function ContentsScreenDesignPanel({
                   <option value="active">有効マニフェストのテーブル</option>
                 </select>
               </label>
-              {remoteIsActive && (
+              {remoteIsActive && remoteTargets.length === 0 && (
+                <p class="text-xs text-amber-700">
+                  有効マニフェストを選べません。一覧が空のときは DB seed（manifest 091）または
+                  <code class="rounded bg-gray-100 px-1">db/patches/add_auth_relationship_remote_boundary_manifest.sql</code>
+                  を適用してください。
+                </p>
+              )}
+              {remoteIsActive && remoteTargets.length > 0 && (
                 <label class="block">
                   有効マニフェスト
                   <select

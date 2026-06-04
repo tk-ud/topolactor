@@ -1413,3 +1413,22 @@ VALUES (
 ON CONFLICT (manifest_id) DO UPDATE
     SET topology = EXCLUDED.topology,
         status   = EXCLUDED.status;
+
+-- ---------------------------------------------------------------------------
+-- manifest — auth.user boundary for Step 2.5 remote relationship targets (ID 091)
+-- Exposes logical table auth.user (column id) for joins from business drafts (e.g. employees.user_id).
+-- SSOT: docs/design/auth-db-session-credential-ssot.yaml (relationship_boundary_manifest)
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-000000000091',
+    NULL,
+    ARRAY[
+        '{"type":"hub_grouping","manifestKey":"auth.user.boundary"}'::jsonb,
+        '{"type":"screen_data_shape","logicalTables":[{"tableName":"auth.user","columns":[{"name":"id","dataType":"uuid","nullable":false},{"name":"username","dataType":"text","nullable":true}]}]}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;
