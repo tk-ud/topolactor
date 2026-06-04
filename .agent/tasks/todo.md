@@ -10,6 +10,8 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `ssot-old-vocabulary-cleanup` | SSOT旧語彙 / 不要 production surface cleanup | 4 | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/sql-attention-logs-ssot.yaml` |
+| `main-data-wiring-ssot-audit` | main データ配線 SSOT 監査 follow-up | 1 | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
+| `ui-builder-layout-design-boundary` | UI Builder layout/design 責務分離 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 
 ---
 
@@ -78,6 +80,22 @@
 ### `main-data-wiring-ssot-audit`（2026-06）
 
 - [x] `NpgsqlTopologyRepository` の demo transition 永続化参照を canonical `topology.demo_state_transitions` に統一
+## Bundle `ui-builder-layout-design-boundary`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/framework-policy.yaml`, `docs/design/css-dictionary-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+- [ ] `/admin/ui-builder` の layout/design 編集境界を SSOT 通りに再分離する
+  - 問題: SSOT は layout を「UI 配置場所（canvas placement / slots / order / responsive layout class refs）」、component_design を「色・形・styling tokens・reaction presentation intent」と分けるが、`frontend/islands/UiBuilderAdmin.tsx` は `layout` タブ内で `PackageDesignPanel` と `LayoutBuilderSection` を同列表示し、さらに `layout_patch` 経路で `cssTokenRefs` / `responsiveTokenRefs` を `components_layout_design` / `ui_topology_tensor` へ保存している。これにより色・余白・トークン設定が layout 編集の保存責務に混入して見える。
+  - 目的: データ駆動OSの正本である DB authority に合わせ、layout はフレーム配置図、component_design は色・形・プロパティ設定として UI と保存経路を明確に分離する。
+  - 改善方針: `UiBuilderAdmin.tsx` の通常導線を `package selection` → `layout child editor` → `component design child editor` の明示サブセクションに分け、layout_patch は配置・slot・order・layout class refs に限定する。色・余白・フォント・CSS token refs・reactionIntent は `component_style_design:upsert` / `components_style_design` 側へ寄せる。既存 DB カラムに互換保存が必要な場合は advanced/debug か migration TODO として明示し、通常 UI で layout と design を混同させない。
+  - 対象ファイル: `frontend/islands/UiBuilderAdmin.tsx`, `backend/runtime/AdminRuntime.cs`, `backend/repository/NpgsqlUiTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/AdminRuntimeLayoutPatchTests.cs`, frontend UI builder tests。
+  - 完了条件: 通常 UI で layout は配置図編集のみ、design は色等プロパティ編集のみになり、layout_patch request/DB write と component_style_design upsert の責務境界をテストで固定する。
+
+---
+
+## 完了済みアーカイブ
 
 ### `ui-topology-package-bucket-vector`（2026-06）
 
