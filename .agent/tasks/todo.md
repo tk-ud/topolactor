@@ -9,7 +9,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
-| `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth SSOT（要追記） |
+| `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
 | `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 
 ---
@@ -53,17 +53,17 @@
 
 ## Bundle `user-login-seed-manifest-auth-boundary`
 
-**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, auth/session/credential SSOT（要追記または既存正本特定）
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, auth DB/session/credential SSOT（要追記または既存正本特定）
 
 **実行前:** AGENTS.md を読む。
 
 - [ ] 通常ユーザ向けログイン UI を seed manifest として作成し、認証コアは既存 AuthService/Auth runtime に委譲する境界をSSOT化・実装する
-  - 問題: admin 操作用ログインと通常ユーザ向けログインを topology manifest で扱う場合、JWT 署名・password hash・refresh token・admin 権限判定まで topology/hub/jsonb 側へ混入すると security boundary が崩れ、admin/user realm が混線する危険がある。
-  - 目的: 通常ユーザ向けログイン画面はデータ駆動 UI として seed manifest で提供しつつ、credential 検証・password hash・JWT 署名・refresh token・session invalidation は既存ログイン基盤に隔離する。
-  - 改善方針: まず auth/session/credential 境界のSSOTを追記または既存正本を特定し、`login UI topology manifest` と `AuthService/Auth runtime` の責務を分ける。seed は `/login` 等の user-facing manifest、入力フィールド、submit action binding、成功/失敗表示、遷移先だけを作る。submit は `auth_runtime.login` 等の既存認証 action に委譲し、claims には `realm=user`, `audience=user_app`, `scope/role=user` を付与する。admin は `realm=admin/system`, `audience=admin_console`, `scope/role=admin` として分離する。
-  - 作らないもの: topology manifest 内の password_hash、JWT secret、token signing、refresh token 永続化、admin 判定ロジック、credential DB 直書き。
-  - 対象ファイル候補: `docs/design/runtime-orchestration-ssot.yaml`, auth/session/credential SSOT（新規または既存）, seed 実装ファイル, auth runtime/API, frontend login manifest/rendering tests。
-  - 完了条件: seed によって通常ユーザ向け login manifest が生成され、ログイン submit は既存認証基盤へ委譲される。admin/user realm・audience・scope が分離され、password hash/JWT secret/refresh token が topology/hub/jsonb に保存されないことをテストで固定する。
+  - 問題: admin 操作用ログインと通常ユーザ向けログインを topology manifest で扱う場合、JWT 署名・password hash・refresh token・admin 権限判定まで topology/hub/jsonb 側へ混入すると security boundary が崩れ、admin/user realm が混線する危険がある。現状の demo auth は `topology.function_parameters(demo_auth/demo_users)` に bcrypt hash を置く仮実装であり、auth 専用DB正本ではない。
+  - 目的: 通常ユーザ向けログイン画面はデータ駆動 UI として seed manifest で提供しつつ、credential 検証・password hash・JWT 署名・refresh token・session invalidation は既存ログイン基盤と auth 専用DB正本に隔離する。
+  - 改善方針: まず auth DB/session/credential 境界のSSOTを追記または既存正本を特定し、`login UI topology manifest` と `AuthService/Auth runtime` の責務を分ける。auth DB 正本として `auth.users`, `auth.credentials`, `auth.sessions` / `auth.refresh_tokens`, `auth.login_events`, `auth.roles` / `auth.scopes` / `auth.grants` 相当の責務を定義する。`topology.function_parameters` の `demo_auth/demo_users` credential は demo-only として隔離し、通常ユーザ認証の正本にしない。seed は `/login` 等の user-facing manifest、入力フィールド、submit action binding、成功/失敗表示、遷移先だけを作る。submit は `auth_runtime.login` 等の既存認証 action に委譲し、claims には `realm=user`, `audience=user_app`, `scope/role=user` を付与する。admin は `realm=admin/system`, `audience=admin_console`, `scope/role=admin` として分離する。
+  - 作らないもの: topology manifest 内の password_hash、JWT secret、token signing、refresh token 永続化、admin 判定ロジック、credential DB 直書き。`topology.function_parameters` を通常ユーザ credential store として使う実装も禁止する。
+  - 対象ファイル候補: `docs/design/runtime-orchestration-ssot.yaml`, auth DB/session/credential SSOT（新規または既存）, `db/schema.sql` または auth DB migration, seed 実装ファイル, auth runtime/API, frontend login manifest/rendering tests。
+  - 完了条件: auth 専用DB正本がSSOT化され、seed によって通常ユーザ向け login manifest が生成され、ログイン submit は既存認証基盤へ委譲される。admin/user realm・audience・scope が分離され、password hash/JWT secret/refresh token が topology/hub/jsonb/`function_parameters` に保存されないことをテストで固定する。
 
 ---
 
