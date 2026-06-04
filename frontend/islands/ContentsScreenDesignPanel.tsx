@@ -76,12 +76,15 @@ import {
   SEARCH_OPERATOR_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
+  UX_FIELD_ADD_SEARCH_CONDITION,
+  UX_FIELD_ADVANCED_SEARCH_CONDITIONS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_DISPLAY_MODE,
   UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
+  UX_FIELD_LOGICAL_CONDITION,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
@@ -1059,158 +1062,6 @@ export default function ContentsScreenDesignPanel({
         </p>
       )}
 
-      {activeStep === 3 && (
-        <div class="mt-4">
-          <h3 class="text-xs font-semibold">{UX_FIELD_SEARCH_CONDITIONS}</h3>
-          <p class="mb-2 text-xs text-muted-xs">
-            検索キー・演算子・値を組み合わせた条件を設定します。AND/OR/NOT で複数条件を結合できます。
-          </p>
-          {design.searchConditions.map((cond, ci) => (
-            <div
-              key={ci}
-              class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 p-2 text-xs"
-            >
-              {ci > 0 && (
-                <select
-                  class="rounded border px-1 py-0.5 text-xs"
-                  value={design.searchConditions[ci - 1].logicalConnector ?? "and"}
-                  onChange={(e) => {
-                    const next = design.searchConditions.map((c, i) =>
-                      i === ci - 1
-                        ? { ...c, logicalConnector: (e.target as HTMLSelectElement).value as SearchCondition["logicalConnector"] }
-                        : c
-                    );
-                    patchDesign({ searchConditions: next });
-                  }}
-                >
-                  {LOGICAL_CONNECTOR_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              )}
-              <select
-                class="rounded border px-1 py-0.5 font-mono text-xs"
-                value={cond.column}
-                onChange={(e) => {
-                  const next = design.searchConditions.map((c, i) =>
-                    i === ci ? { ...c, column: (e.target as HTMLSelectElement).value } : c
-                  );
-                  patchDesign({ searchConditions: next });
-                }}
-              >
-                <option value="">— 項目 —</option>
-                {columnKeys.map((col) => (
-                  <option key={col} value={col}>{col}</option>
-                ))}
-              </select>
-              <select
-                class="rounded border px-1 py-0.5 text-xs"
-                value={cond.operator}
-                onChange={(e) => {
-                  const op = (e.target as HTMLSelectElement).value as SearchOperator;
-                  const next = design.searchConditions.map((c, i) =>
-                    i === ci
-                      ? { ...c, operator: op, value: undefined, valueTo: undefined, values: undefined }
-                      : c
-                  );
-                  patchDesign({ searchConditions: next });
-                }}
-              >
-                {SEARCH_OPERATOR_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              {["is null", "is not null"].includes(cond.operator)
-                ? null
-                : cond.operator === "between"
-                ? (
-                  <>
-                    <input
-                      class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                      placeholder="から"
-                      value={cond.value ?? ""}
-                      onInput={(e) => {
-                        const next = design.searchConditions.map((c, i) =>
-                          i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
-                        );
-                        patchDesign({ searchConditions: next });
-                      }}
-                    />
-                    <span class="text-xs text-slate-500">〜</span>
-                    <input
-                      class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                      placeholder="まで"
-                      value={cond.valueTo ?? ""}
-                      onInput={(e) => {
-                        const next = design.searchConditions.map((c, i) =>
-                          i === ci ? { ...c, valueTo: (e.target as HTMLInputElement).value } : c
-                        );
-                        patchDesign({ searchConditions: next });
-                      }}
-                    />
-                  </>
-                )
-                : ["in", "not in"].includes(cond.operator)
-                ? (
-                  <input
-                    class="w-40 rounded border px-1 py-0.5 font-mono text-xs"
-                    placeholder="値1, 値2, …"
-                    value={(cond.values ?? []).join(", ")}
-                    onInput={(e) => {
-                      const vals = (e.target as HTMLInputElement).value
-                        .split(",")
-                        .map((v) => v.trim())
-                        .filter(Boolean);
-                      const next = design.searchConditions.map((c, i) =>
-                        i === ci ? { ...c, values: vals } : c
-                      );
-                      patchDesign({ searchConditions: next });
-                    }}
-                  />
-                )
-                : (
-                  <input
-                    class="w-28 rounded border px-1 py-0.5 font-mono text-xs"
-                    placeholder="値"
-                    value={cond.value ?? ""}
-                    onInput={(e) => {
-                      const next = design.searchConditions.map((c, i) =>
-                        i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
-                      );
-                      patchDesign({ searchConditions: next });
-                    }}
-                  />
-                )}
-              <button
-                type="button"
-                class="text-xs text-red-500 hover:text-red-700"
-                onClick={() => {
-                  patchDesign({
-                    searchConditions: design.searchConditions.filter((_, i) => i !== ci),
-                  });
-                }}
-              >
-                削除
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            class="btn-secondary mt-1 text-xs"
-            onClick={() => {
-              patchDesign({
-                searchConditions: [
-                  ...design.searchConditions,
-                  { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
-                ],
-              });
-            }}
-          >
-            条件を追加
-          </button>
-        </div>
-      )}
-
       {activeStep === 3 && qualifiedColumns.length > 0 && (
         <div class="mt-4">
           <h3 class="text-xs font-semibold">{UX_FIELD_DISPLAY_MODE}</h3>
@@ -1594,132 +1445,7 @@ export default function ContentsScreenDesignPanel({
         onAggregationKeyChange={(aggregationKey) => patchDesign({ aggregationKey })}
         onMeasuresChange={(aggregationMeasures) => patchDesign({ aggregationMeasures })}
       />
-      {design.aggregationMeasures.length > 0 && (
-        <div class="mt-3">
-          <p class="mb-1 text-xs font-semibold text-slate-700">{UX_FIELD_HAVING_CONDITIONS}</p>
-          <p class="mb-2 text-xs text-muted-xs">
-            集計結果に対する絞り込み条件を設定します。
-          </p>
-          {design.havingConditions.map((hc, hi) => (
-            <div
-              key={hi}
-              class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 p-2 text-xs"
-            >
-              <select
-                class="rounded border px-1 py-0.5 font-mono text-xs"
-                value={`${hc.column}__${hc.function}`}
-                onChange={(e) => {
-                  const parts = (e.target as HTMLSelectElement).value.split("__");
-                  const col = parts[0] ?? "";
-                  const fn = parts[1] ?? "";
-                  const next = design.havingConditions.map((h, i) =>
-                    i === hi ? { ...h, column: col, function: fn } : h
-                  );
-                  patchDesign({ havingConditions: next });
-                }}
-              >
-                <option value="__">— 集計式 —</option>
-                {design.aggregationMeasures.filter((m) => m.column && m.function).map((m) => (
-                  <option key={`${m.column}__${m.function}`} value={`${m.column}__${m.function}`}>
-                    {m.function}({m.column})
-                  </option>
-                ))}
-              </select>
-              <select
-                class="rounded border px-1 py-0.5 text-xs"
-                value={hc.operator}
-                onChange={(e) => {
-                  const next = design.havingConditions.map((h, i) =>
-                    i === hi
-                      ? { ...h, operator: (e.target as HTMLSelectElement).value as HavingCondition["operator"] }
-                      : h
-                  );
-                  patchDesign({ havingConditions: next });
-                }}
-              >
-                {HAVING_OPERATOR_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-              <input
-                class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                placeholder="値"
-                value={hc.value}
-                onInput={(e) => {
-                  const next = design.havingConditions.map((h, i) =>
-                    i === hi ? { ...h, value: (e.target as HTMLInputElement).value } : h
-                  );
-                  patchDesign({ havingConditions: next });
-                }}
-              />
-              <button
-                type="button"
-                class="text-xs text-red-500 hover:text-red-700"
-                onClick={() => {
-                  patchDesign({
-                    havingConditions: design.havingConditions.filter((_, i) => i !== hi),
-                  });
-                }}
-              >
-                削除
-              </button>
-            </div>
-          ))}
-          <button
-            type="button"
-            class="btn-secondary mt-1 text-xs"
-            onClick={() => {
-              const firstMeasure = design.aggregationMeasures.find((m) => m.column && m.function);
-              patchDesign({
-                havingConditions: [
-                  ...design.havingConditions,
-                  {
-                    column: firstMeasure?.column ?? "",
-                    function: firstMeasure?.function ?? "",
-                    operator: ">",
-                    value: "",
-                  },
-                ],
-              });
-            }}
-          >
-            {UX_FIELD_HAVING_CONDITIONS}を追加
-          </button>
-        </div>
-      )}
-      <details class="mt-2">
-        <summary class="cursor-pointer text-xs text-slate-500">
-          詳細 / raw 入力（検索・集計）
-        </summary>
-        <label class="mt-1 block text-xs text-slate-500">
-          検索対象（カンマ区切り）
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-            value={design.searchTargets}
-            onInput={(e) =>
-              patchDesign({
-                searchTargets: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      </details>
-      {/* Advanced: raw aggregationSpec in disclosure */}
-      <details class="mt-2">
-        <summary class="cursor-pointer text-xs text-slate-500">
-          詳細 / raw 集計仕様
-        </summary>
-        <label class="mt-1 block text-xs text-slate-500">
-          集計仕様（raw — 上の構造化フィールドと独立）
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-            value={design.aggregationSpec}
-            onInput={(e) =>
-              patchDesign({
-                aggregationSpec: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      </details>
+
 
       <div class="mt-3">
         <SamplePreviewPanel
@@ -1736,6 +1462,310 @@ export default function ContentsScreenDesignPanel({
           havingConditions={design.havingConditions}
         />
       </div>
+
+      <details class="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
+        <summary class="cursor-pointer text-xs font-semibold text-slate-700">
+          {UX_FIELD_ADVANCED_SEARCH_CONDITIONS}
+        </summary>
+        <p class="mt-2 text-xs text-muted-xs">
+          必要な場合だけ、検索条件・比較演算子・集計後の絞り込みを追加します。1条件だけなら論理条件は表示しません。
+        </p>
+        {design.searchConditions.length === 0
+          ? (
+            <button
+              type="button"
+              class="btn-secondary mt-2 text-xs"
+              onClick={() => {
+                patchDesign({
+                  searchConditions: [
+                    { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
+                  ],
+                });
+              }}
+            >
+              {UX_FIELD_ADD_SEARCH_CONDITION}
+            </button>
+          )
+          : (
+            <div class="mt-3">
+              <h4 class="text-xs font-semibold text-slate-700">{UX_FIELD_SEARCH_CONDITIONS}</h4>
+              {design.searchConditions.map((cond, ci) => (
+                <div
+                  key={ci}
+                  class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-white p-2 text-xs"
+                >
+                  {ci > 0 && (
+                    <label class="flex items-center gap-1 text-xs text-slate-600">
+                      <span>{UX_FIELD_LOGICAL_CONDITION}</span>
+                      <select
+                        class="rounded border px-1 py-0.5 text-xs"
+                        value={design.searchConditions[ci - 1].logicalConnector ?? "and"}
+                        onChange={(e) => {
+                          const next = design.searchConditions.map((c, i) =>
+                            i === ci - 1
+                              ? { ...c, logicalConnector: (e.target as HTMLSelectElement).value as SearchCondition["logicalConnector"] }
+                              : c
+                          );
+                          patchDesign({ searchConditions: next });
+                        }}
+                      >
+                        {LOGICAL_CONNECTOR_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <select
+                    class="rounded border px-1 py-0.5 font-mono text-xs"
+                    value={cond.column}
+                    onChange={(e) => {
+                      const next = design.searchConditions.map((c, i) =>
+                        i === ci ? { ...c, column: (e.target as HTMLSelectElement).value } : c
+                      );
+                      patchDesign({ searchConditions: next });
+                    }}
+                  >
+                    <option value="">— 項目 —</option>
+                    {columnKeys.map((col) => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                  <select
+                    class="rounded border px-1 py-0.5 text-xs"
+                    value={cond.operator}
+                    onChange={(e) => {
+                      const op = (e.target as HTMLSelectElement).value as SearchOperator;
+                      const next = design.searchConditions.map((c, i) =>
+                        i === ci
+                          ? { ...c, operator: op, value: undefined, valueTo: undefined, values: undefined }
+                          : c
+                      );
+                      patchDesign({ searchConditions: next });
+                    }}
+                  >
+                    {SEARCH_OPERATOR_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                  {["is null", "is not null"].includes(cond.operator)
+                    ? null
+                    : cond.operator === "between"
+                    ? (
+                      <>
+                        <input
+                          class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                          placeholder="から"
+                          value={cond.value ?? ""}
+                          onInput={(e) => {
+                            const next = design.searchConditions.map((c, i) =>
+                              i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
+                            );
+                            patchDesign({ searchConditions: next });
+                          }}
+                        />
+                        <span class="text-xs text-slate-500">〜</span>
+                        <input
+                          class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                          placeholder="まで"
+                          value={cond.valueTo ?? ""}
+                          onInput={(e) => {
+                            const next = design.searchConditions.map((c, i) =>
+                              i === ci ? { ...c, valueTo: (e.target as HTMLInputElement).value } : c
+                            );
+                            patchDesign({ searchConditions: next });
+                          }}
+                        />
+                      </>
+                    )
+                    : ["in", "not in"].includes(cond.operator)
+                    ? (
+                      <input
+                        class="w-40 rounded border px-1 py-0.5 font-mono text-xs"
+                        placeholder="値1, 値2, …"
+                        value={(cond.values ?? []).join(", ")}
+                        onInput={(e) => {
+                          const vals = (e.target as HTMLInputElement).value
+                            .split(",")
+                            .map((v) => v.trim())
+                            .filter(Boolean);
+                          const next = design.searchConditions.map((c, i) =>
+                            i === ci ? { ...c, values: vals } : c
+                          );
+                          patchDesign({ searchConditions: next });
+                        }}
+                      />
+                    )
+                    : (
+                      <input
+                        class="w-28 rounded border px-1 py-0.5 font-mono text-xs"
+                        placeholder="値"
+                        value={cond.value ?? ""}
+                        onInput={(e) => {
+                          const next = design.searchConditions.map((c, i) =>
+                            i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
+                          );
+                          patchDesign({ searchConditions: next });
+                        }}
+                      />
+                    )}
+                  <button
+                    type="button"
+                    class="text-xs text-red-500 hover:text-red-700"
+                    onClick={() => {
+                      patchDesign({
+                        searchConditions: design.searchConditions.filter((_, i) => i !== ci),
+                      });
+                    }}
+                  >
+                    削除
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                class="btn-secondary mt-1 text-xs"
+                onClick={() => {
+                  patchDesign({
+                    searchConditions: [
+                      ...design.searchConditions,
+                      { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
+                    ],
+                  });
+                }}
+              >
+                {UX_FIELD_ADD_SEARCH_CONDITION}
+              </button>
+            </div>
+          )}
+
+        {design.aggregationMeasures.length > 0 && (
+          <div class="mt-4 border-t border-slate-200 pt-3">
+            <p class="mb-1 text-xs font-semibold text-slate-700">{UX_FIELD_HAVING_CONDITIONS}</p>
+            <p class="mb-2 text-xs text-muted-xs">
+              集計結果に対する絞り込み条件を、必要な場合だけ設定します。
+            </p>
+            {design.havingConditions.map((hc, hi) => (
+              <div
+                key={hi}
+                class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-white p-2 text-xs"
+              >
+                <select
+                  class="rounded border px-1 py-0.5 font-mono text-xs"
+                  value={`${hc.column}__${hc.function}`}
+                  onChange={(e) => {
+                    const parts = (e.target as HTMLSelectElement).value.split("__");
+                    const col = parts[0] ?? "";
+                    const fn = parts[1] ?? "";
+                    const next = design.havingConditions.map((h, i) =>
+                      i === hi ? { ...h, column: col, function: fn } : h
+                    );
+                    patchDesign({ havingConditions: next });
+                  }}
+                >
+                  <option value="__">— 集計式 —</option>
+                  {design.aggregationMeasures.filter((m) => m.column && m.function).map((m) => (
+                    <option key={`${m.column}__${m.function}`} value={`${m.column}__${m.function}`}>
+                      {m.function}({m.column})
+                    </option>
+                  ))}
+                </select>
+                <select
+                  class="rounded border px-1 py-0.5 text-xs"
+                  value={hc.operator}
+                  onChange={(e) => {
+                    const next = design.havingConditions.map((h, i) =>
+                      i === hi
+                        ? { ...h, operator: (e.target as HTMLSelectElement).value as HavingCondition["operator"] }
+                        : h
+                    );
+                    patchDesign({ havingConditions: next });
+                  }}
+                >
+                  {HAVING_OPERATOR_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <input
+                  class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                  placeholder="値"
+                  value={hc.value}
+                  onInput={(e) => {
+                    const next = design.havingConditions.map((h, i) =>
+                      i === hi ? { ...h, value: (e.target as HTMLInputElement).value } : h
+                    );
+                    patchDesign({ havingConditions: next });
+                  }}
+                />
+                <button
+                  type="button"
+                  class="text-xs text-red-500 hover:text-red-700"
+                  onClick={() => {
+                    patchDesign({
+                      havingConditions: design.havingConditions.filter((_, i) => i !== hi),
+                    });
+                  }}
+                >
+                  削除
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              class="btn-secondary mt-1 text-xs"
+              onClick={() => {
+                const firstMeasure = design.aggregationMeasures.find((m) => m.column && m.function);
+                patchDesign({
+                  havingConditions: [
+                    ...design.havingConditions,
+                    {
+                      column: firstMeasure?.column ?? "",
+                      function: firstMeasure?.function ?? "",
+                      operator: ">",
+                      value: "",
+                    },
+                  ],
+                });
+              }}
+            >
+              {UX_FIELD_HAVING_CONDITIONS}を追加
+            </button>
+          </div>
+        )}
+      </details>
+
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs text-slate-500">
+          プロ向け / raw 入力（検索・集計）
+        </summary>
+        <label class="mt-1 block text-xs text-slate-500">
+          検索対象（カンマ区切り）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+            value={design.searchTargets}
+            onInput={(e) =>
+              patchDesign({
+                searchTargets: (e.target as HTMLInputElement).value,
+              })}
+          />
+        </label>
+      </details>
+      {/* Advanced: raw aggregationSpec in disclosure */}
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs text-slate-500">
+          プロ向け / raw 集計仕様
+        </summary>
+        <label class="mt-1 block text-xs text-slate-500">
+          集計仕様（raw — 上の構造化フィールドと独立）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+            value={design.aggregationSpec}
+            onInput={(e) =>
+              patchDesign({
+                aggregationSpec: (e.target as HTMLInputElement).value,
+              })}
+          />
+        </label>
+      </details>
 
       {showStep3Completion && submitStatus.outcome === "success" && (
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">

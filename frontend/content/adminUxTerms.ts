@@ -95,10 +95,16 @@ export const UX_RELATION_ROW_ID_LABEL = "id (record id)";
 /** 操作ごとの対象項目（イベント時、通常表示） */
 export const UX_FIELD_OPERATION_ENTITY = "操作ごとの対象項目";
 
-/** 検索条件（通常表示） */
+/** 検索条件（詳細表示） */
 export const UX_FIELD_SEARCH_CONDITIONS = "検索条件";
-/** 集計結果の絞り込み（通常表示） */
-export const UX_FIELD_HAVING_CONDITIONS = "集計結果の絞り込み";
+/** 検索条件の段階開示 summary */
+export const UX_FIELD_ADVANCED_SEARCH_CONDITIONS = "詳細条件を設定";
+/** 条件未設定時の追加導線 */
+export const UX_FIELD_ADD_SEARCH_CONDITION = "検索条件を追加";
+/** 論理条件（プロ向け） */
+export const UX_FIELD_LOGICAL_CONDITION = "論理条件";
+/** 集計結果の絞り込み（詳細表示） */
+export const UX_FIELD_HAVING_CONDITIONS = "集計後の絞り込み（詳細）";
 /** 表示列の範囲（通常表示） */
 export const UX_FIELD_DISPLAY_MODE = "表示列の範囲";
 
