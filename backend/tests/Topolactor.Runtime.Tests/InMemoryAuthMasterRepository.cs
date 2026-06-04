@@ -8,8 +8,8 @@ public sealed class InMemoryAuthMasterRepository : AuthMasterRepository
     private readonly Dictionary<Guid, AuthUserRosterDto> _users = new();
 
     public InMemoryAuthMasterRepository(IEnumerable<AuthUserRosterDto>? seed = null)
+        : base("in-memory")
     {
-        _connectionString = "in-memory";
         if (seed is not null)
             foreach (var u in seed)
                 _users[u.UserId] = u;

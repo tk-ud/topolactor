@@ -13,15 +13,16 @@ public class AdminRuntimeMasterRosterTests
     [Fact]
     public async Task AuthUsersCreate_WithInvalidStatus_ReturnsBlockingError()
     {
-        var runtime = BuildRuntime();
+        var runtime = CreateRuntime();
         var vector = new OperationVector(
-            "admin", "admin", "auth_users", "create",
-            Payload: JsonSerializer.SerializeToElement(new
+            "admin", "auth_users", "create", null, "admin",
+            JsonSerializer.SerializeToElement(new
             {
                 username = "new_user",
                 password = "secret",
                 status = "not_a_real_status",
-            }));
+            }),
+            null);
 
         var (_, error) = await runtime.ExecuteDataAsync(vector);
         Assert.NotNull(error);
@@ -31,16 +32,18 @@ public class AdminRuntimeMasterRosterTests
     [Fact]
     public async Task EnumDictionaryCreateGroup_ThenList_IncludesGroup()
     {
-        var runtime = BuildRuntime();
+        var runtime = CreateRuntime();
         var createVector = new OperationVector(
-            "admin", "admin", "enum_dictionary", "create_group",
-            Payload: JsonSerializer.SerializeToElement(new { groupName = "test_group_roster" }));
+            "admin", "enum_dictionary", "create_group", null, "admin",
+            JsonSerializer.SerializeToElement(new { groupName = "test_group_roster" }),
+            null);
 
         var (data, error) = await runtime.ExecuteDataAsync(createVector);
         Assert.Null(error);
         Assert.NotNull(data);
 
-        var listVector = new OperationVector("admin", "admin", "enum_dictionary", "list_groups");
+        var listVector = new OperationVector(
+            "admin", "enum_dictionary", "list_groups", null, "admin", null, null);
         var (listData, listError) = await runtime.ExecuteDataAsync(listVector);
         Assert.Null(listError);
         var json = listData!.Value.GetRawText();
@@ -71,14 +74,15 @@ public class AdminRuntimeMasterRosterTests
         Assert.Equal("AUTH_USER_NOT_APPROVED", response.Errors[0].Code);
     }
 
-    private static AdminRuntime BuildRuntime()
+    private static AdminRuntime CreateRuntime()
     {
-        var ctxRepo = new InMemoryContextRouteRepository();
-        var registrar = new RegistrarValidationService();
-        var pkg = new PackageGeneratorRuntime(
-            NullLogger<PackageGeneratorRuntime>.Instance,
-            new InMemoryUiTopologyRepository());
-        var uiRepo = new InMemoryUiTopologyRepository();
+        var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
+        var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
+        var topoVector = new TopologyVectorRuntime(NullLogger<TopologyVectorRuntime>.Instance, ctxRepo);
+        var registrar = new RegistrarValidationService(
+            NullLogger<RegistrarValidationService>.Instance, topoRepo, topoVector);
+        var uiRepo = new UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "test-double");
+        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, uiRepo);
         return new AdminRuntime(
             NullLogger<AdminRuntime>.Instance,
             ctxRepo,
