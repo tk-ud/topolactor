@@ -78,6 +78,15 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "hub_navigation:update",
   "hub_navigation:deprecate",
   "hub_navigation:reorder",
+  "enum_dictionary:list_groups",
+  "enum_dictionary:get_group",
+  "enum_dictionary:create_group",
+  "enum_dictionary:update_group",
+  "enum_dictionary:delete_group",
+  "enum_dictionary:create_item",
+  "enum_dictionary:update_item",
+  "enum_dictionary:delete_item",
+  "enum_dictionary:set_group_items",
 ];
 
 function extractAdminDispatcherMappings(seedSql: string): Set<string> {
