@@ -10,7 +10,6 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `ssot-old-vocabulary-cleanup` | SSOT旧語彙 / 不要 production surface cleanup | 4 | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/sql-attention-logs-ssot.yaml` |
-| `main-data-wiring-ssot-audit` | main データ配線 SSOT 監査 follow-up | 1 | `docs/design/db-schema.yaml` / `docs/design/runtime-orchestration-ssot.yaml` |
 
 ---
 
@@ -71,22 +70,14 @@
 
 ---
 
-## Bundle `main-data-wiring-ssot-audit`
-
-**SSOT:** `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/pipeline-continuity-ssot.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-- [ ] `NpgsqlTopologyRepository` の demo transition 永続化参照を canonical `topology.demo_state_transitions` に統一する
-  - 問題: `db/topology_tables.sql` は `topology.demo_state_transitions` を作成し、DB SSOT は public/unqualified table を drift とするが、`backend/repository/NpgsqlTopologyRepository.cs` は `INSERT INTO demo_state_transitions` / `SELECT ... FROM demo_state_transitions` を unqualified で参照している。
-  - 目的: データ駆動OSの正本である DB namespace を `topology` に固定し、search_path 依存・public namespace 逸脱・schema drift を排除する。
-  - 改善方針: `backend/repository/NpgsqlTopologyRepository.cs` の demo transition write/read SQL を `topology.demo_state_transitions` へ最小差分で修正し、可能なら SQL 文字列または transition create/advance/history 経路のテストで unqualified 参照が残らないことを固定する。
-  - 対象ファイル: `backend/repository/NpgsqlTopologyRepository.cs`, `backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs` または該当 transition repository テスト。
-  - 完了条件: `demo_state_transitions` の runtime SQL 参照が全て `topology.demo_state_transitions` になり、`db/topology_tables.sql` / `docs/design/db-schema.yaml` の canonical schema contract と一致する。
-
 ---
 
 ## 完了済みアーカイブ
+
+
+### `main-data-wiring-ssot-audit`（2026-06）
+
+- [x] `NpgsqlTopologyRepository` の demo transition 永続化参照を canonical `topology.demo_state_transitions` に統一
 
 ### `ui-topology-package-bucket-vector`（2026-06）
 

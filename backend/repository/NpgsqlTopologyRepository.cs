@@ -275,7 +275,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 cmd.Parameters.AddWithValue("hubId", hubId); cmd.Parameters.AddWithValue("hubIdStr", hubId.ToString()); cmd.Parameters.AddWithValue("relationId", relationId);
                 await cmd.ExecuteNonQueryAsync(ct);
                 var createHistoryCmd = conn.CreateCommand(); createHistoryCmd.Transaction = tx;
-                createHistoryCmd.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";
+                createHistoryCmd.CommandText = "INSERT INTO topology.demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,'create',NULL,'active',jsonb_build_object('created',true,'title',@title,'state',jsonb_build_object('before',NULL,'after','active')),jsonb_build_object('action','create','entity_id',@id::text,'title',@title,'after_state','active'))";
                 createHistoryCmd.Parameters.AddWithValue("id", entityId);
                 createHistoryCmd.Parameters.AddWithValue("title", title ?? "Untitled");
                 await createHistoryCmd.ExecuteNonQueryAsync(ct);
@@ -299,7 +299,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
             up.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await up.ExecuteNonQueryAsync(ct);
             var advanceHistoryCmd = conn.CreateCommand(); advanceHistoryCmd.Transaction = tx;
-            advanceHistoryCmd.CommandText = "INSERT INTO demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after),'state_id',jsonb_build_object('after',@stateId::text)),jsonb_build_object('action',@action,'entity_id',@id::text,'before_state',@before,'after_state',@after))";
+            advanceHistoryCmd.CommandText = "INSERT INTO topology.demo_state_transitions(entity_id,action,before_state,after_state,diff_json,event_json) VALUES(@id,@action,@before,@after,jsonb_build_object('state',jsonb_build_object('before',@before,'after',@after),'state_id',jsonb_build_object('after',@stateId::text)),jsonb_build_object('action',@action,'entity_id',@id::text,'before_state',@before,'after_state',@after))";
             advanceHistoryCmd.Parameters.AddWithValue("id", entityId); advanceHistoryCmd.Parameters.AddWithValue("action", action); advanceHistoryCmd.Parameters.AddWithValue("before", current); advanceHistoryCmd.Parameters.AddWithValue("after", next);
             advanceHistoryCmd.Parameters.AddWithValue("stateId", (Guid)nextStateIdObj);
             await advanceHistoryCmd.ExecuteNonQueryAsync(ct);
@@ -313,7 +313,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT action,before_state,after_state,diff_json::text,event_json::text,created_at FROM demo_state_transitions WHERE entity_id=@id ORDER BY created_at DESC LIMIT 20";
+        cmd.CommandText = "SELECT action,before_state,after_state,diff_json::text,event_json::text,created_at FROM topology.demo_state_transitions WHERE entity_id=@id ORDER BY created_at DESC LIMIT 20";
         cmd.Parameters.AddWithValue("id", entityId);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         var rows = new List<object>();
