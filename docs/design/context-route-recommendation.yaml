@@ -396,7 +396,7 @@ entities:
       Physical DDL is SSOT-defined here; implementation may follow in db/context_route_tables.sql.
     recommendation_lane: state_pressure
     transition_kind: enum_item
-    physical_ddl_status: implemented
+    physical_ddl_status: ddl_present
     fields:
       id:             { type: uuid, pk: true }
       enum_group_id:  { type: uuid, note: "fk enum.groups.group_id" }
@@ -604,7 +604,7 @@ hub_local_recommendation_pressure_lanes:
       models: prev_enum_index_to_next_enum_index_within_enum_group
       recommendation_lane: state_pressure
       physical_table: context_enum_transition_stats
-      physical_ddl_status: implemented
+      physical_ddl_status: ddl_present
       ssot_entity_ref: entities.context_enum_transition_stats
     prohibited:
       - using_context_transition_stats_for_enum_item_transitions

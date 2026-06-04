@@ -190,6 +190,7 @@ export default function OperationPanel({
       statusDetail: response.errors?.[0]?.message ?? "投影の取得に失敗しました",
       candidates: [],
       evaluatedAt: new Date().toISOString(),
+      lane: "sql_attention_projection",
     });
   }
 

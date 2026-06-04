@@ -906,7 +906,7 @@ db_schema:
       role: enum_item_transition_frequency_aggregation_within_enum_group
       transition_kind: enum_item
       recommendation_lane: state_pressure
-      physical_ddl_status: implemented
+      physical_ddl_status: ddl_present
       ssot_reference: docs/design/context-route-recommendation.yaml
       prohibited_use:
         - operation_transition_aggregation
