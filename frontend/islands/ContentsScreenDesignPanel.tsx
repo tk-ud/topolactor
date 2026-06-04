@@ -51,7 +51,6 @@ import {
   emptyManifestScreenDesign,
   type HavingCondition,
   loadManifestScreenDesignLocal,
-  type LogicalConnector,
   MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
   type LogicalTableDraft,
   type ManifestScreenDesignDraft,
