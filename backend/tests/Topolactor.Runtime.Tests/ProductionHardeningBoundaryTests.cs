@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Topolactor.Repository;
 using Topolactor.Schema;
@@ -113,6 +114,21 @@ public class ProductionHardeningBoundaryTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => repo.ApplyDemoTransitionAsync(Guid.NewGuid(), "create", "title"));
         Assert.Equal("DEMO_ENTITY_DEFAULT_RELATION_ID_NOT_CONFIGURED", ex.Message);
+    }
+
+
+    [Fact]
+    public void NpgsqlTopologyRepository_DemoTransitionSql_UsesCanonicalTopologySchema()
+    {
+        var repositoryPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../backend/repository/NpgsqlTopologyRepository.cs");
+        var source = File.ReadAllText(repositoryPath);
+
+        Assert.Contains("topology.demo_state_transitions", source);
+        Assert.DoesNotMatch(
+            new Regex(@"(?<!topology\.)\bdemo_state_transitions\b", RegexOptions.CultureInvariant),
+            source);
     }
 
     // ─── Gap-12: Admin Contracts — NotConnected Removed ──────────────────────
