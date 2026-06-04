@@ -1091,12 +1091,14 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             wiringSel.Parameters.AddWithValue("key", wiringKey);
             var wiringId = (Guid)(await wiringSel.ExecuteScalarAsync(ct))!;
 
-            // 7. INSERT ui_topology_tensor (ON CONFLICT DO NOTHING, then SELECT)
+            // 7. INSERT ui_topology_tensor — slot_key='default' canonical (non-NULL) so that
+            //    ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
+            //    correctly prevents a second tensor row on repeated promotes for the same route.
             await using var tensorInsert = conn.CreateCommand();
             tensorInsert.Transaction = tx;
             tensorInsert.CommandText =
-                "INSERT INTO topology.ui_topology_tensor (route_key, package_id, layout_id, wiring_id) " +
-                "VALUES (@route, @pkg, @layout, @wiring) " +
+                "INSERT INTO topology.ui_topology_tensor (route_key, package_id, layout_id, wiring_id, slot_key) " +
+                "VALUES (@route, @pkg, @layout, @wiring, 'default') " +
                 "ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO NOTHING";
             tensorInsert.Parameters.AddWithValue("route", routeKey);
             tensorInsert.Parameters.AddWithValue("pkg", packageId);
@@ -1109,7 +1111,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             tensorSel.CommandText =
                 "SELECT tensor_id FROM topology.ui_topology_tensor " +
                 "WHERE route_key = @route AND package_id = @pkg AND layout_id = @layout AND wiring_id = @wiring " +
-                "LIMIT 1";
+                "AND slot_key = 'default' LIMIT 1";
             tensorSel.Parameters.AddWithValue("route", routeKey);
             tensorSel.Parameters.AddWithValue("pkg", packageId);
             tensorSel.Parameters.AddWithValue("layout", layoutId);

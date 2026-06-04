@@ -123,7 +123,9 @@ CREATE TABLE IF NOT EXISTS topology.ui_topology_tensor (
     state_policy_json      JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_ui_topology_tensor_route_slot_order UNIQUE (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
+    -- slot_key='default' is the canonical value for single-route promote (non-NULL).
+    -- NULLS NOT DISTINCT prevents NULL slot_key from bypassing the uniqueness check.
+    CONSTRAINT uq_ui_topology_tensor_route_slot_order UNIQUE NULLS NOT DISTINCT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
 );
 
 CREATE INDEX IF NOT EXISTS idx_components_bucket_status ON topology.components_bucket (status);
