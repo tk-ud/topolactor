@@ -610,6 +610,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
         CancellationToken ct = default)
     {
+        // Pure validation (draft-only node, malformed JSON, CSS token vocabulary) runs first —
+        // before any DB access so these explicit errors are never swallowed by a connection failure.
+        var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
+        if (!valid.Ok || !valid.Valid) return valid;
+
         var bindingError = await VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, routeKey, ct);
         if (bindingError is not null)
         {
@@ -617,9 +622,6 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 false, false, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(),
                 bindingError.Message);
         }
-
-        var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
-        if (!valid.Ok || !valid.Valid) return valid;
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
@@ -663,20 +665,49 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT DISTINCT p.package_id::text, p.package_key, t.route_key, t.layout_id::text, t.wiring_id::text " +
+            "SELECT p.package_id::text, p.package_key, t.route_key, t.layout_id::text, t.wiring_id::text, " +
+            "COALESCE(array_agg(DISTINCT m.component_id::text) FILTER (WHERE m.component_id IS NOT NULL), ARRAY[]::text[]) AS component_ids, " +
+            "COALESCE((p.package_schema_json->>'bucketItemIds')::text, NULL) AS bucket_item_ids_json " +
             "FROM topology.ui_component_package p " +
             "LEFT JOIN topology.ui_topology_tensor t ON t.package_id = p.package_id " +
+            "LEFT JOIN topology.ui_package_component_map m ON m.package_id = p.package_id " +
+            "GROUP BY p.package_id, p.package_key, p.package_schema_json, t.route_key, t.layout_id, t.wiring_id " +
             "ORDER BY p.package_key ASC";
         var list = new List<AdminPackageListItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
         {
+            var componentIds = reader.IsDBNull(5)
+                ? Array.Empty<string>()
+                : reader.GetFieldValue<string[]>(5);
+            IReadOnlyList<string>? bucketItemIds = null;
+            if (!reader.IsDBNull(6))
+            {
+                var raw = reader.GetString(6);
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(raw);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            bucketItemIds = doc.RootElement.EnumerateArray()
+                                .Where(e => e.ValueKind == JsonValueKind.String)
+                                .Select(e => e.GetString()!)
+                                .ToList();
+                        }
+                    }
+                    catch (JsonException) { }
+                }
+            }
             list.Add(new AdminPackageListItemDto(
                 reader.GetString(0),
                 reader.GetString(1),
                 reader.IsDBNull(2) ? null : reader.GetString(2),
                 reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                componentIds.Length > 0 ? componentIds : null,
+                bucketItemIds));
         }
         return list;
     }
@@ -876,5 +907,258 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 $"No wiring {wiringId} linked to package {packageId}.");
         }
         return null;
+    }
+
+    /// <summary>
+    /// Promotes multiple bucket items into a single package for routeKey.
+    /// All items must be in 'packaging' status (call GenerateFromBucketAsync first).
+    /// Uses ON CONFLICT semantics for idempotency on package/layout/wiring keys.
+    /// package_schema_json stores { "bucketItemIds": [...], "componentKeys": [...] }.
+    /// </summary>
+    public override async Task<PackageGenerateBatchResult> PromotePackageFromBucketItemsAsync(
+        string routeKey,
+        IReadOnlyList<Guid> bucketItemIds,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            // 1. Validate all items are in 'packaging' status and collect component metadata
+            var componentInfos = new List<(Guid BucketItemId, string ComponentKey, string ComponentKind, string SourcePath)>();
+            foreach (var bucketItemId in bucketItemIds)
+            {
+                await using var checkCmd = conn.CreateCommand();
+                checkCmd.Transaction = tx;
+                checkCmd.CommandText =
+                    "SELECT component_key, component_kind, source_path, status " +
+                    "FROM topology.components_bucket WHERE bucket_item_id = @id";
+                checkCmd.Parameters.AddWithValue("id", bucketItemId);
+                await using var checkReader = await checkCmd.ExecuteReaderAsync(ct);
+                if (!await checkReader.ReadAsync(ct))
+                {
+                    await tx.RollbackAsync(ct);
+                    return new PackageGenerateBatchResult(
+                        PackageGenerateCode.NotFound, null, null, null, null, [], [],
+                        "NOT_FOUND", $"Bucket item {bucketItemId} not found.");
+                }
+                var status = checkReader.GetString(3);
+                if (status != "packaging")
+                {
+                    await tx.RollbackAsync(ct);
+                    return new PackageGenerateBatchResult(
+                        PackageGenerateCode.NotBucketed, null, null, null, null, [], [],
+                        "NOT_PACKAGED",
+                        $"Bucket item {bucketItemId} is in status '{status}', expected 'packaging'.");
+                }
+                componentInfos.Add((bucketItemId, checkReader.GetString(0), checkReader.GetString(1), checkReader.GetString(2)));
+            }
+
+            // 2. INSERT ui_component_registry for each item (ON CONFLICT DO NOTHING, then SELECT)
+            var componentIds = new List<Guid>();
+            foreach (var (_, componentKey, componentKind, sourcePath) in componentInfos)
+            {
+                await using var insertComp = conn.CreateCommand();
+                insertComp.Transaction = tx;
+                insertComp.CommandText =
+                    "INSERT INTO topology.ui_component_registry (component_key, component_kind, source_path) " +
+                    "VALUES (@key, @kind, @path) ON CONFLICT (component_key) DO NOTHING";
+                insertComp.Parameters.AddWithValue("key", componentKey);
+                insertComp.Parameters.AddWithValue("kind", componentKind);
+                insertComp.Parameters.AddWithValue("path", sourcePath);
+                await insertComp.ExecuteNonQueryAsync(ct);
+
+                await using var selComp = conn.CreateCommand();
+                selComp.Transaction = tx;
+                selComp.CommandText =
+                    "SELECT component_id FROM topology.ui_component_registry WHERE component_key = @key";
+                selComp.Parameters.AddWithValue("key", componentKey);
+                var componentId = (Guid)(await selComp.ExecuteScalarAsync(ct))!;
+                componentIds.Add(componentId);
+            }
+
+            // 3. INSERT ui_component_package — union existing schema arrays with this batch (additive promote).
+            var packageKey = $"{routeKey}:pkg";
+            var packageKind = componentInfos[0].ComponentKind;
+
+            // Read existing schema to merge arrays; null means this is the first promote for this route.
+            var existingBucketIds = new List<string>();
+            var existingComponentKeys = new List<string>();
+            await using (var selPkg = conn.CreateCommand())
+            {
+                selPkg.Transaction = tx;
+                selPkg.CommandText =
+                    "SELECT package_schema_json FROM topology.ui_component_package WHERE package_key = @key";
+                selPkg.Parameters.AddWithValue("key", packageKey);
+                var raw = await selPkg.ExecuteScalarAsync(ct) as string;
+                if (raw is not null)
+                {
+                    try
+                    {
+                        var doc = System.Text.Json.JsonDocument.Parse(raw);
+                        if (doc.RootElement.TryGetProperty("bucketItemIds", out var bids))
+                            foreach (var el in bids.EnumerateArray())
+                            {
+                                var s = el.GetString();
+                                if (!string.IsNullOrEmpty(s)) existingBucketIds.Add(s);
+                            }
+                        if (doc.RootElement.TryGetProperty("componentKeys", out var ckeys))
+                            foreach (var el in ckeys.EnumerateArray())
+                            {
+                                var s = el.GetString();
+                                if (!string.IsNullOrEmpty(s)) existingComponentKeys.Add(s);
+                            }
+                    }
+                    catch { /* malformed JSON — treat as empty existing */ }
+                }
+            }
+
+            // Union: existing ∪ this-batch, deduplicated.
+            var mergedBucketIds = existingBucketIds
+                .Union(bucketItemIds.Select(id => id.ToString()), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            var mergedComponentKeys = existingComponentKeys
+                .Union(componentInfos.Select(c => c.ComponentKey), StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var bucketItemIdsJson = System.Text.Json.JsonSerializer.Serialize(mergedBucketIds);
+            var componentKeysJson = System.Text.Json.JsonSerializer.Serialize(mergedComponentKeys);
+            var schemaJson = $"{{\"bucketItemIds\":{bucketItemIdsJson},\"componentKeys\":{componentKeysJson}}}";
+
+            await using var pkgCmd = conn.CreateCommand();
+            pkgCmd.Transaction = tx;
+            pkgCmd.CommandText =
+                "INSERT INTO topology.ui_component_package (package_key, package_kind, package_schema_json) " +
+                "VALUES (@key, @kind, @schema::jsonb) " +
+                "ON CONFLICT (package_key) DO UPDATE SET package_schema_json = EXCLUDED.package_schema_json, updated_at = now() " +
+                "RETURNING package_id";
+            pkgCmd.Parameters.AddWithValue("key", packageKey);
+            pkgCmd.Parameters.AddWithValue("kind", packageKind);
+            pkgCmd.Parameters.AddWithValue("schema", schemaJson);
+            var packageId = (Guid)(await pkgCmd.ExecuteScalarAsync(ct))!;
+
+            // 4. INSERT ui_package_component_map — slot_key='default' (canonical non-NULL slot) makes
+            //    ON CONFLICT (package_id, component_id, slot_key) correctly prevent duplicates for
+            //    repeated promotes of the same component into the same package.
+            for (var i = 0; i < componentIds.Count; i++)
+            {
+                await using var mapCmd = conn.CreateCommand();
+                mapCmd.Transaction = tx;
+                mapCmd.CommandText =
+                    "INSERT INTO topology.ui_package_component_map (package_id, component_id, slot_key, order_index) " +
+                    "VALUES (@pkg, @comp, 'default', @idx) ON CONFLICT (package_id, component_id, slot_key) DO NOTHING";
+                mapCmd.Parameters.AddWithValue("pkg", packageId);
+                mapCmd.Parameters.AddWithValue("comp", componentIds[i]);
+                mapCmd.Parameters.AddWithValue("idx", i);
+                await mapCmd.ExecuteNonQueryAsync(ct);
+            }
+
+            // 5. INSERT components_layout_design (ON CONFLICT DO NOTHING, then SELECT)
+            var layoutKey = $"{routeKey}:layout";
+            await using var layoutInsert = conn.CreateCommand();
+            layoutInsert.Transaction = tx;
+            layoutInsert.CommandText =
+                "INSERT INTO topology.components_layout_design (layout_key, layout_kind) " +
+                "VALUES (@key, @kind) ON CONFLICT (layout_key) DO NOTHING";
+            layoutInsert.Parameters.AddWithValue("key", layoutKey);
+            layoutInsert.Parameters.AddWithValue("kind", packageKind);
+            await layoutInsert.ExecuteNonQueryAsync(ct);
+
+            await using var layoutSel = conn.CreateCommand();
+            layoutSel.Transaction = tx;
+            layoutSel.CommandText =
+                "SELECT layout_id FROM topology.components_layout_design WHERE layout_key = @key";
+            layoutSel.Parameters.AddWithValue("key", layoutKey);
+            var layoutId = (Guid)(await layoutSel.ExecuteScalarAsync(ct))!;
+
+            // 6. INSERT ui_wiring_registry (ON CONFLICT DO NOTHING, then SELECT)
+            var wiringKey = $"{routeKey}:wiring";
+            await using var wiringInsert = conn.CreateCommand();
+            wiringInsert.Transaction = tx;
+            wiringInsert.CommandText =
+                "INSERT INTO topology.ui_wiring_registry (wiring_key, wiring_kind, target_surface) " +
+                "VALUES (@key, @kind, 'route') ON CONFLICT (wiring_key) DO NOTHING";
+            wiringInsert.Parameters.AddWithValue("key", wiringKey);
+            wiringInsert.Parameters.AddWithValue("kind", packageKind);
+            await wiringInsert.ExecuteNonQueryAsync(ct);
+
+            await using var wiringSel = conn.CreateCommand();
+            wiringSel.Transaction = tx;
+            wiringSel.CommandText =
+                "SELECT wiring_id FROM topology.ui_wiring_registry WHERE wiring_key = @key";
+            wiringSel.Parameters.AddWithValue("key", wiringKey);
+            var wiringId = (Guid)(await wiringSel.ExecuteScalarAsync(ct))!;
+
+            // 7. INSERT ui_topology_tensor — slot_key='default' canonical (non-NULL) so that
+            //    ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index)
+            //    correctly prevents a second tensor row on repeated promotes for the same route.
+            await using var tensorInsert = conn.CreateCommand();
+            tensorInsert.Transaction = tx;
+            tensorInsert.CommandText =
+                "INSERT INTO topology.ui_topology_tensor (route_key, package_id, layout_id, wiring_id, slot_key) " +
+                "VALUES (@route, @pkg, @layout, @wiring, 'default') " +
+                "ON CONFLICT (route_key, package_id, layout_id, wiring_id, slot_key, order_index) DO NOTHING";
+            tensorInsert.Parameters.AddWithValue("route", routeKey);
+            tensorInsert.Parameters.AddWithValue("pkg", packageId);
+            tensorInsert.Parameters.AddWithValue("layout", layoutId);
+            tensorInsert.Parameters.AddWithValue("wiring", wiringId);
+            await tensorInsert.ExecuteNonQueryAsync(ct);
+
+            await using var tensorSel = conn.CreateCommand();
+            tensorSel.Transaction = tx;
+            tensorSel.CommandText =
+                "SELECT tensor_id FROM topology.ui_topology_tensor " +
+                "WHERE route_key = @route AND package_id = @pkg AND layout_id = @layout AND wiring_id = @wiring " +
+                "AND slot_key = 'default' LIMIT 1";
+            tensorSel.Parameters.AddWithValue("route", routeKey);
+            tensorSel.Parameters.AddWithValue("pkg", packageId);
+            tensorSel.Parameters.AddWithValue("layout", layoutId);
+            tensorSel.Parameters.AddWithValue("wiring", wiringId);
+            var tensorId = (Guid)(await tensorSel.ExecuteScalarAsync(ct))!;
+
+            // 8. UPDATE components_bucket status = 'promoted' for all items
+            var bucketIdParams = bucketItemIds.Select((_, i) => $"@bid{i}").ToArray();
+            await using var promoteCmd = conn.CreateCommand();
+            promoteCmd.Transaction = tx;
+            promoteCmd.CommandText =
+                $"UPDATE topology.components_bucket SET status = 'promoted', updated_at = now() " +
+                $"WHERE bucket_item_id IN ({string.Join(",", bucketIdParams)}) AND status = 'packaging'";
+            for (var i = 0; i < bucketItemIds.Count; i++)
+                promoteCmd.Parameters.AddWithValue($"bid{i}", bucketItemIds[i]);
+            await promoteCmd.ExecuteNonQueryAsync(ct);
+
+            await tx.CommitAsync(ct);
+
+            _npgsqlLogger.LogInformation(
+                "NpgsqlUiTopologyRepository.PromotePackageFromBucketItemsAsync: committed packageId={PkgId}, routeKey={Route}, components={Count}.",
+                packageId, routeKey, componentIds.Count);
+
+            return new PackageGenerateBatchResult(
+                PackageGenerateCode.Success,
+                tensorId, packageId, layoutId, wiringId,
+                componentIds,
+                bucketItemIds.ToList());
+        }
+        catch (PostgresException ex) when (ex.SqlState == "23505")
+        {
+            await tx.RollbackAsync(ct);
+            _npgsqlLogger.LogWarning(ex,
+                "NpgsqlUiTopologyRepository.PromotePackageFromBucketItemsAsync: constraint violation for routeKey={Route}.", routeKey);
+            return new PackageGenerateBatchResult(
+                PackageGenerateCode.ConstraintViolation, null, null, null, null, [], [],
+                "CONSTRAINT_VIOLATION",
+                "A registry key conflict occurred during batch promote.");
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(ct); } catch { /* best-effort */ }
+            _npgsqlLogger.LogError(ex,
+                "NpgsqlUiTopologyRepository.PromotePackageFromBucketItemsAsync: DB error for routeKey={Route}.", routeKey);
+            return new PackageGenerateBatchResult(
+                PackageGenerateCode.DbUnavailable, null, null, null, null, [], [],
+                "DB_UNAVAILABLE", "Repository unavailable during batch package promotion.");
+        }
     }
 }

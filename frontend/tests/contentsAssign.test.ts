@@ -17,11 +17,11 @@ const existing: ScreenDataShapeSummary = {
   aggregationMeasures: [],
   displayColumns: ["id"],
   logicalTables: [],
-  screenOperationKind: "read",
-  screenOperationKinds: ["read"],
+  screenOperationKind: "list",
+  screenOperationKinds: ["list"],
   userFacingTopologyLabel: "注文",
   columns: [{ name: "id", dataType: "uuid", nullable: false }],
-  relationIntents: [{ joinTableRef: "customers", localKey: "customer_id", remoteKey: "id" }],
+  relationIntents: [{ localTableRef: "orders", joinTableRef: "customers", localKey: "customer_id", remoteKey: "id" }],
   operationEntityBindings: [],
   initialDataRows: [],
 };
@@ -50,7 +50,7 @@ Deno.test("buildAssignPayloadForStep step 2: logicalTables from draft, preserves
 Deno.test("buildAssignPayloadForStep step 2.5: relationIntents only from draft", () => {
   const design = emptyManifestScreenDesign();
   design.relationIntents = [
-    { joinTableRef: "lines", localKey: "order_id", remoteKey: "id" },
+    { localTableRef: "orders", joinTableRef: "lines", localKey: "order_id", remoteKey: "id" },
   ];
   design.columns = [{ name: "wip", dataType: "text", nullable: true }];
 
@@ -63,7 +63,7 @@ Deno.test("buildAssignPayloadForStep step 2.5: relationIntents only from draft",
 Deno.test("buildAssignPayloadForStep step 3: binding fields from draft, columns from existing", () => {
   const design = emptyManifestScreenDesign();
   design.tableRef = "order_lines";
-  design.operationKinds = ["create", "read"];
+  design.operationKinds = ["create", "update"];
   design.searchKeyColumns = ["sku"];
   design.displayColumns = [];
   design.aggregationMeasures = [
@@ -78,7 +78,7 @@ Deno.test("buildAssignPayloadForStep step 3: binding fields from draft, columns 
 
   const payload = buildAssignPayloadForStep(3, manifestId, design, existing);
   assertEquals(payload.tableRef, "order_lines");
-  assertEquals(payload.screenOperationKinds, ["create", "read"]);
+  assertEquals(payload.screenOperationKinds, ["create", "update"]);
   assertEquals(payload.searchKeyColumns, ["sku"]);
   assertEquals(payload.displayColumns, []);
   assertEquals(payload.aggregationMeasures?.length, 2);

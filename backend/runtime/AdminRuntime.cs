@@ -204,9 +204,10 @@ public class AdminRuntime
             "registry_vector:validate"         => await DataValidateRegistryVectorAsync(vector, ct),
             "ui_component_bucket:create"       => await DataCreateBucketItemAsync(vector, ct),
             "ui_component_bucket:list"         => await DataListBucketItemsAsync(vector, ct),
-            "package_generator:generate"       => await DataGenerateAsync(vector, ct),
-            "package_generator:promote"        => await DataPromoteAsync(vector, ct),
-            "ui_topology:promoted_palette"     => await DataPromotedPaletteAsync(ct),
+            "package_generator:generate"        => await DataGenerateAsync(vector, ct),
+            "package_generator:promote"         => await DataPromoteAsync(vector, ct),
+            "package_generator:promote_package" => await DataPromotePackageAsync(vector, ct),
+            "ui_topology:promoted_palette"      => await DataPromotedPaletteAsync(ct),
             "ui_topology:layout_candidates"    => await DataLayoutCandidatesAsync(ct),
             "ui_topology:list_packages"        => await DataListAdminPackagesAsync(ct),
             "ui_topology:list_package_components" => await DataListPackageComponentsAsync(vector, ct),
@@ -654,6 +655,69 @@ public class AdminRuntime
             result.PackageId!.Value.ToString(),
             result.LayoutId!.Value.ToString(),
             result.WiringId!.Value.ToString(),
+            "Package promoted successfully.");
+
+        return (JsonSerializer.SerializeToElement(responseDto), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataPromotePackageAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for package_generator:promote_package"));
+
+        PackageGenerateBatchRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<PackageGenerateBatchRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (request is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(request.RouteKey))
+            return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
+        if (request.BucketItemIds is null || request.BucketItemIds.Count == 0)
+            return (null, new ValidationError("BUCKET_ITEM_IDS_REQUIRED", "bucketItemIds must contain at least one item"));
+
+        var parsedIds = new List<Guid>();
+        foreach (var raw in request.BucketItemIds)
+        {
+            if (!Guid.TryParse(raw, out var id))
+                return (null, new ValidationError("MALFORMED_BUCKET_ITEM_ID", $"bucketItemId '{raw}' is not a valid UUID"));
+            parsedIds.Add(id);
+        }
+
+        var gateError = await CheckCiAttentionPromotionGateAsync(ResolveAuthoringSurface(vector), ct);
+        if (gateError is not null) return (null, gateError);
+
+        var result = await _packageGeneratorRuntime.PromotePackageAsync(request.RouteKey, parsedIds, ct);
+        if (result.Code != PackageGenerateCode.Success)
+        {
+            var errorCode = result.Code switch
+            {
+                PackageGenerateCode.NotFound            => "PACKAGE_NOT_FOUND",
+                PackageGenerateCode.NotBucketed         => "PACKAGE_NOT_PACKAGED",
+                PackageGenerateCode.ConstraintViolation => "CONSTRAINT_VIOLATION",
+                PackageGenerateCode.PromotionFailed     => "PROMOTION_FAILED",
+                _                                       => "PACKAGE_PROMOTE_FAILED"
+            };
+            return (null, new ValidationError(errorCode, result.Message ?? "Batch promotion failed."));
+        }
+
+        var responseDto = new PackageGenerateBatchResponseDto(
+            true,
+            result.TensorId!.Value.ToString(),
+            result.PackageId!.Value.ToString(),
+            result.LayoutId!.Value.ToString(),
+            result.WiringId!.Value.ToString(),
+            result.BucketItemIds.Select(id => id.ToString()).ToList(),
+            result.ComponentIds.Select(id => id.ToString()).ToList(),
             "Package promoted successfully.");
 
         return (JsonSerializer.SerializeToElement(responseDto), null);

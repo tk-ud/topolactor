@@ -110,4 +110,73 @@ public class PackageGeneratorRuntime
         return result;
     }
 
+    /// <summary>
+    /// Generates (bucketed→packaging) all items, then promotes all into a single package for routeKey.
+    /// 1 route = 1 package; package_schema_json stores the bucketItemIds[] vector.
+    /// Already-promoted items skip the generate step.
+    /// </summary>
+    public async Task<PackageGenerateBatchResult> PromotePackageAsync(
+        string routeKey,
+        IReadOnlyList<Guid> bucketItemIds,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(routeKey);
+        if (bucketItemIds.Count == 0)
+            return new PackageGenerateBatchResult(
+                PackageGenerateCode.NotFound, null, null, null, null, [], [],
+                "BUCKET_ITEM_IDS_REQUIRED", "At least one bucketItemId is required.");
+
+        _logger.LogDebug(
+            "PackageGeneratorRuntime.PromotePackageAsync: routeKey={Route}, count={Count}.",
+            routeKey, bucketItemIds.Count);
+
+        // Generate each item (bucketed → packaging); items already in 'packaging' are a no-op.
+        foreach (var bucketItemId in bucketItemIds)
+        {
+            PackageGenerateResult genResult;
+            try
+            {
+                genResult = await _repository.GenerateFromBucketAsync(bucketItemId, routeKey, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "PackageGeneratorRuntime.PromotePackageAsync: generate failed for bucketItemId={Id}.", bucketItemId);
+                return new PackageGenerateBatchResult(
+                    PackageGenerateCode.DbUnavailable, null, null, null, null, [], [],
+                    "DB_UNAVAILABLE", "Repository unavailable during generate step.");
+            }
+
+            if (genResult.Code != PackageGenerateCode.Success && genResult.Code != PackageGenerateCode.NotBucketed)
+            {
+                return new PackageGenerateBatchResult(
+                    genResult.Code, null, null, null, null, [], [],
+                    genResult.ErrorCode, genResult.Message);
+            }
+        }
+
+        PackageGenerateBatchResult result;
+        try
+        {
+            result = await _repository.PromotePackageFromBucketItemsAsync(routeKey, bucketItemIds, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "PackageGeneratorRuntime.PromotePackageAsync: promote failed for routeKey={Route}.", routeKey);
+            return new PackageGenerateBatchResult(
+                PackageGenerateCode.DbUnavailable, null, null, null, null, [], [],
+                "DB_UNAVAILABLE", "Repository unavailable during promote step.");
+        }
+
+        if (result.Code == PackageGenerateCode.Success)
+        {
+            _logger.LogInformation(
+                "PackageGeneratorRuntime.PromotePackageAsync: success packageId={PkgId}, routeKey={Route}, components={Count}.",
+                result.PackageId, routeKey, result.ComponentIds.Count);
+        }
+
+        return result;
+    }
+
 }

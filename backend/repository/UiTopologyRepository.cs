@@ -205,4 +205,28 @@ public class UiTopologyRepository
     {
         throw new NotImplementedException("UiTopologyRepository.UpdatePackageWiringAsync must be overridden.");
     }
+
+    /// <summary>
+    /// Atomically promotes multiple bucket items into a single package for routeKey (1 route = 1 package).
+    /// All items must be in 'packaging' status when this is called (call GenerateFromBucketAsync first).
+    ///
+    /// Key derivation:
+    ///   package_key = "{routeKey}:pkg"
+    ///   layout_key  = "{routeKey}:layout"
+    ///   wiring_key  = "{routeKey}:wiring"
+    ///
+    /// package_schema_json stores { "bucketItemIds": [...], "componentKeys": [...] }.
+    /// Idempotent: ON CONFLICT semantics handle pre-existing keys.
+    ///
+    /// Returns PackageGenerateBatchResult.Success with all IDs and member sets on success.
+    /// Production: overridden by NpgsqlUiTopologyRepository.
+    /// </summary>
+    public virtual Task<PackageGenerateBatchResult> PromotePackageFromBucketItemsAsync(
+        string routeKey,
+        IReadOnlyList<Guid> bucketItemIds,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.PromotePackageFromBucketItemsAsync must be overridden by a production implementation.");
+    }
 }

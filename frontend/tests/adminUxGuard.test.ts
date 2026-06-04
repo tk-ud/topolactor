@@ -605,11 +605,15 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
     aggregationKey: "col_a",
     aggregationFunction: "avg",
     aggregationColumns: ["col_b"],
+    aggregationMeasures: [],
     displayColumns: ["col_a", "col_b"],
     logicalTables: [],
     screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
     columns: [{ name: "col_a", dataType: "text", nullable: true }],
     relationIntents: [],
+    operationEntityBindings: [],
     initialDataRows: [],
   };
   const draft = screenDesignFromBackendShape(shape, "list");

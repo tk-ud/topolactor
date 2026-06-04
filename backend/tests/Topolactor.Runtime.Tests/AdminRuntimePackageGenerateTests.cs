@@ -114,6 +114,109 @@ public class AdminRuntimePackageGenerateTests
         Assert.Equal("PACKAGE_NOT_BUCKETED", error!.Code);
     }
 
+    [Fact]
+    public async Task ExecuteDataAsync_PromotePackage_TwoBucketItems_ReturnsSinglePackageWithVectors()
+    {
+        var tensorId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+        var layoutId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+        var compId1 = Guid.NewGuid();
+        var compId2 = Guid.NewGuid();
+        var bucketId1 = Guid.NewGuid();
+        var bucketId2 = Guid.NewGuid();
+
+        var batchResult = new PackageGenerateBatchResult(
+            PackageGenerateCode.Success,
+            tensorId, packageId, layoutId, wiringId,
+            [compId1, compId2],
+            [bucketId1, bucketId2]);
+
+        var runtime = CreateRuntime(new StubUiTopologyRepository(
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null),
+            batchResult: batchResult));
+
+        var vector = new OperationVector("admin", "package_generator", "promote_package", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                routeKey = "admin:ui-builder",
+                bucketItemIds = new[] { bucketId1.ToString(), bucketId2.ToString() }
+            }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal(packageId.ToString(), data.Value.GetProperty("packageId").GetString());
+        Assert.Equal(layoutId.ToString(), data.Value.GetProperty("layoutId").GetString());
+        Assert.Equal(wiringId.ToString(), data.Value.GetProperty("wiringId").GetString());
+        var componentIds = data.Value.GetProperty("componentIds").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Equal(2, componentIds.Count);
+        Assert.Contains(compId1.ToString(), componentIds);
+        Assert.Contains(compId2.ToString(), componentIds);
+        var returnedBucketIds = data.Value.GetProperty("bucketItemIds").EnumerateArray().Select(e => e.GetString()).ToList();
+        Assert.Equal(2, returnedBucketIds.Count);
+        Assert.Contains(bucketId1.ToString(), returnedBucketIds);
+        Assert.Contains(bucketId2.ToString(), returnedBucketIds);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_PromotePackage_MissingRouteKey_ReturnsError()
+    {
+        var runtime = CreateRuntime(new StubUiTopologyRepository(
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null)));
+
+        var vector = new OperationVector("admin", "package_generator", "promote_package", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                bucketItemIds = new[] { Guid.NewGuid().ToString() }
+            }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("ROUTE_KEY_REQUIRED", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_PromotePackage_EmptyBucketItemIds_ReturnsError()
+    {
+        var runtime = CreateRuntime(new StubUiTopologyRepository(
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null)));
+
+        var vector = new OperationVector("admin", "package_generator", "promote_package", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                routeKey = "admin:ui-builder",
+                bucketItemIds = Array.Empty<string>()
+            }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("BUCKET_ITEM_IDS_REQUIRED", error!.Code);
+    }
+
+    [Fact]
+    public async Task ExecuteDataAsync_PromotePackage_InvalidUuidInBucketItemIds_ReturnsError()
+    {
+        var runtime = CreateRuntime(new StubUiTopologyRepository(
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null)));
+
+        var vector = new OperationVector("admin", "package_generator", "promote_package", null, "admin",
+            JsonSerializer.SerializeToElement(new
+            {
+                routeKey = "admin:ui-builder",
+                bucketItemIds = new[] { "not-a-uuid" }
+            }), null);
+
+        var (data, error) = await runtime.ExecuteDataAsync(vector);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("MALFORMED_BUCKET_ITEM_ID", error!.Code);
+    }
+
     private static AdminRuntime CreateRuntime(UiTopologyRepository uiRepo)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "test-double");
@@ -128,12 +231,17 @@ public class AdminRuntimePackageGenerateTests
     {
         private readonly PackageGenerateResult _generateResult;
         private readonly PackageGenerateResult _promoteResult;
+        private readonly PackageGenerateBatchResult? _batchResult;
 
-        public StubUiTopologyRepository(PackageGenerateResult generateResult, PackageGenerateResult? promoteResult = null)
+        public StubUiTopologyRepository(
+            PackageGenerateResult generateResult,
+            PackageGenerateResult? promoteResult = null,
+            PackageGenerateBatchResult? batchResult = null)
             : base(NullLogger<UiTopologyRepository>.Instance, "test-double")
         {
             _generateResult = generateResult;
             _promoteResult = promoteResult ?? generateResult;
+            _batchResult = batchResult;
         }
 
         public override Task<PackageGenerateResult> GenerateFromBucketAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
@@ -141,5 +249,13 @@ public class AdminRuntimePackageGenerateTests
 
         public override Task<PackageGenerateResult> PromoteBucketItemAsync(Guid bucketItemId, string routeKey, CancellationToken ct = default)
             => Task.FromResult(_promoteResult);
+
+        public override Task<PackageGenerateBatchResult> PromotePackageFromBucketItemsAsync(
+            string routeKey, IReadOnlyList<Guid> bucketItemIds, CancellationToken ct = default)
+        {
+            if (_batchResult is null)
+                throw new InvalidOperationException("StubUiTopologyRepository: _batchResult not configured for batch promote.");
+            return Task.FromResult(_batchResult);
+        }
     }
 }
