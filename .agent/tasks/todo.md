@@ -11,6 +11,7 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
 | `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 / Step3関連項目表示 | 2 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
+| `admin-contents-data-editor-conformance` | Step3 データ編集 / 型式診断 / CI Attention表層 | 4 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 | `search-aggregation-runtime-operator-contract` | Step3 read/query wiring runtime実行契約 / UIイベント接続 | 6 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 
@@ -159,6 +160,45 @@
   - 改善方針: `relationIntents` の local/remote target を解決する Step 3 用 field source を追加し、`qualifiedColumnsFromLogicalTables` 相当の候補集合に related table columns を合成する。draft remote は `design.logicalTables` から、active remote は `listRelationshipRemoteTargets` の logicalTables から取得する。未解決 remote_manifest_id / joinTableRef / remoteKey / column は silent fallback せず blocking error または明示警告にし、`ContentsStep3FieldMatrix`, displayColumns, search/aggregation selectors, initialDataRows, `SamplePreviewPanel`, import preview の候補集合を同じ read model に揃える。
   - 対象ファイル候補: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/components/ContentsStep3FieldMatrix.tsx`, `frontend/lib/manifestLogicalTables.ts`, `frontend/lib/manifestScreenDesign.ts`, `frontend/lib/contentsAssign.ts`, `frontend/api/adminApi.ts`, `frontend/tests/adminUxGuard.test.ts`, relationship / Step3 frontend tests。
   - 完了条件: Step 2.5 で relation した draft/active table の項目が Step 3 の操作対象・表示列・検索/集計・サンプル表示の候補に出る。local/remote の同名項目が衝突せず、保存 payload に relation 由来 field key が保持される。未解決 relation は silent fallback せず明示エラーになる。テストで「Step2.5 relation 済み table 項目が Step3 に表示される」退行を固定する。
+
+---
+
+## Bundle `admin-contents-data-editor-conformance`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+**残差の性質:** Step3 のデータ入力は手入力 `initialDataRows` と CSV/JSON import preview/apply が別 surface で、contents 上で同じ表として継続修正できない。型指定済み column に型式外値を保存できること自体は許容してよいが、型式外・nullable違反・未知列などを CI Attention / admin表層に非blocking warning として露出する checker/read model が Step3 manual path にはない。
+
+**未実装 todo:**
+- [ ] `/admin/contents` Step3 のデータ入力を `ContentsDataEditor` 等の共有コンポーネントへ切り出し、手入力行と CSV/JSON import preview/staged rows を同一グリッドで編集できるようにする
+- [ ] `AdminImportRuntime.ValidateRow` / `ValidateFieldType` 相当を import 専用から `contentDataConformance` 等の共有 checker へ抽出・拡張し、manual `initialDataRows` と import rows の両方に同じ型式診断を適用する
+- [ ] import snapshot/records 由来の行を contents Step3 で再読込・修正・再保存できる read/update API または staged data source 境界を定義し、manual row / imported row / edited row の source lineage を保持する
+- [ ] 型式外値、nullable違反、未知列、relation由来項目の未解決を blocking 保存エラーではなく CI Attention / Step3 表層 warning として表示し、必要に応じて `/admin/manifests` / promotion前診断にも集約する
+
+**対象ファイル候補:**
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/db-schema.yaml`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/islands/AdminImport.tsx`
+- `frontend/components/ContentsDataEditor.tsx`（新規候補）
+- `frontend/lib/contentDataConformance.ts`（新規候補）
+- `frontend/lib/manifestScreenDesign.ts`
+- `frontend/lib/contentsAssign.ts`
+- `frontend/api/adminApi.ts`
+- `backend/runtime/AdminImportRuntime.cs`
+- `backend/runtime/AdminRuntime.cs`
+- `backend/repository/AdminImportRepository.cs`
+- `backend/repository/NpgsqlAdminImportRepository.cs`
+- Step3 data editor / import edit / conformance diagnostics tests
+
+**完了条件:**
+- 手入力で追加した行と CSV/JSON 取り込み後の行を、`/admin/contents` Step3 上で同じ編集グリッドから修正できる
+- column `dataType` / `nullable` / relation field source に基づく型式診断が manual/import の両経路で同一に実行される
+- 型式外値は保存可能だが、CI Attention / Step3 表層に非blocking warning として露出する
+- import 由来行は source snapshot/record lineage を失わず、修正後データの保存・再診断ができる
+- frontend/backend tests で manual row と import row の統一編集、型式外 warning 表示、保存ブロックしない挙動を固定する
 
 ---
 
