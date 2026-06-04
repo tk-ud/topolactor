@@ -83,6 +83,124 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 - SSOT / DB schema / frontend / backend / tests が同じ enum 正本境界を参照している
 
 ---
+## Bundle `admin-master-roster-management-ui`
+
+**SSOT:** 新規作成予定 `docs/design/admin-master-roster-management-ssot.yaml`
+**関連SSOT:** `docs/design/enum-dictionary-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+**実装順序:**
+
+1. enum canonical tables / SSOT
+2. enum seed
+3. enum UI
+4. users UI
+
+**auth seed 参照後の設計方針:**
+
+* auth と同様に、enum も topology / manifest / screen_data_shape 内へ正本値を散らさない
+* enum の正本は `enum_table` / `enum_group` 側に置く
+* topology / manifest / screen_data_shape には enum item 定義そのものではなく、enum_group 参照だけを保持する
+* seed は `ON CONFLICT` 前提の idempotent seed とする
+* users 用 enum seed は `/admin/users` 実装より先に投入する
+* `/admin/users` の `status` は seed 済み enum_group を参照する
+* enum_group 未解決時は silent fallback せず blocking error にする
+* `logs.diff` は auth.login_events 的な監査面として扱い、登録 / 更新 / 削除 / 状態変更の before/after を保存する
+
+**未実装 todo:**
+
+* [ ] `docs/design/enum-dictionary-ssot.yaml` を作成し、enum item / enum_group / index_num / uuid / group items の正本境界を定義する
+* [ ] `docs/design/db-schema.yaml` に `enum_table` / `enum_group` 相当の物理テーブル定義を追記する
+* [ ] enum item は `uuid,index_num,name` を持つ正本として定義する
+* [ ] enum_group は `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義する
+* [ ] enum_group の `items[enum index num]` を属性候補集合ベクトルとして扱う契約をSSOT化する
+* [ ] enum seed は再実行しても重複・破壊しない idempotent seed とする
+* [ ] users に必要な enum_group / enum item を seed 化する
+* [ ] users 用 enum seed に user status enum_group を含める
+
+  * 例: `active`, `inactive`, `suspended`, `archived`
+* [ ] `/admin/enums` を追加し、enum名簿CRUDを扱う
+* [ ] `/admin/enums` トップに Text検索欄を設置する
+* [ ] `/admin/enums` トップに 全件出力 ボタンを設置する
+* [ ] `/admin/enums` トップに 新規追加 ボタンを設置し、Modal form で enum 登録できるようにする
+* [ ] `/admin/enums` の名簿行クリックで enum inline update できるようにする
+* [ ] `/admin/enums` の名簿行クリック後、confirm を経由して enum 削除できるようにする
+* [ ] `/admin/users` を追加し、user名簿とuser状態管理を扱う
+* [ ] `/admin/users` トップに Text検索欄を設置する
+* [ ] `/admin/users` トップに 全件出力 ボタンを設置する
+* [ ] `/admin/users` トップに 新規追加 ボタンを設置し、Modal form で user 登録できるようにする
+* [ ] `/admin/users` の名簿行クリックで user inline update できるようにする
+* [ ] `/admin/users` の名簿行クリック後、confirm を経由して user 削除できるようにする
+* [ ] `/admin/users` の user状態管理に `approve:boolean`, `status:enum`, `suspended_from`, `suspended_until`, `last_login_at` を持たせる
+* [ ] `/admin/users` の `status` は seed 済み enum_group を参照し、手入力ではなく select にする
+* [ ] `approve=false` または `status=suspended` の扱いを auth/runtime 境界とSSOTで定義する
+* [ ] `suspended_from` / `suspended_until` による停止期間を定義する
+* [ ] `suspended_until=null` の扱いを無期限停止または未設定としてSSOTで明確化する
+* [ ] `last_login_at` は auth/login event 由来の readonly 投影とし、通常の inline edit 対象にしない
+* [ ] 必要に応じて `last_login_ip` / `last_login_user_agent` は詳細情報 disclosure 側に隔離する
+* [ ] 停止理由・管理メモ用に `state_note:text|null` を持たせるか判断し、採用する場合は更新ログ対象にする
+* [ ] user状態の登録・更新時に enum_group 未解決なら silent fallback せず blocking error にする
+* [ ] 登録 / 更新 / 削除 / user状態変更の差分ログを `logs.diff` に保存する
+* [ ] `logs.diff` の差分形式を定義する
+
+  * `actor`
+  * `target_table`
+  * `target_id`
+  * `operation`
+  * `before`
+  * `after`
+  * `changed_fields`
+  * `timestamp`
+* [ ] 検索 / 全件出力 / 登録 / 更新 / 削除が silent fallback しないようにする
+* [ ] Modal / inline update / confirm delete / enum seed dependency / user status enum select / last_login readonly の regression test を追加する
+
+**対象ファイル候補:**
+
+* `docs/design/admin-master-roster-management-ssot.yaml`
+* `docs/design/enum-dictionary-ssot.yaml`
+* `docs/design/auth-db-session-credential-ssot.yaml`
+* `docs/design/admin-console-workflow-ssot.yaml`
+* `docs/design/db-schema.yaml`
+* `docs/design/runtime-orchestration-ssot.yaml`
+* `db/enum_tables.sql`
+* `db/enum_seed.sql`
+* `frontend/routes/admin/index.tsx`
+* `frontend/routes/admin/users.tsx`
+* `frontend/routes/admin/enums.tsx`
+* `frontend/islands/AdminUsersRoster.tsx`
+* `frontend/islands/AdminEnumsRoster.tsx`
+* `frontend/hooks/useConfirm.tsx`
+* `frontend/tests/adminUxGuard.test.ts`
+* `frontend/tests/adminMasterRoster.test.ts`
+* `backend/schema/ManifestManagementContracts.cs`
+* `backend/runtime/AdminRuntime.cs`
+* `backend/repository/ManifestRepository.cs`
+* `backend/repository/NpgsqlManifestRepository.cs`
+* backend admin master roster tests
+
+**完了条件:**
+
+* enum item が `uuid,index_num,name` を持つ正本として定義されている
+* enum_group が `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義されている
+* enum seed が idempotent である
+* users に必要な enum が seed として先に投入される
+* topology / manifest / screen_data_shape には enum item 定義そのものを散らさず、enum_group 参照だけを保持している
+* `/admin/enums` で enum名簿CRUDができる
+* `/admin/users` で user名簿とuser状態管理ができる
+* `/admin/users` の状態管理が seed 済み enum を参照している
+* `/admin/users` の `status` が select 入力になっている
+* `/admin/users` の `approve`, `status`, 停止期間が auth/runtime 境界と矛盾しない
+* `last_login_at` が readonly 投影として扱われる
+* 各トップに Text検索欄と全件出力がある
+* 新規追加は Modal form で行える
+* 更新は名簿クリック後の inline edit で行える
+* 削除は confirm を通らない限り実行されない
+* 登録 / 更新 / 削除 / user状態変更の差分が `logs.diff` に保存される
+* user / user状態 / enum の管理UIが DB直編集や hardcoded候補へ逆流しない
+
+
+---
 
 ## Bundle `admin-contents-data-editor-conformance`
 
