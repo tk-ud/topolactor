@@ -882,18 +882,18 @@ public class NpgsqlContextRouteRepository : ContextRouteRepository
                     "ON CONFLICT (event_id) DO NOTHING";
                 archCmd.Parameters.AddWithValue("eventId",    row.EventId);
                 archCmd.Parameters.AddWithValue("sessionId",  row.SessionId);
-                archCmd.Parameters.AddWithValue("userId",     row.UserId);
-                archCmd.Parameters.AddWithValue("role",       row.Role);
-                archCmd.Parameters.AddWithValue("class",      row.Class);
+                archCmd.Parameters.AddWithValue("userId",     row.UserId ?? DBNull.Value);
+                archCmd.Parameters.AddWithValue("role",       row.Role ?? DBNull.Value);
+                archCmd.Parameters.AddWithValue("class",      row.Class ?? DBNull.Value);
                 archCmd.Parameters.AddWithValue("tableName",  row.TableName);
-                archCmd.Parameters.AddWithValue("recordId",   row.RecordId);
+                archCmd.Parameters.AddWithValue("recordId",   row.RecordId ?? DBNull.Value);
                 archCmd.Parameters.AddWithValue("operation",  row.Operation);
                 archCmd.Parameters.Add(
                     new NpgsqlParameter("tokenIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid)
                     { Value = row.TokenIds });
                 archCmd.Parameters.AddWithValue("createdAt",      row.CreatedAt);
-                archCmd.Parameters.AddWithValue("nextOp",         row.NextOpHint);
-                archCmd.Parameters.AddWithValue("nextTokenIds",   row.NextTokenIdsHint);
+                archCmd.Parameters.AddWithValue("nextOp",         row.NextOpHint ?? DBNull.Value);
+                archCmd.Parameters.AddWithValue("nextTokenIds",   row.NextTokenIdsHint ?? DBNull.Value);
                 await archCmd.ExecuteNonQueryAsync(ct);
             }
 

@@ -259,10 +259,10 @@ public class RuntimeExecutorTests
 
         Assert.True(response.Success);
         Assert.Single(response.Emission!.JumpEvents!);
-        Assert.Equal("hub", response.Emission.JumpEvents[0].Scope);
-        Assert.Equal(7, response.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(8, response.Emission.JumpEvents[0].CurrentAddress);
-        Assert.Equal(0, response.Emission.JumpEvents[0].PlannedAddress);
+        Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal(7, response.Emission.JumpEvents![0].PastAddress);
+        Assert.Equal(8, response.Emission.JumpEvents![0].CurrentAddress);
+        Assert.Equal(0, response.Emission.JumpEvents![0].PlannedAddress);
     }
 
     [Fact]
@@ -284,10 +284,10 @@ public class RuntimeExecutorTests
 
         Assert.True(response.Success);
         Assert.Single(response.Emission!.JumpEvents!);
-        Assert.Equal("hub", response.Emission.JumpEvents[0].Scope);
-        Assert.Equal(0, response.Emission.JumpEvents[0].PastAddress);
-        Assert.Equal(8, response.Emission.JumpEvents[0].CurrentAddress);
-        Assert.Equal(9, response.Emission.JumpEvents[0].PlannedAddress);
+        Assert.Equal("hub", response.Emission.JumpEvents![0].Scope);
+        Assert.Equal(0, response.Emission.JumpEvents![0].PastAddress);
+        Assert.Equal(8, response.Emission.JumpEvents![0].CurrentAddress);
+        Assert.Equal(9, response.Emission.JumpEvents![0].PlannedAddress);
     }
 
     [Fact]

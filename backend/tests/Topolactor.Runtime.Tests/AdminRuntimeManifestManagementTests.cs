@@ -564,10 +564,12 @@ public class AdminRuntimeManifestManagementTests
             new OperationVector("admin", "enum_dictionary", "list_groups", null, "admin", null, null), default);
 
         Assert.Null(error);
-        Assert.Equal(1, data!.Value.GetArrayLength());
-        Assert.Equal(
-            InMemoryEnumDictionaryRepository.DemoGroupId.ToString(),
-            data.Value[0].GetProperty("groupId").GetString());
+        Assert.Equal(2, data!.Value.GetArrayLength());
+        var groupIds = data.Value.EnumerateArray()
+            .Select(e => e.GetProperty("groupId").GetString())
+            .ToHashSet(StringComparer.Ordinal);
+        Assert.Contains(InMemoryEnumDictionaryRepository.DemoGroupId.ToString(), groupIds);
+        Assert.Contains(InMemoryEnumDictionaryRepository.UserStatusGroupId.ToString(), groupIds);
     }
 
     private static AdminRuntime CreateRuntime(
