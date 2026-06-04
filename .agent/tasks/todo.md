@@ -16,6 +16,73 @@
 | `sql-attention-m7` | SQL Attention phase_vector 生成 | partial | 1 | `docs/design/sql-attention-logs-ssot.yaml` |
 
 ---
+## Bundle `enum-dictionary-canonicalization`
+
+**SSOT:** 新規作成予定 `docs/design/enum-dictionary-ssot.yaml`  
+**関連SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+**残差の性質:**  
+enum は現在、画面入力時の select 候補・状態管理・属性候補として扱う必要があるが、正本化された辞書空間として未定義。テーブル定義後のデータ登録で属性ごとの enum_group が選択されない場合、手入力が増え、状態値・属性値・select候補・検索軸が分散する。auth と同様に、enum も topology/jsonb 側の便利設定ではなく、状態空間・属性空間の辞書正本として扱う必要がある。
+
+**目的:**  
+enum item を点、enum_group を点集合ベクトルとして正本化し、属性定義から select 候補、状態遷移、検索/近傍探索まで一貫して参照できるようにする。
+
+**改善方針:**  
+- `enum_table` を enum item 正本として定義する
+  - `uuid`
+  - `index_num`
+  - `name`
+- `enum_group` を enum item 集合の正本として定義する
+  - `uuid`
+  - `index_num`
+  - `group_name`
+  - `items[enum index num]`
+- `index_num` は enum 空間内のベクトル/順序/近傍検索用座標として扱う
+- `uuid` は永続ID、`index_num` は探索・UI候補・ベクトル化の参照値として分離する
+- テーブル定義の column/attribute に `enum_group` 参照を持たせる
+- データ入力UIでは、column に enum_group が紐づく場合、手入力ではなく select として候補を出す
+- enum_group の `items[enum index num]` により、属性ごとの候補集合をベクトル検索可能にする
+- enum は auth と同様に正本境界を持ち、画面ごとのローカル候補や hardcoded select に分散させない
+
+**未実装 todo:**
+- [ ] `docs/design/enum-dictionary-ssot.yaml` を作成し、enum item / enum group / index_num / uuid / group items の正本境界を定義する
+- [ ] `docs/design/db-schema.yaml` に `enum_table` / `enum_group` 相当の物理テーブル定義を追記する
+- [ ] `docs/design/admin-console-workflow-ssot.yaml` に、Step 2 テーブル定義の column が enum_group を参照できる契約を追記する
+- [ ] frontend の Step 2 column 定義 UI に enum_group 選択を追加する
+- [ ] frontend の Step 3 初期データ入力で enum_group 参照付き column を select 入力にする
+- [ ] backend 保存/投影で column enum_group 参照を `screen_data_shape` または対応 topology intent に保持する
+- [ ] enum_group 未解決時は silent fallback せず blocking error にする
+- [ ] enum item / enum_group / column enum_group 参照 / select 入力化の regression test を追加する
+- [ ] enum_group `items[enum index num]` を検索・近傍探索に使うための projection/read model 方針をSSOT化する
+
+**対象ファイル候補:**
+- `docs/design/enum-dictionary-ssot.yaml`
+- `docs/design/db-schema.yaml`
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/lib/manifestScreenDesign.ts`
+- `frontend/lib/manifestTopologyExtensions.ts`
+- `frontend/lib/contentsAssign.ts`
+- `frontend/tests/adminUxGuard.test.ts`
+- `backend/schema/ManifestManagementContracts.cs`
+- `backend/runtime/AdminRuntime.cs`
+- `backend/repository/ManifestRepository.cs`
+- `backend/repository/NpgsqlManifestRepository.cs`
+- backend manifest management tests
+
+**完了条件:**
+- enum item が `uuid,index_num,name` を持つ正本として定義されている
+- enum_group が `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義されている
+- table/column 定義から enum_group を参照できる
+- enum_group 参照付き column はデータ入力時に select 候補として表示される
+- enum_group 未解決時に silent fallback しない
+- enum index_num 群が属性候補集合ベクトルとして検索/近傍探索に利用可能な形で保存・投影される
+- SSOT / DB schema / frontend / backend / tests が同じ enum 正本境界を参照している
+
+---
 
 ## Bundle `admin-contents-data-editor-conformance`
 
