@@ -60,7 +60,7 @@ export default function UiBuilderFlowStepper({
       aria-label="UI ビルダー作業フロー"
     >
       <div class="mb-2.5 flex items-center gap-2">
-        <span class="text-xs font-semibold text-blue-900">Step 4 — package 編集ルート</span>
+        <span class="text-xs font-semibold text-blue-900">Step 4 — パッケージ編集ルート</span>
         <span class="text-[0.65rem] text-blue-600">
           — 現在: <strong>{activeTab}</strong>
         </span>

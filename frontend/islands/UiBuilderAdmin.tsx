@@ -1427,56 +1427,6 @@ function BucketPackageRouteFields({
 
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
-async function packageBucketItem(
-  bucketItemId: string,
-  routeKey: string,
-  status: BucketStatusResult["status"],
-  componentKey?: string,
-): Promise<{ handoff: PackagedHandoff | null; error?: ValidationError[] }> {
-  if (status === "promoted") {
-    const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
-    const promoted = paletteBody?.emission?.data as PromotedPaletteEntry[] | undefined;
-    const row = Array.isArray(promoted)
-      ? promoted.find((p) =>
-        componentKey ? p.componentKey === componentKey : p.routeKey === routeKey
-      )
-      : undefined;
-    if (row?.packageId && row.layoutId) {
-      return { handoff: { packageId: row.packageId, routeKey: row.routeKey, layoutId: row.layoutId } };
-    }
-    return {
-      handoff: null,
-      error: [{ code: "ALREADY_PROMOTED", message: "既に配置可能です。layout タブでパッケージを選択してください。" }],
-    };
-  }
-  if (status === "bucketed") {
-    const genBody = await dispatchAdminOp("package_generator", "generate", {
-      bucketItemId,
-      routeKey,
-    });
-    if (dispatchOpFailed(genBody)) {
-      return { handoff: null, error: genBody?.errors ?? [{ code: "GENERATE_FAILED", message: "パッケージ化（generate）に失敗しました。" }] };
-    }
-  } else if (status !== "packaging") {
-    return {
-      handoff: null,
-      error: [{ code: "INVALID_BUCKET_STATUS", message: `バケット状態が不正です: ${status}` }],
-    };
-  }
-  const promBody = await dispatchAdminOp("package_generator", "promote", {
-    bucketItemId,
-    routeKey,
-  });
-  const handoff = parsePackagedHandoff(promBody, routeKey);
-  if (!handoff) {
-    return {
-      handoff: null,
-      error: promBody?.errors ?? [{ code: "PROMOTE_FAILED", message: "配置可能化（promote）に失敗しました。" }],
-    };
-  }
-  return { handoff };
-}
-
 function BucketSection({
   onNavigate,
   onPackaged,
@@ -1587,12 +1537,19 @@ function BucketSection({
     setLoading(true);
     setErrors([]);
     try {
-      // Step 1: ensure all items exist in the bucket (create if absent)
+      // Step 1: ensure all items exist in the bucket (create if absent).
+      // Already-promoted components must not be re-bucketed: skip them.
       const bucketItemIds: string[] = [];
+      let skippedPromoted = 0;
       for (const key of keys) {
         const entry = COMPONENT_CATALOG_ENTRIES.find((c) => c.componentKey === key);
         if (!entry) continue;
         const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
+        // Guard: already-promoted components must not generate duplicate bucket/package entries.
+        if (bucketStatus.status === "promoted") {
+          skippedPromoted++;
+          continue;
+        }
         let bucketId = bucketStatus.bucketItemId;
         if (!bucketId) {
           const body = await dispatchAdminOp("ui_component_bucket", "create", {
@@ -1617,7 +1574,11 @@ function BucketSection({
       }
 
       if (bucketItemIds.length === 0) {
-        setStatus("パッケージ化結果を取得できませんでした。");
+        if (skippedPromoted > 0) {
+          setStatus("選択した部品は既に配置可能です。layout タブでパッケージを選択してください。");
+        } else {
+          setStatus("パッケージ化結果を取得できませんでした。");
+        }
         return;
       }
 
@@ -1692,7 +1653,7 @@ function BucketSection({
 
   const handleCreateManual = async (componentKey: string, sourcePath: string, componentKind: string, metadataJson: string) => {
     if (!componentKey || !sourcePath || !componentKind) {
-      setStatus("componentKey / sourcePath / componentKind は必須です。");
+      setStatus("部品キー / sourcePath / 部品種別 は必須です。");
       return;
     }
     setLoading(true);
@@ -1775,7 +1736,7 @@ function BucketSection({
   return (
     <div>
       <p class="text-muted mb-3">
-        部品を複数選択し、1 回の submit でパッケージ化します（編集ルートは package のみ）。
+        部品を複数選択し、1 回の submit でパッケージ化します（編集ルートはパッケージのみ）。
       </p>
 
       {candidateErrors.length > 0 && (
@@ -2016,26 +1977,32 @@ function ManualBucketCreateForm({
     }
   };
 
+  const handleKeyInput = (e: Event) =>
+    setComponentKey((e.target as HTMLInputElement).value);
+  const handleSourcePathInput = (e: Event) =>
+    setSourcePath((e.target as HTMLInputElement).value);
+  const handleKindInput = (e: Event) =>
+    setComponentKind((e.target as HTMLInputElement).value);
+
   return (
     <div>
       <div class="flex flex-wrap gap-2">
         <input
           value={componentKey}
-          onInput={(e) => setComponentKey((e.target as HTMLInputElement).value)}
-          placeholder="componentKey"
+          onInput={handleKeyInput}
+          placeholder="部品キー"
           class="input-mono w-auto text-xs"
         />
         <input
           value={sourcePath}
-          onInput={(e) => setSourcePath((e.target as HTMLInputElement).value)}
+          onInput={handleSourcePathInput}
           placeholder="sourcePath"
           class="input-mono flex-1 text-xs"
         />
         <input
           value={componentKind}
-          onInput={(e) =>
-            setComponentKind((e.target as HTMLInputElement).value)}
-          placeholder="componentKind"
+          onInput={handleKindInput}
+          placeholder="部品種別"
           class="input-mono w-auto text-xs"
         />
       </div>
@@ -3935,8 +3902,8 @@ function LayoutBuilderSection({
 
       {patchSummary && <LayoutPatchSummaryPanel summary={patchSummary} />}
 
-      <Accordion title="開発者向け情報 — payload / backend JSON" defaultOpen={false}>
-        <p class="text-muted-xs mb-2">v2 payload には x/y/width/height が含まれます。</p>
+      <Accordion title="詳細情報（開発者向け）" defaultOpen={false}>
+        <p class="text-muted-xs mb-2">v2 ビジュアル座標 (x/y/width/height) が含まれます。</p>
         <pre class="pre-box max-h-40 overflow-y-auto m-0 mb-2">{tensorPatchJson}</pre>
         {debugJson && (
           <pre class="pre-box max-h-[200px] overflow-y-auto border border-gray-200 m-0">{debugJson}</pre>
@@ -4071,7 +4038,7 @@ function PackageWiringEditor({
     <section class="mt-3 rounded border border-indigo-100 bg-indigo-50/40 p-3 text-xs">
       <h4 class="font-semibold text-indigo-900">パッケージ配線（編集）</h4>
       <p class="text-muted-xs mb-2">
-        イベント配線の種別と接続先サーフェスを編集します。dispatcher の raw フィールドは詳細設定のみです。
+        イベント配線の種別と接続先サーフェスを編集します。詳細設定は展開してご確認ください。
       </p>
       {loadStatus && <p class="mb-2 text-slate-600">{loadStatus}</p>}
       {wiring && (
@@ -4109,7 +4076,7 @@ function PackageWiringEditor({
               <input
                 class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                 value={targetRef}
-                placeholder="例: manifest:my-page / route:admin:demo"
+                placeholder="例: route:admin:demo"
                 onInput={(e) => setTargetRef((e.target as HTMLInputElement).value)}
               />
             </label>
@@ -4215,10 +4182,10 @@ function PackageDesignPanel({
     <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
       <h3 class="font-semibold">パッケージ選択（編集ルート）</h3>
       <p class="text-muted-xs mb-2 text-amber-800">
-        色・形・トークン・リアクション意図は component design として保存します（CSS 辞書トークンが正本）。
+        色・形・トークン・リアクション意図はデザイン設定として保存します（CSS 辞書トークンが正本）。
       </p>
       <p class="text-muted-xs mb-2">
-        layout / component design / 配線は選択したパッケージにスコープします。
+        layout / デザイン設定 / 配線は選択したパッケージにスコープします。
       </p>
       <label class="block text-xs mb-2">
         パッケージ
@@ -4313,7 +4280,7 @@ function PackageDesignPanel({
         <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
       </div>
       <button type="button" class="btn-primary mt-2 text-xs" onClick={handleUpsertDesign}>
-        component design を保存
+        デザイン設定を保存
       </button>
       {status && <p class="mt-2 text-xs">{status}</p>}
       <ConfirmDialogHost />
@@ -4369,7 +4336,7 @@ export default function UiBuilderAdmin(): JSX.Element {
         class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         role="note"
       >
-        Step 4 の編集ルートは<strong> パッケージのみ</strong>です。layout / component design / 配線は
+        Step 4 の編集ルートは<strong> パッケージのみ</strong>です。layout / デザイン設定 / 配線は
         パッケージ選択後に編集してください。カタログ・CI は参照専用（編集ルートではありません）。
       </div>
 

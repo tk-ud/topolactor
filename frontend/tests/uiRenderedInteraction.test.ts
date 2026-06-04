@@ -965,7 +965,16 @@ Deno.test("ContentsPromotionPanel error surface: source has error/status display
 Deno.test("ContentsScreenDesignPanel render: renders without throwing", () => {
   let html = "";
   let threw = false;
-  try { html = renderHtml(ContentsScreenDesignPanel); } catch { threw = true; }
+  try {
+    html = renderHtml(ContentsScreenDesignPanel, {
+      sharedManifestId: "",
+      onSharedManifestIdChange: () => {},
+      manifests: [],
+      onManifestsChange: () => {},
+      manifestsVersion: 0,
+      onManifestsReload: () => {},
+    });
+  } catch { threw = true; }
   assertFalse(threw, "ContentsScreenDesignPanel must render without throwing");
   assert(html.length > 50, "must produce content");
 });

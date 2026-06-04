@@ -610,6 +610,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
         CancellationToken ct = default)
     {
+        // Pure validation (draft-only node, malformed JSON, CSS token vocabulary) runs first —
+        // before any DB access so these explicit errors are never swallowed by a connection failure.
+        var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
+        if (!valid.Ok || !valid.Valid) return valid;
+
         var bindingError = await VerifyLayoutPatchPackageBindingAsync(packageId, layoutId, routeKey, ct);
         if (bindingError is not null)
         {
@@ -617,9 +622,6 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 false, false, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(),
                 bindingError.Message);
         }
-
-        var valid = await ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
-        if (!valid.Ok || !valid.Valid) return valid;
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);

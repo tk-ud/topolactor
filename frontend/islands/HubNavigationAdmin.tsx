@@ -201,7 +201,7 @@ export default function HubNavigationAdmin(): JSX.Element {
       <section class="rounded-lg border border-gray-200 bg-white p-4">
         <h2 class="mb-3 text-sm font-semibold text-gray-800">1. 設定選択</h2>
         {manifests.length === 0
-          ? <p class="text-sm text-gray-500">画面がまだありません。先に /admin/contents で画面の内容を定義し、/admin/manifests で画面群に登録してください。</p>
+          ? <p class="text-sm text-gray-500">画面がまだありません。先にコンテンツ管理で画面の内容を定義し、ページ管理で画面群に登録してください。</p>
           : (
             <select
               class="input-base w-full max-w-lg"

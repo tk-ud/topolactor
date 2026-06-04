@@ -160,7 +160,7 @@ function upgradeColumnKeyForTables(
   const known = qualified.find((q) => q.key === canonical || q.key === trimmed);
   if (known) return known.key;
   const bareMatches = qualified.filter((q) => q.columnName === trimmed);
-  if (bareMatches.length === 1) return bareMatches[0].key;
+  if (bareMatches.length >= 1) return bareMatches[0].key;
   return trimmed;
 }
 

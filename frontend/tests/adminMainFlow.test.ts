@@ -77,7 +77,7 @@ Deno.test("ADMIN_MAIN_FLOW_STEPS: contents step uses v0.7.2 pipeline wording", (
 Deno.test("ADMIN_MAIN_FLOW_STEPS: ui-builder step references package route", () => {
   const ui = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/ui-builder")!;
   assertEquals(ui.purpose.includes("step 4"), true);
-  assertEquals(ui.purpose.includes("package"), true);
+  assertEquals(ui.purpose.includes("パッケージ"), true);
 });
 
 Deno.test("Fresh registry does not retain deleted /dev/admin helper wrappers", async () => {
