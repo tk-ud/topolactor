@@ -193,3 +193,4 @@
 ### `sql-attention-m7`
 
 - [x] SQLA-IDSPACE-STEP3/4
+- [ ] phase_vector generation implementation（manifest / policy cap 由来ではない phase shift 候補ベクトル生成 — hubs 空間探索結果のみ使用）

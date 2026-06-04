@@ -207,7 +207,20 @@ public class AdminRuntimeManifestManagementTests
             aggregationKey = "col_a",
             displayColumns = new[] { "col_a", "col_b", "col_c" },
             columns = new[] { new { name = "col_a", dataType = "text", nullable = true } },
-            relationIntents = new[] { new { joinTableRef = "other_table", localKey = "id", remoteKey = "ref_id" } },
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "my_table",
+                    columns = new[] { new { name = "id", dataType = "text", nullable = false } },
+                },
+                new
+                {
+                    tableName = "other_table",
+                    columns = new[] { new { name = "ref_id", dataType = "text", nullable = false } },
+                },
+            },
+            relationIntents = new[] { new { joinTableRef = "other_table", localTableRef = "my_table", localKey = "id", remoteKey = "ref_id" } },
             initialDataRows = new[] { new Dictionary<string, string> { ["col_a"] = "v1" } },
             screenOperationKind = "list",
         });

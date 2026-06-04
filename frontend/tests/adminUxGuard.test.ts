@@ -638,6 +638,9 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
     relationIntents: [],
     operationEntityBindings: [],
     initialDataRows: [],
+    searchConditions: [],
+    havingConditions: [],
+    displayColumnMode: null,
   };
   const draft = screenDesignFromBackendShape(shape, "list");
   assertEquals(draft.searchKeyColumns, ["col_a"]);

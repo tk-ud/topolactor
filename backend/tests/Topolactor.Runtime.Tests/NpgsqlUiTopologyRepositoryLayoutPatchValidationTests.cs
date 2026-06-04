@@ -26,13 +26,13 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     }
 
     [Fact]
-    public async Task ValidateLayoutPatchAsync_UnknownCssToken_FailsClose()
+    public async Task ValidateLayoutPatchAsync_UnknownCssToken_StrippedNotRejected()
     {
+        // CSS tokens are placement-only and unknown tokens are stripped/ignored, not rejected.
         var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
         var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", "{}", ["unknown.token"], null);
-        Assert.False(result.Ok);
-        Assert.False(result.Valid);
-        Assert.StartsWith("CSS_TOKEN_REF_UNKNOWN:", result.Message);
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
     }
 
 
@@ -83,14 +83,14 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
     [Fact]
     public async Task ValidateLayoutPatchAsync_VocabularyUnavailable_IsExplicitError()
     {
+        // CSS vocabulary loading was removed; tokens are placement-only and always accepted.
         Environment.SetEnvironmentVariable("TOPOLACTOR_CSS_DICTIONARY_SSOT_PATH", "/tmp/not-found-css-dictionary-ssot.yaml");
         try
         {
             var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
             var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", "{}", ["color.action.primary.background"], null);
-            Assert.False(result.Ok);
-            Assert.False(result.Valid);
-            Assert.Equal("CSS_TOKEN_VOCABULARY_UNAVAILABLE", result.Message);
+            Assert.True(result.Ok);
+            Assert.True(result.Valid);
         }
         finally
         {

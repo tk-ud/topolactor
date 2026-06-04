@@ -1,5 +1,9 @@
 import type { ScreenOperationKind } from "../runtime/screenAuthoringIntent.ts";
-import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
+import type {
+  HavingConditionShape,
+  ScreenDataShapeSummary,
+  SearchConditionShape,
+} from "./manifestTopologyExtensions.ts";
 import {
   normalizeAggregationMeasures,
   type AggregationMeasure,
@@ -48,6 +52,40 @@ export type HavingCondition = {
 
 /** Explicit display column mode (SSOT step 3 displayColumnMode_ambiguity_resolution). */
 export type DisplayColumnMode = "selected" | "all" | "none";
+
+const SEARCH_OPERATORS: readonly SearchOperator[] = [
+  "=", "!=", "<>", "like", "ilike", "not like",
+  ">", ">=", "<", "<=", "between", "in", "not in",
+  "is null", "is not null",
+];
+const HAVING_OPERATORS: readonly HavingCondition["operator"][] = [
+  "=", "!=", "<>", ">", ">=", "<", "<=",
+];
+const LOGICAL_CONNECTORS: readonly LogicalConnector[] = ["and", "or", "not"];
+
+function normalizeSearchConditionShape(s: SearchConditionShape): SearchCondition | null {
+  if (!s.column || !SEARCH_OPERATORS.includes(s.operator as SearchOperator)) return null;
+  return {
+    column: s.column,
+    operator: s.operator as SearchOperator,
+    value: s.value,
+    valueTo: s.valueTo,
+    values: s.values,
+    logicalConnector: LOGICAL_CONNECTORS.includes(s.logicalConnector as LogicalConnector)
+      ? s.logicalConnector as LogicalConnector
+      : undefined,
+  };
+}
+
+function normalizeHavingConditionShape(h: HavingConditionShape): HavingCondition | null {
+  if (!h.column || !h.function || !HAVING_OPERATORS.includes(h.operator as HavingCondition["operator"])) return null;
+  return {
+    column: h.column,
+    function: h.function,
+    operator: h.operator as HavingCondition["operator"],
+    value: h.value,
+  };
+}
 
 export type ManifestScreenColumnDraft = {
   name: string;
@@ -339,9 +377,13 @@ export function screenDesignFromBackendShape(
       : [],
     searchConditions: Array.isArray(shape.searchConditions)
       ? shape.searchConditions
+        .map(normalizeSearchConditionShape)
+        .filter((c): c is SearchCondition => c !== null)
       : [],
     havingConditions: Array.isArray(shape.havingConditions)
       ? shape.havingConditions
+        .map(normalizeHavingConditionShape)
+        .filter((h): h is HavingCondition => h !== null)
       : [],
     displayColumnMode: (shape.displayColumnMode === "selected" || shape.displayColumnMode === "all" || shape.displayColumnMode === "none")
       ? shape.displayColumnMode
