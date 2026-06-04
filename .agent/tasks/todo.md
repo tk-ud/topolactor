@@ -12,6 +12,7 @@
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
 | `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 | `search-aggregation-runtime-operator-contract` | searchConditions/havingConditions/displayColumnMode runtime entity 実行契約 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
+| `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
 
@@ -25,6 +26,38 @@
 | `docs/design/runtime-orchestration-ssot.yaml` | `frontend_routes.admin` |
 | `docs/framework-policy.yaml` | `ui_topology_tensor_persistence` |
 | `docs/design/db-schema.yaml` | `manifest`, `packages`, `components_layout_design`, `components_style_design`, `ui_component_bucket` |
+
+---
+
+## Bundle `admin-frontend-normal-view-copy-polish`
+
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`（v0.7.2 admin workflow / normal-view vocabulary）
+
+**実行前:** AGENTS.md を読む。
+
+**残差の性質:** admin frontend の構造は `コンテンツ → UIビルダー → ページ管理` の導線へ収束し、Step3 progressive disclosure も改善済み。ただし通常表示コピーに `pipeline`, `submit`, `layout / design`, `component design`, raw tab 名（例: `bucket`）, `add のみの既定セマンティクス`, legacy promote を連想させる「有効化」など、作業者には硬い内部寄り語彙が一部残っている。
+
+**未実装 todo:**
+- [ ] `/admin` / `adminGuides.ts` / `AdminMainFlowStepper` の通常表示から `pipeline`, `post-pipeline`, `layout / design` などの開発寄り表現を、ユーザー向けの「作業順」「配置」「デザイン設定」「保存反映」へ置換する
+- [ ] `UiBuilderFlowStepper` / `UiBuilderAdmin` の通常表示で `submit`, `component design`, raw tab 名（`bucket` / `layout` / `design` / `css`）が主導線に出ないよう、表示ラベルをユーザー向けフェーズ名へ寄せる
+- [ ] `/admin/contents` Step3 の通常表示コピーから `add のみの既定セマンティクス` など内部実装前提の文言を外し、「初期表示のデータ候補」「手入力 / CSV・JSON 取り込み」「プレビューして保存」に寄せる
+- [ ] `/admin/manifests` の空状態・案内文で legacy promote / 有効化を連想させる表現を、現行導線（Step3保存 → UIビルダー → ページ管理）と矛盾しない文言へ揃える
+- [ ] `frontend/tests/adminUxGuard.test.ts` などに normal-view copy guard を追加・更新し、上記の内部寄り語彙が details/技術情報以外へ再露出しないことを固定する
+
+**対象ファイル候補:**
+- `frontend/content/adminGuides.ts`
+- `frontend/islands/AdminMainFlowStepper.tsx`
+- `frontend/components/UiBuilderFlowStepper.tsx`
+- `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/islands/ManifestsAdmin.tsx`
+- `frontend/tests/adminUxGuard.test.ts`
+
+**完了条件:**
+- admin通常表示の主導線が「何をする画面か」「次にどこへ進むか」をユーザー語彙で説明している
+- 技術語彙・内部tab名・legacy promote連想語が通常表示の主導線から除去され、必要なものは `<details>` / 技術情報側へ隔離されている
+- `adminUxGuard.test.ts` 等で通常表示コピーの退行が検知できる
+- `deno check frontend/islands/ContentsScreenDesignPanel.tsx frontend/islands/UiBuilderAdmin.tsx frontend/islands/ManifestsAdmin.tsx frontend/components/UiBuilderFlowStepper.tsx` と関連 frontend tests が通る
 
 ---
 
