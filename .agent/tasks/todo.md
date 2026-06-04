@@ -11,7 +11,7 @@
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
 | `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 / Step3関連項目表示 | 2 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
-| `search-aggregation-runtime-operator-contract` | searchConditions/havingConditions/displayColumnMode runtime entity 実行契約 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
+| `search-aggregation-runtime-operator-contract` | Step3 read/query wiring runtime実行契約 / UIイベント接続 | 6 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
@@ -67,20 +67,36 @@
 
 **実行前:** AGENTS.md を読む。
 
-**残差の性質:** `screen_data_shape` に保存された `searchConditions` / `havingConditions` / `displayColumnMode` は現在 Admin 投影（保存・topology intent round-trip）のみ実装済み。フロントエンド sample preview は評価を実施しているが、runtime entity（topology_transform_runtime）では WHERE 相当・HAVING 相当・displayColumnMode 反映が未実装。
+**残差の性質:** `screen_data_shape` に保存された `searchConditions` / `havingConditions` / `displayColumnMode` は現在 Admin 投影（保存・topology intent round-trip）のみ実装済み。フロントエンド sample preview は評価を実施しているが、runtime entity（topology_transform_runtime）では WHERE 相当・HAVING 相当・displayColumnMode 反映が未実装。また Step3 の集計サンプルで作った search / aggregation / display read wiring が UI Builder の event/action binding 候補へ露出しておらず、検索条件・絞り込み条件の値も固定文字列寄りで runtime input 変数として接続できない。
 
 **未実装 todo:**
 - [ ] runtime entity 側で `searchConditions` を抽象演算子として解釈する契約をSSOT化する（`docs/design/admin-console-workflow-ssot.yaml` に `runtime_execution_contract` セクションを追加）
 - [ ] `topology_transform_runtime` が `screen_data_shape.searchConditions` を読んで WHERE 相当のフィルタリングを実施する（SQL直書き禁止・operator vocabulary 経由）
 - [ ] `topology_transform_runtime` が `screen_data_shape.havingConditions` を読んで集計後フィルタリングを実施する
 - [ ] `topology_transform_runtime` が `screen_data_shape.displayColumnMode` に従って返却列を制限する（none=集計値のみ、selected=displayColumns、all=全列）
+- [ ] Step3 の集計サンプルで作成した `searchConditions` / `havingConditions` / `aggregationMeasures` / `displayColumns` / `displayColumnMode` を read/query wiring として命名・保存し、UI Builder の component event/action binding から選択・接続できるようにする。条件値は固定 literal だけでなく `runtimeParam` / `operationInput` / `routeQuery` / `authClaim` / `formValue` 等の value source に分離し、preview 用 sample value と runtime 変数 binding を混同しない
 - [ ] 上記 runtime entity 実装に対する backend 統合テストを追加する
+
+**対象ファイル候補:**
+- `docs/design/admin-console-workflow-ssot.yaml`
+- `docs/design/runtime-orchestration-ssot.yaml`
+- `frontend/islands/ContentsScreenDesignPanel.tsx`
+- `frontend/islands/UiBuilderAdmin.tsx`
+- `frontend/components/PackageWiringPanel.tsx`
+- `frontend/lib/manifestScreenDesign.ts`
+- `frontend/lib/contentsAssign.ts`
+- `frontend/api/adminApi.ts`
+- `backend/runtime/AdminRuntime.cs`
+- `backend/runtime/TopologyTransformRuntime.cs` または同等 runtime entity
+- Step3 read/query wiring と UI Builder event binding の frontend/backend tests
 
 **完了条件:**
 - `screen_data_shape.searchConditions` が runtime entity 実行時に WHERE 相当として解釈される
 - `screen_data_shape.havingConditions` が集計後フィルタとして解釈される
 - `screen_data_shape.displayColumnMode` が結果列の制御に反映される
-- runtime execution に対応する backend テストが通る
+- Step3 で preview 確認した read/query wiring が UI Builder のイベント接続候補として選択できる
+- 条件値は sample preview literal と runtime value source が分離され、UI event の入力・route query・auth claim・form value から bind できる
+- runtime execution と UI event binding に対応する backend / frontend テストが通る
 - `docs/system-roadmap.yaml` の `frontend.admin_routes` / `known_gap_ref` から `search-aggregation-runtime-operator-contract` が除去される
 
 ---
