@@ -43,10 +43,15 @@ This repository supports three operation routes. Keep them separated to avoid mi
    ```
    On a **fresh volume**, `docker-entrypoint-initdb.d` automatically applies (in order):
    `schema.sql` → `topology_tables.sql` → `promotion_tables.sql` →
-   `context_route_tables.sql` → `seed_empty.sql` → `demo_seed.sql`
+   `sql_attention_logs_tables.sql` → `ci_attention_guidance_tables.sql` →
+   `context_route_tables.sql` → `ui_topology_tables.sql` → `manifest_tables.sql` →
+   `auth_tables.sql` → `auth_seed.sql` → `legacy_mirror_tables.sql` →
+   `seed_empty.sql` → `demo_seed.sql`
 
-   On an **existing volume**, the init scripts do not re-run. Apply the demo seed manually:
+   On an **existing volume**, the init scripts do not re-run. Apply missing auth/demo seed files manually as needed:
    ```bash
+   psql -d topolactor_demo -f db/auth_tables.sql
+   psql -d topolactor_demo -f db/auth_seed.sql
    psql -d topolactor_demo -f db/demo_seed.sql
    ```
 
@@ -78,7 +83,7 @@ This repository supports three operation routes. Keep them separated to avoid mi
 > **Note — demo login:** User login is at `/auth` (manifest-driven UI). Admin console login is at `/super_auth`.
 > User login calls `/api/auth/login` (→ `POST /auth/login`). Admin calls `/api/super_auth/login` (→ `POST /super_auth/login`).
 > Backend auth is implemented via `AuthService` / `AuthRuntime` (wired in `backend/Program.cs`).
-> Demo credentials are stored in `auth.credentials` (`db/auth_seed.sql`).
+> Demo credentials are stored in `auth.credentials` (`db/auth_seed.sql`), not in topology/manifests.
 
 > **Note — log retention:** The backend runs a `RetentionScheduler` background service
 > that calls `LogRetentionRuntime` to clean up `context_event` rows older than `cold_days`
@@ -253,7 +258,7 @@ single matching prefix is enough to return a recommendation.
 4. Run dispatch.
 5. The emission summary and Debug details show `context_route_recommendation`:
    - `status: "ok"`
-   - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]`
+   - `nextOperations: [{"value": "demo:entity:list", "score": ~0.6, ...}]
 
 **Why it works:** `demo_seed.sql` inserts fixed-UUID events and their pre-computed prefix
 vectors (`context_prefix_vector_cache`). The resolver loads prefix candidates first (before
@@ -262,78 +267,14 @@ cleanly. Neighbor voting at similarity=1.0 with `neighbor_weight=0.6` gives scor
 Prefix_index=1 has `next_operation=NULL` at that point (no event after it yet) and does not vote.
 
 **Route identity:** the resolver uses the full attractor key (`demo:hub:overview`) as `currentOperation`,
-which matches the `operation` column in seeded `context_event` rows. `tableName` is not used as
-a filter — prefix candidates are scoped by `session_id` and `recent_days`, not by `table_name`.
-
-**Ordering guarantee:** All recommendation reads (`LoadRecentPrefixVectorsAsync`, transition stats)
-complete before `AppendContextEventAsync`. This preserves the prefix → next_operation relationship:
-at candidate read time, prefix_index=1's `last_event_id` has no successor, so it holds `next_operation=NULL`
-and does not vote. The append runs on every path — including cold-start — so that history grows across
-subsequent dispatches and the session eventually reaches `Ok` status.
-
-> **Cold start (no context):** Running **Demo hub overview** without the recommendation preset
-> (no `ContextSessionId`) returns `InsufficientHistory — NO_SESSION_ID`. This is a real backend
-> response, not a static placeholder. Use **Demo hub + recommendation context** for Scenario E.
-
-### Scenario D — structure_map or componentRegistry change → /demo-static projection changes
-
-1. Open `frontend/structure_map.ts` and modify the `"demo:hub:overview"` entry — for example, change `componentIds` to include an additional component ID, or update `packageId`/`schemaId`.
-2. Reload `http://localhost:8000/demo-static`.
-3. The OperationVector block, the `ProjectionView` resolved StructureMap entry, and the Expanded ComponentSpecs list all update to reflect the new entry.
-4. Alternatively, open `frontend/registry/componentRegistry.ts` and add or modify an entry for a component ID referenced in `defaultStructureMap`. The rendered ComponentSpec type and definition update on next page load.
-5. **Why it works:** `/demo-static` calls `resolveOperationVector → lookupStructureMap → renderEmission` entirely in the frontend at render time. No DB or backend API is involved. The pipeline runs against `defaultStructureMap` and `defaultComponentRegistry` as imported — changing those modules changes what `/demo-static` resolves and displays.
-
-> **Note:** This is the only scenario that changes `/demo-static` output without a backend API call. Scenarios A, B, C, and E affect backend resolution via the dispatch API and are observable at `/demo` (runtime dispatch page) or `/` (dispatch panel).
+so recommendations are operation-specific, not generic over all demo actions.
 
 ---
 
-## Architecture Constraints Maintained
+## What This Proves
 
-- **canonical runtime route preserved:** `/demo` dispatches to backend runtime; no frontend-only resolution presented as runtime result.
-- **no synthetic runtime display:** `/demo` uses `OperationPanel` backed by `POST /api/dispatch`; synthetic emission is isolated to `/demo-static` and clearly labelled as static.
-- **no silent fallback:** broken policy refs → `CONTEXT_ROUTE_POLICY_NOT_FOUND` error; backend unreachable → explicit fetch error in EmissionView.
-- **no hardcoded runtime policy:** all scoring, thresholds, and aggregation window values are in `function_parameters`.
-- **frontend is projection only:** demo components accept resolved data as props; no local computation.
-- **static diagram separated:** `/demo-static` clearly labels output as a static structure diagram, not a runtime result.
-- **demo data is fake:** `db/demo_seed.sql` contains no real domain data.
-
----
-
-## Files Reference
-
-| File | Role in demo |
-|---|---|
-| `db/demo_seed.sql` | Source of all demo topology data (backend/DB scenarios A–C, E) |
-| `frontend/routes/index.tsx` | User-facing runtime scenario launcher (`/`) |
-| `frontend/routes/demo.tsx` | Demo-topology runtime dispatch (`/demo`) — demo presets via OperationPanel |
-| `frontend/runtime/operationPresets.ts` | Preset definitions for OperationPanel (SSOT-aligned attractor keys) |
-| `frontend/routes/demo-static.tsx` | Static structure diagram — frontend-only pipeline, no backend call (Scenario D) |
-| `frontend/structure_map.ts` | `defaultStructureMap` — change entries to change `/demo-static` resolution (Scenario D) |
-| `frontend/registry/componentRegistry.ts` | `defaultComponentRegistry` — change entries to change `/demo-static` ComponentSpecs (Scenario D) |
-| `frontend/runtime/resolveOperationVector.ts` | Converts UserOperation → OperationVector + attractorKey |
-| `frontend/runtime/renderEmission.ts` | Resolves componentIds through ComponentRegistry → ComponentSpec[] |
-| `frontend/components/ProjectionView.tsx` | Renders resolved StructureMapEntry and Emission data |
-| `frontend/components/EmissionView.tsx` | Surfaces all fields of a backend Emission for inspection |
-| `frontend/components/RecommendationPanel.tsx` | Recommendation status projection component |
-| `frontend/components/ContextTokenBadgeList.tsx` | Token registry badge projection component (seed reference display) |
-| `frontend/islands/OperationPanel.tsx` | Interactive dispatch island — sends POST /api/dispatch, shows EmissionView |
-| `frontend/package/demoPackage.ts` | Demo package definitions |
-| `frontend/schema/demoSchema.ts` | Demo schema definitions |
-| `backend/runtime/ContextRouteRecommendationResolver.cs` | Recommendation resolver (policy from function_parameters) |
-| `backend/repository/NpgsqlContextRouteRepository.cs` | Windowed transition stats query |
-
-## Scenario F: demo entity state loop
-- Dispatch `target=demo, layer=entity, action=detail|advance|create` with payload `{ "entityId": "<uuid>", "title": "..." }`.
-- Runtime applies DB-backed transition (`entities` + `demo_state_transitions`) and returns emission data with DB-backed `items` (list), `detail`, and `history` (no frontend fallback).
-- Invalid payload/transition/missing entity are explicit errors (`INVALID_PAYLOAD`, `INVALID_TRANSITION`, `STATE_NOT_FOUND`).
-
-- `action=detail` requires payload `entityId` UUID; missing/malformed is `INVALID_PAYLOAD`, unknown action is `INVALID_OPERATION`.
-
-- Runtime reachability: DB seed contains structure_maps for `demo:entity:list`, `demo:entity:detail`, `demo:entity:create`, `demo:entity:advance`, so these operations pass attractor/structure-map resolution before state-loop execution.
-
-## CI runtime-meaning checks
-
-- CI/local should run `bash .agent/tests/check-runtime-semantics.sh` to validate runtime semantics (dispatch/recommendation/admin proxy), not only structure checks.
-- Runtime-meaning check is considered complete only after execution succeeds in an environment with both dotnet and deno available.
-- Docker Compose full E2E smoke remains an optional local check due to runtime/cost; it is not a blocking CI gate in this phase.
-
+1. **Registry-driven behaviour** — Changing DB registry/policy rows changes runtime results.
+2. **Canonical flow continuity** — The route goes through operation vector → attractor → structure → package → schema → component expansion.
+3. **No silent fallback** — Missing policy, missing registry, auth errors, and backend proxy errors surface explicit error codes.
+4. **Topology as data** — The default and demo flows are described by rows in topology tables, not hard-coded switch branches.
+5. **Auth boundary** — Login UI is manifest-driven, while password hashes, refresh tokens, and realm/audience/role grants live in `auth.*`, not topology/manifests.
