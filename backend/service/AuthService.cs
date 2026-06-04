@@ -150,9 +150,8 @@ public class AuthService
         if (user.SuspendedFrom.HasValue)
         {
             var now = DateTimeOffset.UtcNow;
-            var from = new DateTimeOffset(user.SuspendedFrom.Value, TimeSpan.Zero);
-            if (from <= now && (user.SuspendedUntil is null ||
-                now <= new DateTimeOffset(user.SuspendedUntil.Value, TimeSpan.Zero)))
+            var from = user.SuspendedFrom.Value;
+            if (from <= now && (user.SuspendedUntil is null || now <= user.SuspendedUntil.Value))
             {
                 return ("AUTH_USER_SUSPENDED", "User account is within a suspension window.");
             }

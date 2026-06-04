@@ -26,8 +26,8 @@ public class NpgsqlAuthRepository : AuthRepository
             reader.GetBoolean(2),
             reader.GetBoolean(3),
             reader.IsDBNull(4) ? null : reader.GetString(4),
-            reader.IsDBNull(5) ? null : reader.GetDateTime(5),
-            reader.IsDBNull(6) ? null : reader.GetDateTime(6));
+            reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
+            reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6));
     }
 
     public override async Task<string?> GetPasswordHashAsync(

@@ -4,6 +4,7 @@ using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
 using Topolactor.Service;
+using Xunit;
 
 namespace Topolactor.Runtime.Tests;
 
