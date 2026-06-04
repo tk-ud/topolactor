@@ -1032,7 +1032,10 @@ Deno.test("AuthPanel lane: does not use /api/dispatch (uses /api/auth/login)", a
   assertFalse(src.includes('fetch("/api/dispatch"'), "AuthPanel must not call /api/dispatch directly");
   assertFalse(src.includes("queueClientCommand"), "AuthPanel must not use client command lane");
   assertFalse(src.includes("queueAdminClientCommand"), "AuthPanel must not use admin command lane");
-  assert(src.includes("loginDemo") || src.includes("authApi"), "AuthPanel must use authApi functions");
+  assert(
+    src.includes("loginDemo") || src.includes("loginSuper") || src.includes("authApi"),
+    "AuthPanel must use authApi functions",
+  );
 });
 
 Deno.test("AuthPanel auth error: login failure response has errors (not silent)", async () => {

@@ -242,6 +242,132 @@ public class AdminRuntimeManifestManagementTests
         string role, string target, string layer, string action, string runtimeDestination) =>
         ManifestTopologyValidator.BuildTopology(role, target, layer, action, runtimeDestination, null);
 
+    [Fact]
+    public async Task AssignScreenDataShape_Rejects_Unresolved_Active_Remote_Table()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var draftId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            draftId, null, DraftTopologyWithLogicalTables("my_table", "id"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        repo.Seed(new ManifestDetailRecord(
+            activeId, null, DraftTopologyWithLogicalTables("remote_table", "ref_id"), "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = draftId.ToString(),
+            relationIntents = new[]
+            {
+                new
+                {
+                    localTableRef = "my_table",
+                    joinTableRef = "missing_on_remote",
+                    localKey = "id",
+                    remoteKey = "ref_id",
+                    remoteManifestId = activeId.ToString(),
+                },
+            },
+        });
+
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null),
+            default);
+
+        Assert.NotNull(error);
+        Assert.Equal("RELATION_REMOTE_TABLE_UNRESOLVED", error!.Code);
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Persists_Active_Remote_Manifest_Reference()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var draftId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            draftId, null, DraftTopologyWithLogicalTables("my_table", "id"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        repo.Seed(new ManifestDetailRecord(
+            activeId, null, DraftTopologyWithLogicalTables("remote_table", "ref_id"), "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = draftId.ToString(),
+            relationIntents = new[]
+            {
+                new
+                {
+                    localTableRef = "my_table",
+                    joinTableRef = "remote_table",
+                    localKey = "id",
+                    remoteKey = "ref_id",
+                    remoteManifestId = activeId.ToString(),
+                },
+            },
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null),
+            default);
+
+        Assert.Null(error);
+        var rawJson = data!.Value.GetProperty("topologyRawJson").GetString() ?? "[]";
+        var shapeEntry = JsonSerializer.Deserialize<JsonElement[]>(rawJson)!
+            .First(e => e.TryGetProperty("type", out var t) && t.GetString() == "screen_data_shape");
+        var rel = shapeEntry.GetProperty("relationIntents")[0];
+        Assert.Equal(activeId.ToString(), rel.GetProperty("remoteManifestId").GetString());
+    }
+
+    [Fact]
+    public async Task ListRelationshipRemoteTargets_Returns_Active_Manifests_With_Tables()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var draftId = Guid.NewGuid();
+        var activeId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            draftId, null, DraftTopologyWithLogicalTables("t1", "c1"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        repo.Seed(new ManifestDetailRecord(
+            activeId, null, DraftTopologyWithLogicalTables("remote_t", "rk"), "active",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new { excludeManifestId = draftId.ToString() });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "list_relationship_remote_targets", null, "admin", payload, null),
+            default);
+
+        Assert.Null(error);
+        var items = data!.Value.EnumerateArray().ToList();
+        Assert.Single(items);
+        Assert.Equal(activeId.ToString(), items[0].GetProperty("manifestId").GetString());
+        Assert.Equal("remote_t", items[0].GetProperty("logicalTables")[0].GetProperty("tableName").GetString());
+    }
+
+    private static IReadOnlyList<JsonElement> DraftTopologyWithLogicalTables(
+        string tableName, string columnName)
+    {
+        var list = ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime").ToList();
+        var shape = JsonSerializer.SerializeToElement(new
+        {
+            type = "screen_data_shape",
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName,
+                    columns = new[] { new { name = columnName, dataType = "text", nullable = true } },
+                },
+            },
+        });
+        list.Add(shape);
+        return list;
+    }
+
     private static AdminRuntime CreateRuntime(InMemoryManifestAdminRepository manifestRepo)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "Host=localhost");

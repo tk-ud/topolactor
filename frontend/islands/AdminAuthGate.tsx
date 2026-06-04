@@ -1,7 +1,7 @@
 import { ComponentChildren } from "preact";
 import { JSX } from "preact";
 import { useEffect, useState } from "preact/hooks";
-import { probeDemoSessionToken } from "../api/authApi.ts";
+import { probeAdminSessionToken } from "../api/authApi.ts";
 import {
   DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY,
   DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY,
@@ -20,7 +20,7 @@ export default function AdminAuthGate({ children }: Props): JSX.Element {
   useEffect(() => {
     setRedirectPath(globalThis.location?.pathname ?? "/admin");
     void (async () => {
-      const validToken = await ensureValidClientSession(probeDemoSessionToken);
+      const validToken = await ensureValidClientSession(probeAdminSessionToken);
       setAuthState(validToken ? "present" : "absent");
     })();
   }, []);
@@ -34,7 +34,7 @@ export default function AdminAuthGate({ children }: Props): JSX.Element {
   }
 
   if (authState === "absent") {
-    const loginUrl = `/auth?redirect=${encodeURIComponent(redirectPath)}`;
+    const loginUrl = `/super_auth?redirect=${encodeURIComponent(redirectPath)}`;
     return (
       <main class="page-main max-w-md font-sans">
         <h1 class="text-xl font-bold text-gray-900">ログインが必要です</h1>

@@ -56,8 +56,6 @@ export function toFriendlyLabel(technicalKey: string): string {
 }
 
 /** ContentsScreenDesignPanel フィールドラベル（通常表示用） */
-export const UX_FIELD_TABLE_REF = "参照テーブル名";
-export const UX_FIELD_IMPORT_SCHEMA = "取り込みルール名";
 export const UX_FIELD_NULLABLE = "空欄許可";
 
 /** 検索キー選択（通常表示）— internal column names must not be directly exposed */

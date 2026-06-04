@@ -75,11 +75,10 @@ This repository supports three operation routes. Keep them separated to avoid mi
 > all `/dispatch` calls return `AUTH_JWT_SECRET_NOT_CONFIGURED` — the endpoint is
 > never silently unauthenticated.
 
-> **Note — demo login:** The JWT login scaffold is at `/login`. The login form calls
-> `/api/auth/login` (Fresh route → nginx → `POST /auth/login` on the backend).
-> Backend auth is implemented in `AuthEndpoint.cs` (wired via `backend/Program.cs`).
-> Demo credentials are stored as bcrypt hashes in `function_parameters`
-> (`demo_auth / demo_users`) via `db/demo_seed.sql`.
+> **Note — demo login:** User login is at `/auth` (manifest-driven UI). Admin console login is at `/super_auth`.
+> User login calls `/api/auth/login` (→ `POST /auth/login`). Admin calls `/api/super_auth/login` (→ `POST /super_auth/login`).
+> Backend auth is implemented via `AuthService` / `AuthRuntime` (wired in `backend/Program.cs`).
+> Demo credentials are stored in `auth.credentials` (`db/auth_seed.sql`).
 
 > **Note — log retention:** The backend runs a `RetentionScheduler` background service
 > that calls `LogRetentionRuntime` to clean up `context_event` rows older than `cold_days`
@@ -104,7 +103,7 @@ This repository supports three operation routes. Keep them separated to avoid mi
 
 To observe the backend canonical flow end-to-end:
 
-1. **Log in:** Open `/login`, enter demo credentials (seeded by `db/demo_seed.sql`).
+1. **Log in:** Open `/auth` (user) or `/super_auth` (admin), enter demo credentials (`db/auth_seed.sql`).
    - On success, the JWT token is saved to browser `sessionStorage` under `demo_jwt_token`.
    - A "Go to dispatch panel" link is shown.
 2. **Open `/`** (runtime scenario launcher) or **`/demo`** (demo topology presets only).
@@ -247,7 +246,7 @@ Each scenario shows how a single Registry or policy change propagates through th
 `demo:hub:overview` → `demo:entity:list`. With the demo policy (`min_neighbors=1`), a
 single matching prefix is enough to return a recommendation.
 
-1. **Log in** at `/login` with demo credentials.
+1. **Log in** at `/auth` or `/super_auth` with demo credentials.
 2. **Open `/demo`** (or `/` and choose **Demo hub + recommendation context**).
 3. Select the **Demo hub + recommendation context** preset (seed session/token applied automatically).
    Manual UUID entry is only under **Advanced: context session / token IDs**.

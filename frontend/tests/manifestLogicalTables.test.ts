@@ -3,6 +3,7 @@ import {
   logicalTablesFromLegacyColumns,
   namedColumnsFromLogicalTables,
   normalizeLogicalTables,
+  primaryLogicalTableRef,
   primaryTableColumns,
   normalizeRelationKeyColumn,
   qualifyScreenDesignColumnKeys,
@@ -33,6 +34,17 @@ Deno.test("primaryTableColumns: returns first table only", () => {
     { name: "only", dataType: "text", nullable: true },
   ]));
   assertEquals(cols[0].name, "only");
+});
+
+Deno.test("primaryLogicalTableRef: returns first named table", () => {
+  assertEquals(
+    primaryLogicalTableRef([
+      { tableName: "employees", columns: [] },
+      { tableName: "departments", columns: [] },
+    ]),
+    "employees",
+  );
+  assertEquals(primaryLogicalTableRef([{ tableName: "", columns: [] }]), "");
 });
 
 Deno.test("relationKeyColumnOptionsForTableRef: row id as id (record id) before jsonb columns", () => {

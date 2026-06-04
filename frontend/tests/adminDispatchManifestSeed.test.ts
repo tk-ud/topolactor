@@ -52,6 +52,7 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "manifest:deprecate",
   "manifest:assign_hub_grouping",
   "manifest:assign_screen_data_shape",
+  "manifest:list_relationship_remote_targets",
   "promotion_manifest:list",
   "promotion_manifest:get",
   "promotion_manifest:validate",

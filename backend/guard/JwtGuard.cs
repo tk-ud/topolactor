@@ -75,6 +75,38 @@ public class JwtGuard
 
     public string? TryGetRole(string? token) => TryGetStringClaim(token, "role");
 
+    public string? TryGetRealm(string? token) => TryGetStringClaim(token, "realm");
+
+    public string? TryGetAudience(string? token) => TryGetStringClaim(token, "aud");
+
+    /// <summary>Validates token and required realm/audience/role for a surface.</summary>
+    public IReadOnlyList<ValidationError> ValidateForContext(
+        string? token,
+        string expectedRealm,
+        string expectedAudience,
+        string expectedRole)
+    {
+        var errors = Validate(token);
+        if (errors.Count > 0) return errors;
+
+        var realm = TryGetRealm(token);
+        if (!string.Equals(realm, expectedRealm, StringComparison.Ordinal))
+            return [new ValidationError("AUTH_TOKEN_REALM_MISMATCH",
+                $"Token realm must be '{expectedRealm}'.")];
+
+        var aud = TryGetAudience(token);
+        if (!string.Equals(aud, expectedAudience, StringComparison.Ordinal))
+            return [new ValidationError("AUTH_TOKEN_AUDIENCE_MISMATCH",
+                $"Token audience must be '{expectedAudience}'.")];
+
+        var role = TryGetRole(token);
+        if (!string.Equals(role, expectedRole, StringComparison.Ordinal))
+            return [new ValidationError("AUTH_TOKEN_ROLE_MISMATCH",
+                $"Token role must be '{expectedRole}'.")];
+
+        return [];
+    }
+
     private string? TryGetStringClaim(string? token, string claimName)
     {
         if (string.IsNullOrWhiteSpace(token)) return null;

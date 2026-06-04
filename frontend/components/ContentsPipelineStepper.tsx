@@ -36,7 +36,7 @@ const STEPS: { id: ContentsPipelineStep; label: string; detail: string }[] = [
   {
     id: 3,
     label: "物理割当・ページ",
-    detail: "参照テーブル・ページ名・操作種別（複数可）・検索・集計を登録します。",
+    detail: "ページ名・操作種別（複数可）・検索・集計・データ入力を登録します。",
   },
 ];
 

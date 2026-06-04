@@ -60,9 +60,17 @@ Deno.test("buildAssignPayloadForStep step 2.5: relationIntents only from draft",
   assertEquals(payload.columns, existing.columns);
 });
 
-Deno.test("buildAssignPayloadForStep step 3: binding fields from draft, columns from existing", () => {
+Deno.test("buildAssignPayloadForStep step 3: tableRef from primary logical table, columns from existing", () => {
   const design = emptyManifestScreenDesign();
-  design.tableRef = "order_lines";
+  design.logicalTables = [{
+    tableName: "order_lines",
+    columns: [
+      { name: "sku", dataType: "text", nullable: false },
+      { name: "qty", dataType: "integer", nullable: false },
+    ],
+  }];
+  design.tableRef = "ignored_manual";
+  design.importSchemaName = "ignored_manual";
   design.operationKinds = ["create", "update"];
   design.searchKeyColumns = ["sku"];
   design.displayColumns = [];
@@ -78,6 +86,7 @@ Deno.test("buildAssignPayloadForStep step 3: binding fields from draft, columns 
 
   const payload = buildAssignPayloadForStep(3, manifestId, design, existing);
   assertEquals(payload.tableRef, "order_lines");
+  assertEquals(payload.importSchemaName, "public");
   assertEquals(payload.screenOperationKinds, ["create", "update"]);
   assertEquals(payload.searchKeyColumns, ["sku"]);
   assertEquals(payload.displayColumns, []);

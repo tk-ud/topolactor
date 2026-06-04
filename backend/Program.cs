@@ -8,6 +8,7 @@ using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Scheduler;
 using Topolactor.Schema;
+using Topolactor.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -58,6 +59,8 @@ builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
         connectionString));
 builder.Services.AddSingleton<CiAttentionGuidanceRepository>(sp =>
     new NpgsqlCiAttentionGuidanceRepository(connectionString));
+builder.Services.AddSingleton<AuthRepository>(_ =>
+    new NpgsqlAuthRepository(connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();
@@ -183,6 +186,9 @@ builder.Services.AddSingleton<SseEndpoint>(sp =>
     new SseEndpoint(
         sp.GetRequiredService<ILogger<SseEndpoint>>(),
         sp.GetRequiredService<SseEventBroadcaster>()));
+builder.Services.AddSingleton<JwtTokenIssuer>();
+builder.Services.AddSingleton<AuthService>();
+builder.Services.AddSingleton<AuthRuntime>();
 builder.Services.AddSingleton<AuthEndpoint>();
 builder.Services.AddSingleton<ExistingSystemChangeIntakeEndpoint>();
 builder.Services.AddSingleton<ComponentEventAppendEndpoint>();
@@ -289,39 +295,110 @@ app.MapPost("/intake/legacy-change", (
     return Results.Json(result, statusCode: result.Accepted ? 202 : 422);
 });
 
-// POST /auth/login — demo login scaffold
-app.MapPost("/auth/login", async (
-    HttpContext ctx,
-    LoginRequestDto request,
-    AuthEndpoint auth) =>
+static void AppendRefreshCookie(HttpResponse response, string refreshPlain)
 {
-    var result = await auth.HandleAsync(request, ctx.RequestAborted);
+    var maxAge = 60 * 60 * 24 * 7;
+    response.Headers.Append("Set-Cookie",
+        $"{AuthCookieNames.RefreshToken}={Uri.EscapeDataString(refreshPlain)}; Path=/; HttpOnly; SameSite=Lax; Max-Age={maxAge}");
+}
+
+static void ClearRefreshCookie(HttpResponse response) =>
+    response.Headers.Append("Set-Cookie",
+        $"{AuthCookieNames.RefreshToken}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+
+static string? ReadRefreshCookie(HttpRequest request)
+{
+    if (!request.Cookies.TryGetValue(AuthCookieNames.RefreshToken, out var value))
+        return null;
+    return string.IsNullOrWhiteSpace(value) ? null : Uri.UnescapeDataString(value);
+}
+
+// POST /auth/login — user realm (auth_runtime.login)
+app.MapPost("/auth/login", async (HttpContext ctx, LoginRequestDto request, AuthEndpoint auth) =>
+{
+    var (result, refresh) = await auth.LoginUserAsync(request, ctx.RequestAborted);
+    if (result.Success && refresh is not null)
+        AppendRefreshCookie(ctx.Response, refresh);
     return Results.Json(result, statusCode: result.Success ? 200 : 401);
 });
 
-// GET /auth/session — validate Bearer JWT (no mutation; for frontend/middleware probes)
+app.MapPost("/auth/refresh", async (HttpContext ctx, AuthEndpoint auth) =>
+{
+    var bodyRefresh = (await ctx.Request.ReadFromJsonAsync<RefreshRequestDto>(ctx.RequestAborted))?.RefreshToken;
+    var refresh = bodyRefresh ?? ReadRefreshCookie(ctx.Request);
+    var (result, newRefresh) = await auth.RefreshUserAsync(new RefreshRequestDto(refresh), ctx.RequestAborted);
+    if (result.Success && newRefresh is not null)
+        AppendRefreshCookie(ctx.Response, newRefresh);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+app.MapPost("/auth/logout", async (HttpContext ctx, AuthEndpoint auth) =>
+{
+    var bodyRefresh = (await ctx.Request.ReadFromJsonAsync<LogoutRequestDto>(ctx.RequestAborted))?.RefreshToken;
+    var refresh = bodyRefresh ?? ReadRefreshCookie(ctx.Request);
+    var result = await auth.LogoutAsync(new LogoutRequestDto(refresh), ctx.RequestAborted);
+    ClearRefreshCookie(ctx.Response);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+app.MapGet("/auth/login-manifest", async (AuthEndpoint auth, CancellationToken ct) =>
+{
+    var result = await auth.LoadUserLoginManifestAsync(ct);
+    return Results.Json(result, statusCode: result.Success ? 200 : 404);
+});
+
+// POST /super_auth/login — admin realm
+app.MapPost("/super_auth/login", async (HttpContext ctx, LoginRequestDto request, AuthEndpoint auth) =>
+{
+    var (result, refresh) = await auth.LoginAdminAsync(request, ctx.RequestAborted);
+    if (result.Success && refresh is not null)
+        AppendRefreshCookie(ctx.Response, refresh);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+app.MapPost("/super_auth/refresh", async (HttpContext ctx, AuthEndpoint auth) =>
+{
+    var bodyRefresh = (await ctx.Request.ReadFromJsonAsync<RefreshRequestDto>(ctx.RequestAborted))?.RefreshToken;
+    var refresh = bodyRefresh ?? ReadRefreshCookie(ctx.Request);
+    var (result, newRefresh) = await auth.RefreshAdminAsync(new RefreshRequestDto(refresh), ctx.RequestAborted);
+    if (result.Success && newRefresh is not null)
+        AppendRefreshCookie(ctx.Response, newRefresh);
+    return Results.Json(result, statusCode: result.Success ? 200 : 401);
+});
+
+// GET /auth/session — validate Bearer JWT; optional ?expected=admin|user
 app.MapGet("/auth/session", (HttpContext ctx, JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var expected = ctx.Request.Query["expected"].FirstOrDefault();
+
+    IReadOnlyList<ValidationError> authErrors;
+    if (string.Equals(expected, "admin", StringComparison.OrdinalIgnoreCase))
+        authErrors = jwtGuard.ValidateForContext(token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole);
+    else if (string.Equals(expected, "user", StringComparison.OrdinalIgnoreCase))
+        authErrors = jwtGuard.ValidateForContext(token, AuthRealm.UserRealm, AuthRealm.UserAudience, AuthRealm.UserRole);
+    else
+        authErrors = jwtGuard.Validate(token);
+
     if (authErrors.Count > 0)
-        return Results.Json(new SessionResponseDto(false, null, null, authErrors), statusCode: 401);
+        return Results.Json(new SessionResponseDto(false, null, null, null, null, authErrors), statusCode: 401);
 
     var subject = jwtGuard.TryGetSubject(token);
     if (string.IsNullOrWhiteSpace(subject))
     {
         var errors = new[] { new ValidationError("AUTH_TOKEN_SUB_MISSING", "Token is missing required sub claim.") };
-        return Results.Json(new SessionResponseDto(false, null, null, errors), statusCode: 401);
+        return Results.Json(new SessionResponseDto(false, null, null, null, null, errors), statusCode: 401);
     }
 
     var role = jwtGuard.TryGetRole(token);
     if (string.IsNullOrWhiteSpace(role))
     {
         var errors = new[] { new ValidationError("AUTH_TOKEN_ROLE_MISSING", "Token is missing required role claim.") };
-        return Results.Json(new SessionResponseDto(false, null, null, errors), statusCode: 401);
+        return Results.Json(new SessionResponseDto(false, null, null, null, null, errors), statusCode: 401);
     }
 
-    return Results.Json(new SessionResponseDto(true, subject, role, []));
+    return Results.Json(new SessionResponseDto(
+        true, subject, role, jwtGuard.TryGetRealm(token), jwtGuard.TryGetAudience(token), []));
 });
 
 // GET /sse — SSE projection lane (JWT-guarded runtime-adjacent surface).

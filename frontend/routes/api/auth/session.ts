@@ -34,8 +34,12 @@ export const handler: Handlers = {
       );
     }
 
+    const url = new URL(req.url);
+    const expected = url.searchParams.get("expected");
+    const qs = expected ? `?expected=${encodeURIComponent(expected)}` : "";
+
     try {
-      const response = await fetch(`${backendUrl}/auth/session`, {
+      const response = await fetch(`${backendUrl}/auth/session${qs}`, {
         headers: { Authorization: authHeader },
       });
       const json: unknown = await response.json();

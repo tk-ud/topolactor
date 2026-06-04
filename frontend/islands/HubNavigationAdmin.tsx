@@ -184,7 +184,7 @@ export default function HubNavigationAdmin(): JSX.Element {
     return (
       <div class="alert-warning p-4 rounded">
         サーバーへの接続が確立されていません。環境の設定を確認し、
-        <a href="/auth" class="link ml-1">ログイン</a> してから再度お試しください。
+        <a href="/super_auth" class="link ml-1">管理ログイン</a> してから再度お試しください。
       </div>
     );
   }

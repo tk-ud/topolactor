@@ -2,14 +2,18 @@
  * Server-side demo session validation against DEMO_BACKEND_URL/auth/session.
  * Fail-close: unreachable backend or non-200 → invalid (caller should clear client carriers).
  */
-export async function probeDemoSessionOnBackend(token: string): Promise<boolean> {
+export async function probeDemoSessionOnBackend(
+  token: string,
+  expected: "admin" | "user" = "admin",
+): Promise<boolean> {
   const backendUrl = Deno.env.get("DEMO_BACKEND_URL");
   if (!backendUrl) return false;
 
   try {
-    const response = await fetch(`${backendUrl}/auth/session`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const response = await fetch(
+      `${backendUrl}/auth/session?expected=${expected}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
     if (!response.ok) return false;
     const json: unknown = await response.json();
     return (

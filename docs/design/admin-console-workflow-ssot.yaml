@@ -86,14 +86,30 @@ admin_console_workflow_ssot:
           - minimum relation_config needed for screen_data_shape and later physical binding
         boundary:
           manifest_to_manifest_hub_navigation: remains_on_admin_manifests_not_step_2_5
+          relationship_local_side:
+            scope: editing_draft_manifest_only
+            fields: [local_table_ref, local_key]
+            prohibited: [active_manifest_table_as_local_side]
+          relationship_remote_side:
+            scope: draft_logical_tables_or_active_manifest_tables
+            draft_remote: join_table_ref plus remote_key on same editing draft logical tables
+            active_remote: remote_manifest_id plus join_table_ref plus remote_key on status_active manifest screen_data_shape
+            admin_action_list_targets: manifest:list_relationship_remote_targets
+          fail_close:
+            - unresolved_remote_manifest_table_or_column_must_blocking_error
+            - silent_fallback_to_draft_only_remote_targets_prohibited
 
       - step: 3
         label: physical_table_and_page_binding
         route: /admin/contents
         user_facing_goal: 物理テーブル割り当て・ページ名・操作種別（複数選択可）
         submit_persists:
-          - physical_tables assignment (table_ref against topology.physical_tables)
+          - physical_tables assignment (table_ref derived from step 2 primary logical table name against topology.physical_tables; no separate normal-view manual table_ref or import_schema_name inputs)
           - page display name / screen label
+        normal_view_ui_excludes:
+          - manual_text_input_for_table_ref
+          - manual_text_input_for_import_schema_name
+          - duplicate_csv_import_schema_picker_above_data_input_subfeature
           - screen_operation_kinds as multi_select (not radio single-select)
           - per_operation entity binding at event time (entity target specified when the operation fires, not only at layout time)
         form_submit_semantics:
@@ -118,9 +134,10 @@ admin_console_workflow_ssot:
             normal_view_prohibited: [group by]
             normal_view_preferred: [search key, aggregation key, aggregation measures, display columns, sample viewing]
           relation_intent_step_2_5:
-            local_side: local_table_ref plus local_key column select
-            remote_side: join_table_ref plus remote_key column select
-            example: user table id column links to employee table user_id column
+            local_side: local_table_ref plus local_key column select (editing draft logical tables only)
+            remote_side_draft: join_table_ref plus remote_key on editing draft logical tables
+            remote_side_active: remote_manifest_id plus join_table_ref plus remote_key on active manifest logical tables
+            example: user table id column links to employee table user_id column on another active manifest
         fail_close:
           - unresolved topology.physical_tables table_ref mismatch must not silent_no_op
         handoff_after_success: /admin/ui-builder
@@ -295,6 +312,9 @@ admin_console_workflow_ssot:
       label: relationship_configuration
       route: /admin/contents
       submit: single_submit_sequential_db_update
+      relationship_remote_targets:
+        list_action: manifest:list_relationship_remote_targets
+        status_filter: active
     - step: 3
       label: physical_table_and_page_binding
       route: /admin/contents

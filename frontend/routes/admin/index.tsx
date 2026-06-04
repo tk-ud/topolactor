@@ -204,7 +204,7 @@ export default function AdminIndex() {
         </details>
 
         <p class="nav-footer font-mono">
-          <a href="/auth" class="link">ログイン</a>
+          <a href="/super_auth" class="link">管理ログイン</a>
           {" · "}
           <a href="/" class="link">トップ</a>
           {" · "}

@@ -288,6 +288,19 @@ export type RelationIntentInput = {
   joinTableRef: string;
   localKey: string;
   remoteKey: string;
+  remoteManifestId?: string;
+};
+
+export type RelationshipRemoteTargetTable = {
+  tableName: string;
+  columns: AdminManifestScreenColumnInput[];
+};
+
+export type RelationshipRemoteTarget = {
+  manifestId: string;
+  status: string;
+  manifestKey: string | null;
+  logicalTables: RelationshipRemoteTargetTable[];
 };
 
 export type LogicalTableInput = {
@@ -377,6 +390,18 @@ export async function getAdminManifest(manifestId: string): Promise<AdminManifes
   const body = await callAdminManifestOp("get", { manifestId });
   if (body === null) return null;
   return body.emission?.data as AdminManifestDetail;
+}
+
+/** Active manifests with logical tables for Step 2.5 remote relationship targets. */
+export async function listRelationshipRemoteTargets(
+  excludeManifestId?: string,
+): Promise<RelationshipRemoteTarget[] | null> {
+  const body = await callAdminManifestOp(
+    "list_relationship_remote_targets",
+    excludeManifestId ? { excludeManifestId } : undefined,
+  );
+  if (body === null) return null;
+  return (body.emission?.data ?? []) as RelationshipRemoteTarget[];
 }
 
 export async function validateAdminManifest(manifestId: string): Promise<AdminManifestValidateResult | null> {

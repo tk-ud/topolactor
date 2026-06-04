@@ -80,6 +80,8 @@ fi
 echo "=== [RUNTIME_ENV] Verify DB connectivity and required schema relations ==="
 docker exec topolactor-demo-postgres psql -U topolactor_demo -d topolactor_demo -c "SELECT 1;"
 assert_relation_exists "public.manifest"
+assert_relation_exists "auth.users"
+assert_relation_exists "auth.credentials"
 assert_relation_exists "topology.topology_edit_log"
 
 echo "=== [RUNTIME_ENV] Run UI topology migration regression against live DB ==="
@@ -129,8 +131,22 @@ if [ -z "${BACKEND_BASE_URL}" ]; then
 fi
 BACKEND_URL="http://${BACKEND_BASE_URL}"
 
-echo "=== [RUNTIME_ENV] Live API E2E /auth/login -> /dispatch ==="
-login_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/auth/login" -H "Content-Type: application/json" --data-binary @-
+echo "=== [RUNTIME_ENV] Live API E2E user /auth/login (demo_public) ==="
+user_login_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/auth/login" -H "Content-Type: application/json" --data-binary @-
+{"username":"demo_public","password":"demo_public_password"}
+JSON
+)"
+user_token="$(printf '%s' "${user_login_response}" | jq -r '.token // empty')"
+if [ -z "${user_token}" ] || [ "${user_token}" = "null" ]; then
+  echo "ERROR: user login failed; response body:" >&2
+  echo "${user_login_response}" >&2
+  dump_logs
+  exit 1
+fi
+echo "OK: user /auth/login succeeded"
+
+echo "=== [RUNTIME_ENV] Live API E2E admin /super_auth/login -> /dispatch ==="
+login_response="$(cat <<'JSON' | curl -sS -X POST "${BACKEND_URL}/super_auth/login" -H "Content-Type: application/json" --data-binary @-
 {"username":"demo_admin","password":"demo_admin_password"}
 JSON
 )"

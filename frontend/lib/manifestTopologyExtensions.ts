@@ -10,6 +10,7 @@ export type RelationIntentShape = {
   joinTableRef: string;
   localKey: string;
   remoteKey: string;
+  remoteManifestId?: string;
 };
 
 export type LogicalTableShape = {
@@ -144,6 +145,9 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
             joinTableRef: typeof r.joinTableRef === "string" ? r.joinTableRef : "",
             localKey: typeof r.localKey === "string" ? r.localKey : "",
             remoteKey: typeof r.remoteKey === "string" ? r.remoteKey : "",
+            remoteManifestId: typeof r.remoteManifestId === "string" && r.remoteManifestId.trim()
+              ? r.remoteManifestId.trim()
+              : undefined,
           }))
       : [];
     const operationEntityBindings = Array.isArray(entry.operationEntityBindings)

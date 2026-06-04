@@ -377,6 +377,16 @@ VALUES
         'active'
     ),
     (
+        '00000000-0000-0000-0000-00000000007f',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"manifest","action":"list_relationship_remote_targets"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
         '00000000-0000-0000-0000-000000000065',
         NULL,
         ARRAY[
@@ -1383,3 +1393,23 @@ VALUES (
 ON CONFLICT (function_name, parameter_key) DO UPDATE
     SET parameter_value = EXCLUDED.parameter_value,
         active          = EXCLUDED.active;
+
+
+-- ---------------------------------------------------------------------------
+-- manifest — user login UI (ID 090)
+-- SSOT: docs/design/auth-db-session-credential-ssot.yaml
+-- Submit delegates to auth_runtime.login — no credentials in topology.
+-- ---------------------------------------------------------------------------
+INSERT INTO manifest (manifest_id, relation_registry_id, topology, status)
+VALUES (
+    '00000000-0000-0000-0000-000000000090',
+    NULL,
+    ARRAY[
+        '{"type":"auth_action_binding","action":"login","runtime_destination":"auth_runtime","realm":"user","audience":"user_app"}'::jsonb,
+        '{"type":"ui_projection_mapping","surface":"login_form","fields":["username","password"],"labels":{"username":"ユーザー名","password":"パスワード","submit":"ログイン"},"redirect_success":"/","redirect_failure":null}'::jsonb
+    ]::jsonb[],
+    'active'
+)
+ON CONFLICT (manifest_id) DO UPDATE
+    SET topology = EXCLUDED.topology,
+        status   = EXCLUDED.status;

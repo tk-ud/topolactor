@@ -4,6 +4,8 @@ db_schema:
   status: ssot_design_document
   source_files:
     - db/schema.sql
+    - db/auth_tables.sql
+    - db/auth_seed.sql
     - db/topology_tables.sql
     - db/promotion_tables.sql
     - db/sql_attention_logs_tables.sql
@@ -19,10 +21,24 @@ db_schema:
     - context_route
     - ui_topology
     - manifest
+    - auth_identity_session
 
 
 
   canonical_schema_namespaces:
+    auth:
+      status: canonical_active
+      role: user identity, credentials, sessions, refresh tokens, login audit, grants
+      reference: docs/design/auth-db-session-credential-ssot.yaml
+      tables:
+        - auth.users
+        - auth.credentials
+        - auth.sessions
+        - auth.refresh_tokens
+        - auth.login_events
+        - auth.roles
+        - auth.scopes
+        - auth.grants
     hubs:
       role: topology meaning space, hub manifest grouping, and fixed hub sequence
       canonical_tables:

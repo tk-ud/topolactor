@@ -5,7 +5,10 @@ import { normalizeRelationKeyColumn } from "./manifestLogicalTables.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
 import type { ContentsPipelineStep } from "../components/ContentsPipelineStepper.tsx";
 import { primaryOperationKind } from "../runtime/screenAuthoringIntent.ts";
-import { primaryTableColumns } from "./manifestLogicalTables.ts";
+import {
+  primaryLogicalTableRef,
+  primaryTableColumns,
+} from "./manifestLogicalTables.ts";
 
 /** Base payload from persisted backend shape (full entry replace on assign). */
 function shapePayloadFromExisting(
@@ -105,6 +108,7 @@ export function buildAssignPayloadForStep(
           joinTableRef: r.joinTableRef.trim(),
           localKey: normalizeRelationKeyColumn(r.localKey),
           remoteKey: normalizeRelationKeyColumn(r.remoteKey),
+          remoteManifestId: r.remoteManifestId?.trim() || undefined,
         })),
     };
   }
@@ -115,11 +119,15 @@ export function buildAssignPayloadForStep(
     ? base.screenOperationKinds
     : [primaryOperationKind(design)];
 
+  const derivedTableRef = primaryLogicalTableRef(design.logicalTables) ||
+    base.tableRef ||
+    undefined;
+
   return {
     ...base,
-    tableRef: design.tableRef || base.tableRef,
-    dbTableName: design.tableRef || base.tableRef,
-    importSchemaName: design.importSchemaName || base.importSchemaName,
+    tableRef: derivedTableRef,
+    dbTableName: derivedTableRef,
+    importSchemaName: base.importSchemaName,
     searchTargets: design.searchKeyColumns.length > 0
       ? design.searchKeyColumns
       : parseSearchTargets(design.searchTargets).length > 0

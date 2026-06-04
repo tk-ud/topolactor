@@ -239,6 +239,7 @@ public class AdminRuntime
             "manifest:deprecate"                        => await DataManifestDeprecateAsync(vector, ct),
             "manifest:assign_hub_grouping"                => await DataManifestAssignHubGroupingAsync(vector, ct),
             "manifest:assign_screen_data_shape"           => await DataManifestAssignScreenDataShapeAsync(vector, ct),
+            "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
@@ -2157,6 +2158,26 @@ public class AdminRuntime
             return (null, new ValidationError("MALFORMED_MANIFEST_ID", "manifestId must be a valid UUID."));
         }
 
+        var draftDetail = await _manifestRepository.LoadDetailByIdAsync(manifestId, ct);
+        if (draftDetail is null)
+            return (null, new ValidationError("MANIFEST_NOT_FOUND", $"Manifest {manifestId} was not found."));
+
+        var draftTables = ManifestRelationIntentValidator.FromRequestLogicalTables(request.LogicalTables);
+        if (draftTables.Count == 0)
+            draftTables = ManifestRelationIntentValidator.ExtractLogicalTables(draftDetail.Topology);
+
+        var relationIntents = request.RelationIntents ?? Array.Empty<AdminManifestRelationIntentDto>();
+        if (relationIntents.Count > 0)
+        {
+            var relationErrors = await ManifestRelationIntentValidator.ValidateRelationIntentsAsync(
+                relationIntents,
+                draftTables,
+                (id, token) => _manifestRepository.LoadDetailByIdAsync(id, token),
+                ct);
+            if (relationErrors.Count > 0)
+                return (null, relationErrors[0]);
+        }
+
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
             ? request.TableRef.Trim()
             : request.DbTableName?.Trim();
@@ -2191,7 +2212,7 @@ public class AdminRuntime
             screenOperationKind = primaryOp,
             screenOperationKinds = operationKinds,
             userFacingTopologyLabel = request.UserFacingTopologyLabel,
-            relationIntents = request.RelationIntents ?? Array.Empty<AdminManifestRelationIntentDto>(),
+            relationIntents,
             operationEntityBindings = request.OperationEntityBindings ??
                 Array.Empty<AdminManifestOperationEntityBindingDto>(),
             initialDataRows = request.InitialDataRows ?? Array.Empty<System.Text.Json.JsonElement>(),
@@ -2209,6 +2230,50 @@ public class AdminRuntime
         manifest = refreshed ?? manifest;
 
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataManifestListRelationshipRemoteTargetsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_manifestRepository is null) return (null, ManifestRepositoryNotAvailable());
+
+        Guid? excludeId = null;
+        if (vector.Payload is { ValueKind: JsonValueKind.Object } payload &&
+            payload.TryGetProperty("excludeManifestId", out var excludeEl) &&
+            excludeEl.ValueKind == JsonValueKind.String &&
+            Guid.TryParse(excludeEl.GetString(), out var parsedExclude))
+        {
+            excludeId = parsedExclude;
+        }
+
+        var items = await _manifestRepository.ListManifestsAsync("active", ct);
+        var targets = new List<AdminManifestRelationshipRemoteTargetDto>();
+
+        foreach (var item in items)
+        {
+            if (excludeId.HasValue && item.ManifestId == excludeId.Value)
+                continue;
+
+            var detail = await _manifestRepository.LoadDetailByIdAsync(item.ManifestId, ct);
+            if (detail is null) continue;
+
+            var logical = ManifestRelationIntentValidator.ExtractLogicalTables(detail.Topology);
+            if (logical.Count == 0) continue;
+
+            var (_, manifestKey) = ManifestCanonicalProjection.ExtractHubGrouping(detail.Topology);
+            var tables = logical.Select(t => new AdminManifestRelationshipRemoteTargetTableDto(
+                t.TableName,
+                t.ColumnNames.Select(c => new AdminManifestScreenColumnDto(c, "text", true)).ToList()
+            )).ToList();
+
+            targets.Add(new AdminManifestRelationshipRemoteTargetDto(
+                item.ManifestId.ToString(),
+                detail.Status,
+                manifestKey,
+                tables));
+        }
+
+        return (JsonSerializer.SerializeToElement(targets), null);
     }
 
     private async Task<(ManifestDetailRecord? Manifest, ValidationError? Error)> RefreshManifestDispatcherFromExtensionsAsync(

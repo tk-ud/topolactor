@@ -57,7 +57,7 @@
 
 **実行前:** AGENTS.md を読む。
 
-- [ ] 通常ユーザ向けログイン UI を seed manifest として作成し、認証コアは既存 AuthService/Auth runtime に委譲する境界をSSOT化・実装する
+- [x] 通常ユーザ向けログイン UI を seed manifest として作成し、認証コアは既存 AuthService/Auth runtime に委譲する境界をSSOT化・実装する
   - 問題: admin 操作用ログインと通常ユーザ向けログインを topology manifest で扱う場合、JWT 署名・password hash・refresh token・admin 権限判定まで topology/hub/jsonb 側へ混入すると security boundary が崩れ、admin/user realm が混線する危険がある。現状の demo auth は `topology.function_parameters(demo_auth/demo_users)` に bcrypt hash を置く仮実装であり、auth 専用DB正本ではない。
   - 目的: 通常ユーザ向けログイン画面はデータ駆動 UI として seed manifest で提供しつつ、credential 検証・password hash・JWT 署名・refresh token・session invalidation は既存ログイン基盤と auth 専用DB正本に隔離する。
   - 改善方針: まず auth DB/session/credential 境界のSSOTを追記または既存正本を特定し、`login UI topology manifest` と `AuthService/Auth runtime` の責務を分ける。auth DB 正本として `auth.users`, `auth.credentials`, `auth.sessions` / `auth.refresh_tokens`, `auth.login_events`, `auth.roles` / `auth.scopes` / `auth.grants` 相当の責務を定義する。`topology.function_parameters` の `demo_auth/demo_users` credential は demo-only として隔離し、通常ユーザ認証の正本にしない。seed は `/login` 等の user-facing manifest、入力フィールド、submit action binding、成功/失敗表示、遷移先だけを作る。submit は `auth_runtime.login` 等の既存認証 action に委譲し、claims には `realm=user`, `audience=user_app`, `scope/role=user` を付与する。admin は `realm=admin/system`, `audience=admin_console`, `scope/role=admin` として分離する。
@@ -73,7 +73,7 @@
 
 **実行前:** AGENTS.md を読む。
 
-- [ ] Step 2.5 relationship の接続先として有効manifest/tableを選択可能にする
+- [x] Step 2.5 relationship の接続先として有効manifest/tableを選択可能にする
   - 問題: 現状の Step 2.5 relationship UI/データ配線が編集中 draft manifest 配下のテーブルだけを参照点として扱うと、編集中マニフェストから既存の有効マニフェスト上のテーブルへ接続する関係を作れない。データ駆動OSでは既存有効トポロジへの参照が閉じると、manifest間・既存データ間の連続性を表現できない。
   - 目的: 編集中 manifest の local side は draft 配下の logical tables のみを参照しつつ、remote/target side は published/active topology manifests とその table refs も選択できるようにする。
   - 改善方針: まず `docs/design/admin-console-workflow-ssot.yaml` の Step 2.5 relationship_configuration に、local side は current draft manifest scoped、remote side は current draft tables に加えて active/published manifests の table refs を選択可能、という境界を追記する。その後 frontend の relationship selector と backend intent validation/read model を更新し、remote target が active manifest table である場合も fail-close で解決・保存できるようにする。

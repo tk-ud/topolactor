@@ -93,7 +93,25 @@ public record AdminManifestRelationIntentDto(
     [property: JsonPropertyName("localTableRef")] string? LocalTableRef,
     [property: JsonPropertyName("joinTableRef")] string JoinTableRef,
     [property: JsonPropertyName("localKey")] string LocalKey,
-    [property: JsonPropertyName("remoteKey")] string RemoteKey
+    [property: JsonPropertyName("remoteKey")] string RemoteKey,
+    /// <summary>When set, joinTableRef/remoteKey resolve against this active manifest (not draft-only).</summary>
+    [property: JsonPropertyName("remoteManifestId")] string? RemoteManifestId
+);
+
+public record AdminManifestRelationshipRemoteTargetTableDto(
+    [property: JsonPropertyName("tableName")] string TableName,
+    [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto> Columns
+);
+
+public record AdminManifestRelationshipRemoteTargetDto(
+    [property: JsonPropertyName("manifestId")] string ManifestId,
+    [property: JsonPropertyName("status")] string Status,
+    [property: JsonPropertyName("manifestKey")] string? ManifestKey,
+    [property: JsonPropertyName("logicalTables")] IReadOnlyList<AdminManifestRelationshipRemoteTargetTableDto> LogicalTables
+);
+
+public record AdminManifestListRelationshipRemoteTargetsRequestDto(
+    [property: JsonPropertyName("excludeManifestId")] string? ExcludeManifestId
 );
 
 public record AdminManifestOperationEntityBindingDto(

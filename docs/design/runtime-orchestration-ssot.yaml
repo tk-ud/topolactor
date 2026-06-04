@@ -97,6 +97,7 @@ runtime_orchestration_ssot:
     public:
       - /
       - /auth
+      - /super_auth
     admin:
       - /admin
       - /admin/manifests
@@ -248,6 +249,31 @@ runtime_orchestration_ssot:
       - registry_attractor_runtime
       - admin_runtime
       - sse_projection_runtime
+      - auth_runtime
+    auth_command_lane:
+      reference: docs/design/auth-db-session-credential-ssot.yaml
+      owns:
+        - credential_verification
+        - jwt_signing
+        - refresh_token_persistence
+        - session_invalidation
+        - login_events
+      routes:
+        user:
+          login: POST /auth/login
+          refresh: POST /auth/refresh
+          logout: POST /auth/logout
+          session: GET /auth/session
+        admin:
+          login: POST /super_auth/login
+          refresh: POST /super_auth/refresh
+          session: GET /auth/session
+      prohibited:
+        - auth_submit_via_client_command_lane_dispatch
+        - password_hash_in_manifest_topology
+        - jwt_secret_in_topology_or_hub_jsonb
+      seed_mapping_types:
+        - auth_action_binding
     trigger_kinds:
       - cron
       - hook

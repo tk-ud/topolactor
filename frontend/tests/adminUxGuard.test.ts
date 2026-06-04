@@ -21,13 +21,11 @@ import {
   UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
-  UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
   UX_FIELD_SEARCH_KEY,
-  UX_FIELD_TABLE_REF,
   UX_MAIN_FLOW_STEP_LABELS,
   UX_RUNTIME_DESTINATION_LABELS,
   UX_STATUS_LABELS,
@@ -307,31 +305,18 @@ Deno.test("ContentsScreenDesignPanel: step 3 mounts embedded CSV/JSON import sub
   assert(adminApiSrc.includes('"admin_csv_json_import"'), "adminApi owns import layer");
 });
 
-// ─── ContentsScreenDesignPanel field vocabulary regression ────────────────────
-// Internal technical terms must not appear in the user-facing label constants.
+// ─── ContentsScreenDesignPanel Step 3 normal-view regression ───────────────────
+// SSOT: admin-console-workflow-ssot.yaml step 3 normal_view_ui_excludes manual table_ref/import_schema inputs.
 
-Deno.test("UX_FIELD_TABLE_REF: uses user-friendly label 参照テーブル名", () => {
-  assertEquals(UX_FIELD_TABLE_REF, "参照テーブル名");
-  assertFalse(
-    UX_FIELD_TABLE_REF.includes("physical table ref"),
-    "must not use internal term",
+Deno.test("ContentsScreenDesignPanel: step 3 omits legacy table_ref and import_schema_name inputs", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  assertFalse(
-    UX_FIELD_TABLE_REF.includes("table_ref"),
-    "must not use internal snake_case key",
-  );
-});
-
-Deno.test("UX_FIELD_IMPORT_SCHEMA: uses user-friendly label 取り込みルール名", () => {
-  assertEquals(UX_FIELD_IMPORT_SCHEMA, "取り込みルール名");
-  assertFalse(
-    UX_FIELD_IMPORT_SCHEMA.includes("import schema"),
-    "must not use internal term",
-  );
-  assertFalse(
-    UX_FIELD_IMPORT_SCHEMA.includes("importSchema"),
-    "must not use internal camelCase key",
-  );
+  assertEquals(src.includes("参照テーブル名"), false);
+  assertEquals(src.includes("取り込みルール名"), false);
+  assertEquals(src.includes("UX_FIELD_TABLE_REF"), false);
+  assertEquals(src.includes("UX_FIELD_IMPORT_SCHEMA"), false);
+  assertEquals(src.includes("importSchemaName:"), false);
 });
 
 Deno.test("UX_FIELD_NULLABLE: uses user-friendly label 空欄許可", () => {

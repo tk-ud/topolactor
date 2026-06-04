@@ -61,6 +61,11 @@ export function namedLogicalTableRefs(tables: LogicalTableDraft[]): string[] {
   return tables.map((t) => t.tableName.trim()).filter(Boolean);
 }
 
+/** Primary logical table ref for physical binding (first named table in Step 2). */
+export function primaryLogicalTableRef(tables: LogicalTableDraft[]): string {
+  return namedLogicalTableRefs(tables)[0] ?? "";
+}
+
 /** Column names defined on a logical table (empty tableRef matches first unnamed table). */
 export function columnNamesForTableRef(
   tables: LogicalTableDraft[],

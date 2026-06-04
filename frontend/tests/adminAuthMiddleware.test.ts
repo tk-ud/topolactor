@@ -24,13 +24,13 @@ function restoreFetch(): void {
   globalThis.fetch = originalFetch;
 }
 
-Deno.test("admin middleware: missing cookie redirects to /auth with redirect param", async () => {
+Deno.test("admin middleware: missing cookie redirects to /super_auth with redirect param", async () => {
   const req = new Request("https://example.com/admin/contents?x=1");
   const res = await handler(req, mockRouteContext());
   assertEquals(res.status, 302);
   assertEquals(
     res.headers.get("location"),
-    "https://example.com/auth?redirect=%2Fadmin%2Fcontents%3Fx%3D1",
+    "https://example.com/super_auth?redirect=%2Fadmin%2Fcontents%3Fx%3D1",
   );
 });
 
@@ -40,7 +40,7 @@ Deno.test("admin middleware: empty demo_jwt_token cookie redirects (fail-close)"
   });
   const res = await handler(req, mockRouteContext());
   assertEquals(res.status, 302);
-  assertEquals(res.headers.get("location")?.includes("/auth?redirect="), true);
+  assertEquals(res.headers.get("location")?.includes("/super_auth?redirect="), true);
 });
 
 Deno.test("admin middleware: invalid cookie clears session and redirects", async () => {
@@ -68,7 +68,7 @@ Deno.test("admin middleware: valid backend session probe passes through", async 
   Deno.env.set("DEMO_BACKEND_URL", "http://backend.test");
   globalThis.fetch = (input) => {
     const url = typeof input === "string" ? input : input instanceof Request ? input.url : input.href;
-    if (url === "http://backend.test/auth/session") {
+    if (url === "http://backend.test/auth/session?expected=admin") {
       return Promise.resolve(
         new Response(JSON.stringify({ success: true, subject: "demo", role: "admin" }), {
           status: 200,

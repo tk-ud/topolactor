@@ -89,7 +89,7 @@ export const ADMIN_CONTENTS_GUIDE: AdminGuide = {
     "Step 1: 空の下書きとトポロジー表示名を登録する",
     "Step 2: テーブル定義（項目名と型）を保存する",
     "Step 2.5: テーブル間の関連を保存する（任意）",
-    "Step 3: 参照テーブル・ページ名・操作種別（複数可）・検索・集計を保存する",
+    "Step 3: ページ名・操作種別（複数可）・検索・集計・データ入力を保存する",
     `完了後は ${UX_UI_BUILDER} へ。ページ間のつながりは ${UX_HUB_MANIFESTS_PAGE}`,
   ],
   inputs: [

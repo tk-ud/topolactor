@@ -7,6 +7,8 @@ import {
   createAdminManifestDraft,
   getAdminManifest,
   listAdminManifests,
+  listRelationshipRemoteTargets,
+  type RelationshipRemoteTarget,
 } from "../api/adminApi.ts";
 import { AdminSubmitStatus } from "../components/AdminSubmitStatus.tsx";
 import ContentsAggregationMeasuresEditor from "../components/ContentsAggregationMeasuresEditor.tsx";
@@ -27,6 +29,7 @@ import {
   qualifiedColumnsFromLogicalTables,
   qualifyScreenDesignColumnKeys,
   namedLogicalTableRefs,
+  primaryLogicalTableRef,
   primaryTableColumns,
 } from "../lib/manifestLogicalTables.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
@@ -63,13 +66,11 @@ import {
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_DISPLAY_COLUMNS,
-  UX_FIELD_IMPORT_SCHEMA,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
   UX_FIELD_SEARCH_KEY,
-  UX_FIELD_TABLE_REF,
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
   UX_UI_BUILDER,
@@ -276,6 +277,22 @@ export default function ContentsScreenDesignPanel({
   const [dataInputMode, setDataInputMode] = useState<"manual" | "import">("manual");
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
+  const [remoteTargets, setRemoteTargets] = useState<RelationshipRemoteTarget[]>([]);
+  const [remoteTargetsError, setRemoteTargetsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeStep !== 2.5 || !selectedId) return;
+    void (async () => {
+      const targets = await listRelationshipRemoteTargets(selectedId);
+      if (targets === null) {
+        setRemoteTargets([]);
+        setRemoteTargetsError("有効マニフェストの参照先一覧を読み込めませんでした。");
+      } else {
+        setRemoteTargets(targets);
+        setRemoteTargetsError(null);
+      }
+    })();
+  }, [activeStep, selectedId]);
 
   const loadManifestLabels = async (items: AdminManifestListItem[]) => {
     const labels: Record<string, string> = {};
@@ -354,7 +371,11 @@ export default function ContentsScreenDesignPanel({
     } else {
       setDesign(fromBackend);
       setDraftSource(
-        shape.tableRef || shape.importSchemaName ? "backend" : "none",
+        shape.logicalTables.length > 0 ||
+          (shape.screenOperationKinds?.length ?? 0) > 0 ||
+          shape.searchKeyColumns.length > 0
+          ? "backend"
+          : "none",
       );
     }
   };
@@ -654,7 +675,10 @@ export default function ContentsScreenDesignPanel({
       relationIntents: [
         ...design.relationIntents,
         {
-          localTableRef: defaultLocalTableRef(design.logicalTables, design.tableRef),
+          localTableRef: defaultLocalTableRef(
+            design.logicalTables,
+            primaryLogicalTableRef(design.logicalTables),
+          ),
           joinTableRef: "",
           localKey: "",
           remoteKey: "",
@@ -665,6 +689,26 @@ export default function ContentsScreenDesignPanel({
 
   const relationKeyOptionsFor = (tableRef: string) =>
     relationKeyColumnOptionsForTableRef(design.logicalTables, tableRef);
+
+  const relationKeyOptionsForActiveManifest = (
+    manifestId: string,
+    tableRef: string,
+  ) => {
+    const manifest = remoteTargets.find((t) => t.manifestId === manifestId);
+    const table = manifest?.logicalTables.find((t) => t.tableName === tableRef);
+    if (!table) return [];
+    return table.columns
+      .filter((c) => c.name.trim())
+      .map((c) => ({
+        value: normalizeRelationKeyColumn(c.name),
+        label: c.name,
+      }));
+  };
+
+  const remoteTargetLabel = (t: RelationshipRemoteTarget): string => {
+    const key = t.manifestKey?.trim();
+    return key ? `${key} (${t.manifestId.slice(0, 8)}…)` : t.manifestId;
+  };
 
   const patchRelationIntent = (
     index: number,
@@ -711,7 +755,7 @@ export default function ContentsScreenDesignPanel({
     <section class="mb-8 rounded border p-4">
       <h2 class="section-title">ページ内容の設定</h2>
       <p class="mb-3 text-xs text-muted-xs">
-        ページに表示する項目、検索、集計、取り込みルールを設定します。
+        ページに表示する項目、操作、検索、集計、データ入力を設定します。
         作成済みページ同士のつながりや表示順は
         <a href="/admin/manifests" class="link font-semibold">
           {UX_HUB_MANIFESTS_PAGE}
@@ -728,7 +772,7 @@ export default function ContentsScreenDesignPanel({
         <div ref={step3CompletionRef}>
           <ContentsStepCompletionBanner
             title="Step 3 まで完了しました"
-            body={`「${design.screenLabel.trim() || "このページ"}」の物理割当・検索・集計の設定を保存しました。次は ${UX_UI_BUILDER} で部品とレイアウトを作成します。`}
+            body={`「${design.screenLabel.trim() || "このページ"}」の操作・検索・集計の設定を保存しました。次は ${UX_UI_BUILDER} で部品とレイアウトを作成します。`}
             primaryHref="/admin/ui-builder"
             primaryLabel={`${UX_UI_BUILDER}（Step 4）へ進む`}
             onDismiss={() => setShowStep3Completion(false)}
@@ -827,43 +871,21 @@ export default function ContentsScreenDesignPanel({
       )}
 
       {activeStep === 3 && (
-        <div class="mb-4 grid gap-2 sm:grid-cols-2">
-          <label class="text-xs">
-            {UX_FIELD_TABLE_REF}
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 font-mono"
-              value={design.tableRef}
-              onInput={(e) =>
-                patchDesign({ tableRef: (e.target as HTMLInputElement).value })}
-            />
-          </label>
-          <label class="text-xs">
-            {UX_FIELD_IMPORT_SCHEMA}
-            <input
-              class="mt-1 w-full rounded border px-2 py-1 font-mono"
-              value={design.importSchemaName}
-              onInput={(e) =>
-                patchDesign({
-                  importSchemaName: (e.target as HTMLInputElement).value,
-                })}
-            />
-          </label>
-          <div class="sm:col-span-2 text-xs">
-            <p class="font-medium mb-1">操作種別（複数選択可）</p>
-            <div class="flex flex-wrap gap-2">
-              {SCREEN_OPERATION_OPTIONS.map((o) => (
-                <label key={o.kind} class="flex items-center gap-1">
-                  <input
-                    type="checkbox"
-                    checked={design.operationKinds.includes(o.kind)}
-                    onChange={() => toggleOperationKind(o.kind)}
-                  />
-                  {o.label}
-                </label>
-              ))}
-            </div>
+        <div class="mb-4 text-xs">
+          <p class="font-medium mb-1">操作種別（複数選択可）</p>
+          <div class="flex flex-wrap gap-2">
+            {SCREEN_OPERATION_OPTIONS.map((o) => (
+              <label key={o.kind} class="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={design.operationKinds.includes(o.kind)}
+                  onChange={() => toggleOperationKind(o.kind)}
+                />
+                {o.label}
+              </label>
+            ))}
           </div>
-          <div class="sm:col-span-2 mt-3">
+          <div class="mt-3">
             {design.operationKinds.length === 0
               ? (
                 <p class="text-xs italic text-slate-400">
@@ -1029,13 +1051,26 @@ export default function ContentsScreenDesignPanel({
         <>
       <h3 class="mt-4 text-xs font-semibold">{UX_FIELD_RELATION_INTENT}</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        テーブルと項目のペアで接続を指定します（例: user / id → employee / user_id）。
+        参照元は編集中の草稿テーブルのみ。参照先は草稿内テーブルまたは有効（active）マニフェストのテーブルを選べます。
       </p>
+      {remoteTargetsError && (
+        <p class="mb-2 text-xs text-amber-700">{remoteTargetsError}</p>
+      )}
       {design.relationIntents.map((rel, ri) => {
         const localTable = rel.localTableRef ||
-          defaultLocalTableRef(design.logicalTables, design.tableRef);
+          defaultLocalTableRef(
+            design.logicalTables,
+            primaryLogicalTableRef(design.logicalTables),
+          );
         const localKeyOptions = relationKeyOptionsFor(localTable);
-        const remoteKeyOptions = relationKeyOptionsFor(rel.joinTableRef);
+        const remoteIsActive = Boolean(rel.remoteManifestId?.trim());
+        const remoteKeyOptions = remoteIsActive
+          ? relationKeyOptionsForActiveManifest(rel.remoteManifestId!, rel.joinTableRef)
+          : relationKeyOptionsFor(rel.joinTableRef);
+        const activeManifest = remoteTargets.find((t) =>
+          t.manifestId === rel.remoteManifestId
+        );
+        const activeTableOptions = activeManifest?.logicalTables ?? [];
         return (
         <div
           key={ri}
@@ -1081,6 +1116,55 @@ export default function ContentsScreenDesignPanel({
             <div class="space-y-2">
               <p class="font-semibold text-slate-600">参照先</p>
               <label class="block">
+                参照先の種類
+                <select
+                  class="mt-1 w-full rounded border px-2 py-1"
+                  value={remoteIsActive ? "active" : "draft"}
+                  onChange={(e) => {
+                    const mode = (e.target as HTMLSelectElement).value;
+                    if (mode === "active") {
+                      patchRelationIntent(ri, {
+                        remoteManifestId: remoteTargets[0]?.manifestId ?? "",
+                        joinTableRef: "",
+                        remoteKey: "",
+                      });
+                    } else {
+                      patchRelationIntent(ri, {
+                        remoteManifestId: undefined,
+                        joinTableRef: "",
+                        remoteKey: "",
+                      });
+                    }
+                  }}
+                >
+                  <option value="draft">この草稿のテーブル</option>
+                  <option value="active">有効マニフェストのテーブル</option>
+                </select>
+              </label>
+              {remoteIsActive && (
+                <label class="block">
+                  有効マニフェスト
+                  <select
+                    class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                    value={rel.remoteManifestId ?? ""}
+                    onChange={(e) => {
+                      patchRelationIntent(ri, {
+                        remoteManifestId: (e.target as HTMLSelectElement).value,
+                        joinTableRef: "",
+                        remoteKey: "",
+                      });
+                    }}
+                  >
+                    <option value="">— マニフェスト —</option>
+                    {remoteTargets.map((t) => (
+                      <option key={t.manifestId} value={t.manifestId}>
+                        {remoteTargetLabel(t)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label class="block">
                 テーブル
                 <select
                   class="mt-1 w-full rounded border px-2 py-1 font-mono"
@@ -1093,9 +1177,13 @@ export default function ContentsScreenDesignPanel({
                   }}
                 >
                   <option value="">— 選択 —</option>
-                  {logicalTableRefs.filter((n) => n !== localTable).map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))}
+                  {remoteIsActive
+                    ? activeTableOptions.map((t) => (
+                      <option key={t.tableName} value={t.tableName}>{t.tableName}</option>
+                    ))
+                    : logicalTableRefs.filter((n) => n !== localTable).map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
                 </select>
               </label>
               <label class="block">
@@ -1117,7 +1205,9 @@ export default function ContentsScreenDesignPanel({
             </div>
           </div>
           <p class="mt-2 font-mono text-[10px] text-slate-500">
-            {localTable || "?"}.{rel.localKey || "?"} → {rel.joinTableRef || "?"}.{rel.remoteKey || "?"}
+            {localTable || "?"}.{rel.localKey || "?"} →{" "}
+            {remoteIsActive ? `[active ${rel.remoteManifestId?.slice(0, 8) ?? "?"}…]` : ""}
+            {rel.joinTableRef || "?"}.{rel.remoteKey || "?"}
           </p>
           <div class="mt-2 flex justify-end">
             <button

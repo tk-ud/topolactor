@@ -28,6 +28,12 @@
 \echo '[init.sql] applying manifest_tables.sql'
 \i /db/manifest_tables.sql
 
+\echo '[init.sql] applying auth_tables.sql'
+\i /db/auth_tables.sql
+
+\echo '[init.sql] applying auth_seed.sql'
+\i /db/auth_seed.sql
+
 \echo '[init.sql] applying legacy_mirror_tables.sql'
 \i /db/legacy_mirror_tables.sql
 

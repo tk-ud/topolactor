@@ -39,7 +39,7 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
     return (
       <p class="text-muted">
         サーバーへの接続が確立されていません。環境の設定を確認し、
-        <a href="/auth" class="link">ログイン</a> してから再度お試しください。
+        <a href="/super_auth" class="link">ログイン</a> してから再度お試しください。
       </p>
     );
   }
@@ -47,7 +47,7 @@ export default function ContextTokenRegistryEditor(): JSX.Element {
   if (notAuthed) {
     return (
       <p class="text-muted">
-        ログインが必要です — <a href="/auth" class="link">ログインページ</a> で認証してから再度アクセスしてください。
+        ログインが必要です — <a href="/super_auth" class="link">ログインページ</a> で認証してから再度アクセスしてください。
       </p>
     );
   }

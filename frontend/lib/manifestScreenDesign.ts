@@ -32,6 +32,8 @@ export type RelationIntentDraft = {
   localKey: string;
   joinTableRef: string;
   remoteKey: string;
+  /** When set, remote table/column resolve on this active manifest (not draft-only). */
+  remoteManifestId?: string;
 };
 
 /** Per-operation entity targets at event time (SSOT step 3, multi-select). */
@@ -184,6 +186,9 @@ function normalizeRelationIntent(
     joinTableRef: r.joinTableRef ?? "",
     localKey: normalizeRelationKeyColumn(r.localKey ?? ""),
     remoteKey: normalizeRelationKeyColumn(r.remoteKey ?? ""),
+    remoteManifestId: typeof r.remoteManifestId === "string" && r.remoteManifestId.trim()
+      ? r.remoteManifestId.trim()
+      : undefined,
   };
 }
 

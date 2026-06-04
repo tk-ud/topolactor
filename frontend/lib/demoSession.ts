@@ -10,7 +10,7 @@ export const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 /** Shared copy for UI technical-details — keep middleware/tests aligned with this boundary. */
 export const DEMO_ADMIN_SSR_PRESENCE_GATE_SUMMARY =
-  "/admin の SSR は backend の /auth/session で JWT を検証します。検証不能・無効トークンは cookie を削除して /auth へ戻します。";
+  "/admin の SSR は backend の /auth/session?expected=admin で JWT（realm/aud/role）を検証します。検証不能・無効トークンは cookie を削除して /super_auth へ戻します。";
 
 export const DEMO_ADMIN_FINAL_AUTH_BOUNDARY_SUMMARY =
   "API 操作の最終認証境界は backend の Authorization 検証です（無効トークンは AUTH_TOKEN_MISSING 等で明示失敗）。";
@@ -125,17 +125,22 @@ export function syncClientSessionToken(): string | null {
   return fromStorage ?? fromCookie;
 }
 
-export function buildAuthRedirectUrl(req: Request): string {
+export function buildSuperAuthRedirectUrl(req: Request): string {
   const requestUrl = new URL(req.url);
   const redirectPath = `${requestUrl.pathname}${requestUrl.search}`;
-  const authUrl = new URL("/auth", requestUrl.origin);
+  const authUrl = new URL("/super_auth", requestUrl.origin);
   if (redirectPath.startsWith("/") && !redirectPath.startsWith("//")) {
     authUrl.searchParams.set("redirect", redirectPath);
   }
   return authUrl.toString();
 }
 
-/** 302 redirect to /auth; optional session cookie clear (Response.redirect headers are immutable). */
+/** @deprecated Use buildSuperAuthRedirectUrl for admin gates */
+export function buildAuthRedirectUrl(req: Request): string {
+  return buildSuperAuthRedirectUrl(req);
+}
+
+/** 302 redirect to /super_auth; optional session cookie clear */
 export function buildAuthRedirectResponse(
   req: Request,
   options?: { clearSession?: boolean },

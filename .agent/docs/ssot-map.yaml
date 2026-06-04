@@ -195,6 +195,29 @@ mapping:
     supporting_docs: []
     protocols: []
 
+  - work_type: auth_db_session_credential_login_manifest
+    change_surfaces:
+      - backend/endpoint/AuthEndpoint.cs
+      - backend/service/AuthService.cs
+      - backend/runtime/AuthRuntime.cs
+      - backend/repository/AuthRepository.cs
+      - backend/guard/JwtGuard.cs
+      - db/auth_tables.sql
+      - db/auth_seed.sql
+      - frontend/routes/auth.tsx
+      - frontend/routes/super_auth.tsx
+      - frontend/islands/LoginManifestPanel.tsx
+      - frontend/islands/SuperAuthPanel.tsx
+      - frontend/api/authApi.ts
+      - frontend/routes/api/auth/*
+      - frontend/routes/api/super_auth/*
+    required_docs:
+      - docs/design/auth-db-session-credential-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/db-schema.yaml
+    protocols: []
+
   - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
     change_surfaces:
       - runtime orchestration os
