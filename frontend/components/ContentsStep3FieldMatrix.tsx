@@ -42,7 +42,7 @@ export default function ContentsStep3FieldMatrix({
     <div class="overflow-x-auto rounded border border-slate-200">
       <p class="mb-2 text-xs font-semibold text-slate-700">{UX_FIELD_OPERATION_ENTITY}</p>
       <p class="mb-2 text-xs text-muted-xs">
-        操作が実行されるとき、対象とする項目を操作種別ごとに選択します。
+        操作種別ごとに対象項目を選びます。選んだ列がサンプル表と保存時の表示列に反映されます。
       </p>
       <table class="min-w-full text-left text-xs">
         <thead>

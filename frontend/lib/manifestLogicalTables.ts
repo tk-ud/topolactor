@@ -102,6 +102,47 @@ function pushQualifiedColumn(
   out.push(ref);
 }
 
+function activeRemoteManifestMatches(
+  joinTableRef: string,
+  remoteKey: string,
+  remoteTargets: Step3RemoteTargetManifest[],
+): Step3RemoteTargetManifest[] {
+  const tableRef = joinTableRef.trim();
+  if (!tableRef) return [];
+  const key = remoteKey.trim();
+  return remoteTargets.filter((manifest) => {
+    const table = logicalTableByRef(manifest.logicalTables, tableRef);
+    if (!table) return false;
+    if (!key) return true;
+    return table.columns.some((c) => c.name.trim() === key);
+  });
+}
+
+/**
+ * When Step 2.5 saved join_table_ref on an active-remote table without remote_manifest_id,
+ * infer the manifest when exactly one active target defines that table (and remote key when set).
+ */
+export function enrichRelationIntentsWithRemoteTargets(
+  relationIntents: RelationIntentDraft[],
+  logicalTables: LogicalTableDraft[],
+  remoteTargets: Step3RemoteTargetManifest[],
+): RelationIntentDraft[] {
+  return relationIntents.map((rel) => {
+    if (rel.remoteManifestId?.trim()) return rel;
+    const joinTableRef = rel.joinTableRef.trim();
+    if (!joinTableRef || logicalTableByRef(logicalTables, joinTableRef)) return rel;
+
+    const matches = activeRemoteManifestMatches(
+      joinTableRef,
+      rel.remoteKey,
+      remoteTargets,
+    );
+    if (matches.length !== 1) return rel;
+
+    return { ...rel, remoteManifestId: matches[0].manifestId };
+  });
+}
+
 /**
  * Step 3 field candidates: local logical tables plus columns from Step 2.5
  * relationIntents (draft remote tables and active-manifest remote tables).
@@ -115,9 +156,14 @@ export function step3FieldSourceFromDesign(
   const qualifiedColumns = qualifiedColumnsFromLogicalTables(logicalTables);
   const keys = new Set(qualifiedColumns.map((q) => q.key));
   const unresolvedErrors: string[] = [];
+  const resolvedIntents = enrichRelationIntentsWithRemoteTargets(
+    relationIntents,
+    logicalTables,
+    remoteTargets,
+  );
 
-  for (let i = 0; i < relationIntents.length; i++) {
-    const rel = relationIntents[i];
+  for (let i = 0; i < resolvedIntents.length; i++) {
+    const rel = resolvedIntents[i];
     const joinTableRef = rel.joinTableRef.trim();
     if (!joinTableRef) {
       unresolvedErrors.push(
@@ -165,9 +211,24 @@ export function step3FieldSourceFromDesign(
 
     const draftTable = logicalTableByRef(logicalTables, joinTableRef);
     if (!draftTable) {
-      unresolvedErrors.push(
-        `関連 ${i + 1}: 草稿内に参照先テーブル「${joinTableRef}」がありません。Step 2 で定義するか、有効マニフェスト参照に切り替えてください。`,
+      const activeMatches = activeRemoteManifestMatches(
+        joinTableRef,
+        rel.remoteKey,
+        remoteTargets,
       );
+      if (activeMatches.length > 1) {
+        unresolvedErrors.push(
+          `関連 ${i + 1}: テーブル「${joinTableRef}」は複数の有効マニフェストに存在します。Step 2.5 で「有効マニフェストのテーブル」から参照先ページを選んでください。`,
+        );
+      } else if (activeMatches.length === 1 && remoteTargets.length === 0) {
+        unresolvedErrors.push(
+          `関連 ${i + 1}: 参照先「${joinTableRef}」は有効マニフェスト側のテーブルです。参照先一覧を読み込んでから再度開いてください。`,
+        );
+      } else {
+        unresolvedErrors.push(
+          `関連 ${i + 1}: 参照先テーブル「${joinTableRef}」を解決できません。Step 2.5 で有効マニフェスト参照を選ぶか、Step 2 で草稿内に同じテーブル名を定義してください。`,
+        );
+      }
     }
   }
 

@@ -139,11 +139,18 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 マニフェストは一画面単位のため、画面遷移の hub_relation 順序設定は独立した設定サーフェスとして宣言される。
 Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で設定するのが canonical であり、後工程の独立ステップではない。
 
+**Step 3 列の役割（`canonical_sequential_authoring_pipeline` step 3 `column_roles_contract`）**:
+- **操作ごとの対象項目** (`operationEntityBindings`) — UI／サンプル表に出す列（操作種別ごと）。通常表示の唯一の列チェック UI。
+- **集計キー** (`aggregationKey`) — 集計サンプルの GROUP BY 相当（表示列とは別）。
+- **表示列** (`displayColumns`) — 保存・read ランタイム用。Step 3 では別チェックせず、操作対象の和から自動同期。
+
 **関連実装surface**:
 - `frontend/islands/AdminMainFlowStepper.tsx` — メインフロー表示
 - `frontend/content/adminGuides.ts` — `ADMIN_MAIN_FLOW_STEPS`
 - `frontend/routes/admin/` — 各管理ページルート
 - `frontend/islands/HubNavigationAdmin.tsx` — hub_relation 順序設定 Island（実装済み: list/create/update/deprecate/reorder）
+- `frontend/lib/screenSampleProjection.ts` — 操作対象 → サンプル投影・`displayColumns` 同期
+- `frontend/islands/ContentsScreenDesignPanel.tsx` — Step 3 作者 UI
 - `hubs.hub_relations` / `hubs.topology_manifests` — DB binding
 
 **参照すべき場面**:

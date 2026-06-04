@@ -15,6 +15,7 @@ import {
 } from "../content/adminGuides.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  isEnumBackedColumnDataType,
   DISPLAY_COLUMN_MODE_LABELS,
   HAVING_OPERATOR_OPTIONS,
   LOGICAL_CONNECTOR_OPTIONS,
@@ -363,6 +364,7 @@ Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: contains all SSOT candidates", () =>
     "jsonb",
     "uuid",
     "varchar",
+    "enum",
   ];
   for (const t of required) {
     assertEquals(
@@ -373,11 +375,17 @@ Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: contains all SSOT candidates", () =>
   }
 });
 
-Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: has exactly 10 entries matching SSOT", () => {
+Deno.test("isEnumBackedColumnDataType: true only for enum type", () => {
+  assertEquals(isEnumBackedColumnDataType("enum"), true);
+  assertEquals(isEnumBackedColumnDataType("ENUM"), true);
+  assertEquals(isEnumBackedColumnDataType("text"), false);
+});
+
+Deno.test("COLUMN_TYPE_NORMAL_VIEW_OPTIONS: has exactly 11 entries including enum", () => {
   assertEquals(
     COLUMN_TYPE_NORMAL_VIEW_OPTIONS.length,
-    10,
-    "must have exactly 10 normal-view candidates from SSOT",
+    11,
+    "must have exactly 11 normal-view candidates (SSOT scalars + enum)",
   );
 });
 

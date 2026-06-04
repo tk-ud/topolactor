@@ -10,6 +10,7 @@ import {
   qualifiedColumnKey,
   qualifiedColumnsFromLogicalTables,
   relationKeyColumnOptionsForTableRef,
+  enrichRelationIntentsWithRemoteTargets,
   step3FieldSourceFromDesign,
 } from "../lib/manifestLogicalTables.ts";
 import { emptyManifestScreenDesign } from "../lib/manifestScreenDesign.ts";
@@ -146,6 +147,62 @@ Deno.test("step3FieldSourceFromDesign: unresolved active manifest is explicit er
   );
   assertEquals(unresolvedErrors.length, 1);
   assertEquals(unresolvedErrors[0].includes("missing-manifest"), true);
+});
+
+Deno.test("step3FieldSourceFromDesign: infers active remote when remoteManifestId omitted but unique", () => {
+  const manifestId = "00000000-0000-0000-0000-000000000091";
+  const { qualifiedColumns, unresolvedErrors } = step3FieldSourceFromDesign(
+    [{
+      tableName: "employees",
+      columns: [
+        { name: "user_id", dataType: "uuid", nullable: true },
+        { name: "name", dataType: "text", nullable: true },
+      ],
+    }],
+    [{
+      localTableRef: "employees",
+      localKey: "user_id",
+      joinTableRef: "auth.user",
+      remoteKey: "id",
+    }],
+    [{
+      manifestId,
+      logicalTables: [{
+        tableName: "auth.user",
+        columns: [
+          { name: "id", dataType: "uuid", nullable: false },
+          { name: "username", dataType: "text", nullable: true },
+        ],
+      }],
+    }],
+  );
+  assertEquals(unresolvedErrors, []);
+  assertEquals(qualifiedColumns.some((q) => q.key === "auth.user.id"), true);
+  assertEquals(
+    qualifiedColumns.find((q) => q.key === "auth.user.id")?.remoteManifestId,
+    manifestId,
+  );
+});
+
+Deno.test("enrichRelationIntentsWithRemoteTargets: sets remoteManifestId for auth.user join", () => {
+  const manifestId = "00000000-0000-0000-0000-000000000091";
+  const [enriched] = enrichRelationIntentsWithRemoteTargets(
+    [{
+      localTableRef: "employees",
+      localKey: "user_id",
+      joinTableRef: "auth.user",
+      remoteKey: "id",
+    }],
+    [{ tableName: "employees", columns: [{ name: "user_id", dataType: "uuid", nullable: true }] }],
+    [{
+      manifestId,
+      logicalTables: [{
+        tableName: "auth.user",
+        columns: [{ name: "id", dataType: "uuid", nullable: false }],
+      }],
+    }],
+  );
+  assertEquals(enriched.remoteManifestId, manifestId);
 });
 
 Deno.test("step3FieldSourceFromDesign: unresolved draft remote table is explicit error", () => {

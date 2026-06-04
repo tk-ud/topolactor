@@ -5,11 +5,14 @@ import { parseSearchTargets } from "./manifestScreenDesign.ts";
 import { normalizeRelationKeyColumn } from "./manifestLogicalTables.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
 import type { ContentsPipelineStep } from "../components/ContentsPipelineStepper.tsx";
+import { isEnumBackedColumnDataType } from "../content/adminUxTerms.ts";
 import { primaryOperationKind } from "../runtime/screenAuthoringIntent.ts";
 import {
+  enrichRelationIntentsWithRemoteTargets,
   primaryLogicalTableRef,
   primaryTableColumns,
 } from "./manifestLogicalTables.ts";
+import type { Step3RemoteTargetManifest } from "./manifestLogicalTables.ts";
 import {
   assignHavingConditionsFromDesign,
   assignSearchConditionsFromDesign,
@@ -70,11 +73,17 @@ function shapePayloadFromExisting(
  * Step-scoped assign payload: only the current step's fields come from the draft;
  * all other screen_data_shape fields are taken from existing backend state.
  */
+export type BuildAssignPayloadOptions = {
+  /** Active manifests from list_relationship_remote_targets (Step 2.5 infer). */
+  relationshipRemoteTargets?: Step3RemoteTargetManifest[];
+};
+
 export function buildAssignPayloadForStep(
   step: ContentsPipelineStep,
   manifestId: string,
   design: ManifestScreenDesignDraft,
   existing: ScreenDataShapeSummary | null,
+  options?: BuildAssignPayloadOptions,
 ): AdminManifestScreenDataShapeInput {
   const base = shapePayloadFromExisting(manifestId, existing);
 
@@ -85,7 +94,9 @@ export function buildAssignPayloadForStep(
         name: c.name.trim(),
         dataType: c.dataType,
         nullable: c.nullable,
-        enumGroupId: c.enumGroupId?.trim() || undefined,
+        enumGroupId: isEnumBackedColumnDataType(c.dataType)
+          ? c.enumGroupId?.trim() || undefined
+          : undefined,
       })),
     })).filter((t) => t.columns.length > 0);
     const legacyColumns = primaryTableColumns(design.logicalTables)
@@ -115,9 +126,16 @@ export function buildAssignPayloadForStep(
   }
 
   if (step === 2.5) {
+    const remoteTargets: Step3RemoteTargetManifest[] =
+      options?.relationshipRemoteTargets ?? [];
+    const enriched = enrichRelationIntentsWithRemoteTargets(
+      design.relationIntents,
+      design.logicalTables,
+      remoteTargets,
+    );
     return {
       ...base,
-      relationIntents: design.relationIntents
+      relationIntents: enriched
         .filter((r) => r.joinTableRef.trim() && r.localKey.trim() && r.remoteKey.trim())
         .map((r) => ({
           localTableRef: r.localTableRef.trim(),

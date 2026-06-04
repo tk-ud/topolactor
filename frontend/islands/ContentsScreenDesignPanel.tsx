@@ -23,6 +23,11 @@ import ContentsDataEditor from "../components/ContentsDataEditor.tsx";
 import ContentsStep3FieldMatrix from "../components/ContentsStep3FieldMatrix.tsx";
 import { ValidationErrorPanel } from "../components/ValidationErrorPanel.tsx";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
+import {
+  displayShapePatchFromOperationBindings,
+  hydrateOperationBindingsFromLegacyDisplayColumns,
+  projectionColumnsFromOperationBindings,
+} from "../lib/screenSampleProjection.ts";
 import { formatMeasureLabel } from "../lib/aggregationMeasures.ts";
 import {
   normalizeRelationKeyColumn,
@@ -31,6 +36,7 @@ import {
   emptyLogicalTable,
   qualifiedColumnKey,
   qualifiedColumnsFromLogicalTables,
+  enrichRelationIntentsWithRemoteTargets,
   step3FieldSourceFromDesign,
   qualifyScreenDesignColumnKeys,
   namedLogicalTableRefs,
@@ -52,7 +58,6 @@ import {
 } from "../runtime/screenAuthoringIntent.ts";
 import {
   clearManifestScreenDesignLocal,
-  type DisplayColumnMode,
   emptyManifestScreenDesign,
   type HavingCondition,
   loadManifestScreenDesignLocal,
@@ -83,19 +88,18 @@ import {
 } from "../api/adminApi.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
-  DISPLAY_COLUMN_MODE_LABELS,
   HAVING_OPERATOR_OPTIONS,
   LOGICAL_CONNECTOR_OPTIONS,
   SEARCH_OPERATOR_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
+  isEnumBackedColumnDataType,
   UX_FIELD_ADD_SEARCH_CONDITION,
   UX_FIELD_ADVANCED_SEARCH_CONDITIONS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_AGGREGATION_MEASURES,
-  UX_FIELD_DISPLAY_COLUMNS,
-  UX_FIELD_DISPLAY_MODE,
   UX_FIELD_ENUM_GROUP,
+  UX_FIELD_OPERATION_ENTITY,
   UX_FIELD_ENUM_GROUP_NONE,
   UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
@@ -117,8 +121,7 @@ function SamplePreviewPanel({
   columns,
   aggregationKey,
   aggregationMeasures,
-  displayColumns,
-  displayColumnMode,
+  projectionColumns,
   initialDataRows,
   searchConditions,
   havingConditions,
@@ -126,17 +129,13 @@ function SamplePreviewPanel({
   columns: { name: string; dataType: string }[];
   aggregationKey: string;
   aggregationMeasures: { column: string; function: string }[];
-  displayColumns: string[];
-  displayColumnMode: DisplayColumnMode;
+  /** From 操作ごとの対象項目 (operationEntityBindings). */
+  projectionColumns: string[];
   initialDataRows: Record<string, string>[];
   searchConditions: SearchCondition[];
   havingConditions: HavingCondition[];
 }): JSX.Element {
-  const activeCols = displayColumnMode === "none"
-    ? []
-    : displayColumnMode === "all"
-    ? columns.map((c) => c.name)
-    : displayColumns;
+  const activeCols = projectionColumns;
   const filteredRows = applySearchConditions(initialDataRows, searchConditions);
   const hasRows = filteredRows.length > 0;
 
@@ -214,22 +213,16 @@ function SamplePreviewPanel({
           )}
         </ul>
       )}
-      {displayColumnMode === "none"
-        ? (
-          <p class="mb-1 italic text-slate-400">
-            {UX_FIELD_DISPLAY_COLUMNS}: 集計値のみ（列なし）
-          </p>
-        )
-        : activeCols.length > 0
+      {activeCols.length > 0
         ? (
           <p class="mb-1 text-slate-500">
-            {UX_FIELD_DISPLAY_COLUMNS}:{" "}
+            {UX_FIELD_OPERATION_ENTITY}:{" "}
             <span class="font-mono">{activeCols.join(", ")}</span>
           </p>
         )
         : (
           <p class="mb-1 italic text-slate-400">
-            {UX_FIELD_DISPLAY_COLUMNS}: 未選択（全体集計のプレビュー）
+            {UX_FIELD_OPERATION_ENTITY}で列を選ぶとサンプル表に反映されます
           </p>
         )}
       {hasRows && aggregationKey && groups.size > 0
@@ -254,14 +247,10 @@ function SamplePreviewPanel({
             表示列を選ばないと集計キー単位の表は出ません（全体集計は表示列なしで保存可能）
           </p>
         )
-        : hasRows && displayColumnMode !== "none"
+        : hasRows && activeCols.length > 0
         ? <div class="mt-2 overflow-x-auto">{renderTable(filteredRows)}</div>
         : hasRows
-        ? (
-          <p class="mt-1 italic text-slate-400">
-            集計値のみモード — 行データは非表示
-          </p>
-        )
+        ? null
         : (
           <p class="mt-1 italic text-slate-400">
             初期データ行がありません（step 3 で追加してください）
@@ -325,8 +314,17 @@ export default function ContentsScreenDesignPanel({
     null,
   );
 
+  const needsEnumDictionaryCatalog = design.logicalTables.some((t) =>
+    t.columns.some((c) => isEnumBackedColumnDataType(c.dataType))
+  );
+
   useEffect(() => {
     if (activeStep !== 2 && activeStep !== 3) return;
+    if (!needsEnumDictionaryCatalog) {
+      setEnumGroups([]);
+      setEnumDictionaryError(null);
+      return;
+    }
     void (async () => {
       try {
         const groups = await listEnumDictionaryGroups();
@@ -344,7 +342,7 @@ export default function ContentsScreenDesignPanel({
         );
       }
     })();
-  }, [activeStep]);
+  }, [activeStep, needsEnumDictionaryCatalog]);
 
   useEffect(() => {
     if ((activeStep !== 2.5 && activeStep !== 3) || !selectedId) return;
@@ -432,15 +430,20 @@ export default function ContentsScreenDesignPanel({
     }
 
     const local = loadManifestScreenDesignLocal(manifestId);
+    const mergeDesign = (base: ManifestScreenDesignDraft) =>
+      hydrateOperationBindingsFromLegacyDisplayColumns(
+        qualifyScreenDesignColumnKeys(base),
+      );
+
     if (local) {
-      setDesign(qualifyScreenDesignColumnKeys({
+      setDesign(mergeDesign({
         ...fromBackend,
         ...local,
         screenLabel: local.screenLabel || fromBackend.screenLabel,
       }));
       setDraftSource("merged");
     } else {
-      setDesign(fromBackend);
+      setDesign(mergeDesign(fromBackend));
       setDraftSource(
         shape.logicalTables.length > 0 ||
           (shape.screenOperationKinds?.length ?? 0) > 0 ||
@@ -485,6 +488,28 @@ export default function ContentsScreenDesignPanel({
       return next;
     });
   };
+
+  useEffect(() => {
+    if (remoteTargets.length === 0 || design.relationIntents.length === 0) return;
+    const remoteManifests = remoteTargets.map((t) => ({
+      manifestId: t.manifestId,
+      logicalTables: t.logicalTables.map((lt) => ({
+        tableName: lt.tableName,
+        columns: lt.columns,
+      })),
+    }));
+    const enriched = enrichRelationIntentsWithRemoteTargets(
+      design.relationIntents,
+      design.logicalTables,
+      remoteManifests,
+    );
+    const changed = enriched.some((rel, i) =>
+      rel.remoteManifestId !== design.relationIntents[i]?.remoteManifestId
+    );
+    if (changed) {
+      patchDesign({ relationIntents: enriched });
+    }
+  }, [remoteTargets, design.logicalTables, design.relationIntents]);
 
   const handleStep1Submit = async () => {
     if (!design.screenLabel.trim()) {
@@ -556,7 +581,15 @@ export default function ContentsScreenDesignPanel({
     const shape = backendDetail
       ? extractScreenDataShapeFromTopology(backendDetail.topologyRawJson)
       : null;
-    const payload = buildAssignPayloadForStep(step, selectedId, design, shape);
+    const payload = buildAssignPayloadForStep(step, selectedId, design, shape, {
+      relationshipRemoteTargets: remoteTargets.map((t) => ({
+        manifestId: t.manifestId,
+        logicalTables: t.logicalTables.map((lt) => ({
+          tableName: lt.tableName,
+          columns: lt.columns,
+        })),
+      })),
+    });
     const ok = await runAdminSubmit(
       setSubmitStatus,
       setLoading,
@@ -605,46 +638,6 @@ export default function ContentsScreenDesignPanel({
   const canSaveDesign = Boolean(selectedId) &&
     selectedStatus.toLowerCase() === "draft";
 
-  const toggleOperationKind = (kind: ScreenOperationKind) => {
-    const has = design.operationKinds.includes(kind);
-    const next = has
-      ? design.operationKinds.filter((k) => k !== kind)
-      : [...design.operationKinds, kind];
-    const nextBindings = has
-      ? design.operationEntityBindings.filter((b) => b.operationKind !== kind)
-      : [
-        ...design.operationEntityBindings,
-        { operationKind: kind, entityTargetColumns: [] },
-      ];
-    patchDesign({
-      operationKinds: next.length > 0 ? next : ["list"],
-      operationKind: (next[0] ?? "list") as ScreenOperationKind,
-      operationEntityBindings: nextBindings,
-    });
-  };
-
-  const toggleEntityBindingColumn = (
-    kind: ScreenOperationKind,
-    colName: string,
-  ) => {
-    const existing = design.operationEntityBindings.find((b) =>
-      b.operationKind === kind
-    );
-    const current = existing?.entityTargetColumns ?? [];
-    const nextCols = current.includes(colName)
-      ? current.filter((c) => c !== colName)
-      : [...current, colName];
-    const next = existing
-      ? design.operationEntityBindings.map((b) =>
-        b.operationKind === kind ? { ...b, entityTargetColumns: nextCols } : b
-      )
-      : [...design.operationEntityBindings, {
-        operationKind: kind,
-        entityTargetColumns: nextCols,
-      }];
-    patchDesign({ operationEntityBindings: next });
-  };
-
   const draftSourceLabel = {
     none: "未読込",
     local: "この端末の未保存変更",
@@ -674,6 +667,70 @@ export default function ContentsScreenDesignPanel({
     : [];
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
+  const sampleProjectionColumns = projectionColumnsFromOperationBindings(
+    design.operationKinds,
+    design.operationEntityBindings,
+    columnKeys,
+  );
+
+  const toggleOperationKind = (kind: ScreenOperationKind) => {
+    const has = design.operationKinds.includes(kind);
+    const nextKinds = has
+      ? design.operationKinds.filter((k) => k !== kind)
+      : [...design.operationKinds, kind];
+    const resolvedKinds = nextKinds.length > 0 ? nextKinds : ["list"];
+    const nextBindings = has
+      ? design.operationEntityBindings.filter((b) => b.operationKind !== kind)
+      : [
+        ...design.operationEntityBindings,
+        { operationKind: kind, entityTargetColumns: [] },
+      ];
+    patchDesign({
+      operationKinds: resolvedKinds,
+      operationKind: (resolvedKinds[0] ?? "list") as ScreenOperationKind,
+      operationEntityBindings: nextBindings,
+      ...displayShapePatchFromOperationBindings(
+        {
+          operationKinds: resolvedKinds,
+          operationEntityBindings: nextBindings,
+          displayColumnMode: design.displayColumnMode,
+        },
+        columnKeys,
+      ),
+    });
+  };
+
+  const toggleEntityBindingColumn = (
+    kind: ScreenOperationKind,
+    colName: string,
+  ) => {
+    const existing = design.operationEntityBindings.find((b) =>
+      b.operationKind === kind
+    );
+    const current = existing?.entityTargetColumns ?? [];
+    const nextCols = current.includes(colName)
+      ? current.filter((c) => c !== colName)
+      : [...current, colName];
+    const nextBindings = existing
+      ? design.operationEntityBindings.map((b) =>
+        b.operationKind === kind ? { ...b, entityTargetColumns: nextCols } : b
+      )
+      : [...design.operationEntityBindings, {
+        operationKind: kind,
+        entityTargetColumns: nextCols,
+      }];
+    patchDesign({
+      operationEntityBindings: nextBindings,
+      ...displayShapePatchFromOperationBindings(
+        {
+          operationKinds: design.operationKinds,
+          operationEntityBindings: nextBindings,
+          displayColumnMode: design.displayColumnMode,
+        },
+        columnKeys,
+      ),
+    });
+  };
 
   useEffect(() => {
     if (activeStep !== 3) return;
@@ -705,8 +762,11 @@ export default function ContentsScreenDesignPanel({
   const validateEnumGroupResolution = (step: ContentsPipelineStep): string | null => {
     const cols = step === 3 ? step3FieldSource.qualifiedColumns : localQualifiedColumns;
     for (const q of cols) {
+      if (!isEnumBackedColumnDataType(q.column.dataType)) continue;
       const groupId = q.column.enumGroupId?.trim();
-      if (!groupId) continue;
+      if (!groupId) {
+        return `列「${q.key}」は列挙（enum）型です。${UX_FIELD_ENUM_GROUP}を選択してください。`;
+      }
       if (step === 2) {
         if (!enumGroups.some((g) => g.groupId === groupId)) {
           return `列「${q.key}」の${UX_FIELD_ENUM_GROUP}が辞書に存在しません。`;
@@ -1074,7 +1134,7 @@ export default function ContentsScreenDesignPanel({
       <p class="mb-2 text-xs text-muted-xs">
         1つの下書きに複数テーブルを登録できます。Step 2.5 の関連設定で参照先テーブル名を使います。
       </p>
-      {enumDictionaryError && (
+      {needsEnumDictionaryCatalog && enumDictionaryError && (
         <p class="mb-2 text-xs text-red-600" role="alert">{enumDictionaryError}</p>
       )}
       {design.logicalTables.map((table, tableIndex) => (
@@ -1094,10 +1154,16 @@ export default function ContentsScreenDesignPanel({
                 })}
             />
           </label>
-          {table.columns.map((col, colIndex) => (
+          {table.columns.map((col, colIndex) => {
+            const showEnumGroup = isEnumBackedColumnDataType(col.dataType);
+            return (
             <div
               key={colIndex}
-              class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto_auto] sm:items-start"
+              class={`mt-2 grid gap-2 sm:items-start ${
+                showEnumGroup
+                  ? "sm:grid-cols-[1fr_1fr_1fr_auto_auto]"
+                  : "sm:grid-cols-[1fr_1fr_auto_auto]"
+              }`}
             >
               <input
                 class="rounded border px-2 py-1 text-xs font-mono"
@@ -1117,9 +1183,17 @@ export default function ContentsScreenDesignPanel({
                   onChange={(e) => {
                     const val = (e.target as HTMLSelectElement).value;
                     if (val === "__advanced__") {
-                      patchLogicalTableColumn(tableIndex, colIndex, { dataType: "" });
+                      patchLogicalTableColumn(tableIndex, colIndex, {
+                        dataType: "",
+                        enumGroupId: undefined,
+                      });
                     } else {
-                      patchLogicalTableColumn(tableIndex, colIndex, { dataType: val });
+                      patchLogicalTableColumn(tableIndex, colIndex, {
+                        dataType: val,
+                        enumGroupId: isEnumBackedColumnDataType(val)
+                          ? col.enumGroupId
+                          : undefined,
+                      });
                     }
                   }}
                 >
@@ -1137,33 +1211,40 @@ export default function ContentsScreenDesignPanel({
                     class="mt-1 w-full rounded border px-2 py-1 text-xs font-mono"
                     placeholder="詳細な型名"
                     value={col.dataType}
-                    onInput={(e) =>
+                    onInput={(e) => {
+                      const dataType = (e.target as HTMLInputElement).value;
                       patchLogicalTableColumn(tableIndex, colIndex, {
-                        dataType: (e.target as HTMLInputElement).value,
-                      })}
+                        dataType,
+                        enumGroupId: isEnumBackedColumnDataType(dataType)
+                          ? col.enumGroupId
+                          : undefined,
+                      });
+                    }}
                   />
                 )}
               </div>
-              <div>
-                <label class="mb-0.5 block text-[10px] text-slate-500">
-                  {UX_FIELD_ENUM_GROUP}
-                </label>
-                <select
-                  class="w-full rounded border px-2 py-1 text-xs"
-                  value={col.enumGroupId ?? ""}
-                  onChange={(e) =>
-                    patchLogicalTableColumn(tableIndex, colIndex, {
-                      enumGroupId: (e.target as HTMLSelectElement).value || undefined,
-                    })}
-                >
-                  <option value="">{UX_FIELD_ENUM_GROUP_NONE}</option>
-                  {enumGroups.map((g) => (
-                    <option key={g.groupId} value={g.groupId}>
-                      {g.groupName}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {showEnumGroup && (
+                <div>
+                  <label class="mb-0.5 block text-[10px] text-slate-500">
+                    {UX_FIELD_ENUM_GROUP}
+                  </label>
+                  <select
+                    class="w-full rounded border px-2 py-1 text-xs"
+                    value={col.enumGroupId ?? ""}
+                    onChange={(e) =>
+                      patchLogicalTableColumn(tableIndex, colIndex, {
+                        enumGroupId: (e.target as HTMLSelectElement).value || undefined,
+                      })}
+                  >
+                    <option value="">{UX_FIELD_ENUM_GROUP_NONE}</option>
+                    {enumGroups.map((g) => (
+                      <option key={g.groupId} value={g.groupId}>
+                        {g.groupName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <label class="flex items-center gap-2 text-xs sm:pt-1">
                 <input
                   type="checkbox"
@@ -1186,7 +1267,8 @@ export default function ContentsScreenDesignPanel({
                 </button>
               )}
             </div>
-          ))}
+          );
+          })}
           <div class="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
@@ -1234,71 +1316,6 @@ export default function ContentsScreenDesignPanel({
           項目候補は Step 2 の論理テーブルと Step 2.5 で接続した参照先テーブルから構成されます（
           {columnKeys.join(", ")}）。型の変更は Step 2、関連の変更は Step 2.5 で行ってください。
         </p>
-      )}
-
-      {activeStep === 3 && qualifiedColumns.length > 0 && (
-        <div class="mt-4">
-          <h3 class="text-xs font-semibold">{UX_FIELD_DISPLAY_MODE}</h3>
-          <div class="mt-1 flex flex-wrap gap-3">
-            {Object.entries(DISPLAY_COLUMN_MODE_LABELS).map(([mode, label]) => (
-              <label key={mode} class="flex items-center gap-1 text-xs">
-                <input
-                  type="radio"
-                  name="displayColumnMode"
-                  value={mode}
-                  checked={design.displayColumnMode === mode}
-                  onChange={() => patchDesign({ displayColumnMode: mode as DisplayColumnMode })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
-          {design.displayColumnMode === "selected" && (
-            <div class="mt-2">
-              <p class="mb-1 text-xs text-muted-xs">表示する列を選択</p>
-              <div class="mb-1 flex flex-wrap gap-2">
-                <label class="text-xs">
-                  <input
-                    type="checkbox"
-                    checked={design.displayColumns.length === columnKeys.length && columnKeys.length > 0}
-                    onChange={() => {
-                      patchDesign({
-                        displayColumns: design.displayColumns.length === columnKeys.length
-                          ? []
-                          : [...columnKeys],
-                      });
-                    }}
-                  />
-                  {" "}全選択
-                </label>
-                <button
-                  type="button"
-                  class="text-xs text-slate-500 underline"
-                  onClick={() => patchDesign({ displayColumns: [] })}
-                >
-                  全解除
-                </button>
-              </div>
-              <div class="flex flex-wrap gap-2">
-                {columnKeys.map((col) => (
-                  <label key={col} class="flex items-center gap-1 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={design.displayColumns.includes(col)}
-                      onChange={() => {
-                        const next = design.displayColumns.includes(col)
-                          ? design.displayColumns.filter((c) => c !== col)
-                          : [...design.displayColumns, col];
-                        patchDesign({ displayColumns: next });
-                      }}
-                    />
-                    <span class="font-mono">{col}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
       )}
 
       {activeStep === 2.5 && (
@@ -1549,8 +1566,7 @@ export default function ContentsScreenDesignPanel({
           }))}
           aggregationKey={design.aggregationKey}
           aggregationMeasures={design.aggregationMeasures}
-          displayColumns={design.displayColumns}
-          displayColumnMode={design.displayColumnMode}
+          projectionColumns={sampleProjectionColumns}
           initialDataRows={flattenInitialDataRowsForSample(design.initialDataRows)}
           searchConditions={design.searchConditions}
           havingConditions={design.havingConditions}

@@ -76,7 +76,9 @@ export const UX_FIELD_AGGREGATION_COLUMNS = "集計列";
 export const UX_FIELD_AGGREGATION_FUNCTION = "集計関数";
 /** 集計式（列＋関数の複数行） */
 export const UX_FIELD_AGGREGATION_MEASURES = "集計式";
-/** Step 3 項目の使い分け（検索・操作・表示を1表に） */
+/**
+ * Step 3 項目の使い分け: 操作ごとの対象＝UI投影、集計キー＝GROUP BY、表示列は保存用（作者は操作対象のみ編集）。
+ */
 export const UX_FIELD_STEP3_COLUMN_USAGE = "項目の使い分け";
 
 /** 集計関数候補（topology intent; JsonbManifestRuntime 系と整合） */
@@ -111,7 +113,10 @@ export const UX_FIELD_ADD_SEARCH_CONDITION = "検索条件を追加";
 export const UX_FIELD_LOGICAL_CONDITION = "論理条件";
 /** 集計結果の絞り込み（詳細表示） */
 export const UX_FIELD_HAVING_CONDITIONS = "集計後の絞り込み（詳細）";
-/** 表示列の範囲（通常表示） */
+/**
+ * 表示列モード（ランタイム用）。Step 3 通常表示では操作ごとの対象から displayColumns を同期するため、
+ * 作者向けの独立チェック UI には使わない。SSOT: admin-console-workflow-ssot.yaml column_roles_contract.
+ */
 export const UX_FIELD_DISPLAY_MODE = "表示列の範囲";
 
 /** 表示列モード候補 */
@@ -174,7 +179,13 @@ export const COLUMN_TYPE_NORMAL_VIEW_OPTIONS: readonly string[] = [
   "jsonb",
   "uuid",
   "varchar",
+  "enum",
 ];
+
+/** Step 2/3: enum-backed columns use dataType "enum" and optional enumGroupId binding. */
+export function isEnumBackedColumnDataType(dataType: string): boolean {
+  return dataType.trim().toLowerCase() === "enum";
+}
 
 /** 項目型の通常表示ラベル。option value は DB/API 契約の型名を維持する。 */
 export const UX_COLUMN_TYPE_LABELS: Record<string, string> = {
@@ -188,6 +199,7 @@ export const UX_COLUMN_TYPE_LABELS: Record<string, string> = {
   jsonb: "自由形式データ",
   uuid: "識別子",
   varchar: "短い文字列",
+  enum: "列挙（enum）",
 };
 
 /** 通常表示候補外のカスタム型を入力するための advanced/other オプションラベル */

@@ -24,6 +24,32 @@ Deno.test("contentsAssign step 2.5: includes remoteManifestId for active remote 
   );
 });
 
+Deno.test("contentsAssign step 2.5: infers remoteManifestId for unique active auth.user", () => {
+  const design = emptyManifestScreenDesign();
+  const manifestId = "00000000-0000-0000-0000-000000000091";
+  design.relationIntents = [{
+    localTableRef: "employees",
+    localKey: "user_id",
+    joinTableRef: "auth.user",
+    remoteKey: "id",
+  }];
+  design.logicalTables = [{
+    tableName: "employees",
+    columns: [{ name: "user_id", dataType: "uuid", nullable: true }],
+  }];
+
+  const payload = buildAssignPayloadForStep(2.5, "draft-1", design, null, {
+    relationshipRemoteTargets: [{
+      manifestId,
+      logicalTables: [{
+        tableName: "auth.user",
+        columns: [{ name: "id", dataType: "uuid", nullable: false }],
+      }],
+    }],
+  });
+  assertEquals(payload.relationIntents?.[0].remoteManifestId, manifestId);
+});
+
 Deno.test("contentsAssign step 2.5: draft-only remote omits remoteManifestId", () => {
   const design = emptyManifestScreenDesign();
   design.relationIntents = [{
