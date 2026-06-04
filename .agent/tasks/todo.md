@@ -96,11 +96,11 @@
 **実行前:** AGENTS.md を読む。
 
 - [ ] `/admin/contents` のデータ入力 section に CSV・JSON import をサブ機能として接続する
-  - 問題: `frontend/islands/AdminImport.tsx` は `listImportManifests` / `listImportSchemas` / `uploadImportPreview` / `applyImport` を持つ import UI として存在するが、canonical `/admin/contents` のデータ入力 section には mount されていない。`frontend/routes/admin/contents.tsx` は `ContentsAdmin` のみを表示するため、Step2/データ入力 or import の作業面が canonical admin flow 上に存在しない。
+  - 問題: `frontend/islands/AdminImport.tsx` は `listImportManifests` / `listImportSchemas` / `uploadImportPreview` / `applyImport` を持つ import UI として存在するが、canonical `/admin/contents` のデータ入力 section には mount されていない。`frontend/routes/admin/contents.tsx` は `ContentsAdmin` のみを表示するため、Step2/データ入力 or import の作業面が canonical admin flow 上に存在しない。また現行 SSOT は `/admin/import` route 不要までは示すが、「/admin/contents のデータ入力サブ機能として manual input と CSV/JSON import を持つ」ことを十分に明文化していない。
   - 目的: データ駆動OSとして、データの形定義だけでなく、ユーザーが実データ候補を手入力または CSV/JSON import できる surface を `/admin/contents` の正規導線へ接続する。
-  - 改善方針: `/admin/import` route は作らない。既存 `AdminImport.tsx` の preview → apply UI/ロジックを、`/admin/contents` 内の「データ入力」サブ機能へ統合する。通常導線では「手入力」と「CSV・JSON取り込み」を同一データ入力 section の選択肢として扱い、backend の `admin_csv_json_import` preview → explicit apply 経路を使う。
-  - 対象ファイル: `frontend/islands/ContentsAdmin.tsx`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/islands/AdminImport.tsx`, `frontend/routes/admin/contents.tsx`, `frontend/tests/adminMainFlow.test.ts`, `frontend/tests/adminUxGuard.test.ts`。
-  - 完了条件: `/admin/contents` 上でデータ入力または CSV/JSON import surface が到達可能になり、import は preview → explicit apply を経由し、frontend が DB 直書き・topology判断を持たないことをテストで固定する。`/admin/import` route は追加しない。
+  - 改善方針: まず `docs/design/admin-console-workflow-ssot.yaml` に、import は `/admin/import` ではなく `/admin/contents` の data input subfeature であり、手入力と CSV/JSON import は同一データ入力 section の入力モードであることを追記する。その後、既存 `AdminImport.tsx` の preview → apply UI/ロジックを、`/admin/contents` 内の「データ入力」サブ機能へ統合する。backend の `admin_csv_json_import` preview → explicit apply 経路を使い、`/admin/import` route は作らない。
+  - 対象ファイル: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsAdmin.tsx`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/islands/AdminImport.tsx`, `frontend/routes/admin/contents.tsx`, `frontend/tests/adminMainFlow.test.ts`, `frontend/tests/adminUxGuard.test.ts`。
+  - 完了条件: SSOT に `/admin/contents` data input subfeature として manual input / CSV・JSON import が明文化され、`/admin/contents` 上でデータ入力または CSV/JSON import surface が到達可能になり、import は preview → explicit apply を経由し、frontend が DB 直書き・topology判断を持たないことをテストで固定する。`/admin/import` route は追加しない。
 
 ---
 
