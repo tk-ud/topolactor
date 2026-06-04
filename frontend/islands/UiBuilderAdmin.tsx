@@ -1587,13 +1587,13 @@ function BucketSection({
     setLoading(true);
     setErrors([]);
     try {
-      let lastHandoff: PackagedHandoff | null = null;
+      // Step 1: ensure all items exist in the bucket (create if absent)
+      const bucketItemIds: string[] = [];
       for (const key of keys) {
         const entry = COMPONENT_CATALOG_ENTRIES.find((c) => c.componentKey === key);
         if (!entry) continue;
         const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
         let bucketId = bucketStatus.bucketItemId;
-        let itemStatus = bucketStatus.status;
         if (!bucketId) {
           const body = await dispatchAdminOp("ui_component_bucket", "create", {
             componentKey: entry.componentKey,
@@ -1612,25 +1612,35 @@ function BucketSection({
             setStatus("部品の登録に失敗しました。");
             return;
           }
-          itemStatus = "bucketed";
         }
-        const { handoff, error: pkgErr } = await packageBucketItem(
-          bucketId,
-          effectiveRouteKey,
-          itemStatus,
-          key,
-        );
-        if (pkgErr?.length) {
-          setErrors(pkgErr);
-          setStatus(pkgErr[0]?.message ?? "パッケージ化に失敗しました。");
-          return;
-        }
-        if (handoff) lastHandoff = handoff;
+        bucketItemIds.push(bucketId);
       }
-      if (!lastHandoff) {
+
+      if (bucketItemIds.length === 0) {
         setStatus("パッケージ化結果を取得できませんでした。");
         return;
       }
+
+      // Step 2: single promote_package call — 1 route = 1 package with all selected components
+      const promBody = await dispatchAdminOp("package_generator", "promote_package", {
+        routeKey: effectiveRouteKey,
+        bucketItemIds,
+      });
+      if (dispatchOpFailed(promBody)) {
+        setErrors(promBody?.errors ?? [{ code: "PROMOTE_FAILED", message: "パッケージ化に失敗しました。" }]);
+        setStatus(promBody?.errors?.[0]?.message ?? "パッケージ化に失敗しました。");
+        return;
+      }
+      const data = promBody?.emission?.data as Record<string, unknown> | undefined;
+      const packageId = typeof data?.packageId === "string" ? data.packageId : null;
+      const layoutId = typeof data?.layoutId === "string" ? data.layoutId : null;
+      const routeKey = typeof data?.routeKey === "string" ? data.routeKey : effectiveRouteKey;
+      if (!packageId || !layoutId) {
+        setStatus("パッケージ化結果を取得できませんでした。");
+        return;
+      }
+      const lastHandoff: PackagedHandoff = { packageId, routeKey, layoutId };
+
       setStatus(`${keys.length} 件のパッケージ化が完了しました。layout タブで編集を続けます。`);
       await loadBucket();
       const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");

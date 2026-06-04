@@ -46,6 +46,16 @@ public record PackageGenerateRequestDto(
 );
 
 /// <summary>
+/// Request to promote multiple bucket items into a single package for a route.
+/// All bucketItemIds must be UUIDs of rows in ui_component_bucket (bucketed or packaging status).
+/// routeKey determines the package_key ({routeKey}:pkg) — 1 route = 1 package.
+/// </summary>
+public record PackageGenerateBatchRequestDto(
+    [property: JsonPropertyName("routeKey")]      string RouteKey,
+    [property: JsonPropertyName("bucketItemIds")] IReadOnlyList<string> BucketItemIds
+);
+
+/// <summary>
 /// Result code for PackageGeneratorRuntime.GenerateAsync / UiTopologyRepository.PromoteBucketItemAsync.
 /// </summary>
 public enum PackageGenerateCode
@@ -85,6 +95,39 @@ public record PackageGenerateResponseDto(
     [property: JsonPropertyName("wiringId")]     string? WiringId,
     [property: JsonPropertyName("message")]      string Message,
     [property: JsonPropertyName("errorCode")]    string? ErrorCode = null
+);
+
+/// <summary>
+/// Internal result of the batch promotion pipeline (promote_package).
+/// ComponentIds and BucketItemIds are non-empty only when Code = Success.
+/// </summary>
+public record PackageGenerateBatchResult(
+    PackageGenerateCode Code,
+    Guid? TensorId,
+    Guid? PackageId,
+    Guid? LayoutId,
+    Guid? WiringId,
+    IReadOnlyList<Guid> ComponentIds,
+    IReadOnlyList<Guid> BucketItemIds,
+    string? ErrorCode = null,
+    string? Message = null
+);
+
+/// <summary>
+/// API response for package_generator:promote_package.
+/// packageId is the single package created for this routeKey.
+/// componentIds and bucketItemIds reflect the member set stored in package_schema_json.
+/// </summary>
+public record PackageGenerateBatchResponseDto(
+    [property: JsonPropertyName("ok")]             bool Ok,
+    [property: JsonPropertyName("tensorId")]       string? TensorId,
+    [property: JsonPropertyName("packageId")]      string? PackageId,
+    [property: JsonPropertyName("layoutId")]       string? LayoutId,
+    [property: JsonPropertyName("wiringId")]       string? WiringId,
+    [property: JsonPropertyName("bucketItemIds")]  IReadOnlyList<string> BucketItemIds,
+    [property: JsonPropertyName("componentIds")]   IReadOnlyList<string> ComponentIds,
+    [property: JsonPropertyName("message")]        string Message,
+    [property: JsonPropertyName("errorCode")]      string? ErrorCode = null
 );
 
 /// <summary>
@@ -146,7 +189,9 @@ public record AdminPackageListItemDto(
     [property: JsonPropertyName("packageKey")] string PackageKey,
     [property: JsonPropertyName("routeKey")] string? RouteKey,
     [property: JsonPropertyName("layoutId")] string? LayoutId,
-    [property: JsonPropertyName("wiringId")] string? WiringId
+    [property: JsonPropertyName("wiringId")] string? WiringId,
+    [property: JsonPropertyName("componentIds")] IReadOnlyList<string>? ComponentIds = null,
+    [property: JsonPropertyName("bucketItemIds")] IReadOnlyList<string>? BucketItemIds = null
 );
 
 public record AdminPackageComponentDto(
