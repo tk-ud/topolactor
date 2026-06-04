@@ -9,6 +9,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
+| `ssot-old-vocabulary-cleanup` | SSOT旧語彙 / 不要 production surface cleanup | 4 | `docs/design/runtime-orchestration-ssot.yaml` / `docs/design/sql-attention-logs-ssot.yaml` |
 
 ---
 
@@ -53,6 +54,19 @@
 ## Bundle `product-nocode-loop-acceptance`
 
 - [ ] `product.dynamic_support_nocode_loop` 手動受入（roadmap 追従）
+
+---
+
+## Bundle `ssot-old-vocabulary-cleanup`
+
+**SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/sql-attention-logs-ssot.yaml`, `docs/framework-policy.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+- [ ] `dispatcher_legacy_alias: dispatchar` を削除し、必要なら migration / negative-check に限定して旧語彙を隔離
+- [ ] `LegacyChangeIntake*` / `legacy_mirror` / `legacy_system` を SSOT 準拠の existing-system / external-intake 語彙へ収束、または design SSOT に明示し、`/intake/legacy-change` の role は JWT claim 由来に固定して body 由来 role を manifest axis に使わない
+- [ ] `HubAttractorExplorationRuntime.ExploreLegacyHubCurrentSupportCacheDiagnosticsAsync` と related legacy support-cache cosine diagnostics / compatibility payload を削除または test-only / negative-check に隔離し、canonical scheduler route が `hubs.hub_relations` 探索のみであることをテスト更新
+- [ ] `runtime_jump_event_contract` の `from` / `to` 形と実装の `PastAddress` / `CurrentAddress` / `PlannedAddress` 形を突合し、SSOT・DTO・テストの canonical jump event shape を一本化
 
 ---
 
