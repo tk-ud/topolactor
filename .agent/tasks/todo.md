@@ -10,7 +10,7 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
 | `user-login-seed-manifest-auth-boundary` | 通常ユーザログイン seed manifest / 認証境界 | 1 | `docs/design/runtime-orchestration-ssot.yaml` / auth DB SSOT（要追記） |
-| `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 | 1 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
+| `admin-relationship-active-manifest-targets` | Step 2.5 relationship 有効manifest参照 / Step3関連項目表示 | 2 | `docs/design/admin-console-workflow-ssot.yaml` / `docs/design/db-schema.yaml` |
 | `search-aggregation-runtime-operator-contract` | searchConditions/havingConditions/displayColumnMode runtime entity 実行契約 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 
@@ -137,6 +137,12 @@
   - 改善方針: まず `docs/design/admin-console-workflow-ssot.yaml` の Step 2.5 relationship_configuration に、local side は current draft manifest scoped、remote side は current draft tables に加えて active/published manifests の table refs を選択可能、という境界を追記する。その後 frontend の relationship selector と backend intent validation/read model を更新し、remote target が active manifest table である場合も fail-close で解決・保存できるようにする。
   - 対象ファイル候補: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/lib/contentsAssign.ts`, `frontend/api/adminApi.ts`, `backend/runtime/AdminRuntime.cs`, `backend/repository/ManifestRepository.cs`, `backend/repository/NpgsqlManifestRepository.cs`, relationship / manifest management tests。
   - 完了条件: Step 2.5 UI で local side は編集中 manifest の配下テーブルに限定され、remote side は有効manifest/tableも選択できる。backend は remote target の manifest/table_ref を検証し、未解決時は silent fallback せず blocking error にする。テストで draft-only 固定への退行を防ぐ。
+- [ ] `/admin/contents` Step 3 の項目候補に、Step 2.5 relationship で接続した table の項目を表示・選択可能にする
+  - 問題: Step 2.5 で draft/active manifest の table へ relationIntent を作成できても、Step 3 の `qualifiedColumns` / `columnKeys` が編集中 draft の `design.logicalTables` 由来のみの場合、接続先 table の項目が操作対象・表示列・検索/集計・初期データ/preview の候補に出ない。これにより Step 2.5 で作った relationship が Step 3 の表示設計へ投影されず、relation 設定と画面項目設計が分断される。
+  - 目的: Step 3 の項目候補を、編集中 draft の local logical tables だけでなく、Step 2.5 relationIntents で解決済みの draft remote / active remote table columns まで含む read model にする。local 項目と関連 table 項目は区別可能な key / label で表示し、同名 column の衝突を避ける。
+  - 改善方針: `relationIntents` の local/remote target を解決する Step 3 用 field source を追加し、`qualifiedColumnsFromLogicalTables` 相当の候補集合に related table columns を合成する。draft remote は `design.logicalTables` から、active remote は `listRelationshipRemoteTargets` の logicalTables から取得する。未解決 remote_manifest_id / joinTableRef / remoteKey / column は silent fallback せず blocking error または明示警告にし、`ContentsStep3FieldMatrix`, displayColumns, search/aggregation selectors, initialDataRows, `SamplePreviewPanel`, import preview の候補集合を同じ read model に揃える。
+  - 対象ファイル候補: `docs/design/admin-console-workflow-ssot.yaml`, `frontend/islands/ContentsScreenDesignPanel.tsx`, `frontend/components/ContentsStep3FieldMatrix.tsx`, `frontend/lib/manifestLogicalTables.ts`, `frontend/lib/manifestScreenDesign.ts`, `frontend/lib/contentsAssign.ts`, `frontend/api/adminApi.ts`, `frontend/tests/adminUxGuard.test.ts`, relationship / Step3 frontend tests。
+  - 完了条件: Step 2.5 で relation した draft/active table の項目が Step 3 の操作対象・表示列・検索/集計・サンプル表示の候補に出る。local/remote の同名項目が衝突せず、保存 payload に relation 由来 field key が保持される。未解決 relation は silent fallback せず明示エラーになる。テストで「Step2.5 relation 済み table 項目が Step3 に表示される」退行を固定する。
 
 ---
 
