@@ -55,6 +55,9 @@ function shapePayloadFromExisting(
         : [],
     })),
     initialDataRows: existing.initialDataRows,
+    searchConditions: existing.searchConditions ?? [],
+    havingConditions: existing.havingConditions ?? [],
+    displayColumnMode: existing.displayColumnMode ?? undefined,
   };
 }
 
@@ -153,5 +156,8 @@ export function buildAssignPayloadForStep(
     initialDataRows: design.initialDataRows.length > 0
       ? design.initialDataRows
       : base.initialDataRows,
+    searchConditions: design.searchConditions,
+    havingConditions: design.havingConditions,
+    displayColumnMode: design.displayColumnMode,
   };
 }

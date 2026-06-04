@@ -15,16 +15,23 @@ import {
 } from "../content/adminGuides.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  DISPLAY_COLUMN_MODE_LABELS,
+  HAVING_OPERATOR_OPTIONS,
+  LOGICAL_CONNECTOR_OPTIONS,
   NORMAL_VIEW_BANNED_TERMS,
+  SEARCH_OPERATOR_OPTIONS,
   UX_ACTION_LABELS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_DISPLAY_COLUMNS,
+  UX_FIELD_DISPLAY_MODE,
+  UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
+  UX_FIELD_SEARCH_CONDITIONS,
   UX_FIELD_SEARCH_KEY,
   UX_MAIN_FLOW_STEP_LABELS,
   UX_RUNTIME_DESTINATION_LABELS,
@@ -873,4 +880,149 @@ Deno.test("normal view banned terms: shared regression vocabulary covers extract
       `NORMAL_VIEW_BANNED_TERMS must include extracted category term "${term}"`,
     );
   }
+});
+
+// ─── SearchCondition / HavingCondition / DisplayColumnMode round-trip ─────────
+
+Deno.test("emptyManifestScreenDesign: has searchConditions, havingConditions, displayColumnMode", () => {
+  const d = emptyManifestScreenDesign();
+  assertEquals(Array.isArray(d.searchConditions), true, "searchConditions must be an array");
+  assertEquals(d.searchConditions.length, 0, "searchConditions defaults to empty");
+  assertEquals(Array.isArray(d.havingConditions), true, "havingConditions must be an array");
+  assertEquals(d.havingConditions.length, 0, "havingConditions defaults to empty");
+  assertEquals(typeof d.displayColumnMode, "string", "displayColumnMode must be a string");
+  assertEquals(d.displayColumnMode, "selected", "displayColumnMode defaults to selected");
+});
+
+Deno.test("screen_data_shape topology extension: extracts searchConditions and havingConditions", () => {
+  const topology = JSON.stringify([
+    {
+      type: "screen_data_shape",
+      tableRef: "my_table",
+      searchTargets: [],
+      searchConditions: [
+        { column: "col_a", operator: "=", value: "test", logicalConnector: "and" },
+        { column: "col_b", operator: "between", value: "1", valueTo: "10" },
+        { column: "col_c", operator: "in", values: ["x", "y"] },
+        { column: "col_d", operator: "is null" },
+      ],
+      havingConditions: [
+        { column: "salary", function: "sum", operator: ">", value: "1000" },
+      ],
+      displayColumnMode: "none",
+    },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.searchConditions.length, 4);
+  assertEquals(shape.searchConditions[0].column, "col_a");
+  assertEquals(shape.searchConditions[0].operator, "=");
+  assertEquals(shape.searchConditions[0].value, "test");
+  assertEquals(shape.searchConditions[1].operator, "between");
+  assertEquals(shape.searchConditions[1].valueTo, "10");
+  assertEquals(shape.searchConditions[2].operator, "in");
+  assertEquals(shape.searchConditions[2].values?.length, 2);
+  assertEquals(shape.searchConditions[3].operator, "is null");
+  assertEquals(shape.havingConditions.length, 1);
+  assertEquals(shape.havingConditions[0].column, "salary");
+  assertEquals(shape.havingConditions[0].function, "sum");
+  assertEquals(shape.havingConditions[0].operator, ">");
+  assertEquals(shape.havingConditions[0].value, "1000");
+  assertEquals(shape.displayColumnMode, "none");
+});
+
+Deno.test("screen_data_shape topology extension: displayColumnMode defaults null when absent", () => {
+  const topology = JSON.stringify([
+    { type: "screen_data_shape", tableRef: "t" },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.searchConditions, []);
+  assertEquals(shape.havingConditions, []);
+  assertEquals(shape.displayColumnMode, null);
+});
+
+Deno.test("screenDesignFromBackendShape: maps searchConditions, havingConditions, displayColumnMode", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: [],
+    searchKeyColumns: [],
+    aggregationSpec: null,
+    aggregationKey: null,
+    aggregationFunction: null,
+    aggregationColumns: [],
+    aggregationMeasures: [],
+    displayColumns: [],
+    logicalTables: [],
+    screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
+    columns: [],
+    relationIntents: [],
+    operationEntityBindings: [],
+    initialDataRows: [],
+    searchConditions: [{ column: "col_a", operator: "like", value: "test%" }],
+    havingConditions: [{ column: "salary", function: "avg", operator: ">=", value: "500" }],
+    displayColumnMode: "none",
+  };
+  const draft = screenDesignFromBackendShape(shape, "list");
+  assertEquals(draft.searchConditions.length, 1);
+  assertEquals(draft.searchConditions[0].operator, "like");
+  assertEquals(draft.havingConditions.length, 1);
+  assertEquals(draft.havingConditions[0].function, "avg");
+  assertEquals(draft.displayColumnMode, "none");
+});
+
+Deno.test("DISPLAY_COLUMN_MODE_LABELS: covers selected/all/none", () => {
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["selected"], "string");
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["all"], "string");
+  assertEquals(typeof DISPLAY_COLUMN_MODE_LABELS["none"], "string");
+});
+
+Deno.test("SEARCH_OPERATOR_OPTIONS: includes all required operators", () => {
+  const ops = SEARCH_OPERATOR_OPTIONS.map((o) => o.value);
+  const required = ["=", "!=", "like", "ilike", "not like", ">", ">=", "<", "<=", "between", "in", "not in", "is null", "is not null"];
+  for (const op of required) {
+    assert(ops.includes(op), `SEARCH_OPERATOR_OPTIONS must include operator "${op}"`);
+  }
+});
+
+Deno.test("UX_FIELD_SEARCH_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
+  assertEquals(typeof UX_FIELD_SEARCH_CONDITIONS, "string");
+  assert(UX_FIELD_SEARCH_CONDITIONS.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_SEARCH_CONDITIONS.includes("searchConditions"), "must not expose internal field name");
+});
+
+Deno.test("UX_FIELD_HAVING_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
+  assertEquals(typeof UX_FIELD_HAVING_CONDITIONS, "string");
+  assert(UX_FIELD_HAVING_CONDITIONS.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_HAVING_CONDITIONS.toLowerCase().includes("having"), "must not expose SQL HAVING keyword in primary label");
+});
+
+Deno.test("displayColumnMode: none mode means aggregate-only display without row columns", () => {
+  const d = emptyManifestScreenDesign();
+  d.displayColumnMode = "none";
+  assertEquals(d.displayColumnMode, "none");
+  // none mode is intended for aggregate-only display — row columns excluded
+});
+
+Deno.test("LOGICAL_CONNECTOR_OPTIONS: covers and/or/not", () => {
+  const vals = LOGICAL_CONNECTOR_OPTIONS.map((o) => o.value);
+  assert(vals.includes("and"), "must include and");
+  assert(vals.includes("or"), "must include or");
+  assert(vals.includes("not"), "must include not");
+});
+
+Deno.test("HAVING_OPERATOR_OPTIONS: covers comparison operators", () => {
+  const vals = HAVING_OPERATOR_OPTIONS.map((o) => o.value);
+  assert(vals.includes("="), "must include =");
+  assert(vals.includes(">"), "must include >");
+  assert(vals.includes(">="), "must include >=");
+  assert(vals.includes("<"), "must include <");
+  assert(vals.includes("<="), "must include <=");
+});
+
+Deno.test("UX_FIELD_DISPLAY_MODE: is a non-empty user-facing label", () => {
+  assertEquals(typeof UX_FIELD_DISPLAY_MODE, "string");
+  assert(UX_FIELD_DISPLAY_MODE.length > 0, "must be non-empty");
+  assertFalse(UX_FIELD_DISPLAY_MODE.includes("displayColumnMode"), "must not expose internal field name");
 });

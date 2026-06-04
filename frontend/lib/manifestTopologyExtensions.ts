@@ -24,6 +24,22 @@ export type OperationEntityBindingShape = {
   entityTargetColumns: string[];
 };
 
+export type SearchConditionShape = {
+  column: string;
+  operator: string;
+  value?: string;
+  valueTo?: string;
+  values?: string[];
+  logicalConnector?: string;
+};
+
+export type HavingConditionShape = {
+  column: string;
+  function: string;
+  operator: string;
+  value: string;
+};
+
 export type ColumnShape = {
   name: string;
   dataType: string;
@@ -49,6 +65,9 @@ export type ScreenDataShapeSummary = {
   relationIntents: RelationIntentShape[];
   operationEntityBindings: OperationEntityBindingShape[];
   initialDataRows: Record<string, string>[];
+  searchConditions: SearchConditionShape[];
+  havingConditions: HavingConditionShape[];
+  displayColumnMode: string | null;
 };
 
 function parseTopologyEntries(raw: string): Record<string, unknown>[] {
@@ -180,6 +199,35 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
             return record;
           })
       : [];
+    const searchConditions = Array.isArray(entry.searchConditions)
+      ? entry.searchConditions
+          .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
+          .map((c) => ({
+            column: typeof c.column === "string" ? c.column : "",
+            operator: typeof c.operator === "string" ? c.operator : "=",
+            value: typeof c.value === "string" ? c.value : undefined,
+            valueTo: typeof c.valueTo === "string" ? c.valueTo : undefined,
+            values: Array.isArray(c.values)
+              ? c.values.filter((v): v is string => typeof v === "string")
+              : undefined,
+            logicalConnector: typeof c.logicalConnector === "string" ? c.logicalConnector : undefined,
+          }))
+      : [];
+    const havingConditions = Array.isArray(entry.havingConditions)
+      ? entry.havingConditions
+          .filter((h): h is Record<string, unknown> => typeof h === "object" && h !== null)
+          .map((h) => ({
+            column: typeof h.column === "string" ? h.column : "",
+            function: typeof h.function === "string" ? h.function : "",
+            operator: typeof h.operator === "string" ? h.operator : "=",
+            value: typeof h.value === "string" ? h.value : "",
+          }))
+          .filter((h) => h.column && h.function)
+      : [];
+    const displayColumnMode = typeof entry.displayColumnMode === "string" &&
+      ["selected", "all", "none"].includes(entry.displayColumnMode)
+        ? entry.displayColumnMode
+        : null;
     return {
       tableRef,
       importSchemaName,
@@ -199,6 +247,9 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       relationIntents,
       operationEntityBindings,
       initialDataRows,
+      searchConditions,
+      havingConditions,
+      displayColumnMode,
     };
   }
   return {
@@ -220,5 +271,8 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     relationIntents: [],
     operationEntityBindings: [],
     initialDataRows: [],
+    searchConditions: [],
+    havingConditions: [],
+    displayColumnMode: null,
   };
 }

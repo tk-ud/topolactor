@@ -238,6 +238,62 @@ public class AdminRuntimeManifestManagementTests
         Assert.Single(initialRows);
     }
 
+    [Fact]
+    public async Task AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            searchConditions = new object[]
+            {
+                new { column = "col_a", @operator = "=", value = "test", logicalConnector = "and" },
+                new { column = "col_b", @operator = "between", value = "1", valueTo = "10" },
+                new { column = "col_c", @operator = "in", values = new[] { "x", "y" } },
+                new { column = "col_d", @operator = "is null" },
+            },
+            havingConditions = new object[]
+            {
+                new { column = "salary", function = "sum", @operator = ">", value = "1000" },
+            },
+            displayColumnMode = "none",
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        var rawJson = data!.Value.GetProperty("topologyRawJson").GetString() ?? "[]";
+        var shapeEntry = JsonSerializer.Deserialize<JsonElement[]>(rawJson)!
+            .First(e => e.TryGetProperty("type", out var t) && t.GetString() == "screen_data_shape");
+
+        var searchConds = shapeEntry.GetProperty("searchConditions").EnumerateArray().ToList();
+        Assert.Equal(4, searchConds.Count);
+        Assert.Equal("col_a", searchConds[0].GetProperty("column").GetString());
+        Assert.Equal("=", searchConds[0].GetProperty("operator").GetString());
+        Assert.Equal("test", searchConds[0].GetProperty("value").GetString());
+        Assert.Equal("between", searchConds[1].GetProperty("operator").GetString());
+        Assert.Equal("10", searchConds[1].GetProperty("valueTo").GetString());
+        Assert.Equal("in", searchConds[2].GetProperty("operator").GetString());
+        Assert.Equal(2, searchConds[2].GetProperty("values").GetArrayLength());
+        Assert.Equal("is null", searchConds[3].GetProperty("operator").GetString());
+
+        var havingConds = shapeEntry.GetProperty("havingConditions").EnumerateArray().ToList();
+        Assert.Single(havingConds);
+        Assert.Equal("salary", havingConds[0].GetProperty("column").GetString());
+        Assert.Equal("sum", havingConds[0].GetProperty("function").GetString());
+        Assert.Equal(">", havingConds[0].GetProperty("operator").GetString());
+        Assert.Equal("1000", havingConds[0].GetProperty("value").GetString());
+
+        Assert.Equal("none", shapeEntry.GetProperty("displayColumnMode").GetString());
+    }
+
     private static IReadOnlyList<JsonElement> ValidTopology(
         string role, string target, string layer, string action, string runtimeDestination) =>
         ManifestTopologyValidator.BuildTopology(role, target, layer, action, runtimeDestination, null);

@@ -4,31 +4,21 @@ import {
   type ScreenOperationKind,
 } from "../runtime/screenAuthoringIntent.ts";
 import {
-  UX_FIELD_DISPLAY_COLUMNS,
-  UX_FIELD_SEARCH_KEY,
-  UX_FIELD_STEP3_COLUMN_USAGE,
+  UX_FIELD_OPERATION_ENTITY,
 } from "../content/adminUxTerms.ts";
 import type { ManifestScreenDesignDraft } from "../lib/manifestScreenDesign.ts";
 
 export type ContentsStep3FieldMatrixProps = {
   columnNames: string[];
   operationKinds: ScreenOperationKind[];
-  searchKeyColumns: string[];
-  displayColumns: string[];
   operationEntityBindings: ManifestScreenDesignDraft["operationEntityBindings"];
-  onToggleSearch: (col: string) => void;
-  onToggleDisplay: (col: string) => void;
   onToggleOperation: (kind: ScreenOperationKind, col: string) => void;
 };
 
 export default function ContentsStep3FieldMatrix({
   columnNames,
   operationKinds,
-  searchKeyColumns,
-  displayColumns,
   operationEntityBindings,
-  onToggleSearch,
-  onToggleDisplay,
   onToggleOperation,
 }: ContentsStep3FieldMatrixProps): JSX.Element {
   if (columnNames.length === 0) {
@@ -50,17 +40,14 @@ export default function ContentsStep3FieldMatrix({
 
   return (
     <div class="overflow-x-auto rounded border border-slate-200">
-      <p class="mb-2 text-xs font-semibold text-slate-700">{UX_FIELD_STEP3_COLUMN_USAGE}</p>
+      <p class="mb-2 text-xs font-semibold text-slate-700">{UX_FIELD_OPERATION_ENTITY}</p>
       <p class="mb-2 text-xs text-muted-xs">
-        検索キー・各操作・表示列を1つの表で設定します（項目リストの繰り返し表示を避けます）。
+        操作が実行されるとき、対象とする項目を操作種別ごとに選択します。
       </p>
       <table class="min-w-full text-left text-xs">
         <thead>
           <tr class="bg-slate-50">
             <th class="border-b px-2 py-1 font-semibold text-slate-600">項目</th>
-            <th class="border-b px-2 py-1 font-semibold text-slate-600">
-              {UX_FIELD_SEARCH_KEY}
-            </th>
             {opLabels.map((label, i) => (
               <th
                 key={operationKinds[i]}
@@ -69,23 +56,12 @@ export default function ContentsStep3FieldMatrix({
                 {label}
               </th>
             ))}
-            <th class="border-b px-2 py-1 font-semibold text-slate-600">
-              {UX_FIELD_DISPLAY_COLUMNS}
-            </th>
           </tr>
         </thead>
         <tbody>
           {columnNames.map((col) => (
             <tr key={col} class="border-b last:border-0">
               <td class="px-2 py-1 font-mono text-slate-800">{col}</td>
-              <td class="px-2 py-1 text-center">
-                <input
-                  type="checkbox"
-                  checked={searchKeyColumns.includes(col)}
-                  onChange={() => onToggleSearch(col)}
-                  aria-label={`${col} 検索`}
-                />
-              </td>
               {operationKinds.map((kind) => (
                 <td key={`${kind}-${col}`} class="px-2 py-1 text-center">
                   <input
@@ -96,14 +72,6 @@ export default function ContentsStep3FieldMatrix({
                   />
                 </td>
               ))}
-              <td class="px-2 py-1 text-center">
-                <input
-                  type="checkbox"
-                  checked={displayColumns.includes(col)}
-                  onChange={() => onToggleDisplay(col)}
-                  aria-label={`${col} 表示`}
-                />
-              </td>
             </tr>
           ))}
         </tbody>

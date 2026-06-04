@@ -120,6 +120,22 @@ public record AdminManifestOperationEntityBindingDto(
     [property: JsonPropertyName("entityTargetColumns")] IReadOnlyList<string>? EntityTargetColumns
 );
 
+public record AdminManifestSearchConditionDto(
+    [property: JsonPropertyName("column")] string Column,
+    [property: JsonPropertyName("operator")] string Operator,
+    [property: JsonPropertyName("value")] string? Value,
+    [property: JsonPropertyName("valueTo")] string? ValueTo,
+    [property: JsonPropertyName("values")] IReadOnlyList<string>? Values,
+    [property: JsonPropertyName("logicalConnector")] string? LogicalConnector
+);
+
+public record AdminManifestHavingConditionDto(
+    [property: JsonPropertyName("column")] string Column,
+    [property: JsonPropertyName("function")] string Function,
+    [property: JsonPropertyName("operator")] string Operator,
+    [property: JsonPropertyName("value")] string Value
+);
+
 public record AdminManifestLogicalTableDto(
     [property: JsonPropertyName("tableName")] string TableName,
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto> Columns
@@ -145,7 +161,10 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel,
     [property: JsonPropertyName("relationIntents")] IReadOnlyList<AdminManifestRelationIntentDto>? RelationIntents,
     [property: JsonPropertyName("operationEntityBindings")] IReadOnlyList<AdminManifestOperationEntityBindingDto>? OperationEntityBindings,
-    [property: JsonPropertyName("initialDataRows")] IReadOnlyList<System.Text.Json.JsonElement>? InitialDataRows
+    [property: JsonPropertyName("initialDataRows")] IReadOnlyList<System.Text.Json.JsonElement>? InitialDataRows,
+    [property: JsonPropertyName("searchConditions")] IReadOnlyList<AdminManifestSearchConditionDto>? SearchConditions,
+    [property: JsonPropertyName("havingConditions")] IReadOnlyList<AdminManifestHavingConditionDto>? HavingConditions,
+    [property: JsonPropertyName("displayColumnMode")] string? DisplayColumnMode
 );
 
 public record AdminManifestUpdateDraftRequestDto(

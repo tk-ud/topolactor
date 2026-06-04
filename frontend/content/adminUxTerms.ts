@@ -95,6 +95,55 @@ export const UX_RELATION_ROW_ID_LABEL = "id (record id)";
 /** 操作ごとの対象項目（イベント時、通常表示） */
 export const UX_FIELD_OPERATION_ENTITY = "操作ごとの対象項目";
 
+/** 検索条件（通常表示） */
+export const UX_FIELD_SEARCH_CONDITIONS = "検索条件";
+/** 集計結果の絞り込み（通常表示） */
+export const UX_FIELD_HAVING_CONDITIONS = "集計結果の絞り込み";
+/** 表示列の範囲（通常表示） */
+export const UX_FIELD_DISPLAY_MODE = "表示列の範囲";
+
+/** 表示列モード候補 */
+export const DISPLAY_COLUMN_MODE_LABELS: Record<string, string> = {
+  selected: "選んだ列のみ",
+  all: "すべての列",
+  none: "集計値のみ（列なし）",
+};
+
+/** 検索演算子候補（通常表示。SQL 語彙だが条件値として許可） */
+export const SEARCH_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "=", label: "= (一致)" },
+  { value: "!=", label: "≠ (不一致)" },
+  { value: "like", label: "like (部分一致)" },
+  { value: "ilike", label: "ilike (大小無視)" },
+  { value: "not like", label: "not like (不含)" },
+  { value: ">", label: "> (より大)" },
+  { value: ">=", label: "≥ (以上)" },
+  { value: "<", label: "< (より小)" },
+  { value: "<=", label: "≤ (以下)" },
+  { value: "between", label: "between (範囲)" },
+  { value: "in", label: "in (リスト)" },
+  { value: "not in", label: "not in (リスト除外)" },
+  { value: "is null", label: "is null (空)" },
+  { value: "is not null", label: "is not null (空でない)" },
+];
+
+/** 論理結合演算子（条件グループ接続） */
+export const LOGICAL_CONNECTOR_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "and", label: "AND" },
+  { value: "or", label: "OR" },
+  { value: "not", label: "NOT" },
+];
+
+/** HAVING 演算子候補 */
+export const HAVING_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
+  { value: "=", label: "= (一致)" },
+  { value: "!=", label: "≠ (不一致)" },
+  { value: ">", label: "> (より大)" },
+  { value: ">=", label: "≥ (以上)" },
+  { value: "<", label: "< (より小)" },
+  { value: "<=", label: "≤ (以下)" },
+];
+
 /**
  * カラム型の通常表示候補（SSOT: admin-console-workflow-ssot.yaml step3.column_type_UI.candidates）。
  * free-text は UX_COLUMN_TYPE_ADVANCED_LABEL 経由で隔離する。

@@ -47,30 +47,41 @@ import {
 } from "../runtime/screenAuthoringIntent.ts";
 import {
   clearManifestScreenDesignLocal,
+  type DisplayColumnMode,
   emptyManifestScreenDesign,
+  type HavingCondition,
   loadManifestScreenDesignLocal,
+  type LogicalConnector,
   MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
   type LogicalTableDraft,
   type ManifestScreenDesignDraft,
   parseSearchTargets,
   type RelationIntentDraft,
   saveManifestScreenDesignLocal,
+  type SearchCondition,
+  type SearchOperator,
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
+  DISPLAY_COLUMN_MODE_LABELS,
+  HAVING_OPERATOR_OPTIONS,
+  LOGICAL_CONNECTOR_OPTIONS,
+  SEARCH_OPERATOR_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_DISPLAY_COLUMNS,
+  UX_FIELD_DISPLAY_MODE,
+  UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
-  UX_FIELD_SEARCH_KEY,
+  UX_FIELD_SEARCH_CONDITIONS,
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
   UX_UI_BUILDER,
@@ -101,30 +112,112 @@ function computeMeasure(
   }
 }
 
+function applySearchConditions(
+  rows: Record<string, string>[],
+  conditions: SearchCondition[],
+): Record<string, string>[] {
+  if (conditions.length === 0) return rows;
+  return rows.filter((row) => {
+    let result = true;
+    for (let i = 0; i < conditions.length; i++) {
+      const cond = conditions[i];
+      const cellVal = row[cond.column] ?? "";
+      let match = false;
+      switch (cond.operator) {
+        case "=": match = cellVal === (cond.value ?? ""); break;
+        case "!=": case "<>": match = cellVal !== (cond.value ?? ""); break;
+        case "like": case "ilike": match = cellVal.toLowerCase().includes((cond.value ?? "").toLowerCase()); break;
+        case "not like": match = !cellVal.toLowerCase().includes((cond.value ?? "").toLowerCase()); break;
+        case ">": match = Number(cellVal) > Number(cond.value ?? 0); break;
+        case ">=": match = Number(cellVal) >= Number(cond.value ?? 0); break;
+        case "<": match = Number(cellVal) < Number(cond.value ?? 0); break;
+        case "<=": match = Number(cellVal) <= Number(cond.value ?? 0); break;
+        case "between":
+          match = Number(cellVal) >= Number(cond.value ?? 0) && Number(cellVal) <= Number(cond.valueTo ?? 0);
+          break;
+        case "in": match = (cond.values ?? []).includes(cellVal); break;
+        case "not in": match = !(cond.values ?? []).includes(cellVal); break;
+        case "is null": match = cellVal === "" || cellVal == null; break;
+        case "is not null": match = cellVal !== "" && cellVal != null; break;
+        default: match = true;
+      }
+      if (i === 0) {
+        result = match;
+      } else {
+        const conn = conditions[i - 1].logicalConnector ?? "and";
+        if (conn === "and") result = result && match;
+        else if (conn === "or") result = result || match;
+        else if (conn === "not") result = result && !match;
+      }
+    }
+    return result;
+  });
+}
+
+function applyHavingConditions(
+  groups: Map<string, Record<string, string>[]>,
+  havingConditions: HavingCondition[],
+): Map<string, Record<string, string>[]> {
+  if (havingConditions.length === 0) return groups;
+  const filtered = new Map<string, Record<string, string>[]>();
+  for (const [key, rows] of groups) {
+    let keep = true;
+    for (const hc of havingConditions) {
+      const nums = rows.map((r) => Number(r[hc.column])).filter((n) => !Number.isNaN(n));
+      const measureVal = computeMeasure(nums, hc.function);
+      if (measureVal === null) { keep = false; break; }
+      const threshold = Number(hc.value);
+      switch (hc.operator) {
+        case "=": keep = measureVal === threshold; break;
+        case "!=": case "<>": keep = measureVal !== threshold; break;
+        case ">": keep = measureVal > threshold; break;
+        case ">=": keep = measureVal >= threshold; break;
+        case "<": keep = measureVal < threshold; break;
+        case "<=": keep = measureVal <= threshold; break;
+      }
+      if (!keep) break;
+    }
+    if (keep) filtered.set(key, rows);
+  }
+  return filtered;
+}
+
 function SamplePreviewPanel({
   columns,
   aggregationKey,
   aggregationMeasures,
   displayColumns,
+  displayColumnMode,
   initialDataRows,
+  searchConditions,
+  havingConditions,
 }: {
   columns: { name: string; dataType: string }[];
   aggregationKey: string;
   aggregationMeasures: { column: string; function: string }[];
   displayColumns: string[];
+  displayColumnMode: DisplayColumnMode;
   initialDataRows: Record<string, string>[];
+  searchConditions: SearchCondition[];
+  havingConditions: HavingCondition[];
 }): JSX.Element {
-  const activeCols = displayColumns;
-  const hasRows = initialDataRows.length > 0;
+  const activeCols = displayColumnMode === "none"
+    ? []
+    : displayColumnMode === "all"
+    ? columns.map((c) => c.name)
+    : displayColumns;
+  const filteredRows = applySearchConditions(initialDataRows, searchConditions);
+  const hasRows = filteredRows.length > 0;
 
-  const groups = new Map<string, Record<string, string>[]>();
+  let groups = new Map<string, Record<string, string>[]>();
   if (aggregationKey && hasRows) {
-    for (const row of initialDataRows) {
+    for (const row of filteredRows) {
       const key = row[aggregationKey]?.trim() || "(空)";
       const list = groups.get(key) ?? [];
       list.push(row);
       groups.set(key, list);
     }
+    groups = applyHavingConditions(groups, havingConditions);
   }
 
   const renderTable = (rows: Record<string, string>[]) => (
@@ -173,7 +266,7 @@ function SamplePreviewPanel({
         <ul class="mb-2 list-inside list-disc text-slate-600">
           {(aggregationKey
             ? [...groups.entries()]
-            : [["(全体)", initialDataRows] as const]
+            : [["(全体)", filteredRows] as const]
           ).map(([groupKey, rows]) =>
             aggregationMeasures.map((m) => {
               const nums = rows
@@ -190,7 +283,13 @@ function SamplePreviewPanel({
           )}
         </ul>
       )}
-      {activeCols.length > 0
+      {displayColumnMode === "none"
+        ? (
+          <p class="mb-1 italic text-slate-400">
+            {UX_FIELD_DISPLAY_COLUMNS}: 集計値のみ（列なし）
+          </p>
+        )
+        : activeCols.length > 0
         ? (
           <p class="mb-1 text-slate-500">
             {UX_FIELD_DISPLAY_COLUMNS}:{" "}
@@ -211,21 +310,27 @@ function SamplePreviewPanel({
                   {aggregationKey} = <span class="font-mono">{groupKey}</span>
                   {" "}（{rows.length} 件）
                 </p>
-                <div class="overflow-x-auto">{renderTable(rows)}</div>
+                {activeCols.length > 0 && <div class="overflow-x-auto">{renderTable(rows)}</div>}
               </div>
             ))}
           </div>
         )
         : hasRows && activeCols.length > 0
-        ? <div class="mt-2 overflow-x-auto">{renderTable(initialDataRows)}</div>
+        ? <div class="mt-2 overflow-x-auto">{renderTable(filteredRows)}</div>
         : hasRows && aggregationKey
         ? (
           <p class="mt-1 italic text-slate-400">
             表示列を選ばないと集計キー単位の表は出ません（全体集計は表示列なしで保存可能）
           </p>
         )
+        : hasRows && displayColumnMode !== "none"
+        ? <div class="mt-2 overflow-x-auto">{renderTable(filteredRows)}</div>
         : hasRows
-        ? <div class="mt-2 overflow-x-auto">{renderTable(initialDataRows)}</div>
+        ? (
+          <p class="mt-1 italic text-slate-400">
+            集計値のみモード — 行データは非表示
+          </p>
+        )
         : (
           <p class="mt-1 italic text-slate-400">
             初期データ行がありません（step 3 で追加してください）
@@ -580,20 +685,6 @@ export default function ContentsScreenDesignPanel({
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
 
-  const toggleSearchKey = (colName: string) => {
-    const next = design.searchKeyColumns.includes(colName)
-      ? design.searchKeyColumns.filter((k) => k !== colName)
-      : [...design.searchKeyColumns, colName];
-    patchDesign({ searchKeyColumns: next });
-  };
-
-  const toggleDisplayColumn = (colName: string) => {
-    const next = design.displayColumns.includes(colName)
-      ? design.displayColumns.filter((k) => k !== colName)
-      : [...design.displayColumns, colName];
-    patchDesign({ displayColumns: next });
-  };
-
   const patchLogicalTables = (logicalTables: LogicalTableDraft[]) => {
     patchDesign(qualifyScreenDesignColumnKeys({
       ...design,
@@ -901,18 +992,14 @@ export default function ContentsScreenDesignPanel({
             {design.operationKinds.length === 0
               ? (
                 <p class="text-xs italic text-slate-400">
-                  操作種別を1つ以上選択すると、下の表で検索・操作・表示を設定できます。
+                  操作種別を1つ以上選択すると、操作ごとの対象項目を設定できます。
                 </p>
               )
               : (
                 <ContentsStep3FieldMatrix
                   columnNames={columnKeys}
                   operationKinds={design.operationKinds}
-                  searchKeyColumns={design.searchKeyColumns}
-                  displayColumns={design.displayColumns}
                   operationEntityBindings={design.operationEntityBindings}
-                  onToggleSearch={toggleSearchKey}
-                  onToggleDisplay={toggleDisplayColumn}
                   onToggleOperation={toggleEntityBindingColumn}
                 />
               )}
@@ -1057,6 +1144,223 @@ export default function ContentsScreenDesignPanel({
           表示項目は Step 2 で定義済み（{columnKeys.join(", ")}）。
           変更する場合は Step 2 に戻ってください。
         </p>
+      )}
+
+      {activeStep === 3 && (
+        <div class="mt-4">
+          <h3 class="text-xs font-semibold">{UX_FIELD_SEARCH_CONDITIONS}</h3>
+          <p class="mb-2 text-xs text-muted-xs">
+            検索キー・演算子・値を組み合わせた条件を設定します。AND/OR/NOT で複数条件を結合できます。
+          </p>
+          {design.searchConditions.map((cond, ci) => (
+            <div
+              key={ci}
+              class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 p-2 text-xs"
+            >
+              {ci > 0 && (
+                <select
+                  class="rounded border px-1 py-0.5 text-xs"
+                  value={cond.logicalConnector ?? "and"}
+                  onChange={(e) => {
+                    const next = design.searchConditions.map((c, i) =>
+                      i === ci
+                        ? { ...c, logicalConnector: (e.target as HTMLSelectElement).value as SearchCondition["logicalConnector"] }
+                        : c
+                    );
+                    patchDesign({ searchConditions: next });
+                  }}
+                >
+                  {LOGICAL_CONNECTOR_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              )}
+              <select
+                class="rounded border px-1 py-0.5 font-mono text-xs"
+                value={cond.column}
+                onChange={(e) => {
+                  const next = design.searchConditions.map((c, i) =>
+                    i === ci ? { ...c, column: (e.target as HTMLSelectElement).value } : c
+                  );
+                  patchDesign({ searchConditions: next });
+                }}
+              >
+                <option value="">— 項目 —</option>
+                {columnKeys.map((col) => (
+                  <option key={col} value={col}>{col}</option>
+                ))}
+              </select>
+              <select
+                class="rounded border px-1 py-0.5 text-xs"
+                value={cond.operator}
+                onChange={(e) => {
+                  const op = (e.target as HTMLSelectElement).value as SearchOperator;
+                  const next = design.searchConditions.map((c, i) =>
+                    i === ci
+                      ? { ...c, operator: op, value: undefined, valueTo: undefined, values: undefined }
+                      : c
+                  );
+                  patchDesign({ searchConditions: next });
+                }}
+              >
+                {SEARCH_OPERATOR_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {["is null", "is not null"].includes(cond.operator)
+                ? null
+                : cond.operator === "between"
+                ? (
+                  <>
+                    <input
+                      class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                      placeholder="から"
+                      value={cond.value ?? ""}
+                      onInput={(e) => {
+                        const next = design.searchConditions.map((c, i) =>
+                          i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
+                        );
+                        patchDesign({ searchConditions: next });
+                      }}
+                    />
+                    <span class="text-xs text-slate-500">〜</span>
+                    <input
+                      class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                      placeholder="まで"
+                      value={cond.valueTo ?? ""}
+                      onInput={(e) => {
+                        const next = design.searchConditions.map((c, i) =>
+                          i === ci ? { ...c, valueTo: (e.target as HTMLInputElement).value } : c
+                        );
+                        patchDesign({ searchConditions: next });
+                      }}
+                    />
+                  </>
+                )
+                : ["in", "not in"].includes(cond.operator)
+                ? (
+                  <input
+                    class="w-40 rounded border px-1 py-0.5 font-mono text-xs"
+                    placeholder="値1, 値2, …"
+                    value={(cond.values ?? []).join(", ")}
+                    onInput={(e) => {
+                      const vals = (e.target as HTMLInputElement).value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter(Boolean);
+                      const next = design.searchConditions.map((c, i) =>
+                        i === ci ? { ...c, values: vals } : c
+                      );
+                      patchDesign({ searchConditions: next });
+                    }}
+                  />
+                )
+                : (
+                  <input
+                    class="w-28 rounded border px-1 py-0.5 font-mono text-xs"
+                    placeholder="値"
+                    value={cond.value ?? ""}
+                    onInput={(e) => {
+                      const next = design.searchConditions.map((c, i) =>
+                        i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
+                      );
+                      patchDesign({ searchConditions: next });
+                    }}
+                  />
+                )}
+              <button
+                type="button"
+                class="text-xs text-red-500 hover:text-red-700"
+                onClick={() => {
+                  patchDesign({
+                    searchConditions: design.searchConditions.filter((_, i) => i !== ci),
+                  });
+                }}
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            class="btn-secondary mt-1 text-xs"
+            onClick={() => {
+              patchDesign({
+                searchConditions: [
+                  ...design.searchConditions,
+                  { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
+                ],
+              });
+            }}
+          >
+            条件を追加
+          </button>
+        </div>
+      )}
+
+      {activeStep === 3 && qualifiedColumns.length > 0 && (
+        <div class="mt-4">
+          <h3 class="text-xs font-semibold">{UX_FIELD_DISPLAY_MODE}</h3>
+          <div class="mt-1 flex flex-wrap gap-3">
+            {Object.entries(DISPLAY_COLUMN_MODE_LABELS).map(([mode, label]) => (
+              <label key={mode} class="flex items-center gap-1 text-xs">
+                <input
+                  type="radio"
+                  name="displayColumnMode"
+                  value={mode}
+                  checked={design.displayColumnMode === mode}
+                  onChange={() => patchDesign({ displayColumnMode: mode as DisplayColumnMode })}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          {design.displayColumnMode === "selected" && (
+            <div class="mt-2">
+              <p class="mb-1 text-xs text-muted-xs">表示する列を選択</p>
+              <div class="mb-1 flex flex-wrap gap-2">
+                <label class="text-xs">
+                  <input
+                    type="checkbox"
+                    checked={design.displayColumns.length === columnKeys.length && columnKeys.length > 0}
+                    onChange={() => {
+                      patchDesign({
+                        displayColumns: design.displayColumns.length === columnKeys.length
+                          ? []
+                          : [...columnKeys],
+                      });
+                    }}
+                  />
+                  {" "}全選択
+                </label>
+                <button
+                  type="button"
+                  class="text-xs text-slate-500 underline"
+                  onClick={() => patchDesign({ displayColumns: [] })}
+                >
+                  全解除
+                </button>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                {columnKeys.map((col) => (
+                  <label key={col} class="flex items-center gap-1 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={design.displayColumns.includes(col)}
+                      onChange={() => {
+                        const next = design.displayColumns.includes(col)
+                          ? design.displayColumns.filter((c) => c !== col)
+                          : [...design.displayColumns, col];
+                        patchDesign({ displayColumns: next });
+                      }}
+                    />
+                    <span class="font-mono">{col}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {activeStep === 2.5 && (
@@ -1368,7 +1672,7 @@ export default function ContentsScreenDesignPanel({
 
       <h3 class="mt-5 text-xs font-semibold">集計・サンプル</h3>
       <p class="mb-2 text-xs text-muted-xs">
-        {UX_FIELD_SEARCH_KEY}・{UX_FIELD_DISPLAY_COLUMNS} は上の表で設定済みです。ここで集計式を複数登録できます。
+        ここで集計式を複数登録できます。
       </p>
       <ContentsAggregationMeasuresEditor
         columnNames={columnKeys}
@@ -1377,6 +1681,99 @@ export default function ContentsScreenDesignPanel({
         onAggregationKeyChange={(aggregationKey) => patchDesign({ aggregationKey })}
         onMeasuresChange={(aggregationMeasures) => patchDesign({ aggregationMeasures })}
       />
+      {design.aggregationMeasures.length > 0 && (
+        <div class="mt-3">
+          <p class="mb-1 text-xs font-semibold text-slate-700">{UX_FIELD_HAVING_CONDITIONS}</p>
+          <p class="mb-2 text-xs text-muted-xs">
+            集計結果に対する絞り込み条件を設定します。
+          </p>
+          {design.havingConditions.map((hc, hi) => (
+            <div
+              key={hi}
+              class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 p-2 text-xs"
+            >
+              <select
+                class="rounded border px-1 py-0.5 font-mono text-xs"
+                value={`${hc.column}__${hc.function}`}
+                onChange={(e) => {
+                  const parts = (e.target as HTMLSelectElement).value.split("__");
+                  const col = parts[0] ?? "";
+                  const fn = parts[1] ?? "";
+                  const next = design.havingConditions.map((h, i) =>
+                    i === hi ? { ...h, column: col, function: fn } : h
+                  );
+                  patchDesign({ havingConditions: next });
+                }}
+              >
+                <option value="__">— 集計式 —</option>
+                {design.aggregationMeasures.filter((m) => m.column && m.function).map((m) => (
+                  <option key={`${m.column}__${m.function}`} value={`${m.column}__${m.function}`}>
+                    {m.function}({m.column})
+                  </option>
+                ))}
+              </select>
+              <select
+                class="rounded border px-1 py-0.5 text-xs"
+                value={hc.operator}
+                onChange={(e) => {
+                  const next = design.havingConditions.map((h, i) =>
+                    i === hi
+                      ? { ...h, operator: (e.target as HTMLSelectElement).value as HavingCondition["operator"] }
+                      : h
+                  );
+                  patchDesign({ havingConditions: next });
+                }}
+              >
+                {HAVING_OPERATOR_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <input
+                class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
+                placeholder="値"
+                value={hc.value}
+                onInput={(e) => {
+                  const next = design.havingConditions.map((h, i) =>
+                    i === hi ? { ...h, value: (e.target as HTMLInputElement).value } : h
+                  );
+                  patchDesign({ havingConditions: next });
+                }}
+              />
+              <button
+                type="button"
+                class="text-xs text-red-500 hover:text-red-700"
+                onClick={() => {
+                  patchDesign({
+                    havingConditions: design.havingConditions.filter((_, i) => i !== hi),
+                  });
+                }}
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            class="btn-secondary mt-1 text-xs"
+            onClick={() => {
+              const firstMeasure = design.aggregationMeasures.find((m) => m.column && m.function);
+              patchDesign({
+                havingConditions: [
+                  ...design.havingConditions,
+                  {
+                    column: firstMeasure?.column ?? "",
+                    function: firstMeasure?.function ?? "",
+                    operator: ">",
+                    value: "",
+                  },
+                ],
+              });
+            }}
+          >
+            {UX_FIELD_HAVING_CONDITIONS}を追加
+          </button>
+        </div>
+      )}
       <details class="mt-2">
         <summary class="cursor-pointer text-xs text-slate-500">
           詳細 / raw 入力（検索・集計）
@@ -1420,7 +1817,10 @@ export default function ContentsScreenDesignPanel({
           aggregationKey={design.aggregationKey}
           aggregationMeasures={design.aggregationMeasures}
           displayColumns={design.displayColumns}
+          displayColumnMode={design.displayColumnMode}
           initialDataRows={design.initialDataRows}
+          searchConditions={design.searchConditions}
+          havingConditions={design.havingConditions}
         />
       </div>
 
