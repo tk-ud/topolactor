@@ -14,7 +14,8 @@
 | `search-aggregation-runtime-operator-contract` | Step3 read/query wiring runtime実行契約 / UIイベント接続 | not_started | 6 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | not_started | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `sql-attention-m7` | SQL Attention phase_vector 生成 | partial | 1 | `docs/design/sql-attention-logs-ssot.yaml` |
-
+| `enum-dictionary-canonicalization` | enum辞書正本化 | not_started | 9 | `docs/design/enum-dictionary-ssot.yaml` |
+| `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 32 | `docs/design/admin-master-roster-management-ssot.yaml` |
 ---
 ## Bundle `enum-dictionary-canonicalization`
 
