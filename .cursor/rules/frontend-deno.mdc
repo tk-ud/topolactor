@@ -1,0 +1,25 @@
+---
+description: Frontend Fresh/Deno conventions
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend (Deno / Fresh)
+
+## Tooling
+
+- Deno config: repo root `deno.json`; VS Code/Cursor: `.vscode/settings.json` enables Deno for `frontend/`.
+- After adding routes or islands, ensure `frontend/fresh.gen.ts` matches actual files (admin route tests read this manifest).
+
+## Admin API
+
+- Admin dispatch helpers live in `frontend/api/adminApi.ts`.
+- UX terms and route cards: `frontend/content/adminGuides.ts`, `adminUxTerms.ts`.
+
+## Tests
+
+```bash
+deno test frontend/tests/<name>.test.ts --allow-read
+```
+
+Match CI slices in `.agent/tests/check-runtime-semantics.sh` when touching admin API or search/pipeline semantics.

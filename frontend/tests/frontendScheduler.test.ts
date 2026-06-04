@@ -214,8 +214,8 @@ Deno.test("scheduler: queueAdminClientCommand type regression — role rejected 
 // Forbidden: all other .ts/.tsx files in frontend/
 
 Deno.test("source guard: direct fetch('/api/dispatch') forbidden outside allowed files", async () => {
-  const repoRoot = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
-  const frontendDir = repoRoot + "/frontend";
+  const repoRoot = new URL("../../", import.meta.url);
+  const frontendDir = new URL("../../frontend/", import.meta.url);
 
   const allowedRelPaths = [
     "frontend/api/dispatch.ts",
@@ -224,17 +224,25 @@ Deno.test("source guard: direct fetch('/api/dispatch') forbidden outside allowed
 
   const violations: string[] = [];
 
-  async function scanDir(dir: string): Promise<void> {
+  const pathFromRepoRoot = (fileUrl: URL): string => {
+    const rootHref = repoRoot.href.endsWith("/") ? repoRoot.href : `${repoRoot.href}/`;
+    if (!fileUrl.href.startsWith(rootHref)) {
+      throw new Error(`path not under repo root: ${fileUrl.href}`);
+    }
+    return fileUrl.href.slice(rootHref.length);
+  };
+
+  async function scanDir(dir: URL): Promise<void> {
     for await (const entry of Deno.readDir(dir)) {
-      const fullPath = `${dir}/${entry.name}`;
+      const entryUrl = new URL(entry.name, dir);
       if (entry.isDirectory) {
         if (entry.name === "_fresh" || entry.name.startsWith(".") || entry.name === "node_modules") continue;
-        await scanDir(fullPath);
+        await scanDir(new URL(`${entry.name}/`, dir));
       } else if (entry.isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx"))) {
         if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) continue;
-        const relPath = fullPath.replace(repoRoot + "/", "");
+        const relPath = pathFromRepoRoot(entryUrl);
         if (allowedRelPaths.includes(relPath)) continue;
-        const content = await Deno.readTextFile(fullPath);
+        const content = await Deno.readTextFile(entryUrl);
         if (content.includes('fetch("/api/dispatch"') || content.includes("fetch('/api/dispatch'")) {
           violations.push(relPath);
         }

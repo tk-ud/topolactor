@@ -1,0 +1,23 @@
+---
+description: Backend C# conventions and test layout
+globs: backend/**/*.cs
+alwaysApply: false
+---
+
+# Backend (C#)
+
+## Layout
+
+- `backend/runtime/`, `backend/repository/`, `backend/schema/` — production logic
+- `backend/tests/Topolactor.Runtime.Tests/` — unit/runtime semantics (links source via `.csproj` `Compile Include`)
+- `backend/tests/Topolactor.Integration.Tests/` — integration slice
+
+## Nullable
+
+- Projects use `<Nullable>enable</Nullable>`.
+- Fix CS8602/CS8604 at the source (null-forgiving `!`, `?? DBNull.Value` for Npgsql, or narrow types)—do not assume warnings fail CI unless a check adds `/warnaserror`.
+
+## Tests
+
+- Prefer existing in-memory repositories under `backend/tests/Topolactor.Runtime.Tests/` (`InMemory*`) over new DB fixtures for admin/runtime tests.
+- New xunit tests need `using Xunit;` and full `OperationVector` arguments matching existing admin tests.

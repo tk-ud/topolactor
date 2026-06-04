@@ -41,10 +41,9 @@ const HANDLER_PATTERN =
   /\b(onClick|onSubmit|onChange|onInput|onSelect|handleSubmit|handleLoad|handleSave|handleValidate|handlePreview|handleImport|handleApply|runScenario|handleDispatch|handleFileChange|async function handle[A-Z])/;
 
 Deno.test("handler inventory: all interactive islands declare at least one event handler", async () => {
-  const islandsDir = new URL("../islands/", import.meta.url).pathname;
   const missing: string[] = [];
   for (const name of INTERACTIVE_ISLANDS) {
-    const content = await Deno.readTextFile(islandsDir + name);
+    const content = await Deno.readTextFile(new URL(`../islands/${name}`, import.meta.url));
     if (!HANDLER_PATTERN.test(content)) missing.push(name);
   }
   assertEquals(

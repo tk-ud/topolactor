@@ -1,0 +1,40 @@
+---
+description: Local dotnet/deno/docker verification on Cursor (do not skip tests)
+alwaysApply: true
+---
+
+# Local verification (Cursor)
+
+Governance entry: [`top/AGENTS.md`](../../AGENTS.md) (repository root).
+
+## Tooling assumption
+
+This workspace is edited in **Cursor on a local machine** where `dotnet`, `deno`, and `docker` are installed and on `PATH`. CI runners also provide these tools.
+
+- **Do** run checks directly: `dotnet test`, `deno test`, `bash .agent/tests/*.sh`.
+- **Do not** report "tool not found" and stop without trying host commands.
+- **Do not** use a Docker SDK image as a substitute for host `dotnet test` / `deno test` when local tools are available.
+- Use Docker only when a script explicitly requires it (e.g. `.agent/tests/check-runtime-environment.sh`).
+
+## Common commands
+
+```bash
+# Same as .github/workflows/runtime-semantics.yml
+bash .agent/tests/check-runtime-semantics.sh
+
+# Backend unit tests only
+dotnet test backend/tests/Topolactor.Runtime.Tests/Topolactor.Runtime.Tests.csproj --nologo -v minimal
+
+# Integration slice
+dotnet test backend/tests/Topolactor.Integration.Tests/Topolactor.Integration.Tests.csproj --nologo -v minimal
+
+# Frontend semantics slice (from check-runtime-semantics.sh)
+deno test frontend/tests/adminApi.test.ts frontend/tests/defaultEntitySearch.test.ts frontend/tests/pipelineContinuity.test.ts --allow-read
+
+# Full local CI (structure check runs last inside the script)
+bash .agent/tests/check-local-ci.sh
+```
+
+## After backend enum/roster changes
+
+- `InMemoryEnumDictionaryRepository.WithDemoSeed()` includes **demo_status** and **user_status**; tests expecting a single enum group must assert both IDs or filter explicitly.

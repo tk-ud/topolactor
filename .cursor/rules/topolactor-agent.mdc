@@ -1,0 +1,29 @@
+---
+description: Topolactor agent entry route and governance posture (Cursor)
+alwaysApply: true
+---
+
+# Topolactor agent (Cursor)
+
+## Canonical contract (read first)
+
+- **Always start from** repository-top [`AGENTS.md`](../../AGENTS.md) (`top/AGENTS.md`). That file is the agent entry contract; Cursor rules here do not override it.
+- Follow the route defined there before any task-specific work.
+
+## Entry route
+
+1. Read **`top/AGENTS.md`** — i.e. [`AGENTS.md`](../../AGENTS.md) at the repository root (agent contract).
+2. Read `.agent/rules/rule.md` for always-on rules and trigger map.
+3. Read `.agent/README.md` when routing work types.
+4. Open `.agent/prompt/<work-type>.md` and triggered protocols/checklists only when their trigger matches the change.
+
+## Work posture
+
+- Do not load every protocol, doc, or skill by default.
+- Preserve canonical runtime routes and explicit-failure behavior (no silent fallback).
+- Confirm implementation state from **code and tests**, not from `.agent/tasks/todo.md` or `docs/system-roadmap.yaml` alone.
+- Run required local checks before claiming completion; run `bash .agent/tests/check-structure.sh` **last**.
+
+## User communication
+
+- Respond to the user in **Japanese** unless they ask otherwise.
