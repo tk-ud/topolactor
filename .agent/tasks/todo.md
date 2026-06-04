@@ -90,12 +90,6 @@
 
 ---
 
-## 完了済みアーカイブ
-
-
-### `main-data-wiring-ssot-audit`（2026-06）
-
-- [x] `NpgsqlTopologyRepository` の demo transition 永続化参照を canonical `topology.demo_state_transitions` に統一
 ## Bundle `ui-builder-layout-design-boundary`
 
 **SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/framework-policy.yaml`, `docs/design/css-dictionary-ssot.yaml`
@@ -112,6 +106,10 @@
 ---
 
 ## 完了済みアーカイブ
+
+### `main-data-wiring-ssot-audit`（2026-06）
+
+- [x] `NpgsqlTopologyRepository` の demo transition 永続化参照を canonical `topology.demo_state_transitions` に統一
 
 ### `ui-topology-package-bucket-vector`（2026-06）
 
