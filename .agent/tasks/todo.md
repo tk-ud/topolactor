@@ -14,90 +14,7 @@
 | `search-aggregation-runtime-operator-contract` | Step3 read/query wiring runtime実行契約 / UIイベント接続 | not_started | 6 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `admin-frontend-normal-view-copy-polish` | Admin frontend 通常表示コピー調整 | not_started | 5 | `docs/design/admin-console-workflow-ssot.yaml` |
 | `sql-attention-m7` | SQL Attention phase_vector 生成 | partial | 1 | `docs/design/sql-attention-logs-ssot.yaml` |
-| `enum-dictionary-canonicalization` | enum辞書正本化 | not_started | 14 | `docs/design/enum-dictionary-ssot.yaml` |
 | `admin-master-roster-management-ui` | admin user/enum名簿管理UI | not_started | 38 | `docs/design/admin-master-roster-management-ssot.yaml` |
----
-## Bundle `enum-dictionary-canonicalization`
-
-**SSOT:** 新規作成予定 `docs/design/enum-dictionary-ssot.yaml`  
-**関連SSOT:** `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
-
-**実行前:** AGENTS.md を読む。
-
-**残差の性質:**  
-enum は現在、画面入力時の select 候補・状態管理・属性候補として扱う必要があるが、正本化された辞書空間として未定義。テーブル定義後のデータ登録で属性ごとの enum_group が選択されない場合、手入力が増え、状態値・属性値・select候補・検索軸が分散する。auth と同様に、enum も topology/jsonb 側の便利設定ではなく、状態空間・属性空間の辞書正本として扱う必要がある。
-
-**目的:**  
-enum item を点、enum_group を点集合ベクトルとして正本化し、属性定義から select 候補、状態遷移、検索/近傍探索まで一貫して参照できるようにする。
-
-**改善方針:**  
-- `enum_table` を enum item 正本として定義する
-  - `uuid`
-  - `index_num`
-  - `name`
-- `enum_group` を enum item 集合の正本として定義する
-  - `uuid`
-  - `index_num`
-  - `group_name`
-  - `items[enum index num]`
-- `index_num` は enum 空間内のベクトル/順序/近傍検索用座標として扱う
-- `uuid` は永続ID、`index_num` は探索・UI候補・ベクトル化の参照値として分離する
-- テーブル定義の column/attribute に `enum_group` 参照を持たせる
-- データ入力UIでは、column に enum_group が紐づく場合、手入力ではなく select として候補を出す
-- enum_group の `items[enum index num]` により、属性ごとの候補集合をベクトル検索可能にする
-- enum は auth と同様に正本境界を持ち、画面ごとのローカル候補や hardcoded select に分散させない
-
-**未実装 todo:**
-- [ ] `docs/design/enum-dictionary-ssot.yaml` を作成し、enum item / enum group / index_num / uuid / group items の正本境界を定義する
-- [ ] `docs/design/db-schema.yaml` に `enum_table` / `enum_group` 相当の物理テーブル定義を追記する
-- [ ] `docs/design/admin-console-workflow-ssot.yaml` に、Step 2 テーブル定義の column が enum_group を参照できる契約を追記する
-- [ ] `docs/design/runtime-orchestration-ssot.yaml` に enum 正本は `enum-dictionary-ssot.yaml` 参照とし、topology / manifest / screen_data_shape へ enum item 定義を散らさない境界を追記する
-- [ ] frontend の Step 2 column 定義 UI に enum_group 選択を追加する
-- [ ] frontend の Step 3 初期データ入力で enum_group 参照付き column を select 入力にする
-- [ ] backend 保存/投影で column enum_group 参照を `screen_data_shape` または対応 topology intent に保持する
-- [ ] enum_group 未解決時は silent fallback せず blocking error にする
-- [ ] enum item / enum_group / column enum_group 参照 / select 入力化の regression test を追加する
-- [ ] enum_group `items[enum index num]` を検索・近傍探索に使うための projection/read model 方針をSSOT化する
-- [ ] `.agent/docs/ssot-map.yaml` に `enum_dictionary_canonicalization` work_type（change_surfaces / required_docs / protocols）を追加する
-- [ ] `.agent/docs/design-ssot-index.md` に enum dictionary SSOT 節を追加する
-- [ ] `.agent/docs/required-paths.yaml` と `.agent/tests/check-structure.sh` に `docs/design/enum-dictionary-ssot.yaml` 必須パス・必須語彙・`.agent/tests/check-enum-dictionary.sh` subcheck を配線する
-- [ ] `db/enum_tables.sql` を作成し `db/init.sql` チェーンへ組み込む（`check-bootstrap-validation.sh` 経由で適用可能であること）
-
-**対象ファイル候補:**
-- `.agent/docs/ssot-map.yaml`
-- `.agent/docs/design-ssot-index.md`
-- `.agent/docs/required-paths.yaml`
-- `.agent/tests/check-enum-dictionary.sh`
-- `.agent/tests/check-structure.sh`
-- `.agent/tests/check-bootstrap-validation.sh`
-- `db/enum_tables.sql`
-- `db/init.sql`
-- `docs/design/enum-dictionary-ssot.yaml`
-- `docs/design/db-schema.yaml`
-- `docs/design/admin-console-workflow-ssot.yaml`
-- `docs/design/runtime-orchestration-ssot.yaml`
-- `frontend/islands/ContentsScreenDesignPanel.tsx`
-- `frontend/lib/manifestScreenDesign.ts`
-- `frontend/lib/manifestTopologyExtensions.ts`
-- `frontend/lib/contentsAssign.ts`
-- `frontend/tests/adminUxGuard.test.ts`
-- `backend/schema/ManifestManagementContracts.cs`
-- `backend/runtime/AdminRuntime.cs`
-- `backend/repository/ManifestRepository.cs`
-- `backend/repository/NpgsqlManifestRepository.cs`
-- backend manifest management tests
-
-**完了条件:**
-- enum item が `uuid,index_num,name` を持つ正本として定義されている
-- enum_group が `uuid,index_num,group_name,items[enum index num]` を持つ正本として定義されている
-- table/column 定義から enum_group を参照できる
-- enum_group 参照付き column はデータ入力時に select 候補として表示される
-- enum_group 未解決時に silent fallback しない
-- enum index_num 群が属性候補集合ベクトルとして検索/近傍探索に利用可能な形で保存・投影される
-- SSOT / DB schema / frontend / backend / tests が同じ enum 正本境界を参照している
-- `admin-console-workflow-ssot.yaml` / `runtime-orchestration-ssot.yaml` が `enum-dictionary-ssot.yaml` を参照し、workflow・runtime 側の enum 境界と矛盾しない
-- `.agent/docs`（ssot-map / design-ssot-index / required-paths）と `check-structure.sh` subcheck が `enum-dictionary-ssot.yaml` を発見・検証できる
-- `db/init.sql` → `enum_tables.sql` が bootstrap validation で適用可能
 
 ---
 ## Bundle `admin-master-roster-management-ui`
@@ -105,21 +22,20 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 **SSOT:** 新規作成予定 `docs/design/admin-master-roster-management-ssot.yaml`
 **関連SSOT:** `docs/design/enum-dictionary-ssot.yaml`, `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-console-workflow-ssot.yaml`, `docs/design/db-schema.yaml`, `docs/design/runtime-orchestration-ssot.yaml`
 
-**前提 bundle:** `enum-dictionary-canonicalization`（enum item / enum_group / DB schema / Step2・Step3 参照・select 化の正本定義は当該 bundle のみ。本 bundle では再定義しない）
+**前提 bundle（完了）:** `enum-dictionary-canonicalization` — 正本は `docs/design/enum-dictionary-ssot.yaml` / `db/enum_tables.sql` / `db/enum_seed.sql`（デモ `demo_status` のみ）。Step2・Step3 の `enumGroupId` 参照・select 化は実装済み。本 bundle では enum 正本を再定義しない。
 
-**実行前:** AGENTS.md を読む。`enum-dictionary-canonicalization` が未完了の場合は先にそちらを実装する。
+**実行前:** AGENTS.md を読む。
 
 **実装順序:**
 
-1. 前提: `enum-dictionary-canonicalization` 完了
-2. admin 関連 SSOT 整備（名簿管理・route・auth 境界・DB 投影）
-3. enum seed（名簿管理UI・users 向け）
-4. `/admin/enums` 名簿 CRUD UI
-5. `/admin/users` 名簿・状態管理 UI
+1. admin 関連 SSOT 整備（名簿管理・route・auth 境界・DB 投影）
+2. enum seed 拡張（users 向け status 等 — 既存 `db/enum_seed.sql` に idempotent 追記）
+3. `/admin/enums` 名簿 CRUD UI
+4. `/admin/users` 名簿・状態管理 UI
 
 **設計方針（名簿管理・seed 固有）:**
 
-* enum 正本境界・物理テーブル・workflow 上の enum_group 参照契約は `enum-dictionary-canonicalization` を参照する
+* enum 正本境界・物理テーブル・workflow 上の enum_group 参照契約は `docs/design/enum-dictionary-ssot.yaml`（完了済み bundle）を参照する
 * seed は `ON CONFLICT` 前提の idempotent seed とする
 * users 用 enum seed は `/admin/users` 実装より先に投入する
 * `/admin/users` の `status` は seed 済み enum_group を参照する（手入力 select 化の契約自体は前提 bundle 側）
@@ -142,7 +58,7 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 * [ ] users 用 enum seed に user status enum_group を含める
 
   * 例: `active`, `inactive`, `suspended`, `archived`
-* [ ] `db/enum_seed.sql` を作成し `db/init.sql` チェーンへ idempotent seed として組み込む（users 向け enum は `/admin/users` 実装より前）
+* [ ] `db/enum_seed.sql` に users 向け enum item / enum_group を idempotent 追記する（init チェーン組み込み済み — デモ `demo_status` は前提 bundle 分）
 * [ ] `/admin/enums` を追加し、enum名簿CRUDを扱う
 * [ ] `/admin/enums` トップに Text検索欄を設置する
 * [ ] `/admin/enums` トップに 全件出力 ボタンを設置する
@@ -213,7 +129,7 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
 
 **完了条件:**
 
-* 前提: `enum-dictionary-canonicalization` の完了条件を満たしている（enum 正本・DB・Step2/Step3 select 化は当 bundle で検証）
+* 前提: `enum-dictionary-canonicalization` 完了済み（enum 正本・DB・Step2/Step3 select 化 — 当 bundle では users 用 seed と名簿 UI のみ追加）
 * `admin-master-roster-management-ssot.yaml` / `admin-console-workflow-ssot.yaml` / `runtime-orchestration-ssot.yaml` / `auth-db-session-credential-ssot.yaml` / `db-schema.yaml` が名簿管理・route・auth 境界・監査投影で整合している
 * `.agent/docs`（ssot-map / design-ssot-index / required-paths）・`registrar-admin-ui-specification.md`・`check-structure.sh` subcheck が名簿管理 SSOT / route を発見・検証できる
 * `db/init.sql` → `enum_seed.sql` が bootstrap validation で適用可能
@@ -392,7 +308,64 @@ enum item を点、enum_group を点集合ベクトルとして正本化し、�
   - 完了条件: Step 2.5 で relation した draft/active table の項目が Step 3 の操作対象・表示列・検索/集計・サンプル表示の候補に出る。local/remote の同名項目が衝突せず、未解決 relation は silent fallback せず明示エラーになる。
 
 ---
+## Bundle `recommendation-pressure-lane-boundary`
 
+**SSOT:** 新規作成予定 `docs/design/recommendation-pressure-lane-ssot.yaml`
+**関連SSOT:** `docs/design/sql-attention-logs-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/enum-dictionary-ssot.yaml`, `docs/design/db-schema.yaml`
+
+**実行前:** AGENTS.md を読む。
+
+**残差の性質:**
+現在の recommendation engine は context route / operation / token prefix を中心に、hub 内の次操作候補を推薦している。一方で SQL Attention は logs / hub vector / projection pressure を観測し、次に注目すべき hub projection 候補を読む概念側の Attention 層である。
+この2つを同じ recommendation として扱うと、hub間・projection間の概念推薦と、hub内の次候補推薦が混線する。
+
+**責務境界:**
+
+* SQL Attention
+
+  * 役割: 概念自体の推薦
+  * 対象: 次の hub projection 候補
+  * 空間: hub間 / projection間 / topology概念空間
+  * 出力: どの hub / projection / topology を次に見るべきか
+* Recommendation Engine
+
+  * 役割: hub内の次候補推薦
+  * 対象: operation / enum item / component / route action
+  * 空間: 現在hub内部の操作圧力・状態圧力
+  * 出力: このhub内で次に何を選ぶ・押す・遷移するべきか
+
+**未実装 todo:**
+
+* [ ] `docs/design/recommendation-pressure-lane-ssot.yaml` を作成し、SQL Attention と Recommendation Engine の責務境界を定義する
+* [ ] SQL Attention は「次の hub projection 候補」を返す概念推薦 lane として定義する
+* [ ] Recommendation Engine は「現在 hub 内の次候補」を返す hub-local recommendation lane として定義する
+* [ ] UI操作圧力 recommendation lane を定義する
+
+  * source: `context_event`, `component_operation_event_log`
+  * output: `next_operation`, `next_component`, `next_route_action`
+* [ ] 状態圧力 recommendation lane を定義する
+
+  * source: `logs.diff`, enum transition logs
+  * output: `next_enum_item`, `likely_status`, `state_shift_candidate`
+* [ ] enum_group + selected item index を状態圧力の線形空間座標として扱う契約を `enum-dictionary-ssot.yaml` と接続する
+* [ ] operation transition stats と enum item transition stats を混同しない保存境界を定義する
+* [ ] SQL Attention の projection recommendation を Recommendation Engine の hub-local candidate recommendation へ直接混入させない
+* [ ] 必要なら `context_transition_stats` を `transition_kind` で汎用化するか、`context_enum_transition_stats` を別テーブルとして定義する
+* [ ] recommendation result に `lane: ui_pressure | state_pressure` を持たせ、UI側で混線しないようにする
+* [ ] SQL Attention result には `lane: sql_attention_projection` 等を持たせ、hub projection 候補であることを固定する
+* [ ] 責務境界の regression test / SSOT vocabulary guard を追加する
+
+**完了条件:**
+
+* SQL Attention が「どの hub projection を見るか」の概念推薦として定義されている
+* Recommendation Engine が「現在hub内で何を選ぶか」の候補推薦として定義されている
+* UI操作圧力と状態圧力が別laneとして並列に扱われている
+* enum index 線形空間による状態遷移推薦が operation recommendation と混線していない
+* SQL Attention の出力と Recommendation Engine の出力が型・lane・SSOT上で区別されている
+* tests / guard により、SQL Attention と hub-local recommendation の責務混同が検知できる
+
+
+---
 ## Bundle `sql-attention-m7`
 
 **Status:** partial  

@@ -58,6 +58,10 @@ export function toFriendlyLabel(technicalKey: string): string {
 /** ContentsScreenDesignPanel フィールドラベル（通常表示用） */
 export const UX_FIELD_NULLABLE = "空欄許可";
 
+/** Step 2 column enum dictionary group binding (not exposed as enumGroupId). */
+export const UX_FIELD_ENUM_GROUP = "候補グループ";
+export const UX_FIELD_ENUM_GROUP_NONE = "（なし）";
+
 /** 検索キー選択（通常表示）— internal column names must not be directly exposed */
 export const UX_FIELD_SEARCH_KEY = "検索キー";
 /** 集計キー（通常表示）— "group by" must not appear as primary vocabulary */

@@ -90,7 +90,27 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 
 ---
 
-### 5. Admin Console Workflow SSOT（管理コンソールワークフロー）
+### 5. Enum Dictionary SSOT（列候補辞書）
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/enum-dictionary-ssot.yaml` |
+
+**概要**: enum item（点）と enum group（点集合ベクトル）の正本。管理コンソール Step 2 の列 `enumGroupId` 参照と Step 3 の select 入力に使用する。
+
+**関連実装surface**:
+- `db/enum_tables.sql` / `db/enum_seed.sql` — 物理テーブルと最小 seed
+- `backend/runtime/AdminRuntime.cs` — `enum_dictionary:list_groups` / `get_group`、assign 時検証
+- `frontend/islands/ContentsScreenDesignPanel.tsx` — Step 2/3 UI
+
+**参照すべき場面**:
+- 列定義に select 候補を紐づけるとき
+- topology / manifest に enum 候補を埋め込まない境界を確認するとき
+- enum_group 未解決時の blocking error 契約を変更するとき
+
+---
+
+### 6. Admin Console Workflow SSOT（管理コンソールワークフロー）
 
 | 種別 | パス |
 |---|---|

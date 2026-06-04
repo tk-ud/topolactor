@@ -71,6 +71,21 @@ for table_name in "${required_public_tables[@]}"; do
   echo "OK  [public table] ${table_name}"
 done
 
+required_enum_tables=(
+  "items"
+  "groups"
+  "group_items"
+)
+
+for table_name in "${required_enum_tables[@]}"; do
+  exists="$(${PSQL[@]} -tA -c "SELECT to_regclass('enum.${table_name}') IS NOT NULL;")"
+  if [ "${exists}" != "t" ]; then
+    echo "ERROR: required enum table missing after bootstrap: enum.${table_name}" >&2
+    exit 1
+  fi
+  echo "OK  [enum table] enum.${table_name}"
+done
+
 required_topology_tables=(
   "components_bucket"
   "ui_topology_tensor"

@@ -274,6 +274,20 @@ runtime_orchestration_ssot:
         - jwt_secret_in_topology_or_hub_jsonb
       seed_mapping_types:
         - auth_action_binding
+    enum_dictionary_lane:
+      reference: docs/design/enum-dictionary-ssot.yaml
+      owns:
+        - enum_item_canonical_store
+        - enum_group_canonical_store
+        - enum_group_items_vector_order
+        - column_enumGroupId_validation_on_assign_screen_data_shape
+      admin_runtime_actions:
+        - enum_dictionary:list_groups
+        - enum_dictionary:get_group
+      prohibited:
+        - enum_item_definitions_in_topology_or_manifest_jsonb
+        - silent_fallback_when_enumGroupId_unresolved
+        - hardcoded_frontend_select_for_enum_backed_columns
     trigger_kinds:
       - cron
       - hook

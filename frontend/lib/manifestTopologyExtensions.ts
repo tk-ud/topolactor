@@ -44,6 +44,7 @@ export type ColumnShape = {
   name: string;
   dataType: string;
   nullable: boolean;
+  enumGroupId?: string;
 };
 
 export type ScreenDataShapeSummary = {
@@ -143,6 +144,9 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
                     name: typeof c.name === "string" ? c.name : "",
                     dataType: typeof c.dataType === "string" ? c.dataType : "text",
                     nullable: typeof c.nullable === "boolean" ? c.nullable : true,
+                    enumGroupId: typeof c.enumGroupId === "string" && c.enumGroupId.trim()
+                      ? c.enumGroupId.trim()
+                      : undefined,
                   }))
               : [],
           }))
@@ -154,6 +158,9 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
             name: typeof c.name === "string" ? c.name : "",
             dataType: typeof c.dataType === "string" ? c.dataType : "text",
             nullable: typeof c.nullable === "boolean" ? c.nullable : true,
+            enumGroupId: typeof c.enumGroupId === "string" && c.enumGroupId.trim()
+              ? c.enumGroupId.trim()
+              : undefined,
           }))
       : [];
     const relationIntents = Array.isArray(entry.relationIntents)

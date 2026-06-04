@@ -6,6 +6,8 @@ db_schema:
     - db/schema.sql
     - db/auth_tables.sql
     - db/auth_seed.sql
+    - db/enum_tables.sql
+    - db/enum_seed.sql
     - db/topology_tables.sql
     - db/promotion_tables.sql
     - db/sql_attention_logs_tables.sql
@@ -22,6 +24,7 @@ db_schema:
     - ui_topology
     - manifest
     - auth_identity_session
+    - enum_dictionary
 
 
 
@@ -39,6 +42,14 @@ db_schema:
         - auth.roles
         - auth.scopes
         - auth.grants
+    enum:
+      status: canonical_active
+      role: enum item and enum group dictionary for admin column select and vector coordinates
+      reference: docs/design/enum-dictionary-ssot.yaml
+      tables:
+        - enum.items
+        - enum.groups
+        - enum.group_items
     hubs:
       role: topology meaning space, hub manifest grouping, and fixed hub sequence
       canonical_tables:

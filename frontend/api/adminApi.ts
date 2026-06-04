@@ -276,6 +276,26 @@ export type AdminManifestScreenColumnInput = {
   name: string;
   dataType: string;
   nullable: boolean;
+  enumGroupId?: string;
+};
+
+export type EnumDictionaryGroup = {
+  groupId: string;
+  indexNum: number;
+  groupName: string;
+};
+
+export type EnumDictionaryItem = {
+  indexNum: number;
+  name: string;
+};
+
+export type EnumDictionaryGroupDetail = {
+  groupId: string;
+  indexNum: number;
+  groupName: string;
+  items: EnumDictionaryItem[];
+  itemsIndexNums: number[];
 };
 
 export type AggregationMeasureInput = {
@@ -548,6 +568,45 @@ export async function assignAdminManifestScreenDataShape(
   const body = await callAdminManifestOp("assign_screen_data_shape", input);
   if (body === null) throw new Error("DISPATCH_BACKEND_NOT_CONFIGURED");
   return body.emission?.data as AdminManifestDetail;
+}
+
+export async function listEnumDictionaryGroups(): Promise<EnumDictionaryGroup[] | null> {
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "enum_dictionary",
+    action: "list_groups",
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg = result.errors?.[0]
+      ? validationErrorText(result.errors[0])
+      : "enum_dictionary list_groups failed";
+    throw new Error(msg);
+  }
+  return (result.emission?.data ?? []) as EnumDictionaryGroup[];
+}
+
+export async function getEnumDictionaryGroup(
+  groupId: string,
+): Promise<EnumDictionaryGroupDetail | null> {
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer: "enum_dictionary",
+    action: "get_group",
+    payload: { groupId },
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg = result.errors?.[0]
+      ? validationErrorText(result.errors[0])
+      : "enum_dictionary get_group failed";
+    throw new Error(msg);
+  }
+  return result.emission?.data as EnumDictionaryGroupDetail;
 }
 
 export async function deprecateAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {

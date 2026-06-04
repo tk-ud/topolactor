@@ -31,6 +31,8 @@ psql -d <database> -f db/ci_attention_guidance_tables.sql
 psql -d <database> -f db/context_route_tables.sql
 psql -d <database> -f db/ui_topology_tables.sql
 psql -d <database> -f db/manifest_tables.sql
+psql -d <database> -f db/enum_tables.sql
+psql -d <database> -f db/enum_seed.sql
 psql -d <database> -f db/auth_tables.sql
 psql -d <database> -f db/auth_seed.sql
 psql -d <database> -f db/legacy_mirror_tables.sql
@@ -60,7 +62,7 @@ See `docs/demo-walkthrough.md` for what to observe after applying the demo seed.
 
 **docker compose:** On a fresh volume, `docker compose --env-file infra/.env -f infra/docker-compose.yml up -d`
 executes `db/init.sql` via `docker-entrypoint-initdb.d/00-init.sql`. This file is **compose/container-path specific** (`/db/...`) and assumes `infra/docker-compose.yml` mounts `../db` to `/db`.
-It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
+It applies `schema.sql -> topology_tables.sql -> promotion_tables.sql -> sql_attention_logs_tables.sql -> ci_attention_guidance_tables.sql -> context_route_tables.sql -> ui_topology_tables.sql -> manifest_tables.sql -> enum_tables.sql -> enum_seed.sql -> auth_tables.sql -> auth_seed.sql -> legacy_mirror_tables.sql -> seed_empty.sql -> demo_seed.sql` in one explicit order with `ON_ERROR_STOP`.
 For normal host-side `psql` usage, use the ordered per-file commands above (not `psql -f db/init.sql`).
 On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql`, `psql -d topolactor_demo -f db/auth_seed.sql`, and `psql -d topolactor_demo -f db/demo_seed.sql` manually if needed.
 
@@ -75,6 +77,8 @@ On an existing volume, run `psql -d topolactor_demo -f db/auth_tables.sql`, `psq
 | `promotion_tables.sql` | Promotion policy tables (`usage_metrics`, `promotion_candidates`). Advisory only — no migrations executed here. |
 | `context_route_tables.sql` | Context route recommendation runtime tables. Append-only event log, rebuildable sparse vector cache projections, transition stats. Optional cluster/drift tables isolated at bottom. |
 | `manifest_tables.sql` | Manifest draft/active storage and promotion lifecycle tables. |
+| `enum_tables.sql` | Canonical enum item / enum group dictionary (`enum.items`, `enum.groups`, `enum.group_items`). |
+| `enum_seed.sql` | Minimal demo enum dictionary for admin select regression. Apply after `enum_tables.sql`. |
 | `auth_tables.sql` | Canonical auth store for identities, password hashes, sessions, refresh-token hashes, login events, roles, scopes, and grants. |
 | `auth_seed.sql` | Demo-only credentials in `auth.*` for user/admin realm login. Apply after `auth_tables.sql`. |
 | `seed_empty.sql` | Minimal default seed rows. Includes context route policy row in `function_parameters`, admin dispatch manifests, and the user login seed manifest. No real business data. |

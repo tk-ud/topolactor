@@ -81,7 +81,8 @@ public record AdminManifestAssignHubGroupingRequestDto(
 public record AdminManifestScreenColumnDto(
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("dataType")] string DataType,
-    [property: JsonPropertyName("nullable")] bool Nullable
+    [property: JsonPropertyName("nullable")] bool Nullable,
+    [property: JsonPropertyName("enumGroupId")] string? EnumGroupId = null
 );
 
 public record AdminManifestAggregationMeasureDto(

@@ -6,8 +6,11 @@ import {
   assignAdminManifestScreenDataShape,
   createAdminManifestDraft,
   getAdminManifest,
+  getEnumDictionaryGroup,
   listAdminManifests,
+  listEnumDictionaryGroups,
   listRelationshipRemoteTargets,
+  type EnumDictionaryGroupDetail,
   type RelationshipRemoteTarget,
 } from "../api/adminApi.ts";
 import { AdminSubmitStatus } from "../components/AdminSubmitStatus.tsx";
@@ -82,6 +85,8 @@ import {
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_DISPLAY_COLUMNS,
   UX_FIELD_DISPLAY_MODE,
+  UX_FIELD_ENUM_GROUP,
+  UX_FIELD_ENUM_GROUP_NONE,
   UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
   UX_FIELD_LOGICAL_CONDITION,
@@ -300,6 +305,36 @@ export default function ContentsScreenDesignPanel({
   const [manifestLabels, setManifestLabels] = useState<Record<string, string>>({});
   const [remoteTargets, setRemoteTargets] = useState<RelationshipRemoteTarget[]>([]);
   const [remoteTargetsError, setRemoteTargetsError] = useState<string | null>(null);
+  const [enumGroups, setEnumGroups] = useState<
+    { groupId: string; groupName: string }[]
+  >([]);
+  const [enumGroupDetails, setEnumGroupDetails] = useState<
+    Record<string, EnumDictionaryGroupDetail>
+  >({});
+  const [enumDictionaryError, setEnumDictionaryError] = useState<string | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (activeStep !== 2 && activeStep !== 3) return;
+    void (async () => {
+      try {
+        const groups = await listEnumDictionaryGroups();
+        if (groups === null) {
+          setEnumGroups([]);
+          setEnumDictionaryError("候補グループ一覧を読み込めませんでした。");
+        } else {
+          setEnumGroups(groups);
+          setEnumDictionaryError(null);
+        }
+      } catch (err) {
+        setEnumGroups([]);
+        setEnumDictionaryError(
+          err instanceof Error ? err.message : "候補グループ一覧の読み込みに失敗しました。",
+        );
+      }
+    })();
+  }, [activeStep]);
 
   useEffect(() => {
     if (activeStep !== 2.5 || !selectedId) return;
@@ -497,6 +532,13 @@ export default function ContentsScreenDesignPanel({
     }
     setErrors([]);
     setShowStep3Completion(false);
+    if (step === 2 || step === 3) {
+      const enumErr = validateEnumGroupResolution(step);
+      if (enumErr) {
+        setErrors([{ message: enumErr }]);
+        return;
+      }
+    }
     const shape = backendDetail
       ? extractScreenDataShapeFromTopology(backendDetail.topologyRawJson)
       : null;
@@ -600,6 +642,51 @@ export default function ContentsScreenDesignPanel({
   const qualifiedColumns = qualifiedColumnsFromLogicalTables(design.logicalTables);
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
+
+  useEffect(() => {
+    if (activeStep !== 3) return;
+    const groupIds = [
+      ...new Set(
+        qualifiedColumns
+          .map((q) => q.column.enumGroupId?.trim())
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    if (groupIds.length === 0) return;
+    void (async () => {
+      for (const groupId of groupIds) {
+        if (enumGroupDetails[groupId]) continue;
+        try {
+          const detail = await getEnumDictionaryGroup(groupId);
+          if (detail) {
+            setEnumGroupDetails((prev) => ({ ...prev, [groupId]: detail }));
+          }
+        } catch (err) {
+          setEnumDictionaryError(
+            err instanceof Error ? err.message : "候補グループの読み込みに失敗しました。",
+          );
+        }
+      }
+    })();
+  }, [activeStep, design.logicalTables]);
+
+  const validateEnumGroupResolution = (step: ContentsPipelineStep): string | null => {
+    for (const q of qualifiedColumns) {
+      const groupId = q.column.enumGroupId?.trim();
+      if (!groupId) continue;
+      if (step === 2) {
+        if (!enumGroups.some((g) => g.groupId === groupId)) {
+          return `列「${q.key}」の${UX_FIELD_ENUM_GROUP}が辞書に存在しません。`;
+        }
+        continue;
+      }
+      const detail = enumGroupDetails[groupId];
+      if (!detail || detail.items.length === 0) {
+        return `列「${q.key}」の${UX_FIELD_ENUM_GROUP}を解決できません。保存前に候補を読み込んでください。`;
+      }
+    }
+    return null;
+  };
 
   const patchLogicalTables = (logicalTables: LogicalTableDraft[]) => {
     patchDesign(qualifyScreenDesignColumnKeys({
@@ -929,6 +1016,9 @@ export default function ContentsScreenDesignPanel({
       <p class="mb-2 text-xs text-muted-xs">
         1つの下書きに複数テーブルを登録できます。Step 2.5 の関連設定で参照先テーブル名を使います。
       </p>
+      {enumDictionaryError && (
+        <p class="mb-2 text-xs text-red-600" role="alert">{enumDictionaryError}</p>
+      )}
       {design.logicalTables.map((table, tableIndex) => (
         <div
           key={tableIndex}
@@ -949,7 +1039,7 @@ export default function ContentsScreenDesignPanel({
           {table.columns.map((col, colIndex) => (
             <div
               key={colIndex}
-              class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-start"
+              class="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto_auto] sm:items-start"
             >
               <input
                 class="rounded border px-2 py-1 text-xs font-mono"
@@ -995,6 +1085,26 @@ export default function ContentsScreenDesignPanel({
                       })}
                   />
                 )}
+              </div>
+              <div>
+                <label class="mb-0.5 block text-[10px] text-slate-500">
+                  {UX_FIELD_ENUM_GROUP}
+                </label>
+                <select
+                  class="w-full rounded border px-2 py-1 text-xs"
+                  value={col.enumGroupId ?? ""}
+                  onChange={(e) =>
+                    patchLogicalTableColumn(tableIndex, colIndex, {
+                      enumGroupId: (e.target as HTMLSelectElement).value || undefined,
+                    })}
+                >
+                  <option value="">{UX_FIELD_ENUM_GROUP_NONE}</option>
+                  {enumGroups.map((g) => (
+                    <option key={g.groupId} value={g.groupId}>
+                      {g.groupName}
+                    </option>
+                  ))}
+                </select>
               </div>
               <label class="flex items-center gap-2 text-xs sm:pt-1">
                 <input
@@ -1386,20 +1496,58 @@ export default function ContentsScreenDesignPanel({
                       <tbody>
                         {design.initialDataRows.map((row, ri) => (
                           <tr key={ri} class="border-b last:border-0">
-                            {qualifiedColumns.map((q) => (
-                              <td key={q.key} class="px-1 py-1">
-                                <input
-                                  class="w-full rounded border px-1 py-0.5 text-xs font-mono"
-                                  value={row[q.key] ?? ""}
-                                  onInput={(e) =>
-                                    patchInitialDataRow(
-                                      ri,
-                                      q.key,
-                                      (e.target as HTMLInputElement).value,
-                                    )}
-                                />
-                              </td>
-                            ))}
+                            {qualifiedColumns.map((q) => {
+                              const groupId = q.column.enumGroupId?.trim();
+                              const groupDetail = groupId
+                                ? enumGroupDetails[groupId]
+                                : undefined;
+                              if (groupId && (!groupDetail || groupDetail.items.length === 0)) {
+                                return (
+                                  <td key={q.key} class="px-1 py-1">
+                                    <span class="text-xs text-red-600" role="alert">
+                                      {UX_FIELD_ENUM_GROUP}未解決
+                                    </span>
+                                  </td>
+                                );
+                              }
+                              if (groupId && groupDetail) {
+                                return (
+                                  <td key={q.key} class="px-1 py-1">
+                                    <select
+                                      class="w-full rounded border px-1 py-0.5 text-xs font-mono"
+                                      value={row[q.key] ?? ""}
+                                      onChange={(e) =>
+                                        patchInitialDataRow(
+                                          ri,
+                                          q.key,
+                                          (e.target as HTMLSelectElement).value,
+                                        )}
+                                    >
+                                      <option value="">（選択）</option>
+                                      {groupDetail.items.map((item) => (
+                                        <option key={item.indexNum} value={item.name}>
+                                          {item.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                );
+                              }
+                              return (
+                                <td key={q.key} class="px-1 py-1">
+                                  <input
+                                    class="w-full rounded border px-1 py-0.5 text-xs font-mono"
+                                    value={row[q.key] ?? ""}
+                                    onInput={(e) =>
+                                      patchInitialDataRow(
+                                        ri,
+                                        q.key,
+                                        (e.target as HTMLInputElement).value,
+                                      )}
+                                  />
+                                </td>
+                              );
+                            })}
                             <td class="px-1 py-1">
                               <button
                                 type="button"

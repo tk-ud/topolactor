@@ -50,6 +50,20 @@ Deno.test("buildAssignPayloadForStep step 2: logicalTables from draft, preserves
   assertEquals(payload.searchTargets, existing.searchTargets);
 });
 
+Deno.test("buildAssignPayloadForStep step 2: preserves enumGroupId on columns", () => {
+  const design = emptyManifestScreenDesign();
+  const groupId = "22222222-2222-2222-2222-222222222201";
+  design.logicalTables = [{
+    tableName: "employees",
+    columns: [
+      { name: "status", dataType: "text", nullable: true, enumGroupId: groupId },
+    ],
+  }];
+
+  const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  assertEquals(payload.logicalTables?.[0].columns[0].enumGroupId, groupId);
+});
+
 Deno.test("buildAssignPayloadForStep step 2.5: relationIntents only from draft", () => {
   const design = emptyManifestScreenDesign();
   design.relationIntents = [

@@ -437,7 +437,142 @@ public class AdminRuntimeManifestManagementTests
         return list;
     }
 
-    private static AdminRuntime CreateRuntime(InMemoryManifestAdminRepository manifestRepo)
+    [Fact]
+    public async Task AssignScreenDataShape_Persists_EnumGroupId_On_Column()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();
+        var runtime = CreateRuntime(repo, enumRepo);
+        var groupId = InMemoryEnumDictionaryRepository.DemoGroupId.ToString();
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "my_table",
+                    columns = new[]
+                    {
+                        new { name = "status", dataType = "text", nullable = true, enumGroupId = groupId },
+                    },
+                },
+            },
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        var rawJson = data!.Value.GetProperty("topologyRawJson").GetString() ?? "[]";
+        var shapeEntry = JsonSerializer.Deserialize<JsonElement[]>(rawJson)!
+            .First(e => e.TryGetProperty("type", out var t) && t.GetString() == "screen_data_shape");
+        var col = shapeEntry.GetProperty("logicalTables")[0].GetProperty("columns")[0];
+        Assert.Equal(groupId, col.GetProperty("enumGroupId").GetString());
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Rejects_Unknown_EnumGroupId()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo, InMemoryEnumDictionaryRepository.WithDemoSeed());
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "t",
+                    columns = new[]
+                    {
+                        new
+                        {
+                            name = "status",
+                            dataType = "text",
+                            nullable = true,
+                            enumGroupId = Guid.NewGuid().ToString(),
+                        },
+                    },
+                },
+            },
+        });
+
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Rejects_Empty_EnumGroupItems()
+    {
+        var emptyGroupId = Guid.Parse("33333333-3333-3333-3333-333333333301");
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo, InMemoryEnumDictionaryRepository.WithEmptyGroup(emptyGroupId));
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            logicalTables = new[]
+            {
+                new
+                {
+                    tableName = "t",
+                    columns = new[]
+                    {
+                        new
+                        {
+                            name = "status",
+                            dataType = "text",
+                            nullable = true,
+                            enumGroupId = emptyGroupId.ToString(),
+                        },
+                    },
+                },
+            },
+        });
+
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+
+        Assert.NotNull(error);
+        Assert.Equal("ENUM_GROUP_ITEMS_EMPTY", error!.Code);
+    }
+
+    [Fact]
+    public async Task EnumDictionary_ListGroups_Returns_Seeded_Group()
+    {
+        var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();
+        var runtime = CreateRuntime(new InMemoryManifestAdminRepository(), enumRepo);
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "enum_dictionary", "list_groups", null, "admin", null, null), default);
+
+        Assert.Null(error);
+        Assert.Equal(1, data!.Value.GetArrayLength());
+        Assert.Equal(
+            InMemoryEnumDictionaryRepository.DemoGroupId.ToString(),
+            data.Value[0].GetProperty("groupId").GetString());
+    }
+
+    private static AdminRuntime CreateRuntime(
+        InMemoryManifestAdminRepository manifestRepo,
+        EnumDictionaryRepository? enumRepo = null)
     {
         var ctxRepo = new ContextRouteRepository(NullLogger<ContextRouteRepository>.Instance, "Host=localhost");
         var topoRepo = new TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double");
@@ -457,7 +592,9 @@ public class AdminRuntimeManifestManagementTests
             null,
             null,
             null,
-            manifestRepo);
+            manifestRepo,
+            null,
+            enumRepo);
     }
 }
 

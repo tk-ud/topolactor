@@ -59,6 +59,8 @@ builder.Services.AddSingleton<SqlAttentionLogsRepository>(sp =>
         connectionString));
 builder.Services.AddSingleton<CiAttentionGuidanceRepository>(sp =>
     new NpgsqlCiAttentionGuidanceRepository(connectionString));
+builder.Services.AddSingleton<EnumDictionaryRepository>(sp =>
+    new NpgsqlEnumDictionaryRepository(connectionString));
 builder.Services.AddSingleton<AuthRepository>(_ =>
     new NpgsqlAuthRepository(connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
@@ -102,7 +104,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<AdminImportRuntime>(),
         sp.GetRequiredService<ManifestRepository>(),
         sp.GetRequiredService<ContentBundleRepository>(),
-        sp.GetRequiredService<TopologyRepository>()));
+        sp.GetRequiredService<TopologyRepository>(),
+        sp.GetRequiredService<EnumDictionaryRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));

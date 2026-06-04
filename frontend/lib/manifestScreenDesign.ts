@@ -91,6 +91,8 @@ export type ManifestScreenColumnDraft = {
   name: string;
   dataType: string;
   nullable: boolean;
+  /** References enum.groups.group_id when set. */
+  enumGroupId?: string;
 };
 
 /** Step 2 logical table (SSOT: multiple tables per manifest). */

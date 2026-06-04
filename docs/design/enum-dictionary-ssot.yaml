@@ -1,0 +1,74 @@
+enum_dictionary_ssot:
+  name: topolactor_enum_dictionary_ssot
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - canonical_enum_item_and_enum_group_dictionary_for_admin_authoring
+    - column_enum_group_reference_for_select_candidates_and_vector_search_coordinates
+    - fail_close_when_enum_group_unresolved
+
+  source_files:
+    - db/enum_tables.sql
+    - db/enum_seed.sql
+    - backend/repository/EnumDictionaryRepository.cs
+    - backend/repository/NpgsqlEnumDictionaryRepository.cs
+    - backend/schema/EnumDictionaryContracts.cs
+    - backend/runtime/AdminRuntime.cs
+    - frontend/lib/manifestScreenDesign.ts
+    - frontend/lib/manifestTopologyExtensions.ts
+    - frontend/api/adminApi.ts
+
+  prohibited_in_topology_and_manifest:
+    - enum_item_definitions_in_topology_jsonb
+    - enum_item_definitions_in_manifest_except_enumGroupId_column_reference
+    - hardcoded_select_option_lists_for_enum_backed_columns
+    - silent_fallback_to_free_text_when_enumGroupId_is_set
+    - enum_label_or_index_num_authority_in_screen_data_shape_without_db_group
+
+  canonical_tables:
+    enum.items:
+      role: enum_item_canonical_store
+      columns: [enum_id, index_num, name]
+      note: enum_id is persistent UUID; index_num is vector coordinate in enum space
+    enum.groups:
+      role: enum_group_canonical_store
+      columns: [group_id, index_num, group_name]
+      note: group_id is referenced by screen_data_shape columns as enumGroupId
+    enum.group_items:
+      role: ordered_enum_index_num_vector_per_group
+      columns: [group_id, position, enum_index_num]
+      note: position orders items[enum index num] for search and near-neighbor exploration
+
+  column_reference_contract:
+    field: enumGroupId
+    type: uuid_string
+    optional: true
+    resolves_to: enum.groups.group_id
+    prohibited_when_set:
+      - manual_initial_data_text_for_backed_column
+      - inline_candidate_value_arrays_in_topology
+
+  fail_close:
+    error_codes:
+      - ENUM_DICTIONARY_NOT_AVAILABLE
+      - ENUM_GROUP_NOT_FOUND
+      - ENUM_GROUP_ITEMS_EMPTY
+      - ENUM_GROUP_ID_MALFORMED
+    rule: unresolved_enum_group_reference_must_blocking_error_not_silent_fallback
+
+  projection_read_model:
+    initial_strategy: join_enum_groups_and_group_items_at_read_time
+    vector_field: items_index_nums_ordered_by_position
+    future_extensions:
+      - materialized_enum_group_vector_snapshot_on_promote
+    note: screen_data_shape stores enumGroupId only; index_num vector is resolved from DB
+
+  context_route_reconciliation:
+    registry_discrete_values: observation_and_recommendation_coordinates_only
+    admin_select_authority: enum_dictionary_ssot_and_enum_schema_tables
+    rule: context_route_registry_enum_is_not_admin_column_select_ssot
+
+  admin_runtime_actions:
+    list_groups: enum_dictionary:list_groups
+    get_group: enum_dictionary:get_group

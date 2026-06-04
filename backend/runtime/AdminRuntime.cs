@@ -27,6 +27,7 @@ public class AdminRuntime
     private readonly ManifestRepository? _manifestRepository;
     private readonly ContentBundleRepository? _contentBundleRepository;
     private readonly TopologyRepository? _topologyRepository;
+    private readonly EnumDictionaryRepository? _enumDictionaryRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -48,7 +49,8 @@ public class AdminRuntime
         AdminImportRuntime? adminImportRuntime = null,
         ManifestRepository? manifestRepository = null,
         ContentBundleRepository? contentBundleRepository = null,
-        TopologyRepository? topologyRepository = null)
+        TopologyRepository? topologyRepository = null,
+        EnumDictionaryRepository? enumDictionaryRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -63,6 +65,7 @@ public class AdminRuntime
         _manifestRepository = manifestRepository;
         _contentBundleRepository = contentBundleRepository;
         _topologyRepository = topologyRepository;
+        _enumDictionaryRepository = enumDictionaryRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -240,6 +243,8 @@ public class AdminRuntime
             "manifest:assign_hub_grouping"                => await DataManifestAssignHubGroupingAsync(vector, ct),
             "manifest:assign_screen_data_shape"           => await DataManifestAssignScreenDataShapeAsync(vector, ct),
             "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
+            "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(ct),
+            "enum_dictionary:get_group"                   => await DataEnumDictionaryGetGroupAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
@@ -2166,6 +2171,13 @@ public class AdminRuntime
         if (draftTables.Count == 0)
             draftTables = ManifestRelationIntentValidator.ExtractLogicalTables(draftDetail.Topology);
 
+        var enumError = await EnumDictionaryColumnValidator.ValidateEnumGroupReferencesAsync(
+            _enumDictionaryRepository,
+            request.LogicalTables,
+            request.Columns,
+            ct);
+        if (enumError is not null) return (null, enumError);
+
         var relationIntents = request.RelationIntents ?? Array.Empty<AdminManifestRelationIntentDto>();
         if (relationIntents.Count > 0)
         {
@@ -2233,6 +2245,67 @@ public class AdminRuntime
         manifest = refreshed ?? manifest;
 
         return (JsonSerializer.SerializeToElement(ToManifestDetailDto(manifest!)), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataEnumDictionaryListGroupsAsync(
+        CancellationToken ct)
+    {
+        if (_enumDictionaryRepository is null)
+        {
+            return (null, new ValidationError(
+                "ENUM_DICTIONARY_NOT_AVAILABLE",
+                "Enum dictionary repository is not configured."));
+        }
+
+        var groups = await _enumDictionaryRepository.ListGroupsAsync(ct);
+        return (JsonSerializer.SerializeToElement(groups), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataEnumDictionaryGetGroupAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (_enumDictionaryRepository is null)
+        {
+            return (null, new ValidationError(
+                "ENUM_DICTIONARY_NOT_AVAILABLE",
+                "Enum dictionary repository is not configured."));
+        }
+
+        if (vector.Payload is null || vector.Payload.Value.ValueKind != JsonValueKind.Object)
+            return (null, new ValidationError("ENUM_GROUP_PAYLOAD_REQUIRED", "payload with groupId is required."));
+
+        EnumDictionaryGetGroupRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<EnumDictionaryGetGroupRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException)
+        {
+            return (null, new ValidationError("ENUM_GROUP_PAYLOAD_MALFORMED", "payload could not be parsed."));
+        }
+
+        if (request is null || !Guid.TryParse(request.GroupId, out var groupId))
+        {
+            return (null, new ValidationError("ENUM_GROUP_ID_MALFORMED", "groupId must be a valid UUID."));
+        }
+
+        var detail = await _enumDictionaryRepository.GetGroupDetailAsync(groupId, ct);
+        if (detail is null)
+        {
+            return (null, new ValidationError(
+                "ENUM_GROUP_NOT_FOUND",
+                $"Enum group {groupId} was not found."));
+        }
+
+        if (detail.Items.Count == 0)
+        {
+            return (null, new ValidationError(
+                "ENUM_GROUP_ITEMS_EMPTY",
+                $"Enum group {groupId} has no items."));
+        }
+
+        return (JsonSerializer.SerializeToElement(detail), null);
     }
 
     private async Task<(JsonElement? data, ValidationError? error)> DataManifestListRelationshipRemoteTargetsAsync(

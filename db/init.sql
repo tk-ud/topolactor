@@ -28,6 +28,12 @@
 \echo '[init.sql] applying manifest_tables.sql'
 \i /db/manifest_tables.sql
 
+\echo '[init.sql] applying enum_tables.sql'
+\i /db/enum_tables.sql
+
+\echo '[init.sql] applying enum_seed.sql'
+\i /db/enum_seed.sql
+
 \echo '[init.sql] applying auth_tables.sql'
 \i /db/auth_tables.sql
 

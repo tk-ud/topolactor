@@ -218,6 +218,37 @@ mapping:
       - docs/design/db-schema.yaml
     protocols: []
 
+  - work_type: enum_dictionary_canonicalization
+    change_surfaces:
+      - docs/design/enum-dictionary-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - db/enum_tables.sql
+      - db/enum_seed.sql
+      - db/init.sql
+      - backend/repository/EnumDictionaryRepository.cs
+      - backend/repository/NpgsqlEnumDictionaryRepository.cs
+      - backend/schema/EnumDictionaryContracts.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/schema/ManifestManagementContracts.cs
+      - frontend/lib/manifestScreenDesign.ts
+      - frontend/lib/manifestTopologyExtensions.ts
+      - frontend/lib/contentsAssign.ts
+      - frontend/api/adminApi.ts
+      - frontend/islands/ContentsScreenDesignPanel.tsx
+      - frontend/content/adminUxTerms.ts
+      - frontend/tests/adminUxGuard.test.ts
+      - frontend/tests/contentsAssign.test.ts
+      - .agent/tests/check-enum-dictionary.sh
+    required_docs:
+      - docs/design/enum-dictionary-ssot.yaml
+    supporting_docs:
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+    protocols: []
+
   - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime
     change_surfaces:
       - runtime orchestration os

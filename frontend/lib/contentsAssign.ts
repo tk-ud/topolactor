@@ -76,7 +76,12 @@ export function buildAssignPayloadForStep(
   if (step === 2) {
     const logicalTables = design.logicalTables.map((t) => ({
       tableName: t.tableName.trim(),
-      columns: t.columns.filter((c) => c.name.trim()),
+      columns: t.columns.filter((c) => c.name.trim()).map((c) => ({
+        name: c.name.trim(),
+        dataType: c.dataType,
+        nullable: c.nullable,
+        enumGroupId: c.enumGroupId?.trim() || undefined,
+      })),
     })).filter((t) => t.columns.length > 0);
     const legacyColumns = primaryTableColumns(design.logicalTables)
       .filter((c) => c.name.trim());

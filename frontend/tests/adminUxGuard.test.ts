@@ -584,6 +584,26 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
   assertEquals(shape.initialDataRows[0]["col_a"], "value1");
 });
 
+Deno.test("screen_data_shape topology extension: extracts enumGroupId on columns", () => {
+  const groupId = "22222222-2222-2222-2222-222222222201";
+  const topology = JSON.stringify([
+    {
+      type: "screen_data_shape",
+      logicalTables: [{
+        tableName: "employees",
+        columns: [{
+          name: "status",
+          dataType: "text",
+          nullable: true,
+          enumGroupId: groupId,
+        }],
+      }],
+    },
+  ]);
+  const shape = extractScreenDataShapeFromTopology(topology);
+  assertEquals(shape.logicalTables[0].columns[0].enumGroupId, groupId);
+});
+
 Deno.test("screen_data_shape topology extension: returns empty structured fields when absent", () => {
   const topology = JSON.stringify([
     {

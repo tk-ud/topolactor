@@ -70,6 +70,11 @@ admin_console_workflow_ssot:
           - one_or_more logical table definitions
           - per_table column definitions inside jsonb shape intent
           - column types from normal-view candidates (text, integer, bigint, boolean, numeric, timestamp with time zone, date, jsonb, uuid, varchar)
+          - optional enumGroupId per column referencing enum.groups.group_id canonical dictionary
+        enum_group_column_UI:
+          normal_view: select_from_enum_dictionary_list_groups
+          reference_ssot: docs/design/enum-dictionary-ssot.yaml
+          prohibited: hardcoded_select_option_lists_in_frontend
         column_type_UI:
           normal_view: select
           advanced_or_other: isolate_free_text_input
@@ -118,6 +123,10 @@ admin_console_workflow_ssot:
             Form submit in the default no-code path is semantically add (create entity) only.
             update/delete/edit flows require explicit separate operations or advanced surfaces;
             they must not be implied by the default single-page authoring submit.
+        enum_backed_initial_data:
+          rule: columns_with_enumGroupId_use_select_not_free_text
+          unresolved_enum_group: blocking_error_no_silent_fallback
+          admin_actions: [enum_dictionary:list_groups, enum_dictionary:get_group]
         search_aggregation_display:
           may_be_same_submit_or_follow_up_submit:
             - search_key_columns multi_select
