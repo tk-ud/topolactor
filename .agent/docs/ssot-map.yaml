@@ -66,6 +66,8 @@ mapping:
       - frontend/islands/AdminMainFlowStepper.tsx
       - frontend/routes/admin/*
       - frontend/islands/HubNavigationAdmin.tsx
+      - /admin/enums
+      - /admin/users
     required_docs:
       - docs/registrar-admin-ui-specification.md
       - docs/design/admin-console-workflow-ssot.yaml
@@ -247,6 +249,39 @@ mapping:
       - docs/design/runtime-orchestration-ssot.yaml
       - docs/design/db-schema.yaml
       - docs/design/admin-console-workflow-ssot.yaml
+    protocols: []
+
+  - work_type: admin_master_roster_management
+    change_surfaces:
+      - docs/design/admin-master-roster-management-ssot.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+      - docs/design/auth-db-session-credential-ssot.yaml
+      - docs/design/db-schema.yaml
+      - db/enum_seed.sql
+      - db/auth_tables.sql
+      - db/migrations/auth_users_master_roster_state.sql
+      - backend/repository/AuthMasterRepository.cs
+      - backend/repository/NpgsqlAuthMasterRepository.cs
+      - backend/repository/EnumDictionaryRepository.cs
+      - backend/repository/NpgsqlEnumDictionaryRepository.cs
+      - backend/schema/AuthMasterContracts.cs
+      - backend/runtime/AdminMasterRosterAudit.cs
+      - backend/runtime/AdminRuntime.cs
+      - backend/service/AuthService.cs
+      - frontend/routes/admin/enums.tsx
+      - frontend/routes/admin/users.tsx
+      - frontend/islands/AdminEnumsRoster.tsx
+      - frontend/islands/AdminUsersRoster.tsx
+      - frontend/api/adminApi.ts
+      - frontend/content/adminGuides.ts
+      - frontend/tests/adminMasterRoster.test.ts
+      - .agent/tests/check-admin-master-roster.sh
+    required_docs:
+      - docs/design/admin-master-roster-management-ssot.yaml
+    supporting_docs:
+      - docs/design/enum-dictionary-ssot.yaml
+      - docs/design/auth-db-session-credential-ssot.yaml
     protocols: []
 
   - work_type: runtime_orchestration_scheduler_dispatcher_projection_topology_runtime

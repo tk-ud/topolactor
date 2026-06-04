@@ -1190,7 +1190,7 @@ system_roadmap_ssot:
       milestone: M5_admin_and_ui_topology
       public_summary: >
         Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, and /admin/manifests. Full 4-step /admin/contents authoring wizard:
+        /admin/ui-builder, /admin/manifests, /admin/enums, and /admin/users. Full 4-step /admin/contents authoring wizard:
         Step 1 空登録, Step 2 テーブル定義, Step 2.5 relationship, Step 3 物理割当・ページ.
         Structured relation/join intents, searchKeyColumns, aggregationKey, displayColumns,
         aggregationMeasures, searchConditions (15 operators incl. <> alias), havingConditions,
@@ -1219,7 +1219,11 @@ system_roadmap_ssot:
         - frontend/routes/admin/manifests.tsx
         - frontend/routes/admin/contents.tsx
         - frontend/routes/admin/ui-builder.tsx
+        - frontend/routes/admin/enums.tsx
+        - frontend/routes/admin/users.tsx
         - frontend/islands/HubNavigationAdmin.tsx
+        - frontend/islands/AdminEnumsRoster.tsx
+        - frontend/islands/AdminUsersRoster.tsx
         - frontend/islands/ContentsScreenDesignPanel.tsx
         - frontend/islands/ContentsPromotionPanel.tsx
         - frontend/islands/UiBuilderAdmin.tsx
@@ -1244,6 +1248,9 @@ system_roadmap_ssot:
         - admin_manifests_route_exists
         - admin_contents_route_exists
         - admin_ui_builder_route_exists
+        - admin_enums_route_exists
+        - admin_users_route_exists
+        - admin_master_roster_enum_and_user_crud_with_logs_diff_audit
         - admin_manifests_route_owns_existing_manifest_relation_hub_navigation_and_page_group_operations
         - admin_contents_wizard_supports_DB_reference_columns_initial_data_optional_table_relation_search_key_aggregation_display_group_sample_preview_and_explicit_register
         - admin_ui_builder_supports_component_placement_selectable_design_layout_and_wiring_preview_explicit_apply_and_CI_audit_handoff

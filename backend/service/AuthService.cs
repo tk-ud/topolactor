@@ -45,6 +45,14 @@ public class AuthService
             return (Fail("AUTH_INVALID_CREDENTIALS", "Invalid username or password."), null);
         }
 
+        var loginBlock = EvaluateLoginState(user);
+        if (loginBlock is not null)
+        {
+            await _authRepository.InsertLoginEventAsync(user.UserId, realmContext.Realm, false,
+                loginBlock.Value.Code, ct);
+            return (Fail(loginBlock.Value.Code, loginBlock.Value.Message), null);
+        }
+
         var hash = await _authRepository.GetPasswordHashAsync(user.UserId, ct);
         if (hash is null || !BCrypt.Net.BCrypt.Verify(request.Password, hash))
         {
@@ -129,6 +137,28 @@ public class AuthService
         await _authRepository.RevokeRefreshTokenAsync(record.RefreshTokenId, ct);
         await _authRepository.RevokeSessionAsync(record.SessionId, ct);
         return new LogoutResponseDto(true, []);
+    }
+
+    private static (string Code, string Message)? EvaluateLoginState(AuthUserRecord user)
+    {
+        if (!user.Active)
+            return ("AUTH_USER_INACTIVE", "User account is inactive.");
+        if (!user.Approve)
+            return ("AUTH_USER_NOT_APPROVED", "User account is not approved.");
+        if (string.Equals(user.Status, "suspended", StringComparison.OrdinalIgnoreCase))
+            return ("AUTH_USER_SUSPENDED", "User account is suspended.");
+        if (user.SuspendedFrom.HasValue)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var from = new DateTimeOffset(user.SuspendedFrom.Value, TimeSpan.Zero);
+            if (from <= now && (user.SuspendedUntil is null ||
+                now <= new DateTimeOffset(user.SuspendedUntil.Value, TimeSpan.Zero)))
+            {
+                return ("AUTH_USER_SUSPENDED", "User account is within a suspension window.");
+            }
+        }
+
+        return null;
     }
 
     private static LoginResponseDto Fail(string code, string message) =>

@@ -271,6 +271,20 @@ admin_console_workflow_ssot:
           Hub membership, manifest-to-manifest relations, and navigation ordering for already-created
           manifests are not part of sequential steps 1–4. They remain on /admin/manifests.
 
+    master_roster_routes:
+      - route: /admin/enums
+        label: enum_dictionary_roster
+        island: frontend/islands/AdminEnumsRoster.tsx
+        note: >
+          Pipeline-external master data. Enum group/item CRUD via admin_runtime enum_dictionary write
+          actions. Text search, show-all, modal create, row-click inline update, confirm delete.
+      - route: /admin/users
+        label: auth_users_roster
+        island: frontend/islands/AdminUsersRoster.tsx
+        note: >
+          Pipeline-external master data. User roster and state (approve, status select from user_status
+          seed, suspension window, state_note). last_login_at is readonly projection.
+
   shared_authoring_boundary:
     persistence_model_ref: canonical_sequential_authoring_pipeline.persistence_model
     prohibited:

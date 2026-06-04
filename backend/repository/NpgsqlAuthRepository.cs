@@ -13,11 +13,21 @@ public class NpgsqlAuthRepository : AuthRepository
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT user_id, username FROM auth.users WHERE username = @u AND active = true LIMIT 1";
+            """
+            SELECT user_id, username, active, approve, status, suspended_from, suspended_until
+            FROM auth.users WHERE username = @u LIMIT 1
+            """;
         cmd.Parameters.AddWithValue("u", username);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         if (!await reader.ReadAsync(ct)) return null;
-        return new AuthUserRecord(reader.GetGuid(0), reader.GetString(1));
+        return new AuthUserRecord(
+            reader.GetGuid(0),
+            reader.GetString(1),
+            reader.GetBoolean(2),
+            reader.GetBoolean(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+            reader.IsDBNull(6) ? null : reader.GetDateTime(6));
     }
 
     public override async Task<string?> GetPasswordHashAsync(

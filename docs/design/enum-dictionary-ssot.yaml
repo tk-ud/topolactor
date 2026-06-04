@@ -72,3 +72,4 @@ enum_dictionary_ssot:
   admin_runtime_actions:
     list_groups: enum_dictionary:list_groups
     get_group: enum_dictionary:get_group
+    roster_write_actions_ref: docs/design/admin-master-roster-management-ssot.yaml

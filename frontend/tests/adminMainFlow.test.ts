@@ -48,7 +48,13 @@ Deno.test("ACCEPTANCE_FLOW_STEPS matches main flow order", () => {
 Deno.test("ADMIN_ROUTE_CARDS contain canonical admin routes only", () => {
   assertEquals(
     ADMIN_ROUTE_CARDS.map((card) => card.href),
-    ["/admin/contents", "/admin/ui-builder", "/admin/manifests"],
+    [
+      "/admin/contents",
+      "/admin/ui-builder",
+      "/admin/manifests",
+      "/admin/enums",
+      "/admin/users",
+    ],
   );
 });
 
@@ -71,7 +77,14 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
       .filter((route) => route !== "_middleware.ts")
       .map((route) => route === "index.tsx" ? "/admin" : `/admin/${route.replace(/\.tsx$/, "")}`),
   )].sort();
-  assertEquals(adminRoutes, ["/admin", "/admin/contents", "/admin/manifests", "/admin/ui-builder"]);
+  assertEquals(adminRoutes, [
+    "/admin",
+    "/admin/contents",
+    "/admin/enums",
+    "/admin/manifests",
+    "/admin/ui-builder",
+    "/admin/users",
+  ]);
 });
 
 

@@ -254,6 +254,9 @@ db_schema:
       recommendation_namespace: topology and context learning surfaces
     canonical_mapping:
       logs.diff: physical table lifecycle mutation pressure source for logs.current and physical_table_id heat / l2_norm basis
+      logs.diff_admin_master_roster_projection: >-
+        Additional append envelope when source_set_id=admin_master_roster (see
+        docs/design/admin-master-roster-management-ssot.yaml). SQL Attention semantics unchanged.
       logs.current: physical table heat / physical_table_id excitation strength
       logs.hub_current: hub current projection for SQL Attention
       logs.attention: append-only attention evidence and phase_vector_json carrier
@@ -392,6 +395,9 @@ db_schema:
       meaning: SQL Attention rotates/explores hubs space; logs current/attention tables are persistence surfaces, not targets
       signal_meaning:
         logs.diff: physical table lifecycle mutation pressure source for logs.current and physical_table_id heat / l2_norm basis
+      logs.diff_admin_master_roster_projection: >-
+        Additional append envelope when source_set_id=admin_master_roster (see
+        docs/design/admin-master-roster-management-ssot.yaml). SQL Attention semantics unchanged.
         context_event: UI operation pressure source
       not_targets:
         - logs current/evidence persistence surfaces

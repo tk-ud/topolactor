@@ -594,6 +594,7 @@ public class AdminRuntimeManifestManagementTests
             null,
             manifestRepo,
             null,
+            topoRepo,
             enumRepo);
     }
 }

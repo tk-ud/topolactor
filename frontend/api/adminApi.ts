@@ -609,6 +609,131 @@ export async function getEnumDictionaryGroup(
   return result.emission?.data as EnumDictionaryGroupDetail;
 }
 
+export const USER_STATUS_ENUM_GROUP_ID = "33333333-3333-3333-3333-333333333301";
+
+async function callAdminMasterOp<T>(
+  layer: string,
+  action: string,
+  payload?: Record<string, unknown>,
+): Promise<T | null> {
+  const result = await queueAdminClientCommand({
+    operationType: "admin",
+    target: "admin",
+    layer,
+    action,
+    payload,
+  }, getToken());
+  if (!result.success) {
+    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code;
+    if (code === "DISPATCH_BACKEND_NOT_CONFIGURED") return null;
+    const msg = result.errors?.[0]
+      ? validationErrorText(result.errors[0])
+      : `${layer}:${action} failed`;
+    throw new Error(msg);
+  }
+  return result.emission?.data as T;
+}
+
+export async function createEnumDictionaryGroup(
+  groupName: string,
+  indexNum?: number,
+): Promise<EnumDictionaryGroup | null> {
+  return callAdminMasterOp("enum_dictionary", "create_group", { groupName, indexNum });
+}
+
+export async function updateEnumDictionaryGroup(
+  groupId: string,
+  groupName?: string,
+  indexNum?: number,
+): Promise<EnumDictionaryGroup | null> {
+  return callAdminMasterOp("enum_dictionary", "update_group", { groupId, groupName, indexNum });
+}
+
+export async function deleteEnumDictionaryGroup(groupId: string): Promise<{ ok: boolean } | null> {
+  return callAdminMasterOp("enum_dictionary", "delete_group", { groupId });
+}
+
+export async function createEnumDictionaryItem(
+  name: string,
+  indexNum?: number,
+): Promise<EnumDictionaryItem | null> {
+  return callAdminMasterOp("enum_dictionary", "create_item", { name, indexNum });
+}
+
+export async function updateEnumDictionaryItem(
+  indexNum: number,
+  name?: string,
+  newIndexNum?: number,
+): Promise<EnumDictionaryItem | null> {
+  return callAdminMasterOp("enum_dictionary", "update_item", { indexNum, name, newIndexNum });
+}
+
+export async function deleteEnumDictionaryItem(indexNum: number): Promise<{ ok: boolean } | null> {
+  return callAdminMasterOp("enum_dictionary", "delete_item", { indexNum });
+}
+
+export async function setEnumDictionaryGroupItems(
+  groupId: string,
+  enumIndexNums: number[],
+): Promise<EnumDictionaryGroupDetail | null> {
+  return callAdminMasterOp("enum_dictionary", "set_group_items", { groupId, enumIndexNums });
+}
+
+export type AuthUserRoster = {
+  userId: string;
+  username: string;
+  active: boolean;
+  approve: boolean;
+  status: string | null;
+  suspendedFrom: string | null;
+  suspendedUntil: string | null;
+  stateNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string | null;
+};
+
+export async function listAuthUsers(query?: string): Promise<AuthUserRoster[] | null> {
+  return callAdminMasterOp("auth_users", "list", query ? { query } : undefined);
+}
+
+export async function getAuthUser(userId: string): Promise<AuthUserRoster | null> {
+  return callAdminMasterOp("auth_users", "get", { userId });
+}
+
+export async function createAuthUser(input: {
+  username: string;
+  password: string;
+  approve?: boolean;
+  status?: string;
+  roleName?: string;
+  realm?: string;
+  suspendedFrom?: string | null;
+  suspendedUntil?: string | null;
+  stateNote?: string | null;
+}): Promise<AuthUserRoster | null> {
+  return callAdminMasterOp("auth_users", "create", input);
+}
+
+export async function updateAuthUser(input: {
+  userId: string;
+  username?: string;
+  active?: boolean;
+  approve?: boolean;
+  status?: string;
+  suspendedFrom?: string | null;
+  suspendedUntil?: string | null;
+  clearSuspendedFrom?: boolean;
+  clearSuspendedUntil?: boolean;
+  stateNote?: string | null;
+}): Promise<AuthUserRoster | null> {
+  return callAdminMasterOp("auth_users", "update", input);
+}
+
+export async function deleteAuthUser(userId: string): Promise<{ ok: boolean } | null> {
+  return callAdminMasterOp("auth_users", "delete", { userId });
+}
+
 export async function deprecateAdminManifest(manifestId: string): Promise<AdminManifestLifecycleResult | null> {
   const body = await callAdminManifestOp("deprecate", { manifestId });
   if (body === null) return null;

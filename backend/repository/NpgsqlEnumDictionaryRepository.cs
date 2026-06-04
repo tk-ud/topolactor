@@ -68,4 +68,165 @@ public class NpgsqlEnumDictionaryRepository : EnumDictionaryRepository
 
         return new EnumDictionaryGroupDetailDto(gid, indexNum, groupName, items, indexNums);
     }
+
+    public override async Task<EnumDictionaryGroupDto> CreateGroupAsync(
+        string groupName, int? indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var idx = indexNum ?? await NextGroupIndexAsync(conn, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO enum.groups (index_num, group_name) VALUES (@i, @n) RETURNING group_id, index_num, group_name";
+        cmd.Parameters.AddWithValue("i", idx);
+        cmd.Parameters.AddWithValue("n", groupName);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await reader.ReadAsync(ct);
+        return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+    }
+
+    public override async Task<EnumDictionaryGroupDto?> UpdateGroupAsync(
+        Guid groupId, string? groupName, int? indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var sets = new List<string>();
+        await using var cmd = conn.CreateCommand();
+        if (groupName is not null) { sets.Add("group_name = @n"); cmd.Parameters.AddWithValue("n", groupName); }
+        if (indexNum.HasValue) { sets.Add("index_num = @i"); cmd.Parameters.AddWithValue("i", indexNum.Value); }
+        if (sets.Count == 0) return (await ListGroupsAsync(ct)).FirstOrDefault(g => g.GroupId == groupId);
+        cmd.CommandText = $"UPDATE enum.groups SET {string.Join(", ", sets)} WHERE group_id = @id RETURNING group_id, index_num, group_name";
+        cmd.Parameters.AddWithValue("id", groupId);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct)) return null;
+        return new EnumDictionaryGroupDto(reader.GetGuid(0), reader.GetInt32(1), reader.GetString(2));
+    }
+
+    public override async Task<bool> DeleteGroupAsync(Guid groupId, CancellationToken ct = default)
+    {
+        if (await IsGroupReferencedInManifestsAsync(groupId, ct))
+            throw new InvalidOperationException("ENUM_GROUP_IN_USE");
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM enum.groups WHERE group_id = @id";
+        cmd.Parameters.AddWithValue("id", groupId);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public override async Task<EnumDictionaryItemDto> CreateItemAsync(
+        string name, int? indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        var idx = indexNum ?? await NextItemIndexAsync(conn, ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "INSERT INTO enum.items (index_num, name) VALUES (@i, @n) RETURNING index_num, name";
+        cmd.Parameters.AddWithValue("i", idx);
+        cmd.Parameters.AddWithValue("n", name);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        await reader.ReadAsync(ct);
+        return new EnumDictionaryItemDto(reader.GetInt32(0), reader.GetString(1));
+    }
+
+    public override async Task<EnumDictionaryItemDto?> UpdateItemAsync(
+        int indexNum, string? name, int? newIndexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        if (newIndexNum.HasValue && newIndexNum.Value != indexNum)
+        {
+            await using var moveCmd = conn.CreateCommand();
+            moveCmd.CommandText = "UPDATE enum.items SET index_num = @new WHERE index_num = @old";
+            moveCmd.Parameters.AddWithValue("new", newIndexNum.Value);
+            moveCmd.Parameters.AddWithValue("old", indexNum);
+            await moveCmd.ExecuteNonQueryAsync(ct);
+            indexNum = newIndexNum.Value;
+        }
+
+        if (name is not null)
+        {
+            await using var nameCmd = conn.CreateCommand();
+            nameCmd.CommandText = "UPDATE enum.items SET name = @n WHERE index_num = @i RETURNING index_num, name";
+            nameCmd.Parameters.AddWithValue("n", name);
+            nameCmd.Parameters.AddWithValue("i", indexNum);
+            await using var reader = await nameCmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
+            return new EnumDictionaryItemDto(reader.GetInt32(0), reader.GetString(1));
+        }
+
+        await using var getCmd = conn.CreateCommand();
+        getCmd.CommandText = "SELECT index_num, name FROM enum.items WHERE index_num = @i";
+        getCmd.Parameters.AddWithValue("i", indexNum);
+        await using var getReader = await getCmd.ExecuteReaderAsync(ct);
+        if (!await getReader.ReadAsync(ct)) return null;
+        return new EnumDictionaryItemDto(getReader.GetInt32(0), getReader.GetString(1));
+    }
+
+    public override async Task<bool> DeleteItemAsync(int indexNum, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "DELETE FROM enum.items WHERE index_num = @i";
+        cmd.Parameters.AddWithValue("i", indexNum);
+        return await cmd.ExecuteNonQueryAsync(ct) > 0;
+    }
+
+    public override async Task<EnumDictionaryGroupDetailDto?> SetGroupItemsAsync(
+        Guid groupId, IReadOnlyList<int> enumIndexNums, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await using (var delCmd = conn.CreateCommand())
+        {
+            delCmd.Transaction = tx;
+            delCmd.CommandText = "DELETE FROM enum.group_items WHERE group_id = @id";
+            delCmd.Parameters.AddWithValue("id", groupId);
+            await delCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        for (var pos = 0; pos < enumIndexNums.Count; pos++)
+        {
+            await using var insCmd = conn.CreateCommand();
+            insCmd.Transaction = tx;
+            insCmd.CommandText =
+                "INSERT INTO enum.group_items (group_id, position, enum_index_num) VALUES (@g, @p, @e)";
+            insCmd.Parameters.AddWithValue("g", groupId);
+            insCmd.Parameters.AddWithValue("p", pos);
+            insCmd.Parameters.AddWithValue("e", enumIndexNums[pos]);
+            await insCmd.ExecuteNonQueryAsync(ct);
+        }
+
+        await tx.CommitAsync(ct);
+        return await GetGroupDetailAsync(groupId, ct);
+    }
+
+    public override async Task<bool> IsGroupReferencedInManifestsAsync(
+        Guid groupId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT EXISTS (SELECT 1 FROM manifest WHERE topology::text LIKE @p)";
+        cmd.Parameters.AddWithValue("p", $"%{groupId}%");
+        var result = await cmd.ExecuteScalarAsync(ct);
+        return result is bool b && b;
+    }
+
+    private static async Task<int> NextGroupIndexAsync(NpgsqlConnection conn, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(MAX(index_num), 0) + 1 FROM enum.groups";
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+    }
+
+    private static async Task<int> NextItemIndexAsync(NpgsqlConnection conn, CancellationToken ct)
+    {
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT COALESCE(MAX(index_num), 0) + 1 FROM enum.items";
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
+    }
 }

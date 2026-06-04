@@ -15,9 +15,9 @@ INSERT INTO auth.scopes (scope_name, description) VALUES
 ON CONFLICT (scope_name) DO NOTHING;
 
 -- demo_public — user realm
-INSERT INTO auth.users (user_id, username, active)
-VALUES ('00000000-0000-0000-0000-0000000000a1', 'demo_public', true)
-ON CONFLICT (username) DO NOTHING;
+INSERT INTO auth.users (user_id, username, active, approve, status)
+VALUES ('00000000-0000-0000-0000-0000000000a1', 'demo_public', true, true, 'active')
+ON CONFLICT (username) DO UPDATE SET approve = EXCLUDED.approve, status = EXCLUDED.status;
 
 INSERT INTO auth.credentials (user_id, password_hash)
 VALUES (
@@ -31,9 +31,9 @@ VALUES ('00000000-0000-0000-0000-0000000000a1', 'user', 'user')
 ON CONFLICT (user_id, role_name, realm) DO NOTHING;
 
 -- demo_admin — admin realm
-INSERT INTO auth.users (user_id, username, active)
-VALUES ('00000000-0000-0000-0000-0000000000a2', 'demo_admin', true)
-ON CONFLICT (username) DO NOTHING;
+INSERT INTO auth.users (user_id, username, active, approve, status)
+VALUES ('00000000-0000-0000-0000-0000000000a2', 'demo_admin', true, true, 'active')
+ON CONFLICT (username) DO UPDATE SET approve = EXCLUDED.approve, status = EXCLUDED.status;
 
 INSERT INTO auth.credentials (user_id, password_hash)
 VALUES (

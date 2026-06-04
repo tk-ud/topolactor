@@ -429,6 +429,8 @@ not add canonical routes outside that registry.
 | `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial-data topology intent, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit manifest promote/register. Actual business-row insertion remains the separate `content_bundle` validated draft -> preview -> explicit promote route. |
 | `/admin/ui-builder` | Manifest display/operation UI projection: component placement, selectable design/layout settings, selectable component wiring, validate, visual preview, explicit apply, then CI/local governance audit handoff |
 | `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
+| `/admin/enums` | Enum dictionary master roster: group and item CRUD, search, show-all, modal create, inline update, confirm delete |
+| `/admin/users` | Auth user master roster and state management (approve, status enum select, suspension window, state_note); `last_login_at` readonly |
 
 The legacy/debug/helper wrappers formerly isolated under `/dev/admin/*` are deleted. Useful
 implementation pieces must converge on a canonical surface instead of adding helper routes.

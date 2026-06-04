@@ -1,6 +1,13 @@
 namespace Topolactor.Repository;
 
-public record AuthUserRecord(Guid UserId, string Username);
+public record AuthUserRecord(
+    Guid UserId,
+    string Username,
+    bool Active = true,
+    bool Approve = false,
+    string? Status = null,
+    DateTimeOffset? SuspendedFrom = null,
+    DateTimeOffset? SuspendedUntil = null);
 
 public record AuthRefreshTokenRecord(
     Guid RefreshTokenId,

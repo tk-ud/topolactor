@@ -199,6 +199,7 @@ check_file ".agent/tests/check-frontend-types.sh"
 check_file ".agent/tests/check-completion-judgment.sh"
 check_file ".agent/tests/check-css-dictionary.sh"
 check_file ".agent/tests/check-enum-dictionary.sh"
+check_file ".agent/tests/check-admin-master-roster.sh"
 check_file ".agent/tests/check-topology-layout-class-ssot.sh"
 check_file ".agent/tests/check-ui-ux-executable-component-slice.sh"
 check_file ".agent/tests/check-worktype-routing.sh"
@@ -432,6 +433,7 @@ check_content "docs/design/ci-contract-ssot.yaml" "CI_SSOT_VOCABULARY_MEMBERSHIP
 check_content "docs/design/ci-contract-ssot.yaml" "CI_ATTENTION"
 check_content "docs/design/css-dictionary-ssot.yaml" "css_dictionary_ssot"
 check_content "docs/design/enum-dictionary-ssot.yaml" "enum_dictionary_ssot"
+check_content "docs/design/admin-master-roster-management-ssot.yaml" "admin_master_roster_management_ssot"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "runtime_timeline_scheduler"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "manifest_dispatcher"
 check_content "docs/design/runtime-orchestration-ssot.yaml" "topology_transform_runtime"
@@ -684,6 +686,12 @@ if bash "$REPO_ROOT/.agent/tests/check-enum-dictionary.sh"; then
   echo "OK  [subcheck] .agent/tests/check-enum-dictionary.sh"
 else
   fail "Subcheck failed: .agent/tests/check-enum-dictionary.sh"
+fi
+
+if bash "$REPO_ROOT/.agent/tests/check-admin-master-roster.sh"; then
+  echo "OK  [subcheck] .agent/tests/check-admin-master-roster.sh"
+else
+  fail "Subcheck failed: .agent/tests/check-admin-master-roster.sh"
 fi
 
 if bash "$REPO_ROOT/.agent/tests/check-topology-layout-class-ssot.sh"; then

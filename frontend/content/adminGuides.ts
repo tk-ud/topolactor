@@ -6,6 +6,8 @@ import {
   UX_DATA_SHAPE,
   UX_HUB_MANIFESTS,
   UX_HUB_MANIFESTS_PAGE,
+  UX_ENUM_ROSTER,
+  UX_USER_ROSTER,
   UX_RUNTIME_CHECK,
   UX_UI_BUILDER,
 } from "./adminUxTerms.ts";
@@ -170,6 +172,28 @@ export const ADMIN_ROUTE_CARDS: {
     howToSummary: [
       "作成済みページを確認",
       "遷移先を追加・編集・並び替え",
+    ],
+  },
+  {
+    href: "/admin/enums",
+    label: UX_ENUM_ROSTER,
+    purpose: "enum グループ・項目の名簿管理",
+    relation: "master-roster",
+    howToSummary: [
+      "検索または全件出力で一覧を確認",
+      "新規追加はモーダル、更新は行クリック後のインライン編集",
+      "削除は確認ダイアログ必須",
+    ],
+  },
+  {
+    href: "/admin/users",
+    label: UX_USER_ROSTER,
+    purpose: "ユーザー名簿と承認・状態・停止期間の管理",
+    relation: "master-roster",
+    howToSummary: [
+      "status は seed 済み enum から select",
+      "最終ログインは参照のみ",
+      "削除は確認ダイアログ必須",
     ],
   },
 ];

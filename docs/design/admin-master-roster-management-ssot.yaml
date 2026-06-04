@@ -1,0 +1,151 @@
+admin_master_roster_management_ssot:
+  name: topolactor_admin_master_roster_management_ssot
+  version: 0.1.0
+  status: ssot_design_document
+
+  purpose:
+    - admin_enum_roster_crud_on_canonical_enum_schema
+    - admin_user_roster_and_state_management_on_auth_users
+    - logs_diff_audit_projection_for_master_roster_mutations
+    - fail_close_without_silent_fallback
+
+  extends:
+    enum_dictionary: docs/design/enum-dictionary-ssot.yaml
+    auth_session: docs/design/auth-db-session-credential-ssot.yaml
+
+  source_files:
+    - docs/design/admin-master-roster-management-ssot.yaml
+    - db/enum_seed.sql
+    - db/auth_tables.sql
+    - db/migrations/auth_users_master_roster_state.sql
+    - backend/schema/AuthMasterContracts.cs
+    - backend/schema/EnumDictionaryContracts.cs
+    - backend/repository/AuthMasterRepository.cs
+    - backend/repository/NpgsqlAuthMasterRepository.cs
+    - backend/repository/EnumDictionaryRepository.cs
+    - backend/repository/NpgsqlEnumDictionaryRepository.cs
+    - backend/runtime/AdminMasterRosterAudit.cs
+    - backend/runtime/AdminRuntime.cs
+    - backend/service/AuthService.cs
+    - frontend/api/adminApi.ts
+    - frontend/routes/admin/enums.tsx
+    - frontend/routes/admin/users.tsx
+    - frontend/islands/AdminEnumsRoster.tsx
+    - frontend/islands/AdminUsersRoster.tsx
+
+  canonical_routes:
+    admin_enums:
+      path: /admin/enums
+      island: frontend/islands/AdminEnumsRoster.tsx
+      ux_contract:
+        - text_search_at_top
+        - show_all_button_clears_filter_and_lists_full_roster
+        - new_record_via_modal_form
+        - row_click_opens_inline_update_panel
+        - delete_requires_confirm_dialog
+    admin_users:
+      path: /admin/users
+      island: frontend/islands/AdminUsersRoster.tsx
+      ux_contract:
+        - text_search_at_top
+        - show_all_button_clears_filter_and_lists_full_roster
+        - new_record_via_modal_form_with_initial_password
+        - row_click_opens_inline_update_panel
+        - delete_requires_confirm_dialog
+        - status_select_from_seed_user_status_group
+        - last_login_at_readonly_not_inline_editable
+
+  user_status_seed:
+    group_id: "33333333-3333-3333-3333-333333333301"
+    group_name: user_status
+    group_index_num: 2
+    items:
+      - { enum_id: "31111111-1111-1111-1111-311111111101", index_num: 10, name: active }
+      - { enum_id: "31111111-1111-1111-1111-311111111102", index_num: 11, name: inactive }
+      - { enum_id: "31111111-1111-1111-1111-311111111103", index_num: 12, name: suspended }
+      - { enum_id: "31111111-1111-1111-1111-311111111104", index_num: 13, name: archived }
+
+  auth_users_state_columns:
+    approve: boolean
+    status: text
+    status_resolution: enum_item_name_in_user_status_group
+    suspended_from: timestamptz_nullable
+    suspended_until: timestamptz_nullable
+    suspended_until_null_means: indefinite_suspension
+    state_note: text_nullable
+    last_login_at: readonly_projection_from_auth_login_events_success_max_created_at
+    last_login_ip: disclosure_only_not_roster_list
+    last_login_user_agent: disclosure_only_not_roster_list
+    active: boolean_legacy_retained
+
+  login_denial_contract:
+    rules:
+      - when: active_is_false
+        failure_code: AUTH_USER_INACTIVE
+      - when: approve_is_false
+        failure_code: AUTH_USER_NOT_APPROVED
+      - when: status_equals_suspended
+        failure_code: AUTH_USER_SUSPENDED
+      - when: suspended_window_active
+        failure_code: AUTH_USER_SUSPENDED
+    suspended_window_active: >-
+      suspended_from is not null and suspended_from <= now and
+      (suspended_until is null or now <= suspended_until)
+    rule: explicit_failure_no_silent_fallback
+
+  logs_diff_admin_projection:
+    note: >-
+      Physical logs.diff DDL is owned by sql-attention-logs-ssot. Admin master roster
+      appends rows with source_set_id=admin_master_roster to distinguish audit envelope.
+    source_set_id: admin_master_roster
+    basis_window: admin_operation
+    archive_policy: required
+    logical_envelope_fields:
+      - actor
+      - target_table
+      - target_id
+      - operation
+      - before
+      - after
+      - changed_fields
+      - timestamp
+    physical_mapping:
+      actor: actor_or_source and JSON envelope
+      target_table: physical_table_name and JSON envelope
+      target_id: record_id
+      operation: operation_kind
+      before: before_state_or_diff_json
+      after: after_state_or_diff_json
+      changed_fields: JSON envelope array
+      timestamp: observed_at
+
+  admin_runtime_actions:
+    enum_dictionary_read:
+      - enum_dictionary:list_groups
+      - enum_dictionary:get_group
+    enum_dictionary_write:
+      - enum_dictionary:create_group
+      - enum_dictionary:update_group
+      - enum_dictionary:delete_group
+      - enum_dictionary:create_item
+      - enum_dictionary:update_item
+      - enum_dictionary:delete_item
+      - enum_dictionary:set_group_items
+    auth_users:
+      - auth_users:list
+      - auth_users:search
+      - auth_users:get
+      - auth_users:create
+      - auth_users:update
+      - auth_users:delete
+      - auth_users:update_state
+
+  fail_close:
+    reuse_enum_error_codes_from: enum-dictionary-ssot.yaml
+    auth_users_error_codes:
+      - AUTH_USERS_NOT_AVAILABLE
+      - AUTH_USER_NOT_FOUND
+      - AUTH_USER_STATUS_INVALID
+      - AUTH_USER_USERNAME_CONFLICT
+      - ENUM_GROUP_NOT_FOUND
+    rule: search_list_crud_and_enum_unresolved_must_blocking_error

@@ -20,7 +20,8 @@ internal sealed class FakeAuthRepository : AuthRepository
     public override Task<AuthUserRecord?> FindUserByUsernameAsync(string username, CancellationToken ct = default)
     {
         if (!_users.TryGetValue(username, out var u)) return Task.FromResult<AuthUserRecord?>(null);
-        return Task.FromResult<AuthUserRecord?>(new AuthUserRecord(u.UserId, username));
+        return Task.FromResult<AuthUserRecord?>(new AuthUserRecord(
+            u.UserId, username, Active: true, Approve: true, Status: "active"));
     }
 
     public override Task<string?> GetPasswordHashAsync(Guid userId, CancellationToken ct = default)

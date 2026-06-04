@@ -110,7 +110,22 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 
 ---
 
-### 6. Admin Console Workflow SSOT（管理コンソールワークフロー）
+### 6. Admin Master Roster Management SSOT（名簿管理）
+
+| 種別 | パス |
+|---|---|
+| 仕様 YAML | `docs/design/admin-master-roster-management-ssot.yaml` |
+
+**概要**: `/admin/enums` と `/admin/users` の名簿 CRUD、user 状態管理、`logs.diff` 監査投影。enum 正本は enum-dictionary SSOT を参照。
+
+**関連実装surface**:
+- `db/enum_seed.sql` — `user_status` group seed
+- `backend/runtime/AdminRuntime.cs` — `enum_dictionary:*` write、`auth_users:*`
+- `frontend/islands/AdminEnumsRoster.tsx` / `AdminUsersRoster.tsx`
+
+---
+
+### 7. Admin Console Workflow SSOT（管理コンソールワークフロー）
 
 | 種別 | パス |
 |---|---|

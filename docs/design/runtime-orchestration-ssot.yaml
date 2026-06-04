@@ -103,6 +103,8 @@ runtime_orchestration_ssot:
       - /admin/manifests
       - /admin/contents
       - /admin/ui-builder
+      - /admin/enums
+      - /admin/users
 
   trigger_contract:
     kind_enum:
@@ -284,10 +286,27 @@ runtime_orchestration_ssot:
       admin_runtime_actions:
         - enum_dictionary:list_groups
         - enum_dictionary:get_group
+        - enum_dictionary:create_group
+        - enum_dictionary:update_group
+        - enum_dictionary:delete_group
+        - enum_dictionary:create_item
+        - enum_dictionary:update_item
+        - enum_dictionary:delete_item
+        - enum_dictionary:set_group_items
       prohibited:
         - enum_item_definitions_in_topology_or_manifest_jsonb
         - silent_fallback_when_enumGroupId_unresolved
         - hardcoded_frontend_select_for_enum_backed_columns
+    auth_users_master_roster_lane:
+      reference: docs/design/admin-master-roster-management-ssot.yaml
+      admin_runtime_actions:
+        - auth_users:list
+        - auth_users:search
+        - auth_users:get
+        - auth_users:create
+        - auth_users:update
+        - auth_users:delete
+        - auth_users:update_state
     trigger_kinds:
       - cron
       - hook

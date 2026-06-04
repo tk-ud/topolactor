@@ -12,7 +12,7 @@ namespace Topolactor.Runtime;
 /// In manifest-driven production path, AdminRuntimeDispatchAdapter calls ExecuteDataAsync
 /// when runtime_destination=admin_runtime is resolved from the active manifest.
 /// </summary>
-public class AdminRuntime
+public partial class AdminRuntime
 {
     private readonly ILogger<AdminRuntime> _logger;
     private readonly ContextRouteRepository _contextRouteRepository;
@@ -28,6 +28,8 @@ public class AdminRuntime
     private readonly ContentBundleRepository? _contentBundleRepository;
     private readonly TopologyRepository? _topologyRepository;
     private readonly EnumDictionaryRepository? _enumDictionaryRepository;
+    private readonly AuthMasterRepository? _authMasterRepository;
+    private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -50,7 +52,9 @@ public class AdminRuntime
         ManifestRepository? manifestRepository = null,
         ContentBundleRepository? contentBundleRepository = null,
         TopologyRepository? topologyRepository = null,
-        EnumDictionaryRepository? enumDictionaryRepository = null)
+        EnumDictionaryRepository? enumDictionaryRepository = null,
+        AuthMasterRepository? authMasterRepository = null,
+        SqlAttentionLogsRepository? sqlAttentionLogsRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -66,6 +70,8 @@ public class AdminRuntime
         _contentBundleRepository = contentBundleRepository;
         _topologyRepository = topologyRepository;
         _enumDictionaryRepository = enumDictionaryRepository;
+        _authMasterRepository = authMasterRepository;
+        _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -245,6 +251,20 @@ public class AdminRuntime
             "manifest:list_relationship_remote_targets"   => await DataManifestListRelationshipRemoteTargetsAsync(vector, ct),
             "enum_dictionary:list_groups"                 => await DataEnumDictionaryListGroupsAsync(ct),
             "enum_dictionary:get_group"                   => await DataEnumDictionaryGetGroupAsync(vector, ct),
+            "enum_dictionary:create_group"                => await DataEnumDictionaryCreateGroupAsync(vector, ct),
+            "enum_dictionary:update_group"                => await DataEnumDictionaryUpdateGroupAsync(vector, ct),
+            "enum_dictionary:delete_group"                => await DataEnumDictionaryDeleteGroupAsync(vector, ct),
+            "enum_dictionary:create_item"                 => await DataEnumDictionaryCreateItemAsync(vector, ct),
+            "enum_dictionary:update_item"                 => await DataEnumDictionaryUpdateItemAsync(vector, ct),
+            "enum_dictionary:delete_item"                 => await DataEnumDictionaryDeleteItemAsync(vector, ct),
+            "enum_dictionary:set_group_items"             => await DataEnumDictionarySetGroupItemsAsync(vector, ct),
+            "auth_users:list"                             => await DataAuthUsersListAsync(vector, ct),
+            "auth_users:search"                           => await DataAuthUsersSearchAsync(vector, ct),
+            "auth_users:get"                              => await DataAuthUsersGetAsync(vector, ct),
+            "auth_users:create"                           => await DataAuthUsersCreateAsync(vector, ct),
+            "auth_users:update"                           => await DataAuthUsersUpdateAsync(vector, ct),
+            "auth_users:delete"                           => await DataAuthUsersDeleteAsync(vector, ct),
+            "auth_users:update_state"                     => await DataAuthUsersUpdateAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),

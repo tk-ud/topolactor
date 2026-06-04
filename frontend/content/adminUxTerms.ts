@@ -13,6 +13,8 @@ export const UX_IMPORT_SETTINGS_PAGE = UX_CONTENTS_PAGE;
 export const UX_DATA_SHAPE = "データの形";
 export const UX_UI_BUILDER = "画面づくり";
 export const UX_RUNTIME_CHECK = "動作確認";
+export const UX_ENUM_ROSTER = "enum 名簿";
+export const UX_USER_ROSTER = "ユーザー名簿";
 
 /** ステータスラベル（通常表示用） */
 export const UX_STATUS_LABELS: Record<string, string> = {

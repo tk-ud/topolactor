@@ -35,4 +35,27 @@ public abstract class EnumDictionaryRepository
 
         return null;
     }
+
+    public abstract Task<EnumDictionaryGroupDto> CreateGroupAsync(
+        string groupName, int? indexNum, CancellationToken ct = default);
+
+    public abstract Task<EnumDictionaryGroupDto?> UpdateGroupAsync(
+        Guid groupId, string? groupName, int? indexNum, CancellationToken ct = default);
+
+    public abstract Task<bool> DeleteGroupAsync(Guid groupId, CancellationToken ct = default);
+
+    public abstract Task<EnumDictionaryItemDto> CreateItemAsync(
+        string name, int? indexNum, CancellationToken ct = default);
+
+    public abstract Task<EnumDictionaryItemDto?> UpdateItemAsync(
+        int indexNum, string? name, int? newIndexNum, CancellationToken ct = default);
+
+    public abstract Task<bool> DeleteItemAsync(int indexNum, CancellationToken ct = default);
+
+    public abstract Task<EnumDictionaryGroupDetailDto?> SetGroupItemsAsync(
+        Guid groupId, IReadOnlyList<int> enumIndexNums, CancellationToken ct = default);
+
+    public virtual Task<bool> IsGroupReferencedInManifestsAsync(
+        Guid groupId, CancellationToken ct = default) =>
+        Task.FromResult(false);
 }

@@ -2,17 +2,29 @@
 -- auth_tables.sql
 -- Canonical auth identity, credential, session, and refresh token store.
 -- SSOT: docs/design/auth-db-session-credential-ssot.yaml
+-- Master roster state columns: docs/design/admin-master-roster-management-ssot.yaml
 -- =============================================================================
 
 CREATE SCHEMA IF NOT EXISTS auth;
 
 CREATE TABLE IF NOT EXISTS auth.users (
-    user_id     UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    username    TEXT        NOT NULL UNIQUE,
-    active      BOOLEAN     NOT NULL DEFAULT true,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    user_id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    username          TEXT        NOT NULL UNIQUE,
+    active            BOOLEAN     NOT NULL DEFAULT true,
+    approve           BOOLEAN     NOT NULL DEFAULT false,
+    status            TEXT,
+    suspended_from    TIMESTAMPTZ,
+    suspended_until   TIMESTAMPTZ,
+    state_note        TEXT,
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS approve BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS suspended_from TIMESTAMPTZ;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;
+ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS state_note TEXT;
 
 CREATE TABLE IF NOT EXISTS auth.credentials (
     credential_id   UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
