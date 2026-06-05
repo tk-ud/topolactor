@@ -1,4 +1,4 @@
-/** Static copy for /admin help panels — aligned with docs/design/admin-console-workflow-ssot.yaml v0.7.2 */
+/** Static copy for /admin help panels — canvas_workspace_contract 準拠（admin-console-workflow-ssot.yaml） */
 
 import {
   UX_CONTENTS,
@@ -33,7 +33,7 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
   prerequisites: ["先にログインしてください"],
   howToSteps: [
     `${UX_CONTENTS_PAGE}で step 1→3（空登録・テーブル・関連・ページ設定）を順に保存する`,
-    `${UX_UI_BUILDER}で step 4（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）を行う`,
+    `${UX_UI_BUILDER}で canvas workspace（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）を行う`,
     `${UX_HUB_MANIFESTS_PAGE}で作成済みページの所属先、ページ間のつながり、表示順を管理する`,
     `必要に応じてデモ画面で表示と操作を確認する`,
   ],
@@ -58,15 +58,15 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     `${UX_CONTENTS_PAGE}でページ内容と${UX_DATA_SHAPE}を用意してください`,
   ],
   howToSteps: [
-    "部品を複数選択し、1 回でパッケージ化する（step 4.1）",
-    "パッケージを選び、canvas で layout draft をプレビューしながら parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する。cssTokenRefs・色・形はデザイン設定タブで保存（step 4.2）",
+    "Phase A: 部品カードを複数選択し、1 回でパッケージ化する",
+    "Phase B: パッケージを選び、左パネルの配置可能カードをドラッグして canvas に置く。配置・デザインインスペクタで parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する",
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],
   inputs: ["選択する部品、パッケージ、配置とデザインの意図"],
   actions: [
-    "部品選択でパッケージ化（step 4.1）",
-    "パッケージの配置・デザイン設定・配線を保存（step 4.2）",
+    "Phase A: 部品選択でパッケージ化",
+    "Phase B: canvas workspace で配置・デザイン設定・配線を保存",
     "配置: プレビュー → 検証 → 保存反映（パッケージ選択必須）",
   ],
   outputs: ["配置可能な部品", "保存反映されたレイアウト"],
@@ -157,8 +157,8 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
-    purpose: "step 4 — 部品のパッケージ化と配置・デザイン設定",
-    relation: "作業順 step 4",
+    purpose: "canvas workspace — 部品のパッケージ化と配置・デザイン設定",
+    relation: "画面づくり（canvas workspace）",
     howToSummary: [
       "部品を複数選択してパッケージ化",
       "配置とデザイン設定を編集して保存反映",
@@ -247,7 +247,7 @@ export type AcceptanceFlowStep = {
   subSteps?: { label: string; href: string }[];
 };
 
-/** 管理トップのコンパクトステッパー — admin-console-workflow-ssot.yaml canonical_workflow 準拠 */
+/** 管理トップのコンパクトステッパー — canvas_workspace_contract / canonical_authoring_order 準拠 */
 export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
   {
     step: 1,
@@ -267,7 +267,7 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "step 4（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）",
+    purpose: "canvas workspace（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）",
     completionSign: "配置の保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
