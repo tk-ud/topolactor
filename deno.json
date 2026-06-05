@@ -14,6 +14,8 @@
   },
   "imports": {
     "$fresh/": "https://deno.land/x/fresh@1.7.3/",
+    "https://esm.sh/@babel/helper-validator-identifier@7.22.20": "npm:@babel/helper-validator-identifier@7.22.20",
+    "https://esm.sh/*preact-render-to-string@6.3.1": "npm:preact-render-to-string@6.5.11",
     "preact": "npm:preact@10.25.4",
     "preact/hooks": "npm:preact@10.25.4/hooks",
     "preact/jsx-runtime": "npm:preact@10.25.4/jsx-runtime",
