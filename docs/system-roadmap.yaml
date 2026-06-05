@@ -1433,40 +1433,50 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        /admin/ui-builder includes a Figma-like mouse-driven visual layout editor v2 (Issue #89).
-        LayoutPalette shows catalog entries; components with registrationRequired:true are
-        labeled (draft) and blocked from layout_patch:apply.
+        /admin/ui-builder rebuilt as a canvas-first workspace aligned with
+        admin-console-workflow-ssot.yaml §canvas_workspace_contract (PR #364 follow-up).
+        No separate layout/design/visual tabs or preview modal — single unified canvas workspace
+        with docked panels; layout_patch:preview reflects results into the center canvas/status
+        route instead of opening LayoutPatchPreviewModal / visual-audit modal surfaces.
+        UI_BUILDER_WORKSPACE_MODE="canvas_workspace_v2", UI_BUILDER_HAS_SEPARATE_TABS=false exported
+        as SSOT contract markers. UiBuilderFlowStepper updated to two-phase canvas workspace model
+        (package → canvas); old four-tab step framing removed. adminGuides.ts and adminUxTerms.ts
+        aligned with canvas workspace vocabulary.
+        _tmp backend persistence: layout_draft_tmp_json column added to topology.ui_topology_tensor
+        and design_draft_tmp_json column added to topology.components_style_design via migrations.
+        GetLayoutPatchDraftAsync prefers layout_draft_tmp_json over layout_patch_json
+        (hasTmpDraft=true when tmp returned), and component_style_design:list returns design_draft_tmp_json
+        as the effective selected-node design when present. layout_patch:save_tmp action auto-saves
+        canvas state to DB on every canvas mutation (debounced 1500ms) and fails closed with
+        LAYOUT_PATCH_TMP_TARGET_NOT_FOUND when the tensor target is missing; component_style_design:save_tmp
+        auto-saves selected canvas node cssTokenRefs/responsiveTokenRefs/inlineText/linkHref/linkTarget/
+        reactionIntent to topology.components_style_design. ApplyConfirmedLayoutPatchAsync clears
+        layout_draft_tmp_json in the same transaction, and component_style_design:upsert clears design_draft_tmp_json
+        when explicit save promotes the design. sessionStorage kept as synchronous fallback only.
+        Design inspector is selected canvas node driven and rendered inside LayoutBuilderSection's
+        right dock together with LayerTree/layer_inspector: LayerTree/canvas selection drives both
+        layer_inspector and design_inspector, no-selection state is 「ノードを選択してください」,
+        and old standalone design / read-only preview vocabulary is removed
+        from canonical admin UX copy. component_style_design:save_tmp and component_style_design:upsert
+        verify that layoutNodeId exists in the package effective layout_draft_tmp_json/layout_patch_json
+        nodes[] before writing and fail closed with COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND on mismatch.
+        LayerTree rebuilt with HTML5 tree drag: displays parentNodeId hierarchy with indentation;
+        drag-and-drop reparents (into drop = new parent) and reorders (before/after drop = sibling
+        insert). ▲▼ free-floating reorder buttons removed; wouldCreateVisualParentCycle guards
+        reparent operations. Keyboard/button alternatives for drag are a known gap tracked below.
         Apply guard: isDraftOnly nodes → APPLY_BLOCKED frontend-side + backend fail-close
-        (DRAFT_ONLY_NODE_NOT_APPLICABLE) so draft-only payloads cannot persist to
-        topology.components_layout_design/topology.ui_topology_tensor.
-        v2 canvas: absolute-positioned nodes with x/y/width/height; mouse drag to move;
-        resize handles (8 directions) to change size; grid snap (10px); selection state;
-        CanvasInspector for x/y/w/h/slotKey/parentNodeId/gridCol/gridRow numeric editing;
-        LayerTree for node listing/selection/reordering/deletion.
-        buildVisualLayoutPatchJson includes x/y/width/height in patch payload.
-        Canvas nodes render read-only live component preview inside layout manipulation frames
-        (layoutComponentPreview + LayoutComponentPreviewFallback; previewMode suppresses runtime
-        event dispatch). Box primitive uses layout/box factory, not Card surrogate.
-        Package selection hydrates layout_patch_json from ui_topology:get_layout_patch_draft;
-        empty persisted patch seeds stacked nodes from promoted palette. layout_patch:preview
-        normalized tensorPatchJson is applied back to canvas and layer tree immediately.
-        layoutClassRefs preview resolves allowed_for roles: layout_root/section/row on canvas
-        frame, component_wrapper on node wrappers, preview_state on selected node only.
-        Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
-        No direct DB write. Frontend holds draft projection state only; topology persistence
-        authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
-        Frontend authority boundary: draft layout state, mouse interaction, visual preview,
-        local readiness display, intent submission. No topology judgment, no promotion judgment.
-        layoutId round-trip closed: after successful apply, confirmed layoutId from backend response
-        updates frontend state via setLayoutId; explicit LAYOUT_ID_MISMATCH error raised if backend
-        returns a different layoutId than was sent — no silent fallback.
-        Full responsive token rule UI: per-breakpoint (sm/md/lg/xl) token selection rendered in
-        normal view via ResponsiveTokenRuleEditor with breakpoint tabs; raw JSON textarea isolated
-        under AdvancedManualOverride disclosure; filterEmptyResponsiveRules strips empty breakpoints
-        before backend submission; replaces previous hardcoded { md: selectedTokenRefs } placeholder.
+        (DRAFT_ONLY_NODE_NOT_APPLICABLE). buildVisualLayoutPatchJson is the sole canonical
+        patch builder (includes x/y/width/height, nodeKind, htmlTag, parentNodeId).
+        STRUCTURAL_HTML_TAG_ALLOWLIST expanded to full SSOT set (50+ tags: block/heading/text/
+        link/form/media/list/table). Canvas nodes render live component previews; no wireframe boxes.
+        layoutId round-trip closed; LAYOUT_ID_MISMATCH explicit error on mismatch. Full responsive
+        token rule UI (sm/md/lg/xl). Preview/Validate/Apply via layout_patch backend pipeline.
+        No direct DB write; frontend authority boundary: draft state, interaction, submission only.
       files:
         - frontend/islands/UiBuilderAdmin.tsx
         - frontend/runtime/visualLayoutUtils.ts
+        - frontend/components/UiBuilderFlowStepper.tsx
+        - frontend/content/adminGuides.ts
         - frontend/runtime/layoutComponentPreview.ts
         - frontend/runtime/layoutClassPreviewUtils.ts
         - frontend/components/LayoutComponentPreviewFallback.tsx
@@ -1474,10 +1484,13 @@ system_roadmap_ssot:
         - backend/runtime/AdminRuntime.cs
         - backend/schema/UiTopologyContracts.cs
         - backend/repository/UiTopologyRepository.cs
+        - backend/repository/NpgsqlUiTopologyRepository.cs
         - frontend/tests/visualLayoutBuilder.test.ts
+        - frontend/tests/adminUxGuard.test.ts
         - frontend/tests/runtimeComponentFactory.test.ts
         - db/ui_topology_tables.sql
-        - backend/repository/NpgsqlUiTopologyRepository.cs
+        - db/migrations/ui_topology_tensor_layout_draft_tmp.sql
+        - db/migrations/components_style_design_draft_tmp.sql
       completion_condition:
         - layout_tensor_and_variable_css_boundaries_are_defined
         - css_dictionary_ui_binding_is_wired_to_style_selector_candidates
@@ -1488,17 +1501,34 @@ system_roadmap_ssot:
         - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
         - layoutId_round_trip_from_backend_response_updates_frontend_state_with_explicit_mismatch_error
         - responsive_token_rule_UI_per_breakpoint_with_empty_rule_filter_before_backend_submission
+        - canvas_workspace_ssot_alignment_no_separate_layout_design_visual_tab_surfaces
+        - tmp_draft_backend_persistence_layout_draft_tmp_json_column_save_clear_on_apply
+        - selected_canvas_node_drives_layer_and_design_inspectors
+        - design_token_tmp_backend_persistence_components_style_design_save_resume_clear
+        - layout_patch_save_tmp_missing_target_fails_closed
+        - layout_patch_preview_uses_center_canvas_status_without_separate_preview_modal
+        - design_inspector_is_right_docked_with_layer_inspector_and_no_selection_placeholder
+        - component_style_design_layoutNodeId_package_membership_validation_fails_closed
+        - layer_inspector_tree_drag_reparent_and_reorder_no_freestanding_arrow_buttons
+        - structural_html_tag_allowlist_full_ssot_set_all_categories
       evidence:
         tests:
           - visualLayoutBuilder.test.ts (layoutId round-trip: 5 tests)
           - visualLayoutBuilder.test.ts (filterEmptyResponsiveRules: 5 tests)
           - visualLayoutBuilder.test.ts (responsive rule per-breakpoint: 4 tests)
           - visualLayoutBuilder.test.ts (RESPONSIVE_BREAKPOINTS export: sm/md/lg/xl)
+          - visualLayoutBuilder.test.ts (LayerTree tree drag reparent cycle guard: 4 tests)
+          - visualLayoutBuilder.test.ts (canvas workspace contract markers: selected inspector + _tmp backend persistence + inline canvas preview route)
+          - adminUxGuard.test.ts (no LayoutPatchPreviewModal / visual-audit modal in normal authoring route; right-docked selected-node design inspector)
+          - AdminRuntimeLayoutPatchTests (component_style_design layoutNodeId package membership fail-close)
           - runtimeComponentFactory.test.ts (layout canvas preview: 8 tests)
           - visualLayoutBuilder.test.ts (layout canvas live preview: 3 tests)
+          - adminUxGuard.test.ts (UiBuilderFlowStepper canvas workspace phases: 2 tests)
+          - adminUxGuard.test.ts (canvas workspace structural HTML palette + copy ops)
         ci:
           - frontend-tests
-      known_gap_ref: []
+      known_gap_ref:
+        - keyboard_or_button_alternatives_for_drag_move_resize_and_reorder (accessibility — tracked separately per SSOT accessibility_ref)
 
     backend.context_route_repository:
       status: partial
