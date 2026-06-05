@@ -308,6 +308,45 @@ Deno.test("UiBuilderAdmin: layout_patch dispatch omits cssTokenRefs from normal 
   assertEquals(dispatchMatch[0].includes("cssTokenRefs:"), false);
 });
 
+Deno.test("UiBuilderAdmin: layout patch JSON uses buildVisualLayoutPatchJson only", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertEquals(src.includes("function buildLayoutPatchJson"), false,
+    "legacy buildLayoutPatchJson must be removed");
+  assert(src.includes("buildVisualLayoutPatchJson(draftNodes, selectedLayoutClassRefs)"),
+    "tensorPatchJson must be built via buildVisualLayoutPatchJson");
+  assert(src.includes("submittedTensorPatchJson = tensorPatchJson"),
+    "preview/validate/apply must submit the visual layout patch");
+});
+
+Deno.test("UiBuilderAdmin: component_style_design upsert retains design editor fields", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const upsertMatches = [
+    ...src.matchAll(
+      /dispatchAdminOp\("component_style_design", "upsert"[\s\S]*?\}\);/g,
+    ),
+  ];
+  assert(upsertMatches.length >= 1, "component_style_design upsert dispatch must exist");
+  const allUpsertBlocks = upsertMatches.map((m) => m[0]).join("\n");
+  for (const field of [
+    "cssTokenRefs",
+    "responsiveTokenRefs: filterEmptyResponsiveRules",
+    "inlineText:",
+    "linkHref:",
+    "reactionIntent:",
+    "componentId",
+    "layoutNodeId",
+  ]) {
+    assert(
+      allUpsertBlocks.includes(field),
+      `upsert payload surface must include ${field} across layout/design editors`,
+    );
+  }
+});
+
 Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
@@ -945,6 +984,105 @@ Deno.test("v0.8.0: UiBuilderAdmin exposes visual view tab and structural HTML pa
   assertEquals(source.includes("VisualViewPanel"), true);
   assertEquals(source.includes("copyNode"), true);
   assertEquals(source.includes("cloneVisualNode"), true);
+});
+
+// ─── PR#364 follow-up: canvas_workspace_contract bucket cards / drag / right dock ─
+
+Deno.test("UiBuilderAdmin: BucketSection normal path uses icon-style bucket cards not table", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("component-bucket-card"), "icon-style card class must exist");
+  assert(src.includes("component-bucket-panel"), "bucket panel vocabulary must exist");
+  assert(src.includes("ComponentBucketCard"), "shared bucket card component must exist");
+  const bucketSection = src.slice(
+    src.indexOf("function BucketSection"),
+    src.indexOf("function ManualBucketCreateForm"),
+  );
+  const mainCatalogUi = bucketSection.slice(
+    0,
+    bucketSection.indexOf("技術詳細 — 表形式一覧"),
+  );
+  assertEquals(
+    mainCatalogUi.includes('<table class="table'),
+    false,
+    "BucketSection primary catalog UI must not use table",
+  );
+});
+
+Deno.test("UiBuilderAdmin: bucket card drag source and canvas drop path exist", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("handleDragStartPalette"), "palette drag start handler required");
+  assert(src.includes("handleDropOnCanvas"), "canvas drop handler required");
+  assert(src.includes("readBucketCardDragPayload"), "canvas drop must parse card drag payload");
+  assert(src.includes("BUCKET_CARD_DRAG_MIME"), "bucket card drag mime type required");
+  assert(src.includes("makeNewNode"), "drop must create draft node");
+  assert(src.includes("buildVisualLayoutPatchJson"), "canonical layout patch builder required");
+  assert(
+    src.includes('draggable={draggable && placementReady}') ||
+      src.includes("draggable\n              placementReady"),
+    "bucket cards must expose conditional drag source",
+  );
+  assert(src.includes("rejectDraftPaletteEntry"), "unpromoted drop must fail-close");
+});
+
+Deno.test("UiBuilderAdmin: bucket card shows source_path on card face", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("component-bucket-card__source-path"));
+});
+
+Deno.test("UiBuilderAdmin: legacy bucket accordion uses cards not table as primary UI", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const legacyStart = src.indexOf("詳細 — 登録済み部品の個別操作");
+  const legacyBlock = src.slice(legacyStart, src.indexOf("BucketPackageRouteFields", legacyStart + 1));
+  assert(legacyBlock.includes("ComponentBucketCard"));
+  assertEquals(
+    legacyBlock.indexOf("ComponentBucketCard") < legacyBlock.indexOf("技術詳細 — 表形式一覧"),
+    true,
+    "legacy accordion primary UI must be cards before table disclosure",
+  );
+});
+
+Deno.test("UiBuilderAdmin: layout right dock is not fixed 200px wide", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertEquals(src.includes('style="width:200px;"'), false);
+  assert(src.includes("layout-right-dock"), "layout right dock surface must exist");
+  assert(src.includes("clamp(320px, 24vw, 420px)"), "right dock must use practical width clamp");
+  assert(src.includes("CanvasDesignInspector"), "design inspector must share selected node");
+  assert(src.includes("data-selected-node-id"), "selected node must drive dock inspectors");
+  assert(src.includes("LayoutRightDock"), "right dock wrapper must exist");
+});
+
+Deno.test("UiBuilderAdmin: empty canvas guidance promotes drag-to-canvas", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const terms = await Deno.readTextFile(
+    new URL("../content/adminUxTerms.ts", import.meta.url),
+  );
+  assert(src.includes("UX_EMPTY_CANVAS_DRAG_GUIDANCE"));
+  assert(src.includes("UX_PACKAGE_REQUIRED_FOR_CANVAS"));
+  assert(terms.includes("左パネルのカードをドラッグしてキャンバスへ配置"));
+});
+
+Deno.test("UiBuilderAdmin: empty canvas allows drop through guidance overlay", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const canvasBlock = src.slice(
+    src.indexOf("function VisualLayoutCanvas"),
+    src.indexOf("function LayerTree"),
+  );
+  assert(canvasBlock.includes("pointer-events-none absolute inset-0"));
+  assert(canvasBlock.includes("onDrop={onDrop}"));
 });
 
 Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default path", async () => {

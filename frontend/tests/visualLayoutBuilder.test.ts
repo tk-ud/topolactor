@@ -12,7 +12,7 @@
  *   - draft-only apply guard
  *   - responsive token rule utilities
  */
-import { assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assert, assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
@@ -115,6 +115,35 @@ Deno.test("buildVisualLayoutPatchJson: includes standard topology fields", () =>
   assertEquals(node.componentId, "comp-1");
   assertEquals(node.packageId, "pkg-1");
   assertEquals(node.layoutId, "layout-1");
+  assertEquals(node.wiringId, "wiring-1");
+  assertEquals(node.tensorId, "tensor-1");
+});
+
+/** Fields required in preview / validate / apply tensorPatchJson (shared builder path). */
+function assertLayoutPatchNodePayload(node: Record<string, unknown>): void {
+  assertObjectMatch(node, {
+    x: 10,
+    y: 20,
+    width: 140,
+    height: 60,
+    parentNodeId: null,
+    componentId: "comp-1",
+    packageId: "pkg-1",
+    layoutId: "layout-1",
+    wiringId: "wiring-1",
+    tensorId: "tensor-1",
+  });
+  assertEquals(typeof node.nodeId, "string");
+  assertEquals(typeof node.componentKey, "string");
+}
+
+Deno.test("buildVisualLayoutPatchJson: apply/preview/validate payload retains placement topology ids", () => {
+  const actions = ["preview", "validate", "apply"] as const;
+  for (const _action of actions) {
+    const parsed = JSON.parse(buildVisualLayoutPatchJson([sampleNode], ["layout.root.grid"]));
+    assertEquals(parsed.layoutClassRefs, ["layout.root.grid"]);
+    assertLayoutPatchNodePayload(parsed.nodes[0] as Record<string, unknown>);
+  }
 });
 
 Deno.test("buildVisualLayoutPatchJson: draft-only node gets _draftOnly flag", () => {
@@ -204,6 +233,41 @@ Deno.test("cloneVisualNode: copies with new id and offset", () => {
   assertEquals(cloned.x, sampleNode.x + 20);
   assertEquals(cloned.y, sampleNode.y + 20);
   assertEquals(cloned.componentKey, sampleNode.componentKey);
+});
+
+Deno.test("structural HTML workflow: add, copy, move, save preserves layout/structural_html and htmlTag", () => {
+  const added = makeStructuralHtmlNode("section", {
+    nodeId: "html-original",
+    x: 40,
+    y: 40,
+    orderIndex: 0,
+  });
+  const copied = cloneVisualNode(added, "html-copy");
+  const moved = { ...copied, x: 120, y: 80 };
+  const json = buildVisualLayoutPatchJson([moved]);
+  const parsed = parseVisualLayoutPatchJson(json);
+  assertEquals(parsed.ok, true);
+  if (!parsed.ok) return;
+  const node = parsed.value.nodes[0];
+  assertEquals(node.nodeKind, "structural_html");
+  assertEquals(node.htmlTag, "section");
+  assertEquals(node.componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
+  assertEquals(node.x, 120);
+  assertEquals(node.y, 80);
+});
+
+Deno.test("cloneVisualNode: structural_html copy retains nodeKind and htmlTag", () => {
+  const source = makeStructuralHtmlNode("a", {
+    nodeId: "link-1",
+    x: 10,
+    y: 10,
+    orderIndex: 0,
+  });
+  const cloned = cloneVisualNode(source, "link-copy");
+  const saved = JSON.parse(buildVisualLayoutPatchJson([cloned])).nodes[0];
+  assertEquals(saved.nodeKind, "structural_html");
+  assertEquals(saved.htmlTag, "a");
+  assertEquals(saved.componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
 });
 
 Deno.test("buildVisualLayoutPatchJson: cssTokenRefs are NOT in node payload (component_design responsibility)", () => {
@@ -877,4 +941,38 @@ Deno.test("resolveNodeWrapperPreviewClassName: adds preview_state when selected"
     selected,
     "topolactor-topology-layout-card-surface topolactor-topology-layout-state-selected",
   );
+});
+
+// ─── PR#364 follow-up: canvas workspace bucket card / drag / right dock guards ─
+
+Deno.test("canvas workspace: UiBuilderAdmin bucket card and drag-drop vocabulary", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("ComponentBucketCard"));
+  assert(src.includes("component-bucket-card__drag-hint"));
+  assert(src.includes("handleDropOnCanvas"));
+  assert(src.includes("makeNewNode"));
+});
+
+Deno.test("canvas workspace: unpromoted palette entry blocked from apply path", () => {
+  const draftEntry = { ...sampleNode, isDraftOnly: true };
+  assertEquals(isDraftOnlyApplyBlocked([draftEntry]), true);
+});
+
+Deno.test("canvas workspace: layout right dock width uses clamp not 200px literal", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertEquals(src.includes('width:200px'), false);
+  assert(src.includes("clamp(320px, 24vw, 420px)"));
+});
+
+Deno.test("canvas workspace: drop reads bucket card payload and adds draft node", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("readBucketCardDragPayload"));
+  assert(src.includes("paletteEntryFromDragPayload"));
+  assert(src.includes("addNode(makeNewNode"));
 });
