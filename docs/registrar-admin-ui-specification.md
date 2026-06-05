@@ -254,7 +254,7 @@ The authoritative contract is `docs/design/admin-console-workflow-ssot.yaml` →
 | Zone | Position | Content |
 |------|----------|---------|
 | left panel | fixed left | component bucket (icon cards, drag to canvas) + HTML tag palette |
-| **center canvas** | **width: 100% remaining** | **renders actual component previews — not wireframe boxes** |
+| **center canvas** | **width: 100% minus docked panels** | **renders actual component previews — not wireframe boxes** |
 | right panel | fixed right | layer inspector + design inspector (selection-driven) |
 | status bar | fixed bottom | _tmp draft state + layout_patch action buttons |
 

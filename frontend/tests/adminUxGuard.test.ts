@@ -341,7 +341,7 @@ Deno.test("UiBuilderAdmin: design tab exposes preview canvas and css token picke
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assert(src.includes("ComponentDesignPreviewCanvas"), "design tab must render preview canvas");
-  assert(src.includes('aria-label="デザインプレビュー canvas"'), "preview canvas must be labeled");
+  assert(src.includes('aria-label={UX_DESIGN_EDITOR_SURFACE}') || src.includes('aria-label="デザインプレビュー（読み取り専用）"'), "preview canvas must be labeled");
   assert(src.includes("buildInlineStyleFromCssTokenRefs"), "preview must apply css token refs");
   assert(src.includes('dispatchAdminOp("component_style_design", "list"'), "design tab must load saved designs");
   assert(src.includes("CssTokenPicker"), "design tab must expose token picker for color/spacing/typography");
