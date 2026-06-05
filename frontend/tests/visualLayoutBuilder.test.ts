@@ -1,3 +1,17 @@
+/**
+ * visualLayoutBuilder.test.ts
+ *
+ * VisualLayoutCanvas は layout draft のリアルタイムプレビュー &amp; 直感操作 surface として通常導線に残る。
+ * drag / resize は draft node の x/y/width/height を更新するだけ。
+ * parentNodeId / slotKey / orderIndex / layoutClassRefs はインスペクタ（CanvasInspector）で編集する。
+ * cssTokenRefs / classname / tailwind は canvas / layout_patch には含まれない（component_design child の責務）。
+ *
+ * このテストファイルは以下を対象とする:
+ *   - canvas utility functions (snapToGrid, buildVisualLayoutPatchJson, etc.)
+ *   - inspector 構造フィールド utility (wouldCreateVisualParentCycle, orderIndex round-trip)
+ *   - draft-only apply guard
+ *   - responsive token rule utilities
+ */
 import { assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   snapToGrid,
@@ -13,7 +27,7 @@ import {
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 
-// ─── snapToGrid ───────────────────────────────────────────────────────────────
+// ─── canvas utility: snapToGrid ───────────────────────────────────────────────
 
 Deno.test("snapToGrid: snaps to nearest grid point", () => {
   assertEquals(snapToGrid(14, 10), 10);
@@ -128,6 +142,29 @@ Deno.test("buildVisualLayoutPatchJson: multiple nodes preserve order", () => {
   assertEquals(parsed.nodes[1].nodeId, "n2");
 });
 
+Deno.test("buildVisualLayoutPatchJson: slotKey is preserved in node payload (inspector field)", () => {
+  const node: VisualNodePayload = { ...sampleNode, slotKey: "header" };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].slotKey, "header");
+});
+
+Deno.test("buildVisualLayoutPatchJson: parentNodeId is preserved in node payload (inspector field)", () => {
+  const parent: VisualNodePayload = { ...sampleNode, nodeId: "parent", parentNodeId: null };
+  const child: VisualNodePayload = { ...sampleNode, nodeId: "child", parentNodeId: "parent" };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([parent, child]));
+  assertEquals(parsed.nodes[0].parentNodeId, null);
+  assertEquals(parsed.nodes[1].parentNodeId, "parent");
+});
+
+Deno.test("buildVisualLayoutPatchJson: cssTokenRefs are NOT in node payload (component_design responsibility)", () => {
+  // cssTokenRefs belong to component_design child, not layout_patch node payload
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([sampleNode]));
+  const node = parsed.nodes[0];
+  assertEquals(node.cssTokenRefs, undefined);
+  assertEquals(node.classname, undefined);
+  assertEquals(node.tailwind, undefined);
+});
+
 // ─── draft-only apply block ───────────────────────────────────────────────────
 
 Deno.test("getDraftOnlyNodes: returns only draft nodes", () => {
@@ -155,6 +192,36 @@ Deno.test("isDraftOnlyApplyBlocked: returns false when all nodes are promoted", 
 Deno.test("isDraftOnlyApplyBlocked: returns false for empty node list", () => {
   assertFalse(isDraftOnlyApplyBlocked([]));
 });
+
+// ─── inspector 構造フィールド: orderIndex round-trip ─────────────────────────
+
+Deno.test("orderIndex: buildVisualLayoutPatchJson preserves orderIndex in node payload", () => {
+  const node: VisualNodePayload = { ...sampleNode, orderIndex: 3 };
+  const json = buildVisualLayoutPatchJson([node]);
+  const parsed = JSON.parse(json);
+  assertEquals(parsed.nodes[0].orderIndex, 3);
+});
+
+Deno.test("orderIndex: multiple nodes retain distinct orderIndex values", () => {
+  const n1: VisualNodePayload = { ...sampleNode, nodeId: "n1", orderIndex: 0 };
+  const n2: VisualNodePayload = { ...sampleNode, nodeId: "n2", orderIndex: 2 };
+  const n3: VisualNodePayload = { ...sampleNode, nodeId: "n3", orderIndex: 5 };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([n1, n2, n3]));
+  assertEquals(parsed.nodes[0].orderIndex, 0);
+  assertEquals(parsed.nodes[1].orderIndex, 2);
+  assertEquals(parsed.nodes[2].orderIndex, 5);
+});
+
+Deno.test("orderIndex: updating orderIndex produces distinguishable patch", () => {
+  const before: VisualNodePayload = { ...sampleNode, orderIndex: 0 };
+  const after: VisualNodePayload = { ...sampleNode, orderIndex: 1 };
+  assertNotEquals(
+    buildVisualLayoutPatchJson([before]),
+    buildVisualLayoutPatchJson([after]),
+  );
+});
+
+// ─── inspector 構造フィールド: parentNodeId cycle detection ──────────────────
 
 // ─── wouldCreateVisualParentCycle ─────────────────────────────────────────────
 
@@ -343,7 +410,8 @@ Deno.test("lifecycleFailPhase: preview and apply failures are distinct phases", 
   assertNotEquals(getFailPhase("preview"), getFailPhase("apply"));
 });
 
-// ─── Fix 5: CSS token value resolution (SSOT-based, no hardcoded role map) ───
+// ─── canvas utility: CSS token value resolution (SSOT-based, no hardcoded role map) ───
+// cssTokenRefs は component_design child の責務。canvas / layout_patch には含まれない。
 
 Deno.test("resolveCssTokenValue: primary background resolves to SSOT action_primary color", () => {
   const val = resolveCssTokenValue("color.action.primary.background");
