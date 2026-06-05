@@ -57,9 +57,24 @@ export function validateResponsiveTokenRulesJson(raw: string): ResponsiveTokenRu
   return { ok: true, rules: record as ResponsiveTokenRules };
 }
 
-/** SSOT: admin-console-workflow-ssot v0.8.0 layout_editor structural_html allowlist */
+/** SSOT: admin-console-workflow-ssot v0.8.0 layout_editor structural_html allowlist — full set */
 export const STRUCTURAL_HTML_TAG_ALLOWLIST = [
-  "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "a",
+  // block
+  "div", "section", "article", "aside", "header", "footer", "main", "nav",
+  // heading
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  // text
+  "p", "span", "strong", "em", "blockquote", "pre", "code",
+  // link
+  "a",
+  // form
+  "form", "fieldset", "legend", "label", "button", "input", "textarea", "select", "option",
+  // media
+  "img", "picture", "figure", "figcaption", "video", "audio",
+  // list
+  "ul", "ol", "li", "dl", "dt", "dd",
+  // table
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
 ] as const;
 export type StructuralHtmlTag = (typeof STRUCTURAL_HTML_TAG_ALLOWLIST)[number];
 export const STRUCTURAL_HTML_COMPONENT_KEY = "layout/structural_html";

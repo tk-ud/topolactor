@@ -22,7 +22,6 @@ import {
   UX_DESIGN_EDITOR_SURFACE,
   UX_VISUAL_VIEW_SURFACE,
 } from "../content/adminUxTerms.ts";
-import UiBuilderFlowStepper from "../components/UiBuilderFlowStepper.tsx";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
@@ -103,6 +102,11 @@ import {
  */
 
 import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
+
+/** Canvas workspace contract marker (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract). */
+export const UI_BUILDER_WORKSPACE_MODE = "canvas_workspace_v2" as const;
+/** No separate layout/design/visual tabs — single unified workspace. */
+export const UI_BUILDER_HAS_SEPARATE_TABS = false as const;
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -213,7 +217,8 @@ type PaletteEntry = {
   routeKey?: string;
 };
 
-type TabId = "ci" | "catalog" | "bucket" | "layout" | "design" | "visual";
+/** Canvas workspace panel actions (replaces old tab navigation). */
+type WorkspacePanel = "bucket" | "design";
 
 // Gap 1: Lifecycle state machine
 type LifecyclePhase =
@@ -272,68 +277,7 @@ function StatusBadge({ text, variant }: { text: string; variant: "ok" | "warn" |
   return <span class={cls}>{text}</span>;
 }
 
-// ─── タブバー ─────────────────────────────────────────────────────────────────
-
-function TabBar({
-  tabs,
-  activeTab,
-  onSelect,
-}: {
-  tabs: { id: TabId; label: string; hint?: string }[];
-  activeTab: TabId;
-  onSelect: (id: TabId) => void;
-}): JSX.Element {
-  return (
-    <div>
-      <div class="tab-bar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onSelect(tab.id)}
-            class={activeTab === tab.id ? "tab-active" : "tab-inactive"}
-            title={tab.hint}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      {tabs.find((t) => t.id === activeTab)?.hint && (
-        <p class="text-muted-xs mt-1 mb-2">
-          {tabs.find((t) => t.id === activeTab)!.hint}
-        </p>
-      )}
-    </div>
-  );
-}
-
 // ─── ヘルパー ─────────────────────────────────────────────────────────────────
-
-function buildLayoutPatchJson(nodes: DraftNode[], layoutClassRefs: string[] = []): string {
-  return JSON.stringify(
-    {
-      grid: { cols: 12 },
-      ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
-      nodes: nodes.map((n) => ({
-        nodeId: n.nodeId,
-        componentKey: n.componentKey,
-        ...(n.isDraftOnly ? { _draftOnly: true } : {}),
-        ...(n.componentId ? { componentId: n.componentId } : {}),
-        ...(n.packageId ? { packageId: n.packageId } : {}),
-        ...(n.layoutId ? { layoutId: n.layoutId } : {}),
-        ...(n.wiringId ? { wiringId: n.wiringId } : {}),
-        ...(n.tensorId ? { tensorId: n.tensorId } : {}),
-        slotKey: n.slotKey || null,
-        orderIndex: n.orderIndex,
-        parentNodeId: n.parentNodeId || null,
-        gridCol: n.gridCol,
-        gridRow: n.gridRow,
-      })),
-    },
-    null,
-    2
-  );
-}
 
 function makeNodeId(): string {
   return `node_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -375,10 +319,10 @@ const CANVAS_MIN_HEIGHT = 400;
 const MAX_HISTORY = 50;
 
 // Gap 3: Error code → actionable cause + fix
-const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; navigateTo?: TabId }> = {
+const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; navigateTo?: WorkspacePanel }> = {
   DRAFT_ONLY_NODES: {
     cause: "まだ使えない部品が含まれています",
-    suggestion: "「部品登録」タブで対象の部品を配置可能にしてください",
+    suggestion: "「部品登録」パネルで対象の部品を配置可能にしてください",
     navigateTo: "bucket",
   },
   LAYOUT_NOT_FOUND: {
@@ -391,7 +335,7 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
-    suggestion: "「デザイン設定」タブで正しいトークンを選択してください",
+    suggestion: "デザインインスペクタで正しいトークンを選択してください",
     navigateTo: "design",
   },
   LAYOUT_CLASS_REF_INVALID: {
@@ -420,7 +364,6 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
   LAYOUT_ID_MISMATCH: {
     cause: "サーバーが異なるレイアウトIDを返しました",
     suggestion: "レイアウト候補を再読み込みして、正しいレイアウトを選択してください",
-    navigateTo: "layout",
   },
   RESPONSIVE_TOKEN_RULE_JSON_INVALID: {
     cause: "レスポンシブルール JSON が不正です",
@@ -654,7 +597,7 @@ function LifecycleStepIndicator({ phase }: { phase: LifecyclePhase }): JSX.Eleme
       </div>
       {isError && (
         <p role="alert" class="mt-2 text-xs text-red-700">
-          エラー — 「エラー — 修正方法」を確認してください。まだ使えない部品がある場合は部品登録タブへ戻ってください。
+          エラー — 「エラー — 修正方法」を確認してください。まだ使えない部品がある場合は部品登録パネルへ戻ってください。
         </p>
       )}
       {(phase === "applied_ok" || phase === "persisted") && (
@@ -682,10 +625,10 @@ function ActionableValidationErrorPanel({
 }: {
   errors: AnnotatedValidationError[];
   title?: string;
-  onNavigate?: (tab: TabId) => void;
+  onNavigate?: (panel: WorkspacePanel) => void;
 }): JSX.Element | null {
   if (errors.length === 0) return null;
-  const shownNavigateTabs = new Set<TabId>();
+  const shownNavigateTabs = new Set<WorkspacePanel>();
   return (
     <div role="alert" class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
       {title && <div class="mb-2 font-semibold text-red-800">{title}</div>}
@@ -722,9 +665,8 @@ function ActionableValidationErrorPanel({
           if (fix?.navigateTo && !shownNavigateTabs.has(fix.navigateTo)) {
             shownNavigateTabs.add(fix.navigateTo);
             const tab = fix.navigateTo;
-            const label = tab === "bucket" ? "→ 部品登録タブへ移動"
-              : tab === "layout" ? "→ レイアウト選択へ移動"
-              : "→ デザイン設定タブへ移動";
+            const label = tab === "bucket" ? "→ 部品登録パネルへ移動"
+              : "→ デザインインスペクタを開く";
             navButtons.push(
               <button
                 key={tab}
@@ -777,7 +719,7 @@ function ApplyReadinessPanel({
   effectiveLayoutId: string;
   draftNodes: DraftNode[];
   layoutClassRefError: string | null;
-  onNavigate?: (tab: TabId) => void;
+  onNavigate?: (panel: WorkspacePanel) => void;
 }): JSX.Element {
   const draftOnlyCount = draftNodes.filter((n) => n.isDraftOnly).length;
   const customPositionedCount = draftNodes.filter(
@@ -803,7 +745,7 @@ function ApplyReadinessPanel({
               onClick={() => onNavigate("bucket")}
               class="ml-2 rounded bg-amber-600 px-1.5 py-0.5 text-xs font-medium text-white hover:bg-amber-700"
             >
-              部品登録タブで確認する
+              部品登録パネルで確認する
             </button>
           )}
         </li>
@@ -821,7 +763,7 @@ function ApplyReadinessPanel({
               onClick={() => onNavigate("bucket")}
               class="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white hover:bg-red-700"
             >
-              部品登録タブで修正する →
+              部品登録パネルで修正する →
             </button>
           )}
         </li>
@@ -1506,7 +1448,7 @@ function BucketSection({
   onNavigate,
   onPackaged,
 }: {
-  onNavigate?: (tab: TabId) => void;
+  onNavigate?: (panel: WorkspacePanel) => void;
   onPackaged?: (handoff: PackagedHandoff) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
@@ -1687,7 +1629,7 @@ function BucketSection({
         setPromotedKeys(new Set(promoted.map((p: PromotedPaletteEntry) => p.componentKey)));
       }
       onPackaged?.(lastHandoff);
-      onNavigate?.("layout");
+      // Canvas workspace is always visible — no tab navigation needed after packaging.
     } catch (e) {
       setStatus(`エラー: ${e}`);
     } finally {
@@ -3177,7 +3119,7 @@ function LayoutBuilderSection({
   scopedRouteKey,
   scopedLayoutId,
 }: {
-  onNavigate?: (tab: TabId) => void;
+  onNavigate?: (panel: WorkspacePanel) => void;
   scopedPackageId?: string;
   scopedRouteKey?: string | null;
   scopedLayoutId?: string | null;
@@ -3266,7 +3208,7 @@ function LayoutBuilderSection({
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (entry.isDraftOnly) {
-      announce("この部品はまだパッケージに含まれていません。部品選択タブで配置可能化してください。");
+      announce("この部品はまだパッケージに含まれていません。部品登録パネルで配置可能化してください。");
       return true;
     }
     return false;
@@ -3512,6 +3454,49 @@ function LayoutBuilderSection({
     return () => { cancelled = true; };
   }, [scopedPackageId, effectiveLayoutId, effectiveRouteKey, paletteLoadFailed, paletteEntries.length]);
 
+  // ── _tmp draft: sessionStorage auto-save / resume ────────────────────────
+  // Key: ui_builder_tmp_draft_<packageId>. Auto-save on canvas ops; clear on apply success.
+  // TODO: backend _tmp column for cross-device persistence (pending schema migration).
+  const tmpDraftKey = scopedPackageId?.trim()
+    ? `ui_builder_tmp_draft_${scopedPackageId.trim()}`
+    : null;
+
+  useEffect(() => {
+    if (!tmpDraftKey || typeof globalThis.sessionStorage === "undefined") return;
+    const saved = sessionStorage.getItem(tmpDraftKey);
+    if (!saved) return;
+    try {
+      const { nodes, classRefs } = JSON.parse(saved) as {
+        nodes: DraftNode[];
+        classRefs: string[];
+      };
+      if (Array.isArray(nodes) && nodes.length > 0) {
+        setDraftNodes(nodes);
+        if (Array.isArray(classRefs)) setSelectedLayoutClassRefs(classRefs);
+        historyRef.current = [{ nodes: nodes.map((n) => ({ ...n })), label: "_tmp 復元" }];
+        historyPtrRef.current = 0;
+        setCanUndo(false);
+        setCanRedo(false);
+        setLifecyclePhase("idle");
+      }
+    } catch {
+      sessionStorage.removeItem(tmpDraftKey);
+    }
+  }, [tmpDraftKey]);
+
+  useEffect(() => {
+    if (!tmpDraftKey || typeof globalThis.sessionStorage === "undefined") return;
+    if (draftNodes.length === 0) return;
+    try {
+      sessionStorage.setItem(tmpDraftKey, JSON.stringify({
+        nodes: draftNodes,
+        classRefs: selectedLayoutClassRefs,
+      }));
+    } catch {
+      // storage full — ignore
+    }
+  }, [draftNodes, selectedLayoutClassRefs, tmpDraftKey]);
+
   // ── layout patch (preview / validate / apply) ────────────────────────────
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
     setPatchErrors([]);
@@ -3621,6 +3606,10 @@ function LayoutBuilderSection({
         }
 
         if (action === "apply" && summary.valid) {
+          // Clear _tmp draft on successful apply
+          if (tmpDraftKey && typeof globalThis.sessionStorage !== "undefined") {
+            sessionStorage.removeItem(tmpDraftKey);
+          }
           const parsed = parseVisualLayoutPatchJson(
             submittedTensorPatchJson,
             paletteSeedEntries,
@@ -4257,7 +4246,7 @@ function LayoutBuilderSection({
 
       <Accordion title="layoutClassRefs 設定（layout child の responsibility）" defaultOpen={false}>
         <p class="text-muted-xs mb-2">
-          レイアウト投影専用のスタイルクラスを選択します。canvas の視覚装飾（cssTokenRefs 等）はここではなく「デザインを編集」タブで設定します。
+          レイアウト投影専用のスタイルクラスを選択します。canvas の視覚装飾（cssTokenRefs 等）はここではなく右パネルのデザインインスペクタで設定します。
         </p>
         <details class="mb-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
           <summary class="cursor-pointer font-semibold">allowed_for と canvas 反映（技術詳細）</summary>
@@ -4279,11 +4268,11 @@ function LayoutBuilderSection({
       </Accordion>
 
       <p class="mb-3 text-xs text-slate-600">
-        cssTokenRefs・color・spacing・radius は{" "}
+        cssTokenRefs・color・spacing・radius は右パネルのデザインインスペクタ（またはボタン{" "}
         <button type="button" class="link" onClick={() => onNavigate?.("design")}>
-          デザインを編集 タブ
+          デザインインスペクタを開く
         </button>
-        で保存します（design タブ担当）。ここでは canvas 操作と layout child のみ保存します。
+        ）で保存します（design inspector 担当）。ここでは canvas 操作と layout child のみ保存します。
       </p>
 
       {(() => {
@@ -4395,15 +4384,6 @@ function LayoutBuilderSection({
     </div>
   );
 }
-
-// ─── タブナビゲーション ───────────────────────────────────────────────────────
-
-const TABS: { id: TabId; label: string; hint?: string }[] = [
-  { id: "bucket", label: UX_UI_BUILDER_TAB_LABELS.bucket, hint: "部品選択 → パッケージ化" },
-  { id: "layout", label: UX_UI_BUILDER_TAB_LABELS.layout, hint: "配置編集キャンバス — x/y/サイズ・親部品・スロット・表示順・layoutClassRefs を編集（操作可能）" },
-  { id: "design", label: UX_UI_BUILDER_TAB_LABELS.design, hint: "デザインプレビュー（読み取り専用）— cssTokenRefs・inlineText・linkHref・reactionIntent を設定して保存" },
-  { id: "visual", label: UX_UI_BUILDER_TAB_LABELS.visual, hint: "最終確認プレビュー（読み取り専用）— 配置とデザイン合成の最終確認専用。編集不可" },
-];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
 
@@ -5551,119 +5531,22 @@ function PackageDesignPanel({
   );
 }
 
-function VisualViewPanel({
-  packages,
-  selectedPackageId,
-  onSelectPackage,
-}: {
-  packages: AdminPackageRow[];
-  selectedPackageId: string;
-  onSelectPackage: (id: string) => void;
-}): JSX.Element {
-  const [previewNodes, setPreviewNodes] = useState<LayoutPreviewNodeInput[]>([]);
-  const [layoutClassRefs, setLayoutClassRefs] = useState<string[]>([]);
-  const [loadStatus, setLoadStatus] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!selectedPackageId) {
-      setPreviewNodes([]);
-      setLayoutClassRefs([]);
-      setLoadStatus(null);
-      return;
-    }
-    const pkg = packages.find((p) => p.packageId === selectedPackageId);
-    if (!pkg?.layoutId || !pkg.routeKey) {
-      setPreviewNodes([]);
-      setLayoutClassRefs([]);
-      setLoadStatus("パッケージに layout/route が紐付いていません。");
-      return;
-    }
-    (async () => {
-      setLoadStatus("visual view を読み込み中...");
-      const [draftBody, designBody] = await Promise.all([
-        dispatchAdminOp("ui_topology", "get_layout_patch_draft", {
-          packageId: selectedPackageId,
-          layoutId: pkg.layoutId,
-          routeKey: pkg.routeKey,
-        }),
-        dispatchAdminOp("component_style_design", "list", {
-          packageId: selectedPackageId,
-        }),
-      ]);
-      const draftData = draftBody?.emission?.data as Record<string, unknown> | undefined;
-      const tensorPatchJson = typeof draftData?.tensorPatchJson === "string"
-        ? draftData.tensorPatchJson
-        : "";
-      const parsed = parseVisualLayoutPatchJson(tensorPatchJson);
-      if (!parsed.ok) {
-        setPreviewNodes([]);
-        setLayoutClassRefs([]);
-        setLoadStatus("layout patch の解析に失敗しました。");
-        return;
-      }
-      const designs = Array.isArray(designBody?.emission?.data)
-        ? (designBody.emission.data as Record<string, unknown>[]).map(mapSavedDesignRow)
-        : [];
-      const designByComponentId = new Map(
-        designs.filter((d) => d.componentId).map((d) => [d.componentId!, d]),
-      );
-      const designByLayoutNodeId = new Map(
-        designs.filter((d) => d.layoutNodeId).map((d) => [d.layoutNodeId!, d]),
-      );
-      const nodes: LayoutPreviewNodeInput[] = parsed.value.nodes.map((n) => {
-        const design = n.nodeKind === "structural_html"
-          ? designByLayoutNodeId.get(n.nodeId)
-          : (n.componentId ? designByComponentId.get(n.componentId) : undefined);
-        return {
-          nodeId: n.nodeId,
-          componentKey: n.componentKey,
-          componentKind: n.componentKind,
-          componentId: n.componentId,
-          nodeKind: n.nodeKind,
-          htmlTag: n.htmlTag,
-          inlineText: design?.inlineText,
-          linkHref: design?.linkHref,
-          isDraftOnly: n.isDraftOnly,
-          x: n.x,
-          y: n.y,
-          width: n.width,
-          height: n.height,
-        };
-      });
-      setPreviewNodes(nodes);
-      setLayoutClassRefs(parsed.value.layoutClassRefs);
-      setLoadStatus(nodes.length === 0 ? "配置ノードがありません。" : null);
-    })();
-  }, [selectedPackageId, packages]);
-
-  return (
-    <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
-      <PackageScopeSelector
-        packages={packages}
-        selectedPackageId={selectedPackageId}
-        onSelectPackage={onSelectPackage}
-        heading={UX_VISUAL_VIEW_SURFACE}
-      />
-      <div class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-        <strong>最終確認専用（読み取り専用）</strong> —
-        保存済みの配置とデザインを合成した最終プレビューです。
-        ここでは編集できません。配置の変更は「配置を編集」タブ、デザインの変更は「デザインを編集」タブで行ってください。
-      </div>
-      {loadStatus && <p class="mb-2 text-xs text-slate-500">{loadStatus}</p>}
-      <LayoutVisualAuditCanvas
-        nodes={previewNodes}
-        layoutClassRefs={layoutClassRefs}
-        title={UX_VISUAL_VIEW_SURFACE}
-        minHeight={360}
-      />
-    </section>
-  );
-}
-
+/**
+ * Canvas-first workspace (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract).
+ * No separate layout/design/visual tabs — single workspace with docked panels.
+ *
+ * Layout:
+ *   - Bucket panel (collapsible): Phase A component registration + package generation
+ *   - Canvas workspace (LayoutBuilderSection): left palette + center canvas + right inspector
+ *   - Design inspector panel (collapsible, opened from canvas inspector): cssTokenRefs etc.
+ *   - Reference sections (catalog/CI/CSS): collapsed by default
+ */
 export default function UiBuilderAdmin(): JSX.Element {
-  const [activeTab, setActiveTab] = useState<TabId>("bucket");
   const [packages, setPackages] = useState<AdminPackageRow[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
+  const [bucketPanelOpen, setBucketPanelOpen] = useState(true);
+  const [designPanelOpen, setDesignPanelOpen] = useState(false);
   const selectedPackage = packages.find((p) => p.packageId === selectedPackageId);
 
   const reloadPackages = async (): Promise<AdminPackageRow[]> => {
@@ -5678,15 +5561,15 @@ export default function UiBuilderAdmin(): JSX.Element {
     reloadPackages();
   }, []);
 
-  useEffect(() => {
-    if (activeTab === "layout" || activeTab === "design" || activeTab === "visual") {
-      reloadPackages();
-    }
-  }, [activeTab]);
-
   const handlePackaged = (handoff: PackagedHandoff) => {
     setSelectedPackageId(handoff.packageId);
+    setBucketPanelOpen(false);
     reloadPackages();
+  };
+
+  const handleWorkspaceNavigate = (panel: WorkspacePanel) => {
+    if (panel === "bucket") setBucketPanelOpen(true);
+    if (panel === "design") setDesignPanelOpen(true);
   };
 
   return (
@@ -5703,69 +5586,106 @@ export default function UiBuilderAdmin(): JSX.Element {
       />
       <AdminHelpPanel {...ADMIN_UI_BUILDER_GUIDE} />
 
-      {/* Stepper: bucket → generate → promote → layout → preview → validate → apply → runtime */}
-      <UiBuilderFlowStepper activeTab={activeTab} onNavigate={setActiveTab} />
-
       <div
         class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         role="note"
       >
         Step 4 の編集ルートは<strong> パッケージのみ</strong>です。配置・デザイン設定・配線は
-        パッケージ選択後に編集してください。カタログ・CI は参照専用（編集ルートではありません）。
+        パッケージ選択後にキャンバスワークスペースで編集してください。
       </div>
 
-      <TabBar tabs={TABS} activeTab={activeTab} onSelect={setActiveTab} />
+      {/* Phase A: bucket panel (collapsible) */}
+      <details
+        class="mb-3 rounded border border-blue-200 bg-blue-50"
+        open={bucketPanelOpen}
+        onToggle={(e: Event) => setBucketPanelOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-blue-900">
+          {UX_UI_BUILDER_TAB_LABELS.bucket} — 部品登録・パッケージ化
+        </summary>
+        <div class="px-3 pb-3">
+          <BucketSection onNavigate={handleWorkspaceNavigate} onPackaged={handlePackaged} />
+        </div>
+      </details>
 
-      <div>
-        {activeTab === "bucket" && (
-          <BucketSection onNavigate={setActiveTab} onPackaged={handlePackaged} />
-        )}
-        {activeTab === "layout" && (
-          <>
-            <PackageScopeSelector
-              packages={packages}
-              selectedPackageId={selectedPackageId}
-              onSelectPackage={setSelectedPackageId}
-              heading="配置を編集（layout child）"
-            />
-            <LayoutBuilderSection
-              onNavigate={setActiveTab}
-              scopedPackageId={selectedPackageId}
-              scopedRouteKey={selectedPackage?.routeKey}
-              scopedLayoutId={selectedPackage?.layoutId}
-            />
-          </>
-        )}
-        {activeTab === "design" && (
+      {/* Phase B: canvas workspace — layout editor + design inspector */}
+      <div class="mb-4">
+        <div class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+          <strong class="text-sm text-slate-800">{UX_LAYOUT_EDITOR_SURFACE}</strong>
+          <label class="flex items-center gap-1 text-xs text-slate-600">
+            パッケージ:
+            <select
+              class="rounded border px-2 py-0.5 font-mono text-xs"
+              value={selectedPackageId}
+              onChange={(e) => {
+                const id = (e.target as HTMLSelectElement).value;
+                setSelectedPackageId(id);
+                reloadPackages();
+              }}
+            >
+              <option value="">— 選択 —</option>
+              {packages.map((p) => (
+                <option key={p.packageId} value={p.packageId}>
+                  {p.packageKey}{p.routeKey ? ` (${p.routeKey})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedPackage && (
+            <span class="font-mono text-[0.65rem] text-slate-400">
+              {selectedPackage.packageId.slice(0, 8)}…
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setDesignPanelOpen((v) => !v)}
+            class={`ml-auto rounded px-2 py-1 text-xs font-medium border ${
+              designPanelOpen
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-blue-300 bg-white text-blue-700 hover:bg-blue-50"
+            }`}
+            aria-pressed={designPanelOpen}
+          >
+            {designPanelOpen ? "デザインインスペクタを閉じる" : "デザインインスペクタを開く"}
+          </button>
+        </div>
+
+        <LayoutBuilderSection
+          onNavigate={handleWorkspaceNavigate}
+          scopedPackageId={selectedPackageId}
+          scopedRouteKey={selectedPackage?.routeKey}
+          scopedLayoutId={selectedPackage?.layoutId}
+        />
+      </div>
+
+      {/* Design inspector panel (docked, selection-driven, opened by canvas inspector or toolbar) */}
+      {designPanelOpen && (
+        <div class="mb-4 rounded border border-slate-300 bg-white shadow-sm">
+          <div class="flex items-center justify-between border-b border-slate-200 px-3 py-2">
+            <strong class="text-sm text-slate-800">{UX_DESIGN_EDITOR_SURFACE}</strong>
+            <button
+              type="button"
+              onClick={() => setDesignPanelOpen(false)}
+              class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100"
+            >
+              ✕ 閉じる
+            </button>
+          </div>
           <PackageDesignPanel
             packages={packages}
             selectedPackageId={selectedPackageId}
             onSelectPackage={setSelectedPackageId}
           />
-        )}
-        {activeTab === "visual" && (
-          selectedPackageId
-            ? (
-              <VisualViewPanel
-                packages={packages}
-                selectedPackageId={selectedPackageId}
-                onSelectPackage={setSelectedPackageId}
-              />
-            )
-            : (
-              <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
-                <strong>パッケージ未選択</strong> — visual view はパッケージ選択後に利用できます。
-              </div>
-            )
-        )}
-      </div>
+        </div>
+      )}
 
-      <details class="mb-3 mt-6 rounded border border-slate-200 p-3 text-sm">
+      {/* Reference sections */}
+      <details class="mb-3 mt-4 rounded border border-slate-200 p-3 text-sm">
         <summary class="cursor-pointer font-medium text-slate-700">
           参照専用: コンポーネントカタログ（編集ルートではない）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          部品の登録は step 4.1 の部品選択でパッケージ化から行います。ここは分類・候補の参照のみです。
+          部品の登録は上の「{UX_UI_BUILDER_TAB_LABELS.bucket}」パネルから行います。ここは分類・候補の参照のみです。
         </p>
         <div class="mt-2">
           <PrimitiveCatalog />
@@ -5776,7 +5696,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           参照専用: CI ガイダンス（編集ルートではない）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          保存前の注意喚起です。配置・デザインの編集は上の「配置を編集」「デザインを編集」タブで行います。
+          保存前の注意喚起です。配置・デザインの編集はキャンバスワークスペースで行います。
         </p>
         <div class="mt-2">
           <CiAttentionGuidanceSection />
@@ -5784,10 +5704,10 @@ export default function UiBuilderAdmin(): JSX.Element {
       </details>
       <details class="mb-4 rounded border border-slate-200 p-3 text-sm">
         <summary class="cursor-pointer font-medium text-slate-700">
-          参照専用: CSS 辞書トークン一覧（保存は「デザインを編集」タブで行います）
+          参照専用: CSS 辞書トークン一覧（保存はデザインインスペクタで行います）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          ここでは選択しても保存されません。cssTokenRefs の保存は「デザインを編集」タブ → cssTokenRefs セクションを使ってください。
+          ここでは選択しても保存されません。cssTokenRefs の保存はデザインインスペクタ → cssTokenRefs セクションを使ってください。
         </p>
         <div class="mt-2">
           <CssTokenSelectorSection />

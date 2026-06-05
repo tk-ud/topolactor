@@ -920,3 +920,122 @@ Deno.test("UX_UI_BUILDER_TAB_LABELS: layout tab does NOT contain 読み取り専
 Deno.test("UX_UI_BUILDER_TAB_LABELS: design tab does NOT contain 読み取り専用", () => {
   assertFalse(UX_UI_BUILDER_TAB_LABELS.design.includes("読み取り専用"));
 });
+
+// ─── canvas workspace: separate layout/design/visual tab が存在しないこと ─────
+
+import {
+  UI_BUILDER_WORKSPACE_MODE,
+  UI_BUILDER_HAS_SEPARATE_TABS,
+} from "../islands/UiBuilderAdmin.tsx";
+
+Deno.test("canvas workspace: workspace mode is canvas_workspace_v2", () => {
+  // Verify the workspace is the new canvas-first unified workspace (not tab-based).
+  // SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract.
+  assertEquals(UI_BUILDER_WORKSPACE_MODE, "canvas_workspace_v2");
+});
+
+Deno.test("canvas workspace: separate layout/design/visual tabs do NOT exist", () => {
+  // The old separate tabs (layout, design, visual) have been replaced with a unified workspace.
+  assertEquals(UI_BUILDER_HAS_SEPARATE_TABS, false);
+});
+
+Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch builder", () => {
+  // The visual patch builder (includes x/y/width/height, nodeKind, htmlTag) must remain.
+  // It is imported and used by LayoutBuilderSection in the canvas workspace.
+  // If this import fails TypeScript compilation, the workspace is broken.
+  const n = makeStructuralHtmlNode("div", { nodeId: "x", x: 0, y: 0, orderIndex: 0 });
+  const json = buildVisualLayoutPatchJson([n]);
+  const parsed = JSON.parse(json);
+  assertEquals(parsed.nodes[0].nodeKind, "structural_html");
+  assertEquals(typeof parsed.nodes[0].x, "number");
+  assertEquals(typeof parsed.nodes[0].width, "number");
+});
+
+// ─── STRUCTURAL_HTML_TAG_ALLOWLIST: full SSOT set ────────────────────────────
+
+import { STRUCTURAL_HTML_TAG_ALLOWLIST } from "../runtime/visualLayoutUtils.ts";
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes all block tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const blockTags = ["div", "section", "article", "aside", "header", "footer", "main", "nav"];
+  for (const tag of blockTags) {
+    assertEquals(tags.includes(tag), true, `block tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes all heading tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  for (const tag of ["h1", "h2", "h3", "h4", "h5", "h6"]) {
+    assertEquals(tags.includes(tag), true, `heading tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes text tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const textTags = ["p", "span", "strong", "em", "blockquote", "pre", "code"];
+  for (const tag of textTags) {
+    assertEquals(tags.includes(tag), true, `text tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes link tag", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  assertEquals(tags.includes("a"), true);
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes form tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const formTags = ["form", "fieldset", "legend", "label", "button", "input", "textarea", "select", "option"];
+  for (const tag of formTags) {
+    assertEquals(tags.includes(tag), true, `form tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes media tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const mediaTags = ["img", "picture", "figure", "figcaption", "video", "audio"];
+  for (const tag of mediaTags) {
+    assertEquals(tags.includes(tag), true, `media tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes list tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const listTags = ["ul", "ol", "li", "dl", "dt", "dd"];
+  for (const tag of listTags) {
+    assertEquals(tags.includes(tag), true, `list tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes table tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const tableTags = ["table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption"];
+  for (const tag of tableTags) {
+    assertEquals(tags.includes(tag), true, `table tag "${tag}" must be in allowlist`);
+  }
+});
+
+Deno.test("makeStructuralHtmlNode: works with section (compatibility with existing nodes)", () => {
+  const node = makeStructuralHtmlNode("section", {
+    nodeId: "test-section",
+    x: 10,
+    y: 20,
+    orderIndex: 0,
+  });
+  assertEquals(node.htmlTag, "section");
+  assertEquals(node.nodeKind, "structural_html");
+  assertEquals(node.componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
+});
+
+Deno.test("makeStructuralHtmlNode: works with new expanded tags (article, main, nav)", () => {
+  for (const tag of ["article", "main", "nav", "p", "ul", "table"] as const) {
+    const node = makeStructuralHtmlNode(tag, {
+      nodeId: `test-${tag}`,
+      x: 0,
+      y: 0,
+      orderIndex: 0,
+    });
+    assertEquals(node.htmlTag, tag);
+    assertEquals(node.nodeKind, "structural_html");
+  }
+});

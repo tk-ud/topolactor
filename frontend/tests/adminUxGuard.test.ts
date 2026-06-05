@@ -936,15 +936,27 @@ Deno.test("v0.8.0: UiBuilderFlowStepper maps four SSOT authoring surfaces", asyn
   assertEquals(source.includes("SSOT v0.8.0"), true);
 });
 
-Deno.test("v0.8.0: UiBuilderAdmin exposes visual view tab and structural HTML palette", async () => {
+Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette and copy operations", async () => {
+  // Updated for canvas-first workspace (SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract).
+  // Old separate visual/layout/design tabs replaced with unified workspace.
   const source = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assertEquals(source.includes('id: "visual"'), true);
+  // Canvas workspace contract markers
+  assertEquals(source.includes("UI_BUILDER_WORKSPACE_MODE"), true);
+  assertEquals(source.includes("UI_BUILDER_HAS_SEPARATE_TABS"), true);
+  // Structural HTML palette still exposed in canvas workspace
   assertEquals(source.includes("StructuralHtmlPalette"), true);
-  assertEquals(source.includes("VisualViewPanel"), true);
+  // Copy / clone operations remain
   assertEquals(source.includes("copyNode"), true);
   assertEquals(source.includes("cloneVisualNode"), true);
+  // LayoutBuilderSection is the main canvas
+  assertEquals(source.includes("LayoutBuilderSection"), true);
+  // Design inspector panel available in workspace (not separate tab)
+  assertEquals(source.includes("PackageDesignPanel"), true);
+  // No separate tab-based visual view panel
+  assertFalse(source.includes("function VisualViewPanel("), "VisualViewPanel must be removed");
+  assertFalse(source.includes("const TABS:"), "TABS constant must be removed");
 });
 
 Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default path", async () => {
