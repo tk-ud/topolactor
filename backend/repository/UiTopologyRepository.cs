@@ -275,4 +275,17 @@ public class UiTopologyRepository
         throw new NotImplementedException(
             "UiTopologyRepository.PromotePackageFromBucketItemsAsync must be overridden by a production implementation.");
     }
+
+    /// <summary>
+    /// Removes component keys from the route package ({routeKey}:pkg).
+    /// Updates package_schema_json, ui_package_component_map, and bucket status.
+    /// </summary>
+    public virtual Task<PackageDetachComponentsResult> DetachPackageComponentsAsync(
+        string routeKey,
+        IReadOnlyList<string> componentKeys,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.DetachPackageComponentsAsync must be overridden by a production implementation.");
+    }
 }

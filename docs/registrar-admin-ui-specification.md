@@ -258,12 +258,12 @@ The authoritative contract is `docs/design/admin-console-workflow-ssot.yaml` →
 | right panel | fixed right | layer inspector + design inspector (selection-driven) |
 | status bar | fixed bottom | _tmp draft state + layout_patch action buttons |
 
-**Two phases only:**
+**Unified canvas workspace flow:**
 
-| Phase | User-facing | Primary persistence |
-|-------|-------------|---------------------|
-| `package_selection` | 部品選択でパッケージ化 | `package_generator:promote_package` |
-| `canvas_workspace_edit` | canvas workspace で配置・デザインを編集 | `layout_patch:apply` + `component_style_design:upsert` |
+| Step | User-facing | Primary persistence |
+|------|-------------|---------------------|
+| route selection | ルートを選ぶ（パッケージは自動生成） | `package_generator:promote_package` (empty `bucketItemIds[]` shell, idempotent) |
+| canvas edit | canvas workspace で配置・デザインを編集 | `ui_component_bucket:create` + `package_generator:promote_package` on drop; `package_generator:detach_package_components` on last-node delete; `layout_patch:apply` + `component_style_design:upsert` |
 
 **Inspector panels (right panel, selection-driven):**
 
@@ -485,7 +485,7 @@ not add canonical routes outside that registry.
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
 | `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial-data topology intent, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit manifest promote/register. Actual business-row insertion remains the separate `content_bundle` validated draft -> preview -> explicit promote route. |
-| `/admin/ui-builder` | Step 4 UI Builder: canvas workspace (full-width center canvas + docked panels). Phase A: component bucket → package generation. Phase B: canvas workspace — place actual component previews, edit design in right inspector panel, layer tree for nesting, _tmp auto-save, explicit apply. No separate layout/design/preview tabs. See admin-console-workflow-ssot `canvas_workspace_contract` and §5.7. |
+| `/admin/ui-builder` | Step 4 UI Builder: canvas workspace (full-width center canvas + docked panels). Route selection auto-generates shell package; drop auto-registers components. Place actual component previews, edit design in right inspector panel, layer tree for nesting, _tmp auto-save, explicit apply. No separate layout/design/preview tabs. See admin-console-workflow-ssot `canvas_workspace_contract` and §5.7. |
 | `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
 | `/admin/enums` | Enum dictionary master roster: group and item CRUD, search, show-all, modal create, inline update, confirm delete |
 | `/admin/users` | Auth user master roster and state management (approve, status enum select, suspension window, state_note); `last_login_at` readonly |

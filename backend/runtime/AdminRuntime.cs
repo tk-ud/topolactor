@@ -216,6 +216,7 @@ public partial class AdminRuntime
             "package_generator:generate"        => await DataGenerateAsync(vector, ct),
             "package_generator:promote"         => await DataPromoteAsync(vector, ct),
             "package_generator:promote_package" => await DataPromotePackageAsync(vector, ct),
+            "package_generator:detach_package_components" => await DataDetachPackageComponentsAsync(vector, ct),
             "ui_topology:promoted_palette"      => await DataPromotedPaletteAsync(ct),
             "ui_topology:layout_candidates"    => await DataLayoutCandidatesAsync(ct),
             "ui_topology:list_packages"        => await DataListAdminPackagesAsync(ct),
@@ -713,8 +714,8 @@ public partial class AdminRuntime
             return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
         if (string.IsNullOrWhiteSpace(request.RouteKey))
             return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
-        if (request.BucketItemIds is null || request.BucketItemIds.Count == 0)
-            return (null, new ValidationError("BUCKET_ITEM_IDS_REQUIRED", "bucketItemIds must contain at least one item"));
+        if (request.BucketItemIds is null)
+            return (null, new ValidationError("BUCKET_ITEM_IDS_REQUIRED", "bucketItemIds is required"));
 
         var parsedIds = new List<Guid>();
         foreach (var raw in request.BucketItemIds)
@@ -750,6 +751,58 @@ public partial class AdminRuntime
             result.BucketItemIds.Select(id => id.ToString()).ToList(),
             result.ComponentIds.Select(id => id.ToString()).ToList(),
             "Package promoted successfully.");
+
+        return (JsonSerializer.SerializeToElement(responseDto), null);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataDetachPackageComponentsAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED",
+                "payload is required for package_generator:detach_package_components"));
+
+        PackageDetachComponentsRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<PackageDetachComponentsRequestDto>(
+                vector.Payload.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+
+        if (request is null)
+            return (null, new ValidationError("MALFORMED_PAYLOAD", "payload could not be deserialized"));
+        if (string.IsNullOrWhiteSpace(request.RouteKey))
+            return (null, new ValidationError("ROUTE_KEY_REQUIRED", "routeKey is required"));
+        if (request.ComponentKeys is null || request.ComponentKeys.Count == 0)
+            return (null, new ValidationError("COMPONENT_KEYS_REQUIRED", "componentKeys must contain at least one item"));
+
+        var gateError = await CheckCiAttentionPromotionGateAsync(ResolveAuthoringSurface(vector), ct);
+        if (gateError is not null) return (null, gateError);
+
+        var result = await _packageGeneratorRuntime.DetachPackageComponentsAsync(
+            request.RouteKey,
+            request.ComponentKeys,
+            ct);
+        if (result.Code != PackageGenerateCode.Success)
+        {
+            var errorCode = result.Code switch
+            {
+                PackageGenerateCode.NotFound            => "PACKAGE_NOT_FOUND",
+                PackageGenerateCode.ConstraintViolation => "CONSTRAINT_VIOLATION",
+                _                                       => "PACKAGE_DETACH_FAILED"
+            };
+            return (null, new ValidationError(errorCode, result.Message ?? "Component detach failed."));
+        }
+
+        var responseDto = new PackageDetachComponentsResponseDto(
+            true,
+            result.PackageId!.Value.ToString(),
+            result.DetachedComponentKeys.ToList(),
+            "Components detached from package.");
 
         return (JsonSerializer.SerializeToElement(responseDto), null);
     }

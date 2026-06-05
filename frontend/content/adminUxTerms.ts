@@ -274,7 +274,7 @@ export const NORMAL_VIEW_BANNED_TERMS = [
 
 /** UI ビルダー canvas workspace の docked panel labels（タブではない）。 */
 export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
-  bucket: "部品登録",
+  bucket: "部品カタログ（参照）",
   canvas: "canvas workspace",
   layerInspector: "レイヤーインスペクタ",
   designInspector: "デザインインスペクタ",
@@ -287,13 +287,16 @@ export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
 export const UX_EMPTY_CANVAS_DRAG_GUIDANCE =
   "左パネルのカードをドラッグしてキャンバスへ配置してください。";
 
-/** layout editor — パッケージ未選択時の案内 */
-export const UX_PACKAGE_REQUIRED_FOR_CANVAS =
-  "先にパッケージを作成または選択してください。";
+/** layout editor — route 未選択時の案内 */
+export const UX_ROUTE_KEY_REQUIRED_FOR_CANVAS =
+  "先にページルートを選択または入力してください。パッケージは自動で用意されます。";
 
-/** component bucket panel — 配置可能カードの drag ヒント */
+/** @deprecated use UX_ROUTE_KEY_REQUIRED_FOR_CANVAS */
+export const UX_PACKAGE_REQUIRED_FOR_CANVAS = UX_ROUTE_KEY_REQUIRED_FOR_CANVAS;
+
+/** component bucket panel — drag ヒント（drop で自動登録） */
 export const UX_COMPONENT_BUCKET_CARD_DRAG_HINT =
-  "ドラッグしてキャンバスへ配置";
+  "ドラッグしてキャンバスへ配置（部品は自動でパッケージに追加されます）";
 
 /** layout editor 右ドック — 配置インスペクタ見出し */
 export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";

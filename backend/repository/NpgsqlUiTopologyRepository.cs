@@ -1294,7 +1294,7 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
 
             // 3. INSERT ui_component_package — union existing schema arrays with this batch (additive promote).
             var packageKey = $"{routeKey}:pkg";
-            var packageKind = componentInfos[0].ComponentKind;
+            var packageKind = componentInfos.Count > 0 ? componentInfos[0].ComponentKind : "page";
 
             // Read existing schema to merge arrays; null means this is the first promote for this route.
             var existingBucketIds = new List<string>();
@@ -1526,6 +1526,147 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Removes component keys from route package. Idempotent for keys not in package.
+    /// </summary>
+    public override async Task<PackageDetachComponentsResult> DetachPackageComponentsAsync(
+        string routeKey,
+        IReadOnlyList<string> componentKeys,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            var packageKey = $"{routeKey}:pkg";
+            Guid? packageId = null;
+            await using (var selPkg = conn.CreateCommand())
+            {
+                selPkg.Transaction = tx;
+                selPkg.CommandText =
+                    "SELECT package_id::text, package_schema_json::text FROM topology.ui_component_package WHERE package_key = @key";
+                selPkg.Parameters.AddWithValue("key", packageKey);
+                await using var reader = await selPkg.ExecuteReaderAsync(ct);
+                if (!await reader.ReadAsync(ct))
+                {
+                    await tx.RollbackAsync(ct);
+                    return new PackageDetachComponentsResult(
+                        PackageGenerateCode.NotFound, null, [],
+                        "PACKAGE_NOT_FOUND", $"No package for routeKey '{routeKey}'.");
+                }
+                packageId = Guid.Parse(reader.GetString(0));
+            }
+
+            var detached = new List<string>();
+            var remainingBucketIds = new List<string>();
+            var remainingComponentKeys = new List<string>();
+
+            await using (var selSchema = conn.CreateCommand())
+            {
+                selSchema.Transaction = tx;
+                selSchema.CommandText =
+                    "SELECT package_schema_json::text FROM topology.ui_component_package WHERE package_id = @pkg";
+                selSchema.Parameters.AddWithValue("pkg", packageId!.Value);
+                var raw = await selSchema.ExecuteScalarAsync(ct) as string;
+                if (!string.IsNullOrWhiteSpace(raw))
+                {
+                    using var doc = JsonDocument.Parse(raw);
+                    if (doc.RootElement.TryGetProperty("bucketItemIds", out var bids))
+                        foreach (var el in bids.EnumerateArray())
+                        {
+                            var s = el.GetString();
+                            if (!string.IsNullOrEmpty(s)) remainingBucketIds.Add(s);
+                        }
+                    if (doc.RootElement.TryGetProperty("componentKeys", out var ckeys))
+                        foreach (var el in ckeys.EnumerateArray())
+                        {
+                            var s = el.GetString();
+                            if (!string.IsNullOrEmpty(s)) remainingComponentKeys.Add(s);
+                        }
+                }
+            }
+
+            foreach (var key in componentKeys.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (!remainingComponentKeys.Contains(key, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                await using var selComp = conn.CreateCommand();
+                selComp.Transaction = tx;
+                selComp.CommandText =
+                    "SELECT component_id FROM topology.ui_component_registry WHERE component_key = @key";
+                selComp.Parameters.AddWithValue("key", key);
+                var compObj = await selComp.ExecuteScalarAsync(ct);
+                if (compObj is Guid componentId)
+                {
+                    await using var delMap = conn.CreateCommand();
+                    delMap.Transaction = tx;
+                    delMap.CommandText =
+                        "DELETE FROM topology.ui_package_component_map WHERE package_id = @pkg AND component_id = @comp";
+                    delMap.Parameters.AddWithValue("pkg", packageId!.Value);
+                    delMap.Parameters.AddWithValue("comp", componentId);
+                    await delMap.ExecuteNonQueryAsync(ct);
+                }
+
+                await using var demoteBucket = conn.CreateCommand();
+                demoteBucket.Transaction = tx;
+                demoteBucket.CommandText =
+                    "UPDATE topology.components_bucket SET status = 'bucketed', updated_at = now() " +
+                    "WHERE component_key = @key AND status = 'promoted'";
+                demoteBucket.Parameters.AddWithValue("key", key);
+                await demoteBucket.ExecuteNonQueryAsync(ct);
+
+                remainingComponentKeys.RemoveAll(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
+                var bucketIdsToRemove = new List<string>();
+                await using (var selBucket = conn.CreateCommand())
+                {
+                    selBucket.Transaction = tx;
+                    selBucket.CommandText =
+                        "SELECT bucket_item_id::text FROM topology.components_bucket WHERE component_key = @key";
+                    selBucket.Parameters.AddWithValue("key", key);
+                    await using var br = await selBucket.ExecuteReaderAsync(ct);
+                    while (await br.ReadAsync(ct))
+                        bucketIdsToRemove.Add(br.GetString(0));
+                }
+                remainingBucketIds.RemoveAll(id =>
+                    bucketIdsToRemove.Contains(id, StringComparer.OrdinalIgnoreCase));
+                detached.Add(key);
+            }
+
+            var schemaJson = JsonSerializer.Serialize(new
+            {
+                bucketItemIds = remainingBucketIds,
+                componentKeys = remainingComponentKeys,
+            });
+            await using (var updPkg = conn.CreateCommand())
+            {
+                updPkg.Transaction = tx;
+                updPkg.CommandText =
+                    "UPDATE topology.ui_component_package SET package_schema_json = @schema::jsonb, updated_at = now() WHERE package_id = @pkg";
+                updPkg.Parameters.AddWithValue("schema", schemaJson);
+                updPkg.Parameters.AddWithValue("pkg", packageId!.Value);
+                await updPkg.ExecuteNonQueryAsync(ct);
+            }
+
+            await tx.CommitAsync(ct);
+            return new PackageDetachComponentsResult(
+                PackageGenerateCode.Success,
+                packageId,
+                detached);
+        }
+        catch (Exception ex)
+        {
+            try { await tx.RollbackAsync(ct); } catch { /* best-effort */ }
+            _npgsqlLogger.LogError(ex,
+                "NpgsqlUiTopologyRepository.DetachPackageComponentsAsync: failed for routeKey={Route}.", routeKey);
+            return new PackageDetachComponentsResult(
+                PackageGenerateCode.DbUnavailable, null, [],
+                "DB_UNAVAILABLE", "Repository unavailable during detach.");
         }
     }
 }

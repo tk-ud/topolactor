@@ -25,6 +25,9 @@ import AdminHelpPanel, {
   AdminActionHint,
 } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
+import UiBuilderFlowStepper, {
+  type UiBuilderFlowStepId,
+} from "../components/UiBuilderFlowStepper.tsx";
 import {
   UX_COMPONENT_BUCKET_CARD_DRAG_HINT,
   UX_DESIGN_EDITOR_SURFACE,
@@ -32,7 +35,7 @@ import {
   UX_EMPTY_CANVAS_DRAG_GUIDANCE,
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
-  UX_PACKAGE_REQUIRED_FOR_CANVAS,
+  UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
   UX_UI_BUILDER_TAB_LABELS,
 } from "../content/adminUxTerms.ts";
 import {
@@ -718,6 +721,166 @@ type PackagedHandoff = {
   routeKey: string;
   layoutId: string;
 };
+
+type AdminPackageRow = {
+  packageId: string;
+  packageKey: string;
+  routeKey?: string | null;
+  layoutId?: string | null;
+  wiringId?: string | null;
+};
+
+async function findPackageForRoute(
+  routeKey: string,
+): Promise<AdminPackageRow | null> {
+  const body = await dispatchAdminOp("ui_topology", "list_packages");
+  if (dispatchOpFailed(body)) return null;
+  const data = body?.emission?.data;
+  if (!Array.isArray(data)) return null;
+  const list = data as AdminPackageRow[];
+  return list.find((p) => p.routeKey === routeKey) ?? null;
+}
+
+async function ensureShellPackageForRoute(
+  routeKey: string,
+): Promise<{ handoff: PackagedHandoff | null; error: ValidationError | null }> {
+  const existing = await findPackageForRoute(routeKey);
+  if (existing?.packageId && existing?.layoutId) {
+    return {
+      handoff: {
+        packageId: existing.packageId,
+        routeKey,
+        layoutId: existing.layoutId,
+      },
+      error: null,
+    };
+  }
+  const body = await dispatchAdminOp("package_generator", "promote_package", {
+    routeKey,
+    bucketItemIds: [],
+  });
+  const handoff = parsePackagedHandoff(body, routeKey);
+  if (!handoff) {
+    return {
+      handoff: null,
+      error: body?.errors?.[0] ?? {
+        code: "SHELL_PACKAGE_FAILED",
+        message: "ルート用パッケージの自動生成に失敗しました。",
+      },
+    };
+  }
+  return { handoff, error: null };
+}
+
+async function registerCatalogComponentInPackage(
+  routeKey: string,
+  componentKey: string,
+): Promise<{ ok: boolean; error?: ValidationError }> {
+  const catalogEntry = COMPONENT_CATALOG_ENTRIES.find((c) =>
+    c.componentKey === componentKey
+  );
+  if (!catalogEntry) {
+    return {
+      ok: false,
+      error: { code: "CATALOG_NOT_FOUND", message: componentKey },
+    };
+  }
+
+  const paletteBody = await dispatchAdminOp("ui_topology", "promoted_palette");
+  const promoted = paletteBody?.emission?.data as
+    | PromotedPaletteEntry[]
+    | undefined;
+  if (Array.isArray(promoted)) {
+    const pkg = await findPackageForRoute(routeKey);
+    if (
+      pkg &&
+      promoted.some((p) =>
+        p.componentKey === componentKey && p.packageId === pkg.packageId
+      )
+    ) {
+      return { ok: true };
+    }
+  }
+
+  const [bucketedBody, packagingBody] = await Promise.all([
+    dispatchAdminOp("ui_component_bucket", "list"),
+    dispatchAdminOp("ui_component_bucket", "list", { status: "packaging" }),
+  ]);
+  const bucketItems = [
+    ...(Array.isArray(bucketedBody?.emission?.data)
+      ? bucketedBody.emission.data as BucketItem[]
+      : []),
+    ...(Array.isArray(packagingBody?.emission?.data)
+      ? packagingBody.emission.data as BucketItem[]
+      : []),
+  ];
+  let bucketId = bucketItems.find((b) => b.componentKey === componentKey)
+    ?.bucketItemId;
+
+  if (!bucketId) {
+    const createBody = await dispatchAdminOp("ui_component_bucket", "create", {
+      componentKey: catalogEntry.componentKey,
+      sourcePath: catalogEntry.sourcePath,
+      componentKind: catalogEntry.componentKind,
+      metadataJson: "{}",
+    });
+    if (dispatchOpFailed(createBody)) {
+      return {
+        ok: false,
+        error: createBody?.errors?.[0] ?? {
+          code: "BUCKET_CREATE_FAILED",
+          message: `${componentKey} の登録に失敗しました。`,
+        },
+      };
+    }
+    bucketId = createBody?.emission?.data?.bucketItemId as string | undefined;
+    if (!bucketId) {
+      return {
+        ok: false,
+        error: {
+          code: "BUCKET_CREATE_FAILED",
+          message: `${componentKey} の bucketItemId が取得できませんでした。`,
+        },
+      };
+    }
+  }
+
+  const promBody = await dispatchAdminOp("package_generator", "promote_package", {
+    routeKey,
+    bucketItemIds: [bucketId],
+  });
+  if (dispatchOpFailed(promBody)) {
+    return {
+      ok: false,
+      error: promBody?.errors?.[0] ?? {
+        code: "PROMOTE_FAILED",
+        message: "部品のパッケージ追加に失敗しました。",
+      },
+    };
+  }
+  return { ok: true };
+}
+
+async function detachComponentFromPackage(
+  routeKey: string,
+  componentKey: string,
+): Promise<{ ok: boolean; error?: ValidationError }> {
+  const body = await dispatchAdminOp(
+    "package_generator",
+    "detach_package_components",
+    { routeKey, componentKeys: [componentKey] },
+  );
+  if (dispatchOpFailed(body)) {
+    return {
+      ok: false,
+      error: body?.errors?.[0] ?? {
+        code: "DETACH_FAILED",
+        message: "パッケージからの部品削除に失敗しました。",
+      },
+    };
+  }
+  return { ok: true };
+}
 
 function dispatchOpFailed(
   body: { success?: boolean; errors?: ValidationError[] } | null | undefined,
@@ -2000,7 +2163,7 @@ function BucketPackageRouteFields({
   return (
     <div class="mt-3 rounded border border-slate-200 bg-slate-50 p-3">
       <p class="mb-2 text-xs font-semibold text-slate-700">
-        ページルート（パッケージ化に必須）
+        ページルート（canvas workspace の入口）
       </p>
       <label class="mb-2 flex flex-col gap-0.5 text-sm">
         候補から選択
@@ -2021,7 +2184,7 @@ function BucketPackageRouteFields({
         <p class="mb-2 text-xs text-amber-900">
           初回は下の直接入力にルート名を入れてください（例:{" "}
           <code>admin_demo_screen_list</code>）。
-          パッケージ化後、候補から選べるようになります。
+          確定するとパッケージが自動生成され canvas が使えます。
         </p>
       )}
       <label class="flex flex-col gap-0.5 text-sm">
@@ -2047,10 +2210,8 @@ function BucketPackageRouteFields({
 
 function BucketSection({
   onNavigate,
-  onPackaged,
 }: {
   onNavigate?: (panel: WorkspacePanel) => void;
-  onPackaged?: (handoff: PackagedHandoff) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [items, setItems] = useState<BucketItem[]>([]);
@@ -2170,152 +2331,6 @@ function BucketSection({
     setSelectedCatalogKey(key);
     const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
     if (bucketStatus.bucketItemId) setSelectedId(bucketStatus.bucketItemId);
-  };
-
-  const handlePackageSelected = async () => {
-    if (!effectiveRouteKey) {
-      setStatus("ページルートを指定してください。");
-      return;
-    }
-    const keys = [...selectedCatalogKeys];
-    if (keys.length === 0 && selectedCatalogKey) keys.push(selectedCatalogKey);
-    if (keys.length === 0) {
-      setStatus("パッケージ化する部品を1件以上選択してください。");
-      return;
-    }
-    if (
-      !(await confirm(
-        `選択した ${keys.length} 件をパッケージ化します。よろしいですか？`,
-      ))
-    ) {
-      return;
-    }
-    setLoading(true);
-    setErrors([]);
-    try {
-      // Step 1: ensure all items exist in the bucket (create if absent).
-      // Already-promoted components must not be re-bucketed: skip them.
-      const bucketItemIds: string[] = [];
-      let skippedPromoted = 0;
-      for (const key of keys) {
-        const entry = COMPONENT_CATALOG_ENTRIES.find((c) =>
-          c.componentKey === key
-        );
-        if (!entry) continue;
-        const bucketStatus = resolveBucketStatus(key, items, promotedKeys);
-        // Guard: already-promoted components must not generate duplicate bucket/package entries.
-        if (bucketStatus.status === "promoted") {
-          skippedPromoted++;
-          continue;
-        }
-        let bucketId = bucketStatus.bucketItemId;
-        if (!bucketId) {
-          const body = await dispatchAdminOp("ui_component_bucket", "create", {
-            componentKey: entry.componentKey,
-            sourcePath: entry.sourcePath,
-            componentKind: entry.componentKind,
-            metadataJson: "{}",
-          });
-          if (dispatchOpFailed(body)) {
-            setErrors(
-              body?.errors ??
-                [{
-                  code: "BUCKET_CREATE_FAILED",
-                  message: `${key} の登録に失敗しました。`,
-                }],
-            );
-            setStatus("部品の登録に失敗しました。");
-            return;
-          }
-          bucketId = body?.emission?.data?.bucketItemId as string | undefined;
-          if (!bucketId) {
-            setErrors([{
-              code: "BUCKET_CREATE_FAILED",
-              message: `${key} の bucketItemId が取得できませんでした。`,
-            }]);
-            setStatus("部品の登録に失敗しました。");
-            return;
-          }
-        }
-        bucketItemIds.push(bucketId);
-      }
-
-      if (bucketItemIds.length === 0) {
-        if (skippedPromoted > 0) {
-          setStatus(
-            "選択した部品は既に配置可能です。「配置」タブでパッケージを選択してください。",
-          );
-        } else {
-          setStatus("パッケージ化できる部品が見つかりませんでした。");
-        }
-        return;
-      }
-
-      // Step 2: single promote_package call — 1 route = 1 package with all selected components
-      const promBody = await dispatchAdminOp(
-        "package_generator",
-        "promote_package",
-        {
-          routeKey: effectiveRouteKey,
-          bucketItemIds,
-        },
-      );
-      if (dispatchOpFailed(promBody)) {
-        setErrors(
-          promBody?.errors ??
-            [{
-              code: "PROMOTE_FAILED",
-              message: "パッケージ化に失敗しました。",
-            }],
-        );
-        setStatus(
-          promBody?.errors?.[0]?.message ?? "パッケージ化に失敗しました。",
-        );
-        return;
-      }
-      const data = promBody?.emission?.data as
-        | Record<string, unknown>
-        | undefined;
-      const packageId = typeof data?.packageId === "string"
-        ? data.packageId
-        : null;
-      const layoutId = typeof data?.layoutId === "string"
-        ? data.layoutId
-        : null;
-      const routeKey = typeof data?.routeKey === "string"
-        ? data.routeKey
-        : effectiveRouteKey;
-      if (!packageId || !layoutId) {
-        setStatus("パッケージ化結果を取得できませんでした。");
-        return;
-      }
-      const lastHandoff: PackagedHandoff = { packageId, routeKey, layoutId };
-
-      const newCount = bucketItemIds.length;
-      const skipMsg = skippedPromoted > 0
-        ? `（${skippedPromoted} 件は既配置のためスキップ）`
-        : "";
-      setStatus(
-        `${newCount} 件のパッケージ化が完了しました。「配置」タブで編集を続けます。${skipMsg}`,
-      );
-      await loadBucket();
-      const paletteBody = await dispatchAdminOp(
-        "ui_topology",
-        "promoted_palette",
-      );
-      const promoted = paletteBody?.emission?.data;
-      if (Array.isArray(promoted)) {
-        setPromotedKeys(
-          new Set(promoted.map((p: PromotedPaletteEntry) => p.componentKey)),
-        );
-      }
-      onPackaged?.(lastHandoff);
-      // Canvas workspace is always visible — no tab navigation needed after packaging.
-    } catch (e) {
-      setStatus(`エラー: ${e}`);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleCreateFromCatalog = async () => {
@@ -2473,8 +2488,7 @@ function BucketSection({
   return (
     <div>
       <p class="text-muted mb-3">
-        部品を複数選択し、1
-        回の操作でパッケージ化します（編集ルートはパッケージのみ）。
+        部品カタログの参照用パネルです。配置は canvas 左パネルへドラッグしてください（自動でパッケージに追加されます）。
       </p>
 
       {candidateErrors.length > 0 && (
@@ -2484,7 +2498,7 @@ function BucketSection({
         />
       )}
 
-      <Accordion title="部品選択でパッケージ化" defaultOpen={true}>
+      <Accordion title="部品カタログ（参照）" defaultOpen={true}>
         <div class="mb-2 flex flex-wrap gap-2">
           <input
             value={catalogFilter}
@@ -2519,7 +2533,7 @@ function BucketSection({
         <div
           class="component-bucket-panel grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3"
           role="listbox"
-          aria-label="部品カタログ — パッケージ化する部品を選択"
+          aria-label="部品カタログ — 参照"
           aria-multiselectable="true"
         >
           {filteredCatalog.map((c) => {
@@ -2573,36 +2587,14 @@ function BucketSection({
           </div>
         </details>
 
-        <BucketPackageRouteFields
-          routeKey={routeKey}
-          manualRouteKey={manualRouteKey}
-          routeOptions={routeOptions}
-          candidateErrors={candidateErrors}
-          onRouteKeyChange={setRouteKey}
-          onManualRouteKeyChange={setManualRouteKey}
-        />
-
         {hasCatalogSelection && (
           <div class="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-sm">
-            <strong>選択中:</strong>{" "}
+            <strong>選択中（参照）:</strong>{" "}
             {[...selectedCatalogKeys].map((k) => (
               <code key={k} class="mr-2">{k}</code>
             ))}
             {selectedCatalog && (
               <span class="text-muted-xs">{selectedCatalog.componentKind}</span>
-            )}
-            <button
-              type="button"
-              onClick={handlePackageSelected}
-              disabled={loading || !effectiveRouteKey}
-              class="btn-primary mt-2"
-            >
-              選択した部品をパッケージ化
-            </button>
-            {!effectiveRouteKey && (
-              <p class="mt-1 text-xs text-amber-800">
-                上のページルートを選択または入力するとボタンが有効になります。
-              </p>
             )}
             {selectedCatalog && (
               <details class="mt-1">
@@ -4136,7 +4128,7 @@ function LayoutPalette({
       />
 
       <p class="mb-1.5 text-[0.62rem] text-gray-500">
-        {UX_COMPONENT_BUCKET_CARD_DRAG_HINT}。未配置可能なカードは drop できません。
+        {UX_COMPONENT_BUCKET_CARD_DRAG_HINT}
       </p>
       {status && <p class="text-[0.62rem] text-gray-400">{status}</p>}
 
@@ -4156,10 +4148,10 @@ function LayoutPalette({
               componentKey={c.componentKey}
               componentKind={c.componentKind}
               sourcePath={catalogEntry?.sourcePath}
-              statusLabel={draftOnly ? "未配置可能" : "配置可能"}
-              statusVariant={draftOnly ? "warn" : "ok"}
+              statusLabel="カタログ"
+              statusVariant="info"
               draggable
-              placementReady={!draftOnly}
+              placementReady
               dragPayload={bucketCardDragPayloadFromEntry(
                 c,
                 draftOnly ? "未配置可能" : "配置可能",
@@ -4220,11 +4212,19 @@ function LayoutBuilderSection({
   scopedPackageId,
   scopedRouteKey,
   scopedLayoutId,
+  routeCanvasReady = false,
+  onRegisterComponentBeforePlace,
+  onDetachComponentAfterRemove,
+  paletteReloadToken = 0,
 }: {
   onNavigate?: (panel: WorkspacePanel) => void;
   scopedPackageId?: string;
   scopedRouteKey?: string | null;
   scopedLayoutId?: string | null;
+  routeCanvasReady?: boolean;
+  onRegisterComponentBeforePlace?: (componentKey: string) => Promise<boolean>;
+  onDetachComponentAfterRemove?: (componentKey: string) => Promise<void>;
+  paletteReloadToken?: number;
 }): JSX.Element {
   // ── route/layout selection ───────────────────────────────────────────────
   const [layoutId, setLayoutId] = useState("");
@@ -4316,7 +4316,10 @@ function LayoutBuilderSection({
   );
   const dbSlotKeys = selectedLayout?.slotKeys ?? [];
   const slotKeyCandidates = buildSlotKeyCandidates(draftNodes, dbSlotKeys);
-  const packageScopedLayout = Boolean(scopedPackageId?.trim());
+  const packageScopedLayout = routeCanvasReady ||
+    Boolean(scopedRouteKey?.trim());
+  const packageAuthoringReady = Boolean(scopedPackageId?.trim()) &&
+    packageScopedLayout;
   const displayCandidates =
     packageScopedLayout && scopedRouteKey && scopedLayoutId
       ? layoutCandidates.filter(
@@ -4326,17 +4329,17 @@ function LayoutBuilderSection({
   const layoutSelectorsLocked = packageScopedLayout &&
     Boolean(scopedRouteKey && scopedLayoutId);
   const selectorsDisabled = candidateErrors.length > 0 || paletteLoadFailed ||
-    !packageScopedLayout;
-  const canPatch = packageScopedLayout &&
+    !packageAuthoringReady;
+  const canPatch = packageAuthoringReady &&
     Boolean(effectiveLayoutId && effectiveRouteKey);
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
-    if (entry.isDraftOnly) {
-      announce("この部品はまだ配置可能ではありません。先にパッケージ化・配置可能化してください。");
+    if (!packageScopedLayout) {
+      announce(UX_ROUTE_KEY_REQUIRED_FOR_CANVAS);
       return true;
     }
-    if (!packageScopedLayout) {
-      announce(UX_PACKAGE_REQUIRED_FOR_CANVAS);
+    if (!packageAuthoringReady) {
+      announce("パッケージを自動生成中です。少し待ってから再度お試しください。");
       return true;
     }
     if (scopedPackageId && entry.packageId && entry.packageId !== scopedPackageId) {
@@ -4519,34 +4522,36 @@ function LayoutBuilderSection({
         }
         const scopedPromoted = scopedPackageId
           ? promoted.filter((p) => p.packageId === scopedPackageId)
-          : promoted;
-        const promotedEntries = scopedPromoted.map((p) => ({
-          ...p,
-          isDraftOnly: false,
-        } satisfies PaletteEntry));
-        const promotedKeys = new Set(
-          promotedEntries.map((p) => p.componentKey),
+          : promoted.filter((p) =>
+            !scopedRouteKey || p.routeKey === scopedRouteKey
+          );
+        const promotedByKey = new Map(
+          scopedPromoted.map((p) => [p.componentKey, p]),
         );
-        const draftCatalog = scopedPackageId ? [] : COMPONENT_CATALOG_ENTRIES
-          .filter((c) =>
-            isDraftOnlyEntry(c) && !promotedKeys.has(c.componentKey)
-          )
-          .map((c) => ({
-            componentKey: c.componentKey,
-            componentKind: c.componentKind,
-            isDraftOnly: true,
-          } satisfies PaletteEntry));
-        setPaletteEntries([...promotedEntries, ...draftCatalog]);
+        const catalogEntries = COMPONENT_CATALOG_ENTRIES
+          .filter((c) => c.registrationRequired)
+          .map((c) => {
+            const promotedEntry = promotedByKey.get(c.componentKey);
+            if (promotedEntry) {
+              return {
+                ...promotedEntry,
+                isDraftOnly: false,
+              } satisfies PaletteEntry;
+            }
+            return {
+              componentKey: c.componentKey,
+              componentKind: c.componentKind,
+              isDraftOnly: false,
+            } satisfies PaletteEntry;
+          });
+        setPaletteEntries(packageScopedLayout ? catalogEntries : []);
         setPaletteStatus(
-          scopedPackageId
-            ? `パッケージ内 ${promotedEntries.length} 件`
-            : `配置可能 ${promotedEntries.length} 件 / 下書き ${draftCatalog.length} 件`,
+          packageScopedLayout
+            ? `カタログ ${catalogEntries.length} 件（drop で自動追加）`
+            : UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
         );
-        const layoutSource = scopedPromoted.length > 0
-          ? scopedPromoted
-          : promoted;
-        if (candidates.length === 0 && layoutSource.length > 0) {
-          setLayoutCandidates(deriveCandidatesFromPalette(layoutSource));
+        if (candidates.length === 0 && scopedPromoted.length > 0) {
+          setLayoutCandidates(deriveCandidatesFromPalette(scopedPromoted));
         }
         const routeLayoutSource = nextCandidates.length > 0
           ? nextCandidates
@@ -4574,7 +4579,7 @@ function LayoutBuilderSection({
       }
     };
     load();
-  }, [scopedPackageId, scopedRouteKey, scopedLayoutId]);
+  }, [scopedPackageId, scopedRouteKey, scopedLayoutId, paletteReloadToken, packageScopedLayout]);
 
   // ── hydrate layout_patch_json from DB on package / route / layout selection ─
   useEffect(() => {
@@ -5030,7 +5035,7 @@ function LayoutBuilderSection({
     });
   };
 
-  const removeNode = (nodeId: string) => {
+  const removeNode = async (nodeId: string) => {
     const node = draftNodes.find((n) => n.nodeId === nodeId);
     const next = draftNodes.filter((n) => n.nodeId !== nodeId);
     setDraftNodes(next);
@@ -5038,6 +5043,14 @@ function LayoutBuilderSection({
     pushHistory(next, `削除: ${node ? friendlyNodeLabel(node) : nodeId}`);
     setLifecyclePhase("idle");
     if (node) announce(`${friendlyNodeLabel(node)}を削除しました`);
+    if (
+      node?.componentKey &&
+      scopedRouteKey &&
+      onDetachComponentAfterRemove &&
+      !next.some((n) => n.componentKey === node.componentKey)
+    ) {
+      await onDetachComponentAfterRemove(node.componentKey);
+    }
   };
 
   const copyNode = (nodeId: string) => {
@@ -5157,7 +5170,7 @@ function LayoutBuilderSection({
     e.preventDefault();
   };
 
-  const handleDropOnCanvas = (e: Event) => {
+  const handleDropOnCanvas = async (e: Event) => {
     e.preventDefault();
     const de = e as DragEvent;
     let entry: PaletteEntry | null = null;
@@ -5170,6 +5183,10 @@ function LayoutBuilderSection({
     dragSrc.current = null;
     if (!entry) return;
     if (rejectDraftPaletteEntry(entry)) return;
+    if (entry.componentKey && onRegisterComponentBeforePlace) {
+      const registered = await onRegisterComponentBeforePlace(entry.componentKey);
+      if (!registered) return;
+    }
     const rect = canvasRef.current?.getBoundingClientRect();
     const dropX = rect ? snapToGrid(Math.max(0, de.clientX - rect.left), SNAP_SIZE) : 20;
     const dropY = rect ? snapToGrid(Math.max(0, de.clientY - rect.top), SNAP_SIZE) : 20;
@@ -5179,8 +5196,12 @@ function LayoutBuilderSection({
   };
 
   // Gap 5: Non-drag add from palette button
-  const handleAddFromPalette = (entry: PaletteEntry) => {
+  const handleAddFromPalette = async (entry: PaletteEntry) => {
     if (rejectDraftPaletteEntry(entry)) return;
+    if (entry.componentKey && onRegisterComponentBeforePlace) {
+      const registered = await onRegisterComponentBeforePlace(entry.componentKey);
+      if (!registered) return;
+    }
     const count = draftNodes.length;
     const x = snapToGrid(20 + (count % 5) * 160, SNAP_SIZE);
     const y = snapToGrid(20 + Math.floor(count / 5) * 80, SNAP_SIZE);
@@ -5644,7 +5665,7 @@ function LayoutBuilderSection({
           </>
         ) : (
           <div class="component-bucket-panel-left w-[11.5rem] shrink-0 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
-            パッケージ選択後に配置可能カードが表示されます
+            {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
           </div>
         )}
 
@@ -5884,14 +5905,6 @@ function LayoutBuilderSection({
 }
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
-
-type AdminPackageRow = {
-  packageId: string;
-  packageKey: string;
-  routeKey?: string | null;
-  layoutId?: string | null;
-  wiringId?: string | null;
-};
 
 type AdminPackageComponentRow = {
   componentId: string;
@@ -6903,10 +6916,25 @@ function PackageDesignPanel({
 export default function UiBuilderAdmin(): JSX.Element {
   const [packages, setPackages] = useState<AdminPackageRow[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
-  const [bucketPanelOpen, setBucketPanelOpen] = useState(true);
+  const [routeKey, setRouteKey] = useState("");
+  const [manualRouteKey, setManualRouteKey] = useState("");
+  const [layoutCandidates, setLayoutCandidates] = useState<
+    LayoutRouteCandidate[]
+  >([]);
+  const [candidateErrors, setCandidateErrors] = useState<ValidationError[]>([]);
+  const [autoPackageLoading, setAutoPackageLoading] = useState(false);
+  const [autoPackageError, setAutoPackageError] = useState<
+    ValidationError | null
+  >(null);
+  const [paletteReloadToken, setPaletteReloadToken] = useState(0);
+  const [bucketPanelOpen, setBucketPanelOpen] = useState(false);
+  const [flowStep, setFlowStep] = useState<UiBuilderFlowStepId>("route");
+
+  const effectiveRouteKey = manualRouteKey.trim() || routeKey;
+  const routeCanvasReady = Boolean(effectiveRouteKey);
   const selectedPackage = packages.find((p) =>
     p.packageId === selectedPackageId
-  );
+  ) ?? packages.find((p) => p.routeKey === effectiveRouteKey);
 
   const reloadPackages = async (): Promise<AdminPackageRow[]> => {
     const body = await dispatchAdminOp("ui_topology", "list_packages");
@@ -6917,18 +6945,100 @@ export default function UiBuilderAdmin(): JSX.Element {
   };
 
   useEffect(() => {
-    reloadPackages();
+    const init = async () => {
+      await reloadPackages();
+      const { candidates, errors } = await loadLayoutCandidatesFromBackend();
+      setLayoutCandidates(candidates);
+      setCandidateErrors(errors);
+    };
+    init();
   }, []);
 
-  const handlePackaged = (handoff: PackagedHandoff) => {
-    setSelectedPackageId(handoff.packageId);
-    setBucketPanelOpen(false);
-    reloadPackages();
+  useEffect(() => {
+    if (!effectiveRouteKey) {
+      setSelectedPackageId("");
+      setAutoPackageError(null);
+      setFlowStep("route");
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      setAutoPackageLoading(true);
+      setAutoPackageError(null);
+      const { handoff, error } = await ensureShellPackageForRoute(
+        effectiveRouteKey,
+      );
+      if (cancelled) return;
+      if (error || !handoff) {
+        setAutoPackageError(error ?? {
+          code: "SHELL_PACKAGE_FAILED",
+          message: "ルート用パッケージの自動生成に失敗しました。",
+        });
+        setSelectedPackageId("");
+        setFlowStep("route");
+      } else {
+        setSelectedPackageId(handoff.packageId);
+        setFlowStep("canvas_edit");
+        await reloadPackages();
+      }
+      setAutoPackageLoading(false);
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveRouteKey]);
+
+  const handleRegisterComponentBeforePlace = async (
+    componentKey: string,
+  ): Promise<boolean> => {
+    if (!effectiveRouteKey) {
+      setAutoPackageError({
+        code: "ROUTE_KEY_REQUIRED",
+        message: UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
+      });
+      return false;
+    }
+    const result = await registerCatalogComponentInPackage(
+      effectiveRouteKey,
+      componentKey,
+    );
+    if (!result.ok) {
+      setAutoPackageError(result.error ?? {
+        code: "REGISTER_FAILED",
+        message: "部品の自動追加に失敗しました。",
+      });
+      return false;
+    }
+    setPaletteReloadToken((n) => n + 1);
+    await reloadPackages();
+    return true;
+  };
+
+  const handleDetachComponentAfterRemove = async (
+    componentKey: string,
+  ): Promise<void> => {
+    if (!effectiveRouteKey) return;
+    const result = await detachComponentFromPackage(
+      effectiveRouteKey,
+      componentKey,
+    );
+    if (!result.ok) {
+      setAutoPackageError(result.error ?? {
+        code: "DETACH_FAILED",
+        message: "パッケージからの部品削除に失敗しました。",
+      });
+      return;
+    }
+    setPaletteReloadToken((n) => n + 1);
+    await reloadPackages();
   };
 
   const handleWorkspaceNavigate = (panel: WorkspacePanel) => {
     if (panel === "bucket") setBucketPanelOpen(true);
   };
+
+  const routeOptions = uniqueRouteKeys(layoutCandidates);
 
   return (
     <main class="page-main-wide">
@@ -6944,63 +7054,54 @@ export default function UiBuilderAdmin(): JSX.Element {
       />
       <AdminHelpPanel {...ADMIN_UI_BUILDER_GUIDE} />
 
+      <UiBuilderFlowStepper activeStep={flowStep} />
+
       <div
         class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
         role="note"
       >
-        Step 4 の編集ルートは<strong>
-          パッケージのみ
-        </strong>です。配置・デザイン設定・配線は
-        パッケージ選択後にキャンバスワークスペースで編集してください。
+        ルートを選ぶとパッケージが<strong>自動生成</strong>され、canvas
+        workspace がすぐ使えます。部品は左パネルからドラッグするだけでパッケージに追加されます。
       </div>
 
-      {/* Phase A: bucket panel (collapsible) */}
-      <details
-        class="mb-3 rounded border border-blue-200 bg-blue-50"
-        open={bucketPanelOpen}
-        onToggle={(e: Event) =>
-          setBucketPanelOpen((e.target as HTMLDetailsElement).open)}
-      >
-        <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-blue-900">
-          {UX_UI_BUILDER_TAB_LABELS.bucket} — 部品登録・パッケージ化
-        </summary>
-        <div class="px-3 pb-3">
-          <BucketSection
-            onNavigate={handleWorkspaceNavigate}
-            onPackaged={handlePackaged}
+      <div class="mb-3 rounded border border-slate-200 bg-white p-3">
+        <BucketPackageRouteFields
+          routeKey={routeKey}
+          manualRouteKey={manualRouteKey}
+          routeOptions={routeOptions}
+          candidateErrors={candidateErrors}
+          onRouteKeyChange={setRouteKey}
+          onManualRouteKeyChange={setManualRouteKey}
+        />
+        {autoPackageLoading && (
+          <p class="mt-2 text-xs text-blue-800">パッケージを自動生成中…</p>
+        )}
+        {autoPackageError && (
+          <ValidationErrorPanel
+            errors={[autoPackageError]}
+            title="パッケージ自動生成エラー"
           />
-        </div>
-      </details>
+        )}
+        {selectedPackage && routeCanvasReady && !autoPackageLoading && (
+          <p class="mt-2 text-xs text-slate-600">
+            自動生成パッケージ:{" "}
+            <code class="font-mono">{selectedPackage.packageKey}</code>
+            {" "}
+            <span class="text-slate-400">
+              ({selectedPackage.packageId.slice(0, 8)}…)
+            </span>
+          </p>
+        )}
+      </div>
 
-      {/* Phase B: canvas workspace — layout editor + design inspector */}
       <div class="mb-4">
         <div class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2">
           <strong class="text-sm text-slate-800">
             {UX_LAYOUT_EDITOR_SURFACE}
           </strong>
-          <label class="flex items-center gap-1 text-xs text-slate-600">
-            パッケージ:
-            <select
-              class="rounded border px-2 py-0.5 font-mono text-xs"
-              value={selectedPackageId}
-              onChange={(e) => {
-                const id = (e.target as HTMLSelectElement).value;
-                setSelectedPackageId(id);
-                reloadPackages();
-              }}
-            >
-              <option value="">— 選択 —</option>
-              {packages.map((p) => (
-                <option key={p.packageId} value={p.packageId}>
-                  {p.packageKey}
-                  {p.routeKey ? ` (${p.routeKey})` : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedPackage && (
-            <span class="font-mono text-[0.65rem] text-slate-400">
-              {selectedPackage.packageId.slice(0, 8)}…
+          {effectiveRouteKey && (
+            <span class="font-mono text-xs text-slate-600">
+              route: {effectiveRouteKey}
             </span>
           )}
         </div>
@@ -7008,10 +7109,29 @@ export default function UiBuilderAdmin(): JSX.Element {
         <LayoutBuilderSection
           onNavigate={handleWorkspaceNavigate}
           scopedPackageId={selectedPackageId}
-          scopedRouteKey={selectedPackage?.routeKey}
+          scopedRouteKey={selectedPackage?.routeKey ?? effectiveRouteKey}
           scopedLayoutId={selectedPackage?.layoutId}
+          routeCanvasReady={routeCanvasReady && !autoPackageLoading &&
+            !autoPackageError}
+          onRegisterComponentBeforePlace={handleRegisterComponentBeforePlace}
+          onDetachComponentAfterRemove={handleDetachComponentAfterRemove}
+          paletteReloadToken={paletteReloadToken}
         />
       </div>
+
+      <details
+        class="mb-3 rounded border border-blue-200 bg-blue-50"
+        open={bucketPanelOpen}
+        onToggle={(e: Event) =>
+          setBucketPanelOpen((e.target as HTMLDetailsElement).open)}
+      >
+        <summary class="cursor-pointer px-3 py-2 text-sm font-semibold text-blue-900">
+          {UX_UI_BUILDER_TAB_LABELS.bucket}
+        </summary>
+        <div class="px-3 pb-3">
+          <BucketSection onNavigate={handleWorkspaceNavigate} />
+        </div>
+      </details>
 
 
       {/* Reference sections */}

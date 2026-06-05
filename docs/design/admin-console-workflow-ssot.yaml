@@ -277,7 +277,8 @@ admin_console_workflow_ssot:
     route: /admin/ui-builder
     entered_after: canonical_sequential_authoring_pipeline steps 1–3
     user_facing_goal: >
-      部品を選んでパッケージ化し、canvas workspace 上で配置・デザインを統合編集する。
+      ルートを選ぶと canvas workspace がすぐ使え、左パネルの部品カードを canvas にドロップして
+      配置・デザインを統合編集する。パッケージ化は暗黙（route_key 確定時の自動生成 + drop 時の自動追加）。
       canvas が主対象であり、画面遷移・タブ切り替えなしで操作が完結する。
     design_rationale: >
       Canvas renders actual catalog component previews — not wireframe rectangles or abstract boxes.
@@ -292,36 +293,39 @@ admin_console_workflow_ssot:
         The canvas workspace selects and mutates packages only.
         Bucket rows, bare component catalog entries, and unpackaged component ids are not
         parallel edit targets. Placement and design are both scoped to the selected package.
-    authoring_phases:
+    authoring_flow:
+      label: canvas_workspace_edit
+      user_facing_label: canvas workspace で配置・デザインを編集
       note: >
-        Two user-facing phases. Phase B (canvas workspace) never leaves the canvas workspace;
-        bucket, catalog-only, or free-floating components are not the primary canvas objects.
-      phases:
-        - phase: A
-          label: component_select_and_package
-          user_facing_label: 部品選択でパッケージ化
-          responsibility:
-            - present components_bucket as icon-style small-format cards (component_key, source_path, component_kind)
-            - user selects one or more components; packaging submit follows for route_key
-            - backend: package_generator generate then promote; yields package_id and linked layout_id, wiring_id, component_id set
-          prohibited:
-            - text-only list presentation for bucket components
-            - separate author-facing register step before packaging
-            - opening canvas workspace before a package exists
-        - phase: B
-          label: canvas_workspace_edit
-          user_facing_label: canvas workspace で配置・デザインを編集
-          responsibility:
-            - all placement AND design authoring happens inside the unified canvas workspace
-            - require package selection as the sole edit root
-            - layout_patch backend actions: preview → validate → apply for placement persistence
-            - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
-            - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
-          prohibited:
-            - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
-            - treating promoted_palette component list as the edit root instead of package
-            - separate tab, route, or surface for placement vs design vs preview
-        canvas_workspace_contract:
+        Single unified flow. No separate packaging phase, checkbox selection submit, or explicit
+        「パッケージ化」button. route_key is the entry gate; package is implicit infrastructure.
+      responsibilities:
+        - user selects or enters route_key; canvas workspace unlocks immediately for that route
+        - package_auto_generation:
+            trigger: route_key committed (select or blur on manual input)
+            rule: if no package exists for route_key, call package_generator:promote_package with empty bucketItemIds[]
+            effect: yields package_id, layout_id, wiring_id (shell package, idempotent when already exists)
+            fail_close: errors must surface explicitly; no silent fallback
+        - component_auto_registration:
+            trigger: catalog component card dropped onto canvas (or keyboard add equivalent)
+            backend: ui_component_bucket:create (if absent) then package_generator:promote_package with new bucketItemId
+            rule: skip when component already in package (idempotent)
+            effect: component bound to route package, then catalog_component node placed on canvas
+        - component_auto_removal:
+            trigger: canvas node deleted and no remaining canvas nodes share the same componentKey
+            backend: package_generator:detach_package_components for route_key + componentKey
+            effect: component removed from package membership; canvas/layout draft already updated locally
+        - layout_patch backend actions: preview → validate → apply for placement persistence
+        - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
+        - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
+      prohibited:
+        - explicit packaging button, confirm-then-package dialog, or checkbox multi-select submit as primary path
+        - two-step select-then-package phase framing
+        - text-only list presentation for bucket components in the primary left panel
+        - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
+        - treating promoted_palette component list as the edit root instead of package
+        - separate tab, route, or surface for placement vs design vs preview
+      canvas_workspace_contract:
           overview: >
             The canvas workspace is the primary UI of /admin/ui-builder.
             It occupies the full remaining width of the viewport after docked panels are reserved.
@@ -522,11 +526,12 @@ admin_console_workflow_ssot:
     admin_ui_builder:
       route: /admin/ui-builder
       island: frontend/islands/UiBuilderAdmin.tsx
-      ux_label: 部品選択でパッケージ化 → canvas workspace で配置・デザインを統合編集
+      ux_label: ルート選択 → canvas workspace で配置・デザインを統合編集（暗黙パッケージ）
       entered_after: /admin/contents contents pipeline completion
       domain_ownership:
-        - phase A — component select then package (components_bucket icon-card staging + package_generator)
-        - phase B — package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
+        - route_key gate + implicit package auto-generation (package_generator:promote_package shell)
+        - canvas drop auto-registration (ui_component_bucket:create + promote_package additive)
+        - package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
         - canvas_workspace_contract: full-width canvas + docked panels (ref ui_builder_canvas_workspace.canvas_workspace_contract)
         - component-level wiring from registry references
         - post-apply CI / guard handoff (does not change runtime semantics)
@@ -537,7 +542,7 @@ admin_console_workflow_ssot:
         - runtime judgment ownership
         - direct_DB_write_from_frontend
         - raw dispatcher fields as the normal-view authoring path
-      authoring_phases_ref: ui_builder_canvas_workspace.authoring_phases
+      authoring_flow_ref: ui_builder_canvas_workspace.authoring_flow
 
     admin_manifests:
       route: /admin/manifests
