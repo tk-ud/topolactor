@@ -116,7 +116,8 @@ export type ComponentVisualRole =
   | "tree"
   | "page_shell"
   | "json_viewer"
-  | "canvas";
+  | "canvas"
+  | "box";
 export type ComponentLifecycleStatus =
   | "code_only_drift"
   | "alias_maintained"
