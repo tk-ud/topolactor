@@ -3330,7 +3330,7 @@ function VisualLayoutCanvas({
             </p>
             {!allowEmptyStateTemplates && (
               <p class="mt-1 text-xs text-amber-800">
-                {UX_PACKAGE_REQUIRED_FOR_CANVAS}
+                {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
               </p>
             )}
             {allowEmptyStateTemplates && (

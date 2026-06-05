@@ -1198,7 +1198,7 @@ Deno.test("UiBuilderAdmin: empty canvas guidance promotes drag-to-canvas", async
     new URL("../content/adminUxTerms.ts", import.meta.url),
   );
   assert(src.includes("UX_EMPTY_CANVAS_DRAG_GUIDANCE"));
-  assert(src.includes("UX_PACKAGE_REQUIRED_FOR_CANVAS"));
+  assert(src.includes("UX_ROUTE_KEY_REQUIRED_FOR_CANVAS"));
   assert(terms.includes("左パネルのカードをドラッグしてキャンバスへ配置"));
 });
 
