@@ -3829,7 +3829,7 @@ function LayoutBuilderSection({
         <button type="button" class="link" onClick={() => onNavigate?.("design")}>
           デザインを編集 タブ
         </button>
-        で保存します（component_design child）。ここでは canvas 操作と layout child のみ保存します。
+        で保存します（design タブ担当）。ここでは canvas 操作と layout child のみ保存します。
       </p>
 
       <ApplyReadinessPanel
