@@ -1,34 +1,37 @@
 # Agent Task List
-## Owner comments
-構造上の未接続（既知の設計ギャップ）
-canvas workspace で authoring した layout が demo に投影されない
 
-データフローが途中で切れています：
-
-admin canvas → layout_patch:apply → DB (topology.components_layout_design)
-                                         ↑
-                                    ここで止まっている
-demo route → dispatch → Emission → renderEmission() → ComponentSpec[]
-                  ↑
-           Emission に layoutNodes / layoutId フィールドがない
-           structure_map.ts にも layoutId エントリがない
-具体的には：
-
-Emission 型（api/dispatch.ts）に layoutNodes / layoutId が存在しない
-renderEmission.ts は emission.componentIds しか見ていない
-structure_map.ts のエントリは packageId / schemaId / componentIds のみ — layoutId なし
-UserDemoStepper island が dispatch 結果から layout を取り出す経路がない
-
----
 未処理は **bundle 単位**で実装・レビューする。掲載は `not_started` / `partial` のみ。
 
 ## 未処理 bundle 索引
 
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
+| `demo-layout-projection-continuity` | admin layout authoring → demo projection continuity | partial | 1 | `docs/design/pipeline-continuity-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
+
+---
+
+## Bundle `demo-layout-projection-continuity`
+
+**Status:** partial  
+**SSOT:** `docs/design/pipeline-continuity-ssot.yaml`  
+**Supporting SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/db-schema.yaml`
+
+**Problem:** admin canvas authoring can persist layout design into `topology.components_layout_design`, but the demo projection route does not preserve or consume layout identity. The current projection path remains `structure_map -> packageId/schemaId/componentIds -> Emission -> renderEmission()`, so authored layout cannot reach `/demo`.
+
+**Target surfaces:**
+- `backend/schema/Contracts.cs` — `RuntimeWorkingShape`, `Emission`
+- `backend/runtime/EmissionBuilder.cs` — `EmissionBuilder.Build`
+- `frontend/api/dispatch.ts` — `Emission`
+- `frontend/runtime/renderEmission.ts` — `renderEmission`
+- `frontend/islands/UserDemoStepper.tsx` — dispatch result consumption
+- `db/demo_seed.sql` / `topology.structure_maps` — layout identity mapping
+- `topology.components_layout_design` — authored layout source
+
+**Completion condition / TODO:**
+- [ ] Preserve layout identity/payload as one canonical pipeline bundle from admin-authored layout storage through backend emission to `/demo` projection, including explicit failure for missing/malformed layout refs and tests covering emission identity, structure-map layout mapping, `renderEmission()`, and `UserDemoStepper` consumption.
 
 ---
 
