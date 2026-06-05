@@ -925,15 +925,20 @@ Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy 
   assertFalse(source.includes("⑧"), "legacy numbered promote step must not appear");
 });
 
-Deno.test("v0.8.0: UiBuilderFlowStepper maps four SSOT authoring surfaces", async () => {
+Deno.test("v0.8.0: UiBuilderFlowStepper reflects canvas workspace phases (not separate tabs)", async () => {
   const source = await Deno.readTextFile(
     new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
   );
-  assertEquals(source.includes("package決定"), true);
-  assertEquals(source.includes("layout editor"), true);
-  assertEquals(source.includes("component design editor"), true);
-  assertEquals(source.includes("visual view"), true);
-  assertEquals(source.includes("SSOT v0.8.0"), true);
+  // Canvas workspace: two phases instead of four separate tab surfaces
+  assertEquals(source.includes("部品選択でパッケージ化"), true);
+  assertEquals(source.includes("canvas workspace"), true);
+  assertEquals(source.includes("UI_BUILDER_CANVAS_PHASES"), true);
+  assertEquals(source.includes("UiBuilderPhaseId"), true);
+  // Old tab-based vocabulary must be gone
+  assertFalse(source.includes('"layout editor"'), "old layout editor tab label must not appear");
+  assertFalse(source.includes('"component design editor"'), "old design editor tab label must not appear");
+  assertFalse(source.includes('"visual view"'), "old visual view tab label must not appear");
+  assertFalse(source.includes("UiBuilderTabId"), "old tab type must not appear");
 });
 
 Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette and copy operations", async () => {
@@ -959,7 +964,7 @@ Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette a
   assertFalse(source.includes("const TABS:"), "TABS constant must be removed");
 });
 
-Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default path", async () => {
+Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw phase id in default path", async () => {
   const source = await Deno.readTextFile(
     new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
   );
@@ -967,7 +972,12 @@ Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default pa
     source.includes("現在: <strong>{activeTab}</strong>"),
     "raw tab id must not be shown in stepper header",
   );
-  assertEquals(source.includes("UI_BUILDER_TAB_LABELS"), true);
+  assertFalse(
+    source.includes("現在: <strong>{activePhase}</strong>"),
+    "raw phase id must not be shown in stepper header",
+  );
+  // Phase labels used instead of raw IDs
+  assertEquals(source.includes("UI_BUILDER_PHASE_LABELS"), true);
 });
 
 Deno.test("ManifestsAdmin empty state aligns with step3 → ui-builder flow", async () => {

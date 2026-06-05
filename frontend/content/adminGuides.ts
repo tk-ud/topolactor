@@ -1,4 +1,4 @@
-/** Static copy for /admin help panels — aligned with docs/design/admin-console-workflow-ssot.yaml v0.7.2 */
+/** Static copy for /admin help panels — aligned with docs/design/admin-console-workflow-ssot.yaml v0.8.0 */
 
 import {
   UX_CONTENTS,
@@ -59,7 +59,7 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
   ],
   howToSteps: [
     "部品を複数選択し、1 回でパッケージ化する（step 4.1）",
-    "パッケージを選び、canvas で layout draft をプレビューしながら parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する。cssTokenRefs・色・形はデザイン設定タブで保存（step 4.2）",
+    "パッケージを選んで canvas workspace で配置を編集し、右パネルのデザインインスペクタで cssTokenRefs・色・形を設定する",
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],
@@ -157,7 +157,7 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
-    purpose: "step 4 — 部品のパッケージ化と配置・デザイン設定",
+    purpose: "部品選択でパッケージ化 → canvas workspace で配置・デザインを統合編集",
     relation: "作業順 step 4",
     howToSummary: [
       "部品を複数選択してパッケージ化",
@@ -267,7 +267,7 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "step 4（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）",
+    purpose: "部品選択でパッケージ化 → canvas workspace で配置・デザインを統合編集",
     completionSign: "配置の保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
@@ -305,7 +305,7 @@ export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
     href: "/admin/ui-builder",
     checks: [
       "部品を複数選択してパッケージ化できること",
-      "パッケージ選択後に canvas で layout draft をプレビューし、parentNodeId・slotKey・orderIndex を編集できること",
+      "パッケージ選択後に canvas workspace で配置・デザインを統合編集できること",
     ],
   },
   {

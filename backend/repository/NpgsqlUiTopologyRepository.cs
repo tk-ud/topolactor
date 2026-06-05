@@ -628,7 +628,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             """
-            SELECT layout_patch_json::text
+            SELECT
+              COALESCE(layout_draft_tmp_json::text, layout_patch_json::text) AS effective_json,
+              layout_draft_tmp_json IS NOT NULL AS has_tmp
             FROM topology.ui_topology_tensor
             WHERE package_id = @pkg AND layout_id = @layout AND route_key = @route
             ORDER BY updated_at DESC
@@ -637,16 +639,39 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         cmd.Parameters.AddWithValue("pkg", packageId);
         cmd.Parameters.AddWithValue("layout", layoutId);
         cmd.Parameters.AddWithValue("route", routeKey);
-        var scalar = await cmd.ExecuteScalarAsync(ct);
-        if (scalar is null or DBNull)
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
             return null;
-        var json = scalar.ToString() ?? "{}";
+        if (reader.IsDBNull(0))
+            return null;
+        var json = reader.GetString(0);
+        var hasTmp = !reader.IsDBNull(1) && reader.GetBoolean(1);
         return new LayoutPatchDraftDto(
             packageId.ToString(),
             layoutId.ToString(),
             routeKey,
             json,
-            Found: true);
+            Found: true,
+            HasTmpDraft: hasTmp);
+    }
+
+    public override async Task SaveLayoutDraftTmpAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        string tmpJson,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE topology.ui_topology_tensor SET layout_draft_tmp_json=@tmp::jsonb, updated_at=now() WHERE package_id=@pkg AND layout_id=@layout AND route_key=@route";
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("layout", layoutId);
+        cmd.Parameters.AddWithValue("route", routeKey);
+        cmd.Parameters.AddWithValue("tmp", tmpJson);
+        await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
@@ -767,6 +792,14 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             await tx.RollbackAsync(ct);
             return valid with { Ok = false, Valid = false, Message = "TOPOLOGY_TENSOR_NOT_FOUND" };
         }
+        // Clear _tmp draft on apply — explicit apply promotes canvas state to persisted.
+        var clearTmp = new NpgsqlCommand(
+            "UPDATE topology.ui_topology_tensor SET layout_draft_tmp_json=NULL WHERE package_id=@pkg AND layout_id=@layoutId AND route_key=@routeKey",
+            conn, tx);
+        clearTmp.Parameters.AddWithValue("pkg", packageId);
+        clearTmp.Parameters.AddWithValue("layoutId", layoutId);
+        clearTmp.Parameters.AddWithValue("routeKey", routeKey);
+        await clearTmp.ExecuteNonQueryAsync(ct);
         await tx.CommitAsync(ct);
         return valid with { Message = "Layout patch applied." };
     }

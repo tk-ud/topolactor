@@ -2519,64 +2519,135 @@ function VisualLayoutCanvas({
   );
 }
 
+type LayerTreeItem = { node: DraftNode; depth: number };
+
+function buildLayerTreeItems(nodes: DraftNode[]): LayerTreeItem[] {
+  const byParent = new Map<string | null, DraftNode[]>();
+  for (const node of nodes) {
+    const pk = node.parentNodeId ?? null;
+    if (!byParent.has(pk)) byParent.set(pk, []);
+    byParent.get(pk)!.push(node);
+  }
+  for (const ch of byParent.values()) ch.sort((a, b) => a.orderIndex - b.orderIndex);
+  const items: LayerTreeItem[] = [];
+  function walk(pid: string | null, depth: number) {
+    for (const node of (byParent.get(pid) ?? [])) {
+      items.push({ node, depth });
+      walk(node.nodeId, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return items;
+}
+
 function LayerTree({
   draftNodes,
   selectedNodeId,
   onSelect,
-  onMoveUp,
-  onMoveDown,
   onCopy,
   onDelete,
+  onReparent,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
   onSelect: (nodeId: string) => void;
-  onMoveUp: (nodeId: string) => void;
-  onMoveDown: (nodeId: string) => void;
   onCopy: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
+  onReparent: (nodeId: string, newParentId: string | null, insertBeforeId: string | null) => void;
 }): JSX.Element {
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; pos: "before" | "after" | "into" } | null>(null);
+
+  const items = buildLayerTreeItems(draftNodes);
+
+  const handleDragStart = (e: DragEvent, nodeId: string) => {
+    e.dataTransfer?.setData("text/plain", nodeId);
+    setDraggedId(nodeId);
+  };
+
+  const handleDragOver = (e: DragEvent, nodeId: string) => {
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pct = (e.clientY - rect.top) / rect.height;
+    const pos = pct < 0.33 ? "before" : pct > 0.67 ? "after" : "into";
+    setDropTarget({ id: nodeId, pos });
+  };
+
+  const handleDrop = (e: DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = e.dataTransfer?.getData("text/plain") ?? "";
+    const pos = dropTarget?.pos ?? "after";
+    setDropTarget(null);
+    setDraggedId(null);
+    if (!sourceId || sourceId === targetId) return;
+    const target = draftNodes.find((n) => n.nodeId === targetId);
+    if (!target) return;
+    if (pos === "into") {
+      onReparent(sourceId, targetId, null);
+    } else {
+      onReparent(sourceId, target.parentNodeId ?? null, pos === "before" ? targetId : null);
+    }
+  };
+
   return (
     <div class="w-44 shrink-0 rounded-lg border border-gray-200 bg-white">
       <div class="border-b border-gray-200 px-2 py-1.5">
         <h4 class="text-xs font-semibold text-gray-600">
           レイヤー ({draftNodes.length})
         </h4>
+        <p class="text-[0.6rem] text-gray-400">ドラッグで並び替え・入れ子変更</p>
       </div>
       <div
-        role="listbox"
-        aria-label="レイヤー一覧"
+        role="treegrid"
+        aria-label="レイヤーツリー"
         class="overflow-y-auto"
         style="max-height:300px;"
+        onDragLeave={() => setDropTarget(null)}
       >
-        {draftNodes.length === 0 && (
+        {items.length === 0 && (
           <p class="px-2 py-4 text-center text-xs text-gray-400">なし</p>
         )}
-        {[...draftNodes].reverse().map((node, reversedIdx) => {
-          const origIdx = draftNodes.length - 1 - reversedIdx;
+        {items.map(({ node, depth }) => {
           const isSelected = node.nodeId === selectedNodeId;
+          const isDragging = node.nodeId === draggedId;
+          const isTarget = dropTarget?.id === node.nodeId;
+          const dropPos = isTarget ? dropTarget?.pos : null;
           return (
             <div
               key={node.nodeId}
-              role="option"
+              role="row"
               aria-selected={isSelected}
               tabIndex={0}
+              draggable
+              onDragStart={(e: DragEvent) => handleDragStart(e, node.nodeId)}
+              onDragOver={(e: DragEvent) => handleDragOver(e, node.nodeId)}
+              onDrop={(e: DragEvent) => handleDrop(e, node.nodeId)}
+              onDragEnd={() => { setDropTarget(null); setDraggedId(null); }}
               onClick={() => onSelect(node.nodeId)}
               onKeyDown={(e: KeyboardEvent) => {
                 if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(node.nodeId); }
                 if (e.key === "Delete") { e.preventDefault(); onDelete(node.nodeId); }
               }}
-              class={`flex cursor-pointer items-center gap-1 border-b border-gray-100 px-1.5 py-1 text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 ${
+              class={`relative flex cursor-pointer items-center gap-1 border-b border-gray-100 py-1 text-xs focus:outline-none focus-visible:ring-1 focus-visible:ring-blue-400 ${
                 isSelected ? "bg-blue-50" : "hover:bg-gray-50"
+              } ${isDragging ? "opacity-40" : ""} ${
+                isTarget && dropPos === "into" ? "outline outline-1 outline-blue-400" : ""
               }`}
+              style={`padding-left:${depth * 10 + 6}px;padding-right:4px;`}
             >
+              {isTarget && dropPos === "before" && (
+                <div class="pointer-events-none absolute left-0 top-0 h-0.5 w-full bg-blue-500" />
+              )}
+              {isTarget && dropPos === "after" && (
+                <div class="pointer-events-none absolute bottom-0 left-0 h-0.5 w-full bg-blue-500" />
+              )}
               <span
                 class={`h-2 w-2 shrink-0 rounded-sm ${
                   node.isDraftOnly ? "bg-yellow-400" : "bg-blue-400"
                 }`}
                 aria-hidden="true"
               />
-              <span class="flex-1 truncate font-mono" title={node.componentKey}>
+              <span class="flex-1 truncate font-mono text-[0.63rem]" title={node.nodeId}>
                 {friendlyNodeLabel(node)}
               </span>
               <div class="flex shrink-0 gap-0.5">
@@ -2589,26 +2660,10 @@ function LayerTree({
                 >⧉</button>
                 <button
                   type="button"
-                  onClick={(e: Event) => { e.stopPropagation(); onMoveUp(node.nodeId); }}
-                  disabled={origIdx === draftNodes.length - 1}
-                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30 focus-visible:ring-1 focus-visible:ring-blue-400"
-                  title="前面へ"
-                  aria-label={`${friendlyComponentLabel(node.componentKey)}を前面へ`}
-                >▲</button>
-                <button
-                  type="button"
-                  onClick={(e: Event) => { e.stopPropagation(); onMoveDown(node.nodeId); }}
-                  disabled={origIdx === 0}
-                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 disabled:opacity-30 focus-visible:ring-1 focus-visible:ring-blue-400"
-                  title="背面へ"
-                  aria-label={`${friendlyComponentLabel(node.componentKey)}を背面へ`}
-                >▼</button>
-                <button
-                  type="button"
                   onClick={(e: Event) => { e.stopPropagation(); onDelete(node.nodeId); }}
                   class="rounded px-0.5 text-[0.65rem] text-red-400 hover:text-red-600 focus-visible:ring-1 focus-visible:ring-red-400"
                   title="削除"
-                  aria-label={`${friendlyComponentLabel(node.componentKey)}を削除`}
+                  aria-label={`${friendlyNodeLabel(node)}を削除`}
                 >✕</button>
               </div>
             </div>
@@ -3454,13 +3509,17 @@ function LayoutBuilderSection({
     return () => { cancelled = true; };
   }, [scopedPackageId, effectiveLayoutId, effectiveRouteKey, paletteLoadFailed, paletteEntries.length]);
 
-  // ── _tmp draft: sessionStorage auto-save / resume ────────────────────────
-  // Key: ui_builder_tmp_draft_<packageId>. Auto-save on canvas ops; clear on apply success.
-  // TODO: backend _tmp column for cross-device persistence (pending schema migration).
+  // ── _tmp draft: backend auto-save + sessionStorage fallback ──────────────
+  // Backend: layout_draft_tmp_json column on topology.ui_topology_tensor.
+  // SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract.draft_persistence_model
+  // sessionStorage keeps the synchronous last-known copy as a local fallback.
+  const [tmpSaveStatus, setTmpSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const tmpSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const tmpDraftKey = scopedPackageId?.trim()
     ? `ui_builder_tmp_draft_${scopedPackageId.trim()}`
     : null;
 
+  // sessionStorage restore (synchronous fallback when backend hydrate finds nothing)
   useEffect(() => {
     if (!tmpDraftKey || typeof globalThis.sessionStorage === "undefined") return;
     const saved = sessionStorage.getItem(tmpDraftKey);
@@ -3484,18 +3543,40 @@ function LayoutBuilderSection({
     }
   }, [tmpDraftKey]);
 
+  // Debounced backend save + sessionStorage sync on every canvas mutation
   useEffect(() => {
-    if (!tmpDraftKey || typeof globalThis.sessionStorage === "undefined") return;
     if (draftNodes.length === 0) return;
-    try {
-      sessionStorage.setItem(tmpDraftKey, JSON.stringify({
-        nodes: draftNodes,
-        classRefs: selectedLayoutClassRefs,
-      }));
-    } catch {
-      // storage full — ignore
+    // sessionStorage sync (synchronous, fallback)
+    if (tmpDraftKey && typeof globalThis.sessionStorage !== "undefined") {
+      try {
+        sessionStorage.setItem(tmpDraftKey, JSON.stringify({
+          nodes: draftNodes,
+          classRefs: selectedLayoutClassRefs,
+        }));
+      } catch { /* storage full */ }
     }
-  }, [draftNodes, selectedLayoutClassRefs, tmpDraftKey]);
+    // Backend save (debounced 1500ms)
+    if (!scopedPackageId?.trim() || !effectiveLayoutId || !effectiveRouteKey) return;
+    if (tmpSaveTimerRef.current) clearTimeout(tmpSaveTimerRef.current);
+    setTmpSaveStatus("saving");
+    tmpSaveTimerRef.current = setTimeout(async () => {
+      try {
+        await dispatchAdminOp("layout_patch", "save_tmp", {
+          packageId: scopedPackageId.trim(),
+          layoutId: effectiveLayoutId,
+          routeKey: effectiveRouteKey,
+          tmpJson: tensorPatchJson,
+        });
+        setTmpSaveStatus("saved");
+      } catch {
+        setTmpSaveStatus("error");
+      }
+    }, 1500);
+    return () => {
+      if (tmpSaveTimerRef.current) clearTimeout(tmpSaveTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftNodes, selectedLayoutClassRefs]);
 
   // ── layout patch (preview / validate / apply) ────────────────────────────
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
@@ -3606,10 +3687,11 @@ function LayoutBuilderSection({
         }
 
         if (action === "apply" && summary.valid) {
-          // Clear _tmp draft on successful apply
+          // Clear _tmp on successful apply (backend cleared server-side; clear local fallbacks too)
           if (tmpDraftKey && typeof globalThis.sessionStorage !== "undefined") {
             sessionStorage.removeItem(tmpDraftKey);
           }
+          setTmpSaveStatus("idle");
           const parsed = parseVisualLayoutPatchJson(
             submittedTensorPatchJson,
             paletteSeedEntries,
@@ -3705,6 +3787,40 @@ function LayoutBuilderSection({
     pushHistory(next, `追加: ${friendlyComponentLabel(newNode.componentKey)}`);
     setLifecyclePhase("idle");
     announce(`${friendlyComponentLabel(newNode.componentKey)}をキャンバスに追加しました`);
+  };
+
+  const reparentNode = (
+    nodeId: string,
+    newParentId: string | null,
+    insertBeforeId: string | null,
+  ) => {
+    if (wouldCreateVisualParentCycle(draftNodes, nodeId, newParentId)) {
+      announce("循環参照になるため移動できません");
+      return;
+    }
+    setDraftNodes((prev) => {
+      const node = prev.find((n) => n.nodeId === nodeId);
+      if (!node) return prev;
+      const siblings = prev
+        .filter((n) => n.parentNodeId === newParentId && n.nodeId !== nodeId)
+        .sort((a, b) => a.orderIndex - b.orderIndex);
+      const insertAt = insertBeforeId
+        ? Math.max(0, siblings.findIndex((n) => n.nodeId === insertBeforeId))
+        : siblings.length;
+      siblings.splice(insertAt < 0 ? siblings.length : insertAt, 0, {
+        ...node,
+        parentNodeId: newParentId,
+      });
+      const reordered = siblings.map((n, i) => ({ ...n, orderIndex: i }));
+      const others = prev.filter(
+        (n) => n.parentNodeId !== newParentId && n.nodeId !== nodeId,
+      );
+      const result = [...others, ...reordered];
+      pushHistory(result, `入れ子/並び替え: ${friendlyNodeLabel(node)}`);
+      return result;
+    });
+    setLifecyclePhase("idle");
+    announce("レイヤーを移動しました");
   };
 
   const moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
@@ -4216,10 +4332,9 @@ function LayoutBuilderSection({
             draftNodes={draftNodes}
             selectedNodeId={selectedNodeId}
             onSelect={(id) => setSelectedNodeId(id === selectedNodeId ? null : id)}
-            onMoveUp={(id) => moveLayoutNode(id, "up")}
-            onMoveDown={(id) => moveLayoutNode(id, "down")}
             onCopy={copyNode}
             onDelete={removeNode}
+            onReparent={reparentNode}
           />
           {selectedNode
             ? (
@@ -4274,6 +4389,15 @@ function LayoutBuilderSection({
         </button>
         ）で保存します（design inspector 担当）。ここでは canvas 操作と layout child のみ保存します。
       </p>
+
+      {/* _tmp auto-save status indicator */}
+      {(tmpSaveStatus === "saving" || tmpSaveStatus === "saved" || tmpSaveStatus === "error") && (
+        <div class="flex items-center gap-1 text-xs mb-2">
+          {tmpSaveStatus === "saving" && <span class="text-amber-600">自動保存中…</span>}
+          {tmpSaveStatus === "saved" && <span class="text-green-600">自動保存済</span>}
+          {tmpSaveStatus === "error" && <span class="text-red-500">自動保存エラー（sessionStorage は有効）</span>}
+        </div>
+      )}
 
       {(() => {
         const hasReadinessError = !canPatch || draftNodes.some((n) => n.isDraftOnly) || !!layoutClassRefError;

@@ -105,6 +105,18 @@ public class UiTopologyRepository
             "UiTopologyRepository.GetLayoutPatchDraftAsync must be overridden by a production implementation.");
     }
 
+    /// <summary>Auto-saves canvas tmp draft to layout_draft_tmp_json. Cleared on apply.</summary>
+    public virtual Task SaveLayoutDraftTmpAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        string tmpJson,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.SaveLayoutDraftTmpAsync must be overridden by a production implementation.");
+    }
+
     public virtual Task<LayoutPatchResult> PreviewLayoutPatchAsync(
         Guid layoutId,
         string routeKey,

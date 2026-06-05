@@ -173,13 +173,24 @@ public record LayoutPatchResult(
     string Message
 );
 
-/// <summary>Read-only layout_patch_json for UI Builder canvas hydrate (no mutation).</summary>
+/// <summary>Read-only layout_patch_json for UI Builder canvas hydrate (no mutation).
+/// tensorPatchJson is the effective canvas state: layout_draft_tmp_json if present, else layout_patch_json.
+/// hasTmpDraft=true means the returned JSON is the tmp auto-save (unsaved changes exist).</summary>
 public record LayoutPatchDraftDto(
     [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("layoutId")] string LayoutId,
     [property: JsonPropertyName("routeKey")] string RouteKey,
     [property: JsonPropertyName("tensorPatchJson")] string TensorPatchJson,
-    [property: JsonPropertyName("found")] bool Found
+    [property: JsonPropertyName("found")] bool Found,
+    [property: JsonPropertyName("hasTmpDraft")] bool HasTmpDraft = false
+);
+
+/// <summary>Payload for layout_patch:save_tmp — auto-saves canvas state before explicit apply.</summary>
+public record LayoutPatchSaveTmpRequestDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("layoutId")] string LayoutId,
+    [property: JsonPropertyName("routeKey")] string RouteKey,
+    [property: JsonPropertyName("tmpJson")] string TmpJson
 );
 
 public record PromotedPaletteEntryDto(

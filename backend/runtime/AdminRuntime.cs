@@ -228,6 +228,7 @@ public partial class AdminRuntime
             "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
             "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
             "layout_patch:apply"               => await DataLayoutPatchApplyAsync(vector, ct),
+            "layout_patch:save_tmp"            => await DataLayoutPatchSaveTmpAsync(vector, ct),
             "seed_runtime:save"                => await DataSeedSaveAsync(vector, ct),
             "seed_runtime:load"                => await DataSeedLoadAsync(ct),
             "seed_runtime:validate"            => await DataSeedValidateAsync(ct),
@@ -880,6 +881,45 @@ public partial class AdminRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "DataGetLayoutPatchDraftAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataLayoutPatchSaveTmpAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for layout_patch:save_tmp"));
+        LayoutPatchSaveTmpRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<LayoutPatchSaveTmpRequestDto>(
+                vector.Payload.Value.GetRawText(),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (request is null ||
+            !Guid.TryParse(request.PackageId, out var packageId) ||
+            !Guid.TryParse(request.LayoutId, out var layoutId) ||
+            string.IsNullOrWhiteSpace(request.RouteKey) ||
+            string.IsNullOrWhiteSpace(request.TmpJson))
+        {
+            return (null, new ValidationError(
+                "LAYOUT_PATCH_SAVE_TMP_PAYLOAD_INVALID",
+                "packageId, layoutId, routeKey, and tmpJson are required."));
+        }
+        try
+        {
+            await _uiTopologyRepository.SaveLayoutDraftTmpAsync(
+                packageId, layoutId, request.RouteKey, request.TmpJson, ct);
+            return (JsonSerializer.SerializeToElement(new { ok = true }), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataLayoutPatchSaveTmpAsync failed.");
             return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
         }
     }
