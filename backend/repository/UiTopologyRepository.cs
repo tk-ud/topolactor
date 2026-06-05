@@ -106,7 +106,7 @@ public class UiTopologyRepository
     }
 
     /// <summary>Auto-saves canvas tmp draft to layout_draft_tmp_json. Cleared on apply.</summary>
-    public virtual Task SaveLayoutDraftTmpAsync(
+    public virtual Task<ValidationError?> SaveLayoutDraftTmpAsync(
         Guid packageId,
         Guid layoutId,
         string routeKey,
@@ -202,6 +202,17 @@ public class UiTopologyRepository
         CancellationToken ct = default)
     {
         throw new NotImplementedException("UiTopologyRepository.UpsertComponentStyleDesignForPackageAsync must be overridden.");
+    }
+
+    public virtual Task<(Guid DesignId, ValidationError? Error)> SaveComponentStyleDesignDraftTmpForPackageAsync(
+        Guid packageId,
+        Guid? componentId,
+        string? layoutNodeId,
+        string name,
+        string designTmpJson,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.SaveComponentStyleDesignDraftTmpForPackageAsync must be overridden.");
     }
 
     public virtual Task<IReadOnlyList<AdminPackageComponentDto>> ListPackageComponentsAsync(

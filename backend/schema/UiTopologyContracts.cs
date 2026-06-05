@@ -244,10 +244,28 @@ public record ComponentStyleDesignListItemDto(
     [property: JsonPropertyName("linkTarget")] string? LinkTarget = null,
     [property: JsonPropertyName("reactionIntent")] string? ReactionIntent = null,
     [property: JsonPropertyName("classname")] string? Classname = null,
-    [property: JsonPropertyName("tailwind")] string? Tailwind = null
+    [property: JsonPropertyName("tailwind")] string? Tailwind = null,
+    [property: JsonPropertyName("hasDesignTmpDraft")] bool HasDesignTmpDraft = false
 );
 
 public record ComponentStyleDesignUpsertRequestDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("componentId")] string? ComponentId,
+    [property: JsonPropertyName("layoutNodeId")] string? LayoutNodeId,
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("classname")] string? Classname,
+    [property: JsonPropertyName("tailwind")] string? Tailwind,
+    [property: JsonPropertyName("cssTokenRefs")] IReadOnlyList<string>? CssTokenRefs,
+    [property: JsonPropertyName("responsiveTokenRefs")] Dictionary<string, IReadOnlyList<string>>? ResponsiveTokenRefs,
+    [property: JsonPropertyName("inlineText")] string? InlineText,
+    [property: JsonPropertyName("linkHref")] string? LinkHref,
+    [property: JsonPropertyName("linkTarget")] string? LinkTarget,
+    [property: JsonPropertyName("reactionIntent")] string? ReactionIntent
+);
+
+
+/// <summary>Payload for component_style_design:save_tmp — auto-saves selected canvas node design before explicit upsert.</summary>
+public record ComponentStyleDesignSaveTmpRequestDto(
     [property: JsonPropertyName("packageId")] string PackageId,
     [property: JsonPropertyName("componentId")] string? ComponentId,
     [property: JsonPropertyName("layoutNodeId")] string? LayoutNodeId,
