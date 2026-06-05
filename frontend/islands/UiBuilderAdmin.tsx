@@ -4346,14 +4346,14 @@ function PackageDesignPanel({
           cssTokenRefs — CSS 辞書トークン（保存の正式参照）
         </p>
         <p class="text-muted-xs mb-2">
-          選択後は「デザイン設定を保存」で component_design child に保存されます。
+          選択後は「デザイン設定を保存」でデザイン設定として保存されます。
         </p>
         <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
       </div>
 
-      <AdvancedManualOverride title="上級者向け — raw classname / tailwind（補助メモのみ・保存対象外）">
+      <AdvancedManualOverride title="上級者向け — classname / tailwind 手入力（補助メモのみ・保存対象外）">
         <p class="text-muted-xs mb-2">
-          通常は cssTokenRefs を使ってください。raw 文字列は補助メモとしてのみ保存され、runtime 投影の正式参照にはなりません。
+          通常は cssTokenRefs を使ってください。入力した文字列は補助メモとしてのみ保存され、投影の正式参照にはなりません。
         </p>
         <label class="mb-2 block text-xs">
           classname（補助メモ）
