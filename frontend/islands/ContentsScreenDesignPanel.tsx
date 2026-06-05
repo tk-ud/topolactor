@@ -41,6 +41,7 @@ import {
   emptyLogicalTable,
   qualifiedColumnKey,
   qualifiedColumnsFromLogicalTables,
+  type QualifiedColumnRef,
   enrichRelationIntentsWithRemoteTargets,
   step3FieldSourceFromDesign,
   qualifyScreenDesignColumnKeys,
@@ -124,7 +125,7 @@ function SamplePreviewPanel({
 }: {
   columns: { name: string; dataType: string }[];
   aggregationBlocks: AggregationBlock[];
-  qualifiedColumns: { key: string; tableRef: string; remoteManifestId?: string }[];
+  qualifiedColumns: QualifiedColumnRef[];
   operationKinds: ScreenOperationKind[];
   operationEntityBindings: ManifestScreenDesignDraft["operationEntityBindings"];
   columnOrder: string[];

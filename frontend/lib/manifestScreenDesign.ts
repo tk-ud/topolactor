@@ -496,9 +496,27 @@ export function screenDesignFromBackendShape(
       .map(normalizeHavingConditionShape)
       .filter((h): h is HavingCondition => h !== null)
     : [];
+  const aggregationBlocksFromShape = Array.isArray(shape.aggregationBlocks) &&
+      shape.aggregationBlocks.length > 0
+    ? shape.aggregationBlocks.map((b) => ({
+      sourceRef: b.sourceRef,
+      aggregationKey: b.aggregationKey,
+      measures: b.measures,
+      searchConditions: Array.isArray(b.searchConditions)
+        ? b.searchConditions
+          .map(normalizeSearchConditionShape)
+          .filter((c): c is SearchCondition => c !== null)
+        : [],
+      havingConditions: Array.isArray(b.havingConditions)
+        ? b.havingConditions
+          .map(normalizeHavingConditionShape)
+          .filter((h): h is HavingCondition => h !== null)
+        : [],
+    }))
+    : undefined;
   const aggregationFields = resolveDesignAggregationFields(
     {
-      aggregationBlocks: shape.aggregationBlocks,
+      aggregationBlocks: aggregationBlocksFromShape,
       aggregationKey: shape.aggregationKey,
       aggregationMeasures: shape.aggregationMeasures,
       aggregationFunction: shape.aggregationFunction,
