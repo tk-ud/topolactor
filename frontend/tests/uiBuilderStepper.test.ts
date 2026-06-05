@@ -1,49 +1,62 @@
 import { assertEquals, assertFalse } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
-  getActiveStepIds,
-  UI_BUILDER_FLOW_STEPS,
-  type UiBuilderTabId,
+  getActivePhaseIds,
+  UI_BUILDER_CANVAS_PHASES,
+  UI_BUILDER_PHASE_LABELS,
+  type UiBuilderPhaseId,
 } from "../components/UiBuilderFlowStepper.tsx";
 
-Deno.test("UI_BUILDER_FLOW_STEPS: SSOT v0.8.0 four surfaces + demo handoff", () => {
-  assertEquals(UI_BUILDER_FLOW_STEPS.length, 5);
+Deno.test("UI_BUILDER_CANVAS_PHASES: canvas workspace has exactly 2 phases", () => {
+  assertEquals(UI_BUILDER_CANVAS_PHASES.length, 2);
 });
 
-Deno.test("UI_BUILDER_FLOW_STEPS: step IDs include visual view surface", () => {
-  assertEquals(UI_BUILDER_FLOW_STEPS.map((s) => s.id), [1, 2, 3, 4, 5]);
+Deno.test("UI_BUILDER_CANVAS_PHASES: phase IDs are 1 and 2", () => {
+  assertEquals(UI_BUILDER_CANVAS_PHASES.map((p) => p.id), [1, 2]);
 });
 
-Deno.test("getActiveStepIds: bucket tab activates step 1 only", () => {
-  assertEquals(getActiveStepIds("bucket"), [1]);
+Deno.test("UI_BUILDER_CANVAS_PHASES: phase 1 is package selection", () => {
+  assertEquals(UI_BUILDER_CANVAS_PHASES[0].phaseId, "package");
+  assertEquals(UI_BUILDER_CANVAS_PHASES[0].id, 1);
 });
 
-Deno.test("getActiveStepIds: layout tab activates step 2", () => {
-  assertEquals(getActiveStepIds("layout"), [2]);
+Deno.test("UI_BUILDER_CANVAS_PHASES: phase 2 is canvas workspace", () => {
+  assertEquals(UI_BUILDER_CANVAS_PHASES[1].phaseId, "canvas");
+  assertEquals(UI_BUILDER_CANVAS_PHASES[1].id, 2);
 });
 
-Deno.test("getActiveStepIds: design tab activates step 3", () => {
-  assertEquals(getActiveStepIds("design"), [3]);
+Deno.test("getActivePhaseIds: package phase activates phase 1 only", () => {
+  assertEquals(getActivePhaseIds("package"), [1]);
 });
 
-Deno.test("getActiveStepIds: visual tab activates step 4", () => {
-  assertEquals(getActiveStepIds("visual"), [4]);
+Deno.test("getActivePhaseIds: canvas phase activates phase 2 only", () => {
+  assertEquals(getActivePhaseIds("canvas"), [2]);
 });
 
-Deno.test("step 1 label: package決定", () => {
-  assertEquals(UI_BUILDER_FLOW_STEPS[0].label, "package決定");
+Deno.test("UI_BUILDER_PHASE_LABELS: package phase has user-facing label", () => {
+  const label = UI_BUILDER_PHASE_LABELS["package" as UiBuilderPhaseId];
+  assertEquals(typeof label, "string");
+  assertEquals(label.length > 0, true);
 });
 
-Deno.test("step 4 label: visual view", () => {
-  assertEquals(UI_BUILDER_FLOW_STEPS[3].label, "visual view");
-  assertEquals(UI_BUILDER_FLOW_STEPS[3].tabTarget, "visual");
+Deno.test("UI_BUILDER_PHASE_LABELS: canvas phase has user-facing label", () => {
+  const label = UI_BUILDER_PHASE_LABELS["canvas" as UiBuilderPhaseId];
+  assertEquals(typeof label, "string");
+  assertEquals(label.includes("canvas"), true);
 });
 
-Deno.test("step 5 external href is /demo", () => {
-  assertEquals(UI_BUILDER_FLOW_STEPS[4].externalHref, "/demo");
+Deno.test("canvas workspace: no separate layout/design/visual tabs in phase model", () => {
+  const phaseIds = UI_BUILDER_CANVAS_PHASES.map((p) => p.phaseId);
+  assertFalse(phaseIds.includes("layout" as UiBuilderPhaseId));
+  assertFalse(phaseIds.includes("design" as UiBuilderPhaseId));
+  assertFalse(phaseIds.includes("visual" as UiBuilderPhaseId));
 });
 
-Deno.test("no step has both tabTarget and externalHref", () => {
-  for (const step of UI_BUILDER_FLOW_STEPS) {
-    assertFalse(Boolean(step.tabTarget) && Boolean(step.externalHref));
-  }
+Deno.test("canvas workspace: phase 1 label includes パッケージ", () => {
+  assertEquals(UI_BUILDER_CANVAS_PHASES[0].label.includes("パッケージ"), true);
+});
+
+Deno.test("canvas workspace: phase 2 detail describes unified canvas editing", () => {
+  const detail = UI_BUILDER_CANVAS_PHASES[1].detail;
+  assertEquals(typeof detail, "string");
+  assertEquals(detail.includes("canvas"), true);
 });

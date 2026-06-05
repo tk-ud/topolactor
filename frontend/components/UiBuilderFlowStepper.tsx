@@ -1,84 +1,64 @@
 import { JSX } from "preact";
 
-/** Tab IDs for /admin/ui-builder — must stay in sync with UiBuilderAdmin.tsx TabId */
-export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "layout" | "design" | "visual";
+/**
+ * /admin/ui-builder canvas workspace phase guide.
+ * SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract
+ *
+ * Authoring model: two phases (select+package, then canvas workspace edit).
+ * No separate layout/design/visual surfaces — all editing in the unified canvas workspace.
+ */
 
-/** 通常表示用タブラベル（内部 TabId は主導線に出さない） */
-export const UI_BUILDER_TAB_LABELS: Record<UiBuilderTabId, string> = {
-  bucket: "package決定",
-  layout: "layout editor",
-  design: "component design editor",
-  visual: "visual view",
-  catalog: "部品カタログ（参照）",
-  ci: "CI ガイダンス（参照）",
+export type UiBuilderPhaseId = "package" | "canvas";
+
+/** 通常表示用フェーズラベル（内部 id は主導線に出さない） */
+export const UI_BUILDER_PHASE_LABELS: Record<UiBuilderPhaseId, string> = {
+  package: "部品選択でパッケージ化",
+  canvas: "canvas workspace で配置・デザインを編集",
 };
 
-type StepSpec = {
+type PhaseSpec = {
   id: number;
+  phaseId: UiBuilderPhaseId;
   label: string;
   detail: string;
   note?: string;
-  tabTarget?: UiBuilderTabId;
-  externalHref?: string;
 };
 
-/** SSOT v0.8.0 — four authoring surfaces + post-apply /demo handoff. */
-export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
+/** SSOT: canvas_workspace_contract — 2 authoring phases. */
+export const UI_BUILDER_CANVAS_PHASES: PhaseSpec[] = [
   {
     id: 1,
-    label: "package決定",
+    phaseId: "package",
+    label: "部品選択でパッケージ化",
     detail:
       "components_bucket から部品を選択し、1 回の package_generator でパッケージ化します。",
     note: "カタログ・CI は画面下部の参照専用セクションにあります。",
-    tabTarget: "bucket",
   },
   {
     id: 2,
-    label: "layout editor",
+    phaseId: "canvas",
+    label: "canvas workspace で配置・デザインを編集",
     detail:
-      "入れ子・構造 HTML（h1–h6/div/section/a）・コピー・DnD・ノード単位 layoutClassRefs を layout_patch で保存します。",
-    tabTarget: "layout",
-  },
-  {
-    id: 3,
-    label: "component design editor",
-    detail:
-      "designId + cssTokenRefs / responsiveTokenRefs / inline text / link を component_style_design:upsert で保存します。",
-    tabTarget: "design",
-  },
-  {
-    id: 4,
-    label: "visual view",
-    detail:
-      "保存済み layout + design の合成を read-only でプレビューします（操作キャンバスとは別面）。",
-    tabTarget: "visual",
-  },
-  {
-    id: 5,
-    label: "動作確認",
-    detail: "保存反映後はデモ画面で登録結果を試します（post-apply 検証）。",
-    externalHref: "/demo",
+      "パッケージを選んで canvas workspace で配置・デザインを統合編集します。" +
+      " 配置（parentNodeId / slotKey / orderIndex / layoutClassRefs）は layout_patch:apply で保存。" +
+      " デザイントークン（cssTokenRefs / responsiveTokenRefs / inlineText / linkHref）は component_style_design:upsert で保存。" +
+      " canvas が主対象で、tab 切り替えなし・separate surface なし。",
   },
 ];
 
-export function getActiveStepIds(activeTab: UiBuilderTabId): number[] {
-  if (activeTab === "bucket") return [1];
-  if (activeTab === "layout") return [2];
-  if (activeTab === "design") return [3];
-  if (activeTab === "visual") return [4];
+export function getActivePhaseIds(phaseId: UiBuilderPhaseId): number[] {
+  if (phaseId === "package") return [1];
+  if (phaseId === "canvas") return [2];
   return [];
 }
 
 export default function UiBuilderFlowStepper({
-  activeTab,
-  onNavigate,
+  activePhase,
 }: {
-  activeTab: UiBuilderTabId;
-  onNavigate: (tab: UiBuilderTabId) => void;
+  activePhase: UiBuilderPhaseId;
 }): JSX.Element {
-  const activeStepIds = getActiveStepIds(activeTab);
-  const activeDetails = UI_BUILDER_FLOW_STEPS.filter((s) => activeStepIds.includes(s.id));
-  const activeTabLabel = UI_BUILDER_TAB_LABELS[activeTab] ?? activeTab;
+  const activePhaseIds = getActivePhaseIds(activePhase);
+  const activeLabel = UI_BUILDER_PHASE_LABELS[activePhase] ?? activePhase;
 
   return (
     <div
@@ -87,19 +67,19 @@ export default function UiBuilderFlowStepper({
       aria-label="画面づくりの作業フロー"
     >
       <div class="mb-2.5 flex items-center gap-2">
-        <span class="text-xs font-semibold text-blue-900">Step 4 — 画面づくり（SSOT v0.8.0）</span>
+        <span class="text-xs font-semibold text-blue-900">Step 4 — 画面づくり（canvas workspace）</span>
         <span class="text-[0.65rem] text-blue-600">
-          — 現在: <strong>{activeTabLabel}</strong>
+          — 現在: <strong>{activeLabel}</strong>
         </span>
       </div>
 
       <div class="flex items-start overflow-x-auto pb-1" role="list">
-        {UI_BUILDER_FLOW_STEPS.map((step, i) => {
-          const isActive = activeStepIds.includes(step.id);
+        {UI_BUILDER_CANVAS_PHASES.map((phase, i) => {
+          const isActive = activePhaseIds.includes(phase.id);
           return (
-            <div key={step.id} class="flex items-center" role="listitem">
+            <div key={phase.id} class="flex items-center" role="listitem">
               {i > 0 && <div class="mx-1 mt-3 h-px w-4 shrink-0 bg-blue-200" aria-hidden="true" />}
-              <div class="flex min-w-[100px] max-w-[160px] flex-col items-center">
+              <div class="flex min-w-[120px] max-w-[180px] flex-col items-center">
                 <div
                   class={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
                     isActive
@@ -108,24 +88,13 @@ export default function UiBuilderFlowStepper({
                   }`}
                   aria-current={isActive ? "step" : undefined}
                 >
-                  {step.id}
+                  {phase.id}
                 </div>
                 <div class={`mt-1 text-center text-[0.63rem] font-medium ${isActive ? "text-blue-800" : "text-gray-500"}`}>
-                  {step.label}
+                  {phase.label}
                 </div>
-                {step.tabTarget && (
-                  <button
-                    type="button"
-                    onClick={() => onNavigate(step.tabTarget!)}
-                    class={`mt-1 rounded px-1.5 py-0.5 text-[0.58rem] font-medium ${
-                      isActive ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-500"
-                    }`}
-                  >
-                    {isActive ? "作業中" : "移動"}
-                  </button>
-                )}
-                {step.externalHref && (
-                  <a href={step.externalHref} class="mt-1 text-[0.58rem] text-blue-600 underline">
+                {phase.id === 2 && (
+                  <a href="/demo" class="mt-1 text-[0.58rem] text-blue-600 underline">
                     確認 →
                   </a>
                 )}
@@ -135,11 +104,11 @@ export default function UiBuilderFlowStepper({
         })}
       </div>
 
-      {activeDetails.map((step) => (
-        <div key={step.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
-          <p class="font-semibold text-blue-900">フェーズ {step.id}: {step.label}</p>
-          <p class="text-gray-700">{step.detail}</p>
-          {step.note && <p class="text-amber-700">{step.note}</p>}
+      {UI_BUILDER_CANVAS_PHASES.filter((p) => activePhaseIds.includes(p.id)).map((phase) => (
+        <div key={phase.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
+          <p class="font-semibold text-blue-900">フェーズ {phase.id}: {phase.label}</p>
+          <p class="text-gray-700">{phase.detail}</p>
+          {phase.note && <p class="text-amber-700">{phase.note}</p>}
         </div>
       ))}
     </div>

@@ -82,7 +82,10 @@ export const UX_FIELD_AGGREGATION_MEASURES = "集計式";
 export const UX_FIELD_STEP3_COLUMN_USAGE = "項目の使い分け";
 
 /** 集計関数候補（topology intent; JsonbManifestRuntime 系と整合） */
-export const AGGREGATION_FUNCTION_OPTIONS: readonly { value: string; label: string }[] = [
+export const AGGREGATION_FUNCTION_OPTIONS: readonly {
+  value: string;
+  label: string;
+}[] = [
   { value: "", label: "— なし —" },
   { value: "sum", label: "合計 (sum)" },
   { value: "avg", label: "平均 (avg)" },
@@ -127,7 +130,10 @@ export const DISPLAY_COLUMN_MODE_LABELS: Record<string, string> = {
 };
 
 /** 検索演算子候補（通常表示。SQL 語彙だが条件値として許可） */
-export const SEARCH_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
+export const SEARCH_OPERATOR_OPTIONS: readonly {
+  value: string;
+  label: string;
+}[] = [
   { value: "=", label: "= (一致)" },
   { value: "!=", label: "≠ (不一致)" },
   { value: "<>", label: "<> (不一致 alias)" },
@@ -146,14 +152,20 @@ export const SEARCH_OPERATOR_OPTIONS: readonly { value: string; label: string }[
 ];
 
 /** 論理結合演算子（条件グループ接続） */
-export const LOGICAL_CONNECTOR_OPTIONS: readonly { value: string; label: string }[] = [
+export const LOGICAL_CONNECTOR_OPTIONS: readonly {
+  value: string;
+  label: string;
+}[] = [
   { value: "and", label: "AND" },
   { value: "or", label: "OR" },
   { value: "not", label: "NOT" },
 ];
 
 /** HAVING 演算子候補 */
-export const HAVING_OPERATOR_OPTIONS: readonly { value: string; label: string }[] = [
+export const HAVING_OPERATOR_OPTIONS: readonly {
+  value: string;
+  label: string;
+}[] = [
   { value: "=", label: "= (一致)" },
   { value: "!=", label: "≠ (不一致)" },
   { value: "<>", label: "<> (不一致 alias)" },
@@ -253,20 +265,42 @@ export const NORMAL_VIEW_BANNED_TERMS = [
   "pipeline",
   "post-pipeline",
   "submit",
-  "layout / design",
-  "component design",
+  "separate layout/design surface",
+  "standalone design surface",
   "promote",
   "バケット",
   "add のみ",
 ] as const;
 
-/** UI ビルダー内部タブ ID → 通常表示ラベル（主導線に raw id を出さない） */
+/** UI ビルダー canvas workspace の docked panel labels（タブではない）。 */
 export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
-  bucket: "package決定",
-  layout: "layout editor",
-  design: "component design editor",
-  visual: "visual view",
+  bucket: "部品登録",
+  canvas: "canvas workspace",
+  layerInspector: "レイヤーインスペクタ",
+  designInspector: "デザインインスペクタ",
   css: "スタイル辞書",
   catalog: "部品カタログ（参照）",
   ci: "CI ガイダンス（参照）",
 };
+
+/** layout editor 空キャンバス — 主導線は左パネルカードの drag-to-canvas */
+export const UX_EMPTY_CANVAS_DRAG_GUIDANCE =
+  "左パネルのカードをドラッグしてキャンバスへ配置してください。";
+
+/** layout editor — パッケージ未選択時の案内 */
+export const UX_PACKAGE_REQUIRED_FOR_CANVAS =
+  "先にパッケージを作成または選択してください。";
+
+/** component bucket panel — 配置可能カードの drag ヒント */
+export const UX_COMPONENT_BUCKET_CARD_DRAG_HINT =
+  "ドラッグしてキャンバスへ配置";
+
+/** layout editor 右ドック — 配置インスペクタ見出し */
+export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";
+
+/** layout editor 右ドック — デザインインスペクタ見出し（選択ノードと連動） */
+export const UX_DESIGN_INSPECTOR_SECTION = "デザインインスペクタ";
+
+/** /admin/ui-builder は canvas workspace + docked inspectors の単一 authoring surface。 */
+export const UX_LAYOUT_EDITOR_SURFACE = "canvas workspace";
+export const UX_DESIGN_EDITOR_SURFACE = "デザインインスペクタ";
