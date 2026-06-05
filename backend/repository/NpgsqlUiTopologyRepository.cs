@@ -742,6 +742,40 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return null;
     }
 
+    public override async Task<ValidationError?> VerifyPackageLayoutNodeAsync(
+        Guid packageId,
+        string layoutNodeId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT 1
+            FROM topology.ui_topology_tensor t
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(COALESCE(t.layout_draft_tmp_json, t.layout_patch_json)->'nodes') = 'array'
+                  THEN COALESCE(t.layout_draft_tmp_json, t.layout_patch_json)->'nodes'
+                ELSE '[]'::jsonb
+              END
+            ) AS node(elem)
+            WHERE t.package_id = @pkg AND node.elem->>'nodeId' = @node
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("node", layoutNodeId);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null)
+        {
+            return new ValidationError(
+                "COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND",
+                $"layoutNodeId {layoutNodeId} is not present in package {packageId} effective layout draft.");
+        }
+        return null;
+    }
+
     public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
         Guid packageId,
         Guid layoutId,

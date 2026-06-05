@@ -317,8 +317,8 @@ Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", a
     "apply must open handoff modal",
   );
   assert(
-    src.includes('onNavigate?.("design")'),
-    "handoff must open the docked design inspector",
+    src.includes('announce("右パネルのデザインインスペクタで選択ノードを編集できます")'),
+    "handoff must route authors to the docked right-panel design inspector",
   );
   assert(
     src.includes("setLayoutApplyHandoffOpen(true)"),
@@ -326,22 +326,29 @@ Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", a
   );
 });
 
-Deno.test("UiBuilderAdmin: layout_patch preview opens SSOT visual audit modal surface", async () => {
+Deno.test("UiBuilderAdmin: layout_patch preview updates canvas without separate modal", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(
+  assertFalse(
     src.includes("LayoutPatchPreviewModal"),
-    "preview must use visual audit modal",
+    "preview modal component must not remain in the normal authoring route",
   );
-  assert(
-    src.includes("LayoutVisualAuditCanvas") ||
-      src.includes("layoutPatchPreviewNodes"),
-    "preview must render visual audit canvas nodes",
+  assertFalse(
+    src.includes("LayoutVisualAuditCanvas"),
+    "separate visual audit canvas must not remain in the normal authoring route",
   );
-  assert(
+  assertFalse(
     src.includes("buildLayoutPatchPreviewAudit"),
-    "preview must retain backend audit boundary",
+    "preview audit modal boundary must be removed from authoring route",
+  );
+  assertFalse(
+    src.includes("視覚監査モーダル") || src.includes("視覚監査"),
+    "normal UI copy must not advertise a separate visual audit modal",
+  );
+  assert(
+    src.includes("プレビュー結果を canvas とステータスに反映しました"),
+    "layout_patch:preview result must be reflected into the center canvas/status route",
   );
 });
 
@@ -1032,8 +1039,19 @@ Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette a
   assertEquals(source.includes("cloneVisualNode"), true);
   // LayoutBuilderSection is the main canvas
   assertEquals(source.includes("LayoutBuilderSection"), true);
-  // Design inspector panel available in workspace (not separate tab)
-  assertEquals(source.includes("PackageDesignPanel"), true);
+  // Design inspector panel is docked in the LayoutBuilderSection right panel and selected-node driven.
+  const rightPanelIndex = source.indexOf("{/* right panel: layer tree + inspector */}");
+  const designPanelIndex = source.indexOf("<PackageDesignPanel", rightPanelIndex);
+  assert(rightPanelIndex >= 0, "right dock panel marker must exist");
+  assert(designPanelIndex > rightPanelIndex, "PackageDesignPanel must be rendered in the right dock");
+  assert(
+    source.slice(rightPanelIndex, designPanelIndex + 240).includes("selectedCanvasNode={selectedNode}"),
+    "docked design inspector must be driven by the selected canvas node",
+  );
+  assertFalse(
+    source.includes("designPanelOpen"),
+    "standalone design panel toggle must not remain in normal authoring",
+  );
   // No separate tab-based visual view panel
   assertFalse(
     source.includes("function VisualViewPanel("),

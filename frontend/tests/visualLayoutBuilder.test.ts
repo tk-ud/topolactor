@@ -13,6 +13,7 @@
  *   - responsive token rule utilities
  */
 import {
+  assert,
   assertEquals,
   assertFalse,
   assertNotEquals,
@@ -981,6 +982,18 @@ Deno.test("canvas workspace: workspace mode is canvas_workspace_v2", () => {
 Deno.test("canvas workspace: separate layout/design/visual tabs do NOT exist", () => {
   // The old separate tabs (layout, design, visual) have been replaced with a unified workspace.
   assertEquals(UI_BUILDER_HAS_SEPARATE_TABS, false);
+});
+
+Deno.test("canvas workspace: preview remains inline canvas route, not modal", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertFalse(source.includes("LayoutPatchPreviewModal"));
+  assertFalse(source.includes("視覚監査モーダル"));
+  assert(
+    source.includes("プレビュー結果を canvas とステータスに反映しました"),
+    "preview action should update the same canvas/status route",
+  );
 });
 
 Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch builder", () => {

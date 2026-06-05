@@ -48,16 +48,10 @@ import {
   validateResponsiveTokenRulesJson,
   wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
-import { LayoutVisualAuditCanvas } from "../components/LayoutVisualAuditCanvas.tsx";
 import {
   resolveCanvasRootPreviewClassName,
   resolveNodeWrapperPreviewClassName,
 } from "../runtime/layoutClassPreviewUtils.ts";
-import {
-  buildLayoutPatchPreviewAudit,
-  type LayoutPatchPreviewAudit,
-} from "../runtime/layoutPatchPreviewUtils.ts";
-import { LayoutPatchPreviewModal } from "../components/LayoutPatchPreviewModal.tsx";
 import { LayoutPatchApplyHandoffModal } from "../components/LayoutPatchApplyHandoffModal.tsx";
 import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
 import {
@@ -235,7 +229,7 @@ type PaletteEntry = {
 };
 
 /** Canvas workspace panel actions (replaces old tab navigation). */
-type WorkspacePanel = "bucket" | "design";
+type WorkspacePanel = "bucket";
 
 // Gap 1: Lifecycle state machine
 type LifecyclePhase =
@@ -371,8 +365,7 @@ const ERROR_CODE_FIX: Record<
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
-    suggestion: "デザインインスペクタで正しいトークンを選択してください",
-    navigateTo: "design",
+    suggestion: "右パネルのデザインインスペクタで正しいトークンを選択してください",
   },
   LAYOUT_CLASS_REF_INVALID: {
     cause: "レイアウトクラス参照が解決できません",
@@ -776,9 +769,7 @@ function ActionableValidationErrorPanel({
           if (fix?.navigateTo && !shownNavigateTabs.has(fix.navigateTo)) {
             shownNavigateTabs.add(fix.navigateTo);
             const tab = fix.navigateTo;
-            const label = tab === "bucket"
-              ? "→ 部品登録パネルへ移動"
-              : "→ デザインインスペクタを開く";
+            const label = "→ 部品登録パネルへ移動";
             navButtons.push(
               <button
                 key={tab}
@@ -934,7 +925,7 @@ function ApplyReadinessPanel({
       </ul>
       {allClear && (
         <p class="mt-2 text-green-700 font-semibold text-xs">
-          すべてのローカルチェック通過。プレビュー（視覚監査） → バリデート →
+          すべてのローカルチェック通過。canvasプレビュー → バリデート →
           適用 の順で実行してください。
         </p>
       )}
@@ -3924,13 +3915,11 @@ function LayoutBuilderSection({
   scopedPackageId,
   scopedRouteKey,
   scopedLayoutId,
-  onSelectedCanvasNodeChange,
 }: {
   onNavigate?: (panel: WorkspacePanel) => void;
   scopedPackageId?: string;
   scopedRouteKey?: string | null;
   scopedLayoutId?: string | null;
-  onSelectedCanvasNodeChange?: (node: DraftNode | null) => void;
 }): JSX.Element {
   // ── route/layout selection ───────────────────────────────────────────────
   const [layoutId, setLayoutId] = useState("");
@@ -3989,10 +3978,6 @@ function LayoutBuilderSection({
     { code: string; message: string }[]
   >([]);
   const [debugJson, setDebugJson] = useState<string | null>(null);
-  const [layoutPatchPreviewOpen, setLayoutPatchPreviewOpen] = useState(false);
-  const [layoutPatchPreviewAudit, setLayoutPatchPreviewAudit] = useState<
-    LayoutPatchPreviewAudit | null
-  >(null);
   const [layoutPatchPreviewNodes, setLayoutPatchPreviewNodes] = useState<
     LayoutPreviewNodeInput[]
   >([]);
@@ -4054,10 +4039,6 @@ function LayoutBuilderSection({
   const canvasPreviewClass = resolveCanvasRootPreviewClassName(
     selectedLayoutClassRefs,
   );
-  useEffect(() => {
-    onSelectedCanvasNodeChange?.(selectedNode);
-  }, [selectedNodeId, draftNodes, onSelectedCanvasNodeChange]);
-
   const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((
     e,
   ) => ({
@@ -4449,8 +4430,6 @@ function LayoutBuilderSection({
     setDebugJson(null);
     setLayoutApplyHandoffOpen(false);
     if (action !== "preview") {
-      setLayoutPatchPreviewOpen(false);
-      setLayoutPatchPreviewAudit(null);
       setLayoutPatchPreviewNodes([]);
       setLayoutPatchPreviewClassRefs([]);
     }
@@ -4568,22 +4547,10 @@ function LayoutBuilderSection({
             normalizedJson,
             paletteSeedEntries,
           );
-          const previewNodes = enrichLayoutPreviewNodes(
-            parsed.ok ? parsed.value.nodes : draftNodes,
-            paletteSeedEntries,
-          ) as LayoutPreviewNodeInput[];
-          const previewClassRefs = parsed.ok
-            ? parsed.value.layoutClassRefs
-            : selectedLayoutClassRefs;
-          setLayoutPatchPreviewAudit(buildLayoutPatchPreviewAudit(
-            submittedTensorPatchJson,
-            normalizedJson,
-            summary.message,
-          ));
-          setLayoutPatchPreviewNodes(previewNodes);
-          setLayoutPatchPreviewClassRefs(previewClassRefs);
-          setLayoutPatchPreviewOpen(true);
-          announce("視覚監査モーダルを表示しました");
+          if (parsed.ok) {
+            setLayoutPatchPreviewClassRefs(parsed.value.layoutClassRefs);
+          }
+          announce("プレビュー結果を canvas とステータスに反映しました");
         }
 
         if (action === "apply" && summary.valid) {
@@ -5423,9 +5390,6 @@ function LayoutBuilderSection({
                 onToggleLayoutClassRef={(classKey) =>
                   toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
                 onCopy={() => copyNode(selectedNode.nodeId)}
-                onEditDesign={onNavigate
-                  ? () => onNavigate("design")
-                  : undefined}
                 onClose={() => setSelectedNodeId(null)}
               />
             )
@@ -5434,6 +5398,13 @@ function LayoutBuilderSection({
                 canvas またはレイヤーから要素を選択してください
               </div>
             )}
+          <section class="rounded border border-slate-200 bg-white p-2" aria-label="デザインインスペクタ">
+            <h4 class="mb-2 text-xs font-semibold text-slate-700">デザインインスペクタ</h4>
+            <PackageDesignPanel
+              selectedPackageId={scopedPackageId?.trim() ?? ""}
+              selectedCanvasNode={selectedNode}
+            />
+          </section>
         </div>
       </div>
 
@@ -5491,17 +5462,8 @@ function LayoutBuilderSection({
       </Accordion>
 
       <p class="mb-3 text-xs text-slate-600">
-        cssTokenRefs・color・spacing・radius
-        は右パネルのデザインインスペクタ（またはボタン{" "}
-        <button
-          type="button"
-          class="link"
-          onClick={() => onNavigate?.("design")}
-        >
-          デザインインスペクタを開く
-        </button>
-        ）で保存します（design inspector 担当）。ここでは canvas 操作と layout
-        child のみ保存します。
+        cssTokenRefs・color・spacing・radius は同じ右パネル内のデザインインスペクタで保存します。
+        ここでは canvas 操作と layout child のみ保存します。
       </p>
 
       {/* _tmp auto-save status indicator */}
@@ -5560,7 +5522,7 @@ function LayoutBuilderSection({
             onClick={() => callLayoutPatch("preview")}
             disabled={loading || !canPatch}
             class="btn-secondary min-w-[100px]"
-            aria-label="プレビュー — 保存前の視覚監査（部品の見た目・DB変更なし）"
+            aria-label="プレビュー — canvasへ保存前結果を反映（DB変更なし）"
           >
             1. プレビュー
           </button>
@@ -5590,22 +5552,11 @@ function LayoutBuilderSection({
           )}
         </div>
         <p class="mt-1 text-[0.65rem] text-gray-400">
-          プレビュー: 視覚監査モーダル（DB変更なし） → バリデート:
+          プレビュー: center canvas / inline summary に反映（DB変更なし） → バリデート:
           ref整合チェック → 適用: DBへ反映
         </p>
       </div>
 
-      <LayoutPatchPreviewModal
-        open={layoutPatchPreviewOpen}
-        audit={layoutPatchPreviewAudit}
-        previewNodes={layoutPatchPreviewNodes}
-        layoutClassRefs={layoutPatchPreviewClassRefs}
-        onClose={() => setLayoutPatchPreviewOpen(false)}
-        onProceedValidate={() => {
-          setLayoutPatchPreviewOpen(false);
-          void callLayoutPatch("validate");
-        }}
-      />
 
       <LayoutPatchApplyHandoffModal
         open={layoutApplyHandoffOpen}
@@ -5619,7 +5570,7 @@ function LayoutBuilderSection({
         onClose={() => setLayoutApplyHandoffOpen(false)}
         onGoDesign={() => {
           setLayoutApplyHandoffOpen(false);
-          onNavigate?.("design");
+          announce("右パネルのデザインインスペクタで選択ノードを編集できます");
         }}
       />
 
@@ -6668,10 +6619,6 @@ export default function UiBuilderAdmin(): JSX.Element {
   const [packages, setPackages] = useState<AdminPackageRow[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [bucketPanelOpen, setBucketPanelOpen] = useState(true);
-  const [designPanelOpen, setDesignPanelOpen] = useState(false);
-  const [selectedCanvasNode, setSelectedCanvasNode] = useState<
-    DraftNode | null
-  >(null);
   const selectedPackage = packages.find((p) =>
     p.packageId === selectedPackageId
   );
@@ -6696,7 +6643,6 @@ export default function UiBuilderAdmin(): JSX.Element {
 
   const handleWorkspaceNavigate = (panel: WorkspacePanel) => {
     if (panel === "bucket") setBucketPanelOpen(true);
-    if (panel === "design") setDesignPanelOpen(true);
   };
 
   return (
@@ -6755,7 +6701,6 @@ export default function UiBuilderAdmin(): JSX.Element {
               onChange={(e) => {
                 const id = (e.target as HTMLSelectElement).value;
                 setSelectedPackageId(id);
-                setSelectedCanvasNode(null);
                 reloadPackages();
               }}
             >
@@ -6773,20 +6718,6 @@ export default function UiBuilderAdmin(): JSX.Element {
               {selectedPackage.packageId.slice(0, 8)}…
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => setDesignPanelOpen((v) => !v)}
-            class={`ml-auto rounded px-2 py-1 text-xs font-medium border ${
-              designPanelOpen
-                ? "border-blue-600 bg-blue-600 text-white"
-                : "border-blue-300 bg-white text-blue-700 hover:bg-blue-50"
-            }`}
-            aria-pressed={designPanelOpen}
-          >
-            {designPanelOpen
-              ? "デザインインスペクタを閉じる"
-              : "デザインインスペクタを開く"}
-          </button>
         </div>
 
         <LayoutBuilderSection
@@ -6794,31 +6725,9 @@ export default function UiBuilderAdmin(): JSX.Element {
           scopedPackageId={selectedPackageId}
           scopedRouteKey={selectedPackage?.routeKey}
           scopedLayoutId={selectedPackage?.layoutId}
-          onSelectedCanvasNodeChange={setSelectedCanvasNode}
         />
       </div>
 
-      {/* Design inspector panel (docked, selection-driven, opened by canvas inspector or toolbar) */}
-      {designPanelOpen && (
-        <div class="mb-4 rounded border border-slate-300 bg-white shadow-sm">
-          <div class="flex items-center justify-between border-b border-slate-200 px-3 py-2">
-            <strong class="text-sm text-slate-800">
-              {UX_DESIGN_EDITOR_SURFACE}
-            </strong>
-            <button
-              type="button"
-              onClick={() => setDesignPanelOpen(false)}
-              class="rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100"
-            >
-              ✕ 閉じる
-            </button>
-          </div>
-          <PackageDesignPanel
-            selectedPackageId={selectedPackageId}
-            selectedCanvasNode={selectedCanvasNode}
-          />
-        </div>
-      )}
 
       {/* Reference sections */}
       <details class="mb-3 mt-4 rounded border border-slate-200 p-3 text-sm">

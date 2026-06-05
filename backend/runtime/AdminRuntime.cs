@@ -1090,6 +1090,17 @@ public partial class AdminRuntime
         return null;
     }
 
+    private async Task<ValidationError?> VerifyComponentStyleLayoutNodeTargetAsync(
+        Guid packageId,
+        string? layoutNodeId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(layoutNodeId))
+            return null;
+        return await _uiTopologyRepository.VerifyPackageLayoutNodeAsync(
+            packageId, layoutNodeId.Trim(), ct);
+    }
+
     private async Task<(JsonElement? data, ValidationError? error)> DataSaveComponentStyleDesignTmpAsync(
         OperationVector vector, CancellationToken ct)
     {
@@ -1119,6 +1130,8 @@ public partial class AdminRuntime
             request.ResponsiveTokenRefs, request.InlineText, request.LinkHref, request.LinkTarget, request.ReactionIntent));
         try
         {
+            var layoutNodeError = await VerifyComponentStyleLayoutNodeTargetAsync(packageId, layoutNodeId, ct);
+            if (layoutNodeError is not null) return (null, layoutNodeError);
             var (designId, error) = await _uiTopologyRepository.SaveComponentStyleDesignDraftTmpForPackageAsync(
                 packageId, componentId, layoutNodeId, request.Name.Trim(), designJson, ct);
             if (error is not null) return (null, error);
@@ -1160,6 +1173,8 @@ public partial class AdminRuntime
             request.ResponsiveTokenRefs, request.InlineText, request.LinkHref, request.LinkTarget, request.ReactionIntent));
         try
         {
+            var layoutNodeError = await VerifyComponentStyleLayoutNodeTargetAsync(packageId, layoutNodeId, ct);
+            if (layoutNodeError is not null) return (null, layoutNodeError);
             var (designId, error) = await _uiTopologyRepository.UpsertComponentStyleDesignForPackageAsync(
                 packageId, componentId, layoutNodeId, request.Name.Trim(), designJson, ct);
             if (error is not null) return (null, error);
