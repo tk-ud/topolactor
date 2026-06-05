@@ -128,6 +128,90 @@ public class AdminRuntimeLayoutPatchTests
         Assert.Equal("LAYOUT_PATCH_DRAFT_NOT_FOUND", error!.Code);
     }
 
+
+    [Fact]
+    public async Task LayoutPatchSaveTmp_TargetNotFound_ReturnsExplicitError()
+    {
+        var runtime = CreateRuntime(new SaveTmpMissingUiRepo());
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutId = Guid.NewGuid().ToString(),
+            routeKey = "/admin/ui-builder",
+            tmpJson = "{}",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "layout_patch", "save_tmp", null, "admin", payload, null), default);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("LAYOUT_PATCH_TMP_TARGET_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
+    public async Task ComponentStyleDesignSaveTmp_ReturnsDataAndUsesLayoutNodeTarget()
+    {
+        var repo = new CapturingDesignTmpUiRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutNodeId = "node-1",
+            name = "node-1_design",
+            cssTokenRefs = new[] { "color.action.primary.background" },
+            inlineText = "Hello",
+            linkHref = "/next",
+            linkTarget = "_self",
+            reactionIntent = "hover"
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "component_style_design", "save_tmp", null, "admin", payload, null), default);
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.Equal("node-1", repo.LayoutNodeId);
+        Assert.Contains("color.action.primary.background", repo.DesignTmpJson);
+        Assert.Contains("Hello", repo.DesignTmpJson);
+    }
+
+    [Fact]
+    public async Task ComponentStyleDesignSaveTmp_RejectsLayoutNodeOutsidePackage()
+    {
+        var repo = new RejectingDesignNodeUiRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutNodeId = "foreign-node",
+            name = "foreign-node_design",
+            cssTokenRefs = new[] { "color.action.primary.background" },
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "component_style_design", "save_tmp", null, "admin", payload, null), default);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND", error!.Code);
+        Assert.False(repo.SaveTmpCalled);
+    }
+
+    [Fact]
+    public async Task ComponentStyleDesignUpsert_RejectsLayoutNodeOutsidePackage()
+    {
+        var repo = new RejectingDesignNodeUiRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutNodeId = "foreign-node",
+            name = "foreign-node_design",
+            classname = "cta",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "component_style_design", "upsert", null, "admin", payload, null), default);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND", error!.Code);
+        Assert.False(repo.UpsertCalled);
+    }
+
     [Fact]
     public async Task LayoutPatchValidate_CssTokenRefsInPayload_AreStrippedBeforeRepository()
     {
@@ -178,6 +262,9 @@ public class AdminRuntimeLayoutPatchTests
         public override Task<ValidationError?> VerifyLayoutPatchPackageBindingAsync(
             Guid packageId, Guid layoutId, string routeKey, CancellationToken ct = default)
             => Task.FromResult<ValidationError?>(null);
+        public override Task<ValidationError?> VerifyPackageLayoutNodeAsync(
+            Guid packageId, string layoutNodeId, CancellationToken ct = default)
+            => Task.FromResult<ValidationError?>(null);
 
         public override Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
             Guid packageId, Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
@@ -203,6 +290,54 @@ public class AdminRuntimeLayoutPatchTests
             if (cssTokenRefs is not null)
                 capturedCss.AddRange(cssTokenRefs);
             return base.ValidateLayoutPatchAsync(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs, ct);
+        }
+    }
+
+    private sealed class SaveTmpMissingUiRepo() : StubUiRepo(true)
+    {
+        public override Task<ValidationError?> SaveLayoutDraftTmpAsync(
+            Guid packageId, Guid layoutId, string routeKey, string tmpJson, CancellationToken ct = default)
+            => Task.FromResult<ValidationError?>(new ValidationError(
+                "LAYOUT_PATCH_TMP_TARGET_NOT_FOUND", "missing target"));
+    }
+
+    private sealed class CapturingDesignTmpUiRepo() : StubUiRepo(true)
+    {
+        public string? LayoutNodeId { get; private set; }
+        public string DesignTmpJson { get; private set; } = "";
+
+        public override Task<(Guid DesignId, ValidationError? Error)> SaveComponentStyleDesignDraftTmpForPackageAsync(
+            Guid packageId, Guid? componentId, string? layoutNodeId, string name, string designTmpJson, CancellationToken ct = default)
+        {
+            LayoutNodeId = layoutNodeId;
+            DesignTmpJson = designTmpJson;
+            return Task.FromResult((Guid.NewGuid(), (ValidationError?)null));
+        }
+    }
+
+    private sealed class RejectingDesignNodeUiRepo() : StubUiRepo(true)
+    {
+        public bool SaveTmpCalled { get; private set; }
+        public bool UpsertCalled { get; private set; }
+
+        public override Task<ValidationError?> VerifyPackageLayoutNodeAsync(
+            Guid packageId, string layoutNodeId, CancellationToken ct = default)
+            => Task.FromResult<ValidationError?>(new ValidationError(
+                "COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND",
+                $"layoutNodeId {layoutNodeId} is not present in package {packageId}."));
+
+        public override Task<(Guid DesignId, ValidationError? Error)> SaveComponentStyleDesignDraftTmpForPackageAsync(
+            Guid packageId, Guid? componentId, string? layoutNodeId, string name, string designTmpJson, CancellationToken ct = default)
+        {
+            SaveTmpCalled = true;
+            return Task.FromResult((Guid.Empty, (ValidationError?)null));
+        }
+
+        public override Task<(Guid DesignId, ValidationError? Error)> UpsertComponentStyleDesignForPackageAsync(
+            Guid packageId, Guid? componentId, string? layoutNodeId, string name, string designJson, CancellationToken ct = default)
+        {
+            UpsertCalled = true;
+            return Task.FromResult((Guid.Empty, (ValidationError?)null));
         }
     }
 

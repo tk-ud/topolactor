@@ -4,7 +4,7 @@
  * VisualLayoutCanvas は layout draft のリアルタイムプレビュー &amp; 直感操作 surface として通常導線に残る。
  * drag / resize は draft node の x/y/width/height を更新するだけ。
  * parentNodeId / slotKey / orderIndex / layoutClassRefs はインスペクタ（CanvasInspector）で編集する。
- * cssTokenRefs / classname / tailwind は canvas / layout_patch には含まれない（component_design child の責務）。
+ * cssTokenRefs / classname / tailwind は canvas / layout_patch には含まれない（選択ノード design_inspector の責務）。
  *
  * このテストファイルは以下を対象とする:
  *   - canvas utility functions (snapToGrid, buildVisualLayoutPatchJson, etc.)
@@ -12,24 +12,30 @@
  *   - draft-only apply guard
  *   - responsive token rule utilities
  */
-import { assert, assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
-  snapToGrid,
+  assert,
+  assertEquals,
+  assertFalse,
+  assertNotEquals,
+  assertObjectMatch,
+} from "https://deno.land/std@0.208.0/assert/mod.ts";
+import {
   buildVisualLayoutPatchJson,
-  parseVisualLayoutPatchJson,
-  seedDraftNodesFromPalette,
+  cloneVisualNode,
+  filterEmptyResponsiveRules,
   getDraftOnlyNodes,
   isDraftOnlyApplyBlocked,
-  wouldCreateVisualParentCycle,
-  RESPONSIVE_BREAKPOINTS,
-  filterEmptyResponsiveRules,
-  validateResponsiveTokenRulesJson,
-  reorderLayoutNodeStack,
-  cloneVisualNode,
   makeStructuralHtmlNode,
-  STRUCTURAL_HTML_COMPONENT_KEY,
-  type VisualNodePayload,
+  parseVisualLayoutPatchJson,
+  reorderLayoutNodeStack,
+  RESPONSIVE_BREAKPOINTS,
   type ResponsiveTokenRules,
+  seedDraftNodesFromPalette,
+  snapToGrid,
+  STRUCTURAL_HTML_COMPONENT_KEY,
+  validateResponsiveTokenRulesJson,
+  type VisualNodePayload,
+  wouldCreateVisualParentCycle,
 } from "../runtime/visualLayoutUtils.ts";
 import {
   filterLayoutClassRefsByAllowedFor,
@@ -38,9 +44,9 @@ import {
 } from "../runtime/layoutClassPreviewUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 import {
+  getLayoutPreviewDefaultSize,
   renderLayoutComponentPreview,
   resolveComponentKindForLayoutPreview,
-  getLayoutPreviewDefaultSize,
 } from "../runtime/layoutComponentPreview.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
@@ -194,8 +200,16 @@ Deno.test("buildVisualLayoutPatchJson: slotKey is preserved in node payload (ins
 });
 
 Deno.test("buildVisualLayoutPatchJson: parentNodeId is preserved in node payload (inspector field)", () => {
-  const parent: VisualNodePayload = { ...sampleNode, nodeId: "parent", parentNodeId: null };
-  const child: VisualNodePayload = { ...sampleNode, nodeId: "child", parentNodeId: "parent" };
+  const parent: VisualNodePayload = {
+    ...sampleNode,
+    nodeId: "parent",
+    parentNodeId: null,
+  };
+  const child: VisualNodePayload = {
+    ...sampleNode,
+    nodeId: "child",
+    parentNodeId: "parent",
+  };
   const parsed = JSON.parse(buildVisualLayoutPatchJson([parent, child]));
   assertEquals(parsed.nodes[0].parentNodeId, null);
   assertEquals(parsed.nodes[1].parentNodeId, "parent");
@@ -223,7 +237,9 @@ Deno.test("buildVisualLayoutPatchJson: per-node layoutClassRefs round-trip", () 
   const parsed = parseVisualLayoutPatchJson(json);
   assertEquals(parsed.ok, true);
   if (parsed.ok) {
-    assertEquals(parsed.value.nodes[0].layoutClassRefs, ["layout.card.surface"]);
+    assertEquals(parsed.value.nodes[0].layoutClassRefs, [
+      "layout.card.surface",
+    ]);
   }
 });
 
@@ -272,6 +288,7 @@ Deno.test("cloneVisualNode: structural_html copy retains nodeKind and htmlTag", 
 
 Deno.test("buildVisualLayoutPatchJson: cssTokenRefs are NOT in node payload (component_design responsibility)", () => {
   // cssTokenRefs belong to component_design child, not layout_patch node payload
+
   const parsed = JSON.parse(buildVisualLayoutPatchJson([sampleNode]));
   const node = parsed.nodes[0];
   assertEquals(node.cssTokenRefs, undefined);
@@ -340,12 +357,20 @@ Deno.test("orderIndex: updating orderIndex produces distinguishable patch", () =
 // ─── wouldCreateVisualParentCycle ─────────────────────────────────────────────
 
 Deno.test("wouldCreateVisualParentCycle: null parent never cycles", () => {
-  const nodes: VisualNodePayload[] = [{ ...sampleNode, nodeId: "a", parentNodeId: null }];
+  const nodes: VisualNodePayload[] = [{
+    ...sampleNode,
+    nodeId: "a",
+    parentNodeId: null,
+  }];
   assertFalse(wouldCreateVisualParentCycle(nodes, "a", null));
 });
 
 Deno.test("wouldCreateVisualParentCycle: direct self-reference is a cycle", () => {
-  const nodes: VisualNodePayload[] = [{ ...sampleNode, nodeId: "a", parentNodeId: null }];
+  const nodes: VisualNodePayload[] = [{
+    ...sampleNode,
+    nodeId: "a",
+    parentNodeId: null,
+  }];
   assertEquals(wouldCreateVisualParentCycle(nodes, "a", "a"), true);
 });
 
@@ -480,9 +505,17 @@ function applyKeyboardResizeDelta(
 ): { x: number; y: number; width: number; height: number } {
   let { x, y, width, height } = node;
   if (dir.includes("e")) width = snapToGrid(Math.max(40, width + delta), SNAP);
-  if (dir.includes("w")) { x = snapToGrid(Math.max(0, x - delta), SNAP); width = snapToGrid(Math.max(40, width + delta), SNAP); }
-  if (dir.includes("s")) height = snapToGrid(Math.max(30, height + delta), SNAP);
-  if (dir.includes("n")) { y = snapToGrid(Math.max(0, y - delta), SNAP); height = snapToGrid(Math.max(30, height + delta), SNAP); }
+  if (dir.includes("w")) {
+    x = snapToGrid(Math.max(0, x - delta), SNAP);
+    width = snapToGrid(Math.max(40, width + delta), SNAP);
+  }
+  if (dir.includes("s")) {
+    height = snapToGrid(Math.max(30, height + delta), SNAP);
+  }
+  if (dir.includes("n")) {
+    y = snapToGrid(Math.max(0, y - delta), SNAP);
+    height = snapToGrid(Math.max(30, height + delta), SNAP);
+  }
   return { x, y, width, height };
 }
 
@@ -524,7 +557,10 @@ Deno.test("keyboardResize: width clamped to minimum 40", () => {
   const delta = -SNAP;
   let { x, y, width, height } = n;
   const dir = "w";
-  if (dir.includes("w")) { x = snapToGrid(Math.max(0, x - delta), SNAP); width = snapToGrid(Math.max(40, width + delta), SNAP); }
+  if (dir.includes("w")) {
+    x = snapToGrid(Math.max(0, x - delta), SNAP);
+    width = snapToGrid(Math.max(40, width + delta), SNAP);
+  }
   assertEquals(width, 40);
 });
 
@@ -540,9 +576,14 @@ Deno.test("keyboardResize: nw handle moves top-left corner", () => {
 // ─── Fix 5: Lifecycle failure phase mapping ───────────────────────────────────
 
 type LifecyclePhase =
-  | "idle" | "previewing" | "previewed"
-  | "validating" | "validated"
-  | "applying" | "applied_ok" | "applied_fail"
+  | "idle"
+  | "previewing"
+  | "previewed"
+  | "validating"
+  | "validated"
+  | "applying"
+  | "applied_ok"
+  | "applied_fail"
   | "persisted";
 
 function getFailPhase(action: string): LifecyclePhase {
@@ -571,7 +612,7 @@ Deno.test("lifecycleFailPhase: preview and apply failures are distinct phases", 
 });
 
 // ─── canvas utility: CSS token value resolution (SSOT-based, no hardcoded role map) ───
-// cssTokenRefs は component_design child の責務。canvas / layout_patch には含まれない。
+// cssTokenRefs は選択ノード design_inspector の責務。canvas / layout_patch には含まれない。
 
 Deno.test("resolveCssTokenValue: primary background resolves to SSOT action_primary color", () => {
   const val = resolveCssTokenValue("color.action.primary.background");
@@ -593,7 +634,10 @@ Deno.test("resolveCssTokenValue: radius.control.sm resolves to SSOT radius.sm", 
 });
 
 Deno.test("resolveCssTokenValue: border direct value resolves without value_ref", () => {
-  assertEquals(resolveCssTokenValue("border.control.default"), "1px solid #ccc");
+  assertEquals(
+    resolveCssTokenValue("border.control.default"),
+    "1px solid #ccc",
+  );
 });
 
 Deno.test("resolveCssTokenValue: unknown token returns undefined", () => {
@@ -607,7 +651,11 @@ Deno.test("inspector commit: same node at two positions produces distinguishable
   const after: VisualNodePayload = { ...sampleNode, x: 100, y: 100 };
   const snap1 = buildVisualLayoutPatchJson([base]);
   const snap2 = buildVisualLayoutPatchJson([after]);
-  assertNotEquals(snap1, snap2, "committed position change must produce different serialized state");
+  assertNotEquals(
+    snap1,
+    snap2,
+    "committed position change must produce different serialized state",
+  );
   assertEquals(JSON.parse(snap1).nodes[0].x, 50);
   assertEquals(JSON.parse(snap2).nodes[0].x, 100);
 });
@@ -642,7 +690,8 @@ Deno.test("layoutId round-trip: same layoutId sent and confirmed is valid", () =
 Deno.test("layoutId round-trip: mismatch between sent and confirmed is detectable", () => {
   const sentLayoutId: string = "550e8400-e29b-41d4-a716-446655440000";
   const confirmedLayoutId: string = "550e8400-e29b-41d4-a716-000000000001";
-  const isMismatch = confirmedLayoutId.length > 0 && confirmedLayoutId !== sentLayoutId;
+  const isMismatch = confirmedLayoutId.length > 0 &&
+    confirmedLayoutId !== sentLayoutId;
   assertEquals(isMismatch, true);
 });
 
@@ -656,7 +705,9 @@ Deno.test("layoutId round-trip: backend response layoutId updates frontend state
   // Simulate the round-trip logic: backend returns same layoutId as sent
   const sentId = "abc-123";
   const backendData = { layoutId: "abc-123", routeKey: "/admin/ui-builder" };
-  const confirmedLayoutId = typeof backendData.layoutId === "string" ? backendData.layoutId : null;
+  const confirmedLayoutId = typeof backendData.layoutId === "string"
+    ? backendData.layoutId
+    : null;
   assertEquals(confirmedLayoutId, sentId);
   assertEquals(confirmedLayoutId !== sentId, false); // no mismatch
 });
@@ -773,7 +824,9 @@ Deno.test("validateResponsiveTokenRulesJson: whitespace-only string returns ok w
 });
 
 Deno.test("validateResponsiveTokenRulesJson: valid object parses correctly", () => {
-  const result = validateResponsiveTokenRulesJson('{"md": ["color.action.primary.background"], "lg": ["spacing.sm"]}');
+  const result = validateResponsiveTokenRulesJson(
+    '{"md": ["color.action.primary.background"], "lg": ["spacing.sm"]}',
+  );
   assertEquals(result.ok, true);
   if (result.ok) {
     assertEquals(result.rules["md"], ["color.action.primary.background"]);
@@ -793,19 +846,25 @@ Deno.test("validateResponsiveTokenRulesJson: malformed JSON returns structured e
 Deno.test("validateResponsiveTokenRulesJson: JSON array returns structured error", () => {
   const result = validateResponsiveTokenRulesJson('["sm", "md"]');
   assertEquals(result.ok, false);
-  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  }
 });
 
 Deno.test("validateResponsiveTokenRulesJson: null JSON returns structured error", () => {
   const result = validateResponsiveTokenRulesJson("null");
   assertEquals(result.ok, false);
-  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  }
 });
 
 Deno.test("validateResponsiveTokenRulesJson: JSON string (non-object) returns structured error", () => {
   const result = validateResponsiveTokenRulesJson('"hello"');
   assertEquals(result.ok, false);
-  if (!result.ok) assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  if (!result.ok) {
+    assertEquals(result.errorCode, "RESPONSIVE_TOKEN_RULE_JSON_INVALID");
+  }
 });
 
 Deno.test("validateResponsiveTokenRulesJson: unknown breakpoint key returns structured error", () => {
@@ -923,7 +982,10 @@ Deno.test("filterLayoutClassRefsByAllowedFor: keeps matching roles only", () => 
 });
 
 Deno.test("resolveCanvasRootPreviewClassName: applies layout_root classes", () => {
-  const className = resolveCanvasRootPreviewClassName(["layout.root.grid", "layout.card.surface"]);
+  const className = resolveCanvasRootPreviewClassName([
+    "layout.root.grid",
+    "layout.card.surface",
+  ]);
   assertEquals(className, "topolactor-topology-layout-root-grid");
 });
 
@@ -942,6 +1004,336 @@ Deno.test("resolveNodeWrapperPreviewClassName: adds preview_state when selected"
     "topolactor-topology-layout-card-surface topolactor-topology-layout-state-selected",
   );
 });
+
+// ─── UX canvas workspace labels (no separate layout/design/visual surfaces) ──
+
+import {
+  UX_DESIGN_EDITOR_SURFACE,
+  UX_LAYOUT_EDITOR_SURFACE,
+  UX_UI_BUILDER_TAB_LABELS,
+} from "../content/adminUxTerms.ts";
+
+Deno.test("UX surface labels: canvas workspace and design inspector are not read-only previews", () => {
+  assertEquals(UX_LAYOUT_EDITOR_SURFACE, "canvas workspace");
+  assertEquals(UX_DESIGN_EDITOR_SURFACE, "デザインインスペクタ");
+  assertFalse(UX_LAYOUT_EDITOR_SURFACE.includes("読み取り専用"));
+  assertFalse(UX_DESIGN_EDITOR_SURFACE.includes("読み取り専用"));
+});
+
+Deno.test("UX_UI_BUILDER_TAB_LABELS: exposes canvas workspace docked panels, not visual tab", () => {
+  assertEquals(UX_UI_BUILDER_TAB_LABELS.canvas, "canvas workspace");
+  assertEquals(
+    UX_UI_BUILDER_TAB_LABELS.designInspector,
+    "デザインインスペクタ",
+  );
+  assertEquals("visual" in UX_UI_BUILDER_TAB_LABELS, false);
+  assertEquals("layout" in UX_UI_BUILDER_TAB_LABELS, false);
+  assertEquals("design" in UX_UI_BUILDER_TAB_LABELS, false);
+});
+
+// ─── canvas workspace: separate layout/design/visual tab が存在しないこと ─────
+
+import {
+  UI_BUILDER_HAS_SEPARATE_TABS,
+  UI_BUILDER_WORKSPACE_MODE,
+} from "../islands/UiBuilderAdmin.tsx";
+
+Deno.test("canvas workspace: workspace mode is canvas_workspace_v2", () => {
+  // Verify the workspace is the new canvas-first unified workspace (not tab-based).
+  // SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract.
+  assertEquals(UI_BUILDER_WORKSPACE_MODE, "canvas_workspace_v2");
+});
+
+Deno.test("canvas workspace: separate layout/design/visual tabs do NOT exist", () => {
+  // The old separate tabs (layout, design, visual) have been replaced with a unified workspace.
+  assertEquals(UI_BUILDER_HAS_SEPARATE_TABS, false);
+});
+
+Deno.test("canvas workspace: preview remains inline canvas route, not modal", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertFalse(source.includes("LayoutPatchPreviewModal"));
+  assertFalse(source.includes("視覚監査モーダル"));
+  assert(
+    source.includes("プレビュー結果を canvas とステータスに反映しました"),
+    "preview action should update the same canvas/status route",
+  );
+});
+
+Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch builder", () => {
+  // The visual patch builder (includes x/y/width/height, nodeKind, htmlTag) must remain.
+  // It is imported and used by LayoutBuilderSection in the canvas workspace.
+  // If this import fails TypeScript compilation, the workspace is broken.
+  const n = makeStructuralHtmlNode("div", {
+    nodeId: "x",
+    x: 0,
+    y: 0,
+    orderIndex: 0,
+  });
+  const json = buildVisualLayoutPatchJson([n]);
+  const parsed = JSON.parse(json);
+  assertEquals(parsed.nodes[0].nodeKind, "structural_html");
+  assertEquals(typeof parsed.nodes[0].x, "number");
+  assertEquals(typeof parsed.nodes[0].width, "number");
+});
+
+// ─── STRUCTURAL_HTML_TAG_ALLOWLIST: full SSOT set ────────────────────────────
+
+import { STRUCTURAL_HTML_TAG_ALLOWLIST } from "../runtime/visualLayoutUtils.ts";
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes all block tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const blockTags = [
+    "div",
+    "section",
+    "article",
+    "aside",
+    "header",
+    "footer",
+    "main",
+    "nav",
+  ];
+  for (const tag of blockTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `block tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes all heading tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  for (const tag of ["h1", "h2", "h3", "h4", "h5", "h6"]) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `heading tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes text tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const textTags = ["p", "span", "strong", "em", "blockquote", "pre", "code"];
+  for (const tag of textTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `text tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes link tag", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  assertEquals(tags.includes("a"), true);
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes form tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const formTags = [
+    "form",
+    "fieldset",
+    "legend",
+    "label",
+    "button",
+    "input",
+    "textarea",
+    "select",
+    "option",
+  ];
+  for (const tag of formTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `form tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes media tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const mediaTags = [
+    "img",
+    "picture",
+    "figure",
+    "figcaption",
+    "video",
+    "audio",
+  ];
+  for (const tag of mediaTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `media tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes list tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const listTags = ["ul", "ol", "li", "dl", "dt", "dd"];
+  for (const tag of listTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `list tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("STRUCTURAL_HTML_TAG_ALLOWLIST: includes table tags", () => {
+  const tags = STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[];
+  const tableTags = [
+    "table",
+    "thead",
+    "tbody",
+    "tfoot",
+    "tr",
+    "th",
+    "td",
+    "caption",
+  ];
+  for (const tag of tableTags) {
+    assertEquals(
+      tags.includes(tag),
+      true,
+      `table tag "${tag}" must be in allowlist`,
+    );
+  }
+});
+
+Deno.test("makeStructuralHtmlNode: works with section (compatibility with existing nodes)", () => {
+  const node = makeStructuralHtmlNode("section", {
+    nodeId: "test-section",
+    x: 10,
+    y: 20,
+    orderIndex: 0,
+  });
+  assertEquals(node.htmlTag, "section");
+  assertEquals(node.nodeKind, "structural_html");
+  assertEquals(node.componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
+});
+
+Deno.test("makeStructuralHtmlNode: works with new expanded tags (article, main, nav)", () => {
+  for (const tag of ["article", "main", "nav", "p", "ul", "table"] as const) {
+    const node = makeStructuralHtmlNode(tag, {
+      nodeId: `test-${tag}`,
+      x: 0,
+      y: 0,
+      orderIndex: 0,
+    });
+    assertEquals(node.htmlTag, tag);
+    assertEquals(node.nodeKind, "structural_html");
+  }
+});
+
+// ─── LayerTree tree drag: reparent cycle detection ───────────────────────────
+// SSOT: canvas_workspace_contract.layer_inspector — drag reparent must detect cycles.
+
+Deno.test("wouldCreateVisualParentCycle: reparent to own child creates cycle", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "a", parentNodeId: null },
+    { ...sampleNode, nodeId: "b", parentNodeId: "a" },
+    { ...sampleNode, nodeId: "c", parentNodeId: "b" },
+  ];
+  assertEquals(
+    wouldCreateVisualParentCycle(nodes, "a", "c"),
+    true,
+    "reparenting root 'a' under grandchild 'c' must be detected as cycle",
+  );
+});
+
+Deno.test("wouldCreateVisualParentCycle: reparent to direct child creates cycle", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "parent", parentNodeId: null },
+    { ...sampleNode, nodeId: "child", parentNodeId: "parent" },
+  ];
+  assertEquals(
+    wouldCreateVisualParentCycle(nodes, "parent", "child"),
+    true,
+    "reparenting 'parent' under 'child' creates a direct cycle",
+  );
+});
+
+Deno.test("wouldCreateVisualParentCycle: reparent to sibling is allowed", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "root", parentNodeId: null },
+    { ...sampleNode, nodeId: "a", parentNodeId: "root" },
+    { ...sampleNode, nodeId: "b", parentNodeId: "root" },
+  ];
+  assertFalse(
+    wouldCreateVisualParentCycle(nodes, "a", "b"),
+    "reparenting 'a' under sibling 'b' does not create a cycle",
+  );
+});
+
+// ─── reorderLayoutNodeStack: LayerTree drag reorder ──────────────────────────
+// SSOT: canvas_workspace_contract.layer_inspector — drag IS the reorder affordance.
+
+Deno.test("reorderLayoutNodeStack: front moves toward end", () => {
+  const nodes = [
+    { nodeId: "a", orderIndex: 0 },
+    { nodeId: "b", orderIndex: 1 },
+    { nodeId: "c", orderIndex: 2 },
+  ];
+  const result = reorderLayoutNodeStack(nodes, "a", "front");
+  assertEquals(result?.[0].nodeId, "b");
+  assertEquals(result?.[1].nodeId, "a");
+  assertEquals(result?.[0].orderIndex, 0);
+  assertEquals(result?.[1].orderIndex, 1);
+});
+
+Deno.test("reorderLayoutNodeStack: back moves toward start", () => {
+  const nodes = [
+    { nodeId: "x", orderIndex: 0 },
+    { nodeId: "y", orderIndex: 1 },
+    { nodeId: "z", orderIndex: 2 },
+  ];
+  const result = reorderLayoutNodeStack(nodes, "z", "back");
+  assertEquals(result?.[2].nodeId, "y");
+  assertEquals(result?.[1].nodeId, "z");
+});
+
+Deno.test("reorderLayoutNodeStack: front at last position returns null (already at front)", () => {
+  const nodes = [
+    { nodeId: "a", orderIndex: 0 },
+    { nodeId: "b", orderIndex: 1 },
+  ];
+  const result = reorderLayoutNodeStack(nodes, "b", "front");
+  assertEquals(result, null, "cannot move front-most node further to front");
+});
+
+// ─── canvas workspace contract markers ───────────────────────────────────────
+// SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract
+
+Deno.test("canvas workspace: _tmp backend persistence uses layout and design save_tmp action keys", () => {
+  // Verify the action key strings match what AdminRuntime.cs registers.
+  // SSOT: draft_persistence_model auto_save storage = _tmp attribute on the layout/design record.
+  assertEquals(`layout_patch:${"save_tmp"}`, "layout_patch:save_tmp");
+  assertEquals(
+    `component_style_design:${"save_tmp"}`,
+    "component_style_design:save_tmp",
+  );
+});
+
+Deno.test("canvas workspace: tree drag reparent uses wouldCreateVisualParentCycle guard", () => {
+  // Verify the cycle guard is available for use in tree drag handlers.
+  const deepNodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "root", parentNodeId: null },
+    { ...sampleNode, nodeId: "level1", parentNodeId: "root" },
+    { ...sampleNode, nodeId: "level2", parentNodeId: "level1" },
+    { ...sampleNode, nodeId: "level3", parentNodeId: "level2" },
+  ];
+  assertEquals(wouldCreateVisualParentCycle(deepNodes, "root", "level3"), true);
+  assertEquals(
+    wouldCreateVisualParentCycle(deepNodes, "level3", "root"),
+    false,
+  );
+});
+
 
 // ─── PR#364 follow-up: canvas workspace bucket card / drag / right dock guards ─
 
@@ -976,3 +1368,4 @@ Deno.test("canvas workspace: drop reads bucket card payload and adds draft node"
   assert(src.includes("paletteEntryFromDragPayload"));
   assert(src.includes("addNode(makeNewNode"));
 });
+

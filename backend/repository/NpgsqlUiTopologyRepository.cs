@@ -628,7 +628,9 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             """
-            SELECT layout_patch_json::text
+            SELECT
+              COALESCE(layout_draft_tmp_json::text, layout_patch_json::text) AS effective_json,
+              layout_draft_tmp_json IS NOT NULL AS has_tmp
             FROM topology.ui_topology_tensor
             WHERE package_id = @pkg AND layout_id = @layout AND route_key = @route
             ORDER BY updated_at DESC
@@ -637,16 +639,42 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         cmd.Parameters.AddWithValue("pkg", packageId);
         cmd.Parameters.AddWithValue("layout", layoutId);
         cmd.Parameters.AddWithValue("route", routeKey);
-        var scalar = await cmd.ExecuteScalarAsync(ct);
-        if (scalar is null or DBNull)
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        if (!await reader.ReadAsync(ct))
             return null;
-        var json = scalar.ToString() ?? "{}";
+        if (reader.IsDBNull(0))
+            return null;
+        var json = reader.GetString(0);
+        var hasTmp = !reader.IsDBNull(1) && reader.GetBoolean(1);
         return new LayoutPatchDraftDto(
             packageId.ToString(),
             layoutId.ToString(),
             routeKey,
             json,
-            Found: true);
+            Found: true,
+            HasTmpDraft: hasTmp);
+    }
+
+    public override async Task<ValidationError?> SaveLayoutDraftTmpAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        string tmpJson,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "UPDATE topology.ui_topology_tensor SET layout_draft_tmp_json=@tmp::jsonb, updated_at=now() WHERE package_id=@pkg AND layout_id=@layout AND route_key=@route";
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("layout", layoutId);
+        cmd.Parameters.AddWithValue("route", routeKey);
+        cmd.Parameters.AddWithValue("tmp", tmpJson);
+        var rows = await cmd.ExecuteNonQueryAsync(ct);
+        return rows == 0
+            ? new ValidationError("LAYOUT_PATCH_TMP_TARGET_NOT_FOUND", $"No ui_topology_tensor row for package {packageId}, layout {layoutId}, route {routeKey}.")
+            : null;
     }
 
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
@@ -714,6 +742,40 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return null;
     }
 
+    public override async Task<ValidationError?> VerifyPackageLayoutNodeAsync(
+        Guid packageId,
+        string layoutNodeId,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT 1
+            FROM topology.ui_topology_tensor t
+            CROSS JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(COALESCE(t.layout_draft_tmp_json, t.layout_patch_json)->'nodes') = 'array'
+                  THEN COALESCE(t.layout_draft_tmp_json, t.layout_patch_json)->'nodes'
+                ELSE '[]'::jsonb
+              END
+            ) AS node(elem)
+            WHERE t.package_id = @pkg AND node.elem->>'nodeId' = @node
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("node", layoutNodeId);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null)
+        {
+            return new ValidationError(
+                "COMPONENT_DESIGN_LAYOUT_NODE_NOT_FOUND",
+                $"layoutNodeId {layoutNodeId} is not present in package {packageId} effective layout draft.");
+        }
+        return null;
+    }
+
     public override async Task<LayoutPatchResult> ApplyConfirmedLayoutPatchAsync(
         Guid packageId,
         Guid layoutId,
@@ -767,6 +829,14 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             await tx.RollbackAsync(ct);
             return valid with { Ok = false, Valid = false, Message = "TOPOLOGY_TENSOR_NOT_FOUND" };
         }
+        // Clear _tmp draft on apply — explicit apply promotes canvas state to persisted.
+        var clearTmp = new NpgsqlCommand(
+            "UPDATE topology.ui_topology_tensor SET layout_draft_tmp_json=NULL WHERE package_id=@pkg AND layout_id=@layoutId AND route_key=@routeKey",
+            conn, tx);
+        clearTmp.Parameters.AddWithValue("pkg", packageId);
+        clearTmp.Parameters.AddWithValue("layoutId", layoutId);
+        clearTmp.Parameters.AddWithValue("routeKey", routeKey);
+        await clearTmp.ExecuteNonQueryAsync(ct);
         await tx.CommitAsync(ct);
         return valid with { Message = "Layout patch applied." };
     }
@@ -838,16 +908,17 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 """
                 SELECT csd.design_id::text,
                        csd.name,
-                       csd.design->>'componentId',
-                       csd.design->>'layoutNodeId',
-                       csd.design->'cssTokenRefs',
-                       csd.design->'responsiveTokenRefs',
-                       csd.design->>'inlineText',
-                       csd.design->>'linkHref',
-                       csd.design->>'linkTarget',
-                       csd.design->>'reactionIntent',
-                       csd.design->>'classname',
-                       csd.design->>'tailwind'
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'componentId',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'layoutNodeId',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->'cssTokenRefs',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->'responsiveTokenRefs',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'inlineText',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'linkHref',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'linkTarget',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'reactionIntent',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'classname',
+                       COALESCE(csd.design_draft_tmp_json, csd.design)->>'tailwind',
+                       csd.design_draft_tmp_json IS NOT NULL
                 FROM topology.components_style_design csd
                 WHERE EXISTS (
                     SELECT 1
@@ -866,16 +937,17 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 """
                 SELECT design_id::text,
                        name,
-                       design->>'componentId',
-                       design->>'layoutNodeId',
-                       design->'cssTokenRefs',
-                       design->'responsiveTokenRefs',
-                       design->>'inlineText',
-                       design->>'linkHref',
-                       design->>'linkTarget',
-                       design->>'reactionIntent',
-                       design->>'classname',
-                       design->>'tailwind'
+                       COALESCE(design_draft_tmp_json, design)->>'componentId',
+                       COALESCE(design_draft_tmp_json, design)->>'layoutNodeId',
+                       COALESCE(design_draft_tmp_json, design)->'cssTokenRefs',
+                       COALESCE(design_draft_tmp_json, design)->'responsiveTokenRefs',
+                       COALESCE(design_draft_tmp_json, design)->>'inlineText',
+                       COALESCE(design_draft_tmp_json, design)->>'linkHref',
+                       COALESCE(design_draft_tmp_json, design)->>'linkTarget',
+                       COALESCE(design_draft_tmp_json, design)->>'reactionIntent',
+                       COALESCE(design_draft_tmp_json, design)->>'classname',
+                       COALESCE(design_draft_tmp_json, design)->>'tailwind',
+                       design_draft_tmp_json IS NOT NULL
                 FROM topology.components_style_design
                 ORDER BY name ASC
                 """;
@@ -897,7 +969,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
                 reader.IsDBNull(8) ? null : reader.GetString(8),
                 reader.IsDBNull(9) ? null : reader.GetString(9),
                 reader.IsDBNull(10) ? null : reader.GetString(10),
-                reader.IsDBNull(11) ? null : reader.GetString(11)));
+                reader.IsDBNull(11) ? null : reader.GetString(11),
+                !reader.IsDBNull(12) && reader.GetBoolean(12)));
         }
         return list;
     }
@@ -928,8 +1001,8 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var upsert = conn.CreateCommand();
         upsert.Transaction = tx;
         upsert.CommandText =
-            "INSERT INTO topology.components_style_design (name, design) VALUES (@name, @design::jsonb) " +
-            "ON CONFLICT (name) DO UPDATE SET design = EXCLUDED.design, updated_at = now() " +
+            "INSERT INTO topology.components_style_design (name, design, design_draft_tmp_json) VALUES (@name, @design::jsonb, NULL) " +
+            "ON CONFLICT (name) DO UPDATE SET design = EXCLUDED.design, design_draft_tmp_json = NULL, updated_at = now() " +
             "RETURNING design_id";
         upsert.Parameters.AddWithValue("name", name);
         upsert.Parameters.AddWithValue("design", designJson);
@@ -979,6 +1052,76 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await tx.CommitAsync(ct);
         return (designId, null);
     }
+
+
+
+    public override async Task<(Guid DesignId, ValidationError? Error)> SaveComponentStyleDesignDraftTmpForPackageAsync(
+        Guid packageId,
+        Guid? componentId,
+        string? layoutNodeId,
+        string name,
+        string designTmpJson,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        await using var pkgMeta = conn.CreateCommand();
+        pkgMeta.Transaction = tx;
+        pkgMeta.CommandText = "SELECT package_key FROM topology.ui_component_package WHERE package_id = @id LIMIT 1";
+        pkgMeta.Parameters.AddWithValue("id", packageId);
+        var packageKey = (string?)(await pkgMeta.ExecuteScalarAsync(ct));
+        if (packageKey is null)
+        {
+            await tx.RollbackAsync(ct);
+            return (Guid.Empty, new ValidationError("PACKAGE_NOT_FOUND", $"package {packageId} not found"));
+        }
+
+        Guid designId;
+        await using var upsert = conn.CreateCommand();
+        upsert.Transaction = tx;
+        upsert.CommandText =
+            "INSERT INTO topology.components_style_design (name, design, design_draft_tmp_json) VALUES (@name, '{}'::jsonb, @tmp::jsonb) " +
+            "ON CONFLICT (name) DO UPDATE SET design_draft_tmp_json = EXCLUDED.design_draft_tmp_json, updated_at = now() " +
+            "RETURNING design_id";
+        upsert.Parameters.AddWithValue("name", name);
+        upsert.Parameters.AddWithValue("tmp", designTmpJson);
+        designId = (Guid)(await upsert.ExecuteScalarAsync(ct))!;
+
+        object pairEntry = componentId.HasValue
+            ? new { componentId = componentId.Value.ToString(), designId = designId.ToString() }
+            : new { layoutNodeId = layoutNodeId!.Trim(), designId = designId.ToString() };
+        var pairJson = System.Text.Json.JsonSerializer.Serialize(new[] { pairEntry });
+
+        await using var mergeLayout = conn.CreateCommand();
+        mergeLayout.Transaction = tx;
+        mergeLayout.CommandText =
+            """
+            INSERT INTO topology.components_package_design (package_id, name, state, layout)
+            VALUES (@pkg, @name, 'draft', @pair::jsonb)
+            ON CONFLICT (package_id) DO UPDATE SET
+              layout = (
+                SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
+                FROM (
+                  SELECT DISTINCT ON (COALESCE(elem->>'componentId', elem->>'layoutNodeId')) elem
+                  FROM jsonb_array_elements(
+                    COALESCE(topology.components_package_design.layout, '[]'::jsonb) || @pair::jsonb
+                  ) AS elem
+                  ORDER BY COALESCE(elem->>'componentId', elem->>'layoutNodeId'), (elem->>'designId')
+                ) AS sub
+              ),
+              updated_at = now()
+            """;
+        mergeLayout.Parameters.AddWithValue("pkg", packageId);
+        mergeLayout.Parameters.AddWithValue("name", packageKey);
+        mergeLayout.Parameters.AddWithValue("pair", pairJson);
+        await mergeLayout.ExecuteNonQueryAsync(ct);
+
+        await tx.CommitAsync(ct);
+        return (designId, null);
+    }
+
 
     public override async Task<IReadOnlyList<AdminPackageComponentDto>> ListPackageComponentsAsync(
         Guid packageId,
