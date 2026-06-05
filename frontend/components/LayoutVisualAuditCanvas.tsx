@@ -41,11 +41,16 @@ export function LayoutVisualAuditCanvas({
       aria-label={title}
     >
       <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h3 class="m-0 text-sm font-semibold text-slate-900">{title}</h3>
+        <div class="flex items-center gap-2">
+          <h3 class="m-0 text-sm font-semibold text-slate-900">{title}</h3>
+          <span class="rounded bg-slate-200 px-1.5 py-0.5 text-[0.6rem] font-medium text-slate-600">
+            読み取り専用
+          </span>
+        </div>
         <span class="text-xs text-slate-500">{nodes.length} ノード</span>
       </div>
       <div
-        class={`relative overflow-auto rounded-md border border-dashed border-slate-300 bg-white ${canvasClassName}`}
+        class={`relative overflow-auto rounded-md border-2 border-slate-300 bg-white ${canvasClassName}`}
         style={{ minHeight: `${minHeight}px`, height: `${Math.min(bounds.height, 520)}px` }}
       >
         {nodes.length === 0

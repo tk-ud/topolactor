@@ -16,7 +16,12 @@ import { createSseReceiver, extractCiAttentionFragmentPayload, type CiAttentionF
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
-import { UX_UI_BUILDER_TAB_LABELS } from "../content/adminUxTerms.ts";
+import {
+  UX_UI_BUILDER_TAB_LABELS,
+  UX_LAYOUT_EDITOR_SURFACE,
+  UX_DESIGN_EDITOR_SURFACE,
+  UX_VISUAL_VIEW_SURFACE,
+} from "../content/adminUxTerms.ts";
 import UiBuilderFlowStepper from "../components/UiBuilderFlowStepper.tsx";
 import {
   snapToGrid,
@@ -839,7 +844,7 @@ function ApplyReadinessPanel({
         <li class="flex items-start gap-2">
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
-            保存対象は layout child の構造情報（parentNodeId / slotKey / orderIndex / layoutClassRefs / x/y/width/height）。
+            保存対象は配置構造情報（親部品・配置スロット・表示順・layoutClassRefs・位置・サイズ）。
             cssTokenRefs・色・形は「デザインを編集」タブで保存します。
           </span>
         </li>
@@ -4109,11 +4114,13 @@ function LayoutBuilderSection({
       )}
 
       {packageScopedLayout && (
-        <div class="mb-2 rounded border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-900">
-          <strong>レイアウトプレビュー &amp; 操作:</strong>{" "}
-          パレットで部品を追加し、canvas 上でドラッグ・リサイズして x/y/width/height を調整します。
-          parentNodeId・slotKey・orderIndex は右のインスペクタで編集してください。
-          layoutClassRefs は下の「スタイルクラス設定」で選択し、プレビュー → 検証 → 保存反映します。
+        <div class="mb-2 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <strong class="block text-sm text-blue-900 mb-1">{UX_LAYOUT_EDITOR_SURFACE}</strong>
+          <span class="text-[0.7rem] text-blue-700">
+            編集対象: 位置 (x/y)・サイズ (幅/高さ)・親部品・配置スロット・表示順・layoutClassRefs —
+            パレットで部品を追加し、canvas 上でドラッグ・リサイズして位置を調整します。
+            構造設定は右のインスペクタで編集してください。
+          </span>
         </div>
       )}
 
@@ -4225,19 +4232,26 @@ function LayoutBuilderSection({
             onCopy={copyNode}
             onDelete={removeNode}
           />
-          {selectedNode && (
-            <CanvasInspector
-              node={selectedNode}
-              draftNodes={draftNodes}
-              slotKeyCandidates={slotKeyCandidates}
-              onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
-              onCommit={(updates, label) => commitNodeUpdate(selectedNode.nodeId, updates, label)}
-              onToggleLayoutClassRef={(classKey) => toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
-              onCopy={() => copyNode(selectedNode.nodeId)}
-              onEditDesign={onNavigate ? () => onNavigate("design") : undefined}
-              onClose={() => setSelectedNodeId(null)}
-            />
-          )}
+          {selectedNode
+            ? (
+              <CanvasInspector
+                node={selectedNode}
+                draftNodes={draftNodes}
+                slotKeyCandidates={slotKeyCandidates}
+                onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
+                onCommit={(updates, label) => commitNodeUpdate(selectedNode.nodeId, updates, label)}
+                onToggleLayoutClassRef={(classKey) => toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+                onCopy={() => copyNode(selectedNode.nodeId)}
+                onEditDesign={onNavigate ? () => onNavigate("design") : undefined}
+                onClose={() => setSelectedNodeId(null)}
+              />
+            )
+            : (
+              <div class="rounded border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
+                canvas またはレイヤーから要素を選択してください
+              </div>
+            )
+          }
         </div>
       </div>
 
@@ -4272,46 +4286,65 @@ function LayoutBuilderSection({
         で保存します（design タブ担当）。ここでは canvas 操作と layout child のみ保存します。
       </p>
 
-      <ApplyReadinessPanel
-        canPatch={canPatch}
-        effectiveRouteKey={effectiveRouteKey}
-        effectiveLayoutId={effectiveLayoutId}
-        draftNodes={draftNodes}
-        layoutClassRefError={layoutClassRefError}
-        onNavigate={onNavigate}
-      />
+      {(() => {
+        const hasReadinessError = !canPatch || draftNodes.some((n) => n.isDraftOnly) || !!layoutClassRefError;
+        return (
+          <details class="mb-3" open={hasReadinessError}>
+            <summary class={`cursor-pointer rounded px-2 py-1 text-xs font-semibold ${
+              hasReadinessError
+                ? "bg-amber-100 text-amber-900"
+                : "bg-green-50 text-green-700"
+            }`}>
+              {hasReadinessError ? "⚠ 保存前チェック（要確認）" : "✓ 保存前チェック（問題なし）"}
+            </summary>
+            <ApplyReadinessPanel
+              canPatch={canPatch}
+              effectiveRouteKey={effectiveRouteKey}
+              effectiveLayoutId={effectiveLayoutId}
+              draftNodes={draftNodes}
+              layoutClassRefError={layoutClassRefError}
+              onNavigate={onNavigate}
+            />
+          </details>
+        );
+      })()}
 
-      {/* Action buttons with clear step labels */}
-      <div class="mb-1 flex flex-wrap gap-2">
-        <button
-          onClick={() => callLayoutPatch("preview")}
-          disabled={loading || !canPatch}
-          class="btn-secondary min-w-[100px]"
-          aria-label="プレビュー — 保存前の視覚監査（部品の見た目・DB変更なし）"
-        >
-          1. プレビュー
-        </button>
-        <button
-          onClick={() => callLayoutPatch("validate")}
-          disabled={loading || !canPatch}
-          class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
-          aria-label="バリデート実行 — ref整合チェック"
-        >
-          2. バリデート
-        </button>
-        <button
-          onClick={() => callLayoutPatch("apply")}
-          disabled={loading || !canPatch}
-          class="btn-success min-w-[100px]"
-          aria-label="適用実行 — DBへ反映"
-        >
-          3. 適用
-        </button>
-        {loading && <span class="flex items-center text-sm text-gray-500" aria-live="polite">実行中...</span>}
+      {/* アクションバー: preview / validate / apply — 常時表示 */}
+      <div class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+        <div class="mb-1.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-500">
+          保存フロー: プレビュー → バリデート → 適用
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button
+            onClick={() => callLayoutPatch("preview")}
+            disabled={loading || !canPatch}
+            class="btn-secondary min-w-[100px]"
+            aria-label="プレビュー — 保存前の視覚監査（部品の見た目・DB変更なし）"
+          >
+            1. プレビュー
+          </button>
+          <button
+            onClick={() => callLayoutPatch("validate")}
+            disabled={loading || !canPatch}
+            class="btn border border-blue-600 text-blue-600 hover:bg-blue-50 min-w-[100px]"
+            aria-label="バリデート実行 — ref整合チェック"
+          >
+            2. バリデート
+          </button>
+          <button
+            onClick={() => callLayoutPatch("apply")}
+            disabled={loading || !canPatch}
+            class="btn-success min-w-[100px]"
+            aria-label="適用実行 — DBへ反映"
+          >
+            3. 適用
+          </button>
+          {loading && <span class="flex items-center text-sm text-gray-500" aria-live="polite">実行中...</span>}
+        </div>
+        <p class="mt-1 text-[0.65rem] text-gray-400">
+          プレビュー: 視覚監査モーダル（DB変更なし） → バリデート: ref整合チェック → 適用: DBへ反映
+        </p>
       </div>
-      <p class="mb-3 text-xs text-gray-500">
-        プレビュー: 視覚監査モーダル（部品の見た目・DB変更なし） → バリデート: ref整合チェック → 適用: DBへ反映
-      </p>
 
       <LayoutPatchPreviewModal
         open={layoutPatchPreviewOpen}
@@ -4367,9 +4400,9 @@ function LayoutBuilderSection({
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
   { id: "bucket", label: UX_UI_BUILDER_TAB_LABELS.bucket, hint: "部品選択 → パッケージ化" },
-  { id: "layout", label: UX_UI_BUILDER_TAB_LABELS.layout, hint: "入れ子・構造 HTML・コピー・DnD・layoutClassRefs" },
-  { id: "design", label: UX_UI_BUILDER_TAB_LABELS.design, hint: "cssTokenRefs・inline text・link・designId 保存" },
-  { id: "visual", label: UX_UI_BUILDER_TAB_LABELS.visual, hint: "配置とデザイン合成の read-only island プレビュー" },
+  { id: "layout", label: UX_UI_BUILDER_TAB_LABELS.layout, hint: "配置編集キャンバス — x/y/サイズ・親部品・スロット・表示順・layoutClassRefs を編集（操作可能）" },
+  { id: "design", label: UX_UI_BUILDER_TAB_LABELS.design, hint: "デザインプレビュー（読み取り専用）— cssTokenRefs・inlineText・linkHref・reactionIntent を設定して保存" },
+  { id: "visual", label: UX_UI_BUILDER_TAB_LABELS.visual, hint: "最終確認プレビュー（読み取り専用）— 配置とデザイン合成の最終確認専用。編集不可" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
@@ -4850,11 +4883,16 @@ function ComponentDesignPreviewCanvas({
   const previewStyle = buildInlineStyleFromCssTokenRefs(cssTokenRefs);
   return (
     <section
-      class="rounded-lg border-2 border-dashed border-indigo-200 bg-slate-100 p-4"
-      aria-label="デザインプレビュー canvas"
+      class="rounded-lg border-2 border-slate-300 bg-slate-50 p-4"
+      aria-label={UX_DESIGN_EDITOR_SURFACE}
     >
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h4 class="text-sm font-semibold text-indigo-900">プレビュー canvas</h4>
+        <div class="flex items-center gap-2">
+          <h4 class="text-sm font-semibold text-slate-800">デザインプレビュー</h4>
+          <span class="rounded bg-slate-200 px-1.5 py-0.5 text-[0.6rem] font-medium text-slate-600">
+            読み取り専用
+          </span>
+        </div>
         <span class="text-[0.65rem] text-slate-500">
           トークン {cssTokenRefs.length} 件をリアルタイム反映
         </span>
@@ -5230,6 +5268,55 @@ function PackageDesignPanel({
         <p class="mb-2 text-xs text-slate-500">{designsLoadStatus}</p>
       )}
 
+      {/* TODO 3: 選択対象の常時表示ヘッダー */}
+      {selectedPackageId && (
+        <div class="mb-3 rounded border border-slate-200 bg-white px-3 py-2 text-xs">
+          <div class="mb-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-slate-400">
+            現在の編集対象
+          </div>
+          <div class="flex flex-wrap gap-x-4 gap-y-1">
+            <span>
+              <span class="text-slate-500">package: </span>
+              <code class="font-mono">{selectedPackage?.packageKey ?? selectedPackageId.slice(0, 8)}</code>
+            </span>
+            {designTarget === DESIGN_TARGET_PACKAGE_ITEM && componentId && (
+              <>
+                <span>
+                  <span class="text-slate-500">componentId: </span>
+                  <code class="font-mono text-[0.65rem]">{componentId.slice(0, 8)}…</code>
+                </span>
+                {selectedComponent && (
+                  <span>
+                    <span class="text-slate-500">componentKey: </span>
+                    <code class="font-mono">{selectedComponent.componentKey}</code>
+                  </span>
+                )}
+              </>
+            )}
+            {designTarget === DESIGN_TARGET_LAYOUT_NODE && layoutNodeId && (
+              <>
+                <span>
+                  <span class="text-slate-500">layoutNodeId: </span>
+                  <code class="font-mono text-[0.65rem]">{layoutNodeId.slice(0, 8)}…</code>
+                </span>
+                {selectedLayoutNode && (
+                  <span>
+                    <span class="text-slate-500">ノード: </span>
+                    <strong>{selectedLayoutNode.label}</strong>
+                  </span>
+                )}
+                {selectedLayoutNode?.htmlTag && (
+                  <span>
+                    <span class="text-slate-500">htmlTag: </span>
+                    <code class="font-mono">&lt;{selectedLayoutNode.htmlTag}&gt;</code>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <div class="mb-3 flex flex-wrap gap-2">
         <label class="flex items-center gap-1 text-xs">
           <input
@@ -5555,16 +5642,18 @@ function VisualViewPanel({
         packages={packages}
         selectedPackageId={selectedPackageId}
         onSelectPackage={onSelectPackage}
-        heading="visual view（読み取り専用）"
+        heading={UX_VISUAL_VIEW_SURFACE}
       />
-      <p class="text-muted-xs mb-3">
-        保存済みの配置とデザインを合成して island 全体をプレビューします。編集は「配置を編集」「デザインを編集」タブで行います。
-      </p>
+      <div class="mb-3 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <strong>最終確認専用（読み取り専用）</strong> —
+        保存済みの配置とデザインを合成した最終プレビューです。
+        ここでは編集できません。配置の変更は「配置を編集」タブ、デザインの変更は「デザインを編集」タブで行ってください。
+      </div>
       {loadStatus && <p class="mb-2 text-xs text-slate-500">{loadStatus}</p>}
       <LayoutVisualAuditCanvas
         nodes={previewNodes}
         layoutClassRefs={layoutClassRefs}
-        title="visual view"
+        title={UX_VISUAL_VIEW_SURFACE}
         minHeight={360}
       />
     </section>
