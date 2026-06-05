@@ -1,4 +1,23 @@
 # Agent Task List
+## Owner comments
+構造上の未接続（既知の設計ギャップ）
+canvas workspace で authoring した layout が demo に投影されない
+
+データフローが途中で切れています：
+
+admin canvas → layout_patch:apply → DB (topology.components_layout_design)
+                                         ↑
+                                    ここで止まっている
+demo route → dispatch → Emission → renderEmission() → ComponentSpec[]
+                  ↑
+           Emission に layoutNodes / layoutId フィールドがない
+           structure_map.ts にも layoutId エントリがない
+具体的には：
+
+Emission 型（api/dispatch.ts）に layoutNodes / layoutId が存在しない
+renderEmission.ts は emission.componentIds しか見ていない
+structure_map.ts のエントリは packageId / schemaId / componentIds のみ — layoutId なし
+UserDemoStepper island が dispatch 結果から layout を取り出す経路がない
 
 ---
 未処理は **bundle 単位**で実装・レビューする。掲載は `not_started` / `partial` のみ。
