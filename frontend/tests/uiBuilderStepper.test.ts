@@ -21,8 +21,8 @@ Deno.test("getActiveStepIds: layout tab activates step 2", () => {
   assertEquals(getActiveStepIds("layout"), [2]);
 });
 
-Deno.test("getActiveStepIds: css tab activates layout and design subphases", () => {
-  assertEquals(getActiveStepIds("css"), [2, 2.5]);
+Deno.test("getActiveStepIds: design tab activates step 2.5", () => {
+  assertEquals(getActiveStepIds("design"), [2.5]);
 });
 
 Deno.test("step 1 label: 部品選択でパッケージ化", () => {
@@ -35,14 +35,14 @@ Deno.test("step 1 notes catalog is reference-only", () => {
 
 Deno.test("step 2 uses placement vocabulary without raw tab ids", () => {
   const s2 = UI_BUILDER_FLOW_STEPS[1];
-  assertEquals(s2.label, "配置");
-  assertEquals(s2.detail.includes("デザイン設定"), true);
+  assertEquals(s2.label, "配置を編集");
+  assertEquals(s2.detail.includes("デザインを編集"), true);
   assertEquals(s2.detail.toLowerCase().includes("layout_patch"), false);
 });
 
-Deno.test("step 2.5 uses design-settings label without component design phrase", () => {
+Deno.test("step 2.5 uses design label without component design phrase", () => {
   const designStep = UI_BUILDER_FLOW_STEPS.find((s) => s.id === 2.5)!;
-  assertEquals(designStep.label.includes("デザイン設定"), true);
+  assertEquals(designStep.label, "デザインを編集");
   assertEquals(designStep.label.toLowerCase().includes("component design"), false);
 });
 
