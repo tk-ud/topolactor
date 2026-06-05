@@ -58,8 +58,8 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     `${UX_CONTENTS_PAGE}でページ内容と${UX_DATA_SHAPE}を用意してください`,
   ],
   howToSteps: [
-    "部品を複数選択し、1 回でパッケージ化する（step 4.1）",
-    "パッケージを選び、canvas で layout draft をプレビューしながら parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する。cssTokenRefs・色・形はデザイン設定タブで保存（step 4.2）",
+    "部品カードを複数選択し、1 回でパッケージ化する（step 4.1）",
+    "パッケージを選び、左パネルの配置可能カードをドラッグして canvas に置く。配置・デザインインスペクタで parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する。cssTokenRefs・色・形はデザイン設定タブで保存（step 4.2）",
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],

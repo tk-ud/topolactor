@@ -1433,37 +1433,19 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        /admin/ui-builder includes a Figma-like mouse-driven visual layout editor v2 (Issue #89).
-        LayoutPalette shows catalog entries; components with registrationRequired:true are
-        labeled (draft) and blocked from layout_patch:apply.
-        Apply guard: isDraftOnly nodes → APPLY_BLOCKED frontend-side + backend fail-close
-        (DRAFT_ONLY_NODE_NOT_APPLICABLE) so draft-only payloads cannot persist to
-        topology.components_layout_design/topology.ui_topology_tensor.
-        v2 canvas: absolute-positioned nodes with x/y/width/height; mouse drag to move;
-        resize handles (8 directions) to change size; grid snap (10px); selection state;
-        CanvasInspector for x/y/w/h/slotKey/parentNodeId/gridCol/gridRow numeric editing;
-        LayerTree for node listing/selection/reordering/deletion.
-        buildVisualLayoutPatchJson includes x/y/width/height in patch payload.
-        Canvas nodes render read-only live component preview inside layout manipulation frames
-        (layoutComponentPreview + LayoutComponentPreviewFallback; previewMode suppresses runtime
-        event dispatch). Box primitive uses layout/box factory, not Card surrogate.
-        Package selection hydrates layout_patch_json from ui_topology:get_layout_patch_draft;
-        empty persisted patch seeds stacked nodes from promoted palette. layout_patch:preview
-        normalized tensorPatchJson is applied back to canvas and layer tree immediately.
-        layoutClassRefs preview resolves allowed_for roles: layout_root/section/row on canvas
-        frame, component_wrapper on node wrappers, preview_state on selected node only.
-        Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
-        No direct DB write. Frontend holds draft projection state only; topology persistence
-        authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
-        Frontend authority boundary: draft layout state, mouse interaction, visual preview,
-        local readiness display, intent submission. No topology judgment, no promotion judgment.
-        layoutId round-trip closed: after successful apply, confirmed layoutId from backend response
-        updates frontend state via setLayoutId; explicit LAYOUT_ID_MISMATCH error raised if backend
-        returns a different layoutId than was sent — no silent fallback.
-        Full responsive token rule UI: per-breakpoint (sm/md/lg/xl) token selection rendered in
-        normal view via ResponsiveTokenRuleEditor with breakpoint tabs; raw JSON textarea isolated
-        under AdvancedManualOverride disclosure; filterEmptyResponsiveRules strips empty breakpoints
-        before backend submission; replaces previous hardcoded { md: selectedTokenRefs } placeholder.
+        /admin/ui-builder layout editor canvas workspace aligns with admin-console-workflow-ssot
+        canvas_workspace_contract (PR#364 follow-up). components_bucket and layout left panel use
+        shared icon-style component-bucket-card vocabulary (not table-primary UX). Placement-ready
+        cards drag to center canvas via handleDragStartPalette/handleDropOnCanvas → makeNewNode →
+        buildVisualLayoutPatchJson; unpromoted or non-package-scoped drops fail-close with explicit
+        guidance (no frontend DB write). BUCKET_CARD_DRAG_MIME payload carries componentKey,
+        packageId, layoutId, wiringId, tensorId, isDraftOnly for drop validation.
+        layout-right-dock uses clamp(320px, 24vw, 420px) — not 200px fixed — with accordion
+        LayerTree, CanvasInspector, and CanvasDesignInspector (CssTokenPicker, inlineText, link)
+        on the same selectedNode via data-selected-node-id. Empty canvas primary guidance is
+        drag-to-canvas from left panel cards; package-unselected shows UX_PACKAGE_REQUIRED_FOR_CANVAS.
+        v2 canvas, layout_patch preview/validate/apply, draft-only apply guard, layoutId round-trip,
+        and responsive token rule UI remain; production_ready still gated on manual acceptance.
       files:
         - frontend/islands/UiBuilderAdmin.tsx
         - frontend/runtime/visualLayoutUtils.ts
@@ -1488,14 +1470,20 @@ system_roadmap_ssot:
         - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
         - layoutId_round_trip_from_backend_response_updates_frontend_state_with_explicit_mismatch_error
         - responsive_token_rule_UI_per_breakpoint_with_empty_rule_filter_before_backend_submission
+        - canvas_workspace_bucket_cards_not_table_primary_ux
+        - canvas_workspace_bucket_card_drag_to_center_canvas_on_promoted_entries
+        - canvas_workspace_right_dock_practical_width_not_200px_fixed
+        - canvas_workspace_empty_canvas_drag_to_canvas_primary_guidance
       evidence:
         tests:
           - visualLayoutBuilder.test.ts (layoutId round-trip: 5 tests)
           - visualLayoutBuilder.test.ts (filterEmptyResponsiveRules: 5 tests)
           - visualLayoutBuilder.test.ts (responsive rule per-breakpoint: 4 tests)
           - visualLayoutBuilder.test.ts (RESPONSIVE_BREAKPOINTS export: sm/md/lg/xl)
+          - visualLayoutBuilder.test.ts (canvas workspace bucket card / drag / right dock guards)
           - runtimeComponentFactory.test.ts (layout canvas preview: 8 tests)
           - visualLayoutBuilder.test.ts (layout canvas live preview: 3 tests)
+          - adminUxGuard.test.ts (canvas_workspace_contract bucket cards / drag / right dock)
         ci:
           - frontend-tests
       known_gap_ref: []
