@@ -762,16 +762,17 @@ function ApplyReadinessPanel({
         <li class="flex items-start gap-2">
           <span class="text-blue-600 text-xs">i</span>
           <span class="text-xs">
-            visual canvas: {draftNodes.length} ノード
+            layout nodes: {draftNodes.length} 件
             {customPositionedCount > 0
-              ? ` (${customPositionedCount} 件カスタム配置)`
-              : draftNodes.length > 0 ? " (デフォルト配置)" : ""}
+              ? ` (${customPositionedCount} 件 canvas 位置調整済み)`
+              : draftNodes.length > 0 ? " (canvas デフォルト配置)" : ""}
           </span>
         </li>
         <li class="flex items-start gap-2">
           <span class="text-muted-xs">i</span>
           <span class="text-muted-xs">
-            色・余白トークンは「デザイン設定」タブで保存します（配置の保存では位置のみ）。
+            保存対象は layout child の構造情報（parentNodeId / slotKey / orderIndex / layoutClassRefs / x/y/width/height）。
+            cssTokenRefs・色・形は「デザインを編集」タブで保存します。
           </span>
         </li>
       </ul>
@@ -2412,11 +2413,11 @@ function VisualLayoutCanvas({
         <div class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <div class="text-4xl text-gray-200" aria-hidden="true">☐</div>
           <div>
-            <p class="text-base font-semibold text-gray-500">キャンバスが空です</p>
+            <p class="text-base font-semibold text-gray-500">layout draft が空です</p>
             <p class="mt-1 text-sm text-gray-400">
               {allowEmptyStateTemplates
-                ? "左のパレットからドラッグするか、下のボタンでコンポーネントを追加してください"
-                : "左のパレット（パッケージ内の配置可能部品）からドラッグして追加してください"}
+                ? "左のパレットで部品を追加すると、ここに layout draft のリアルタイムプレビューが表示されます。追加後にドラッグ・リサイズで位置を調整できます。"
+                : "左のパレット（パッケージ内の配置可能部品）で「追加」すると layout draft のプレビューが表示されます。"}
             </p>
           </div>
           {onAddFromEmptyState && allowEmptyStateTemplates && (
@@ -2732,6 +2733,22 @@ function CanvasInspector({
             </button>
           </div>
         </AdvancedManualOverride>
+
+        {/* orderIndex — layout child の表示順 */}
+        <label class="flex flex-col gap-0.5">
+          <span class="text-[0.65rem] text-gray-600">表示順 (orderIndex)</span>
+          <input
+            type="number"
+            min={0}
+            value={node.orderIndex}
+            onInput={(e) => {
+              const v = parseInt((e.target as HTMLInputElement).value, 10);
+              if (!isNaN(v) && v >= 0) onCommit({ orderIndex: v }, "orderIndexを変更");
+            }}
+            class="input px-1 py-0.5"
+            aria-label="orderIndex (表示順)"
+          />
+        </label>
       </fieldset>
 
       {/* Gap 4: Friendly grid labels */}
@@ -2927,7 +2944,7 @@ function LayoutPalette({
       />
 
       <p class="mb-1.5 text-[0.62rem] text-gray-500">
-        ドラッグ or「追加」ボタンで配置
+        「追加」で layout node として追加。canvas 上でドラッグして位置調整できます。
       </p>
       {status && <p class="text-[0.62rem] text-gray-400">{status}</p>}
 
@@ -3668,7 +3685,16 @@ function LayoutBuilderSection({
         <p class="text-sm text-yellow-700 mb-2">ルートとレイアウトを選択してから操作してください。</p>
       )}
 
-      {/* Canvas toolbar — Gap 2: Undo/Redo buttons */}
+      {packageScopedLayout && (
+        <div class="mb-2 rounded border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-900">
+          <strong>レイアウトプレビュー &amp; 操作:</strong>{" "}
+          パレットで部品を追加し、canvas 上でドラッグ・リサイズして x/y/width/height を調整します。
+          parentNodeId・slotKey・orderIndex は右のインスペクタで編集してください。
+          layoutClassRefs は下の「スタイルクラス設定」で選択し、プレビュー → 検証 → 保存反映します。
+        </div>
+      )}
+
+      {/* layout draft プレビュー & 操作ツールバー */}
       <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
         <div class="flex items-center gap-1">
           <button
@@ -3720,7 +3746,7 @@ function LayoutBuilderSection({
         </span>
       </div>
 
-      {/* v2 main canvas area: palette + canvas + layer/inspector */}
+      {/* layout draft プレビュー & 操作エリア: palette + live canvas + inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
         {packageScopedLayout ? (
           <LayoutPalette
@@ -3784,7 +3810,10 @@ function LayoutBuilderSection({
         </div>
       </div>
 
-      <Accordion title="スタイルクラス設定" defaultOpen={false}>
+      <Accordion title="layoutClassRefs 設定（layout child の responsibility）" defaultOpen={false}>
+        <p class="text-muted-xs mb-2">
+          レイアウト投影専用のスタイルクラスを選択します。canvas の視覚装飾（cssTokenRefs 等）はここではなく「デザインを編集」タブで設定します。
+        </p>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
         <AdvancedManualOverride title="詳細設定 — クラスキーを直接入力">
@@ -3796,11 +3825,11 @@ function LayoutBuilderSection({
       </Accordion>
 
       <p class="mb-3 text-xs text-slate-600">
-        色・余白・CSS 辞書トークン・レスポンシブは
+        cssTokenRefs・color・spacing・radius は{" "}
         <button type="button" class="link" onClick={() => onNavigate?.("design")}>
-          部品デザイン タブ
+          デザインを編集 タブ
         </button>
-        で保存してください。
+        で保存します（design タブ担当）。ここでは canvas 操作と layout child のみ保存します。
       </p>
 
       <ApplyReadinessPanel

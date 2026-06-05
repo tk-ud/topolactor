@@ -35,7 +35,7 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
     id: 2,
     label: "配置を編集",
     detail:
-      "パッケージを選び、x/y/width/height・slotKey・layoutClassRefs を保存します（layout child）。色・形は「デザインを編集」タブです。",
+      "パッケージを選び、canvas で layout draft をリアルタイムプレビューしながら、parentNodeId・slotKey・orderIndex・layoutClassRefs を保存します（layout child）。canvas 上でドラッグ・リサイズして x/y/width/height を調整できます。cssTokenRefs・色・形は「デザインを編集」タブです。",
     tabTarget: "layout",
   },
   {
