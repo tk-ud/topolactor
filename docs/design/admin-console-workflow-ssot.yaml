@@ -19,7 +19,7 @@ admin_console_workflow_ssot:
     - define the canonical sequential authoring pipeline (single submit per numbered step, sequential DB persistence)
     - define /admin/contents as steps 1–3 of that pipeline (manifest shell through physical page binding)
     - define /admin/ui-builder as step 4 (component select → package; then package-only authoring of layout and component design children)
-    - define step 4 ui_builder_authoring_surfaces as four author-facing surfaces (package selection, layout editor, component design editor, visual view)
+    - define step 4 canvas_workspace_contract: full-width canvas workspace with docked panels (component bucket, html tag palette, layer inspector, design inspector, status bar); no separate layout/design/preview surfaces
     - define /admin/manifests as post-pipeline page-group hub / relation / navigation management (outside steps 1–4)
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
@@ -268,193 +268,188 @@ admin_console_workflow_ssot:
         handoff_after_success: /admin/ui-builder
 
       - step: 4
-        label: ui_topology_select_package_then_edit_package_children
+        label: ui_topology_package_then_canvas_workspace_edit
         route: /admin/ui-builder
-        user_facing_goal: 部品を選んでパッケージ化し、パッケージだけを対象に子階層の layout と component design を編集する
+        user_facing_goal: >
+          部品を選んでパッケージ化し、canvas workspace 上で配置・デザインを統合編集する。
+          canvas が主対象であり、画面遷移・タブ切り替えなしで操作が完結する。
+        design_rationale: >
+          Canvas renders actual catalog component previews — not wireframe rectangles or abstract boxes.
+          Because the canvas IS the preview, a separate read-only visual_view surface is unnecessary.
+          Because design is applied to the selected canvas object via a docked inspector panel,
+          a separate component_design_editor surface is unnecessary.
+          Implementation MUST NOT introduce tabs, steps, or separate routes for layout vs design vs preview.
         edit_target_contract:
           sole_authoring_target: package
           rule: >
-            After packaging, the UI Builder authoring surface selects and mutates packages only.
+            After packaging, the canvas workspace selects and mutates packages only.
             Bucket rows, bare component catalog entries, and unpackaged component ids are not
-            parallel edit targets. Layout and component design are child concerns under the
-            selected package, not separate top-level authoring objects.
-          child_hierarchy_under_package:
-            - child: layout
-              user_facing: UI 配置場所
-              authoring_surface_ref: ui_builder_authoring_surfaces.layout_editor
-              persists_under: topology.components_layout_design and package-linked layout composition (ui_topology_tensor layout axis)
-              responsibility:
-                - canvas placement, slots, order, responsive layout class refs, route-bound layout identity
-                - nesting, element add/copy/delete, structural HTML nodes, drag-and-drop move/reorder (see layout_editor surface)
-            - child: component_design
-              user_facing: UI の色・形・リアクション等
-              authoring_surface_ref: ui_builder_authoring_surfaces.component_design_editor
-              persists_under: topology.components_style_design and package layout vector pairs (componentId + designId)
-              responsibility:
-                - color, shape, styling tokens, interaction/reaction presentation intent per component within the package
-                - cssTokenRefs and responsive token rules where vocabulary SSOT applies
-                - inline text, link href, and styling for structural_html nodes from layout editor (see component_design_editor surface)
+            parallel edit targets. Placement and design are both scoped to the selected package.
         ux_phases:
           - phase: select_and_package
             user_facing: 部品選択 → パッケージ化
             note: >
-              Authors select component candidates (components_bucket / catalog, TS source_path).
-              Packaging submit creates or updates the package entity and its registry links.
-          - phase: edit_package_children
-            user_facing: パッケージを選び、layout と component design を編集
+              Authors pick catalog components from the bucket panel (icon-card format, not text list).
+              A single packaging submit creates or updates the package entity and its registry links.
+          - phase: canvas_workspace_edit
+            user_facing: canvas workspace で配置・デザインを編集
             note: >
-              Author picks one package (per route or manifest binding). All edits are scoped to that
-              package's layout child and component_design child only.
+              Full-width canvas is the primary workspace. Author drags components onto canvas,
+              selects placed nodes, and edits placement + design in docked inspector panels
+              without leaving the canvas workspace or switching surfaces.
         authority_ref:
           - docs/framework-policy.yaml ui_topology_tensor_persistence
           - docs/design/db-schema.yaml packages / components_layout_design / components_style_design
         internal_sequential_submits:
           note: >
-            Step 4 uses two user-facing phases with single submits. Phase B never authors bucket,
-            catalog-only, or free-floating components as the primary object.
+            Step 4 has two user phases. Phase B (canvas workspace) never leaves the canvas workspace;
+            bucket, catalog-only, or free-floating components are not the primary canvas objects.
           sub_steps:
             - sub_step: 4.1
               label: component_select_and_package
               user_facing_label: 部品選択でパッケージ化
               responsibility:
-                - present components_bucket as staging for TS component candidates (component_key, source_path, component_kind)
+                - present components_bucket as icon-style small-format cards (component_key, source_path, component_kind)
                 - user selects one or more components; packaging submit follows for route_key
                 - backend: package_generator generate then promote; yields package_id and linked layout_id, wiring_id, component_id set
               prohibited:
+                - text-only list presentation for bucket components
                 - separate author-facing register step before packaging
-                - opening layout or component_design editors before a package exists
+                - opening canvas workspace before a package exists
             - sub_step: 4.2
-              label: edit_package_layout_and_component_design
-              user_facing_label: パッケージの layout / component design 編集
+              label: canvas_workspace_edit
+              user_facing_label: canvas workspace で配置・デザインを編集
               responsibility:
-                - require package selection as the only edit root
-                - layout child submit: persist UI placement for the selected package (layout_patch preview, validate, apply or equivalent backend bundle)
-                - component_design child submit: persist styling and reaction intent for components bound inside that package
-                - optional per-component wiring remains under package scope; raw dispatcher fields in advanced disclosure only
+                - all placement AND design authoring happens inside the unified canvas workspace
+                - require package selection as the sole edit root
+                - layout_patch pipeline: preview → validate → apply for placement persistence
+                - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
+                - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
               prohibited:
                 - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
                 - treating promoted_palette component list as the edit root instead of package
-        ui_builder_authoring_surfaces:
-          note: >
-            Two author-facing surfaces on /admin/ui-builder arranged as a panel-based layout:
-            a full-width main canvas surrounded by fixed peripheral panels. Implementation MUST
-            map to these surfaces exactly; tab-based or workflow-step interpretations are
-            prohibited. Styling vocabulary authority remains css-dictionary-ssot and
-            topology-layout-class-ssot (raw tailwind/className is legacy-only).
-            REMOVED surfaces: component_design_editor (merged into layout_editor inspector panel),
-            visual_view (canvas now renders actual component previews — no separate read-only tab).
-          panel_layout:
-            main_canvas:
-              description: >
-                Full-width center canvas that renders actual catalog component previews and
-                structural HTML nodes in their placed positions. Not wireframe rectangles.
-              left_panel: components_bucket and html_tag_palette (fixed)
-              right_panel: component_inspector and layer_inspector (fixed, selection-driven)
-          surfaces:
-            - id: package_selection
-              order: 1
-              user_facing_label: package決定
-              purpose: >
-                Select required components from components_bucket and generate a package for the
-                target route.
-              responsibilities:
-                - present components_bucket as icon-style small-format cards (not text-only list)
-                - author selects one or more catalog components
-                - single package_generator promote_package submit creates or updates package entity and registry links
-              persistence:
-                backend_actions:
-                  - ui_component_bucket:create
-                  - package_generator:promote_package
-                persists_under:
-                  - topology.packages
-                  - topology.ui_topology_tensor package axis links
-              internal_sequential_submit_ref: sub_step 4.1
-              prohibited:
-                - separate author-facing register step before packaging
-                - opening layout_editor before a package exists
-            - id: layout_editor
-              order: 2
-              user_facing_label: layout editor
-              purpose: >
-                Configure nesting, placement, and presentation of components and structural HTML
-                elements inside the selected package. Unified panel-based editor — the canvas
-                renders actual component previews; design properties are edited in the right
-                inspector panel without switching surfaces.
-              panel_structure:
-                left_panel:
-                  - components_bucket: icon-style cards, drag-to-canvas to place
-                  - html_tag_palette: allowlist tags as draggable palette items
-                center_canvas:
-                  - renders actual catalog component previews (not abstract rectangles)
-                  - selected node highlighted with handles for resize/move
-                  - snap grid: 10px
-                right_panel:
-                  component_inspector:
-                    - color, shape, spacing, radius, typography via cssTokenRefs and responsiveTokenRefs
-                    - inline text content for display text and child text nodes
-                    - link href and link target for anchor nodes and link-bearing components
-                    - reactionIntent for interaction presentation intent
-                    - style_vocabulary_authority_ref: docs/design/css-dictionary-ssot.yaml
-                  layer_inspector:
-                    - tree view of parentNodeId nesting
-                    - selection-driven; no free-floating layer move arrows
-                    - selected node properties shown in component_inspector above
-              responsibilities:
-                - nest package-bound catalog components via parentNodeId tree
-                - add, copy, and delete layout nodes (catalog_component and structural_html)
-                - add structural HTML elements from the allowlist as first-class layout nodes
-                - assign layoutClassRefs per node from topology-layout-class-ssot vocabulary
-                - move and reorder nodes via drag-and-drop on the main canvas
-                - edit design properties (color, shape, text, links, reactions) in the right inspector panel
-                - canvas auto-saves all operations to _tmp draft state (no data loss on interruption)
-                - explicit apply promotes _tmp draft and removes the _tmp marker
-              node_kind_contract:
-                catalog_component:
-                  description: promoted palette or component registry entry bound inside the package
-                  required_fields: [nodeId, componentKey, parentNodeId, slotKey, orderIndex]
-                structural_html:
-                  description: general Preact-renderable HTML scaffold node added in layout editor
-                  required_fields: [nodeId, nodeKind, htmlTag, parentNodeId, slotKey, orderIndex]
-                  html_tag_allowlist:
-                    block: [div, section, article, aside, header, footer, main, nav]
-                    heading: [h1, h2, h3, h4, h5, h6]
-                    inline: [span, p, a, strong, em, label]
-                    form: [button, input, textarea, select, form, fieldset, legend]
-                    media: [img, figure, figcaption]
-                    list: [ul, ol, li, dl, dt, dd]
-                    table: [table, thead, tbody, tfoot, tr, th, td]
-                  extension_policy: allowlist changes require SSOT amendment only
-              layout_class_authority_ref: docs/design/topology-layout-class-ssot.yaml
-              persistence:
-                draft_model:
-                  description: >
-                    Canvas operations auto-save to _tmp draft state so interrupted sessions can
-                    resume without data loss. The _tmp attribute is removed when apply is called.
-                  auto_save_trigger: any canvas placement, move, resize, or delete operation
-                  promote_trigger: explicit layout_patch:apply call
-                  _tmp_cleared_by: layout_patch:apply
-                backend_actions:
-                  - layout_patch:preview
-                  - layout_patch:validate
-                  - layout_patch:apply
-                  - component_style_design:upsert
-                persists_under:
-                  - topology.components_layout_design
-                  - topology.ui_topology_tensor layout_patch_json
-                  - topology.components_style_design
-              accessibility_ref: docs/system-roadmap.yaml admin_visual_layout_builder keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
-              prohibited:
-                - raw className, raw tailwind, or inline style as the normal layout authoring path
-                - frontend direct DB write
-                - authoring layout against bucket rows, catalog-only entries, or non-package roots
-                - persisting design tokens through layout_patch:apply (layout_patch owns placement/tensor only; design uses component_style_design:upsert)
-                - separate tab or surface for design editing (inspector panel is the design surface)
-                - separate read-only visual preview tab (canvas itself renders actual previews)
+                - separate tab, route, or surface for placement vs design vs preview
+        canvas_workspace_contract:
+          overview: >
+            The canvas workspace is the primary UI of /admin/ui-builder.
+            It occupies the full remaining width of the viewport after docked panels are reserved.
+            All placement, design, and preview happens inside the canvas workspace — no tab switching,
+            no surface transitions, no separate read-only preview route.
+          screen_layout:
+            left_panel:
+              position: fixed left, docked
+              panels:
+                component_bucket_panel:
+                  content: catalog components as icon-style small cards
+                  interaction: drag card onto canvas to place a catalog_component node
+                html_tag_panel:
+                  content: structural HTML tags from the allowlist as palette items
+                  interaction: drag tag onto canvas to place a structural_html node
+            center_canvas:
+              position: full remaining width (width: 100% of viewport minus docked panels)
+              rendering: >
+                Renders actual catalog component previews and structural HTML nodes
+                in their placed positions. NOT wireframe rectangles or placeholder boxes.
+                Canvas state always reflects the current draft (including _tmp auto-saved state).
+              snap_grid: 10px
+              node_interaction:
+                - click to select; selection drives both inspector panels
+                - drag to move; resize via handles
+                - delete key or panel button to remove node
+              design_rationale_for_no_separate_preview: >
+                Canvas renders actual components, so the canvas itself IS the preview.
+                A separate visual_view tab or route adds no information and is prohibited.
+            right_panel:
+              position: fixed right, docked
+              panels:
+                layer_inspector:
+                  purpose: manage parentNodeId nesting, slotKey assignment, and orderIndex
+                  responsibilities:
+                    - display full node tree (parentNodeId hierarchy) for the selected package
+                    - click any tree node to select it (drives center canvas + design_inspector)
+                    - drag tree nodes to reparent (change parentNodeId) or reorder (change orderIndex)
+                    - show slotKey and orderIndex per node; allow inline edit
+                    - no free-floating move-up/down arrow buttons; tree drag IS the reorder affordance
+                  required_fields_shown: [nodeId, nodeKind, componentKey or htmlTag, parentNodeId, slotKey, orderIndex]
+                design_inspector:
+                  purpose: edit all presentation properties of the selected canvas node
+                  responsibilities:
+                    - cssTokenRefs: color, background, border, radius, shadow via css-dictionary-ssot vocabulary
+                    - responsiveTokenRefs: responsive breakpoint token overrides
+                    - typography tokens: font family, size, weight, line-height from css-dictionary-ssot
+                    - spacing tokens: margin, padding from css-dictionary-ssot
+                    - layoutClassRefs: assign topology-layout-class-ssot vocabulary refs per node
+                    - inlineText: editable text content for display text and child text nodes
+                    - linkHref and linkTarget: for anchor (a) nodes and link-bearing components
+                    - reactionIntent: interaction presentation intent (hover, active, focus behaviors)
+                    - no-selection state: shows placeholder "ノードを選択してください" — no empty panel
+                  style_vocabulary_authority_ref: docs/design/css-dictionary-ssot.yaml
+                  layout_class_authority_ref: docs/design/topology-layout-class-ssot.yaml
+                  prohibited:
+                    - raw tailwind strings or raw className as the normal authoring path
+                    - freeform CSS input in the default view (advanced disclosure only)
+            status_bar:
+              position: bottom, fixed
+              content:
+                - current _tmp draft state indicator (unsaved / auto-saved / applied)
+                - layout_patch action buttons: preview / validate / apply
+                - apply clears _tmp and promotes draft to persisted state
+          draft_persistence_model:
+            rationale: >
+              Web sessions can be interrupted. Canvas auto-saves all operations to _tmp so
+              authors can resume without data loss. Explicit apply is required to promote to
+              persisted state and remove _tmp.
+            auto_save:
+              trigger: any canvas placement, move, resize, delete, or design token change
+              storage: _tmp attribute on the layout/design record
+            promote:
+              trigger: explicit layout_patch:apply call
+              effect: removes _tmp marker; draft becomes persisted state
+            backend_actions:
+              placement_pipeline:
+                - layout_patch:preview
+                - layout_patch:validate
+                - layout_patch:apply
+              design_persistence:
+                - component_style_design:upsert
+            persists_under:
+              - topology.components_layout_design
+              - topology.ui_topology_tensor layout_patch_json
+              - topology.components_style_design
+          node_kind_contract:
+            catalog_component:
+              description: promoted palette or component registry entry bound inside the package
+              required_fields: [nodeId, componentKey, parentNodeId, slotKey, orderIndex]
+              canvas_rendering: renders actual component preview (LayoutPreviewNodeFrame)
+            structural_html:
+              description: Preact-renderable HTML scaffold node; first-class canvas node same as catalog_component
+              required_fields: [nodeId, nodeKind, htmlTag, parentNodeId, slotKey, orderIndex]
+              canvas_rendering: renders actual HTML element preview with inlineText / linkHref if set
+              html_tag_allowlist:
+                block: [div, section, article, aside, header, footer, main, nav]
+                heading: [h1, h2, h3, h4, h5, h6]
+                text: [p, span, strong, em, blockquote, pre, code]
+                link: [a]
+                form: [form, fieldset, legend, label, button, input, textarea, select, option]
+                media: [img, picture, figure, figcaption, video, audio]
+                list: [ul, ol, li, dl, dt, dd]
+                table: [table, thead, tbody, tfoot, tr, th, td, caption]
+              extension_policy: allowlist changes require SSOT amendment only; no unilateral implementation additions
+          accessibility_ref: docs/system-roadmap.yaml admin_visual_layout_builder keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
+          prohibited:
+            - separate tab, route, or modal for layout editing vs design editing vs preview
+            - wireframe rectangles or abstract placeholder boxes as the canvas rendering primitive
+            - visual_view as a separate surface (canvas IS the preview)
+            - component_design_editor as a separate surface (design_inspector IS the design surface)
+            - raw className, raw tailwind, or inline style as the normal authoring path
+            - frontend direct DB write
+            - non-package roots for layout or design authoring
+            - implementation_convenience_shortcuts_that_add_surfaces_not_in_this_contract
         prohibited:
           - non_package_roots_for_layout_or_design_authoring
           - ui_topology_component_catalog_only_interpretation_without_db_persistence
           - direct_DB_write_from_frontend
-          - implementation_convenience_shortcuts_that_diverge_from_ui_builder_authoring_surfaces
+          - tab_based_or_step_based_surface_separation_for_layout_vs_design_vs_preview
 
     post_pipeline_surfaces:
       - route: /admin/manifests
@@ -533,11 +528,11 @@ admin_console_workflow_ssot:
       domain_ownership:
         - phase A — component select then package (components_bucket icon-card staging + package_generator)
         - phase B — package-only edit root; unified panel-based layout+design editor (配置・色・形・リアクション等)
-        - ui_builder_authoring_surfaces — package_selection, layout_editor (ref step 4 ui_builder_authoring_surfaces)
+        - canvas_workspace_contract: full-width canvas + docked panels (ref step 4 canvas_workspace_contract)
         - component-level wiring from registry references
         - post-apply CI / guard handoff (does not change runtime semantics)
       edit_target_contract_ref: canonical_sequential_authoring_pipeline.steps[4].edit_target_contract
-      ui_builder_authoring_surfaces_ref: canonical_sequential_authoring_pipeline.steps[4].ui_builder_authoring_surfaces
+      canvas_workspace_contract_ref: canonical_sequential_authoring_pipeline.steps[4].canvas_workspace_contract
       explicitly_out_of_scope:
         - manifest empty register and logical/physical table authoring (steps 1–3 — /admin/contents)
         - runtime judgment ownership
