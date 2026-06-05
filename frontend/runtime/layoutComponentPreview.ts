@@ -113,7 +113,7 @@ export function buildLayoutPreviewPlaceholderProps(
   switch (componentKind) {
     case "action/button":
       return {
-        data: { label: shortLabel || "Button", variant: "primary", disabled: false },
+        data: { label: shortLabel || "Button", variant: "primary", disabled: true },
       };
     case "form_input/input":
     case "form_input/textarea":

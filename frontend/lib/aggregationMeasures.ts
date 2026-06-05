@@ -50,16 +50,17 @@ export function hydrateAggregationBlockConditions(
   return blocks.map((b, i) => {
     const searchConditions = b.searchConditions ?? [];
     const havingConditions = b.havingConditions ?? [];
-    if (i === 0 && !hasBlockSearch && globalSearch.length > 0) {
-      return { ...b, searchConditions: globalSearch, havingConditions };
-    }
-    if (i === 0 && !hasBlockHaving && globalHaving.length > 0) {
-      return { ...b, havingConditions: globalHaving };
+    if (i !== 0) {
+      return { ...b, searchConditions, havingConditions };
     }
     return {
       ...b,
-      searchConditions,
-      havingConditions,
+      searchConditions: !hasBlockSearch && globalSearch.length > 0
+        ? globalSearch
+        : searchConditions,
+      havingConditions: !hasBlockHaving && globalHaving.length > 0
+        ? globalHaving
+        : havingConditions,
     };
   });
 }
