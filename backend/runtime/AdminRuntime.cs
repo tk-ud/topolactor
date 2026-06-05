@@ -224,6 +224,7 @@ public partial class AdminRuntime
             "ui_topology:get_layout_patch_draft" => await DataGetLayoutPatchDraftAsync(vector, ct),
             "ui_topology:update_package_wiring" => await DataUpdatePackageWiringAsync(vector, ct),
             "component_style_design:list"      => await DataListComponentStyleDesignsAsync(vector, ct),
+            "component_style_design:save_tmp"  => await DataSaveComponentStyleDesignTmpAsync(vector, ct),
             "component_style_design:upsert"    => await DataUpsertComponentStyleDesignAsync(vector, ct),
             "layout_patch:preview"             => await DataLayoutPatchPreviewAsync(vector, ct),
             "layout_patch:validate"            => await DataLayoutPatchValidateAsync(vector, ct),
@@ -913,8 +914,9 @@ public partial class AdminRuntime
         }
         try
         {
-            await _uiTopologyRepository.SaveLayoutDraftTmpAsync(
+            var saveError = await _uiTopologyRepository.SaveLayoutDraftTmpAsync(
                 packageId, layoutId, request.RouteKey, request.TmpJson, ct);
+            if (saveError is not null) return (null, saveError);
             return (JsonSerializer.SerializeToElement(new { ok = true }), null);
         }
         catch (Exception ex)
@@ -1032,6 +1034,116 @@ public partial class AdminRuntime
         }
     }
 
+
+    private static object BuildComponentStyleDesignObject(
+        Guid? componentId,
+        string? layoutNodeId,
+        string? classname,
+        string? tailwind,
+        IReadOnlyList<string>? cssTokenRefs,
+        Dictionary<string, IReadOnlyList<string>>? responsiveTokenRefs,
+        string? inlineText,
+        string? linkHref,
+        string? linkTarget,
+        string? reactionIntent) => new
+    {
+        componentId = componentId?.ToString(),
+        layoutNodeId,
+        classname = classname ?? "",
+        tailwind = tailwind ?? "",
+        cssTokenRefs = cssTokenRefs ?? Array.Empty<string>(),
+        responsiveTokenRefs = responsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>(),
+        inlineText = inlineText ?? "",
+        linkHref = linkHref ?? "",
+        linkTarget = linkTarget ?? "",
+        reactionIntent = reactionIntent ?? "",
+    };
+
+    private static ValidationError? ValidateComponentStyleDesignTarget(
+        string packageIdText,
+        string? componentIdText,
+        string? layoutNodeIdText,
+        string name,
+        out Guid packageId,
+        out Guid? componentId,
+        out string? layoutNodeId)
+    {
+        packageId = Guid.Empty;
+        componentId = null;
+        layoutNodeId = string.IsNullOrWhiteSpace(layoutNodeIdText) ? null : layoutNodeIdText.Trim();
+        if (!Guid.TryParse(packageIdText, out packageId) || string.IsNullOrWhiteSpace(name))
+        {
+            return new ValidationError("COMPONENT_DESIGN_PAYLOAD_INVALID", "packageId and name are required.");
+        }
+        if (!string.IsNullOrWhiteSpace(componentIdText))
+        {
+            if (!Guid.TryParse(componentIdText, out var parsedComponentId))
+            {
+                return new ValidationError("COMPONENT_DESIGN_PAYLOAD_INVALID", "componentId must be a valid UUID when provided.");
+            }
+            componentId = parsedComponentId;
+        }
+        if (componentId is null && layoutNodeId is null)
+        {
+            return new ValidationError("COMPONENT_DESIGN_PAYLOAD_INVALID", "componentId or layoutNodeId is required.");
+        }
+        return null;
+    }
+
+    private async Task<ValidationError?> VerifyComponentStyleLayoutNodeTargetAsync(
+        Guid packageId,
+        string? layoutNodeId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(layoutNodeId))
+            return null;
+        return await _uiTopologyRepository.VerifyPackageLayoutNodeAsync(
+            packageId, layoutNodeId.Trim(), ct);
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataSaveComponentStyleDesignTmpAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null)
+            return (null, new ValidationError("PAYLOAD_REQUIRED", "payload is required for component_style_design:save_tmp"));
+        ComponentStyleDesignSaveTmpRequestDto? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ComponentStyleDesignSaveTmpRequestDto>(
+                vector.Payload.Value.GetRawText());
+        }
+        catch (JsonException ex)
+        {
+            return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
+        }
+        if (request is null)
+        {
+            return (null, new ValidationError("COMPONENT_DESIGN_PAYLOAD_INVALID", "payload could not be deserialized"));
+        }
+        var targetError = ValidateComponentStyleDesignTarget(
+            request.PackageId, request.ComponentId, request.LayoutNodeId, request.Name,
+            out var packageId, out var componentId, out var layoutNodeId);
+        if (targetError is not null) return (null, targetError);
+
+        var designJson = JsonSerializer.Serialize(BuildComponentStyleDesignObject(
+            componentId, layoutNodeId, request.Classname, request.Tailwind, request.CssTokenRefs,
+            request.ResponsiveTokenRefs, request.InlineText, request.LinkHref, request.LinkTarget, request.ReactionIntent));
+        try
+        {
+            var layoutNodeError = await VerifyComponentStyleLayoutNodeTargetAsync(packageId, layoutNodeId, ct);
+            if (layoutNodeError is not null) return (null, layoutNodeError);
+            var (designId, error) = await _uiTopologyRepository.SaveComponentStyleDesignDraftTmpForPackageAsync(
+                packageId, componentId, layoutNodeId, request.Name.Trim(), designJson, ct);
+            if (error is not null) return (null, error);
+            return (JsonSerializer.SerializeToElement(new { ok = true, designId = designId.ToString() }), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataSaveComponentStyleDesignTmpAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
     private async Task<(JsonElement? data, ValidationError? error)> DataUpsertComponentStyleDesignAsync(
         OperationVector vector, CancellationToken ct)
     {
@@ -1047,54 +1159,22 @@ public partial class AdminRuntime
         {
             return (null, new ValidationError("MALFORMED_PAYLOAD", ex.Message));
         }
-        if (request is null ||
-            !Guid.TryParse(request.PackageId, out var packageId) ||
-            string.IsNullOrWhiteSpace(request.Name))
+        if (request is null)
         {
-            return (null, new ValidationError(
-                "COMPONENT_DESIGN_PAYLOAD_INVALID",
-                "packageId and name are required."));
+            return (null, new ValidationError("COMPONENT_DESIGN_PAYLOAD_INVALID", "payload could not be deserialized"));
         }
+        var targetError = ValidateComponentStyleDesignTarget(
+            request.PackageId, request.ComponentId, request.LayoutNodeId, request.Name,
+            out var packageId, out var componentId, out var layoutNodeId);
+        if (targetError is not null) return (null, targetError);
 
-        Guid? componentId = null;
-        if (!string.IsNullOrWhiteSpace(request.ComponentId))
-        {
-            if (!Guid.TryParse(request.ComponentId, out var parsedComponentId))
-            {
-                return (null, new ValidationError(
-                    "COMPONENT_DESIGN_PAYLOAD_INVALID",
-                    "componentId must be a valid UUID when provided."));
-            }
-            componentId = parsedComponentId;
-        }
-
-        var layoutNodeId = string.IsNullOrWhiteSpace(request.LayoutNodeId)
-            ? null
-            : request.LayoutNodeId.Trim();
-
-        if (componentId is null && layoutNodeId is null)
-        {
-            return (null, new ValidationError(
-                "COMPONENT_DESIGN_PAYLOAD_INVALID",
-                "componentId or layoutNodeId is required."));
-        }
-
-        var designObj = new
-        {
-            componentId = componentId?.ToString(),
-            layoutNodeId,
-            classname = request.Classname ?? "",
-            tailwind = request.Tailwind ?? "",
-            cssTokenRefs = request.CssTokenRefs ?? Array.Empty<string>(),
-            responsiveTokenRefs = request.ResponsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>(),
-            inlineText = request.InlineText ?? "",
-            linkHref = request.LinkHref ?? "",
-            linkTarget = request.LinkTarget ?? "",
-            reactionIntent = request.ReactionIntent ?? "",
-        };
-        var designJson = JsonSerializer.Serialize(designObj);
+        var designJson = JsonSerializer.Serialize(BuildComponentStyleDesignObject(
+            componentId, layoutNodeId, request.Classname, request.Tailwind, request.CssTokenRefs,
+            request.ResponsiveTokenRefs, request.InlineText, request.LinkHref, request.LinkTarget, request.ReactionIntent));
         try
         {
+            var layoutNodeError = await VerifyComponentStyleLayoutNodeTargetAsync(packageId, layoutNodeId, ct);
+            if (layoutNodeError is not null) return (null, layoutNodeError);
             var (designId, error) = await _uiTopologyRepository.UpsertComponentStyleDesignForPackageAsync(
                 packageId, componentId, layoutNodeId, request.Name.Trim(), designJson, ct);
             if (error is not null) return (null, error);

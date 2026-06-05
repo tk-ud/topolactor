@@ -165,10 +165,12 @@ CREATE TABLE IF NOT EXISTS topology.components_style_design (
     design_id      UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     name           TEXT        NOT NULL UNIQUE,
     design         JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    design_draft_tmp_json JSONB,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 -- design shape: {componentId?: uuid, layoutNodeId?: string, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}, inlineText?: string, linkHref?: string, linkTarget?: string, reactionIntent?: string}
+-- design_draft_tmp_json stores the selected canvas node design auto-save draft; component_style_design:upsert promotes design and clears this _tmp field.
 -- CSS vocabulary authority is docs/design/css-dictionary-ssot.yaml (static YAML); DB stores promoted token refs/draft state, not CSS dictionary registry rows.
 -- componentId is a soft reference for filtering designs by component in the package editor.
 -- The authoritative component+design binding lives in topology.components_package_design.layout.

@@ -106,7 +106,7 @@ public class UiTopologyRepository
     }
 
     /// <summary>Auto-saves canvas tmp draft to layout_draft_tmp_json. Cleared on apply.</summary>
-    public virtual Task SaveLayoutDraftTmpAsync(
+    public virtual Task<ValidationError?> SaveLayoutDraftTmpAsync(
         Guid packageId,
         Guid layoutId,
         string routeKey,
@@ -164,6 +164,18 @@ public class UiTopologyRepository
             "UiTopologyRepository.VerifyLayoutPatchPackageBindingAsync must be overridden by a production implementation.");
     }
 
+    /// <summary>
+    /// Ensures a selected canvas layout node belongs to the package effective layout draft before design writes.
+    /// </summary>
+    public virtual Task<ValidationError?> VerifyPackageLayoutNodeAsync(
+        Guid packageId,
+        string layoutNodeId,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.VerifyPackageLayoutNodeAsync must be overridden by a production implementation.");
+    }
+
     public virtual Task<IReadOnlyList<PromotedPaletteEntryDto>> ListPromotedPaletteEntriesAsync(
         CancellationToken ct = default)
     {
@@ -202,6 +214,17 @@ public class UiTopologyRepository
         CancellationToken ct = default)
     {
         throw new NotImplementedException("UiTopologyRepository.UpsertComponentStyleDesignForPackageAsync must be overridden.");
+    }
+
+    public virtual Task<(Guid DesignId, ValidationError? Error)> SaveComponentStyleDesignDraftTmpForPackageAsync(
+        Guid packageId,
+        Guid? componentId,
+        string? layoutNodeId,
+        string name,
+        string designTmpJson,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException("UiTopologyRepository.SaveComponentStyleDesignDraftTmpForPackageAsync must be overridden.");
     }
 
     public virtual Task<IReadOnlyList<AdminPackageComponentDto>> ListPackageComponentsAsync(

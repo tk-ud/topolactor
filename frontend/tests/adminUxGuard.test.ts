@@ -15,9 +15,9 @@ import {
 } from "../content/adminGuides.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
-  isEnumBackedColumnDataType,
   DISPLAY_COLUMN_MODE_LABELS,
   HAVING_OPERATOR_OPTIONS,
+  isEnumBackedColumnDataType,
   LOGICAL_CONNECTOR_OPTIONS,
   NORMAL_VIEW_BANNED_TERMS,
   SEARCH_OPERATOR_OPTIONS,
@@ -51,8 +51,8 @@ import {
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import {
-  applySearchConditions,
   applyHavingConditions,
+  applySearchConditions,
 } from "../lib/searchConditionEval.ts";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
 
@@ -312,39 +312,92 @@ Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", a
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(src.includes("LayoutPatchApplyHandoffModal"), "apply must open handoff modal");
-  assert(src.includes('onNavigate?.("design")'), "handoff must route to design tab");
-  assert(src.includes("setLayoutApplyHandoffOpen(true)"), "apply success must open handoff");
+  assert(
+    src.includes("LayoutPatchApplyHandoffModal"),
+    "apply must open handoff modal",
+  );
+  assert(
+    src.includes('announce("右パネルのデザインインスペクタで選択ノードを編集できます")'),
+    "handoff must route authors to the docked right-panel design inspector",
+  );
+  assert(
+    src.includes("setLayoutApplyHandoffOpen(true)"),
+    "apply success must open handoff",
+  );
 });
 
-Deno.test("UiBuilderAdmin: layout_patch preview opens SSOT visual audit modal surface", async () => {
+Deno.test("UiBuilderAdmin: layout_patch preview updates canvas without separate modal", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(src.includes("LayoutPatchPreviewModal"), "preview must use visual audit modal");
-  assert(src.includes("LayoutVisualAuditCanvas") || src.includes("layoutPatchPreviewNodes"),
-    "preview must render visual audit canvas nodes");
-  assert(src.includes("buildLayoutPatchPreviewAudit"), "preview must retain backend audit boundary");
+  assertFalse(
+    src.includes("LayoutPatchPreviewModal"),
+    "preview modal component must not remain in the normal authoring route",
+  );
+  assertFalse(
+    src.includes("LayoutVisualAuditCanvas"),
+    "separate visual audit canvas must not remain in the normal authoring route",
+  );
+  assertFalse(
+    src.includes("buildLayoutPatchPreviewAudit"),
+    "preview audit modal boundary must be removed from authoring route",
+  );
+  assertFalse(
+    src.includes("視覚監査モーダル") || src.includes("視覚監査"),
+    "normal UI copy must not advertise a separate visual audit modal",
+  );
+  assert(
+    src.includes("プレビュー結果を canvas とステータスに反映しました"),
+    "layout_patch:preview result must be reflected into the center canvas/status route",
+  );
 });
 
 Deno.test("UiBuilderAdmin: canvas node drag uses hold threshold to avoid click conflict", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(src.includes("CANVAS_DRAG_HOLD_MS"), "canvas drag must use hold delay");
-  assert(src.includes("pendingDragState"), "canvas drag must defer until hold or move threshold");
-  assert(src.includes("reorderLayoutNodeStack"), "layer stack reorder must use shared util");
+  assert(
+    src.includes("CANVAS_DRAG_HOLD_MS"),
+    "canvas drag must use hold delay",
+  );
+  assert(
+    src.includes("pendingDragState"),
+    "canvas drag must defer until hold or move threshold",
+  );
+  assert(
+    src.includes("reorderLayoutNodeStack"),
+    "layer stack reorder must use shared util",
+  );
 });
 
-Deno.test("UiBuilderAdmin: design tab exposes preview canvas and css token picker", async () => {
+Deno.test("UiBuilderAdmin: design inspector is selected canvas node driven and auto-saves design _tmp", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(src.includes("ComponentDesignPreviewCanvas"), "design tab must render preview canvas");
-  assert(src.includes('aria-label={UX_DESIGN_EDITOR_SURFACE}') || src.includes('aria-label="デザインプレビュー（読み取り専用）"'), "preview canvas must be labeled");
-  assert(src.includes("buildInlineStyleFromCssTokenRefs"), "preview must apply css token refs");
-  assert(src.includes('dispatchAdminOp("component_style_design", "list"'), "design tab must load saved designs");
-  assert(src.includes("CssTokenPicker"), "design tab must expose token picker for color/spacing/typography");
+  assert(
+    src.includes("selectedCanvasNode"),
+    "design inspector must receive selected canvas node",
+  );
+  assert(
+    src.includes("ノードを選択してください"),
+    "no-selection state must follow SSOT copy",
+  );
+  assert(
+    src.includes('"component_style_design",') && src.includes('"save_tmp",'),
+    "design token edits must auto-save to backend _tmp",
+  );
+  assert(
+    src.includes('"component_style_design",') && src.includes('"upsert",'),
+    "explicit save must promote design via upsert",
+  );
+  assert(
+    src.includes("CssTokenPicker"),
+    "design inspector must expose token picker for selected node",
+  );
+  assertFalse(
+    src.includes("ComponentDesignPreviewCanvas"),
+    "design inspector must not be a separate preview panel",
+  );
 });
 
 // ─── ContentsScreenDesignPanel data input + import wiring ─────────────────────
@@ -359,12 +412,21 @@ Deno.test("ContentsScreenDesignPanel: step 3 mounts embedded CSV/JSON import sub
     src.includes("onMergePreviewToEditor"),
     "must wire CSV/JSON preview merge into unified editor",
   );
-  assert(src.includes("ContentsDataEditor"), "must keep unified manual editor grid");
-  assert(src.includes("admin_csv_json_import") === false, "panel must use adminApi not raw layer strings");
+  assert(
+    src.includes("ContentsDataEditor"),
+    "must keep unified manual editor grid",
+  );
+  assert(
+    src.includes("admin_csv_json_import") === false,
+    "panel must use adminApi not raw layer strings",
+  );
   const adminApiSrc = await Deno.readTextFile(
     new URL("../api/adminApi.ts", import.meta.url),
   );
-  assert(adminApiSrc.includes('"admin_csv_json_import"'), "adminApi owns import layer");
+  assert(
+    adminApiSrc.includes('"admin_csv_json_import"'),
+    "adminApi owns import layer",
+  );
 });
 
 // ─── ContentsScreenDesignPanel Step 3 normal-view regression ───────────────────
@@ -909,7 +971,12 @@ Deno.test("normal view source guard: scanned default-path copy excludes extracte
         hitAt >= 0,
         `${relativePath} must not expose internal term "${term}" outside technical details` +
           (hitAt >= 0
-            ? ` (context: …${normalViewCopy.slice(Math.max(0, hitAt - 30), hitAt + needle.length + 30)}…)`
+            ? ` (context: …${
+              normalViewCopy.slice(
+                Math.max(0, hitAt - 30),
+                hitAt + needle.length + 30,
+              )
+            }…)`
             : ""),
       );
     }
@@ -922,7 +989,10 @@ Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy 
   );
   assertEquals(source.includes("Step 1"), true);
   assertEquals(source.includes("空登録"), true);
-  assertFalse(source.includes("⑧"), "legacy numbered promote step must not appear");
+  assertFalse(
+    source.includes("⑧"),
+    "legacy numbered promote step must not appear",
+  );
 });
 
 Deno.test("v0.8.0: UiBuilderFlowStepper reflects canvas workspace phases (not separate tabs)", async () => {
@@ -935,10 +1005,22 @@ Deno.test("v0.8.0: UiBuilderFlowStepper reflects canvas workspace phases (not se
   assertEquals(source.includes("UI_BUILDER_CANVAS_PHASES"), true);
   assertEquals(source.includes("UiBuilderPhaseId"), true);
   // Old tab-based vocabulary must be gone
-  assertFalse(source.includes('"layout editor"'), "old layout editor tab label must not appear");
-  assertFalse(source.includes('"component design editor"'), "old design editor tab label must not appear");
-  assertFalse(source.includes('"visual view"'), "old visual view tab label must not appear");
-  assertFalse(source.includes("UiBuilderTabId"), "old tab type must not appear");
+  assertFalse(
+    source.includes('"layout editor"'),
+    "old layout editor tab label must not appear",
+  );
+  assertFalse(
+    source.includes('"standalone design surface"'),
+    "old design editor tab label must not appear",
+  );
+  assertFalse(
+    source.includes('"visual view"'),
+    "old visual view tab label must not appear",
+  );
+  assertFalse(
+    source.includes("UiBuilderTabId"),
+    "old tab type must not appear",
+  );
 });
 
 Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette and copy operations", async () => {
@@ -957,10 +1039,24 @@ Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette a
   assertEquals(source.includes("cloneVisualNode"), true);
   // LayoutBuilderSection is the main canvas
   assertEquals(source.includes("LayoutBuilderSection"), true);
-  // Design inspector panel available in workspace (not separate tab)
-  assertEquals(source.includes("PackageDesignPanel"), true);
+  // Design inspector panel is docked in the LayoutBuilderSection right panel and selected-node driven.
+  const rightPanelIndex = source.indexOf("{/* right panel: layer tree + inspector */}");
+  const designPanelIndex = source.indexOf("<PackageDesignPanel", rightPanelIndex);
+  assert(rightPanelIndex >= 0, "right dock panel marker must exist");
+  assert(designPanelIndex > rightPanelIndex, "PackageDesignPanel must be rendered in the right dock");
+  assert(
+    source.slice(rightPanelIndex, designPanelIndex + 240).includes("selectedCanvasNode={selectedNode}"),
+    "docked design inspector must be driven by the selected canvas node",
+  );
+  assertFalse(
+    source.includes("designPanelOpen"),
+    "standalone design panel toggle must not remain in normal authoring",
+  );
   // No separate tab-based visual view panel
-  assertFalse(source.includes("function VisualViewPanel("), "VisualViewPanel must be removed");
+  assertFalse(
+    source.includes("function VisualViewPanel("),
+    "VisualViewPanel must be removed",
+  );
   assertFalse(source.includes("const TABS:"), "TABS constant must be removed");
 });
 
@@ -1020,7 +1116,15 @@ Deno.test("normal view terms: shared flow labels use user-facing page vocabulary
 
 Deno.test("normal view guide guard: adminGuides copy excludes pipeline and layout/design jargon", () => {
   const guideCopy = collectGuideNormalViewCopy().toLowerCase();
-  for (const term of ["pipeline", "post-pipeline", "layout / design", "submit", "component design"]) {
+  for (
+    const term of [
+      "pipeline",
+      "post-pipeline",
+      "separate layout/design surface",
+      "submit",
+      "standalone design surface",
+    ]
+  ) {
     assertFalse(
       guideCopy.includes(term),
       `adminGuides primary copy must not contain "${term}"`,
@@ -1052,8 +1156,8 @@ Deno.test("normal view banned terms: shared regression vocabulary covers extract
       "pipeline",
       "post-pipeline",
       "submit",
-      "layout / design",
-      "component design",
+      "separate layout/design surface",
+      "standalone design surface",
       "promote",
       "バケット",
       "add のみ",
@@ -1072,12 +1176,36 @@ Deno.test("normal view banned terms: shared regression vocabulary covers extract
 
 Deno.test("emptyManifestScreenDesign: has searchConditions, havingConditions, displayColumnMode", () => {
   const d = emptyManifestScreenDesign();
-  assertEquals(Array.isArray(d.searchConditions), true, "searchConditions must be an array");
-  assertEquals(d.searchConditions.length, 0, "searchConditions defaults to empty");
-  assertEquals(Array.isArray(d.havingConditions), true, "havingConditions must be an array");
-  assertEquals(d.havingConditions.length, 0, "havingConditions defaults to empty");
-  assertEquals(typeof d.displayColumnMode, "string", "displayColumnMode must be a string");
-  assertEquals(d.displayColumnMode, "selected", "displayColumnMode defaults to selected");
+  assertEquals(
+    Array.isArray(d.searchConditions),
+    true,
+    "searchConditions must be an array",
+  );
+  assertEquals(
+    d.searchConditions.length,
+    0,
+    "searchConditions defaults to empty",
+  );
+  assertEquals(
+    Array.isArray(d.havingConditions),
+    true,
+    "havingConditions must be an array",
+  );
+  assertEquals(
+    d.havingConditions.length,
+    0,
+    "havingConditions defaults to empty",
+  );
+  assertEquals(
+    typeof d.displayColumnMode,
+    "string",
+    "displayColumnMode must be a string",
+  );
+  assertEquals(
+    d.displayColumnMode,
+    "selected",
+    "displayColumnMode defaults to selected",
+  );
 });
 
 Deno.test("screen_data_shape topology extension: extracts searchConditions and havingConditions", () => {
@@ -1087,7 +1215,12 @@ Deno.test("screen_data_shape topology extension: extracts searchConditions and h
       tableRef: "my_table",
       searchTargets: [],
       searchConditions: [
-        { column: "col_a", operator: "=", value: "test", logicalConnector: "and" },
+        {
+          column: "col_a",
+          operator: "=",
+          value: "test",
+          logicalConnector: "and",
+        },
         { column: "col_b", operator: "between", value: "1", valueTo: "10" },
         { column: "col_c", operator: "in", values: ["x", "y"] },
         { column: "col_d", operator: "is null" },
@@ -1148,14 +1281,22 @@ Deno.test("screenDesignFromBackendShape: migrates global conditions into first b
     operationEntityBindings: [],
     initialDataRows: [],
     searchConditions: [{ column: "col_a", operator: "like", value: "test%" }],
-    havingConditions: [{ column: "salary", function: "avg", operator: ">=", value: "500" }],
+    havingConditions: [{
+      column: "salary",
+      function: "avg",
+      operator: ">=",
+      value: "500",
+    }],
     displayColumnMode: "none",
   };
   const draft = screenDesignFromBackendShape(shape, "list");
   assertEquals(draft.searchConditions.length, 0);
   assertEquals(draft.aggregationBlocks.length, 1);
   assertEquals(draft.aggregationBlocks[0]!.searchConditions.length, 1);
-  assertEquals(draft.aggregationBlocks[0]!.searchConditions[0].operator, "like");
+  assertEquals(
+    draft.aggregationBlocks[0]!.searchConditions[0].operator,
+    "like",
+  );
   assertEquals(draft.aggregationBlocks[0]!.havingConditions.length, 1);
   assertEquals(draft.aggregationBlocks[0]!.havingConditions[0].function, "avg");
   assertEquals(draft.displayColumnMode, "none");
@@ -1183,7 +1324,12 @@ Deno.test("screenDesignFromBackendShape: keeps global conditions when no aggrega
     operationEntityBindings: [],
     initialDataRows: [],
     searchConditions: [{ column: "col_a", operator: "like", value: "test%" }],
-    havingConditions: [{ column: "salary", function: "avg", operator: ">=", value: "500" }],
+    havingConditions: [{
+      column: "salary",
+      function: "avg",
+      operator: ">=",
+      value: "500",
+    }],
     displayColumnMode: "none",
   };
   const draft = screenDesignFromBackendShape(shape, "list");
@@ -1200,22 +1346,47 @@ Deno.test("DISPLAY_COLUMN_MODE_LABELS: covers selected/all/none", () => {
 
 Deno.test("SEARCH_OPERATOR_OPTIONS: includes all required operators including <> alias", () => {
   const ops = SEARCH_OPERATOR_OPTIONS.map((o) => o.value);
-  const required = ["=", "!=", "<>", "like", "ilike", "not like", ">", ">=", "<", "<=", "between", "in", "not in", "is null", "is not null"];
+  const required = [
+    "=",
+    "!=",
+    "<>",
+    "like",
+    "ilike",
+    "not like",
+    ">",
+    ">=",
+    "<",
+    "<=",
+    "between",
+    "in",
+    "not in",
+    "is null",
+    "is not null",
+  ];
   for (const op of required) {
-    assert(ops.includes(op), `SEARCH_OPERATOR_OPTIONS must include operator "${op}"`);
+    assert(
+      ops.includes(op),
+      `SEARCH_OPERATOR_OPTIONS must include operator "${op}"`,
+    );
   }
 });
 
 Deno.test("UX_FIELD_SEARCH_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
   assertEquals(typeof UX_FIELD_SEARCH_CONDITIONS, "string");
   assert(UX_FIELD_SEARCH_CONDITIONS.length > 0, "must be non-empty");
-  assertFalse(UX_FIELD_SEARCH_CONDITIONS.includes("searchConditions"), "must not expose internal field name");
+  assertFalse(
+    UX_FIELD_SEARCH_CONDITIONS.includes("searchConditions"),
+    "must not expose internal field name",
+  );
 });
 
 Deno.test("UX_FIELD_HAVING_CONDITIONS: is a non-empty user-facing label without internal vocabulary", () => {
   assertEquals(typeof UX_FIELD_HAVING_CONDITIONS, "string");
   assert(UX_FIELD_HAVING_CONDITIONS.length > 0, "must be non-empty");
-  assertFalse(UX_FIELD_HAVING_CONDITIONS.toLowerCase().includes("having"), "must not expose SQL HAVING keyword in primary label");
+  assertFalse(
+    UX_FIELD_HAVING_CONDITIONS.toLowerCase().includes("having"),
+    "must not expose SQL HAVING keyword in primary label",
+  );
 });
 
 Deno.test("displayColumnMode: none mode means aggregate-only display without row columns", () => {
@@ -1246,7 +1417,10 @@ Deno.test("HAVING_OPERATOR_OPTIONS: covers comparison operators including <> ali
 Deno.test("UX_FIELD_DISPLAY_MODE: is a non-empty user-facing label", () => {
   assertEquals(typeof UX_FIELD_DISPLAY_MODE, "string");
   assert(UX_FIELD_DISPLAY_MODE.length > 0, "must be non-empty");
-  assertFalse(UX_FIELD_DISPLAY_MODE.includes("displayColumnMode"), "must not expose internal field name");
+  assertFalse(
+    UX_FIELD_DISPLAY_MODE.includes("displayColumnMode"),
+    "must not expose internal field name",
+  );
 });
 
 // ─── applySearchConditions: AND/OR/NOT evaluation contract ───────────────────
@@ -1254,15 +1428,26 @@ Deno.test("UX_FIELD_DISPLAY_MODE: is a non-empty user-facing label", () => {
 // Connector is stored on the source row, evaluated when combining with the next.
 
 Deno.test("applySearchConditions: single condition = filters correctly", () => {
-  const rows = [{ col: "a" }, { col: "b" }, { col: "c" }] as Record<string, string>[];
-  const result = applySearchConditions(rows, [{ column: "col", operator: "=", value: "b" }]);
+  const rows = [{ col: "a" }, { col: "b" }, { col: "c" }] as Record<
+    string,
+    string
+  >[];
+  const result = applySearchConditions(rows, [{
+    column: "col",
+    operator: "=",
+    value: "b",
+  }]);
   assertEquals(result.length, 1);
   assertEquals(result[0]["col"], "b");
 });
 
 Deno.test("applySearchConditions: <> operator matches != semantics", () => {
   const rows = [{ col: "a" }, { col: "b" }] as Record<string, string>[];
-  const result = applySearchConditions(rows, [{ column: "col", operator: "<>", value: "a" }]);
+  const result = applySearchConditions(rows, [{
+    column: "col",
+    operator: "<>",
+    value: "a",
+  }]);
   assertEquals(result.length, 1);
   assertEquals(result[0]["col"], "b");
 });
@@ -1293,7 +1478,10 @@ Deno.test("applySearchConditions: OR connector — either condition matches", ()
     { column: "dept", operator: "=", value: "HR" },
   ]);
   assertEquals(result.length, 2);
-  assert(result.some((r) => r["name"] === "Alice"), "Alice (Eng) must be included");
+  assert(
+    result.some((r) => r["name"] === "Alice"),
+    "Alice (Eng) must be included",
+  );
   assert(result.some((r) => r["name"] === "Bob"), "Bob (HR) must be included");
 });
 
@@ -1371,23 +1559,55 @@ Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from back
     operationEntityBindings: [],
     initialDataRows: [],
     searchConditions: [{ column: "col_a", operator: "=", value: "test" }],
-    havingConditions: [{ column: "salary", function: "sum", operator: ">", value: "1000" }],
+    havingConditions: [{
+      column: "salary",
+      function: "sum",
+      operator: ">",
+      value: "1000",
+    }],
     displayColumnMode: "none",
   };
   const design = emptyManifestScreenDesign();
-  const payload = buildAssignPayloadForStep(2, "manifest-id", design, shape as Parameters<typeof buildAssignPayloadForStep>[3]);
-  assertEquals(Array.isArray(payload.searchConditions), true, "searchConditions must be preserved");
-  assertEquals((payload.searchConditions ?? []).length, 1, "one searchCondition must survive step 2 re-save");
+  const payload = buildAssignPayloadForStep(
+    2,
+    "manifest-id",
+    design,
+    shape as Parameters<typeof buildAssignPayloadForStep>[3],
+  );
+  assertEquals(
+    Array.isArray(payload.searchConditions),
+    true,
+    "searchConditions must be preserved",
+  );
+  assertEquals(
+    (payload.searchConditions ?? []).length,
+    1,
+    "one searchCondition must survive step 2 re-save",
+  );
   assertEquals((payload.searchConditions ?? [])[0].column, "col_a");
-  assertEquals(Array.isArray(payload.havingConditions), true, "havingConditions must be preserved");
-  assertEquals((payload.havingConditions ?? []).length, 1, "one havingCondition must survive step 2 re-save");
-  assertEquals(payload.displayColumnMode, "none", "displayColumnMode must survive step 2 re-save");
+  assertEquals(
+    Array.isArray(payload.havingConditions),
+    true,
+    "havingConditions must be preserved",
+  );
+  assertEquals(
+    (payload.havingConditions ?? []).length,
+    1,
+    "one havingCondition must survive step 2 re-save",
+  );
+  assertEquals(
+    payload.displayColumnMode,
+    "none",
+    "displayColumnMode must survive step 2 re-save",
+  );
 });
-
 
 Deno.test("Step3 aggregation: block add UI is exposed in normal view", async () => {
   const source = await Deno.readTextFile(
-    new URL("../components/ContentsAggregationMeasuresEditor.tsx", import.meta.url),
+    new URL(
+      "../components/ContentsAggregationMeasuresEditor.tsx",
+      import.meta.url,
+    ),
   );
   assert(
     source.includes("集計ブロックを追加") &&
@@ -1431,19 +1651,32 @@ Deno.test("Step3 progressive disclosure: raw inputs remain disclosed", async () 
 
 Deno.test("Step3 progressive disclosure: search operator UI lives inside aggregation block", async () => {
   const source = await Deno.readTextFile(
-    new URL("../components/AggregationBlockConditionsEditor.tsx", import.meta.url),
+    new URL(
+      "../components/AggregationBlockConditionsEditor.tsx",
+      import.meta.url,
+    ),
   );
   const advancedStart = source.indexOf(`{UX_FIELD_ADVANCED_SEARCH_CONDITIONS}`);
-  const operatorStart = source.indexOf("SEARCH_OPERATOR_OPTIONS.map", advancedStart);
-  assert(advancedStart >= 0, "advanced search disclosure summary must exist inside aggregation block");
-  assert(operatorStart > advancedStart, "search operator select must live inside the block conditions editor");
+  const operatorStart = source.indexOf(
+    "SEARCH_OPERATOR_OPTIONS.map",
+    advancedStart,
+  );
+  assert(
+    advancedStart >= 0,
+    "advanced search disclosure summary must exist inside aggregation block",
+  );
+  assert(
+    operatorStart > advancedStart,
+    "search operator select must live inside the block conditions editor",
+  );
   assert(
     source.includes("searchConditions.length === 0") &&
       source.includes(`{UX_FIELD_ADD_SEARCH_CONDITION}`),
     "zero-condition state must show only the add-search-condition path before condition rows",
   );
   assert(
-    source.includes("{ci > 0 && (") && source.includes(`{UX_FIELD_LOGICAL_CONDITION}`),
+    source.includes("{ci > 0 && (") &&
+      source.includes(`{UX_FIELD_LOGICAL_CONDITION}`),
     "AND/OR/NOT logical connector UI must only appear from the second condition onward",
   );
   const panelSource = await Deno.readTextFile(
