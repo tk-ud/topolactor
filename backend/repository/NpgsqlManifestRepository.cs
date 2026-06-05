@@ -203,23 +203,39 @@ public class NpgsqlManifestRepository : ManifestRepository
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) " +
-            "VALUES (@id, @rel, @topology, 'draft') " +
-            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
-        cmd.Parameters.AddWithValue("id", manifestId);
-        cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
-        AddTopologyArrayParameter(cmd, "topology", topology);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        ManifestDetailRecord created;
+        await using (var cmd = conn.CreateCommand())
         {
-            return (null, new ValidationError("MANIFEST_CREATE_FAILED", "Failed to create draft manifest."));
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "INSERT INTO manifest (manifest_id, relation_registry_id, topology, status) " +
+                "VALUES (@id, @rel, @topology, 'draft') " +
+                "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+            cmd.Parameters.AddWithValue("id", manifestId);
+            cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
+            AddTopologyArrayParameter(cmd, "topology", topology);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                await tx.RollbackAsync(ct);
+                return (null, new ValidationError("MANIFEST_CREATE_FAILED", "Failed to create draft manifest."));
+            }
+
+            created = ReadDetailRecord(reader);
         }
 
-        return (ReadDetailRecord(reader), null);
+        var projectionError = await ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync(conn, created, ct, tx);
+        if (projectionError is not null)
+        {
+            await tx.RollbackAsync(ct);
+            return (null, projectionError);
+        }
+
+        await tx.CommitAsync(ct);
+        return (created, null);
     }
 
     /// <inheritdoc/>
@@ -241,23 +257,39 @@ public class NpgsqlManifestRepository : ManifestRepository
 
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
 
-        await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "UPDATE manifest SET relation_registry_id = @rel, topology = @topology, updated_at = now() " +
-            "WHERE manifest_id = @id AND status = 'draft' " +
-            "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
-        cmd.Parameters.AddWithValue("id", manifestId);
-        cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
-        AddTopologyArrayParameter(cmd, "topology", topology);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (!await reader.ReadAsync(ct))
+        ManifestDetailRecord updated;
+        await using (var cmd = conn.CreateCommand())
         {
-            return (null, new ValidationError("MANIFEST_UPDATE_FAILED", $"Failed to update draft manifest {manifestId}."));
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "UPDATE manifest SET relation_registry_id = @rel, topology = @topology, updated_at = now() " +
+                "WHERE manifest_id = @id AND status = 'draft' " +
+                "RETURNING manifest_id, relation_registry_id, topology, status, created_at, updated_at";
+            cmd.Parameters.AddWithValue("id", manifestId);
+            cmd.Parameters.AddWithValue("rel", (object?)relationRegistryId ?? DBNull.Value);
+            AddTopologyArrayParameter(cmd, "topology", topology);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct))
+            {
+                await tx.RollbackAsync(ct);
+                return (null, new ValidationError("MANIFEST_UPDATE_FAILED", $"Failed to update draft manifest {manifestId}."));
+            }
+
+            updated = ReadDetailRecord(reader);
         }
 
-        return (ReadDetailRecord(reader), null);
+        var projectionError = await ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync(conn, updated, ct, tx);
+        if (projectionError is not null)
+        {
+            await tx.RollbackAsync(ct);
+            return (null, projectionError);
+        }
+
+        await tx.CommitAsync(ct);
+        return (updated, null);
     }
 
     /// <inheritdoc/>
@@ -321,7 +353,7 @@ public class NpgsqlManifestRepository : ManifestRepository
             promoted = ReadDetailRecord(reader);
         }
 
-        var projectionError = await ManifestCanonicalProjection.ProjectOnPromoteAsync(conn, promoted, ct);
+        var projectionError = await ManifestCanonicalProjection.ProjectOnPromoteAsync(conn, promoted, ct, tx);
         if (projectionError is not null)
         {
             await tx.RollbackAsync(ct);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import { JSX } from "preact";
 import {
   type AdminImportApplyResult,
@@ -79,6 +79,19 @@ export function AdminImportPanel({
     })();
   }, []);
 
+  const manifestOptions = useMemo(() => {
+    if (!embedded || !defaultManifestId) return manifests;
+    if (manifests.some((m) => m.manifestId === defaultManifestId)) return manifests;
+    return [
+      {
+        manifestId: defaultManifestId,
+        status: "draft",
+        createdAt: "",
+      },
+      ...manifests,
+    ];
+  }, [manifests, embedded, defaultManifestId]);
+
   const handleFileChange = (e: Event) => {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -95,7 +108,7 @@ export function AdminImportPanel({
     reader.readAsText(file);
   };
 
-  const manifestsEmpty = !loadingSelectors && manifests.length === 0;
+  const manifestsEmpty = !loadingSelectors && manifestOptions.length === 0;
   const schemasEmpty = !loadingSelectors && schemas.length === 0;
   const canSelectInputs = !manifestsEmpty && !schemasEmpty;
 
@@ -225,9 +238,11 @@ export function AdminImportPanel({
                   class="input-mono mt-1 min-w-[260px]"
                 >
                   <option value="">— 画面を選択 —</option>
-                  {manifests.map((m, index) => (
+                  {manifestOptions.map((m, index) => (
                     <option key={m.manifestId} value={m.manifestId}>
-                      取り込み先 {index + 1}
+                      {m.manifestId === defaultManifestId && lockManifestId
+                        ? "このページ（編集中）"
+                        : `取り込み先 ${index + 1}`}
                     </option>
                   ))}
                 </select>

@@ -4,6 +4,19 @@ import type {
 } from "./manifestScreenDesign.ts";
 import type { ScreenOperationKind } from "../runtime/screenAuthoringIntent.ts";
 
+/** entityTargetColumns for one operation kind, stable column order. */
+export function projectionColumnsForOperationKind(
+  operationKind: ScreenOperationKind,
+  operationEntityBindings: OperationEntityBindingDraft[],
+  columnOrder: string[],
+): string[] {
+  return projectionColumnsFromOperationBindings(
+    [operationKind],
+    operationEntityBindings,
+    columnOrder,
+  );
+}
+
 /** Union of entityTargetColumns for selected operation kinds, stable column order. */
 export function projectionColumnsFromOperationBindings(
   operationKinds: ScreenOperationKind[],

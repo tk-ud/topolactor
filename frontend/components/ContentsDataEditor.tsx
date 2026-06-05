@@ -6,10 +6,15 @@ import {
   type ContentDataConformanceWarning,
 } from "../lib/contentDataConformance.ts";
 import {
+  generateUuidValue,
+  relationUuidCandidatesForColumn,
+} from "../lib/contentDataFieldHelpers.ts";
+import {
   type ContentDataRowDraft,
   dataRowValues,
   markDataRowEdited,
   type DataRowLineageSource,
+  type RelationIntentDraft,
 } from "../lib/manifestScreenDesign.ts";
 import type { QualifiedColumnRef } from "../lib/manifestLogicalTables.ts";
 import { UX_FIELD_ENUM_GROUP } from "../content/adminUxTerms.ts";
@@ -18,6 +23,7 @@ export type ContentsDataEditorProps = {
   qualifiedColumns: QualifiedColumnRef[];
   rows: ContentDataRowDraft[];
   enumGroupDetails: Record<string, EnumDictionaryGroupDetail>;
+  relationIntents?: RelationIntentDraft[];
   unresolvedRelationColumnKeys?: ReadonlySet<string>;
   onRowsChange: (rows: ContentDataRowDraft[]) => void;
 };
@@ -54,10 +60,24 @@ function warningsForRow(
   return warnings.filter((w) => w.rowIndex === rowIndex && !w.columnKey);
 }
 
+function isUuidType(dataType: string): boolean {
+  return dataType.trim().toLowerCase() === "uuid";
+}
+
+function isDateType(dataType: string): boolean {
+  return dataType.trim().toLowerCase() === "date";
+}
+
+function isTimestampType(dataType: string): boolean {
+  const t = dataType.trim().toLowerCase();
+  return t === "timestamp with time zone" || t === "timestamp" || t === "timestamptz";
+}
+
 export default function ContentsDataEditor({
   qualifiedColumns,
   rows,
   enumGroupDetails,
+  relationIntents = [],
   unresolvedRelationColumnKeys,
   onRowsChange,
 }: ContentsDataEditorProps): JSX.Element {
@@ -215,6 +235,105 @@ export default function ContentsDataEditor({
                           </td>
                         );
                       }
+
+                      const dataType = q.column.dataType;
+                      if (isUuidType(dataType)) {
+                        const candidates = relationUuidCandidatesForColumn(
+                          q.key,
+                          relationIntents,
+                          rows,
+                        );
+                        return (
+                          <td key={q.key} class="px-1 py-1">
+                            <div class="flex flex-col gap-1">
+                              {candidates.length > 0
+                                ? (
+                                  <select
+                                    class={inputClass}
+                                    value={values[q.key] ?? ""}
+                                    onChange={(e) =>
+                                      patchRow(
+                                        ri,
+                                        q.key,
+                                        (e.target as HTMLSelectElement).value,
+                                      )}
+                                  >
+                                    <option value="">（参照を選択）</option>
+                                    {candidates.map((id) => (
+                                      <option key={id} value={id}>{id}</option>
+                                    ))}
+                                  </select>
+                                )
+                                : (
+                                  <input
+                                    class={inputClass}
+                                    value={values[q.key] ?? ""}
+                                    placeholder="UUID"
+                                    onInput={(e) =>
+                                      patchRow(
+                                        ri,
+                                        q.key,
+                                        (e.target as HTMLInputElement).value,
+                                      )}
+                                  />
+                                )}
+                              <button
+                                type="button"
+                                class="text-left text-xs text-blue-600 hover:text-blue-800"
+                                onClick={() => patchRow(ri, q.key, generateUuidValue())}
+                              >
+                                新規 UUID を生成
+                              </button>
+                            </div>
+                            {cellWarnings.map((w, wi) => (
+                              <p key={wi} class="mt-0.5 text-amber-700">{w.message}</p>
+                            ))}
+                          </td>
+                        );
+                      }
+
+                      if (isDateType(dataType)) {
+                        return (
+                          <td key={q.key} class="px-1 py-1">
+                            <input
+                              type="date"
+                              class={inputClass}
+                              value={values[q.key] ?? ""}
+                              onInput={(e) =>
+                                patchRow(
+                                  ri,
+                                  q.key,
+                                  (e.target as HTMLInputElement).value,
+                                )}
+                            />
+                            {cellWarnings.map((w, wi) => (
+                              <p key={wi} class="mt-0.5 text-amber-700">{w.message}</p>
+                            ))}
+                          </td>
+                        );
+                      }
+
+                      if (isTimestampType(dataType)) {
+                        return (
+                          <td key={q.key} class="px-1 py-1">
+                            <input
+                              type="datetime-local"
+                              class={inputClass}
+                              value={values[q.key] ?? ""}
+                              onInput={(e) =>
+                                patchRow(
+                                  ri,
+                                  q.key,
+                                  (e.target as HTMLInputElement).value,
+                                )}
+                            />
+                            {cellWarnings.map((w, wi) => (
+                              <p key={wi} class="mt-0.5 text-amber-700">{w.message}</p>
+                            ))}
+                          </td>
+                        );
+                      }
+
                       return (
                         <td key={q.key} class="px-1 py-1">
                           <input

@@ -664,6 +664,71 @@ public class ManifestCanonicalProjectionUnitTests
     }
 
     /// <summary>
+    /// Authoring draft projection writes topology_manifests without requiring wiring table_ref.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "RequiresDatabase")]
+    public async Task ProjectOnAuthoringDraft_WritesTopologyManifest_WithoutWiringTableRef()
+    {
+        var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+                throw new InvalidOperationException(
+                    "TOPOLACTOR_TEST_DB_CONNECTION is required for manifest projection live DB regression " +
+                    "(TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 enforces DB presence).");
+            return;
+        }
+
+        var hubId = Guid.NewGuid();
+        var manifestId = Guid.NewGuid();
+        var missingTableRef = $"missing_authoring_table_{Guid.NewGuid():N}";
+        var topology = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new { type = "hub_grouping", hubId, manifestKey = $"authoring-{manifestId:N}" }),
+            JsonSerializer.SerializeToElement(new { type = "screen_data_shape", tableRef = missingTableRef }),
+        };
+        var detail = new ManifestDetailRecord(
+            manifestId, null, topology, "draft", DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+
+        await using var conn = new NpgsqlConnection(cs);
+        await conn.OpenAsync();
+
+        try
+        {
+            await using (var seedHub = new NpgsqlCommand(
+                "INSERT INTO hubs.hub (hub_id, relation) VALUES (@id, '{}'::jsonb)", conn))
+            {
+                seedHub.Parameters.AddWithValue("id", hubId);
+                await seedHub.ExecuteNonQueryAsync();
+            }
+
+            var error = await ManifestCanonicalProjection.ProjectOnAuthoringDraftAsync(conn, detail, default);
+
+            Assert.Null(error);
+            Assert.Equal(1, await CountAsync(
+                conn,
+                "SELECT count(*) FROM hubs.topology_manifests WHERE topology_manifest_id = @id",
+                manifestId));
+            Assert.Equal(0, await CountAsync(
+                conn,
+                "SELECT count(*) FROM topology.wiring_physical_to_package WHERE package_id = @id",
+                manifestId));
+        }
+        finally
+        {
+            await using var cleanup = new NpgsqlCommand(
+                "DELETE FROM topology.wiring_physical_to_package WHERE package_id = @manifest; " +
+                "DELETE FROM hubs.topology_manifests WHERE topology_manifest_id = @manifest; " +
+                "DELETE FROM hubs.hub WHERE hub_id = @hub",
+                conn);
+            cleanup.Parameters.AddWithValue("manifest", manifestId);
+            cleanup.Parameters.AddWithValue("hub", hubId);
+            await cleanup.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>
     /// Regression: a tableRef mismatch fails before canonical projection writes, even when the
     /// projection helper is called independently of NpgsqlManifestRepository's transaction.
     /// </summary>

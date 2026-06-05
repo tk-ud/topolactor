@@ -262,9 +262,10 @@ export const NORMAL_VIEW_BANNED_TERMS = [
 
 /** UI ビルダー内部タブ ID → 通常表示ラベル（主導線に raw id を出さない） */
 export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
-  bucket: "部品選択でパッケージ化",
-  layout: "配置",
-  design: "デザイン設定",
+  bucket: "package決定",
+  layout: "layout editor",
+  design: "component design editor",
+  visual: "visual view",
   css: "スタイル辞書",
   catalog: "部品カタログ（参照）",
   ci: "CI ガイダンス（参照）",

@@ -33,6 +33,20 @@ export function resolveCssTokenValue(tokenKey: string): string | undefined {
   return CSS_TOKEN_RESOLVED_VALUES[tokenKey];
 }
 
+/** Apply selected cssTokenRefs as inline styles for admin design preview canvas. */
+export function buildInlineStyleFromCssTokenRefs(
+  tokenRefs: string[],
+): Record<string, string> {
+  const style: Record<string, string> = {};
+  for (const key of tokenRefs) {
+    const token = CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
+    const value = resolveCssTokenValue(key);
+    if (!token || !value) continue;
+    style[token.property] = value;
+  }
+  return style;
+}
+
 export const CSS_DICTIONARY_TOKENS: CssDictionaryToken[] = [
   { tokenKey: "color.action.primary.background", category: "color", property: "background", componentScope: ["Button"], semanticRole: "primary_action" },
   { tokenKey: "color.action.primary.text", category: "color", property: "color", componentScope: ["Button"], semanticRole: "primary_action" },

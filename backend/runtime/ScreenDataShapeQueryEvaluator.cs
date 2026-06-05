@@ -37,6 +37,13 @@ public static class ScreenDataShapeQueryEvaluator
         string Operator,
         string Value);
 
+    public sealed record ResolvedAggregationBlock(
+        string SourceRef,
+        string? AggregationKey,
+        IReadOnlyList<(string Column, string Function)> Measures,
+        IReadOnlyList<ResolvedSearchCondition> SearchConditions,
+        IReadOnlyList<ResolvedHavingCondition> HavingConditions);
+
     public sealed record ScreenDataShapeQueryInput(
         IReadOnlyList<Dictionary<string, string>> InitialRows,
         IReadOnlyList<ResolvedSearchCondition> SearchConditions,
@@ -44,7 +51,8 @@ public static class ScreenDataShapeQueryEvaluator
         string? AggregationKey,
         IReadOnlyList<(string Column, string Function)> AggregationMeasures,
         IReadOnlyList<string> DisplayColumns,
-        string DisplayColumnMode);
+        string DisplayColumnMode,
+        IReadOnlyList<ResolvedAggregationBlock>? AggregationBlocks = null);
 
     public sealed record ScreenDataShapeQueryResult(
         IReadOnlyList<Dictionary<string, string>> Rows,
@@ -57,23 +65,14 @@ public static class ScreenDataShapeQueryEvaluator
         ArgumentNullException.ThrowIfNull(input);
         var errors = new List<ValidationError>();
 
-        foreach (var cond in input.SearchConditions)
+        ValidateSearchConditions(input.SearchConditions, errors);
+        ValidateHavingConditions(input.HavingConditions, errors);
+        if (input.AggregationBlocks is { Count: > 0 } blocks)
         {
-            if (!SearchOperators.Contains(cond.Operator))
+            foreach (var block in blocks)
             {
-                errors.Add(new ValidationError(
-                    "SEARCH_OPERATOR_UNKNOWN",
-                    $"searchConditions operator '{cond.Operator}' is not in the SSOT vocabulary."));
-            }
-        }
-
-        foreach (var hc in input.HavingConditions)
-        {
-            if (!HavingOperators.Contains(hc.Operator))
-            {
-                errors.Add(new ValidationError(
-                    "HAVING_OPERATOR_UNKNOWN",
-                    $"havingConditions operator '{hc.Operator}' is not in the SSOT vocabulary."));
+                ValidateSearchConditions(block.SearchConditions, errors);
+                ValidateHavingConditions(block.HavingConditions, errors);
             }
         }
 
@@ -82,20 +81,105 @@ public static class ScreenDataShapeQueryEvaluator
             return new ScreenDataShapeQueryResult([], [], [], errors);
         }
 
-        var filtered = ApplySearchConditions(input.InitialRows, input.SearchConditions);
         var aggregationResults = new List<Dictionary<string, object?>>();
+        IReadOnlyList<Dictionary<string, string>> filtered;
 
-        if (!string.IsNullOrWhiteSpace(input.AggregationKey) && input.AggregationMeasures.Count > 0)
+        if (input.AggregationBlocks is { Count: > 0 } aggregationBlocks)
         {
-            var groups = GroupRows(filtered, input.AggregationKey);
-            groups = ApplyHavingConditions(groups, input.HavingConditions, input.AggregationMeasures);
+            foreach (var block in aggregationBlocks)
+            {
+                AppendAggregationResultsForBlock(
+                    aggregationResults,
+                    input.InitialRows,
+                    block.SourceRef,
+                    block.AggregationKey,
+                    block.Measures,
+                    block.SearchConditions,
+                    block.HavingConditions);
+            }
+
+            var primary = aggregationBlocks[0];
+            filtered = ApplySearchConditions(input.InitialRows, primary.SearchConditions);
+        }
+        else
+        {
+            filtered = ApplySearchConditions(input.InitialRows, input.SearchConditions);
+            AppendAggregationResultsForBlock(
+                aggregationResults,
+                input.InitialRows,
+                sourceRef: null,
+                input.AggregationKey,
+                input.AggregationMeasures,
+                input.SearchConditions,
+                input.HavingConditions);
+        }
+
+        var activeColumns = ResolveActiveColumns(
+            filtered,
+            input.DisplayColumnMode,
+            input.DisplayColumns);
+
+        var displayRows = ProjectRows(filtered, activeColumns);
+
+        return new ScreenDataShapeQueryResult(displayRows, aggregationResults, activeColumns, errors);
+    }
+
+    private static void ValidateSearchConditions(
+        IReadOnlyList<ResolvedSearchCondition> conditions,
+        List<ValidationError> errors)
+    {
+        foreach (var cond in conditions)
+        {
+            if (!SearchOperators.Contains(cond.Operator))
+            {
+                errors.Add(new ValidationError(
+                    "SEARCH_OPERATOR_UNKNOWN",
+                    $"searchConditions operator '{cond.Operator}' is not in the SSOT vocabulary."));
+            }
+        }
+    }
+
+    private static void ValidateHavingConditions(
+        IReadOnlyList<ResolvedHavingCondition> conditions,
+        List<ValidationError> errors)
+    {
+        foreach (var hc in conditions)
+        {
+            if (!HavingOperators.Contains(hc.Operator))
+            {
+                errors.Add(new ValidationError(
+                    "HAVING_OPERATOR_UNKNOWN",
+                    $"havingConditions operator '{hc.Operator}' is not in the SSOT vocabulary."));
+            }
+        }
+    }
+
+    private static void AppendAggregationResultsForBlock(
+        List<Dictionary<string, object?>> aggregationResults,
+        IReadOnlyList<Dictionary<string, string>> initialRows,
+        string? sourceRef,
+        string? aggregationKey,
+        IReadOnlyList<(string Column, string Function)> measures,
+        IReadOnlyList<ResolvedSearchCondition> searchConditions,
+        IReadOnlyList<ResolvedHavingCondition> havingConditions)
+    {
+        if (measures.Count == 0) return;
+
+        var filtered = ApplySearchConditions(initialRows, searchConditions);
+
+        if (!string.IsNullOrWhiteSpace(aggregationKey))
+        {
+            var groups = GroupRows(filtered, aggregationKey);
+            groups = ApplyHavingConditions(groups, havingConditions, measures);
             foreach (var (groupKey, rows) in groups)
             {
                 var entry = new Dictionary<string, object?>(StringComparer.Ordinal)
                 {
                     ["groupKey"] = groupKey,
                 };
-                foreach (var (column, function) in input.AggregationMeasures)
+                if (!string.IsNullOrWhiteSpace(sourceRef))
+                    entry["sourceRef"] = sourceRef;
+                foreach (var (column, function) in measures)
                 {
                     var nums = rows
                         .Select(r => TryParseNumber(r.GetValueOrDefault(column)))
@@ -107,10 +191,12 @@ public static class ScreenDataShapeQueryEvaluator
                 aggregationResults.Add(entry);
             }
         }
-        else if (input.AggregationMeasures.Count > 0 && filtered.Count > 0)
+        else if (filtered.Count > 0)
         {
             var entry = new Dictionary<string, object?>(StringComparer.Ordinal) { ["groupKey"] = "(全体)" };
-            foreach (var (column, function) in input.AggregationMeasures)
+            if (!string.IsNullOrWhiteSpace(sourceRef))
+                entry["sourceRef"] = sourceRef;
+            foreach (var (column, function) in measures)
             {
                 var nums = filtered
                     .Select(r => TryParseNumber(r.GetValueOrDefault(column)))
@@ -121,15 +207,6 @@ public static class ScreenDataShapeQueryEvaluator
             }
             aggregationResults.Add(entry);
         }
-
-        var activeColumns = ResolveActiveColumns(
-            filtered,
-            input.DisplayColumnMode,
-            input.DisplayColumns);
-
-        var displayRows = ProjectRows(filtered, activeColumns);
-
-        return new ScreenDataShapeQueryResult(displayRows, aggregationResults, activeColumns, errors);
     }
 
     private static IReadOnlyList<Dictionary<string, string>> ApplySearchConditions(

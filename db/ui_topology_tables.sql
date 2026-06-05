@@ -168,7 +168,7 @@ CREATE TABLE IF NOT EXISTS topology.components_style_design (
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- design shape: {componentId: uuid, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}}
+-- design shape: {componentId?: uuid, layoutNodeId?: string, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}, inlineText?: string, linkHref?: string, linkTarget?: string, reactionIntent?: string}
 -- CSS vocabulary authority is docs/design/css-dictionary-ssot.yaml (static YAML); DB stores promoted token refs/draft state, not CSS dictionary registry rows.
 -- componentId is a soft reference for filtering designs by component in the package editor.
 -- The authoritative component+design binding lives in topology.components_package_design.layout.
@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS topology.components_package_design (
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_components_package_design_state CHECK (state IN ('draft', 'active', 'deprecated'))
 );
--- layout shape: [{componentId: uuid, designId: uuid}, ...]
+-- layout shape: [{componentId?: uuid, layoutNodeId?: string, designId: uuid}, ...]
 -- One component can appear multiple times paired with different designs.
 -- manifest topology entries (ui_projection.packageIds) reference topology.components_package_design.package_id.
 

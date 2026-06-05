@@ -1009,26 +1009,54 @@ public partial class AdminRuntime
         }
         if (request is null ||
             !Guid.TryParse(request.PackageId, out var packageId) ||
-            !Guid.TryParse(request.ComponentId, out var componentId) ||
             string.IsNullOrWhiteSpace(request.Name))
         {
             return (null, new ValidationError(
                 "COMPONENT_DESIGN_PAYLOAD_INVALID",
-                "packageId, componentId, and name are required."));
+                "packageId and name are required."));
         }
+
+        Guid? componentId = null;
+        if (!string.IsNullOrWhiteSpace(request.ComponentId))
+        {
+            if (!Guid.TryParse(request.ComponentId, out var parsedComponentId))
+            {
+                return (null, new ValidationError(
+                    "COMPONENT_DESIGN_PAYLOAD_INVALID",
+                    "componentId must be a valid UUID when provided."));
+            }
+            componentId = parsedComponentId;
+        }
+
+        var layoutNodeId = string.IsNullOrWhiteSpace(request.LayoutNodeId)
+            ? null
+            : request.LayoutNodeId.Trim();
+
+        if (componentId is null && layoutNodeId is null)
+        {
+            return (null, new ValidationError(
+                "COMPONENT_DESIGN_PAYLOAD_INVALID",
+                "componentId or layoutNodeId is required."));
+        }
+
         var designObj = new
         {
-            componentId = componentId.ToString(),
+            componentId = componentId?.ToString(),
+            layoutNodeId,
             classname = request.Classname ?? "",
             tailwind = request.Tailwind ?? "",
             cssTokenRefs = request.CssTokenRefs ?? Array.Empty<string>(),
+            responsiveTokenRefs = request.ResponsiveTokenRefs ?? new Dictionary<string, IReadOnlyList<string>>(),
+            inlineText = request.InlineText ?? "",
+            linkHref = request.LinkHref ?? "",
+            linkTarget = request.LinkTarget ?? "",
             reactionIntent = request.ReactionIntent ?? "",
         };
         var designJson = JsonSerializer.Serialize(designObj);
         try
         {
             var (designId, error) = await _uiTopologyRepository.UpsertComponentStyleDesignForPackageAsync(
-                packageId, componentId, request.Name.Trim(), designJson, ct);
+                packageId, componentId, layoutNodeId, request.Name.Trim(), designJson, ct);
             if (error is not null) return (null, error);
             return (JsonSerializer.SerializeToElement(new { ok = true, designId = designId.ToString() }), null);
         }
@@ -2351,6 +2379,7 @@ public partial class AdminRuntime
             aggregationFunction = request.AggregationFunction,
             aggregationColumns = request.AggregationColumns ?? Array.Empty<string>(),
             aggregationMeasures = request.AggregationMeasures ?? Array.Empty<AdminManifestAggregationMeasureDto>(),
+            aggregationBlocks = request.AggregationBlocks ?? Array.Empty<AdminManifestAggregationBlockDto>(),
             displayColumns = request.DisplayColumns ?? Array.Empty<string>(),
             logicalTables = request.LogicalTables ?? Array.Empty<AdminManifestLogicalTableDto>(),
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),

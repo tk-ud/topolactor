@@ -24,6 +24,10 @@ import {
   RESPONSIVE_BREAKPOINTS,
   filterEmptyResponsiveRules,
   validateResponsiveTokenRulesJson,
+  reorderLayoutNodeStack,
+  cloneVisualNode,
+  makeStructuralHtmlNode,
+  STRUCTURAL_HTML_COMPONENT_KEY,
   type VisualNodePayload,
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
@@ -36,6 +40,7 @@ import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 import {
   renderLayoutComponentPreview,
   resolveComponentKindForLayoutPreview,
+  getLayoutPreviewDefaultSize,
 } from "../runtime/layoutComponentPreview.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
@@ -165,6 +170,40 @@ Deno.test("buildVisualLayoutPatchJson: parentNodeId is preserved in node payload
   const parsed = JSON.parse(buildVisualLayoutPatchJson([parent, child]));
   assertEquals(parsed.nodes[0].parentNodeId, null);
   assertEquals(parsed.nodes[1].parentNodeId, "parent");
+});
+
+Deno.test("buildVisualLayoutPatchJson: structural_html node includes nodeKind and htmlTag", () => {
+  const node = makeStructuralHtmlNode("section", {
+    nodeId: "html-1",
+    x: 10,
+    y: 20,
+    orderIndex: 0,
+  });
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].nodeKind, "structural_html");
+  assertEquals(parsed.nodes[0].htmlTag, "section");
+  assertEquals(parsed.nodes[0].componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
+});
+
+Deno.test("buildVisualLayoutPatchJson: per-node layoutClassRefs round-trip", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    layoutClassRefs: ["layout.card.surface"],
+  };
+  const json = buildVisualLayoutPatchJson([node]);
+  const parsed = parseVisualLayoutPatchJson(json);
+  assertEquals(parsed.ok, true);
+  if (parsed.ok) {
+    assertEquals(parsed.value.nodes[0].layoutClassRefs, ["layout.card.surface"]);
+  }
+});
+
+Deno.test("cloneVisualNode: copies with new id and offset", () => {
+  const cloned = cloneVisualNode(sampleNode, "node_copy");
+  assertEquals(cloned.nodeId, "node_copy");
+  assertEquals(cloned.x, sampleNode.x + 20);
+  assertEquals(cloned.y, sampleNode.y + 20);
+  assertEquals(cloned.componentKey, sampleNode.componentKey);
 });
 
 Deno.test("buildVisualLayoutPatchJson: cssTokenRefs are NOT in node payload (component_design responsibility)", () => {
@@ -320,6 +359,21 @@ Deno.test("layout canvas preview: card.primitive resolves and renders", () => {
     componentKind: "display/card",
   });
   if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+});
+
+Deno.test("layout canvas preview: bare button key resolves via catalog alias", () => {
+  assertEquals(
+    resolveComponentKindForLayoutPreview("button"),
+    "action/button",
+  );
+  const result = renderLayoutComponentPreview({ componentKey: "button" });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+});
+
+Deno.test("layout canvas preview: getLayoutPreviewDefaultSize returns kind-specific dimensions", () => {
+  const buttonSize = getLayoutPreviewDefaultSize("action/button");
+  assertEquals(buttonSize.width >= 140, true);
+  assertEquals(buttonSize.height >= 40, true);
 });
 
 Deno.test("layout canvas preview: table.primitive renders with placeholder rows", () => {
@@ -760,6 +814,38 @@ Deno.test("seedDraftNodesFromPalette: stacks promotable entries", () => {
   assertEquals(seeds.length, 2);
   assertEquals(seeds[0].componentKey, "a/b");
   assertEquals(seeds[1].y, seeds[0].y + 72);
+});
+
+// ─── reorderLayoutNodeStack (layer ▲▼ z-order) ───────────────────────────────
+
+Deno.test("reorderLayoutNodeStack: front moves node toward higher index", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "a", orderIndex: 0 },
+    { ...sampleNode, nodeId: "b", orderIndex: 1 },
+    { ...sampleNode, nodeId: "c", orderIndex: 2 },
+  ];
+  const next = reorderLayoutNodeStack(nodes, "b", "front");
+  assertEquals(next?.map((n) => n.nodeId), ["a", "c", "b"]);
+  assertEquals(next?.map((n) => n.orderIndex), [0, 1, 2]);
+});
+
+Deno.test("reorderLayoutNodeStack: back moves node toward lower index", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "a", orderIndex: 0 },
+    { ...sampleNode, nodeId: "b", orderIndex: 1 },
+    { ...sampleNode, nodeId: "c", orderIndex: 2 },
+  ];
+  const next = reorderLayoutNodeStack(nodes, "b", "back");
+  assertEquals(next?.map((n) => n.nodeId), ["b", "a", "c"]);
+});
+
+Deno.test("reorderLayoutNodeStack: no-op at stack edge", () => {
+  const nodes: VisualNodePayload[] = [
+    { ...sampleNode, nodeId: "a", orderIndex: 0 },
+    { ...sampleNode, nodeId: "b", orderIndex: 1 },
+  ];
+  assertEquals(reorderLayoutNodeStack(nodes, "b", "front"), null);
+  assertEquals(reorderLayoutNodeStack(nodes, "a", "back"), null);
 });
 
 // ─── layoutClassPreviewUtils ──────────────────────────────────────────────────

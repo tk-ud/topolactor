@@ -5,18 +5,54 @@ import type {
   SearchConditionShape,
 } from "./manifestTopologyExtensions.ts";
 import {
+  flattenAggregationBlocks,
+  hydrateAggregationBlockConditions,
+  normalizeAggregationBlocks,
   normalizeAggregationMeasures,
+  type AggregationBlock,
   type AggregationMeasure,
 } from "./aggregationMeasures.ts";
 import {
   logicalTablesFromLegacyColumns,
   normalizeLogicalTables,
   normalizeRelationKeyColumn,
+  primaryLogicalTableRef,
   primaryTableColumns,
   qualifyScreenDesignColumnKeys,
 } from "./manifestLogicalTables.ts";
 
-export type { AggregationMeasure };
+export type { AggregationBlock, AggregationMeasure };
+
+/** Keep legacy flat fields in sync when blocks change (authoring — preserves in-progress measure rows). */
+export function patchAggregationBlocks(
+  blocks: AggregationBlock[],
+  _primarySourceRef = "",
+): Pick<
+  ManifestScreenDesignDraft,
+  "aggregationBlocks" | "aggregationKey" | "aggregationMeasures"
+> & Partial<Pick<ManifestScreenDesignDraft, "searchConditions" | "havingConditions">> {
+  const aggregationBlocks = blocks.map((b) => ({
+    sourceRef: (b.sourceRef ?? "").trim(),
+    aggregationKey: (b.aggregationKey ?? "").trim(),
+    measures: Array.isArray(b.measures)
+      ? b.measures.map((m) => ({
+        column: String(m.column ?? ""),
+        function: String(m.function ?? ""),
+      }))
+      : [],
+    searchConditions: Array.isArray(b.searchConditions) ? [...b.searchConditions] : [],
+    havingConditions: Array.isArray(b.havingConditions) ? [...b.havingConditions] : [],
+  }));
+  const { aggregationKey, aggregationMeasures } = flattenAggregationBlocks(aggregationBlocks);
+  return {
+    aggregationBlocks,
+    aggregationKey,
+    aggregationMeasures,
+    ...(aggregationBlocks.length > 0
+      ? { searchConditions: [] as SearchCondition[], havingConditions: [] as HavingCondition[] }
+      : {}),
+  };
+}
 
 /** Search operator vocabulary (SSOT step 3 searchConditions). */
 export type SearchOperator =
@@ -231,6 +267,8 @@ export type ManifestScreenDesignDraft = {
   aggregationKey: string;
   /** Structured display columns (normal-view multi-select). */
   displayColumns: string[];
+  /** SQL-source-scoped aggregation blocks (Step 3 normal view). */
+  aggregationBlocks: AggregationBlock[];
   /** Multiple measures e.g. salary+sum, salary+max (SSOT step 3). */
   aggregationMeasures: AggregationMeasure[];
   /** @deprecated use aggregationMeasures */
@@ -271,6 +309,7 @@ export const emptyManifestScreenDesign = (): ManifestScreenDesignDraft => ({
   aggregationSpec: "",
   aggregationKey: "",
   displayColumns: [],
+  aggregationBlocks: [],
   aggregationMeasures: [],
   aggregationColumns: [],
   aggregationFunction: "",
@@ -298,6 +337,37 @@ function readAll(): Record<string, ManifestScreenDesignDraft> {
   }
 }
 
+function resolveDesignAggregationFields(
+  input: {
+    aggregationBlocks?: AggregationBlock[];
+    aggregationKey?: string | null;
+    aggregationMeasures?: AggregationMeasure[];
+    aggregationFunction?: string | null;
+    aggregationColumns?: string[];
+    primarySourceRef?: string;
+  },
+  globalSearch: SearchCondition[],
+  globalHaving: HavingCondition[],
+): Pick<
+  ManifestScreenDesignDraft,
+  "aggregationBlocks" | "aggregationKey" | "aggregationMeasures" | "searchConditions" | "havingConditions"
+> {
+  const aggregationBlocks = hydrateAggregationBlockConditions(
+    normalizeAggregationBlocks(input),
+    globalSearch,
+    globalHaving,
+  );
+  const { aggregationKey, aggregationMeasures } = flattenAggregationBlocks(aggregationBlocks);
+  const blockScoped = aggregationBlocks.length > 0;
+  return {
+    aggregationBlocks,
+    aggregationKey,
+    aggregationMeasures,
+    searchConditions: blockScoped ? [] : globalSearch,
+    havingConditions: blockScoped ? [] : globalHaving,
+  };
+}
+
 export function loadManifestScreenDesignLocal(
   manifestId: string,
 ): ManifestScreenDesignDraft | null {
@@ -307,6 +377,22 @@ export function loadManifestScreenDesignLocal(
   const kinds = Array.isArray(entry.operationKinds) && entry.operationKinds.length > 0
     ? entry.operationKinds
     : [opKind];
+  const logicalTables = normalizeLogicalTables(
+    Array.isArray(entry.logicalTables) ? entry.logicalTables : undefined,
+    entry.columns,
+  );
+  const aggregationFields = resolveDesignAggregationFields(
+    {
+      aggregationBlocks: entry.aggregationBlocks,
+      aggregationKey: entry.aggregationKey,
+      aggregationMeasures: entry.aggregationMeasures,
+      aggregationFunction: entry.aggregationFunction,
+      aggregationColumns: entry.aggregationColumns,
+      primarySourceRef: primaryLogicalTableRef(logicalTables),
+    },
+    Array.isArray(entry.searchConditions) ? entry.searchConditions : [],
+    Array.isArray(entry.havingConditions) ? entry.havingConditions : [],
+  );
   const draft: ManifestScreenDesignDraft = {
     ...emptyManifestScreenDesign(),
     ...entry,
@@ -326,35 +412,17 @@ export function loadManifestScreenDesignLocal(
     aggregationFunction: typeof entry.aggregationFunction === "string"
       ? entry.aggregationFunction
       : "",
-    logicalTables: normalizeLogicalTables(
-      Array.isArray(entry.logicalTables) ? entry.logicalTables : undefined,
-      entry.columns,
-    ),
-    columns: primaryTableColumns(
-      normalizeLogicalTables(
-        Array.isArray(entry.logicalTables) ? entry.logicalTables : undefined,
-        entry.columns,
-      ),
-    ),
+    logicalTables,
+    columns: primaryTableColumns(logicalTables),
     relationIntents: Array.isArray(entry.relationIntents)
       ? entry.relationIntents.map(normalizeRelationIntent)
       : [],
-    aggregationMeasures: normalizeAggregationMeasures({
-      aggregationMeasures: entry.aggregationMeasures,
-      aggregationFunction: entry.aggregationFunction,
-      aggregationColumns: entry.aggregationColumns,
-    }),
+    ...aggregationFields,
     initialDataRows: normalizeContentDataRows(
       Array.isArray(entry.initialDataRows) ? entry.initialDataRows : [],
     ),
     operationEntityBindings: Array.isArray(entry.operationEntityBindings)
       ? entry.operationEntityBindings.map(normalizeOperationEntityBinding)
-      : [],
-    searchConditions: Array.isArray(entry.searchConditions)
-      ? entry.searchConditions
-      : [],
-    havingConditions: Array.isArray(entry.havingConditions)
-      ? entry.havingConditions
       : [],
     displayColumnMode: (entry.displayColumnMode === "selected" || entry.displayColumnMode === "all" || entry.displayColumnMode === "none")
       ? entry.displayColumnMode
@@ -416,6 +484,30 @@ export function screenDesignFromBackendShape(
       shape.screenOperationKinds.length > 0
     ? shape.screenOperationKinds as ScreenOperationKind[]
     : [(shape.screenOperationKind as ScreenOperationKind) ?? operationKind];
+  const logicalTables = normalizeLogicalTables(shape.logicalTables, shape.columns);
+  const primaryRef = primaryLogicalTableRef(logicalTables);
+  const globalSearch = Array.isArray(shape.searchConditions)
+    ? shape.searchConditions
+      .map(normalizeSearchConditionShape)
+      .filter((c): c is SearchCondition => c !== null)
+    : [];
+  const globalHaving = Array.isArray(shape.havingConditions)
+    ? shape.havingConditions
+      .map(normalizeHavingConditionShape)
+      .filter((h): h is HavingCondition => h !== null)
+    : [];
+  const aggregationFields = resolveDesignAggregationFields(
+    {
+      aggregationBlocks: shape.aggregationBlocks,
+      aggregationKey: shape.aggregationKey,
+      aggregationMeasures: shape.aggregationMeasures,
+      aggregationFunction: shape.aggregationFunction,
+      aggregationColumns: shape.aggregationColumns,
+      primarySourceRef: primaryRef,
+    },
+    globalSearch,
+    globalHaving,
+  );
   return qualifyScreenDesignColumnKeys({
     screenLabel: shape.userFacingTopologyLabel ?? "",
     operationKind: kinds[0],
@@ -427,7 +519,6 @@ export function screenDesignFromBackendShape(
       ? shape.searchKeyColumns
       : shape.searchTargets,
     aggregationSpec: shape.aggregationSpec ?? "",
-    aggregationKey: shape.aggregationKey ?? "",
     displayColumns: Array.isArray(shape.displayColumns)
       ? shape.displayColumns
       : [],
@@ -435,12 +526,8 @@ export function screenDesignFromBackendShape(
       ? shape.aggregationColumns
       : [],
     aggregationFunction: shape.aggregationFunction ?? "",
-    aggregationMeasures: normalizeAggregationMeasures({
-      aggregationMeasures: shape.aggregationMeasures,
-      aggregationFunction: shape.aggregationFunction,
-      aggregationColumns: shape.aggregationColumns,
-    }),
-    logicalTables: normalizeLogicalTables(shape.logicalTables, shape.columns),
+    ...aggregationFields,
+    logicalTables,
     columns: primaryTableColumns(
       normalizeLogicalTables(shape.logicalTables, shape.columns),
     ),
@@ -469,16 +556,6 @@ export function screenDesignFromBackendShape(
     initialDataRows: normalizeContentDataRows(
       Array.isArray(shape.initialDataRows) ? shape.initialDataRows : [],
     ),
-    searchConditions: Array.isArray(shape.searchConditions)
-      ? shape.searchConditions
-        .map(normalizeSearchConditionShape)
-        .filter((c): c is SearchCondition => c !== null)
-      : [],
-    havingConditions: Array.isArray(shape.havingConditions)
-      ? shape.havingConditions
-        .map(normalizeHavingConditionShape)
-        .filter((h): h is HavingCondition => h !== null)
-      : [],
     displayColumnMode: (shape.displayColumnMode === "selected" || shape.displayColumnMode === "all" || shape.displayColumnMode === "none")
       ? shape.displayColumnMode
       : (Array.isArray(shape.displayColumns) && shape.displayColumns.length > 0 ? "selected" : "all"),

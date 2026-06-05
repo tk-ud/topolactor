@@ -135,6 +135,7 @@ primary target は `hubs.*`。`topologys.*` / registry は projection/support la
 - `admin/manifests` → DB系 / 配線系 / hub系
 - `admin/contents` → UI系 / イベントトリガ系
 - `admin/hub-navigation` → hub_relation によるページナビ順序設定（新規コンポーネント）
+- step 4 `/admin/ui-builder` → `ui_builder_authoring_surfaces`（package決定 / layout editor / component design editor / visual view の4面契約、v0.8.0）
 
 マニフェストは一画面単位のため、画面遷移の hub_relation 順序設定は独立した設定サーフェスとして宣言される。
 Wiring（dispatcher axes: role/target/layer/action）は `admin/manifests` で設定するのが canonical であり、後工程の独立ステップではない。

@@ -317,6 +317,14 @@ export type AggregationMeasureInput = {
   function: string;
 };
 
+export type AggregationBlockInput = {
+  sourceRef: string;
+  aggregationKey?: string;
+  measures: AggregationMeasureInput[];
+  searchConditions?: SearchConditionInput[];
+  havingConditions?: HavingConditionInput[];
+};
+
 export type RelationIntentInput = {
   localTableRef?: string;
   joinTableRef: string;
@@ -392,6 +400,8 @@ export type AdminManifestScreenDataShapeInput = {
   aggregationColumns?: string[];
   /** Multiple aggregation measures (column + function). */
   aggregationMeasures?: AggregationMeasureInput[];
+  /** SQL-source-scoped aggregation blocks (Step 3). */
+  aggregationBlocks?: AggregationBlockInput[];
   /** Structured display columns. */
   displayColumns?: string[];
   /** Step 2 logical tables (multiple per manifest). */

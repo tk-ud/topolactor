@@ -1,6 +1,9 @@
 import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
-import { emptyManifestScreenDesign } from "../lib/manifestScreenDesign.ts";
+import {
+  emptyManifestScreenDesign,
+  patchAggregationBlocks,
+} from "../lib/manifestScreenDesign.ts";
 import type { ScreenDataShapeSummary } from "../lib/manifestTopologyExtensions.ts";
 
 const manifestId = "00000000-0000-0000-0000-000000000099";
@@ -15,6 +18,7 @@ const existing: ScreenDataShapeSummary = {
   aggregationColumns: [],
   aggregationFunction: null,
   aggregationMeasures: [],
+  aggregationBlocks: [],
   displayColumns: ["id"],
   logicalTables: [],
   screenOperationKind: "list",
@@ -105,10 +109,19 @@ Deno.test("buildAssignPayloadForStep step 3: tableRef from primary logical table
   design.operationKinds = ["create", "update"];
   design.searchKeyColumns = ["sku"];
   design.displayColumns = [];
-  design.aggregationMeasures = [
-    { column: "qty", function: "sum" },
-    { column: "qty", function: "max" },
+  design.aggregationBlocks = [
+    {
+      sourceRef: "order_lines",
+      aggregationKey: "",
+      measures: [
+        { column: "order_lines.qty", function: "sum" },
+        { column: "order_lines.qty", function: "max" },
+      ],
+      searchConditions: [],
+      havingConditions: [],
+    },
   ];
+  Object.assign(design, patchAggregationBlocks(design.aggregationBlocks, "order_lines"));
   design.operationEntityBindings = [{
     operationKind: "create",
     entityTargetColumns: ["sku", "qty"],
@@ -123,6 +136,8 @@ Deno.test("buildAssignPayloadForStep step 3: tableRef from primary logical table
   assertEquals(payload.displayColumns, []);
   assertEquals(payload.aggregationMeasures?.length, 2);
   assertEquals(payload.aggregationMeasures?.[0].function, "sum");
+  assertEquals(payload.aggregationBlocks?.length, 1);
+  assertEquals(payload.aggregationBlocks?.[0].sourceRef, "order_lines");
   assertEquals(
     payload.operationEntityBindings?.[0].entityTargetColumns,
     ["sku", "qty"],

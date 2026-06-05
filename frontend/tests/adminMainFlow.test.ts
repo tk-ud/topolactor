@@ -95,6 +95,12 @@ Deno.test("ADMIN_MAIN_FLOW_STEPS: contents step uses user-facing step wording", 
   assertEquals(contents.purpose.toLowerCase().includes("pipeline"), false);
 });
 
+Deno.test("ADMIN_MAIN_FLOW_STEPS: contents subSteps have unique labels for stepper keys", () => {
+  const contents = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/contents")!;
+  const labels = (contents.subSteps ?? []).map((sub) => sub.label);
+  assertEquals(new Set(labels).size, labels.length);
+});
+
 Deno.test("ADMIN_MAIN_FLOW_STEPS: ui-builder step references package route", () => {
   const ui = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/ui-builder")!;
   assertEquals(ui.purpose.includes("step 4"), true);

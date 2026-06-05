@@ -1108,7 +1108,7 @@ db_schema:
         - name: design
           type: jsonb
           role: styling_with_soft_component_ref
-          shape: "{componentId: uuid, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}}"
+          shape: "{componentId?: uuid, layoutNodeId?: string, classname: string, tailwind: string, cssTokenRefs?: string[], responsiveTokenRefs?: {[breakpoint: string]: string[]}, inlineText?: string, linkHref?: string, linkTarget?: string, reactionIntent?: string}"
           note: componentId_is_soft_ref_for_editor_filtering_not_fk
 
     packages:
@@ -1127,7 +1127,7 @@ db_schema:
         - name: layout
           type: jsonb
           role: component_design_pair_vector
-          shape: "[{componentId: uuid, designId: uuid}, ...]"
+          shape: "[{componentId?: uuid, layoutNodeId?: string, designId: uuid}, ...]"
           note: same_component_can_appear_with_multiple_designs
       manifest_reference: manifest.topology[ui_projection].packageIds
 

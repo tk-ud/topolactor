@@ -481,24 +481,109 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return keys;
     }
 
+    private static readonly HashSet<string> StructuralHtmlTagAllowlist = new(StringComparer.Ordinal)
+    {
+        "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "a",
+    };
+
     private static List<string> ExtractLayoutClassRefs(string tensorPatchJson)
     {
         using var doc = JsonDocument.Parse(tensorPatchJson);
         var refs = new List<string>();
-        if (!doc.RootElement.TryGetProperty("layoutClassRefs", out var arr) ||
-            arr.ValueKind != JsonValueKind.Array)
+        if (doc.RootElement.TryGetProperty("layoutClassRefs", out var rootArr) &&
+            rootArr.ValueKind == JsonValueKind.Array)
         {
-            return refs;
-        }
-        foreach (var item in arr.EnumerateArray())
-        {
-            if (item.ValueKind == JsonValueKind.String)
+            foreach (var item in rootArr.EnumerateArray())
             {
-                var value = item.GetString();
-                if (!string.IsNullOrWhiteSpace(value)) refs.Add(value!);
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    var value = item.GetString();
+                    if (!string.IsNullOrWhiteSpace(value)) refs.Add(value!);
+                }
+            }
+        }
+        if (doc.RootElement.TryGetProperty("nodes", out var nodes) &&
+            nodes.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var node in nodes.EnumerateArray())
+            {
+                if (node.ValueKind != JsonValueKind.Object) continue;
+                if (!node.TryGetProperty("layoutClassRefs", out var nodeArr) ||
+                    nodeArr.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+                foreach (var item in nodeArr.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var value = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(value)) refs.Add(value!);
+                    }
+                }
             }
         }
         return refs;
+    }
+
+    private static string? ValidateLayoutPatchNodes(string tensorPatchJson)
+    {
+        using var doc = JsonDocument.Parse(tensorPatchJson);
+        if (!doc.RootElement.TryGetProperty("nodes", out var nodes) ||
+            nodes.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        foreach (var node in nodes.EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object)
+                return "LAYOUT_PATCH_NODE_MUST_BE_OBJECT";
+
+            var nodeId = node.TryGetProperty("nodeId", out var nodeIdEl) &&
+                nodeIdEl.ValueKind == JsonValueKind.String
+                ? nodeIdEl.GetString()?.Trim()
+                : null;
+            if (string.IsNullOrWhiteSpace(nodeId))
+                return "LAYOUT_PATCH_NODE_ID_REQUIRED";
+
+            var nodeKind = node.TryGetProperty("nodeKind", out var kindEl) &&
+                kindEl.ValueKind == JsonValueKind.String
+                ? kindEl.GetString()
+                : "catalog_component";
+
+            if (nodeKind == "structural_html")
+            {
+                var htmlTag = node.TryGetProperty("htmlTag", out var tagEl) &&
+                    tagEl.ValueKind == JsonValueKind.String
+                    ? tagEl.GetString()?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(htmlTag))
+                    return "LAYOUT_PATCH_STRUCTURAL_HTML_TAG_REQUIRED";
+                if (!StructuralHtmlTagAllowlist.Contains(htmlTag))
+                    return $"LAYOUT_PATCH_STRUCTURAL_HTML_TAG_UNKNOWN:{htmlTag}";
+
+                if (!node.TryGetProperty("slotKey", out _))
+                    return "LAYOUT_PATCH_STRUCTURAL_HTML_SLOT_KEY_REQUIRED";
+                if (!node.TryGetProperty("orderIndex", out _))
+                    return "LAYOUT_PATCH_STRUCTURAL_HTML_ORDER_INDEX_REQUIRED";
+            }
+            else if (nodeKind is "catalog_component" or null)
+            {
+                var componentKey = node.TryGetProperty("componentKey", out var keyEl) &&
+                    keyEl.ValueKind == JsonValueKind.String
+                    ? keyEl.GetString()?.Trim()
+                    : null;
+                if (string.IsNullOrWhiteSpace(componentKey))
+                    return "LAYOUT_PATCH_CATALOG_COMPONENT_KEY_REQUIRED";
+            }
+            else
+            {
+                return $"LAYOUT_PATCH_NODE_KIND_UNKNOWN:{nodeKind}";
+            }
+        }
+
+        return null;
     }
 
     private static LayoutPatchResult NormalizeLayoutPatch(
@@ -584,6 +669,10 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             return Task.FromResult(normalized with { Ok = false, Valid = false, Message = "TOPOLOGY_LAYOUT_CLASS_VOCABULARY_UNAVAILABLE" });
         try
         {
+            var nodeError = ValidateLayoutPatchNodes(normalized.TensorPatchJson);
+            if (nodeError is not null)
+                return Task.FromResult(normalized with { Ok = false, Valid = false, Message = nodeError });
+
             foreach (var classRef in ExtractLayoutClassRefs(normalized.TensorPatchJson))
             {
                 if (!layoutClassVocab.Contains(classRef))
@@ -743,8 +832,55 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         await using var conn = new NpgsqlConnection(_connectionString);
         await conn.OpenAsync(ct);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText =
-            "SELECT design_id::text, name, design->>'componentId' FROM topology.components_style_design ORDER BY name ASC";
+        if (packageId.HasValue)
+        {
+            cmd.CommandText =
+                """
+                SELECT csd.design_id::text,
+                       csd.name,
+                       csd.design->>'componentId',
+                       csd.design->>'layoutNodeId',
+                       csd.design->'cssTokenRefs',
+                       csd.design->'responsiveTokenRefs',
+                       csd.design->>'inlineText',
+                       csd.design->>'linkHref',
+                       csd.design->>'linkTarget',
+                       csd.design->>'reactionIntent',
+                       csd.design->>'classname',
+                       csd.design->>'tailwind'
+                FROM topology.components_style_design csd
+                WHERE EXISTS (
+                    SELECT 1
+                    FROM topology.components_package_design cpd,
+                         jsonb_array_elements(cpd.layout) AS pair(elem)
+                    WHERE cpd.package_id = @pkg
+                      AND (pair.elem->>'designId')::uuid = csd.design_id
+                )
+                ORDER BY csd.name ASC
+                """;
+            cmd.Parameters.AddWithValue("pkg", packageId.Value);
+        }
+        else
+        {
+            cmd.CommandText =
+                """
+                SELECT design_id::text,
+                       name,
+                       design->>'componentId',
+                       design->>'layoutNodeId',
+                       design->'cssTokenRefs',
+                       design->'responsiveTokenRefs',
+                       design->>'inlineText',
+                       design->>'linkHref',
+                       design->>'linkTarget',
+                       design->>'reactionIntent',
+                       design->>'classname',
+                       design->>'tailwind'
+                FROM topology.components_style_design
+                ORDER BY name ASC
+                """;
+        }
+
         var list = new List<ComponentStyleDesignListItemDto>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct))
@@ -752,14 +888,24 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             list.Add(new ComponentStyleDesignListItemDto(
                 reader.GetString(0),
                 reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2)));
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3),
+                ParseCssTokenRefsJson(reader.IsDBNull(4) ? null : reader.GetString(4)),
+                ParseResponsiveTokenRefsJson(reader.IsDBNull(5) ? null : reader.GetString(5)),
+                reader.IsDBNull(6) ? null : reader.GetString(6),
+                reader.IsDBNull(7) ? null : reader.GetString(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9),
+                reader.IsDBNull(10) ? null : reader.GetString(10),
+                reader.IsDBNull(11) ? null : reader.GetString(11)));
         }
         return list;
     }
 
     public override async Task<(Guid DesignId, ValidationError? Error)> UpsertComponentStyleDesignForPackageAsync(
         Guid packageId,
-        Guid componentId,
+        Guid? componentId,
+        string? layoutNodeId,
         string name,
         string designJson,
         CancellationToken ct = default)
@@ -789,10 +935,10 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         upsert.Parameters.AddWithValue("design", designJson);
         designId = (Guid)(await upsert.ExecuteScalarAsync(ct))!;
 
-        var pairJson = System.Text.Json.JsonSerializer.Serialize(new[]
-        {
-            new { componentId = componentId.ToString(), designId = designId.ToString() },
-        });
+        object pairEntry = componentId.HasValue
+            ? new { componentId = componentId.Value.ToString(), designId = designId.ToString() }
+            : new { layoutNodeId = layoutNodeId!.Trim(), designId = designId.ToString() };
+        var pairJson = System.Text.Json.JsonSerializer.Serialize(new[] { pairEntry });
 
         await using var pkgMeta = conn.CreateCommand();
         pkgMeta.Transaction = tx;
@@ -816,11 +962,11 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
               layout = (
                 SELECT COALESCE(jsonb_agg(elem), '[]'::jsonb)
                 FROM (
-                  SELECT DISTINCT ON ((elem->>'componentId')) elem
+                  SELECT DISTINCT ON (COALESCE(elem->>'componentId', elem->>'layoutNodeId')) elem
                   FROM jsonb_array_elements(
                     COALESCE(topology.components_package_design.layout, '[]'::jsonb) || @pair::jsonb
                   ) AS elem
-                  ORDER BY (elem->>'componentId'), (elem->>'designId')
+                  ORDER BY COALESCE(elem->>'componentId', elem->>'layoutNodeId'), (elem->>'designId')
                 ) AS sub
               ),
               updated_at = now()
@@ -1183,6 +1329,60 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             return new PackageGenerateBatchResult(
                 PackageGenerateCode.DbUnavailable, null, null, null, null, [], [],
                 "DB_UNAVAILABLE", "Repository unavailable during batch package promotion.");
+        }
+    }
+
+    private static Dictionary<string, IReadOnlyList<string>>? ParseResponsiveTokenRefsJson(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var map = new Dictionary<string, IReadOnlyList<string>>();
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Value.ValueKind != JsonValueKind.Array) continue;
+                var tokens = new List<string>();
+                foreach (var item in prop.Value.EnumerateArray())
+                {
+                    if (item.ValueKind == JsonValueKind.String)
+                    {
+                        var value = item.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(value)) tokens.Add(value);
+                    }
+                }
+                if (tokens.Count > 0) map[prop.Name] = tokens;
+            }
+            return map.Count > 0 ? map : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static IReadOnlyList<string>? ParseCssTokenRefsJson(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
+            var list = new List<string>();
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    var value = item.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(value)) list.Add(value);
+                }
+            }
+            return list;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 }

@@ -2,9 +2,22 @@ import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   displayShapePatchFromOperationBindings,
   hydrateOperationBindingsFromLegacyDisplayColumns,
+  projectionColumnsForOperationKind,
   projectionColumnsFromOperationBindings,
 } from "../lib/screenSampleProjection.ts";
 import { emptyManifestScreenDesign } from "../lib/manifestScreenDesign.ts";
+
+Deno.test("projectionColumnsForOperationKind: projects single operation binding only", () => {
+  const cols = projectionColumnsForOperationKind(
+    "create",
+    [
+      { operationKind: "list", entityTargetColumns: ["employees.name", "employees.salary"] },
+      { operationKind: "create", entityTargetColumns: ["employees.name"] },
+    ],
+    ["employees.name", "employees.salary", "employees.status"],
+  );
+  assertEquals(cols, ["employees.name"]);
+});
 
 Deno.test("projectionColumnsFromOperationBindings: unions columns across selected operations", () => {
   const cols = projectionColumnsFromOperationBindings(

@@ -415,6 +415,22 @@ export function qualifyScreenDesignColumnKeys(
       ...m,
       column: upgradeColumnKeyForTables(tables, m.column, qualified),
     })),
+    aggregationBlocks: (draft.aggregationBlocks ?? []).map((b) => ({
+      ...b,
+      aggregationKey: upgradeColumnKeyForTables(tables, b.aggregationKey, qualified),
+      measures: b.measures.map((m) => ({
+        ...m,
+        column: upgradeColumnKeyForTables(tables, m.column, qualified),
+      })),
+      searchConditions: (b.searchConditions ?? []).map((c) => ({
+        ...c,
+        column: upgradeColumnKeyForTables(tables, c.column, qualified),
+      })),
+      havingConditions: (b.havingConditions ?? []).map((h) => ({
+        ...h,
+        column: upgradeColumnKeyForTables(tables, h.column, qualified),
+      })),
+    })),
     operationEntityBindings: draft.operationEntityBindings.map((b) => ({
       ...b,
       entityTargetColumns: qualifyKeyList(tables, b.entityTargetColumns),

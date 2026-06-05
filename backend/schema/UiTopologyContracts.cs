@@ -150,6 +150,18 @@ public record LayoutPatchRequestDto(
     [property: JsonPropertyName("responsiveTokenRefs")] Dictionary<string, IReadOnlyList<string>>? ResponsiveTokenRefs
 );
 
+/// <summary>Layout tensor node shape for SSOT v0.8.0 layout_editor (documentation contract).</summary>
+public record LayoutPatchNodeDto(
+    [property: JsonPropertyName("nodeId")] string NodeId,
+    [property: JsonPropertyName("nodeKind")] string? NodeKind,
+    [property: JsonPropertyName("htmlTag")] string? HtmlTag,
+    [property: JsonPropertyName("componentKey")] string? ComponentKey,
+    [property: JsonPropertyName("parentNodeId")] string? ParentNodeId,
+    [property: JsonPropertyName("slotKey")] string? SlotKey,
+    [property: JsonPropertyName("orderIndex")] int? OrderIndex,
+    [property: JsonPropertyName("layoutClassRefs")] IReadOnlyList<string>? LayoutClassRefs
+);
+
 public record LayoutPatchResult(
     bool Ok,
     bool Valid,
@@ -212,16 +224,30 @@ public record AdminPackageComponentDto(
 public record ComponentStyleDesignListItemDto(
     [property: JsonPropertyName("designId")] string DesignId,
     [property: JsonPropertyName("name")] string Name,
-    [property: JsonPropertyName("componentId")] string? ComponentId
+    [property: JsonPropertyName("componentId")] string? ComponentId,
+    [property: JsonPropertyName("layoutNodeId")] string? LayoutNodeId = null,
+    [property: JsonPropertyName("cssTokenRefs")] IReadOnlyList<string>? CssTokenRefs = null,
+    [property: JsonPropertyName("responsiveTokenRefs")] Dictionary<string, IReadOnlyList<string>>? ResponsiveTokenRefs = null,
+    [property: JsonPropertyName("inlineText")] string? InlineText = null,
+    [property: JsonPropertyName("linkHref")] string? LinkHref = null,
+    [property: JsonPropertyName("linkTarget")] string? LinkTarget = null,
+    [property: JsonPropertyName("reactionIntent")] string? ReactionIntent = null,
+    [property: JsonPropertyName("classname")] string? Classname = null,
+    [property: JsonPropertyName("tailwind")] string? Tailwind = null
 );
 
 public record ComponentStyleDesignUpsertRequestDto(
     [property: JsonPropertyName("packageId")] string PackageId,
-    [property: JsonPropertyName("componentId")] string ComponentId,
+    [property: JsonPropertyName("componentId")] string? ComponentId,
+    [property: JsonPropertyName("layoutNodeId")] string? LayoutNodeId,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("classname")] string? Classname,
     [property: JsonPropertyName("tailwind")] string? Tailwind,
     [property: JsonPropertyName("cssTokenRefs")] IReadOnlyList<string>? CssTokenRefs,
+    [property: JsonPropertyName("responsiveTokenRefs")] Dictionary<string, IReadOnlyList<string>>? ResponsiveTokenRefs,
+    [property: JsonPropertyName("inlineText")] string? InlineText,
+    [property: JsonPropertyName("linkHref")] string? LinkHref,
+    [property: JsonPropertyName("linkTarget")] string? LinkTarget,
     [property: JsonPropertyName("reactionIntent")] string? ReactionIntent
 );
 

@@ -26,9 +26,14 @@ import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
 import {
   displayShapePatchFromOperationBindings,
   hydrateOperationBindingsFromLegacyDisplayColumns,
+  projectionColumnsForOperationKind,
   projectionColumnsFromOperationBindings,
 } from "../lib/screenSampleProjection.ts";
-import { formatMeasureLabel } from "../lib/aggregationMeasures.ts";
+import {
+  aggregationSourceRefs,
+  formatMeasureLabel,
+  type AggregationBlock,
+} from "../lib/aggregationMeasures.ts";
 import {
   normalizeRelationKeyColumn,
   relationKeyColumnOptionsForTableRef,
@@ -53,32 +58,31 @@ import {
   buildStep1DraftInput,
   getStoredScreenLabel,
   SCREEN_OPERATION_OPTIONS,
+  screenOperationLabel,
   type ScreenOperationKind,
   setStoredScreenLabel,
 } from "../runtime/screenAuthoringIntent.ts";
 import {
   clearManifestScreenDesignLocal,
   emptyManifestScreenDesign,
-  type HavingCondition,
   loadManifestScreenDesignLocal,
   MANIFEST_SCREEN_DESIGN_LOCAL_CACHE_NOTE,
   type LogicalTableDraft,
   type ContentDataRowDraft,
   flattenInitialDataRowsForSample,
+  patchAggregationBlocks,
   type ManifestScreenDesignDraft,
   parseSearchTargets,
   type RelationIntentDraft,
   saveManifestScreenDesignLocal,
-  type SearchCondition,
-  type SearchOperator,
   screenDesignFromBackendShape,
 } from "../lib/manifestScreenDesign.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import {
   applyHavingConditions,
   applySearchConditions,
-  computeMeasure,
 } from "../lib/searchConditionEval.ts";
+import { evaluateMeasureOnRows } from "../lib/aggregationMeasureEval.ts";
 import { importRecordToRowValues } from "../lib/contentDataConformance.ts";
 import { AdminImportPanel } from "./AdminImport.tsx";
 import {
@@ -88,26 +92,18 @@ import {
 } from "../api/adminApi.ts";
 import {
   COLUMN_TYPE_NORMAL_VIEW_OPTIONS,
-  HAVING_OPERATOR_OPTIONS,
-  LOGICAL_CONNECTOR_OPTIONS,
-  SEARCH_OPERATOR_OPTIONS,
   UX_COLUMN_TYPE_ADVANCED_LABEL,
   UX_COLUMN_TYPE_LABELS,
   isEnumBackedColumnDataType,
-  UX_FIELD_ADD_SEARCH_CONDITION,
-  UX_FIELD_ADVANCED_SEARCH_CONDITIONS,
   UX_FIELD_AGGREGATION_KEY,
   UX_FIELD_AGGREGATION_MEASURES,
   UX_FIELD_ENUM_GROUP,
   UX_FIELD_OPERATION_ENTITY,
   UX_FIELD_ENUM_GROUP_NONE,
-  UX_FIELD_HAVING_CONDITIONS,
   UX_FIELD_INITIAL_DATA,
-  UX_FIELD_LOGICAL_CONDITION,
   UX_FIELD_NULLABLE,
   UX_FIELD_RELATION_INTENT,
   UX_FIELD_SAMPLE_VIEWING,
-  UX_FIELD_SEARCH_CONDITIONS,
   UX_HUB_MANIFESTS_PAGE,
   UX_STATUS_LABELS,
   UX_UI_BUILDER,
@@ -119,35 +115,59 @@ type DraftSource = "none" | "local" | "backend" | "merged";
 
 function SamplePreviewPanel({
   columns,
-  aggregationKey,
-  aggregationMeasures,
-  projectionColumns,
+  aggregationBlocks,
+  qualifiedColumns,
+  operationKinds,
+  operationEntityBindings,
+  columnOrder,
   initialDataRows,
-  searchConditions,
-  havingConditions,
 }: {
   columns: { name: string; dataType: string }[];
-  aggregationKey: string;
-  aggregationMeasures: { column: string; function: string }[];
-  /** From 操作ごとの対象項目 (operationEntityBindings). */
-  projectionColumns: string[];
+  aggregationBlocks: AggregationBlock[];
+  qualifiedColumns: { key: string; tableRef: string; remoteManifestId?: string }[];
+  operationKinds: ScreenOperationKind[];
+  operationEntityBindings: ManifestScreenDesignDraft["operationEntityBindings"];
+  columnOrder: string[];
   initialDataRows: Record<string, string>[];
-  searchConditions: SearchCondition[];
-  havingConditions: HavingCondition[];
 }): JSX.Element {
-  const activeCols = projectionColumns;
-  const filteredRows = applySearchConditions(initialDataRows, searchConditions);
-  const hasRows = filteredRows.length > 0;
+  const previewKinds = operationKinds.length > 0 ? operationKinds : (["list"] as ScreenOperationKind[]);
+  const [previewOperationKind, setPreviewOperationKind] = useState<ScreenOperationKind>(
+    previewKinds[0] ?? "list",
+  );
+  const effectivePreviewKind = previewKinds.includes(previewOperationKind)
+    ? previewOperationKind
+    : (previewKinds[0] ?? "list");
+  const activeCols = projectionColumnsForOperationKind(
+    effectivePreviewKind,
+    operationEntityBindings,
+    columnOrder,
+  );
+  const columnTypeByName = Object.fromEntries(columns.map((c) => [c.name, c.dataType]));
+  const hasRows = initialDataRows.length > 0;
+  const sourceLabels = aggregationSourceRefs(qualifiedColumns);
+  const activeBlocks = aggregationBlocks.filter((b) =>
+    b.measures.some((m) => m.column && m.function) || b.aggregationKey.trim()
+    || (b.searchConditions ?? []).length > 0 || (b.havingConditions ?? []).length > 0
+  );
+  const primaryBlock = activeBlocks[0];
+  const tableAggregationKey = primaryBlock?.aggregationKey.trim() ?? "";
+  const primaryFilteredRows = primaryBlock
+    ? applySearchConditions(
+      initialDataRows,
+      primaryBlock.searchConditions ?? [],
+      columnTypeByName,
+    )
+    : initialDataRows;
 
   let groups = new Map<string, Record<string, string>[]>();
-  if (aggregationKey && hasRows) {
-    for (const row of filteredRows) {
-      const key = row[aggregationKey]?.trim() || "(空)";
+  if (tableAggregationKey && hasRows) {
+    for (const row of primaryFilteredRows) {
+      const key = row[tableAggregationKey]?.trim() || "(空)";
       const list = groups.get(key) ?? [];
       list.push(row);
       groups.set(key, list);
     }
-    groups = applyHavingConditions(groups, havingConditions);
+    groups = applyHavingConditions(groups, primaryBlock?.havingConditions ?? []);
   }
 
   const renderTable = (rows: Record<string, string>[]) => (
@@ -177,61 +197,104 @@ function SamplePreviewPanel({
 
   return (
     <div class="rounded border border-slate-200 bg-slate-50 p-3 text-xs">
-      <p class="mb-2 font-semibold text-slate-700">{UX_FIELD_SAMPLE_VIEWING}</p>
-      {aggregationKey && (
-        <p class="mb-1 text-slate-500">
-          {UX_FIELD_AGGREGATION_KEY}:{" "}
-          <span class="font-mono">{aggregationKey}</span>
-        </p>
-      )}
-      {aggregationMeasures.length > 0 && (
-        <p class="mb-1 text-slate-500">
-          {UX_FIELD_AGGREGATION_MEASURES}:{" "}
-          <span class="font-mono">
-            {aggregationMeasures.map(formatMeasureLabel).join(", ")}
-          </span>
-        </p>
-      )}
-      {aggregationMeasures.length > 0 && hasRows && (
-        <ul class="mb-2 list-inside list-disc text-slate-600">
-          {(aggregationKey
-            ? [...groups.entries()]
-            : [["(全体)", filteredRows] as const]
-          ).map(([groupKey, rows]) =>
-            aggregationMeasures.map((m) => {
-              const nums = rows
-                .map((r) => Number(r[m.column]))
-                .filter((n) => !Number.isNaN(n));
-              const val = computeMeasure(nums, m.function);
-              return (
-                <li key={`${groupKey}-${m.column}-${m.function}`}>
-                  {aggregationKey ? `${aggregationKey}=${groupKey}: ` : ""}
-                  {formatMeasureLabel(m)} = {val ?? "—"}
-                </li>
-              );
-            })
-          )}
-        </ul>
+      <div class="mb-2 flex flex-wrap items-center gap-2">
+        <p class="font-semibold text-slate-700">{UX_FIELD_SAMPLE_VIEWING}</p>
+        <label class="flex items-center gap-1 text-slate-600">
+          <span>操作種別</span>
+          <select
+            class="rounded border px-2 py-0.5 text-xs"
+            value={effectivePreviewKind}
+            onChange={(e) =>
+              setPreviewOperationKind((e.target as HTMLSelectElement).value as ScreenOperationKind)}
+          >
+            {previewKinds.map((kind) => (
+              <option key={kind} value={kind}>{screenOperationLabel(kind)}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {activeBlocks.length > 0 && hasRows && (
+        <div class="mb-2 space-y-2">
+          {activeBlocks.map((block, bi) => {
+            const sourceLabel = (
+              sourceLabels.find((s) => s.ref === block.sourceRef)?.label
+              ?? block.sourceRef
+            ) || `ブロック ${bi + 1}`;
+            const blockKey = block.aggregationKey.trim();
+            const blockFilteredRows = applySearchConditions(
+              initialDataRows,
+              block.searchConditions ?? [],
+              columnTypeByName,
+            );
+            let blockGroups = new Map<string, Record<string, string>[]>();
+            if (blockKey) {
+              for (const row of blockFilteredRows) {
+                const key = row[blockKey]?.trim() || "(空)";
+                const list = blockGroups.get(key) ?? [];
+                list.push(row);
+                blockGroups.set(key, list);
+              }
+              blockGroups = applyHavingConditions(blockGroups, block.havingConditions ?? []);
+            }
+            const measures = block.measures.filter((m) => m.column && m.function);
+            if (measures.length === 0 && !blockKey) return null;
+            return (
+              <div key={bi} class="rounded border border-slate-100 bg-white p-2">
+                <p class="mb-1 font-semibold text-slate-600">
+                  集計ブロック: <span class="font-mono">{sourceLabel}</span>
+                </p>
+                {(block.searchConditions ?? []).length > 0 && (
+                  <p class="mb-1 text-slate-500">
+                    検索条件: {block.searchConditions.length} 件（ブロック内）
+                  </p>
+                )}
+                {blockKey && (
+                  <p class="mb-1 text-slate-500">
+                    {UX_FIELD_AGGREGATION_KEY}: <span class="font-mono">{blockKey}</span>
+                  </p>
+                )}
+                {measures.length > 0 && (
+                  <ul class="list-inside list-disc text-slate-600">
+                    {(blockKey
+                      ? [...blockGroups.entries()]
+                      : [["(全体)", blockFilteredRows] as const]
+                    ).map(([groupKey, rows]) =>
+                      measures.map((m) => {
+                        const val = evaluateMeasureOnRows(rows, m);
+                        return (
+                          <li key={`${bi}-${groupKey}-${m.column}-${m.function}`}>
+                            {blockKey ? `${blockKey}=${groupKey}: ` : ""}
+                            {formatMeasureLabel(m)} = {val ?? "—"}
+                          </li>
+                        );
+                      })
+                    )}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
       )}
       {activeCols.length > 0
         ? (
           <p class="mb-1 text-slate-500">
-            {UX_FIELD_OPERATION_ENTITY}:{" "}
+            {UX_FIELD_OPERATION_ENTITY}（{screenOperationLabel(effectivePreviewKind)}）:{" "}
             <span class="font-mono">{activeCols.join(", ")}</span>
           </p>
         )
         : (
           <p class="mb-1 italic text-slate-400">
-            {UX_FIELD_OPERATION_ENTITY}で列を選ぶとサンプル表に反映されます
+            {UX_FIELD_OPERATION_ENTITY}（{screenOperationLabel(effectivePreviewKind)}）で列を選ぶとサンプル表に反映されます
           </p>
         )}
-      {hasRows && aggregationKey && groups.size > 0
+      {hasRows && tableAggregationKey && groups.size > 0
         ? (
           <div class="mt-2 space-y-3">
             {[...groups.entries()].map(([groupKey, rows]) => (
               <div key={groupKey}>
                 <p class="mb-1 font-semibold text-slate-600">
-                  {aggregationKey} = <span class="font-mono">{groupKey}</span>
+                  {tableAggregationKey} = <span class="font-mono">{groupKey}</span>
                   {" "}（{rows.length} 件）
                 </p>
                 {activeCols.length > 0 && <div class="overflow-x-auto">{renderTable(rows)}</div>}
@@ -240,15 +303,15 @@ function SamplePreviewPanel({
           </div>
         )
         : hasRows && activeCols.length > 0
-        ? <div class="mt-2 overflow-x-auto">{renderTable(filteredRows)}</div>
-        : hasRows && aggregationKey
+        ? <div class="mt-2 overflow-x-auto">{renderTable(primaryFilteredRows)}</div>
+        : hasRows && tableAggregationKey
         ? (
           <p class="mt-1 italic text-slate-400">
             表示列を選ばないと集計キー単位の表は出ません（全体集計は表示列なしで保存可能）
           </p>
         )
         : hasRows && activeCols.length > 0
-        ? <div class="mt-2 overflow-x-auto">{renderTable(filteredRows)}</div>
+        ? <div class="mt-2 overflow-x-auto">{renderTable(primaryFilteredRows)}</div>
         : hasRows
         ? null
         : (
@@ -667,12 +730,6 @@ export default function ContentsScreenDesignPanel({
     : [];
   const columnKeys = qualifiedColumns.map((q) => q.key);
   const logicalTableRefs = namedLogicalTableRefs(design.logicalTables);
-  const sampleProjectionColumns = projectionColumnsFromOperationBindings(
-    design.operationKinds,
-    design.operationEntityBindings,
-    columnKeys,
-  );
-
   const toggleOperationKind = (kind: ScreenOperationKind) => {
     const has = design.operationKinds.includes(kind);
     const nextKinds = has
@@ -852,11 +909,19 @@ export default function ContentsScreenDesignPanel({
         delete next[removedName];
         return { values: next, lineage: { ...row.lineage } };
       });
-      if (patch.aggregationKey === removedKey || patch.aggregationKey === removedName) {
-        patch.aggregationKey = "";
-      }
-      patch.aggregationMeasures = design.aggregationMeasures.filter((m) =>
-        drop(m.column)
+      const nextBlocks = design.aggregationBlocks.map((b) => ({
+        ...b,
+        aggregationKey: drop(b.aggregationKey) ? "" : b.aggregationKey,
+        measures: b.measures.filter((m) => !drop(m.column)),
+        searchConditions: (b.searchConditions ?? []).filter((c) => !drop(c.column)),
+        havingConditions: (b.havingConditions ?? []).filter((h) => !drop(h.column)),
+      })).filter((b) =>
+        b.sourceRef || b.aggregationKey || b.measures.length > 0
+        || (b.searchConditions?.length ?? 0) > 0 || (b.havingConditions?.length ?? 0) > 0
+      );
+      Object.assign(
+        patch,
+        patchAggregationBlocks(nextBlocks, primaryLogicalTableRef(design.logicalTables)),
       );
     }
     patchDesign(patch);
@@ -1542,19 +1607,16 @@ export default function ContentsScreenDesignPanel({
         qualifiedColumns={qualifiedColumns}
         rows={design.initialDataRows}
         enumGroupDetails={enumGroupDetails}
+        relationIntents={design.relationIntents}
         onRowsChange={(initialDataRows) => patchDesign({ initialDataRows })}
       />
 
       <h3 class="mt-5 text-xs font-semibold">集計・サンプル</h3>
-      <p class="mb-2 text-xs text-muted-xs">
-        ここで集計式を複数登録できます。
-      </p>
       <ContentsAggregationMeasuresEditor
-        columnNames={columnKeys}
-        aggregationKey={design.aggregationKey}
-        measures={design.aggregationMeasures}
-        onAggregationKeyChange={(aggregationKey) => patchDesign({ aggregationKey })}
-        onMeasuresChange={(aggregationMeasures) => patchDesign({ aggregationMeasures })}
+        qualifiedColumns={qualifiedColumns}
+        blocks={design.aggregationBlocks ?? []}
+        onBlocksChange={(nextBlocks) =>
+          patchDesign(patchAggregationBlocks(nextBlocks))}
       />
 
 
@@ -1564,291 +1626,28 @@ export default function ContentsScreenDesignPanel({
             name: q.key,
             dataType: q.column.dataType,
           }))}
-          aggregationKey={design.aggregationKey}
-          aggregationMeasures={design.aggregationMeasures}
-          projectionColumns={sampleProjectionColumns}
+          aggregationBlocks={design.aggregationBlocks}
+          qualifiedColumns={qualifiedColumns}
+          operationKinds={design.operationKinds}
+          operationEntityBindings={design.operationEntityBindings}
+          columnOrder={columnKeys}
           initialDataRows={flattenInitialDataRowsForSample(design.initialDataRows)}
-          searchConditions={design.searchConditions}
-          havingConditions={design.havingConditions}
         />
       </div>
-
-      <details class="mt-4 rounded border border-slate-200 bg-slate-50 p-3">
-        <summary class="cursor-pointer text-xs font-semibold text-slate-700">
-          {UX_FIELD_ADVANCED_SEARCH_CONDITIONS}
-        </summary>
-        <p class="mt-2 text-xs text-muted-xs">
-          必要な場合だけ、検索条件・比較演算子・集計後の絞り込みを追加します。1条件だけなら論理条件は表示しません。
-        </p>
-        {design.searchConditions.length === 0
-          ? (
-            <button
-              type="button"
-              class="btn-secondary mt-2 text-xs"
-              onClick={() => {
-                patchDesign({
-                  searchConditions: [
-                    { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
-                  ],
-                });
-              }}
-            >
-              {UX_FIELD_ADD_SEARCH_CONDITION}
-            </button>
-          )
-          : (
-            <div class="mt-3">
-              <h4 class="text-xs font-semibold text-slate-700">{UX_FIELD_SEARCH_CONDITIONS}</h4>
-              {design.searchConditions.map((cond, ci) => (
-                <div
-                  key={ci}
-                  class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-white p-2 text-xs"
-                >
-                  {ci > 0 && (
-                    <label class="flex items-center gap-1 text-xs text-slate-600">
-                      <span>{UX_FIELD_LOGICAL_CONDITION}</span>
-                      <select
-                        class="rounded border px-1 py-0.5 text-xs"
-                        value={design.searchConditions[ci - 1].logicalConnector ?? "and"}
-                        onChange={(e) => {
-                          const next = design.searchConditions.map((c, i) =>
-                            i === ci - 1
-                              ? { ...c, logicalConnector: (e.target as HTMLSelectElement).value as SearchCondition["logicalConnector"] }
-                              : c
-                          );
-                          patchDesign({ searchConditions: next });
-                        }}
-                      >
-                        {LOGICAL_CONNECTOR_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
-                  <select
-                    class="rounded border px-1 py-0.5 font-mono text-xs"
-                    value={cond.column}
-                    onChange={(e) => {
-                      const next = design.searchConditions.map((c, i) =>
-                        i === ci ? { ...c, column: (e.target as HTMLSelectElement).value } : c
-                      );
-                      patchDesign({ searchConditions: next });
-                    }}
-                  >
-                    <option value="">— 項目 —</option>
-                    {columnKeys.map((col) => (
-                      <option key={col} value={col}>{col}</option>
-                    ))}
-                  </select>
-                  <select
-                    class="rounded border px-1 py-0.5 text-xs"
-                    value={cond.operator}
-                    onChange={(e) => {
-                      const op = (e.target as HTMLSelectElement).value as SearchOperator;
-                      const next = design.searchConditions.map((c, i) =>
-                        i === ci
-                          ? { ...c, operator: op, value: undefined, valueTo: undefined, values: undefined }
-                          : c
-                      );
-                      patchDesign({ searchConditions: next });
-                    }}
-                  >
-                    {SEARCH_OPERATOR_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                  {["is null", "is not null"].includes(cond.operator)
-                    ? null
-                    : cond.operator === "between"
-                    ? (
-                      <>
-                        <input
-                          class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                          placeholder="から"
-                          value={cond.value ?? ""}
-                          onInput={(e) => {
-                            const next = design.searchConditions.map((c, i) =>
-                              i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
-                            );
-                            patchDesign({ searchConditions: next });
-                          }}
-                        />
-                        <span class="text-xs text-slate-500">〜</span>
-                        <input
-                          class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                          placeholder="まで"
-                          value={cond.valueTo ?? ""}
-                          onInput={(e) => {
-                            const next = design.searchConditions.map((c, i) =>
-                              i === ci ? { ...c, valueTo: (e.target as HTMLInputElement).value } : c
-                            );
-                            patchDesign({ searchConditions: next });
-                          }}
-                        />
-                      </>
-                    )
-                    : ["in", "not in"].includes(cond.operator)
-                    ? (
-                      <input
-                        class="w-40 rounded border px-1 py-0.5 font-mono text-xs"
-                        placeholder="値1, 値2, …"
-                        value={(cond.values ?? []).join(", ")}
-                        onInput={(e) => {
-                          const vals = (e.target as HTMLInputElement).value
-                            .split(",")
-                            .map((v) => v.trim())
-                            .filter(Boolean);
-                          const next = design.searchConditions.map((c, i) =>
-                            i === ci ? { ...c, values: vals } : c
-                          );
-                          patchDesign({ searchConditions: next });
-                        }}
-                      />
-                    )
-                    : (
-                      <input
-                        class="w-28 rounded border px-1 py-0.5 font-mono text-xs"
-                        placeholder="値"
-                        value={cond.value ?? ""}
-                        onInput={(e) => {
-                          const next = design.searchConditions.map((c, i) =>
-                            i === ci ? { ...c, value: (e.target as HTMLInputElement).value } : c
-                          );
-                          patchDesign({ searchConditions: next });
-                        }}
-                      />
-                    )}
-                  <button
-                    type="button"
-                    class="text-xs text-red-500 hover:text-red-700"
-                    onClick={() => {
-                      patchDesign({
-                        searchConditions: design.searchConditions.filter((_, i) => i !== ci),
-                      });
-                    }}
-                  >
-                    削除
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                class="btn-secondary mt-1 text-xs"
-                onClick={() => {
-                  patchDesign({
-                    searchConditions: [
-                      ...design.searchConditions,
-                      { column: columnKeys[0] ?? "", operator: "=" as SearchOperator, value: "" },
-                    ],
-                  });
-                }}
-              >
-                {UX_FIELD_ADD_SEARCH_CONDITION}
-              </button>
-            </div>
-          )}
-
-        {design.aggregationMeasures.length > 0 && (
-          <div class="mt-4 border-t border-slate-200 pt-3">
-            <p class="mb-1 text-xs font-semibold text-slate-700">{UX_FIELD_HAVING_CONDITIONS}</p>
-            <p class="mb-2 text-xs text-muted-xs">
-              集計結果に対する絞り込み条件を、必要な場合だけ設定します。
-            </p>
-            {design.havingConditions.map((hc, hi) => (
-              <div
-                key={hi}
-                class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-white p-2 text-xs"
-              >
-                <select
-                  class="rounded border px-1 py-0.5 font-mono text-xs"
-                  value={`${hc.column}__${hc.function}`}
-                  onChange={(e) => {
-                    const parts = (e.target as HTMLSelectElement).value.split("__");
-                    const col = parts[0] ?? "";
-                    const fn = parts[1] ?? "";
-                    const next = design.havingConditions.map((h, i) =>
-                      i === hi ? { ...h, column: col, function: fn } : h
-                    );
-                    patchDesign({ havingConditions: next });
-                  }}
-                >
-                  <option value="__">— 集計式 —</option>
-                  {design.aggregationMeasures.filter((m) => m.column && m.function).map((m) => (
-                    <option key={`${m.column}__${m.function}`} value={`${m.column}__${m.function}`}>
-                      {m.function}({m.column})
-                    </option>
-                  ))}
-                </select>
-                <select
-                  class="rounded border px-1 py-0.5 text-xs"
-                  value={hc.operator}
-                  onChange={(e) => {
-                    const next = design.havingConditions.map((h, i) =>
-                      i === hi
-                        ? { ...h, operator: (e.target as HTMLSelectElement).value as HavingCondition["operator"] }
-                        : h
-                    );
-                    patchDesign({ havingConditions: next });
-                  }}
-                >
-                  {HAVING_OPERATOR_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-                <input
-                  class="w-20 rounded border px-1 py-0.5 font-mono text-xs"
-                  placeholder="値"
-                  value={hc.value}
-                  onInput={(e) => {
-                    const next = design.havingConditions.map((h, i) =>
-                      i === hi ? { ...h, value: (e.target as HTMLInputElement).value } : h
-                    );
-                    patchDesign({ havingConditions: next });
-                  }}
-                />
-                <button
-                  type="button"
-                  class="text-xs text-red-500 hover:text-red-700"
-                  onClick={() => {
-                    patchDesign({
-                      havingConditions: design.havingConditions.filter((_, i) => i !== hi),
-                    });
-                  }}
-                >
-                  削除
-                </button>
-              </div>
-            ))}
-            <button
-              type="button"
-              class="btn-secondary mt-1 text-xs"
-              onClick={() => {
-                const firstMeasure = design.aggregationMeasures.find((m) => m.column && m.function);
-                patchDesign({
-                  havingConditions: [
-                    ...design.havingConditions,
-                    {
-                      column: firstMeasure?.column ?? "",
-                      function: firstMeasure?.function ?? "",
-                      operator: ">",
-                      value: "",
-                    },
-                  ],
-                });
-              }}
-            >
-              {UX_FIELD_HAVING_CONDITIONS}を追加
-            </button>
-          </div>
-        )}
-      </details>
 
       <details class="mt-2">
         <summary class="cursor-pointer text-xs text-slate-500">
           プロ向け / raw 入力（検索・集計）
         </summary>
+        <p class="mt-2 text-xs text-muted-xs">
+          通常ビューの「検索キー」や操作ごとの対象項目とは独立した raw 入力です。
+          区切りはカンマ・セミコロン・改行のいずれか。qualified 列名を列挙してください。
+        </p>
+        <p class="mt-1 font-mono text-xs text-slate-500">
+          例: employees.name, employees.status
+        </p>
         <label class="mt-1 block text-xs text-slate-500">
-          検索対象（カンマ区切り）
+          検索対象（searchTargets）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             value={design.searchTargets}
@@ -1864,8 +1663,15 @@ export default function ContentsScreenDesignPanel({
         <summary class="cursor-pointer text-xs text-slate-500">
           プロ向け / raw 集計仕様
         </summary>
+        <p class="mt-2 text-xs text-muted-xs">
+          上の「集計キー」「集計式」と独立した raw 文字列です。サンプル表示では未使用で、
+          ランタイム拡張や高度な集計 wiring 向けに保持されます。
+        </p>
+        <p class="mt-1 font-mono text-xs text-slate-500">
+          例: sum(employees.salary) group by employees.dept
+        </p>
         <label class="mt-1 block text-xs text-slate-500">
-          集計仕様（raw — 上の構造化フィールドと独立）
+          集計仕様（aggregationSpec — raw）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             value={design.aggregationSpec}

@@ -14,6 +14,7 @@ import {
 } from "./manifestLogicalTables.ts";
 import type { Step3RemoteTargetManifest } from "./manifestLogicalTables.ts";
 import {
+  assignAggregationBlocksFromDesign,
   assignHavingConditionsFromDesign,
   assignSearchConditionsFromDesign,
 } from "./screenReadQueryWiring.ts";
@@ -45,6 +46,9 @@ function shapePayloadFromExisting(
     aggregationFunction: existing.aggregationFunction || undefined,
     aggregationMeasures: existing.aggregationMeasures.length > 0
       ? existing.aggregationMeasures
+      : undefined,
+    aggregationBlocks: existing.aggregationBlocks.length > 0
+      ? existing.aggregationBlocks
       : undefined,
     logicalTables: existing.logicalTables.length > 0
       ? existing.logicalTables
@@ -173,6 +177,7 @@ export function buildAssignPayloadForStep(
     aggregationMeasures: design.aggregationMeasures.filter((m) =>
       m.column.trim() && m.function.trim()
     ),
+    aggregationBlocks: assignAggregationBlocksFromDesign(design),
     displayColumns: design.displayColumns,
     columns: base.columns,
     logicalTables: base.logicalTables,

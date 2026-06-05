@@ -4,7 +4,7 @@ import { ADMIN_MAIN_FLOW_STEPS } from "../content/adminGuides.ts";
 
 /** 管理トップ用 — canonical workflow ステッパー（subSteps タブ分岐対応） */
 export default function AdminMainFlowStepper(): JSX.Element {
-  const [activeSubStepHref, setActiveSubStepHref] = useState<Record<number, string>>({});
+  const [activeSubStepLabel, setActiveSubStepLabel] = useState<Record<number, string>>({});
 
   return (
     <nav
@@ -18,9 +18,7 @@ export default function AdminMainFlowStepper(): JSX.Element {
       <ol class="flex flex-wrap items-start gap-2" role="list">
         {ADMIN_MAIN_FLOW_STEPS.map((step, i) => {
           const hasSubSteps = step.subSteps && step.subSteps.length > 0;
-          const currentHref = hasSubSteps
-            ? (activeSubStepHref[step.step] ?? step.subSteps![0].href)
-            : step.href;
+          const currentHref = step.href;
 
           return (
             <li key={step.step} class="flex items-center" role="listitem">
@@ -38,10 +36,11 @@ export default function AdminMainFlowStepper(): JSX.Element {
                 {hasSubSteps && (
                   <div class="flex divide-x divide-blue-100 border-t border-blue-100 rounded-b-md overflow-hidden">
                     {step.subSteps!.map((sub) => {
-                      const isActive = (activeSubStepHref[step.step] ?? step.subSteps![0].href) === sub.href;
+                      const activeLabel = activeSubStepLabel[step.step] ?? step.subSteps![0].label;
+                      const isActive = activeLabel === sub.label;
                       return (
                         <button
-                          key={sub.href}
+                          key={`${step.step}:${sub.label}`}
                           type="button"
                           class={`flex-1 px-1 py-0.5 text-[0.6rem] transition-colors ${
                             isActive
@@ -49,7 +48,8 @@ export default function AdminMainFlowStepper(): JSX.Element {
                               : "text-blue-500 hover:bg-blue-50"
                           }`}
                           onClick={() =>
-                            setActiveSubStepHref((prev) => ({ ...prev, [step.step]: sub.href }))}
+                            setActiveSubStepLabel((prev) => ({ ...prev, [step.step]: sub.label }))}
+                          aria-pressed={isActive}
                         >
                           {sub.label}
                         </button>

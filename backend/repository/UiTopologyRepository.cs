@@ -183,7 +183,8 @@ public class UiTopologyRepository
 
     public virtual Task<(Guid DesignId, ValidationError? Error)> UpsertComponentStyleDesignForPackageAsync(
         Guid packageId,
-        Guid componentId,
+        Guid? componentId,
+        string? layoutNodeId,
         string name,
         string designJson,
         CancellationToken ct = default)

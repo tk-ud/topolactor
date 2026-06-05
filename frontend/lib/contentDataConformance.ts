@@ -35,6 +35,18 @@ const NUMERIC_TYPES = new Set([
   "bigint",
 ]);
 
+const DATE_TYPES = new Set(["date"]);
+const TIMESTAMP_TYPES = new Set([
+  "timestamp with time zone",
+  "timestamp",
+  "timestamptz",
+  "datetime",
+]);
+
+/** Accepts demo-seed style UUIDs (8-4-4-4-12 hex) without strict RFC variant checks. */
+export const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function validateFieldType(
   key: string,
   raw: string,
@@ -63,10 +75,15 @@ function validateFieldType(
   }
 
   if (type === "uuid") {
-    const uuidRe =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!uuidRe.test(raw.trim())) {
+    if (!UUID_PATTERN.test(raw.trim())) {
       return `field '${key}' expects type 'uuid' but value is not a valid UUID: '${raw}'`;
+    }
+    return null;
+  }
+
+  if (DATE_TYPES.has(type) || TIMESTAMP_TYPES.has(type)) {
+    if (Number.isNaN(Date.parse(raw.trim()))) {
+      return `field '${key}' expects type '${dataType}' but value is not a valid date: '${raw}'`;
     }
     return null;
   }

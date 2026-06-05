@@ -143,14 +143,39 @@ function collectFromWiringSection(
   }
 }
 
+function designUsesBlockScopedConditions(design: ManifestScreenDesignDraft): boolean {
+  return (design.aggregationBlocks ?? []).some((b) =>
+    (b.searchConditions ?? []).length > 0 || (b.havingConditions ?? []).length > 0
+  );
+}
+
 export function assignSearchConditionsFromDesign(
   design: ManifestScreenDesignDraft,
 ): SearchConditionInputWithSources[] {
+  if (designUsesBlockScopedConditions(design)) return [];
   return design.searchConditions.map((c) => searchConditionWithSources(c));
 }
 
 export function assignHavingConditionsFromDesign(
   design: ManifestScreenDesignDraft,
 ): HavingConditionInputWithSources[] {
+  if (designUsesBlockScopedConditions(design)) return [];
   return design.havingConditions.map((hc) => havingConditionWithSources(hc));
+}
+
+export function assignAggregationBlocksFromDesign(
+  design: ManifestScreenDesignDraft,
+): NonNullable<import("../api/adminApi.ts").AdminManifestScreenDataShapeInput["aggregationBlocks"]> {
+  return design.aggregationBlocks
+    .map((b) => ({
+      sourceRef: b.sourceRef.trim(),
+      aggregationKey: b.aggregationKey.trim() || undefined,
+      measures: b.measures.filter((m) => m.column.trim() && m.function.trim()),
+      searchConditions: (b.searchConditions ?? []).map((c) => searchConditionWithSources(c)),
+      havingConditions: (b.havingConditions ?? []).map((hc) => havingConditionWithSources(hc)),
+    }))
+    .filter((b) =>
+      b.sourceRef || b.aggregationKey || b.measures.length > 0
+      || (b.searchConditions?.length ?? 0) > 0 || (b.havingConditions?.length ?? 0) > 0
+    );
 }

@@ -301,9 +301,50 @@ Deno.test("UiBuilderAdmin: layout_patch dispatch omits cssTokenRefs from normal 
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  const patchBlock = src.slice(src.indexOf('dispatchAdminOp("layout_patch"'));
-  assert(patchBlock.length > 0, "layout_patch dispatch must exist");
-  assertEquals(patchBlock.includes("cssTokenRefs:"), false);
+  const dispatchMatch = src.match(
+    /dispatchAdminOp\("layout_patch"[\s\S]*?tensorPatchJson:\s*[^,]+,\s*\}\);/,
+  );
+  assert(dispatchMatch, "layout_patch dispatch must exist");
+  assertEquals(dispatchMatch[0].includes("cssTokenRefs:"), false);
+});
+
+Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("LayoutPatchApplyHandoffModal"), "apply must open handoff modal");
+  assert(src.includes('onNavigate?.("design")'), "handoff must route to design tab");
+  assert(src.includes("setLayoutApplyHandoffOpen(true)"), "apply success must open handoff");
+});
+
+Deno.test("UiBuilderAdmin: layout_patch preview opens SSOT visual audit modal surface", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("LayoutPatchPreviewModal"), "preview must use visual audit modal");
+  assert(src.includes("LayoutVisualAuditCanvas") || src.includes("layoutPatchPreviewNodes"),
+    "preview must render visual audit canvas nodes");
+  assert(src.includes("buildLayoutPatchPreviewAudit"), "preview must retain backend audit boundary");
+});
+
+Deno.test("UiBuilderAdmin: canvas node drag uses hold threshold to avoid click conflict", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("CANVAS_DRAG_HOLD_MS"), "canvas drag must use hold delay");
+  assert(src.includes("pendingDragState"), "canvas drag must defer until hold or move threshold");
+  assert(src.includes("reorderLayoutNodeStack"), "layer stack reorder must use shared util");
+});
+
+Deno.test("UiBuilderAdmin: design tab exposes preview canvas and css token picker", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("ComponentDesignPreviewCanvas"), "design tab must render preview canvas");
+  assert(src.includes('aria-label="デザインプレビュー canvas"'), "preview canvas must be labeled");
+  assert(src.includes("buildInlineStyleFromCssTokenRefs"), "preview must apply css token refs");
+  assert(src.includes('dispatchAdminOp("component_style_design", "list"'), "design tab must load saved designs");
+  assert(src.includes("CssTokenPicker"), "design tab must expose token picker for color/spacing/typography");
 });
 
 // ─── ContentsScreenDesignPanel data input + import wiring ─────────────────────
@@ -576,6 +617,11 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
         remoteKey: "ref_id",
       }],
       aggregationMeasures: [{ column: "col_b", function: "sum" }],
+      aggregationBlocks: [{
+        sourceRef: "my_table",
+        aggregationKey: "col_a",
+        measures: [{ column: "col_b", function: "sum" }],
+      }],
       initialDataRows: [{ col_a: "value1" }],
     },
   ]);
@@ -593,6 +639,8 @@ Deno.test("screen_data_shape topology extension: extracts structured fields from
   assertEquals(shape.relationIntents[0].localTableRef, "my_table");
   assertEquals(shape.relationIntents[0].joinTableRef, "other_table");
   assertEquals(shape.aggregationMeasures[0].column, "col_b");
+  assertEquals(shape.aggregationBlocks[0].sourceRef, "my_table");
+  assertEquals(shape.aggregationBlocks[0].measures[0].function, "sum");
   assertEquals(shape.initialDataRows.length, 1);
   assertEquals(shape.initialDataRows[0].values["col_a"], "value1");
 });
@@ -665,6 +713,7 @@ Deno.test("screenDesignFromBackendShape: maps structured fields from topology sh
     aggregationFunction: "avg",
     aggregationColumns: ["col_b"],
     aggregationMeasures: [],
+    aggregationBlocks: [],
     displayColumns: ["col_a", "col_b"],
     logicalTables: [],
     screenOperationKind: "list",
@@ -764,7 +813,8 @@ function stripTechnicalDisclosures(source: string): string {
 function extractNormalViewCopy(source: string): string {
   const visibleSource = stripTechnicalDisclosures(source);
   const fragments: string[] = [];
-  for (const match of visibleSource.matchAll(/>([^<{]+)</g)) {
+  // Exclude `=>` arrow functions — `>` there is not JSX text.
+  for (const match of visibleSource.matchAll(/(?<!=)>([^<{]+)</g)) {
     if (/[ぁ-んァ-ヶ一-龠]/.test(match[1])) fragments.push(match[1]);
   }
   for (
@@ -853,9 +903,14 @@ Deno.test("normal view source guard: scanned default-path copy excludes extracte
     );
     const normalViewCopy = extractNormalViewCopy(source).toLowerCase();
     for (const term of NORMAL_VIEW_BANNED_TERMS) {
+      const needle = term.toLowerCase();
+      const hitAt = normalViewCopy.indexOf(needle);
       assertFalse(
-        normalViewCopy.includes(term.toLowerCase()),
-        `${relativePath} must not expose internal term "${term}" outside technical details`,
+        hitAt >= 0,
+        `${relativePath} must not expose internal term "${term}" outside technical details` +
+          (hitAt >= 0
+            ? ` (context: …${normalViewCopy.slice(Math.max(0, hitAt - 30), hitAt + needle.length + 30)}…)`
+            : ""),
       );
     }
   }
@@ -870,12 +925,26 @@ Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy 
   assertFalse(source.includes("⑧"), "legacy numbered promote step must not appear");
 });
 
-Deno.test("v0.7.2: UiBuilderFlowStepper uses package packaging label", async () => {
+Deno.test("v0.8.0: UiBuilderFlowStepper maps four SSOT authoring surfaces", async () => {
   const source = await Deno.readTextFile(
     new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
   );
-  assertEquals(source.includes("部品選択でパッケージ化"), true);
-  assertFalse(source.includes("配置できる状態にする"), "legacy placement-ready goal removed");
+  assertEquals(source.includes("package決定"), true);
+  assertEquals(source.includes("layout editor"), true);
+  assertEquals(source.includes("component design editor"), true);
+  assertEquals(source.includes("visual view"), true);
+  assertEquals(source.includes("SSOT v0.8.0"), true);
+});
+
+Deno.test("v0.8.0: UiBuilderAdmin exposes visual view tab and structural HTML palette", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assertEquals(source.includes('id: "visual"'), true);
+  assertEquals(source.includes("StructuralHtmlPalette"), true);
+  assertEquals(source.includes("VisualViewPanel"), true);
+  assertEquals(source.includes("copyNode"), true);
+  assertEquals(source.includes("cloneVisualNode"), true);
 });
 
 Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw tab id in default path", async () => {
@@ -1035,7 +1104,42 @@ Deno.test("screen_data_shape topology extension: displayColumnMode defaults null
   assertEquals(shape.displayColumnMode, null);
 });
 
-Deno.test("screenDesignFromBackendShape: maps searchConditions, havingConditions, displayColumnMode", () => {
+Deno.test("screenDesignFromBackendShape: migrates global conditions into first block when blocks exist", () => {
+  const shape = {
+    tableRef: "tbl",
+    importSchemaName: null,
+    searchTargets: [],
+    searchKeyColumns: [],
+    aggregationSpec: null,
+    aggregationKey: "employees.status",
+    aggregationFunction: null,
+    aggregationColumns: [],
+    aggregationMeasures: [{ column: "employees.salary", function: "sum" }],
+    aggregationBlocks: [],
+    displayColumns: [],
+    logicalTables: [],
+    screenOperationKind: "list",
+    screenOperationKinds: ["list"],
+    userFacingTopologyLabel: null,
+    columns: [],
+    relationIntents: [],
+    operationEntityBindings: [],
+    initialDataRows: [],
+    searchConditions: [{ column: "col_a", operator: "like", value: "test%" }],
+    havingConditions: [{ column: "salary", function: "avg", operator: ">=", value: "500" }],
+    displayColumnMode: "none",
+  };
+  const draft = screenDesignFromBackendShape(shape, "list");
+  assertEquals(draft.searchConditions.length, 0);
+  assertEquals(draft.aggregationBlocks.length, 1);
+  assertEquals(draft.aggregationBlocks[0]!.searchConditions.length, 1);
+  assertEquals(draft.aggregationBlocks[0]!.searchConditions[0].operator, "like");
+  assertEquals(draft.aggregationBlocks[0]!.havingConditions.length, 1);
+  assertEquals(draft.aggregationBlocks[0]!.havingConditions[0].function, "avg");
+  assertEquals(draft.displayColumnMode, "none");
+});
+
+Deno.test("screenDesignFromBackendShape: keeps global conditions when no aggregation blocks", () => {
   const shape = {
     tableRef: "tbl",
     importSchemaName: null,
@@ -1046,6 +1150,7 @@ Deno.test("screenDesignFromBackendShape: maps searchConditions, havingConditions
     aggregationFunction: null,
     aggregationColumns: [],
     aggregationMeasures: [],
+    aggregationBlocks: [],
     displayColumns: [],
     logicalTables: [],
     screenOperationKind: "list",
@@ -1061,10 +1166,8 @@ Deno.test("screenDesignFromBackendShape: maps searchConditions, havingConditions
   };
   const draft = screenDesignFromBackendShape(shape, "list");
   assertEquals(draft.searchConditions.length, 1);
-  assertEquals(draft.searchConditions[0].operator, "like");
   assertEquals(draft.havingConditions.length, 1);
-  assertEquals(draft.havingConditions[0].function, "avg");
-  assertEquals(draft.displayColumnMode, "none");
+  assertEquals(draft.aggregationBlocks.length, 0);
 });
 
 Deno.test("DISPLAY_COLUMN_MODE_LABELS: covers selected/all/none", () => {
@@ -1235,6 +1338,7 @@ Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from back
     aggregationFunction: null,
     aggregationColumns: [],
     aggregationMeasures: [],
+    aggregationBlocks: [],
     displayColumns: [],
     logicalTables: [],
     screenOperationKind: "list",
@@ -1259,6 +1363,29 @@ Deno.test("buildAssignPayloadForStep step2: preserves searchConditions from back
 });
 
 
+Deno.test("Step3 aggregation: block add UI is exposed in normal view", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../components/ContentsAggregationMeasuresEditor.tsx", import.meta.url),
+  );
+  assert(
+    source.includes("集計ブロックを追加") &&
+      source.includes("SQL ソース（論理テーブル）"),
+    "aggregation blocks must be addable per SQL/logical-table source",
+  );
+});
+
+Deno.test("Step3 sample viewing: operation kind select drives preview projection", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(
+    source.includes("操作種別") &&
+      source.includes("projectionColumnsForOperationKind") &&
+      source.includes("screenOperationLabel(effectivePreviewKind)"),
+    "sample preview must switch entityTargetColumns by selected operation kind",
+  );
+});
+
 Deno.test("Step3 progressive disclosure: raw inputs remain disclosed", async () => {
   const source = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
@@ -1273,24 +1400,36 @@ Deno.test("Step3 progressive disclosure: raw inputs remain disclosed", async () 
       source.includes("value={design.aggregationSpec}"),
     "raw aggregationSpec must stay behind a pro-facing disclosure",
   );
+  assert(
+    source.includes("employees.name, employees.status") &&
+      source.includes("sum(employees.salary) group by employees.dept"),
+    "pro-facing searchTargets and aggregationSpec must show format samples",
+  );
 });
 
-Deno.test("Step3 progressive disclosure: search operator UI is not primary", async () => {
+Deno.test("Step3 progressive disclosure: search operator UI lives inside aggregation block", async () => {
   const source = await Deno.readTextFile(
-    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+    new URL("../components/AggregationBlockConditionsEditor.tsx", import.meta.url),
   );
   const advancedStart = source.indexOf(`{UX_FIELD_ADVANCED_SEARCH_CONDITIONS}`);
   const operatorStart = source.indexOf("SEARCH_OPERATOR_OPTIONS.map", advancedStart);
-  assert(advancedStart >= 0, "advanced search disclosure summary must exist");
-  assert(operatorStart > advancedStart, "search operator select must live inside the advanced disclosure block");
+  assert(advancedStart >= 0, "advanced search disclosure summary must exist inside aggregation block");
+  assert(operatorStart > advancedStart, "search operator select must live inside the block conditions editor");
   assert(
-    source.includes("design.searchConditions.length === 0") &&
+    source.includes("searchConditions.length === 0") &&
       source.includes(`{UX_FIELD_ADD_SEARCH_CONDITION}`),
     "zero-condition state must show only the add-search-condition path before condition rows",
   );
   assert(
     source.includes("{ci > 0 && (") && source.includes(`{UX_FIELD_LOGICAL_CONDITION}`),
     "AND/OR/NOT logical connector UI must only appear from the second condition onward",
+  );
+  const panelSource = await Deno.readTextFile(
+    new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
+  );
+  assert(
+    !panelSource.includes(`{UX_FIELD_ADVANCED_SEARCH_CONDITIONS}`),
+    "screen-level advanced search disclosure must be removed; conditions belong to blocks",
   );
 });
 

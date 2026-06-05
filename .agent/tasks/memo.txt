@@ -1,0 +1,17 @@
+# ui builder
+
+## 1. package決定
+1. component bucketから必要なcomponentを選択
+2. package generated
+## 2. layout editer
+1. package内のコンポーネントの入れ子設定をする場所
+2. 要素はコピー等で要素を増減できる
+3. <h*><div><section><a>のような一般的なpreactで使用可能なhtmlは使用でき、要素として追加できる
+4. 各要素にlayout css class を割り当てられる
+5. drag and drop で直感的に要素の移動が出来る
+## 3. component design editer
+1. package内のコンポーネントの色,形,inline text, link などのプロパティを設定をする場所
+2. 主にtailwind 等を使い変更していく
+3. <h*><div><section><a>のようなlayout editerで追加された要素も編集出来る
+## 4. 全体のVisual view
+1. 設定された構成でislandを描画

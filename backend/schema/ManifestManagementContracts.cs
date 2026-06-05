@@ -90,6 +90,14 @@ public record AdminManifestAggregationMeasureDto(
     [property: JsonPropertyName("function")] string Function
 );
 
+public record AdminManifestAggregationBlockDto(
+    [property: JsonPropertyName("sourceRef")] string SourceRef,
+    [property: JsonPropertyName("aggregationKey")] string? AggregationKey,
+    [property: JsonPropertyName("measures")] IReadOnlyList<AdminManifestAggregationMeasureDto> Measures,
+    [property: JsonPropertyName("searchConditions")] IReadOnlyList<AdminManifestSearchConditionDto>? SearchConditions = null,
+    [property: JsonPropertyName("havingConditions")] IReadOnlyList<AdminManifestHavingConditionDto>? HavingConditions = null
+);
+
 public record AdminManifestRelationIntentDto(
     [property: JsonPropertyName("localTableRef")] string? LocalTableRef,
     [property: JsonPropertyName("joinTableRef")] string JoinTableRef,
@@ -163,6 +171,7 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("aggregationFunction")] string? AggregationFunction,
     [property: JsonPropertyName("aggregationColumns")] IReadOnlyList<string>? AggregationColumns,
     [property: JsonPropertyName("aggregationMeasures")] IReadOnlyList<AdminManifestAggregationMeasureDto>? AggregationMeasures,
+    [property: JsonPropertyName("aggregationBlocks")] IReadOnlyList<AdminManifestAggregationBlockDto>? AggregationBlocks,
     [property: JsonPropertyName("displayColumns")] IReadOnlyList<string>? DisplayColumns,
     [property: JsonPropertyName("logicalTables")] IReadOnlyList<AdminManifestLogicalTableDto>? LogicalTables,
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,

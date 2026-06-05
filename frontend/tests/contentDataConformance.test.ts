@@ -44,6 +44,23 @@ Deno.test("diagnoseContentDataRows applies same rules to manual and import rows"
   assertEquals(manual[0]!.message, imported[0]!.message);
 });
 
+Deno.test("diagnoseContentDataRows accepts demo-seed style UUID", () => {
+  const warnings = diagnoseContentDataRows([{
+    values: { id: "00000000-0000-0000-0000-0000000000a1" },
+    lineage: { source: "manual" },
+  }], [{ key: "id", dataType: "uuid", nullable: false }]);
+  assertEquals(warnings.length, 0);
+});
+
+Deno.test("diagnoseContentDataRows flags invalid date values", () => {
+  const warnings = diagnoseContentDataRows([{
+    values: { started: "not-a-date" },
+    lineage: { source: "manual" },
+  }], [{ key: "started", dataType: "date", nullable: true }]);
+  assertEquals(warnings.length, 1);
+  assertEquals(warnings[0]!.code, "TYPE_MISMATCH");
+});
+
 Deno.test("importRecordToRowValues maps preview record to qualified keys", () => {
   const values = importRecordToRowValues(
     { name: "Alice", age: 30 },

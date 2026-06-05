@@ -80,10 +80,51 @@ public static class ManifestCanonicalProjection
         return list;
     }
 
+    /// <summary>
+    /// Projects a draft manifest shell into hubs.topology_manifests so admin import and
+    /// hub-navigation selectors can reference the authoring manifest before promote.
+    /// Skips wiring projection (physical table may not exist until later pipeline steps).
+    /// </summary>
+    public static async Task<ValidationError?> ProjectOnAuthoringDraftAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
+    {
+        var resolved = await ResolveHubIdAndManifestKeyAsync(conn, detail, ct, tx);
+        if (resolved.Error is not null) return resolved.Error;
+        return await UpsertTopologyManifestAsync(
+            conn, detail, resolved.HubId!.Value, resolved.ManifestKey!, ct, tx);
+    }
+
     public static async Task<ValidationError?> ProjectOnPromoteAsync(
         NpgsqlConnection conn,
         ManifestDetailRecord detail,
-        CancellationToken ct)
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
+    {
+        var resolved = await ResolveHubIdAndManifestKeyAsync(conn, detail, ct, tx);
+        if (resolved.Error is not null) return resolved.Error;
+
+        // Fail closed before either canonical projection table is mutated. The repository
+        // transaction remains the final rollback boundary, but table_ref mismatch is a
+        // validation failure and must not leave a topology_manifests partial write even when
+        // this projection helper is called independently.
+        var wiringPreflightError = await ValidateWiringTableRefAsync(conn, detail, ct, tx);
+        if (wiringPreflightError is not null) return wiringPreflightError;
+
+        var upsertError = await UpsertTopologyManifestAsync(
+            conn, detail, resolved.HubId!.Value, resolved.ManifestKey!, ct, tx);
+        if (upsertError is not null) return upsertError;
+
+        return await TryProjectWiringAsync(conn, detail, ct, tx);
+    }
+
+    private static async Task<(Guid? HubId, string? ManifestKey, ValidationError? Error)> ResolveHubIdAndManifestKeyAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
     {
         var summary = ManifestTopologyValidator.ExtractSummary(detail.Topology);
         var (hubId, manifestKey) = ExtractHubGrouping(detail.Topology);
@@ -91,6 +132,7 @@ public static class ManifestCanonicalProjection
         if (!hubId.HasValue && detail.RelationRegistryId.HasValue)
         {
             await using var hubCmd = conn.CreateCommand();
+            hubCmd.Transaction = tx;
             hubCmd.CommandText =
                 "SELECT hub_id FROM hubs.hub WHERE relation_registry_id = @rel ORDER BY created_at ASC LIMIT 1";
             hubCmd.Parameters.AddWithValue("rel", detail.RelationRegistryId.Value);
@@ -101,6 +143,7 @@ public static class ManifestCanonicalProjection
         if (!hubId.HasValue)
         {
             await using var fallbackCmd = conn.CreateCommand();
+            fallbackCmd.Transaction = tx;
             fallbackCmd.CommandText = "SELECT hub_id FROM hubs.hub ORDER BY created_at ASC LIMIT 1";
             var scalar = await fallbackCmd.ExecuteScalarAsync(ct);
             if (scalar is Guid g) hubId = g;
@@ -108,21 +151,25 @@ public static class ManifestCanonicalProjection
 
         if (!hubId.HasValue)
         {
-            return new ValidationError(
+            return (null, null, new ValidationError(
                 "HUB_GROUPING_REQUIRED",
-                "Promote requires hub_grouping.hubId on the manifest draft, or at least one row in hubs.hub.");
+                "Manifest authoring requires hub_grouping.hubId on the draft, or at least one row in hubs.hub."));
         }
 
         manifestKey ??= PromotionManifestValidator.ExtractMetadataDto(detail.Topology)?.ManifestKey;
         manifestKey ??= BuildDefaultManifestKey(summary);
 
-        // Fail closed before either canonical projection table is mutated. The repository
-        // transaction remains the final rollback boundary, but table_ref mismatch is a
-        // validation failure and must not leave a topology_manifests partial write even when
-        // this projection helper is called independently.
-        var wiringPreflightError = await ValidateWiringTableRefAsync(conn, detail, ct);
-        if (wiringPreflightError is not null) return wiringPreflightError;
+        return (hubId, manifestKey, null);
+    }
 
+    private static async Task<ValidationError?> UpsertTopologyManifestAsync(
+        NpgsqlConnection conn,
+        ManifestDetailRecord detail,
+        Guid hubId,
+        string manifestKey,
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
+    {
         var topologyJsonb = JsonSerializer.Serialize(new
         {
             manifest_id = detail.ManifestId,
@@ -130,6 +177,7 @@ public static class ManifestCanonicalProjection
         });
 
         await using var upsert = conn.CreateCommand();
+        upsert.Transaction = tx;
         upsert.CommandText =
             "INSERT INTO hubs.topology_manifests " +
             "(topology_manifest_id, hub_id, manifest_key, status, topology_jsonb) " +
@@ -141,13 +189,11 @@ public static class ManifestCanonicalProjection
             "topology_jsonb = EXCLUDED.topology_jsonb, " +
             "updated_at = now()";
         upsert.Parameters.AddWithValue("id", detail.ManifestId);
-        upsert.Parameters.AddWithValue("hub", hubId.Value);
+        upsert.Parameters.AddWithValue("hub", hubId);
         upsert.Parameters.AddWithValue("key", manifestKey);
         upsert.Parameters.AddWithValue("topo", topologyJsonb);
         await upsert.ExecuteNonQueryAsync(ct);
-
-        var wiringError = await TryProjectWiringAsync(conn, detail, ct);
-        return wiringError;
+        return null;
     }
 
     /// <summary>
@@ -159,12 +205,13 @@ public static class ManifestCanonicalProjection
     private static async Task<ValidationError?> TryProjectWiringAsync(
         NpgsqlConnection conn,
         ManifestDetailRecord detail,
-        CancellationToken ct)
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
     {
         var tableRef = ExtractScreenDataShapeTableRef(detail.Topology);
         if (string.IsNullOrWhiteSpace(tableRef)) return null;
 
-        var physicalTableId = await FindPhysicalTableIdAsync(conn, tableRef, ct);
+        var physicalTableId = await FindPhysicalTableIdAsync(conn, tableRef, ct, tx);
         if (!physicalTableId.HasValue)
         {
             // ProjectOnPromoteAsync performs this preflight before any canonical write. Keep
@@ -181,6 +228,7 @@ public static class ManifestCanonicalProjection
         });
 
         await using var exists = conn.CreateCommand();
+        exists.Transaction = tx;
         exists.CommandText =
             "SELECT 1 FROM topology.wiring_physical_to_package " +
             "WHERE physical_table_id = @pt AND package_id = @pkg AND active = true LIMIT 1";
@@ -189,6 +237,7 @@ public static class ManifestCanonicalProjection
         if (await exists.ExecuteScalarAsync(ct) is not null) return null;
 
         await using var insert = conn.CreateCommand();
+        insert.Transaction = tx;
         insert.CommandText =
             "INSERT INTO topology.wiring_physical_to_package " +
             "(physical_table_id, package_id, wiring_def, active) " +
@@ -203,12 +252,13 @@ public static class ManifestCanonicalProjection
     private static async Task<ValidationError?> ValidateWiringTableRefAsync(
         NpgsqlConnection conn,
         ManifestDetailRecord detail,
-        CancellationToken ct)
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
     {
         var tableRef = ExtractScreenDataShapeTableRef(detail.Topology);
         if (string.IsNullOrWhiteSpace(tableRef)) return null;
 
-        return await FindPhysicalTableIdAsync(conn, tableRef, ct) is null
+        return await FindPhysicalTableIdAsync(conn, tableRef, ct, tx) is null
             ? WiringTableRefNotFound(tableRef)
             : null;
     }
@@ -231,9 +281,11 @@ public static class ManifestCanonicalProjection
     private static async Task<long?> FindPhysicalTableIdAsync(
         NpgsqlConnection conn,
         string tableRef,
-        CancellationToken ct)
+        CancellationToken ct,
+        NpgsqlTransaction? tx = null)
     {
         await using var lookup = conn.CreateCommand();
+        lookup.Transaction = tx;
         lookup.CommandText =
             "SELECT physical_table_id FROM topology.physical_tables " +
             "WHERE table_ref = @ref AND active = true LIMIT 1";

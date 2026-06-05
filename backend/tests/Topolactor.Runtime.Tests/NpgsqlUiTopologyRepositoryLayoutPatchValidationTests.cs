@@ -81,6 +81,56 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
         Assert.Equal("DRAFT_ONLY_NODE_NOT_APPLICABLE:DRAFT_ONLY_NODE_CANNOT_BE_APPLIED", result.Message);
     }
     [Fact]
+    public async Task ValidateLayoutPatchAsync_StructuralHtmlNode_PassesWhenAllowlisted()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        {
+          "nodes": [
+            {
+              "nodeId": "html-1",
+              "nodeKind": "structural_html",
+              "htmlTag": "section",
+              "componentKey": "layout/structural_html",
+              "slotKey": "",
+              "orderIndex": 0,
+              "parentNodeId": null
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+        Assert.True(result.Ok);
+        Assert.True(result.Valid);
+    }
+
+    [Fact]
+    public async Task ValidateLayoutPatchAsync_StructuralHtmlUnknownTag_FailsClose()
+    {
+        var repo = new NpgsqlUiTopologyRepository(NullLogger<NpgsqlUiTopologyRepository>.Instance, "Host=localhost;Database=none");
+        var tensorPatchJson = """
+        {
+          "nodes": [
+            {
+              "nodeId": "html-1",
+              "nodeKind": "structural_html",
+              "htmlTag": "article",
+              "componentKey": "layout/structural_html",
+              "slotKey": "",
+              "orderIndex": 0
+            }
+          ]
+        }
+        """;
+
+        var result = await repo.ValidateLayoutPatchAsync(Guid.NewGuid(), "/admin/ui-builder", tensorPatchJson, null, null);
+        Assert.False(result.Ok);
+        Assert.False(result.Valid);
+        Assert.StartsWith("LAYOUT_PATCH_STRUCTURAL_HTML_TAG_UNKNOWN:", result.Message);
+    }
+
+    [Fact]
     public async Task ValidateLayoutPatchAsync_VocabularyUnavailable_IsExplicitError()
     {
         // CSS vocabulary loading was removed; tokens are placement-only and always accepted.

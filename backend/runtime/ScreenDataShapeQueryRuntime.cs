@@ -56,6 +56,7 @@ public sealed class ScreenDataShapeQueryRuntime
         var initialRows = ScreenDataShapeQueryEvaluator.ParseInitialDataRows(entry);
         var searchConditions = ParseSearchConditions(entry, vector);
         var havingConditions = ParseHavingConditions(entry, vector);
+        var aggregationBlocks = ParseAggregationBlocks(entry, vector, searchConditions, havingConditions);
         var aggregationKey = entry.TryGetProperty("aggregationKey", out var ak) && ak.ValueKind == JsonValueKind.String
             ? ak.GetString()
             : null;
@@ -65,14 +66,16 @@ public sealed class ScreenDataShapeQueryRuntime
             ? dcm.GetString() ?? "selected"
             : displayColumns.Count > 0 ? "selected" : "all";
 
+        var useBlocks = aggregationBlocks.Count > 0;
         var result = ScreenDataShapeQueryEvaluator.Execute(new ScreenDataShapeQueryEvaluator.ScreenDataShapeQueryInput(
             InitialRows: initialRows,
-            SearchConditions: searchConditions,
-            HavingConditions: havingConditions,
-            AggregationKey: aggregationKey,
-            AggregationMeasures: measures,
+            SearchConditions: useBlocks ? [] : searchConditions,
+            HavingConditions: useBlocks ? [] : havingConditions,
+            AggregationKey: useBlocks ? null : aggregationKey,
+            AggregationMeasures: useBlocks ? [] : measures,
             DisplayColumns: displayColumns,
-            DisplayColumnMode: displayColumnMode));
+            DisplayColumnMode: displayColumnMode,
+            AggregationBlocks: useBlocks ? aggregationBlocks : null));
 
         if (result.Errors.Count > 0)
             return (null, result.Errors);
@@ -90,15 +93,111 @@ public sealed class ScreenDataShapeQueryRuntime
         return (JsonSerializer.SerializeToElement(payload), []);
     }
 
+    private static List<ScreenDataShapeQueryEvaluator.ResolvedAggregationBlock> ParseAggregationBlocks(
+        JsonElement shapeEntry,
+        OperationVector vector,
+        IReadOnlyList<ScreenDataShapeQueryEvaluator.ResolvedSearchCondition> legacySearch,
+        IReadOnlyList<ScreenDataShapeQueryEvaluator.ResolvedHavingCondition> legacyHaving)
+    {
+        var list = new List<ScreenDataShapeQueryEvaluator.ResolvedAggregationBlock>();
+        if (!shapeEntry.TryGetProperty("aggregationBlocks", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return list;
+
+        var blockIndex = 0;
+        foreach (var blockEl in arr.EnumerateArray())
+        {
+            if (blockEl.ValueKind != JsonValueKind.Object) continue;
+            var sourceRef = blockEl.TryGetProperty("sourceRef", out var sr) ? sr.GetString() ?? "" : "";
+            var aggregationKey = blockEl.TryGetProperty("aggregationKey", out var ak) && ak.ValueKind == JsonValueKind.String
+                ? ak.GetString()
+                : null;
+            var measures = ParseAggregationMeasuresFromBlock(blockEl);
+            var blockSearch = blockEl.TryGetProperty("searchConditions", out var scArr) && scArr.ValueKind == JsonValueKind.Array
+                ? ParseSearchConditionsFromArray(scArr, FindBlockWiringEntry(shapeEntry, blockIndex, "searchConditions"), vector)
+                : [];
+            var blockHaving = blockEl.TryGetProperty("havingConditions", out var hcArr) && hcArr.ValueKind == JsonValueKind.Array
+                ? ParseHavingConditionsFromArray(hcArr, FindBlockWiringEntry(shapeEntry, blockIndex, "havingConditions"), vector)
+                : [];
+
+            if (blockIndex == 0 && blockSearch.Count == 0 && legacySearch.Count > 0)
+                blockSearch = legacySearch.ToList();
+            if (blockIndex == 0 && blockHaving.Count == 0 && legacyHaving.Count > 0)
+                blockHaving = legacyHaving.ToList();
+
+            if (string.IsNullOrWhiteSpace(sourceRef) &&
+                string.IsNullOrWhiteSpace(aggregationKey) &&
+                measures.Count == 0 &&
+                blockSearch.Count == 0 &&
+                blockHaving.Count == 0)
+            {
+                blockIndex++;
+                continue;
+            }
+
+            list.Add(new ScreenDataShapeQueryEvaluator.ResolvedAggregationBlock(
+                sourceRef,
+                aggregationKey,
+                measures,
+                blockSearch,
+                blockHaving));
+            blockIndex++;
+        }
+
+        return list;
+    }
+
+    private static JsonElement? FindBlockWiringEntry(JsonElement shapeEntry, int blockIndex, string field)
+    {
+        if (!shapeEntry.TryGetProperty("screenReadQueryWiring", out var wiring) ||
+            wiring.ValueKind != JsonValueKind.Object ||
+            !wiring.TryGetProperty("aggregationBlocks", out var blocks) ||
+            blocks.ValueKind != JsonValueKind.Array ||
+            blockIndex >= blocks.GetArrayLength())
+        {
+            return null;
+        }
+
+        var blockWiring = blocks[blockIndex];
+        if (blockWiring.ValueKind != JsonValueKind.Object ||
+            !blockWiring.TryGetProperty(field, out var entry))
+        {
+            return null;
+        }
+
+        return entry.ValueKind == JsonValueKind.Object ? entry : null;
+    }
+
+    private static List<(string Column, string Function)> ParseAggregationMeasuresFromBlock(JsonElement blockEl)
+    {
+        var list = new List<(string, string)>();
+        if (!blockEl.TryGetProperty("measures", out var arr) || arr.ValueKind != JsonValueKind.Array)
+            return list;
+        foreach (var m in arr.EnumerateArray())
+        {
+            if (m.ValueKind != JsonValueKind.Object) continue;
+            var col = m.TryGetProperty("column", out var c) ? c.GetString()?.Trim() : null;
+            var fn = m.TryGetProperty("function", out var f) ? f.GetString()?.Trim() : null;
+            if (!string.IsNullOrEmpty(col) && !string.IsNullOrEmpty(fn))
+                list.Add((col, fn));
+        }
+        return list;
+    }
+
     private static List<ScreenDataShapeQueryEvaluator.ResolvedSearchCondition> ParseSearchConditions(
         JsonElement shapeEntry,
         OperationVector vector)
     {
-        var wiring = FindWiringEntry(shapeEntry, "searchConditions");
-        var list = new List<ScreenDataShapeQueryEvaluator.ResolvedSearchCondition>();
         if (!shapeEntry.TryGetProperty("searchConditions", out var arr) || arr.ValueKind != JsonValueKind.Array)
-            return list;
+            return [];
+        return ParseSearchConditionsFromArray(arr, FindWiringEntry(shapeEntry, "searchConditions"), vector);
+    }
 
+    private static List<ScreenDataShapeQueryEvaluator.ResolvedSearchCondition> ParseSearchConditionsFromArray(
+        JsonElement arr,
+        JsonElement? wiring,
+        OperationVector vector)
+    {
+        var list = new List<ScreenDataShapeQueryEvaluator.ResolvedSearchCondition>();
         var idx = 0;
         foreach (var cond in arr.EnumerateArray())
         {
@@ -145,11 +244,17 @@ public sealed class ScreenDataShapeQueryRuntime
         JsonElement shapeEntry,
         OperationVector vector)
     {
-        var wiring = FindWiringEntry(shapeEntry, "havingConditions");
-        var list = new List<ScreenDataShapeQueryEvaluator.ResolvedHavingCondition>();
         if (!shapeEntry.TryGetProperty("havingConditions", out var arr) || arr.ValueKind != JsonValueKind.Array)
-            return list;
+            return [];
+        return ParseHavingConditionsFromArray(arr, FindWiringEntry(shapeEntry, "havingConditions"), vector);
+    }
 
+    private static List<ScreenDataShapeQueryEvaluator.ResolvedHavingCondition> ParseHavingConditionsFromArray(
+        JsonElement arr,
+        JsonElement? wiring,
+        OperationVector vector)
+    {
+        var list = new List<ScreenDataShapeQueryEvaluator.ResolvedHavingCondition>();
         var idx = 0;
         foreach (var cond in arr.EnumerateArray())
         {

@@ -244,6 +244,28 @@ topology-layout-class-ssot.yaml
 - Frontend projects selector candidates only; unknown class refs must fail explicitly (no silent fallback to raw className/Tailwind).
 - Raw `className` / `tailwind` / inline `style` in design payloads are legacy-only for topology layout paths.
 
+## 5.7 UI Builder authoring surfaces (step 4 — v0.8.0)
+
+`/admin/ui-builder` step 4 defines four author-facing surfaces in
+`docs/design/admin-console-workflow-ssot.yaml` → `ui_builder_authoring_surfaces`.
+Implementation MUST map to these surfaces exactly; implementation-convenience shortcuts are prohibited.
+
+| Surface | User-facing | Primary persistence |
+|---------|-------------|---------------------|
+| `package_selection` | package決定 | `package_generator:promote_package` |
+| `layout_editor` | layout editor | `layout_patch:preview` → `validate` → `apply` |
+| `component_design_editor` | component design editor | `component_style_design:upsert` |
+| `visual_view` | visual view | read-only projection (no DB write) |
+
+- **layout_editor** owns nesting (`parentNodeId`), element add/copy/delete, structural HTML nodes
+  (`h1`–`h6`, `div`, `section`, `a`), per-node `layoutClassRefs`, and drag-and-drop move/reorder.
+- **component_design_editor** owns `cssTokenRefs` / `responsiveTokenRefs`, inline text, link href,
+  and `reactionIntent` for both catalog components and `structural_html` nodes from layout editor.
+  Product notes that mention "tailwind 等" map to css-dictionary and topology-layout-class vocabulary —
+  not freeform tailwind strings.
+- **visual_view** is a read-only composite island preview distinct from the layout editor manipulation
+  canvas and distinct from post-apply `/demo` runtime verification.
+
 ## 6. Validation Model
 
 The following validation classes apply during the validate-refs stage:
@@ -427,7 +449,7 @@ not add canonical routes outside that registry.
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
 | `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial-data topology intent, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit manifest promote/register. Actual business-row insertion remains the separate `content_bundle` validated draft -> preview -> explicit promote route. |
-| `/admin/ui-builder` | Manifest display/operation UI projection: component placement, selectable design/layout settings, selectable component wiring, validate, visual preview, explicit apply, then CI/local governance audit handoff |
+| `/admin/ui-builder` | Step 4 UI Builder: four authoring surfaces (package selection → layout editor → component design editor → visual view). Component bucket → package generation; package-only layout nesting/placement (structural HTML, layoutClassRefs, drag-and-drop); component design (cssTokenRefs, inline text, links); read-only island composite preview; validate → explicit apply; CI/local governance audit handoff. See admin-console-workflow-ssot `ui_builder_authoring_surfaces` and §5.7. |
 | `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
 | `/admin/enums` | Enum dictionary master roster: group and item CRUD, search, show-all, modal create, inline update, confirm delete |
 | `/admin/users` | Auth user master roster and state management (approve, status enum select, suspension window, state_note); `last_login_at` readonly |

@@ -5,6 +5,14 @@ export type AggregationMeasureShape = {
   function: string;
 };
 
+export type AggregationBlockShape = {
+  sourceRef: string;
+  aggregationKey: string;
+  measures: AggregationMeasureShape[];
+  searchConditions?: SearchConditionShape[];
+  havingConditions?: HavingConditionShape[];
+};
+
 export type RelationIntentShape = {
   localTableRef: string;
   joinTableRef: string;
@@ -58,6 +66,7 @@ export type ScreenDataShapeSummary = {
   aggregationColumns: string[];
   aggregationFunction: string | null;
   aggregationMeasures: AggregationMeasureShape[];
+  aggregationBlocks: AggregationBlockShape[];
   logicalTables: LogicalTableShape[];
   screenOperationKind: string | null;
   screenOperationKinds: string[];
@@ -129,6 +138,58 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
             function: typeof m.function === "string" ? m.function : "",
           }))
           .filter((m) => m.column && m.function)
+      : [];
+    const aggregationBlocks = Array.isArray(entry.aggregationBlocks)
+      ? entry.aggregationBlocks
+          .filter((b): b is Record<string, unknown> => typeof b === "object" && b !== null)
+          .map((b) => {
+            const blockSearch = Array.isArray(b.searchConditions)
+              ? b.searchConditions
+                .filter((c): c is Record<string, unknown> => typeof c === "object" && c !== null)
+                .map((c) => ({
+                  column: typeof c.column === "string" ? c.column : "",
+                  operator: typeof c.operator === "string" ? c.operator : "=",
+                  value: typeof c.value === "string" ? c.value : undefined,
+                  valueTo: typeof c.valueTo === "string" ? c.valueTo : undefined,
+                  values: Array.isArray(c.values)
+                    ? c.values.filter((v): v is string => typeof v === "string")
+                    : undefined,
+                  logicalConnector: typeof c.logicalConnector === "string"
+                    ? c.logicalConnector
+                    : undefined,
+                }))
+              : [];
+            const blockHaving = Array.isArray(b.havingConditions)
+              ? b.havingConditions
+                .filter((h): h is Record<string, unknown> => typeof h === "object" && h !== null)
+                .map((h) => ({
+                  column: typeof h.column === "string" ? h.column : "",
+                  function: typeof h.function === "string" ? h.function : "",
+                  operator: typeof h.operator === "string" ? h.operator : "=",
+                  value: typeof h.value === "string" ? h.value : "",
+                }))
+                .filter((h) => h.column && h.function)
+              : [];
+            return {
+              sourceRef: typeof b.sourceRef === "string" ? b.sourceRef : "",
+              aggregationKey: typeof b.aggregationKey === "string" ? b.aggregationKey : "",
+              measures: Array.isArray(b.measures)
+                ? b.measures
+                  .filter((m): m is Record<string, unknown> => typeof m === "object" && m !== null)
+                  .map((m) => ({
+                    column: typeof m.column === "string" ? m.column : "",
+                    function: typeof m.function === "string" ? m.function : "",
+                  }))
+                  .filter((m) => m.column && m.function)
+                : [],
+              searchConditions: blockSearch,
+              havingConditions: blockHaving,
+            };
+          })
+          .filter((b) =>
+            b.sourceRef || b.aggregationKey || b.measures.length > 0
+            || (b.searchConditions?.length ?? 0) > 0 || (b.havingConditions?.length ?? 0) > 0
+          )
       : [];
     const logicalTables = Array.isArray(entry.logicalTables)
       ? entry.logicalTables
@@ -257,6 +318,7 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
       aggregationColumns,
       aggregationFunction,
       aggregationMeasures,
+      aggregationBlocks,
       logicalTables,
       screenOperationKind,
       screenOperationKinds,
@@ -281,6 +343,7 @@ export function extractScreenDataShapeFromTopology(raw: string): ScreenDataShape
     aggregationColumns: [],
     aggregationFunction: null,
     aggregationMeasures: [],
+    aggregationBlocks: [],
     logicalTables: [],
     screenOperationKind: null,
     screenOperationKinds: [],

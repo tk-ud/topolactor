@@ -31,13 +31,15 @@ services:
 
   backend:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
     container_name: topolactor-demo-backend
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_URL}"
       BACKEND_PORT: "5000"
+      # Layout class vocabulary for layout_patch validate/apply (baked into image; volume allows live SSOT edits).
+      TOPOLACTOR_TOPOLOGY_LAYOUT_CLASS_SSOT_PATH: /app/ssot/topology-layout-class-ssot.yaml
       # Required — set in infra/.env (copy infra/.env.example and fill in values).
       # /dispatch is always JWT-guarded; AUTH_JWT_SECRET_NOT_CONFIGURED is returned
       # when DEMO_JWT_SECRET is absent so the endpoint is never silently unauthenticated.
@@ -49,6 +51,7 @@ services:
       SEED_STORAGE_PATH: "/storage"
     volumes:
       - topolactor_seed_storage:/storage
+      - ../docs/design/topology-layout-class-ssot.yaml:/app/ssot/topology-layout-class-ssot.yaml:ro
     ports:
       - "5000:5000"
     depends_on:

@@ -57,6 +57,14 @@ export function validateResponsiveTokenRulesJson(raw: string): ResponsiveTokenRu
   return { ok: true, rules: record as ResponsiveTokenRules };
 }
 
+/** SSOT: admin-console-workflow-ssot v0.8.0 layout_editor structural_html allowlist */
+export const STRUCTURAL_HTML_TAG_ALLOWLIST = [
+  "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "a",
+] as const;
+export type StructuralHtmlTag = (typeof STRUCTURAL_HTML_TAG_ALLOWLIST)[number];
+export const STRUCTURAL_HTML_COMPONENT_KEY = "layout/structural_html";
+export type LayoutNodeKind = "catalog_component" | "structural_html";
+
 // Minimal node shape for patch builder — compatible with DraftNode in UiBuilderAdmin.tsx.
 export interface VisualNodePayload {
   nodeId: string;
@@ -71,12 +79,83 @@ export interface VisualNodePayload {
   y: number;
   width: number;
   height: number;
+  nodeKind?: LayoutNodeKind;
+  htmlTag?: StructuralHtmlTag;
+  layoutClassRefs?: string[];
   componentId?: string;
   packageId?: string;
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
   componentKind?: string;
+}
+
+export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
+  return node.nodeKind === "structural_html";
+}
+
+export function resolveLayoutNodeKind(
+  raw: Record<string, unknown>,
+): LayoutNodeKind {
+  return raw.nodeKind === "structural_html" ? "structural_html" : "catalog_component";
+}
+
+export function readNodeLayoutClassRefs(raw: Record<string, unknown>): string[] {
+  if (!Array.isArray(raw.layoutClassRefs)) return [];
+  return raw.layoutClassRefs.filter((v): v is string =>
+    typeof v === "string" && v.trim().length > 0
+  );
+}
+
+/** Copy a layout node with a new id and slight offset (layout editor copy operation). */
+export function cloneVisualNode(
+  source: VisualNodePayload,
+  newNodeId: string,
+  offset: { x?: number; y?: number } = {},
+): VisualNodePayload {
+  const dx = offset.x ?? 20;
+  const dy = offset.y ?? 20;
+  return {
+    ...source,
+    nodeId: newNodeId,
+    x: source.x + dx,
+    y: source.y + dy,
+    orderIndex: source.orderIndex + 1,
+  };
+}
+
+export const DEFAULT_VISUAL_NODE_WIDTH = 140;
+export const DEFAULT_VISUAL_NODE_HEIGHT = 60;
+
+export function makeStructuralHtmlNode(
+  htmlTag: StructuralHtmlTag,
+  options: {
+    nodeId: string;
+    x: number;
+    y: number;
+    orderIndex: number;
+    parentNodeId?: string | null;
+    width?: number;
+    height?: number;
+  },
+): VisualNodePayload {
+  return {
+    nodeId: options.nodeId,
+    nodeKind: "structural_html",
+    htmlTag,
+    componentKey: STRUCTURAL_HTML_COMPONENT_KEY,
+    componentKind: "layout/structural_html",
+    isDraftOnly: false,
+    slotKey: "",
+    orderIndex: options.orderIndex,
+    parentNodeId: options.parentNodeId ?? null,
+    gridCol: Math.max(1, Math.floor(options.x / 50) + 1),
+    gridRow: Math.max(1, Math.floor(options.y / 40) + 1),
+    x: options.x,
+    y: options.y,
+    width: options.width ?? DEFAULT_VISUAL_NODE_WIDTH,
+    height: options.height ?? DEFAULT_VISUAL_NODE_HEIGHT,
+  };
 }
 
 /**
@@ -86,15 +165,6 @@ export function snapToGrid(value: number, snapSize: number): number {
   if (snapSize <= 0) return value;
   return Math.round(value / snapSize) * snapSize;
 }
-
-/**
- * Build the backend layout_patch payload JSON including visual coordinates.
- * Extends buildLayoutPatchJson with x/y/width/height per node.
- * Frontend authority: draft layout state + intent submission only.
- * Actual topology persistence authority: backend / DB (topology.components_layout_design).
- */
-export const DEFAULT_VISUAL_NODE_WIDTH = 140;
-export const DEFAULT_VISUAL_NODE_HEIGHT = 60;
 
 export type PaletteDraftSeedEntry = {
   componentKey: string;
@@ -121,16 +191,29 @@ function readPatchNode(
   paletteByKey: Map<string, PaletteDraftSeedEntry>,
 ): VisualNodePayload | null {
   const nodeId = typeof raw.nodeId === "string" ? raw.nodeId.trim() : "";
+  if (!nodeId) return null;
+  const nodeKind = resolveLayoutNodeKind(raw);
+  const htmlTag = typeof raw.htmlTag === "string" ? raw.htmlTag.trim() : "";
   const componentKey = typeof raw.componentKey === "string"
     ? raw.componentKey.trim()
     : "";
-  if (!nodeId || !componentKey) return null;
-  const palette = paletteByKey.get(componentKey);
+  if (nodeKind === "structural_html") {
+    if (!htmlTag || !(STRUCTURAL_HTML_TAG_ALLOWLIST as readonly string[]).includes(htmlTag)) {
+      return null;
+    }
+  } else if (!componentKey) {
+    return null;
+  }
+  const palette = componentKey ? paletteByKey.get(componentKey) : undefined;
   const isDraftOnly = raw._draftOnly === true ||
     (palette?.isDraftOnly ?? false);
+  const layoutClassRefs = readNodeLayoutClassRefs(raw);
   return {
     nodeId,
-    componentKey,
+    nodeKind,
+    ...(nodeKind === "structural_html"
+      ? { htmlTag: htmlTag as StructuralHtmlTag, componentKey: STRUCTURAL_HTML_COMPONENT_KEY }
+      : { componentKey }),
     isDraftOnly,
     slotKey: typeof raw.slotKey === "string" ? raw.slotKey : "",
     orderIndex: typeof raw.orderIndex === "number" ? raw.orderIndex : 0,
@@ -145,6 +228,7 @@ function readPatchNode(
     height: typeof raw.height === "number"
       ? raw.height
       : DEFAULT_VISUAL_NODE_HEIGHT,
+    ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
     componentId: typeof raw.componentId === "string"
       ? raw.componentId
       : palette?.componentId,
@@ -154,7 +238,9 @@ function readPatchNode(
     layoutId: typeof raw.layoutId === "string" ? raw.layoutId : palette?.layoutId,
     wiringId: typeof raw.wiringId === "string" ? raw.wiringId : palette?.wiringId,
     tensorId: typeof raw.tensorId === "string" ? raw.tensorId : palette?.tensorId,
-    componentKind: palette?.componentKind,
+    componentKind: nodeKind === "structural_html"
+      ? "layout/structural_html"
+      : palette?.componentKind,
   };
 }
 
@@ -239,6 +325,8 @@ export function buildVisualLayoutPatchJson(
       ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
       nodes: nodes.map((n) => ({
         nodeId: n.nodeId,
+        ...(n.nodeKind ? { nodeKind: n.nodeKind } : {}),
+        ...(n.nodeKind === "structural_html" && n.htmlTag ? { htmlTag: n.htmlTag } : {}),
         componentKey: n.componentKey,
         ...(n.isDraftOnly ? { _draftOnly: true } : {}),
         ...(n.componentId ? { componentId: n.componentId } : {}),
@@ -246,6 +334,9 @@ export function buildVisualLayoutPatchJson(
         ...(n.layoutId ? { layoutId: n.layoutId } : {}),
         ...(n.wiringId ? { wiringId: n.wiringId } : {}),
         ...(n.tensorId ? { tensorId: n.tensorId } : {}),
+        ...(n.layoutClassRefs && n.layoutClassRefs.length > 0
+          ? { layoutClassRefs: n.layoutClassRefs }
+          : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,
@@ -288,4 +379,24 @@ export function wouldCreateVisualParentCycle(
     current = parent?.parentNodeId ?? null;
   }
   return false;
+}
+
+export type LayoutStackDirection = "front" | "back";
+
+/**
+ * Reorder layout nodes for z-stack (later index = painted on top on canvas).
+ * "front" moves toward higher index; "back" toward lower index.
+ */
+export function reorderLayoutNodeStack<T extends { nodeId: string; orderIndex: number }>(
+  nodes: T[],
+  nodeId: string,
+  direction: LayoutStackDirection,
+): T[] | null {
+  const idx = nodes.findIndex((n) => n.nodeId === nodeId);
+  if (idx < 0) return null;
+  const swapIdx = direction === "front" ? idx + 1 : idx - 1;
+  if (swapIdx < 0 || swapIdx >= nodes.length) return null;
+  const next = [...nodes];
+  [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+  return next.map((n, i) => ({ ...n, orderIndex: i }));
 }

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
-import { CSS_DICTIONARY_TOKENS, resolveCssTokenValue } from "../runtime/cssDictionary.ts";
+import {
+  CSS_DICTIONARY_TOKENS,
+  buildInlineStyleFromCssTokenRefs,
+  resolveCssTokenValue,
+} from "../runtime/cssDictionary.ts";
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
 import { resolveTopologyLayoutClassRefs } from "../runtime/topologyLayoutClassResolver.ts";
 import { OperationGuardBanner } from "../components/OperationGuardBanner.tsx";
@@ -12,6 +16,7 @@ import { createSseReceiver, extractCiAttentionFragmentPayload, type CiAttentionF
 import AdminHowTo from "../components/AdminHowTo.tsx";
 import AdminHelpPanel, { AdminActionHint } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
+import { UX_UI_BUILDER_TAB_LABELS } from "../content/adminUxTerms.ts";
 import UiBuilderFlowStepper from "../components/UiBuilderFlowStepper.tsx";
 import {
   snapToGrid,
@@ -22,13 +27,27 @@ import {
   RESPONSIVE_BREAKPOINTS,
   filterEmptyResponsiveRules,
   validateResponsiveTokenRulesJson,
+  reorderLayoutNodeStack,
+  cloneVisualNode,
+  makeStructuralHtmlNode,
+  STRUCTURAL_HTML_TAG_ALLOWLIST,
+  type LayoutNodeKind,
   type PaletteDraftSeedEntry,
   type ResponsiveTokenRules,
+  type StructuralHtmlTag,
 } from "../runtime/visualLayoutUtils.ts";
+import { LayoutVisualAuditCanvas } from "../components/LayoutVisualAuditCanvas.tsx";
 import {
   resolveCanvasRootPreviewClassName,
   resolveNodeWrapperPreviewClassName,
 } from "../runtime/layoutClassPreviewUtils.ts";
+import {
+  buildLayoutPatchPreviewAudit,
+  type LayoutPatchPreviewAudit,
+} from "../runtime/layoutPatchPreviewUtils.ts";
+import { LayoutPatchPreviewModal } from "../components/LayoutPatchPreviewModal.tsx";
+import { LayoutPatchApplyHandoffModal } from "../components/LayoutPatchApplyHandoffModal.tsx";
+import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
 import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
 import {
   createEmptyLabelValueEditorRow,
@@ -37,18 +56,32 @@ import {
   type LabelValueEditorRow,
 } from "../runtime/labelValueEditor.ts";
 import {
-  mergeWiringKindSuggestions,
   PACKAGE_WIRING_TARGET_SURFACES,
 } from "../lib/packageWiringOptions.ts";
+import {
+  buildWiringKindSelectOptions,
+  encodeManifestPackageTargetRef,
+  manifestIdFromTargetRef,
+  manifestWiringKeyFromTargetRef,
+  mergeManifestPickerOptions,
+  type ManifestPickerOption,
+} from "../lib/packageWiringPicker.ts";
 import {
   buildScreenReadQueryWiringCandidates,
   type ScreenReadQueryWiringCandidate,
 } from "../lib/screenReadQueryWiring.ts";
-import { useConfirm } from "../hooks/useConfirm.tsx";
-import { LayoutComponentPreviewFallback } from "../components/LayoutComponentPreviewFallback.tsx";
 import {
-  renderLayoutComponentPreview,
+  listAdminManifests,
+  getAdminManifest,
+} from "../api/adminApi.ts";
+import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
+import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import { useConfirm } from "../hooks/useConfirm.tsx";
+import { LayoutPreviewNodeFrame } from "../components/LayoutPreviewNodeFrame.tsx";
+import {
   resolveComponentKindForLayoutPreview,
+  getLayoutPreviewDefaultSize,
+  enrichLayoutPreviewNodes,
 } from "../runtime/layoutComponentPreview.ts";
 
 /**
@@ -92,6 +125,9 @@ type DraftNode = {
   componentKey: string;
   /** Resolved from palette/catalog for live canvas preview. */
   componentKind?: string;
+  nodeKind?: LayoutNodeKind;
+  htmlTag?: StructuralHtmlTag;
+  layoutClassRefs?: string[];
   isDraftOnly: boolean;
   slotKey: string;
   orderIndex: number;
@@ -119,6 +155,19 @@ type CanvasDragState = {
   startMouseY: number;
   startNodeX: number;
   startNodeY: number;
+} | null;
+
+/** Hold left button this long before canvas node drag activates (avoids click/drag conflict). */
+const CANVAS_DRAG_HOLD_MS = 300;
+const CANVAS_DRAG_MOVE_THRESHOLD_PX = 5;
+
+type CanvasPendingDragState = {
+  nodeId: string;
+  startMouseX: number;
+  startMouseY: number;
+  startNodeX: number;
+  startNodeY: number;
+  holdTimerId: ReturnType<typeof setTimeout>;
 } | null;
 
 type CanvasResizeState = {
@@ -159,7 +208,7 @@ type PaletteEntry = {
   routeKey?: string;
 };
 
-type TabId = "ci" | "catalog" | "bucket" | "layout" | "design";
+type TabId = "ci" | "catalog" | "bucket" | "layout" | "design" | "visual";
 
 // Gap 1: Lifecycle state machine
 type LifecyclePhase =
@@ -528,7 +577,7 @@ function projectLayoutPatchSummary(
   } else if (action === "validate") {
     nextAction = "問題なければ「適用」を実行";
   } else {
-    nextAction = "レイアウトパッチが適用されました";
+    nextAction = "モーダルで次のステップ（デザイン設定 / デモ / ページ群管理）を選んでください";
   }
 
   return {
@@ -603,6 +652,11 @@ function LifecycleStepIndicator({ phase }: { phase: LifecyclePhase }): JSX.Eleme
           エラー — 「エラー — 修正方法」を確認してください。まだ使えない部品がある場合は部品登録タブへ戻ってください。
         </p>
       )}
+      {(phase === "applied_ok" || phase === "persisted") && (
+        <p role="status" class="mt-2 rounded border border-green-300 bg-green-50 px-2 py-1.5 text-xs font-medium text-green-800">
+          配置を DB に保存しました — 次のステップへ進んでください。
+        </p>
+      )}
     </div>
   );
 }
@@ -646,7 +700,7 @@ function ActionableValidationErrorPanel({
               {/* Contextual detail: field / nodeId / componentKey when available */}
               {(e.field || e.nodeId || e.componentKey) && (
                 <div class="mt-0.5 rounded border border-red-200 bg-white px-2 py-0.5 font-mono text-xs text-red-700">
-                  {e.componentKey && <span>コンポーネント: <code>{friendlyComponentLabel(e.componentKey)}</code>{" "}</span>}
+                  {e.componentKey && <span>部品: <code>{friendlyComponentLabel(e.componentKey)}</code>{" "}</span>}
                   {e.field && <span>フィールド: <code>{e.field}</code>{" "}</span>}
                   {e.nodeId && <span class="text-gray-400">({e.nodeId.slice(0, 8)})</span>}
                 </div>
@@ -792,7 +846,7 @@ function ApplyReadinessPanel({
       </ul>
       {allClear && (
         <p class="mt-2 text-green-700 font-semibold text-xs">
-          すべてのローカルチェック通過。確認 → 検証 → 保存反映 の順で実行してください。
+          すべてのローカルチェック通過。プレビュー（視覚監査） → バリデート → 適用 の順で実行してください。
         </p>
       )}
     </div>
@@ -976,7 +1030,7 @@ function CssTokenPicker({
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={scopeFilter} onChange={(e) => setScopeFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs" aria-label="スコープでフィルター">
-          <option value="">対象コンポーネント（すべて）</option>
+          <option value="">対象部品（すべて）</option>
           {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)} class="input w-auto text-xs" aria-label="役割でフィルター">
@@ -1638,7 +1692,7 @@ function BucketSection({
 
   const handleCreateFromCatalog = async () => {
     if (!selectedCatalog) {
-      setStatus("カタログからコンポーネントを選択してください。");
+      setStatus("カタログから部品を選択してください。");
       return;
     }
     const existing = resolveBucketStatus(selectedCatalog.componentKey, items, promotedKeys);
@@ -2254,28 +2308,21 @@ function friendlyComponentLabel(componentKey: string): string {
   return parts[parts.length - 1] ?? componentKey;
 }
 
+function friendlyNodeLabel(node: Pick<DraftNode, "componentKey" | "nodeKind" | "htmlTag">): string {
+  if (node.nodeKind === "structural_html" && node.htmlTag) return `<${node.htmlTag}>`;
+  return friendlyComponentLabel(node.componentKey);
+}
+
 /** Read-only live component preview inside a layout manipulation frame. */
 function LayoutComponentPreviewPane({ node }: { node: DraftNode }): JSX.Element {
-  const componentKind = node.componentKind ??
-    resolveComponentKindForLayoutPreview(node.componentKey) ??
-    "—";
-  const result = renderLayoutComponentPreview({
-    componentKey: node.componentKey,
-    componentKind: node.componentKind,
-    componentId: node.componentId,
-    isDraftOnly: node.isDraftOnly,
-  });
-  if (!result.ok) {
-    return (
-      <LayoutComponentPreviewFallback
-        componentKey={node.componentKey}
-        componentKind={componentKind}
-        code={result.code}
-        reason={result.reason}
-      />
-    );
-  }
-  return result.node as JSX.Element;
+  return (
+    <LayoutPreviewNodeFrame
+      componentKey={node.componentKey}
+      componentKind={node.componentKind}
+      componentId={node.componentId}
+      isDraftOnly={node.isDraftOnly}
+    />
+  );
 }
 
 function VisualLayoutNode({
@@ -2318,7 +2365,7 @@ function VisualLayoutNode({
       tabIndex={0}
       aria-selected={isSelected}
       aria-label={`${friendlyComponentLabel(node.componentKey)}${node.isDraftOnly ? " (ドラフト)" : ""}${node.slotKey ? ` スロット:${node.slotKey}` : ""} 位置(${displayX},${displayY}) サイズ(${displayW}×${displayH})`}
-      class={`absolute select-none rounded border-2 font-mono text-xs transition-shadow ${
+      class={`absolute select-none rounded border-2 text-sm transition-shadow ${
         isSelected
           ? "border-blue-600 shadow-lg ring-2 ring-blue-300 ring-offset-1"
           : node.isDraftOnly
@@ -2334,7 +2381,7 @@ function VisualLayoutNode({
         cursor: isDragging ? "grabbing" : "grab",
         opacity: isDragging ? 0.75 : 1,
       }}
-      onClick={(e: Event) => { (e as MouseEvent).stopPropagation(); onSelect(); }}
+      onClick={(e: Event) => { (e as MouseEvent).stopPropagation(); }}
       onMouseDown={onNodeMouseDown}
       onKeyDown={(e: KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); return; }
@@ -2445,7 +2492,7 @@ function VisualLayoutCanvas({
     <div
       ref={canvasRef}
       role="application"
-      aria-label="レイアウトキャンバス — ノードをドラッグして配置。キーボード: 矢印キーで移動、Delete で削除、Tab でノードを切り替え"
+      aria-label="レイアウトキャンバス — クリックで選択。0.3秒長押しまたはドラッグで移動。キーボード: 矢印キーで移動、Delete で削除、Tab でノードを切り替え"
       class="relative overflow-auto rounded-lg border-2 border-dashed border-gray-300 bg-white focus-within:border-blue-300"
       style={{ minHeight: `${CANVAS_MIN_HEIGHT}px`, ...gridStyle }}
       onClick={onDeselectAll}
@@ -2531,6 +2578,7 @@ function LayerTree({
   onSelect,
   onMoveUp,
   onMoveDown,
+  onCopy,
   onDelete,
 }: {
   draftNodes: DraftNode[];
@@ -2538,6 +2586,7 @@ function LayerTree({
   onSelect: (nodeId: string) => void;
   onMoveUp: (nodeId: string) => void;
   onMoveDown: (nodeId: string) => void;
+  onCopy: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
 }): JSX.Element {
   return (
@@ -2581,9 +2630,16 @@ function LayerTree({
                 aria-hidden="true"
               />
               <span class="flex-1 truncate font-mono" title={node.componentKey}>
-                {friendlyComponentLabel(node.componentKey)}
+                {friendlyNodeLabel(node)}
               </span>
               <div class="flex shrink-0 gap-0.5">
+                <button
+                  type="button"
+                  onClick={(e: Event) => { e.stopPropagation(); onCopy(node.nodeId); }}
+                  class="rounded px-0.5 text-[0.65rem] text-gray-400 hover:text-gray-600 focus-visible:ring-1 focus-visible:ring-blue-400"
+                  title="コピー"
+                  aria-label={`${friendlyNodeLabel(node)}をコピー`}
+                >⧉</button>
                 <button
                   type="button"
                   onClick={(e: Event) => { e.stopPropagation(); onMoveUp(node.nodeId); }}
@@ -2630,6 +2686,9 @@ function CanvasInspector({
   slotKeyCandidates,
   onUpdate,
   onCommit,
+  onToggleLayoutClassRef,
+  onCopy,
+  onEditDesign,
   onClose,
 }: {
   node: DraftNode;
@@ -2637,6 +2696,9 @@ function CanvasInspector({
   slotKeyCandidates: string[];
   onUpdate: (updates: Partial<DraftNode>) => void;
   onCommit: (updates: Partial<DraftNode>, label: string) => void;
+  onToggleLayoutClassRef: (classKey: string) => void;
+  onCopy: () => void;
+  onEditDesign?: () => void;
   onClose: () => void;
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
@@ -2650,7 +2712,7 @@ function CanvasInspector({
       return;
     }
     setParentCycleError(null);
-    onCommit({ parentNodeId: parentId }, "親コンポーネントを変更");
+    onCommit({ parentNodeId: parentId }, "親部品を変更");
   };
 
   // onInput → live preview (no history); onChange/blur → commit to history
@@ -2675,7 +2737,7 @@ function CanvasInspector({
   return (
     <div
       role="complementary"
-      aria-label={`${friendlyComponentLabel(node.componentKey)} のプロパティ`}
+      aria-label={`${friendlyNodeLabel(node)} のプロパティ`}
       class="w-52 shrink-0 overflow-y-auto rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs"
       style="max-height:440px;"
     >
@@ -2691,7 +2753,7 @@ function CanvasInspector({
 
       {/* Gap 4: Friendly name first, technical key in details */}
       <div class="mb-3 rounded border border-blue-200 bg-white p-1.5">
-        <div class="font-bold text-blue-900">{friendlyComponentLabel(node.componentKey)}</div>
+        <div class="font-bold text-blue-900">{friendlyNodeLabel(node)}</div>
         {node.isDraftOnly && (
           <div class="mt-0.5 text-[0.65rem] font-medium text-yellow-700">
             ⚠ まだ使えない部品 — 先に部品登録を完了してください
@@ -2728,14 +2790,14 @@ function CanvasInspector({
       <fieldset class="mb-2 flex flex-col gap-1.5">
         <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">配置設定</legend>
 
-        {/* Gap 4: "親コンポーネント" instead of "parentNodeId" */}
+        {/* Gap 4: friendly parent label instead of "parentNodeId" */}
         <label class="flex flex-col gap-0.5">
-          <span class="text-[0.65rem] text-gray-600">親コンポーネント</span>
+          <span class="text-[0.65rem] text-gray-600">親部品</span>
           <select
             value={node.parentNodeId ?? ""}
             onChange={(e) => handleParentChange((e.target as HTMLSelectElement).value)}
             class="input px-1 py-0.5 text-xs"
-            aria-label="親コンポーネントを選択"
+            aria-label="親部品を選択"
           >
             <option value="">(なし — トップレベル)</option>
             {parentOptions.map((n) => {
@@ -2803,6 +2865,25 @@ function CanvasInspector({
           />
         </label>
       </fieldset>
+
+      <fieldset class="mb-2 flex flex-col gap-1.5">
+        <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">layoutClassRefs（ノード単位）</legend>
+        <TopologyLayoutClassPicker
+          selectedClassRefs={node.layoutClassRefs ?? []}
+          onToggle={onToggleLayoutClassRef}
+          scopeFilter=""
+          allowedForFilter="component_wrapper"
+        />
+      </fieldset>
+
+      <div class="mb-2 flex flex-wrap gap-1">
+        <button type="button" class="btn-secondary text-xs" onClick={onCopy}>コピー</button>
+        {onEditDesign && (
+          <button type="button" class="btn-secondary text-xs" onClick={onEditDesign}>
+            デザインを編集
+          </button>
+        )}
+      </div>
 
       {/* Gap 4: Friendly grid labels */}
       <fieldset class="flex flex-col gap-1">
@@ -2985,7 +3066,7 @@ function LayoutPalette({
 
   return (
     <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[480px]">
-      <h4 class="mb-1 text-sm font-semibold">コンポーネント</h4>
+      <h4 class="mb-1 text-sm font-semibold">部品</h4>
 
       {/* Gap 5: Filter so users can find components without scrolling */}
       <input
@@ -2993,7 +3074,7 @@ function LayoutPalette({
         onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
         placeholder="絞り込み..."
         class="mb-1 w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
-        aria-label="パレットのコンポーネントを絞り込み"
+        aria-label="パレットの部品を絞り込み"
       />
 
       <p class="mb-1.5 text-[0.62rem] text-gray-500">
@@ -3053,6 +3134,36 @@ function LayoutPalette({
   );
 }
 
+function StructuralHtmlPalette({
+  onAddTag,
+  disabled = false,
+}: {
+  onAddTag: (tag: StructuralHtmlTag) => void;
+  disabled?: boolean;
+}): JSX.Element {
+  return (
+    <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50 p-2 max-h-[480px]">
+      <h4 class="mb-1 text-sm font-semibold text-emerald-900">構造 HTML</h4>
+      <p class="mb-1.5 text-[0.62rem] text-emerald-800">
+        SSOT 許可タグを layout ノードとして追加します。
+      </p>
+      <div class="flex flex-col gap-1">
+        {STRUCTURAL_HTML_TAG_ALLOWLIST.map((tag) => (
+          <button
+            key={tag}
+            type="button"
+            disabled={disabled}
+            onClick={() => onAddTag(tag)}
+            class="rounded border border-emerald-300 bg-white px-2 py-1 text-left font-mono text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+          >
+            + &lt;{tag}&gt;
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── レイアウトビルダーセクション v2 + UX強化 ─────────────────────────────────
 
 function LayoutBuilderSection({
@@ -3091,9 +3202,11 @@ function LayoutBuilderSection({
   // ── v2: canvas visual interaction state ─────────────────────────────────
   const [showGrid, setShowGrid] = useState(true);
   const [liveDragPos, setLiveDragPos] = useState<{ nodeId: string; x: number; y: number } | null>(null);
+  const [activeDragNodeId, setActiveDragNodeId] = useState<string | null>(null);
   const [liveResizePos, setLiveResizePos] = useState<{ nodeId: string; x: number; y: number; width: number; height: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const dragState = useRef<CanvasDragState>(null);
+  const pendingDragState = useRef<CanvasPendingDragState>(null);
   const resizeState = useRef<CanvasResizeState>(null);
 
   // ── layout class refs (placement only; design tokens → component design tab) ─
@@ -3105,6 +3218,12 @@ function LayoutBuilderSection({
   const [patchSummary, setPatchSummary] = useState<LayoutPatchSummary | null>(null);
   const [patchErrors, setPatchErrors] = useState<{ code: string; message: string }[]>([]);
   const [debugJson, setDebugJson] = useState<string | null>(null);
+  const [layoutPatchPreviewOpen, setLayoutPatchPreviewOpen] = useState(false);
+  const [layoutPatchPreviewAudit, setLayoutPatchPreviewAudit] = useState<LayoutPatchPreviewAudit | null>(null);
+  const [layoutPatchPreviewNodes, setLayoutPatchPreviewNodes] = useState<LayoutPreviewNodeInput[]>([]);
+  const [layoutPatchPreviewClassRefs, setLayoutPatchPreviewClassRefs] = useState<string[]>([]);
+  const [layoutApplyHandoffOpen, setLayoutApplyHandoffOpen] = useState(false);
+  const lifecycleRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
 
   // ── palette / layout candidates ──────────────────────────────────────────
@@ -3173,7 +3292,10 @@ function LayoutBuilderSection({
       }]);
       return false;
     }
-    let nodes = parsed.value.nodes as DraftNode[];
+    let nodes = enrichLayoutPreviewNodes(
+      parsed.value.nodes as DraftNode[],
+      paletteSeedEntries,
+    ) as DraftNode[];
     if (nodes.length === 0 && options.seedWhenEmpty !== false) {
       nodes = seedDraftNodesFromPalette(paletteSeedEntries) as DraftNode[];
     }
@@ -3390,6 +3512,13 @@ function LayoutBuilderSection({
     setPatchErrors([]);
     setPatchSummary(null);
     setDebugJson(null);
+    setLayoutApplyHandoffOpen(false);
+    if (action !== "preview") {
+      setLayoutPatchPreviewOpen(false);
+      setLayoutPatchPreviewAudit(null);
+      setLayoutPatchPreviewNodes([]);
+      setLayoutPatchPreviewClassRefs([]);
+    }
 
     if (!canPatch) {
       setPatchErrors([{ code: "NO_ROUTE_LAYOUT", message: "ルートとレイアウトを選択してください。" }]);
@@ -3426,12 +3555,14 @@ function LayoutBuilderSection({
       return;
     }
 
+    const submittedTensorPatchJson = tensorPatchJson;
+
     try {
       const body = await dispatchAdminOp("layout_patch", action, {
         packageId: scopedPackageId.trim(),
         layoutId: effectiveLayoutId,
         routeKey: effectiveRouteKey,
-        tensorPatchJson,
+        tensorPatchJson: submittedTensorPatchJson,
       });
       setDebugJson(JSON.stringify(body, null, 2));
       const summary = projectLayoutPatchSummary(action, body, draftNodes, selectedLayoutClassRefs.length, selectedLayout?.layoutKey);
@@ -3457,14 +3588,49 @@ function LayoutBuilderSection({
           const previewData = (body?.emission?.data ?? body) as { tensorPatchJson?: string };
           const normalizedJson = typeof previewData?.tensorPatchJson === "string"
             ? previewData.tensorPatchJson
-            : null;
-          if (normalizedJson && applyCanvasFromTensorPatch(
+            : submittedTensorPatchJson;
+          if (applyCanvasFromTensorPatch(
             normalizedJson,
             "プレビュー結果を反映",
             { seedWhenEmpty: false },
           )) {
             announce("プレビュー結果を canvas に反映しました");
           }
+          const parsed = parseVisualLayoutPatchJson(normalizedJson, paletteSeedEntries);
+          const previewNodes = enrichLayoutPreviewNodes(
+            parsed.ok ? parsed.value.nodes : draftNodes,
+            paletteSeedEntries,
+          ) as LayoutPreviewNodeInput[];
+          const previewClassRefs = parsed.ok
+            ? parsed.value.layoutClassRefs
+            : selectedLayoutClassRefs;
+          setLayoutPatchPreviewAudit(buildLayoutPatchPreviewAudit(
+            submittedTensorPatchJson,
+            normalizedJson,
+            summary.message,
+          ));
+          setLayoutPatchPreviewNodes(previewNodes);
+          setLayoutPatchPreviewClassRefs(previewClassRefs);
+          setLayoutPatchPreviewOpen(true);
+          announce("視覚監査モーダルを表示しました");
+        }
+
+        if (action === "apply" && summary.valid) {
+          const parsed = parseVisualLayoutPatchJson(
+            submittedTensorPatchJson,
+            paletteSeedEntries,
+          );
+          const handoffNodes = enrichLayoutPreviewNodes(
+            parsed.ok ? parsed.value.nodes : draftNodes,
+            paletteSeedEntries,
+          ) as LayoutPreviewNodeInput[];
+          setLayoutPatchPreviewNodes(handoffNodes);
+          setLayoutPatchPreviewClassRefs(
+            parsed.ok ? parsed.value.layoutClassRefs : selectedLayoutClassRefs,
+          );
+          setLayoutApplyHandoffOpen(true);
+          lifecycleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+          announce("配置の保存が完了しました — 次のステップを選んでください");
         }
 
         // layoutId round-trip: confirm DB-authoritative identity from backend response.
@@ -3502,25 +3668,33 @@ function LayoutBuilderSection({
   };
 
   // ── node factory ─────────────────────────────────────────────────────────
-  const makeNewNode = (entry: PaletteEntry, x: number, y: number): DraftNode => ({
-    nodeId: makeNodeId(),
-    componentKey: entry.componentKey,
-    componentKind: entry.componentKind,
-    isDraftOnly: entry.isDraftOnly,
-    componentId: entry.componentId,
-    packageId: entry.packageId,
-    layoutId: entry.layoutId,
-    wiringId: entry.wiringId,
-    tensorId: entry.tensorId,
-    slotKey: "",
-    orderIndex: draftNodes.length,
-    parentNodeId: null,
-    gridCol: Math.max(1, Math.floor(x / 50) + 1),
-    gridRow: Math.max(1, Math.floor(y / 40) + 1),
-    x, y,
-    width: DEFAULT_NODE_WIDTH,
-    height: DEFAULT_NODE_HEIGHT,
-  });
+  const makeNewNode = (entry: PaletteEntry, x: number, y: number): DraftNode => {
+    const componentKind = entry.componentKind ||
+      resolveComponentKindForLayoutPreview(entry.componentKey) ||
+      undefined;
+    const defaults = componentKind
+      ? getLayoutPreviewDefaultSize(componentKind)
+      : { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT };
+    return {
+      nodeId: makeNodeId(),
+      componentKey: entry.componentKey,
+      componentKind,
+      isDraftOnly: entry.isDraftOnly,
+      componentId: entry.componentId,
+      packageId: entry.packageId,
+      layoutId: entry.layoutId,
+      wiringId: entry.wiringId,
+      tensorId: entry.tensorId,
+      slotKey: "",
+      orderIndex: draftNodes.length,
+      parentNodeId: null,
+      gridCol: Math.max(1, Math.floor(x / 50) + 1),
+      gridRow: Math.max(1, Math.floor(y / 40) + 1),
+      x, y,
+      width: defaults.width,
+      height: defaults.height,
+    };
+  };
 
   // ── node operations (all push to history) ────────────────────────────────
   const addNode = (newNode: DraftNode) => {
@@ -3540,15 +3714,12 @@ function LayoutBuilderSection({
   };
 
   const moveLayoutNode = (nodeId: string, dir: "up" | "down") => {
+    const direction = dir === "up" ? "front" : "back";
     setDraftNodes((prev) => {
-      const idx = prev.findIndex((n) => n.nodeId === nodeId);
-      if (idx < 0) return prev;
-      const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
-      const result = next.map((n, i) => ({ ...n, orderIndex: i }));
-      pushHistory(result, `順序変更: ${friendlyComponentLabel(prev[idx].componentKey)}`);
+      const result = reorderLayoutNodeStack(prev, nodeId, direction);
+      if (!result) return prev;
+      const moved = prev.find((n) => n.nodeId === nodeId);
+      pushHistory(result, `順序変更: ${friendlyComponentLabel(moved?.componentKey ?? nodeId)}`);
       return result;
     });
   };
@@ -3558,9 +3729,51 @@ function LayoutBuilderSection({
     const next = draftNodes.filter((n) => n.nodeId !== nodeId);
     setDraftNodes(next);
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
-    pushHistory(next, `削除: ${node ? friendlyComponentLabel(node.componentKey) : nodeId}`);
+    pushHistory(next, `削除: ${node ? friendlyNodeLabel(node) : nodeId}`);
     setLifecyclePhase("idle");
-    if (node) announce(`${friendlyComponentLabel(node.componentKey)}を削除しました`);
+    if (node) announce(`${friendlyNodeLabel(node)}を削除しました`);
+  };
+
+  const copyNode = (nodeId: string) => {
+    const source = draftNodes.find((n) => n.nodeId === nodeId);
+    if (!source || !packageScopedLayout) return;
+    const cloned = cloneVisualNode(source, makeNodeId()) as DraftNode;
+    const next = [...draftNodes, cloned];
+    setDraftNodes(next);
+    setSelectedNodeId(cloned.nodeId);
+    pushHistory(next, `コピー: ${friendlyNodeLabel(source)}`);
+    setLifecyclePhase("idle");
+    announce(`${friendlyNodeLabel(source)}をコピーしました`);
+  };
+
+  const addStructuralHtmlNode = (htmlTag: StructuralHtmlTag) => {
+    if (!packageScopedLayout) {
+      announce("先に上のパッケージを選択してください。");
+      return;
+    }
+    const newNode = makeStructuralHtmlNode(htmlTag, {
+      nodeId: makeNodeId(),
+      x: 40 + draftNodes.length * 12,
+      y: 40 + draftNodes.length * 12,
+      orderIndex: draftNodes.length,
+    }) as DraftNode;
+    addNode(newNode);
+  };
+
+  const toggleNodeLayoutClassRef = (nodeId: string, classKey: string) => {
+    setDraftNodes((prev) => {
+      const next = prev.map((n) => {
+        if (n.nodeId !== nodeId) return n;
+        const current = n.layoutClassRefs ?? [];
+        const layoutClassRefs = current.includes(classKey)
+          ? current.filter((k) => k !== classKey)
+          : [...current, classKey];
+        return { ...n, layoutClassRefs };
+      });
+      pushHistory(next, "ノード layoutClassRefs を変更");
+      return next;
+    });
+    setLifecyclePhase("idle");
   };
 
   const updateNode = (nodeId: string, updates: Partial<DraftNode>) => {
@@ -3663,10 +3876,36 @@ function LayoutBuilderSection({
     setDraftNodes(nodes);
     pushHistory(nodes, `テンプレート: ${templateId}`);
     setLifecyclePhase("idle");
-    announce(`${nodes.length} 件のコンポーネントを追加しました`);
+    announce(`${nodes.length} 件の部品を追加しました`);
   };
 
   // ── mouse drag for canvas node movement ──────────────────────────────────
+  const clearPendingDrag = () => {
+    const pending = pendingDragState.current;
+    if (pending?.holdTimerId !== undefined) {
+      clearTimeout(pending.holdTimerId);
+    }
+    pendingDragState.current = null;
+  };
+
+  useEffect(() => () => clearPendingDrag(), []);
+
+  const activateCanvasDrag = (
+    nodeId: string,
+    pos: { x: number; y: number },
+    startNodeX: number,
+    startNodeY: number,
+  ) => {
+    dragState.current = {
+      nodeId,
+      startMouseX: pos.x,
+      startMouseY: pos.y,
+      startNodeX,
+      startNodeY,
+    };
+    setActiveDragNodeId(nodeId);
+  };
+
   const getCanvasPos = (e: Event): { x: number; y: number } => {
     const me = e as MouseEvent;
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -3677,13 +3916,30 @@ function LayoutBuilderSection({
   const handleNodeMouseDown = (e: Event, nodeId: string) => {
     if (resizeState.current) return;
     const me = e as MouseEvent;
-    me.preventDefault();
     me.stopPropagation();
     const node = draftNodes.find((n) => n.nodeId === nodeId);
     if (!node) return;
     setSelectedNodeId(nodeId);
+    clearPendingDrag();
+    dragState.current = null;
+    setActiveDragNodeId(null);
+    setLiveDragPos(null);
+
     const pos = getCanvasPos(e);
-    dragState.current = { nodeId, startMouseX: pos.x, startMouseY: pos.y, startNodeX: node.x, startNodeY: node.y };
+    const holdTimerId = setTimeout(() => {
+      if (pendingDragState.current?.nodeId !== nodeId) return;
+      pendingDragState.current = null;
+      activateCanvasDrag(nodeId, pos, node.x, node.y);
+    }, CANVAS_DRAG_HOLD_MS);
+
+    pendingDragState.current = {
+      nodeId,
+      startMouseX: pos.x,
+      startMouseY: pos.y,
+      startNodeX: node.x,
+      startNodeY: node.y,
+      holdTimerId,
+    };
   };
 
   const handleResizeHandleMouseDown = (e: Event, nodeId: string, dir: ResizeDir) => {
@@ -3699,6 +3955,19 @@ function LayoutBuilderSection({
 
   const handleCanvasMouseMove = (e: Event) => {
     const pos = getCanvasPos(e);
+    const pending = pendingDragState.current;
+    if (pending && !dragState.current) {
+      const dist = Math.hypot(pos.x - pending.startMouseX, pos.y - pending.startMouseY);
+      if (dist >= CANVAS_DRAG_MOVE_THRESHOLD_PX) {
+        clearPendingDrag();
+        activateCanvasDrag(
+          pending.nodeId,
+          { x: pending.startMouseX, y: pending.startMouseY },
+          pending.startNodeX,
+          pending.startNodeY,
+        );
+      }
+    }
     if (dragState.current) {
       const { startMouseX, startMouseY, startNodeX, startNodeY, nodeId } = dragState.current;
       setLiveDragPos({
@@ -3720,14 +3989,20 @@ function LayoutBuilderSection({
   };
 
   const handleCanvasMouseUp = () => {
+    clearPendingDrag();
     if (dragState.current && liveDragPos) {
-      commitNodeUpdate(dragState.current.nodeId, { x: liveDragPos.x, y: liveDragPos.y }, "移動");
+      const { nodeId } = dragState.current;
+      const node = draftNodes.find((n) => n.nodeId === nodeId);
+      if (node && (liveDragPos.x !== node.x || liveDragPos.y !== node.y)) {
+        commitNodeUpdate(nodeId, { x: liveDragPos.x, y: liveDragPos.y }, "移動");
+      }
     }
     if (resizeState.current && liveResizePos) {
       commitNodeUpdate(resizeState.current.nodeId, { x: liveResizePos.x, y: liveResizePos.y, width: liveResizePos.width, height: liveResizePos.height }, "リサイズ");
     }
     dragState.current = null;
     resizeState.current = null;
+    setActiveDragNodeId(null);
     setLiveDragPos(null);
     setLiveResizePos(null);
   };
@@ -3768,7 +4043,9 @@ function LayoutBuilderSection({
       </div>
 
       {/* Gap 1: Lifecycle step indicator */}
-      <LifecycleStepIndicator phase={lifecyclePhase} />
+      <div ref={lifecycleRef}>
+        <LifecycleStepIndicator phase={lifecyclePhase} />
+      </div>
 
       {!packageScopedLayout && (
         <p class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -3887,7 +4164,7 @@ function LayoutBuilderSection({
         )}
 
         <span class="ml-auto text-xs text-gray-400" aria-live="polite">
-          {draftNodes.length} コンポーネント
+          {draftNodes.length} 部品
           {selectedNode ? ` — 選択中: ${friendlyComponentLabel(selectedNode.componentKey)}` : ""}
         </span>
       </div>
@@ -3895,13 +4172,16 @@ function LayoutBuilderSection({
       {/* layout draft プレビュー & 操作エリア: palette + live canvas + inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
         {packageScopedLayout ? (
-          <LayoutPalette
-            onDragStart={handleDragStartPalette}
-            onAddToCanvas={handleAddFromPalette}
-            entries={paletteEntries}
-            status={paletteStatus}
-            packageOnly={true}
-          />
+          <>
+            <LayoutPalette
+              onDragStart={handleDragStartPalette}
+              onAddToCanvas={handleAddFromPalette}
+              entries={paletteEntries}
+              status={paletteStatus}
+              packageOnly={true}
+            />
+            <StructuralHtmlPalette onAddTag={addStructuralHtmlNode} />
+          </>
         ) : (
           <div class="w-44 shrink-0 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
             パッケージ選択後にパレットが有効になります
@@ -3914,11 +4194,11 @@ function LayoutBuilderSection({
             selectedNodeId={selectedNodeId}
             layoutClassRefs={selectedLayoutClassRefs}
             canvasRef={canvasRef}
-            liveDragNodeId={liveDragPos?.nodeId ?? null}
+            liveDragNodeId={activeDragNodeId ?? liveDragPos?.nodeId ?? null}
             liveResizeNodeId={liveResizePos?.nodeId ?? null}
             getLivePos={getLivePos}
             showGrid={showGrid}
-            onSelectNode={(id) => setSelectedNodeId(id === selectedNodeId ? null : id)}
+            onSelectNode={(id) => setSelectedNodeId(id)}
             onDeselectAll={() => setSelectedNodeId(null)}
             onNodeMouseDown={handleNodeMouseDown}
             onResizeHandleMouseDown={handleResizeHandleMouseDown}
@@ -3942,6 +4222,7 @@ function LayoutBuilderSection({
             onSelect={(id) => setSelectedNodeId(id === selectedNodeId ? null : id)}
             onMoveUp={(id) => moveLayoutNode(id, "up")}
             onMoveDown={(id) => moveLayoutNode(id, "down")}
+            onCopy={copyNode}
             onDelete={removeNode}
           />
           {selectedNode && (
@@ -3951,6 +4232,9 @@ function LayoutBuilderSection({
               slotKeyCandidates={slotKeyCandidates}
               onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
               onCommit={(updates, label) => commitNodeUpdate(selectedNode.nodeId, updates, label)}
+              onToggleLayoutClassRef={(classKey) => toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+              onCopy={() => copyNode(selectedNode.nodeId)}
+              onEditDesign={onNavigate ? () => onNavigate("design") : undefined}
               onClose={() => setSelectedNodeId(null)}
             />
           )}
@@ -3961,13 +4245,15 @@ function LayoutBuilderSection({
         <p class="text-muted-xs mb-2">
           レイアウト投影専用のスタイルクラスを選択します。canvas の視覚装飾（cssTokenRefs 等）はここではなく「デザインを編集」タブで設定します。
         </p>
-        <div class="mb-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
-          <strong>allowed_for と canvas 反映:</strong>{" "}
-          <code>layout_root</code> / <code>layout_section</code> / <code>layout_row</code> → キャンバス外枠、
-          <code>component_wrapper</code> → 各ノード枠、
-          <code>preview_state</code> → 選択中ノードのみ。
-          選択した class のうち対象ロールに合うものだけがプレビューに適用されます。
-        </div>
+        <details class="mb-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+          <summary class="cursor-pointer font-semibold">allowed_for と canvas 反映（技術詳細）</summary>
+          <p class="mt-1 mb-0">
+            <code>layout_root</code> / <code>layout_section</code> / <code>layout_row</code> → キャンバス外枠、
+            <code>component_wrapper</code> → 各ノード枠、
+            <code>preview_state</code> → 選択中ノードのみ。
+            選択した class のうち対象ロールに合うものだけがプレビューに適用されます。
+          </p>
+        </details>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
         <AdvancedManualOverride title="詳細設定 — クラスキーを直接入力">
@@ -4001,7 +4287,7 @@ function LayoutBuilderSection({
           onClick={() => callLayoutPatch("preview")}
           disabled={loading || !canPatch}
           class="btn-secondary min-w-[100px]"
-          aria-label="プレビュー実行 — DBへの変更なし"
+          aria-label="プレビュー — 保存前の視覚監査（部品の見た目・DB変更なし）"
         >
           1. プレビュー
         </button>
@@ -4024,8 +4310,36 @@ function LayoutBuilderSection({
         {loading && <span class="flex items-center text-sm text-gray-500" aria-live="polite">実行中...</span>}
       </div>
       <p class="mb-3 text-xs text-gray-500">
-        プレビュー: 解決結果のみ(DB変更なし) → バリデート: ref整合チェック → 適用: DBへ反映
+        プレビュー: 視覚監査モーダル（部品の見た目・DB変更なし） → バリデート: ref整合チェック → 適用: DBへ反映
       </p>
+
+      <LayoutPatchPreviewModal
+        open={layoutPatchPreviewOpen}
+        audit={layoutPatchPreviewAudit}
+        previewNodes={layoutPatchPreviewNodes}
+        layoutClassRefs={layoutPatchPreviewClassRefs}
+        onClose={() => setLayoutPatchPreviewOpen(false)}
+        onProceedValidate={() => {
+          setLayoutPatchPreviewOpen(false);
+          void callLayoutPatch("validate");
+        }}
+      />
+
+      <LayoutPatchApplyHandoffModal
+        open={layoutApplyHandoffOpen}
+        routeKey={effectiveRouteKey}
+        layoutLabel={selectedLayout?.layoutKey ?? shortId(effectiveLayoutId)}
+        nodeCount={draftNodes.length}
+        previewNodes={layoutPatchPreviewNodes}
+        layoutClassRefs={layoutPatchPreviewClassRefs.length > 0
+          ? layoutPatchPreviewClassRefs
+          : selectedLayoutClassRefs}
+        onClose={() => setLayoutApplyHandoffOpen(false)}
+        onGoDesign={() => {
+          setLayoutApplyHandoffOpen(false);
+          onNavigate?.("design");
+        }}
+      />
 
       {/* Gap 3: Actionable error panel */}
       {patchErrors.length > 0 && (
@@ -4052,9 +4366,10 @@ function LayoutBuilderSection({
 // ─── タブナビゲーション ───────────────────────────────────────────────────────
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
-  { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
-  { id: "layout", label: "配置を編集", hint: "画面上の配置・構造・レイアウトクラス（位置・スロット・順序）" },
-  { id: "design", label: "デザインを編集", hint: "色・形・反応・CSS トークン（cssTokenRefs）をパッケージ単位で保存" },
+  { id: "bucket", label: UX_UI_BUILDER_TAB_LABELS.bucket, hint: "部品選択 → パッケージ化" },
+  { id: "layout", label: UX_UI_BUILDER_TAB_LABELS.layout, hint: "入れ子・構造 HTML・コピー・DnD・layoutClassRefs" },
+  { id: "design", label: UX_UI_BUILDER_TAB_LABELS.design, hint: "cssTokenRefs・inline text・link・designId 保存" },
+  { id: "visual", label: UX_UI_BUILDER_TAB_LABELS.visual, hint: "配置とデザイン合成の read-only island プレビュー" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
@@ -4101,15 +4416,31 @@ function PackageWiringEditor({
   const [screenWiringCandidates, setScreenWiringCandidates] = useState<
     ScreenReadQueryWiringCandidate[]
   >([]);
-  const [manifestIdForWiring, setManifestIdForWiring] = useState("");
+  const [manifestOptions, setManifestOptions] = useState<ManifestPickerOption[]>([]);
+  const [loadingManifests, setLoadingManifests] = useState(false);
+  const [selectedManifestId, setSelectedManifestId] = useState("");
+  const [selectedManifestWiringKey, setSelectedManifestWiringKey] = useState("");
 
-  const kindSuggestions = mergeWiringKindSuggestions(
+  const wiringKindOptions = buildWiringKindSelectOptions(
     packageComponents.map((c) => c.componentKind),
+    screenWiringCandidates,
   );
-  const eventBindingSuggestions = [
-    ...kindSuggestions,
-    ...screenWiringCandidates.map((c) => c.wiringKey),
-  ];
+
+  const applyLoadedWiring = (data: AdminPackageWiringRow) => {
+    setWiring(data);
+    setWiringKind(data.wiringKind);
+    setTargetSurface(data.targetSurface);
+    setTargetRef(data.targetRef ?? "");
+    if (data.targetSurface === "manifest") {
+      const manifestId = manifestIdFromTargetRef(data.targetRef ?? "", "manifest");
+      const wiringKey = manifestWiringKeyFromTargetRef(data.targetRef ?? "", "manifest");
+      setSelectedManifestId(manifestId);
+      setSelectedManifestWiringKey(wiringKey);
+    } else {
+      setSelectedManifestId("");
+      setSelectedManifestWiringKey("");
+    }
+  };
 
   useEffect(() => {
     if (!selectedPackageId) {
@@ -4117,6 +4448,8 @@ function PackageWiringEditor({
       setWiringKind("");
       setTargetSurface("route");
       setTargetRef("");
+      setSelectedManifestId("");
+      setSelectedManifestWiringKey("");
       setLoadStatus(null);
       setSaveStatus(null);
       return;
@@ -4129,10 +4462,7 @@ function PackageWiringEditor({
       });
       const data = body?.emission?.data as AdminPackageWiringRow | undefined;
       if (data?.wiringId) {
-        setWiring(data);
-        setWiringKind(data.wiringKind);
-        setTargetSurface(data.targetSurface);
-        setTargetRef(data.targetRef ?? "");
+        applyLoadedWiring(data);
         setLoadStatus(null);
       } else {
         setWiring(null);
@@ -4145,13 +4475,37 @@ function PackageWiringEditor({
   }, [selectedPackageId]);
 
   useEffect(() => {
-    if (targetSurface !== "manifest" || !manifestIdForWiring.trim()) {
+    if (targetSurface !== "manifest") {
+      setManifestOptions([]);
+      setScreenWiringCandidates([]);
+      return;
+    }
+    (async () => {
+      setLoadingManifests(true);
+      try {
+        const [active, draft] = await Promise.all([
+          listAdminManifests("active"),
+          listAdminManifests("draft"),
+        ]);
+        const items = mergeManifestPickerOptions(
+          await buildManifestPickerOptions(active ?? []),
+          await buildManifestPickerOptions(draft ?? []),
+        );
+        setManifestOptions(items);
+      } finally {
+        setLoadingManifests(false);
+      }
+    })();
+  }, [targetSurface]);
+
+  useEffect(() => {
+    if (targetSurface !== "manifest" || !selectedManifestId.trim()) {
       setScreenWiringCandidates([]);
       return;
     }
     (async () => {
       const body = await dispatchAdminOp("manifest", "list_screen_read_query_wiring", {
-        manifestId: manifestIdForWiring.trim(),
+        manifestId: selectedManifestId.trim(),
       });
       const data = body?.emission?.data as { candidates?: ScreenReadQueryWiringCandidate[] } | undefined;
       if (Array.isArray(data?.candidates)) {
@@ -4159,7 +4513,7 @@ function PackageWiringEditor({
         return;
       }
       const getBody = await dispatchAdminOp("manifest", "get", {
-        manifestId: manifestIdForWiring.trim(),
+        manifestId: selectedManifestId.trim(),
       });
       const detail = getBody?.emission?.data as { topologyRawJson?: string } | undefined;
       if (typeof detail?.topologyRawJson === "string") {
@@ -4168,11 +4522,23 @@ function PackageWiringEditor({
         setScreenWiringCandidates([]);
       }
     })();
-  }, [targetSurface, manifestIdForWiring]);
+  }, [targetSurface, selectedManifestId]);
+
+  const resolvedTargetRefForSave = (): string | null => {
+    if (targetSurface === "manifest") {
+      if (!selectedManifestId.trim()) return null;
+      return encodeManifestPackageTargetRef(selectedManifestId, selectedManifestWiringKey);
+    }
+    return targetRef.trim() || null;
+  };
 
   const handleSaveWiring = async () => {
     if (!selectedPackageId || !wiring?.wiringId || !wiringKind.trim() || !targetSurface) {
       setSaveStatus("配線種別と接続先サーフェスを入力してください。");
+      return;
+    }
+    if (targetSurface === "manifest" && !selectedManifestId.trim()) {
+      setSaveStatus("接続先ページを選択してください。");
       return;
     }
     if (!(await confirm("パッケージ配線を保存します。よろしいですか？"))) {
@@ -4180,20 +4546,18 @@ function PackageWiringEditor({
     }
     setSaving(true);
     setSaveStatus(null);
+    const nextTargetRef = resolvedTargetRefForSave();
     try {
       const body = await dispatchAdminOp("ui_topology", "update_package_wiring", {
         packageId: selectedPackageId,
         wiringId: wiring.wiringId,
         wiringKind: wiringKind.trim(),
         targetSurface,
-        targetRef: targetRef.trim() || null,
+        targetRef: nextTargetRef,
       });
       const refreshed = body?.emission?.data?.wiring as AdminPackageWiringRow | undefined;
       if (body?.success && refreshed?.wiringId) {
-        setWiring(refreshed);
-        setWiringKind(refreshed.wiringKind);
-        setTargetSurface(refreshed.targetSurface);
-        setTargetRef(refreshed.targetRef ?? "");
+        applyLoadedWiring(refreshed);
         setSaveStatus("パッケージ配線を保存しました。");
         onWiringSaved?.(refreshed);
       } else {
@@ -4204,30 +4568,45 @@ function PackageWiringEditor({
     }
   };
 
+  const handleSelectManifestWiring = (wiringKey: string) => {
+    setSelectedManifestWiringKey(wiringKey);
+    if (wiringKey && !wiringKindOptions.includes(wiringKind)) {
+      setWiringKind(wiringKey);
+    }
+  };
+
   return (
     <section class="mt-3 rounded border border-indigo-100 bg-indigo-50/40 p-3 text-xs">
       <h4 class="font-semibold text-indigo-900">パッケージ配線（編集）</h4>
       <p class="text-muted-xs mb-2">
-        イベント配線の種別と接続先サーフェスを編集します。詳細設定は展開してご確認ください。
+        保存済み配線を読み込み、一覧から選んで接続先を設定します（UUID の手入力は不要です）。
       </p>
       {loadStatus && <p class="mb-2 text-slate-600">{loadStatus}</p>}
       {wiring && (
         <>
+          <div class="mb-3 rounded border border-slate-200 bg-white px-3 py-2 text-[0.7rem] text-slate-700">
+            <p class="font-semibold text-slate-900">保存済み配線</p>
+            <p class="mt-1 font-mono">
+              kind: {wiring.wiringKind} / surface: {wiring.targetSurface}
+              {wiring.targetRef ? ` / ref: ${wiring.targetRef}` : ""}
+            </p>
+          </div>
           <p class="mb-2 font-mono text-[0.65rem] text-slate-500">
             wiring: {wiring.wiringId.slice(0, 8)}… / key: {wiring.wiringKey}
           </p>
-          <div class="grid gap-2 sm:grid-cols-2">
+          <div class="grid gap-3 sm:grid-cols-2">
             <label class="block">
               配線種別 (wiring_kind)
-              <input
-                list="wiring-kind-suggestions"
+              <select
                 class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
                 value={wiringKind}
-                onInput={(e) => setWiringKind((e.target as HTMLInputElement).value)}
-              />
-              <datalist id="wiring-kind-suggestions">
-                {eventBindingSuggestions.map((k) => <option key={k} value={k} />)}
-              </datalist>
+                onChange={(e) => setWiringKind((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">— 選択 —</option>
+                {wiringKindOptions.map((k) => (
+                  <option key={k} value={k}>{k}</option>
+                ))}
+              </select>
             </label>
             <label class="block">
               接続先サーフェス
@@ -4237,7 +4616,10 @@ function PackageWiringEditor({
                 onChange={(e) => {
                   const next = (e.target as HTMLSelectElement).value;
                   setTargetSurface(next);
-                  if (next !== "manifest") setManifestIdForWiring("");
+                  if (next !== "manifest") {
+                    setSelectedManifestId("");
+                    setSelectedManifestWiringKey("");
+                  }
                 }}
               >
                 {PACKAGE_WIRING_TARGET_SURFACES.map((s) => (
@@ -4245,41 +4627,93 @@ function PackageWiringEditor({
                 ))}
               </select>
             </label>
+
             {targetSurface === "manifest" && (
+              <div class="sm:col-span-2 space-y-3 rounded border border-indigo-200 bg-white p-3">
+                <label class="block">
+                  接続先ページ
+                  <select
+                    class="mt-1 w-full rounded border px-2 py-1 text-xs"
+                    value={selectedManifestId}
+                    onChange={(e) => {
+                      const next = (e.target as HTMLSelectElement).value;
+                      setSelectedManifestId(next);
+                      setSelectedManifestWiringKey("");
+                    }}
+                  >
+                    <option value="">— ページを選択 —</option>
+                    {manifestOptions.map((m) => (
+                      <option key={m.manifestId} value={m.manifestId}>
+                        {m.label} [{m.status}]
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {loadingManifests && (
+                  <p class="text-slate-500">ページ一覧を読み込み中…</p>
+                )}
+                {!loadingManifests && manifestOptions.length === 0 && (
+                  <p class="text-amber-800">
+                    選択できるページがありません。先にコンテンツ管理で Step 1 を保存してください。
+                  </p>
+                )}
+                {selectedManifestId && (
+                  <fieldset>
+                    <legend class="mb-2 font-medium text-slate-800">
+                      Step3 read/query 配線（接続先参照）
+                    </legend>
+                    {screenWiringCandidates.length === 0
+                      ? (
+                        <p class="text-slate-500">
+                          このページに read/query 配線候補がありません。Step 3 の保存後に再度お試しください。
+                        </p>
+                      )
+                      : (
+                        <ul class="space-y-2">
+                          <li>
+                            <label class="flex cursor-pointer items-start gap-2 rounded border border-slate-200 px-2 py-1.5 hover:bg-slate-50">
+                              <input
+                                type="radio"
+                                name={`manifest-wiring-${wiring.wiringId}`}
+                                checked={selectedManifestWiringKey === ""}
+                                onChange={() => handleSelectManifestWiring("")}
+                              />
+                              <span>接続なし（ページのみ紐づけ）</span>
+                            </label>
+                          </li>
+                          {screenWiringCandidates.map((c) => (
+                            <li key={c.wiringKey}>
+                              <label class="flex cursor-pointer items-start gap-2 rounded border border-slate-200 px-2 py-1.5 hover:bg-slate-50">
+                                <input
+                                  type="radio"
+                                  name={`manifest-wiring-${wiring.wiringId}`}
+                                  checked={selectedManifestWiringKey === c.wiringKey}
+                                  onChange={() => handleSelectManifestWiring(c.wiringKey)}
+                                />
+                                <span>
+                                  <span class="font-mono text-indigo-900">{c.wiringKey}</span>
+                                  <span class="mt-0.5 block text-slate-600">{c.label}</span>
+                                </span>
+                              </label>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                  </fieldset>
+                )}
+              </div>
+            )}
+
+            {targetSurface !== "manifest" && (
               <label class="block sm:col-span-2">
-                マニフェスト ID（Step3 read/query 配線候補の取得）
+                接続先参照 (target_ref、任意)
                 <input
                   class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                  value={manifestIdForWiring}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  onInput={(e) => setManifestIdForWiring((e.target as HTMLInputElement).value)}
+                  value={targetRef}
+                  placeholder="例: route:admin:demo"
+                  onInput={(e) => setTargetRef((e.target as HTMLInputElement).value)}
                 />
               </label>
-            )}
-            <label class="block sm:col-span-2">
-              接続先参照 (target_ref、任意)
-              <input
-                class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                value={targetRef}
-                placeholder={targetSurface === "manifest"
-                  ? "screen.searchConditions[0] 等（候補から選択可）"
-                  : "例: route:admin:demo"}
-                onInput={(e) => setTargetRef((e.target as HTMLInputElement).value)}
-                list={targetSurface === "manifest" ? "screen-read-wiring-candidates" : undefined}
-              />
-              {targetSurface === "manifest" && (
-                <datalist id="screen-read-wiring-candidates">
-                  {screenWiringCandidates.map((c) => (
-                    <option key={c.wiringKey} value={c.wiringKey}>{c.label}</option>
-                  ))}
-                </datalist>
-              )}
-            </label>
-            {targetSurface === "manifest" && screenWiringCandidates.length > 0 && (
-              <p class="sm:col-span-2 text-[0.65rem] text-slate-600">
-                Step3 の read/query 配線 {screenWiringCandidates.length} 件をイベント接続候補として利用できます。
-                条件値は preview 用 literal と runtime 変数（runtimeParam / operationInput / routeQuery / authClaim / formValue）を分離して保存済みです。
-              </p>
             )}
           </div>
           <button
@@ -4297,12 +4731,30 @@ function PackageWiringEditor({
         <summary class="cursor-pointer">技術情報（dispatcher raw）</summary>
         <p class="mt-1">
           wiring_id は <code>ui_topology_tensor</code> 経由でパッケージに紐づきます。
-          保存は <code>ui_topology:update_package_wiring</code> のみ。直接 DB 書き込みは行いません。
+          manifest 接続時の target_ref は <code>manifest:&lt;uuid&gt;:&lt;wiringKey&gt;</code> 形式で保存されます。
         </p>
       </details>
       <ConfirmDialogHost />
     </section>
   );
+}
+
+async function buildManifestPickerOptions(
+  items: { manifestId: string; status: string }[],
+): Promise<ManifestPickerOption[]> {
+  return Promise.all(items.map(async (item) => {
+    const stored = getStoredScreenLabel(item.manifestId);
+    if (stored) {
+      return { manifestId: item.manifestId, label: stored, status: item.status };
+    }
+    const detail = await getAdminManifest(item.manifestId);
+    const shape = detail
+      ? extractScreenDataShapeFromTopology(detail.topologyRawJson)
+      : null;
+    const label = shape?.userFacingTopologyLabel?.trim() ??
+      `${item.status} ${item.manifestId.slice(0, 8)}…`;
+    return { manifestId: item.manifestId, label, status: item.status };
+  }));
 }
 
 function PackageScopeSelector({
@@ -4353,6 +4805,142 @@ function PackageScopeSelector({
   );
 }
 
+type SavedComponentDesignRow = {
+  designId: string;
+  name: string;
+  componentId: string | null;
+  layoutNodeId: string | null;
+  cssTokenRefs: string[];
+  responsiveTokenRefs: ResponsiveTokenRules;
+  inlineText: string;
+  linkHref: string;
+  linkTarget: string;
+  reactionIntent: string;
+  classname: string;
+  tailwind: string;
+};
+
+type LayoutNodeDesignOption = {
+  nodeId: string;
+  label: string;
+  nodeKind?: LayoutNodeKind;
+  htmlTag?: StructuralHtmlTag;
+};
+
+function defaultDesignName(componentKey: string): string {
+  const slug = componentKey.split("/").pop()?.replace(/[^a-zA-Z0-9._-]+/g, "_") ?? "part";
+  return `${slug}_design`;
+}
+
+function ComponentDesignPreviewCanvas({
+  componentKey,
+  componentKind,
+  cssTokenRefs,
+  sampleText,
+  reactionIntent,
+  onSampleTextChange,
+}: {
+  componentKey: string;
+  componentKind?: string;
+  cssTokenRefs: string[];
+  sampleText: string;
+  reactionIntent: string;
+  onSampleTextChange: (value: string) => void;
+}): JSX.Element {
+  const previewStyle = buildInlineStyleFromCssTokenRefs(cssTokenRefs);
+  return (
+    <section
+      class="rounded-lg border-2 border-dashed border-indigo-200 bg-slate-100 p-4"
+      aria-label="デザインプレビュー canvas"
+    >
+      <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h4 class="text-sm font-semibold text-indigo-900">プレビュー canvas</h4>
+        <span class="text-[0.65rem] text-slate-500">
+          トークン {cssTokenRefs.length} 件をリアルタイム反映
+        </span>
+      </div>
+      <label class="mb-3 block text-xs text-slate-700">
+        サンプルテキスト
+        <input
+          class="mt-1 w-full rounded border bg-white px-2 py-1 text-sm"
+          value={sampleText}
+          onInput={(e) => onSampleTextChange((e.target as HTMLInputElement).value)}
+          placeholder="プレビュー用の表示テキスト"
+        />
+      </label>
+      <div
+        class="mx-auto min-h-[220px] max-w-lg rounded-lg border border-slate-300 bg-white p-6 shadow-sm"
+        style={previewStyle}
+      >
+        <p class="mb-3 text-xs font-medium text-slate-500">
+          {friendlyComponentLabel(componentKey)}
+          {componentKind ? ` (${componentKind})` : ""}
+        </p>
+        <div class="mb-3 min-h-[80px] rounded border border-slate-200 bg-white/80 p-2">
+          <LayoutPreviewNodeFrame
+            componentKey={componentKey}
+            componentKind={componentKind}
+          />
+        </div>
+        <p class="text-sm" style={{ color: previewStyle.color, fontFamily: previewStyle["font-family"] }}>
+          {sampleText || "サンプルテキストを入力するとここに表示されます"}
+        </p>
+      </div>
+      {reactionIntent.trim() && (
+        <p class="mt-2 text-xs text-slate-600">
+          反応意図: {reactionIntent.trim()}
+        </p>
+      )}
+      {cssTokenRefs.length > 0 && (
+        <ul class="mt-3 flex flex-wrap gap-1.5">
+          {cssTokenRefs.map((key) => {
+            const token = CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
+            return (
+              <li
+                key={key}
+                class="flex items-center gap-1 rounded border border-indigo-200 bg-white px-2 py-0.5 font-mono text-[0.65rem]"
+              >
+                {token && <CssTokenSwatch token={token} />}
+                {key}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function mapSavedDesignRow(raw: Record<string, unknown>): SavedComponentDesignRow {
+  const refs = Array.isArray(raw.cssTokenRefs)
+    ? raw.cssTokenRefs.filter((v): v is string => typeof v === "string")
+    : [];
+  const responsiveRaw = raw.responsiveTokenRefs;
+  const responsiveTokenRefs = typeof responsiveRaw === "object" &&
+      responsiveRaw !== null &&
+      !Array.isArray(responsiveRaw)
+    ? responsiveRaw as ResponsiveTokenRules
+    : {};
+  return {
+    designId: String(raw.designId ?? ""),
+    name: String(raw.name ?? ""),
+    componentId: typeof raw.componentId === "string" ? raw.componentId : null,
+    layoutNodeId: typeof raw.layoutNodeId === "string" ? raw.layoutNodeId : null,
+    cssTokenRefs: refs,
+    responsiveTokenRefs,
+    inlineText: typeof raw.inlineText === "string" ? raw.inlineText : "",
+    linkHref: typeof raw.linkHref === "string" ? raw.linkHref : "",
+    linkTarget: typeof raw.linkTarget === "string" ? raw.linkTarget : "",
+    reactionIntent: typeof raw.reactionIntent === "string" ? raw.reactionIntent : "",
+    classname: typeof raw.classname === "string" ? raw.classname : "",
+    tailwind: typeof raw.tailwind === "string" ? raw.tailwind : "",
+  };
+}
+
+const DESIGN_TARGET_PACKAGE_ITEM = "package_item" as const;
+const DESIGN_TARGET_LAYOUT_NODE = "layout_node" as const;
+type DesignTargetKind = typeof DESIGN_TARGET_PACKAGE_ITEM | typeof DESIGN_TARGET_LAYOUT_NODE;
+
 function PackageDesignPanel({
   packages,
   selectedPackageId,
@@ -4363,19 +4951,42 @@ function PackageDesignPanel({
   onSelectPackage: (id: string) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
+  const [designTarget, setDesignTarget] = useState<DesignTargetKind>(DESIGN_TARGET_PACKAGE_ITEM);
   const [componentId, setComponentId] = useState("");
+  const [layoutNodeId, setLayoutNodeId] = useState("");
   const [designName, setDesignName] = useState("");
   const [classname, setClassname] = useState("");
   const [tailwind, setTailwind] = useState("");
   const [reactionIntent, setReactionIntent] = useState("");
   const [cssTokenRefs, setCssTokenRefs] = useState<string[]>([]);
+  const [responsiveTokenRefs, setResponsiveTokenRefs] = useState<ResponsiveTokenRules>({});
+  const [inlineText, setInlineText] = useState("");
+  const [linkHref, setLinkHref] = useState("");
+  const [linkTarget, setLinkTarget] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
   const [packageComponents, setPackageComponents] = useState<AdminPackageComponentRow[]>([]);
+  const [layoutNodeOptions, setLayoutNodeOptions] = useState<LayoutNodeDesignOption[]>([]);
+  const [savedDesigns, setSavedDesigns] = useState<SavedComponentDesignRow[]>([]);
   const [componentsLoadStatus, setComponentsLoadStatus] = useState<string | null>(null);
+  const [layoutNodesLoadStatus, setLayoutNodesLoadStatus] = useState<string | null>(null);
+  const [designsLoadStatus, setDesignsLoadStatus] = useState<string | null>(null);
 
-  const canSave = Boolean(selectedPackageId && componentId && designName.trim());
+  const selectedPackage = packages.find((p) => p.packageId === selectedPackageId);
+  const selectedComponent = packageComponents.find((c) => c.componentId === componentId);
+  const selectedLayoutNode = layoutNodeOptions.find((n) => n.nodeId === layoutNodeId);
+  const designsForTarget = savedDesigns.filter((d) =>
+    designTarget === DESIGN_TARGET_PACKAGE_ITEM
+      ? d.componentId === componentId
+      : d.layoutNodeId === layoutNodeId
+  );
+  const canSave = Boolean(
+    selectedPackageId &&
+      designName.trim() &&
+      ((designTarget === DESIGN_TARGET_PACKAGE_ITEM && componentId) ||
+        (designTarget === DESIGN_TARGET_LAYOUT_NODE && layoutNodeId)),
+  );
 
   const toggleCssToken = (tokenKey: string) => {
     setCssTokenRefs((prev) =>
@@ -4383,23 +4994,55 @@ function PackageDesignPanel({
     );
   };
 
+  const applySavedDesign = (design: SavedComponentDesignRow) => {
+    setDesignName(design.name);
+    setCssTokenRefs(design.cssTokenRefs);
+    setResponsiveTokenRefs(design.responsiveTokenRefs);
+    setInlineText(design.inlineText);
+    setLinkHref(design.linkHref);
+    setLinkTarget(design.linkTarget);
+    setReactionIntent(design.reactionIntent);
+    setClassname(design.classname);
+    setTailwind(design.tailwind);
+  };
+
   useEffect(() => {
     if (!selectedPackageId) {
       setPackageComponents([]);
+      setLayoutNodeOptions([]);
+      setSavedDesigns([]);
       setComponentId("");
+      setLayoutNodeId("");
       setComponentsLoadStatus(null);
+      setLayoutNodesLoadStatus(null);
+      setDesignsLoadStatus(null);
       setStatus(null);
       setSaveOk(null);
       return;
     }
     (async () => {
       setComponentsLoadStatus("部品一覧を読み込み中...");
-      const body = await dispatchAdminOp("ui_topology", "list_package_components", {
-        packageId: selectedPackageId,
-      });
-      const data = body?.emission?.data;
-      if (Array.isArray(data)) {
-        const rows = data as AdminPackageComponentRow[];
+      setLayoutNodesLoadStatus("layout ノードを読み込み中...");
+      setDesignsLoadStatus("保存済みデザインを読み込み中...");
+      const pkg = packages.find((p) => p.packageId === selectedPackageId);
+      const [compBody, designBody, draftBody] = await Promise.all([
+        dispatchAdminOp("ui_topology", "list_package_components", {
+          packageId: selectedPackageId,
+        }),
+        dispatchAdminOp("component_style_design", "list", {
+          packageId: selectedPackageId,
+        }),
+        pkg?.layoutId && pkg.routeKey
+          ? dispatchAdminOp("ui_topology", "get_layout_patch_draft", {
+            packageId: selectedPackageId,
+            layoutId: pkg.layoutId,
+            routeKey: pkg.routeKey,
+          })
+          : Promise.resolve(null),
+      ]);
+      const compData = compBody?.emission?.data;
+      if (Array.isArray(compData)) {
+        const rows = compData as AdminPackageComponentRow[];
         setPackageComponents(rows);
         setComponentsLoadStatus(rows.length === 0 ? "このパッケージに部品がありません。" : null);
         if (rows.length > 0 && !rows.some((r) => r.componentId === componentId)) {
@@ -4409,8 +5052,84 @@ function PackageDesignPanel({
         setPackageComponents([]);
         setComponentsLoadStatus("部品一覧の取得に失敗しました。");
       }
+
+      const draftData = draftBody?.emission?.data as Record<string, unknown> | undefined;
+      const tensorPatchJson = typeof draftData?.tensorPatchJson === "string"
+        ? draftData.tensorPatchJson
+        : "";
+      const parsedLayout = parseVisualLayoutPatchJson(tensorPatchJson);
+      if (parsedLayout.ok) {
+        const options = parsedLayout.value.nodes.map((n) => ({
+          nodeId: n.nodeId,
+          label: n.nodeKind === "structural_html" && n.htmlTag
+            ? `<${n.htmlTag}>`
+            : friendlyComponentLabel(n.componentKey),
+          nodeKind: n.nodeKind,
+          htmlTag: n.htmlTag,
+        }));
+        setLayoutNodeOptions(options);
+        setLayoutNodesLoadStatus(options.length === 0 ? "layout ノードがありません。" : null);
+        if (options.length > 0 && !options.some((o) => o.nodeId === layoutNodeId)) {
+          setLayoutNodeId(options[0].nodeId);
+        }
+      } else {
+        setLayoutNodeOptions([]);
+        setLayoutNodesLoadStatus("layout ノードの取得に失敗しました。");
+      }
+
+      const designData = designBody?.emission?.data;
+      if (Array.isArray(designData)) {
+        const rows = designData.map((raw) => mapSavedDesignRow(raw as Record<string, unknown>));
+        setSavedDesigns(rows);
+        setDesignsLoadStatus(rows.length === 0 ? "保存済みデザインはまだありません。" : null);
+      } else {
+        setSavedDesigns([]);
+        setDesignsLoadStatus("保存済みデザインの取得に失敗しました。");
+      }
     })();
-  }, [selectedPackageId]);
+  }, [selectedPackageId, packages]);
+
+  useEffect(() => {
+    if (designTarget !== DESIGN_TARGET_PACKAGE_ITEM || !componentId) return;
+    const saved = savedDesigns.find((d) => d.componentId === componentId);
+    if (saved) {
+      applySavedDesign(saved);
+      return;
+    }
+    const comp = packageComponents.find((c) => c.componentId === componentId);
+    if (comp) {
+      setDesignName(defaultDesignName(comp.componentKey));
+      setCssTokenRefs([]);
+      setResponsiveTokenRefs({});
+      setInlineText("");
+      setLinkHref("");
+      setLinkTarget("");
+      setReactionIntent("");
+      setClassname("");
+      setTailwind("");
+    }
+  }, [designTarget, componentId, savedDesigns, packageComponents]);
+
+  useEffect(() => {
+    if (designTarget !== DESIGN_TARGET_LAYOUT_NODE || !layoutNodeId) return;
+    const saved = savedDesigns.find((d) => d.layoutNodeId === layoutNodeId);
+    if (saved) {
+      applySavedDesign(saved);
+      return;
+    }
+    const node = layoutNodeOptions.find((n) => n.nodeId === layoutNodeId);
+    if (node) {
+      setDesignName(`${node.nodeId}_design`);
+      setCssTokenRefs([]);
+      setResponsiveTokenRefs({});
+      setInlineText(node.htmlTag === "a" ? "リンクテキスト" : "");
+      setLinkHref("");
+      setLinkTarget("");
+      setReactionIntent("");
+      setClassname("");
+      setTailwind("");
+    }
+  }, [designTarget, layoutNodeId, savedDesigns, layoutNodeOptions]);
 
   const handleUpsertDesign = async () => {
     if (!canSave) {
@@ -4427,11 +5146,17 @@ function PackageDesignPanel({
     try {
       const body = await dispatchAdminOp("component_style_design", "upsert", {
         packageId: selectedPackageId,
-        componentId,
+        ...(designTarget === DESIGN_TARGET_PACKAGE_ITEM
+          ? { componentId }
+          : { layoutNodeId }),
         name: designName.trim(),
         classname: classname.trim(),
         tailwind: tailwind.trim(),
         cssTokenRefs,
+        responsiveTokenRefs: filterEmptyResponsiveRules(responsiveTokenRefs),
+        inlineText: inlineText.trim(),
+        linkHref: linkHref.trim(),
+        linkTarget: linkTarget.trim(),
         reactionIntent: reactionIntent.trim(),
       });
       const ok = Boolean(body?.success);
@@ -4439,6 +5164,18 @@ function PackageDesignPanel({
       setStatus(ok
         ? "デザイン設定を保存しました。"
         : (body?.errors?.[0]?.message ?? "保存に失敗しました。"));
+      if (ok) {
+        const designBody = await dispatchAdminOp("component_style_design", "list", {
+          packageId: selectedPackageId,
+        });
+        const designData = designBody?.emission?.data;
+        if (Array.isArray(designData)) {
+          setSavedDesigns(designData.map((raw) =>
+            mapSavedDesignRow(raw as Record<string, unknown>)
+          ));
+          setDesignsLoadStatus(null);
+        }
+      }
     } catch (e) {
       setSaveOk(false);
       setStatus(`保存エラー: ${e}`);
@@ -4448,7 +5185,8 @@ function PackageDesignPanel({
   };
 
   const noPackage = !selectedPackageId;
-  const noComponent = selectedPackageId && !componentId;
+  const noComponent = designTarget === DESIGN_TARGET_PACKAGE_ITEM && selectedPackageId && !componentId;
+  const noLayoutNode = designTarget === DESIGN_TARGET_LAYOUT_NODE && selectedPackageId && !layoutNodeId;
 
   return (
     <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
@@ -4456,7 +5194,7 @@ function PackageDesignPanel({
         packages={packages}
         selectedPackageId={selectedPackageId}
         onSelectPackage={onSelectPackage}
-        heading="デザインを編集（component_design child）"
+        heading="デザインを編集"
       />
 
       {noPackage && (
@@ -4471,41 +5209,88 @@ function PackageDesignPanel({
         </div>
       )}
 
-      <p class="text-muted-xs mb-2">
-        cssTokenRefs・color・spacing・radius・typography・reactionIntent を保存します。
-        配置（x/y/width/height）は「配置を編集」タブで保存してください。
-      </p>
-
-      {selectedPackageId && (
-        <PackageWiringEditor
-          selectedPackageId={selectedPackageId}
-          packageComponents={packageComponents}
-        />
+      {!noPackage && noLayoutNode && layoutNodeOptions.length === 0 && !layoutNodesLoadStatus && (
+        <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+          <strong>layout ノードなし</strong> — 「配置を編集」タブで structural HTML または部品を配置してください。
+        </div>
       )}
+
+      <p class="text-muted-xs mb-3">
+        色・余白・フォント（cssTokenRefs）を canvas で確認しながら設定します。
+        部品の位置・サイズは「配置を編集」タブの canvas で編集してください。
+      </p>
 
       {componentsLoadStatus && (
         <p class="mb-2 text-xs text-slate-500">{componentsLoadStatus}</p>
       )}
+      {layoutNodesLoadStatus && (
+        <p class="mb-2 text-xs text-slate-500">{layoutNodesLoadStatus}</p>
+      )}
+      {designsLoadStatus && (
+        <p class="mb-2 text-xs text-slate-500">{designsLoadStatus}</p>
+      )}
 
-      <div class="grid gap-2 sm:grid-cols-2">
-        <label class="text-xs">
-          部品
-          <select
-            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-            value={componentId}
-            disabled={packageComponents.length === 0}
-            onChange={(e) => setComponentId((e.target as HTMLSelectElement).value)}
-          >
-            <option value="">— 部品を選択 —</option>
-            {packageComponents.map((c) => (
-              <option key={c.componentId} value={c.componentId}>
-                {c.componentKey} ({c.componentKind})
-              </option>
-            ))}
-          </select>
+      <div class="mb-3 flex flex-wrap gap-2">
+        <label class="flex items-center gap-1 text-xs">
+          <input
+            type="radio"
+            name="design-target"
+            checked={designTarget === DESIGN_TARGET_PACKAGE_ITEM}
+            onChange={() => setDesignTarget(DESIGN_TARGET_PACKAGE_ITEM)}
+          />
+          パッケージ部品
         </label>
+        <label class="flex items-center gap-1 text-xs">
+          <input
+            type="radio"
+            name="design-target"
+            checked={designTarget === DESIGN_TARGET_LAYOUT_NODE}
+            onChange={() => setDesignTarget(DESIGN_TARGET_LAYOUT_NODE)}
+          />
+          layout ノード（構造 HTML 含む）
+        </label>
+      </div>
+
+      <div class="mb-4 grid gap-2 sm:grid-cols-2">
+        {designTarget === DESIGN_TARGET_PACKAGE_ITEM
+          ? (
+            <label class="text-xs">
+              部品
+              <select
+                class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                value={componentId}
+                disabled={packageComponents.length === 0}
+                onChange={(e) => setComponentId((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">— 部品を選択 —</option>
+                {packageComponents.map((c) => (
+                  <option key={c.componentId} value={c.componentId}>
+                    {c.componentKey} ({c.componentKind})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )
+          : (
+            <label class="text-xs">
+              layout ノード
+              <select
+                class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                value={layoutNodeId}
+                disabled={layoutNodeOptions.length === 0}
+                onChange={(e) => setLayoutNodeId((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">— ノードを選択 —</option>
+                {layoutNodeOptions.map((n) => (
+                  <option key={n.nodeId} value={n.nodeId}>
+                    {n.label} ({n.nodeId.slice(0, 8)}…)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         <label class="text-xs">
-          デザイン名
+          デザイン名（保存キー）
           <input
             class="mt-1 w-full rounded border px-2 py-1 text-xs"
             value={designName}
@@ -4513,26 +5298,117 @@ function PackageDesignPanel({
             placeholder="例: primary_card_design"
           />
         </label>
-        <label class="text-xs sm:col-span-2">
-          リアクション意図（hover / focus 等）
+        {designsForTarget.length > 0 && (
+          <label class="text-xs sm:col-span-2">
+            保存済みデザインを読み込む
+            <select
+              class="mt-1 w-full rounded border px-2 py-1 text-xs"
+              value={designName}
+              onChange={(e) => {
+                const name = (e.target as HTMLSelectElement).value;
+                const design = designsForTarget.find((d) => d.name === name);
+                if (design) applySavedDesign(design);
+              }}
+            >
+              {designsForTarget.map((d) => (
+                <option key={d.designId} value={d.name}>
+                  {d.name}（トークン {d.cssTokenRefs.length} 件）
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+
+      {designTarget === DESIGN_TARGET_PACKAGE_ITEM && selectedComponent && (
+        <div class="mb-4">
+          <ComponentDesignPreviewCanvas
+            componentKey={selectedComponent.componentKey}
+            componentKind={selectedComponent.componentKind}
+            cssTokenRefs={cssTokenRefs}
+            sampleText={inlineText}
+            reactionIntent={reactionIntent}
+            onSampleTextChange={setInlineText}
+          />
+        </div>
+      )}
+
+      {designTarget === DESIGN_TARGET_LAYOUT_NODE && selectedLayoutNode && (
+        <div class="mb-4 rounded border border-emerald-100 bg-emerald-50 p-3 text-xs text-emerald-900">
+          編集対象: <strong>{selectedLayoutNode.label}</strong>
+          {selectedLayoutNode.htmlTag === "a" && " — linkHref / inlineText を設定できます"}
+        </div>
+      )}
+
+      <div class="mb-4 rounded border border-slate-100 bg-slate-50 p-2">
+        <p class="mb-1 text-xs font-semibold text-slate-700">
+          色・余白・フォント — CSS 辞書トークン（チェックで選択）
+        </p>
+        <p class="text-muted-xs mb-2">
+          チェックしたトークンが上の canvas に即時反映されます。保存は「デザイン設定を保存」で行います。
+        </p>
+        <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
+      </div>
+
+      <label class="mb-4 block text-xs">
+        インラインテキスト
+        <input
+          class="mt-1 w-full rounded border px-2 py-1 text-xs"
+          value={inlineText}
+          onInput={(e) => setInlineText((e.target as HTMLInputElement).value)}
+          placeholder="表示テキスト / 子テキストノード"
+        />
+      </label>
+
+      <div class="mb-4 grid gap-2 sm:grid-cols-2">
+        <label class="text-xs">
+          リンク URL（href）
           <input
             class="mt-1 w-full rounded border px-2 py-1 text-xs"
-            value={reactionIntent}
-            onInput={(e) => setReactionIntent((e.target as HTMLInputElement).value)}
-            placeholder="例: ホバーで背景を primary に変化"
+            value={linkHref}
+            onInput={(e) => setLinkHref((e.target as HTMLInputElement).value)}
+            placeholder="https://..."
+          />
+        </label>
+        <label class="text-xs">
+          リンク target
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 text-xs"
+            value={linkTarget}
+            onInput={(e) => setLinkTarget((e.target as HTMLInputElement).value)}
+            placeholder="_blank 等"
           />
         </label>
       </div>
 
-      <div class="mt-3 rounded border border-slate-100 bg-slate-50 p-2">
-        <p class="mb-1 text-xs font-semibold text-slate-700">
-          cssTokenRefs — CSS 辞書トークン（保存の正式参照）
-        </p>
-        <p class="text-muted-xs mb-2">
-          選択後は「デザイン設定を保存」でデザイン設定として保存されます。
-        </p>
-        <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
+      <div class="mb-4">
+        <ResponsiveTokenRuleEditor
+          rules={responsiveTokenRefs}
+          onChange={setResponsiveTokenRefs}
+        />
       </div>
+
+      <label class="mb-4 block text-xs">
+        リアクション意図（hover / focus 等）
+        <input
+          class="mt-1 w-full rounded border px-2 py-1 text-xs"
+          value={reactionIntent}
+          onInput={(e) => setReactionIntent((e.target as HTMLInputElement).value)}
+          placeholder="例: ホバーで背景を primary に変化"
+        />
+      </label>
+
+      {selectedPackageId && (
+        <details class="mb-4 rounded border border-slate-200 p-3">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-700">
+            パッケージ配線（イベント接続・詳細）
+          </summary>
+          <PackageWiringEditor
+            selectedPackageId={selectedPackageId}
+            packageComponents={packageComponents}
+          />
+        </details>
+      )}
 
       <AdvancedManualOverride title="上級者向け — classname / tailwind 手入力（補助メモのみ・保存対象外）">
         <p class="text-muted-xs mb-2">
@@ -4588,6 +5464,113 @@ function PackageDesignPanel({
   );
 }
 
+function VisualViewPanel({
+  packages,
+  selectedPackageId,
+  onSelectPackage,
+}: {
+  packages: AdminPackageRow[];
+  selectedPackageId: string;
+  onSelectPackage: (id: string) => void;
+}): JSX.Element {
+  const [previewNodes, setPreviewNodes] = useState<LayoutPreviewNodeInput[]>([]);
+  const [layoutClassRefs, setLayoutClassRefs] = useState<string[]>([]);
+  const [loadStatus, setLoadStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setPreviewNodes([]);
+      setLayoutClassRefs([]);
+      setLoadStatus(null);
+      return;
+    }
+    const pkg = packages.find((p) => p.packageId === selectedPackageId);
+    if (!pkg?.layoutId || !pkg.routeKey) {
+      setPreviewNodes([]);
+      setLayoutClassRefs([]);
+      setLoadStatus("パッケージに layout/route が紐付いていません。");
+      return;
+    }
+    (async () => {
+      setLoadStatus("visual view を読み込み中...");
+      const [draftBody, designBody] = await Promise.all([
+        dispatchAdminOp("ui_topology", "get_layout_patch_draft", {
+          packageId: selectedPackageId,
+          layoutId: pkg.layoutId,
+          routeKey: pkg.routeKey,
+        }),
+        dispatchAdminOp("component_style_design", "list", {
+          packageId: selectedPackageId,
+        }),
+      ]);
+      const draftData = draftBody?.emission?.data as Record<string, unknown> | undefined;
+      const tensorPatchJson = typeof draftData?.tensorPatchJson === "string"
+        ? draftData.tensorPatchJson
+        : "";
+      const parsed = parseVisualLayoutPatchJson(tensorPatchJson);
+      if (!parsed.ok) {
+        setPreviewNodes([]);
+        setLayoutClassRefs([]);
+        setLoadStatus("layout patch の解析に失敗しました。");
+        return;
+      }
+      const designs = Array.isArray(designBody?.emission?.data)
+        ? (designBody.emission.data as Record<string, unknown>[]).map(mapSavedDesignRow)
+        : [];
+      const designByComponentId = new Map(
+        designs.filter((d) => d.componentId).map((d) => [d.componentId!, d]),
+      );
+      const designByLayoutNodeId = new Map(
+        designs.filter((d) => d.layoutNodeId).map((d) => [d.layoutNodeId!, d]),
+      );
+      const nodes: LayoutPreviewNodeInput[] = parsed.value.nodes.map((n) => {
+        const design = n.nodeKind === "structural_html"
+          ? designByLayoutNodeId.get(n.nodeId)
+          : (n.componentId ? designByComponentId.get(n.componentId) : undefined);
+        return {
+          nodeId: n.nodeId,
+          componentKey: n.componentKey,
+          componentKind: n.componentKind,
+          componentId: n.componentId,
+          nodeKind: n.nodeKind,
+          htmlTag: n.htmlTag,
+          inlineText: design?.inlineText,
+          linkHref: design?.linkHref,
+          isDraftOnly: n.isDraftOnly,
+          x: n.x,
+          y: n.y,
+          width: n.width,
+          height: n.height,
+        };
+      });
+      setPreviewNodes(nodes);
+      setLayoutClassRefs(parsed.value.layoutClassRefs);
+      setLoadStatus(nodes.length === 0 ? "配置ノードがありません。" : null);
+    })();
+  }, [selectedPackageId, packages]);
+
+  return (
+    <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
+      <PackageScopeSelector
+        packages={packages}
+        selectedPackageId={selectedPackageId}
+        onSelectPackage={onSelectPackage}
+        heading="visual view（読み取り専用）"
+      />
+      <p class="text-muted-xs mb-3">
+        保存済みの配置とデザインを合成して island 全体をプレビューします。編集は「配置を編集」「デザインを編集」タブで行います。
+      </p>
+      {loadStatus && <p class="mb-2 text-xs text-slate-500">{loadStatus}</p>}
+      <LayoutVisualAuditCanvas
+        nodes={previewNodes}
+        layoutClassRefs={layoutClassRefs}
+        title="visual view"
+        minHeight={360}
+      />
+    </section>
+  );
+}
+
 export default function UiBuilderAdmin(): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>("bucket");
   const [packages, setPackages] = useState<AdminPackageRow[]>([]);
@@ -4607,7 +5590,9 @@ export default function UiBuilderAdmin(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "layout" || activeTab === "design") reloadPackages();
+    if (activeTab === "layout" || activeTab === "design" || activeTab === "visual") {
+      reloadPackages();
+    }
   }, [activeTab]);
 
   const handlePackaged = (handoff: PackagedHandoff) => {
@@ -4668,6 +5653,21 @@ export default function UiBuilderAdmin(): JSX.Element {
             selectedPackageId={selectedPackageId}
             onSelectPackage={setSelectedPackageId}
           />
+        )}
+        {activeTab === "visual" && (
+          selectedPackageId
+            ? (
+              <VisualViewPanel
+                packages={packages}
+                selectedPackageId={selectedPackageId}
+                onSelectPackage={setSelectedPackageId}
+              />
+            )
+            : (
+              <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+                <strong>パッケージ未選択</strong> — visual view はパッケージ選択後に利用できます。
+              </div>
+            )
         )}
       </div>
 
