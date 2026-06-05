@@ -532,6 +532,38 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return false;
     }
 
+    public override async Task<LayoutPatchDraftDto?> GetLayoutPatchDraftAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            """
+            SELECT layout_patch_json::text
+            FROM topology.ui_topology_tensor
+            WHERE package_id = @pkg AND layout_id = @layout AND route_key = @route
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """;
+        cmd.Parameters.AddWithValue("pkg", packageId);
+        cmd.Parameters.AddWithValue("layout", layoutId);
+        cmd.Parameters.AddWithValue("route", routeKey);
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null or DBNull)
+            return null;
+        var json = scalar.ToString() ?? "{}";
+        return new LayoutPatchDraftDto(
+            packageId.ToString(),
+            layoutId.ToString(),
+            routeKey,
+            json,
+            Found: true);
+    }
+
     public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
         => Task.FromResult(NormalizeLayoutPatch(layoutId, routeKey, tensorPatchJson, cssTokenRefs, responsiveTokenRefs));
 

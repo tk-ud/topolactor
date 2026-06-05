@@ -11,7 +11,8 @@ export type LayoutPreviewRenderResult =
   | { ok: true; node: VNode }
   | { ok: false; code: string; reason: string };
 
-const PREVIEW_EVENT_STUB = { eventType: "click" as const, payload: {} };
+/** Inert binding shape for previewMode factory render (no runtime dispatch). */
+const PREVIEW_INERT_CLICK_BINDING = { eventType: "click" as const, payload: {} };
 
 /** Resolve componentKind from catalog entry or registry key. */
 export function resolveComponentKindForLayoutPreview(
@@ -124,7 +125,7 @@ export function buildLayoutPreviewRuntimeSpec(input: {
       componentType: componentKind,
       props: buildLayoutPreviewPlaceholderProps(componentKind, input.componentKey),
       eventBinding: {
-        click: PREVIEW_EVENT_STUB,
+        click: PREVIEW_INERT_CLICK_BINDING,
         change: { eventType: "change", payload: {} },
         select: { eventType: "select", payload: {} },
         submit: { eventType: "submit", payload: {} },

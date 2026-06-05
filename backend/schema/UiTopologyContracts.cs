@@ -161,6 +161,15 @@ public record LayoutPatchResult(
     string Message
 );
 
+/// <summary>Read-only layout_patch_json for UI Builder canvas hydrate (no mutation).</summary>
+public record LayoutPatchDraftDto(
+    [property: JsonPropertyName("packageId")] string PackageId,
+    [property: JsonPropertyName("layoutId")] string LayoutId,
+    [property: JsonPropertyName("routeKey")] string RouteKey,
+    [property: JsonPropertyName("tensorPatchJson")] string TensorPatchJson,
+    [property: JsonPropertyName("found")] bool Found
+);
+
 public record PromotedPaletteEntryDto(
     [property: JsonPropertyName("componentKey")] string ComponentKey,
     [property: JsonPropertyName("componentKind")] string ComponentKind,

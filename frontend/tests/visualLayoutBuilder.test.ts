@@ -16,6 +16,8 @@ import { assertEquals, assertFalse, assertNotEquals, assertObjectMatch } from "h
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
+  parseVisualLayoutPatchJson,
+  seedDraftNodesFromPalette,
   getDraftOnlyNodes,
   isDraftOnlyApplyBlocked,
   wouldCreateVisualParentCycle,
@@ -25,6 +27,11 @@ import {
   type VisualNodePayload,
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
+import {
+  filterLayoutClassRefsByAllowedFor,
+  resolveCanvasRootPreviewClassName,
+  resolveNodeWrapperPreviewClassName,
+} from "../runtime/layoutClassPreviewUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 import {
   renderLayoutComponentPreview,
@@ -713,4 +720,75 @@ Deno.test("validateResponsiveTokenRulesJson: non-string array item returns struc
 Deno.test("validateResponsiveTokenRulesJson: empty arrays per breakpoint are valid", () => {
   const result = validateResponsiveTokenRulesJson('{"sm": [], "md": []}');
   assertEquals(result.ok, true);
+});
+
+// ─── parseVisualLayoutPatchJson / seedDraftNodesFromPalette ───────────────────
+
+Deno.test("parseVisualLayoutPatchJson: hydrates nodes and layoutClassRefs", () => {
+  const raw = JSON.stringify({
+    layoutClassRefs: ["layout.root.grid"],
+    nodes: [{
+      nodeId: "n1",
+      componentKey: "display/card",
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 50,
+    }],
+  });
+  const palette = [{
+    componentKey: "display/card",
+    componentKind: "display",
+    isDraftOnly: false,
+    componentId: "c1",
+  }];
+  const result = parseVisualLayoutPatchJson(raw, palette);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.layoutClassRefs, ["layout.root.grid"]);
+  assertEquals(result.value.nodes.length, 1);
+  assertEquals(result.value.nodes[0].componentKind, "display");
+  assertEquals(result.value.nodes[0].componentId, "c1");
+});
+
+Deno.test("seedDraftNodesFromPalette: stacks promotable entries", () => {
+  const seeds = seedDraftNodesFromPalette([
+    { componentKey: "a/b", componentKind: "primitive", isDraftOnly: false },
+    { componentKey: "c/d", componentKind: "display", isDraftOnly: true },
+    { componentKey: "e/f", componentKind: "layout", isDraftOnly: false },
+  ]);
+  assertEquals(seeds.length, 2);
+  assertEquals(seeds[0].componentKey, "a/b");
+  assertEquals(seeds[1].y, seeds[0].y + 72);
+});
+
+// ─── layoutClassPreviewUtils ──────────────────────────────────────────────────
+
+Deno.test("filterLayoutClassRefsByAllowedFor: keeps matching roles only", () => {
+  const filtered = filterLayoutClassRefsByAllowedFor(
+    ["layout.root.grid", "layout.card.surface", "layout.state.selected"],
+    "component_wrapper",
+  );
+  assertEquals(filtered, ["layout.card.surface"]);
+});
+
+Deno.test("resolveCanvasRootPreviewClassName: applies layout_root classes", () => {
+  const className = resolveCanvasRootPreviewClassName(["layout.root.grid", "layout.card.surface"]);
+  assertEquals(className, "topolactor-topology-layout-root-grid");
+});
+
+Deno.test("resolveNodeWrapperPreviewClassName: adds preview_state when selected", () => {
+  const unselected = resolveNodeWrapperPreviewClassName(
+    ["layout.card.surface", "layout.state.selected"],
+    false,
+  );
+  const selected = resolveNodeWrapperPreviewClassName(
+    ["layout.card.surface", "layout.state.selected"],
+    true,
+  );
+  assertEquals(unselected, "topolactor-topology-layout-card-surface");
+  assertEquals(
+    selected,
+    "topolactor-topology-layout-card-surface topolactor-topology-layout-state-selected",
+  );
 });

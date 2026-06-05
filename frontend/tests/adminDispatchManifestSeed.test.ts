@@ -29,6 +29,7 @@ const REQUIRED_ADMIN_DISPATCH_AXES: string[] = [
   "ui_topology:list_packages",
   "ui_topology:list_package_components",
   "ui_topology:get_package_wiring",
+  "ui_topology:get_layout_patch_draft",
   "ui_topology:update_package_wiring",
   "component_style_design:list",
   "component_style_design:upsert",

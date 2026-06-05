@@ -95,6 +95,16 @@ public class UiTopologyRepository
             "UiTopologyRepository.PromoteBucketItemAsync must be overridden by a production implementation.");
     }
 
+    public virtual Task<LayoutPatchDraftDto?> GetLayoutPatchDraftAsync(
+        Guid packageId,
+        Guid layoutId,
+        string routeKey,
+        CancellationToken ct = default)
+    {
+        throw new NotImplementedException(
+            "UiTopologyRepository.GetLayoutPatchDraftAsync must be overridden by a production implementation.");
+    }
+
     public virtual Task<LayoutPatchResult> PreviewLayoutPatchAsync(
         Guid layoutId,
         string routeKey,

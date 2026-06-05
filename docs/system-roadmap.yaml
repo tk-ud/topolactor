@@ -1444,6 +1444,14 @@ system_roadmap_ssot:
         CanvasInspector for x/y/w/h/slotKey/parentNodeId/gridCol/gridRow numeric editing;
         LayerTree for node listing/selection/reordering/deletion.
         buildVisualLayoutPatchJson includes x/y/width/height in patch payload.
+        Canvas nodes render read-only live component preview inside layout manipulation frames
+        (layoutComponentPreview + LayoutComponentPreviewFallback; previewMode suppresses runtime
+        event dispatch). Box primitive uses layout/box factory, not Card surrogate.
+        Package selection hydrates layout_patch_json from ui_topology:get_layout_patch_draft;
+        empty persisted patch seeds stacked nodes from promoted palette. layout_patch:preview
+        normalized tensorPatchJson is applied back to canvas and layer tree immediately.
+        layoutClassRefs preview resolves allowed_for roles: layout_root/section/row on canvas
+        frame, component_wrapper on node wrappers, preview_state on selected node only.
         Preview/Validate/Apply route through layout_patch:preview→validate→apply (dispatchAdminOp).
         No direct DB write. Frontend holds draft projection state only; topology persistence
         authority is DB-side (topology.components_layout_design / topology.ui_topology_tensor).
@@ -1459,8 +1467,15 @@ system_roadmap_ssot:
       files:
         - frontend/islands/UiBuilderAdmin.tsx
         - frontend/runtime/visualLayoutUtils.ts
+        - frontend/runtime/layoutComponentPreview.ts
+        - frontend/runtime/layoutClassPreviewUtils.ts
+        - frontend/components/LayoutComponentPreviewFallback.tsx
         - frontend/runtime/cssDictionary.ts
+        - backend/runtime/AdminRuntime.cs
+        - backend/schema/UiTopologyContracts.cs
+        - backend/repository/UiTopologyRepository.cs
         - frontend/tests/visualLayoutBuilder.test.ts
+        - frontend/tests/runtimeComponentFactory.test.ts
         - db/ui_topology_tables.sql
         - backend/repository/NpgsqlUiTopologyRepository.cs
       completion_condition:
@@ -1479,6 +1494,8 @@ system_roadmap_ssot:
           - visualLayoutBuilder.test.ts (filterEmptyResponsiveRules: 5 tests)
           - visualLayoutBuilder.test.ts (responsive rule per-breakpoint: 4 tests)
           - visualLayoutBuilder.test.ts (RESPONSIVE_BREAKPOINTS export: sm/md/lg/xl)
+          - runtimeComponentFactory.test.ts (layout canvas preview: 8 tests)
+          - visualLayoutBuilder.test.ts (layout canvas live preview: 3 tests)
         ci:
           - frontend-tests
       known_gap_ref: []

@@ -221,6 +221,7 @@ public partial class AdminRuntime
             "ui_topology:list_packages"        => await DataListAdminPackagesAsync(ct),
             "ui_topology:list_package_components" => await DataListPackageComponentsAsync(vector, ct),
             "ui_topology:get_package_wiring"   => await DataGetPackageWiringAsync(vector, ct),
+            "ui_topology:get_layout_patch_draft" => await DataGetLayoutPatchDraftAsync(vector, ct),
             "ui_topology:update_package_wiring" => await DataUpdatePackageWiringAsync(vector, ct),
             "component_style_design:list"      => await DataListComponentStyleDesignsAsync(vector, ct),
             "component_style_design:upsert"    => await DataUpsertComponentStyleDesignAsync(vector, ct),
@@ -841,6 +842,44 @@ public partial class AdminRuntime
         catch (Exception ex)
         {
             _logger.LogError(ex, "DataListPackageComponentsAsync failed.");
+            return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
+        }
+    }
+
+    private async Task<(JsonElement? data, ValidationError? error)> DataGetLayoutPatchDraftAsync(
+        OperationVector vector, CancellationToken ct)
+    {
+        if (vector.Payload is null ||
+            !vector.Payload.Value.TryGetProperty("packageId", out var pkgEl) ||
+            !Guid.TryParse(pkgEl.GetString(), out var packageId) ||
+            !vector.Payload.Value.TryGetProperty("layoutId", out var layoutEl) ||
+            !Guid.TryParse(layoutEl.GetString(), out var layoutId) ||
+            !vector.Payload.Value.TryGetProperty("routeKey", out var routeEl) ||
+            string.IsNullOrWhiteSpace(routeEl.GetString()))
+        {
+            return (null, new ValidationError(
+                "LAYOUT_PATCH_DRAFT_PAYLOAD_INVALID",
+                "packageId, layoutId, and routeKey are required."));
+        }
+        var routeKey = routeEl.GetString()!;
+        try
+        {
+            var bindingError = await _uiTopologyRepository.VerifyLayoutPatchPackageBindingAsync(
+                packageId, layoutId, routeKey, ct);
+            if (bindingError is not null) return (null, bindingError);
+            var draft = await _uiTopologyRepository.GetLayoutPatchDraftAsync(
+                packageId, layoutId, routeKey, ct);
+            if (draft is null)
+            {
+                return (null, new ValidationError(
+                    "LAYOUT_PATCH_DRAFT_NOT_FOUND",
+                    $"No layout_patch_json for package {packageId}, layout {layoutId}, route {routeKey}."));
+            }
+            return (JsonSerializer.SerializeToElement(draft), null);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DataGetLayoutPatchDraftAsync failed.");
             return (null, new ValidationError("DB_UNAVAILABLE", ex.Message));
         }
     }

@@ -86,6 +86,49 @@ public class AdminRuntimeLayoutPatchTests
     }
 
     [Fact]
+    public async Task GetLayoutPatchDraft_ReturnsTensorPatchJson()
+    {
+        var packageId = Guid.NewGuid();
+        var layoutId = Guid.NewGuid();
+        const string routeKey = "/admin/ui-builder";
+        const string patchJson = """{"nodes":[{"nodeId":"n1","componentKey":"display/card"}]}""";
+        var runtime = CreateRuntime(new StubUiRepo(false, draft: new LayoutPatchDraftDto(
+            packageId.ToString(), layoutId.ToString(), routeKey, patchJson, true)));
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = packageId.ToString(),
+            layoutId = layoutId.ToString(),
+            routeKey,
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "ui_topology", "get_layout_patch_draft", null, "admin", payload, null),
+            default);
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.TryGetProperty("tensorPatchJson", out var patch));
+        Assert.Equal(patchJson, patch.GetString());
+        Assert.True(data.Value.GetProperty("found").GetBoolean());
+    }
+
+    [Fact]
+    public async Task GetLayoutPatchDraft_NotFound_ReturnsExplicitError()
+    {
+        var runtime = CreateRuntime(new StubUiRepo(false, draft: null));
+        var payload = System.Text.Json.JsonSerializer.SerializeToElement(new
+        {
+            packageId = Guid.NewGuid().ToString(),
+            layoutId = Guid.NewGuid().ToString(),
+            routeKey = "/admin/ui-builder",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "ui_topology", "get_layout_patch_draft", null, "admin", payload, null),
+            default);
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("LAYOUT_PATCH_DRAFT_NOT_FOUND", error!.Code);
+    }
+
+    [Fact]
     public async Task LayoutPatchValidate_CssTokenRefsInPayload_AreStrippedBeforeRepository()
     {
         var capturedCss = new List<string>();
@@ -118,10 +161,16 @@ public class AdminRuntimeLayoutPatchTests
     private class StubUiRepo(
         bool valid,
         IReadOnlyList<PromotedPaletteEntryDto>? palette = null,
-        IReadOnlyList<LayoutCandidateDto>? candidates = null) : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")
+        IReadOnlyList<LayoutCandidateDto>? candidates = null,
+        LayoutPatchDraftDto? draft = null) : UiTopologyRepository(NullLogger<UiTopologyRepository>.Instance, "Host=localhost")
     {
         private readonly IReadOnlyList<PromotedPaletteEntryDto> _palette = palette ?? [];
         private readonly IReadOnlyList<LayoutCandidateDto> _candidates = candidates ?? [];
+        private readonly LayoutPatchDraftDto? _draft = draft;
+
+        public override Task<LayoutPatchDraftDto?> GetLayoutPatchDraftAsync(
+            Guid packageId, Guid layoutId, string routeKey, CancellationToken ct = default)
+            => Task.FromResult(_draft);
         public override Task<LayoutPatchResult> PreviewLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)
             => Task.FromResult(new LayoutPatchResult(true, true, layoutId.ToString(), routeKey, "{}", [], new Dictionary<string, IReadOnlyList<string>>(), "ok"));
         public override Task<LayoutPatchResult> ValidateLayoutPatchAsync(Guid layoutId, string routeKey, string? tensorPatchJson, IReadOnlyList<string>? cssTokenRefs, IReadOnlyDictionary<string, IReadOnlyList<string>>? responsiveTokenRefs, CancellationToken ct = default)

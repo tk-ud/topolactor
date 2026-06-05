@@ -918,6 +918,16 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000b9',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"ui_topology","action":"get_layout_patch_draft"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -1278,6 +1288,15 @@ VALUES
         '00000000-0000-0000-0000-0000000000b8',
         'admin_enum_dictionary_set_group_items',
         'admin:enum_dictionary:set_group_items',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c0',
+        'admin_ui_topology_get_layout_patch_draft',
+        'admin:ui_topology:get_layout_patch_draft',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

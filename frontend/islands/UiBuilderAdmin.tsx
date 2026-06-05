@@ -16,12 +16,19 @@ import UiBuilderFlowStepper from "../components/UiBuilderFlowStepper.tsx";
 import {
   snapToGrid,
   buildVisualLayoutPatchJson,
+  parseVisualLayoutPatchJson,
+  seedDraftNodesFromPalette,
   wouldCreateVisualParentCycle,
   RESPONSIVE_BREAKPOINTS,
   filterEmptyResponsiveRules,
   validateResponsiveTokenRulesJson,
+  type PaletteDraftSeedEntry,
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
+import {
+  resolveCanvasRootPreviewClassName,
+  resolveNodeWrapperPreviewClassName,
+} from "../runtime/layoutClassPreviewUtils.ts";
 import { resolveBucketStatus, type BucketItem } from "../runtime/bucketUtils.ts";
 import {
   createEmptyLabelValueEditorRow,
@@ -2279,6 +2286,7 @@ function VisualLayoutNode({
   displayY,
   displayW,
   displayH,
+  wrapperPreviewClassName = "",
   onSelect,
   onNodeMouseDown,
   onResizeHandleMouseDown,
@@ -2293,6 +2301,7 @@ function VisualLayoutNode({
   displayY: number;
   displayW: number;
   displayH: number;
+  wrapperPreviewClassName?: string;
   onSelect: () => void;
   onNodeMouseDown: (e: Event) => void;
   onResizeHandleMouseDown: (e: Event, dir: ResizeDir) => void;
@@ -2315,7 +2324,7 @@ function VisualLayoutNode({
           : node.isDraftOnly
           ? "border-yellow-300 hover:border-yellow-500"
           : "border-blue-200 hover:border-blue-400"
-      } ${node.isDraftOnly ? "bg-yellow-50" : "bg-white"} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
+      } ${node.isDraftOnly ? "bg-yellow-50" : "bg-white"} ${wrapperPreviewClassName} focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500`}
       style={{
         left: `${displayX}px`,
         top: `${displayY}px`,
@@ -2379,6 +2388,7 @@ function VisualLayoutNode({
 function VisualLayoutCanvas({
   draftNodes,
   selectedNodeId,
+  layoutClassRefs,
   canvasRef,
   liveDragNodeId,
   liveResizeNodeId,
@@ -2400,6 +2410,7 @@ function VisualLayoutCanvas({
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
+  layoutClassRefs: string[];
   // deno-lint-ignore no-explicit-any
   canvasRef: { current: any };
   liveDragNodeId: string | null;
@@ -2485,16 +2496,22 @@ function VisualLayoutCanvas({
       )}
       {draftNodes.map((node) => {
         const live = getLivePos(node.nodeId);
+        const isSelected = node.nodeId === selectedNodeId;
+        const wrapperPreviewClassName = resolveNodeWrapperPreviewClassName(
+          layoutClassRefs,
+          isSelected,
+        );
         return (
           <VisualLayoutNode
             key={node.nodeId}
             node={node}
-            isSelected={node.nodeId === selectedNodeId}
+            isSelected={isSelected}
             isDragging={liveDragNodeId === node.nodeId}
             displayX={live?.x ?? node.x}
             displayY={live?.y ?? node.y}
             displayW={live?.width ?? node.width}
             displayH={live?.height ?? node.height}
+            wrapperPreviewClassName={wrapperPreviewClassName}
             onSelect={() => onSelectNode(node.nodeId)}
             onNodeMouseDown={(e) => onNodeMouseDown(e, node.nodeId)}
             onResizeHandleMouseDown={(e, dir) => onResizeHandleMouseDown(e, node.nodeId, dir)}
@@ -3102,9 +3119,6 @@ function LayoutBuilderSection({
 
   // ── derived ─────────────────────────────────────────────────────────────
   const tensorPatchJson = buildVisualLayoutPatchJson(draftNodes, selectedLayoutClassRefs);
-  const topologyPreviewClasses = selectedLayoutClassRefs.length > 0
-    ? resolveTopologyLayoutClassRefs(selectedLayoutClassRefs)
-    : null;
   const effectiveLayoutId = manualLayoutId.trim() || layoutId;
   const effectiveRouteKey = manualRouteKey.trim() || routeKey;
   const selectedLayout = layoutCandidates.find(
@@ -3134,7 +3148,45 @@ function LayoutBuilderSection({
     return false;
   };
   const selectedNode = draftNodes.find((n) => n.nodeId === selectedNodeId) ?? null;
-  const canvasPreviewClass = topologyPreviewClasses?.ok ? topologyPreviewClasses.className : "";
+  const canvasPreviewClass = resolveCanvasRootPreviewClassName(selectedLayoutClassRefs);
+  const paletteSeedEntries: PaletteDraftSeedEntry[] = paletteEntries.map((e) => ({
+    componentKey: e.componentKey,
+    componentKind: e.componentKind,
+    isDraftOnly: e.isDraftOnly,
+    componentId: e.componentId,
+    packageId: e.packageId,
+    layoutId: e.layoutId,
+    wiringId: e.wiringId,
+    tensorId: e.tensorId,
+  }));
+
+  const applyCanvasFromTensorPatch = (
+    tensorPatchJson: string,
+    historyLabel: string,
+    options: { seedWhenEmpty?: boolean } = {},
+  ): boolean => {
+    const parsed = parseVisualLayoutPatchJson(tensorPatchJson, paletteSeedEntries);
+    if (!parsed.ok) {
+      setPatchErrors([{
+        code: parsed.error,
+        message: "layout_patch_json の解析に失敗しました。",
+      }]);
+      return false;
+    }
+    let nodes = parsed.value.nodes as DraftNode[];
+    if (nodes.length === 0 && options.seedWhenEmpty !== false) {
+      nodes = seedDraftNodesFromPalette(paletteSeedEntries) as DraftNode[];
+    }
+    setDraftNodes(nodes);
+    setSelectedLayoutClassRefs(parsed.value.layoutClassRefs);
+    setSelectedNodeId(null);
+    historyRef.current = [{ nodes: nodes.map((n) => ({ ...n })), label: historyLabel }];
+    historyPtrRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+    setLifecyclePhase("idle");
+    return true;
+  };
 
   // ── Gap 2: History management ─────────────────────────────────────────────
   const pushHistory = (nodes: DraftNode[], label: string) => {
@@ -3290,6 +3342,49 @@ function LayoutBuilderSection({
     load();
   }, [scopedPackageId, scopedRouteKey, scopedLayoutId]);
 
+  // ── hydrate layout_patch_json from DB on package / route / layout selection ─
+  useEffect(() => {
+    if (!scopedPackageId?.trim() || !effectiveLayoutId || !effectiveRouteKey) return;
+    if (paletteLoadFailed) return;
+
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const body = await dispatchAdminOp("ui_topology", "get_layout_patch_draft", {
+          packageId: scopedPackageId.trim(),
+          layoutId: effectiveLayoutId,
+          routeKey: effectiveRouteKey,
+        });
+        if (cancelled) return;
+        if (body?.errors?.length) {
+          const notFound = body.errors.some(
+            (e: ValidationError) =>
+              e.code === "LAYOUT_PATCH_DRAFT_NOT_FOUND" ||
+              e.code === "PACKAGE_WIRING_NOT_FOUND",
+          );
+          if (notFound) {
+            applyCanvasFromTensorPatch("{}", "パレットから初期配置", { seedWhenEmpty: true });
+            announce("保存済み layout draft なし — パレットから初期ノードを配置しました");
+          } else {
+            setPatchErrors(body.errors);
+          }
+          return;
+        }
+        const data = body?.emission?.data as { tensorPatchJson?: string } | undefined;
+        const json = typeof data?.tensorPatchJson === "string" ? data.tensorPatchJson : "{}";
+        if (applyCanvasFromTensorPatch(json, "DB layout draft 読込", { seedWhenEmpty: true })) {
+          announce("layout_patch_json を canvas に読み込みました");
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setPatchErrors([{ code: "LAYOUT_PATCH_DRAFT_LOAD_ERROR", message: String(e) }]);
+        }
+      }
+    };
+    hydrate();
+    return () => { cancelled = true; };
+  }, [scopedPackageId, effectiveLayoutId, effectiveRouteKey, paletteLoadFailed, paletteEntries.length]);
+
   // ── layout patch (preview / validate / apply) ────────────────────────────
   const callLayoutPatch = async (action: "preview" | "validate" | "apply") => {
     setPatchErrors([]);
@@ -3357,6 +3452,20 @@ function LayoutBuilderSection({
         };
         const isPersisted = body?.emission?.data?.persisted === true;
         setLifecyclePhase(isPersisted ? "persisted" : donePhase[action] as LifecyclePhase);
+
+        if (action === "preview") {
+          const previewData = (body?.emission?.data ?? body) as { tensorPatchJson?: string };
+          const normalizedJson = typeof previewData?.tensorPatchJson === "string"
+            ? previewData.tensorPatchJson
+            : null;
+          if (normalizedJson && applyCanvasFromTensorPatch(
+            normalizedJson,
+            "プレビュー結果を反映",
+            { seedWhenEmpty: false },
+          )) {
+            announce("プレビュー結果を canvas に反映しました");
+          }
+        }
 
         // layoutId round-trip: confirm DB-authoritative identity from backend response.
         // Backend NormalizeLayoutPatch returns the same layoutId it received, confirming
@@ -3803,6 +3912,7 @@ function LayoutBuilderSection({
           <VisualLayoutCanvas
             draftNodes={draftNodes}
             selectedNodeId={selectedNodeId}
+            layoutClassRefs={selectedLayoutClassRefs}
             canvasRef={canvasRef}
             liveDragNodeId={liveDragPos?.nodeId ?? null}
             liveResizeNodeId={liveResizePos?.nodeId ?? null}
@@ -3851,6 +3961,13 @@ function LayoutBuilderSection({
         <p class="text-muted-xs mb-2">
           レイアウト投影専用のスタイルクラスを選択します。canvas の視覚装飾（cssTokenRefs 等）はここではなく「デザインを編集」タブで設定します。
         </p>
+        <div class="mb-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700">
+          <strong>allowed_for と canvas 反映:</strong>{" "}
+          <code>layout_root</code> / <code>layout_section</code> / <code>layout_row</code> → キャンバス外枠、
+          <code>component_wrapper</code> → 各ノード枠、
+          <code>preview_state</code> → 選択中ノードのみ。
+          選択した class のうち対象ロールに合うものだけがプレビューに適用されます。
+        </div>
         <TopologyLayoutClassPicker selectedClassRefs={selectedLayoutClassRefs} onToggle={toggleLayoutClassRef} scopeFilter="" allowedForFilter="" />
         {layoutClassRefError && <p class="text-red-600 text-sm mt-2" role="alert">{layoutClassRefError}</p>}
         <AdvancedManualOverride title="詳細設定 — クラスキーを直接入力">
