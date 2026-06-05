@@ -38,6 +38,11 @@ import {
   type ScreenReadQueryWiringCandidate,
 } from "../lib/screenReadQueryWiring.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
+import { LayoutComponentPreviewFallback } from "../components/LayoutComponentPreviewFallback.tsx";
+import {
+  renderLayoutComponentPreview,
+  resolveComponentKindForLayoutPreview,
+} from "../runtime/layoutComponentPreview.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -78,6 +83,8 @@ type ValidationError = { code: string; message: string; field?: string; nodeId?:
 type DraftNode = {
   nodeId: string;
   componentKey: string;
+  /** Resolved from palette/catalog for live canvas preview. */
+  componentKind?: string;
   isDraftOnly: boolean;
   slotKey: string;
   orderIndex: number;
@@ -2240,6 +2247,30 @@ function friendlyComponentLabel(componentKey: string): string {
   return parts[parts.length - 1] ?? componentKey;
 }
 
+/** Read-only live component preview inside a layout manipulation frame. */
+function LayoutComponentPreviewPane({ node }: { node: DraftNode }): JSX.Element {
+  const componentKind = node.componentKind ??
+    resolveComponentKindForLayoutPreview(node.componentKey) ??
+    "—";
+  const result = renderLayoutComponentPreview({
+    componentKey: node.componentKey,
+    componentKind: node.componentKind,
+    componentId: node.componentId,
+    isDraftOnly: node.isDraftOnly,
+  });
+  if (!result.ok) {
+    return (
+      <LayoutComponentPreviewFallback
+        componentKey={node.componentKey}
+        componentKind={componentKind}
+        code={result.code}
+        reason={result.reason}
+      />
+    );
+  }
+  return result.node as JSX.Element;
+}
+
 function VisualLayoutNode({
   node,
   isSelected,
@@ -2307,22 +2338,27 @@ function VisualLayoutNode({
         if (e.key === "ArrowDown") { e.preventDefault(); onKeyboardMove?.(0, step); }
       }}
     >
-      <div class="flex h-full flex-col overflow-hidden p-1">
-        <div class="truncate font-bold leading-tight" title={node.componentKey}>
-          {friendlyComponentLabel(node.componentKey)}
+      <div
+        class="pointer-events-none flex h-full min-h-0 flex-col overflow-hidden"
+        aria-hidden="false"
+      >
+        <div class="min-h-0 flex-1 overflow-hidden p-0.5">
+          <LayoutComponentPreviewPane node={node} />
         </div>
-        {node.isDraftOnly && (
-          <span
-            class="text-[0.58rem] text-yellow-700 font-medium"
-            title="部品登録タブで配置可能にしてから保存反映してください"
-          >⚠ まだ使えない部品 — 保存ブロック</span>
+        {(node.slotKey || node.parentNodeId) && (
+          <div class="shrink-0 border-t border-slate-100 bg-white/80 px-1 py-0.5 font-mono text-[0.48rem] text-slate-400">
+            {node.slotKey && <span>slot:{node.slotKey} </span>}
+            {node.parentNodeId && (
+              <span>parent:{node.parentNodeId.slice(0, 8)}…</span>
+            )}
+          </div>
         )}
-        {node.slotKey && (
-          <span class="truncate text-[0.58rem] text-gray-500">配置: {node.slotKey}</span>
-        )}
-        <span class="mt-auto text-[0.55rem] text-gray-300">
-          {displayW}×{displayH}
-        </span>
+      </div>
+      <div
+        class="pointer-events-none absolute right-0.5 top-0.5 rounded bg-white/90 px-1 font-mono text-[0.48rem] text-slate-300 shadow-sm"
+        aria-hidden="true"
+      >
+        {displayW}×{displayH}
       </div>
       {isSelected && !isDragging && (
         <>
@@ -3360,6 +3396,7 @@ function LayoutBuilderSection({
   const makeNewNode = (entry: PaletteEntry, x: number, y: number): DraftNode => ({
     nodeId: makeNodeId(),
     componentKey: entry.componentKey,
+    componentKind: entry.componentKind,
     isDraftOnly: entry.isDraftOnly,
     componentId: entry.componentId,
     packageId: entry.packageId,

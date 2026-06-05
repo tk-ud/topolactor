@@ -6,6 +6,7 @@ export type BoxProps = {
   style?: Record<string, string>;
   role?: JSX.HTMLAttributes<HTMLDivElement>["role"];
   "aria-label"?: string;
+  "data-layout-preview"?: string;
 };
 
 export default function Box({
@@ -14,6 +15,7 @@ export default function Box({
   style,
   role,
   "aria-label": ariaLabel,
+  "data-layout-preview": dataLayoutPreview,
 }: BoxProps): JSX.Element {
   return (
     <div
@@ -21,6 +23,7 @@ export default function Box({
       style={style}
       role={role}
       aria-label={ariaLabel}
+      data-layout-preview={dataLayoutPreview}
     >
       {children}
     </div>

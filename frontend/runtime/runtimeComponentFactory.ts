@@ -142,11 +142,16 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
   };
 }
 
+function isPreviewMode(spec: RuntimeComponentSpec): boolean {
+  return spec.previewMode === true;
+}
+
 function emitBoundEvent(
   spec: RuntimeComponentSpec,
   trigger: string,
   payload: Record<string, unknown>,
 ): { ok: true } | { ok: false; error: string } {
+  if (isPreviewMode(spec)) return { ok: true };
   const binding = parseEventBinding(spec.eventBinding[trigger]);
   if (!binding) {
     return {
@@ -169,6 +174,7 @@ function requireBinding(
   spec: RuntimeComponentSpec,
   trigger: string,
 ): { ok: true } | { ok: false; error: string } {
+  if (isPreviewMode(spec)) return { ok: true };
   if (!(trigger in spec.eventBinding)) {
     return {
       ok: false,
@@ -1862,13 +1868,28 @@ function boxFactory(spec: RuntimeComponentSpec): RenderResult {
   const style = (typeof props.style === "object" && props.style !== null && !Array.isArray(props.style))
     ? props.style as Record<string, string>
     : undefined;
+  const preview = isPreviewMode(spec);
   return {
     ok: true,
     node: h(Box, {
-      className: spec.className,
+      className: spec.className ??
+        (preview
+          ? "h-full w-full min-h-[2rem] rounded border border-dashed border-slate-300 bg-slate-50/90"
+          : undefined),
       style,
       role: props.role as JSX.HTMLAttributes<HTMLDivElement>["role"],
       "aria-label": props["aria-label"] as string | undefined,
+      "data-layout-preview": preview ? "box" : undefined,
+      children: preview
+        ? h(
+          "div",
+          {
+            class:
+              "flex h-full w-full items-center justify-center text-[0.65rem] text-slate-400 select-none",
+          },
+          "Box",
+        )
+        : undefined,
     }),
   };
 }
@@ -2028,3 +2049,11 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
   { componentKinds: ["layout/box"], render: boxFactory },
 ];
+
+export {
+  buildLayoutPreviewPlaceholderProps,
+  buildLayoutPreviewRuntimeSpec,
+  renderLayoutComponentPreview,
+  resolveComponentKindForLayoutPreview,
+} from "./layoutComponentPreview.ts";
+export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";

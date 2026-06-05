@@ -26,6 +26,10 @@ import {
   type ResponsiveTokenRules,
 } from "../runtime/visualLayoutUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
+import {
+  renderLayoutComponentPreview,
+  resolveComponentKindForLayoutPreview,
+} from "../runtime/layoutComponentPreview.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
 
@@ -295,6 +299,37 @@ Deno.test("isDraftOnlyApplyBlocked: single draft node blocks apply", () => {
     true,
     "Error code and component key should be truthy for actionable error display",
   );
+});
+
+// ─── layout canvas live component preview ─────────────────────────────────────
+
+Deno.test("layout canvas preview: card.primitive resolves and renders", () => {
+  assertEquals(
+    resolveComponentKindForLayoutPreview("card.primitive"),
+    "display/card",
+  );
+  const result = renderLayoutComponentPreview({
+    componentKey: "card.primitive",
+    componentKind: "display/card",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+});
+
+Deno.test("layout canvas preview: table.primitive renders with placeholder rows", () => {
+  const result = renderLayoutComponentPreview({
+    componentKey: "table.primitive",
+    componentKind: "data_display/table",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+});
+
+Deno.test("layout canvas preview: unsupported component fails with explicit code", () => {
+  const result = renderLayoutComponentPreview({
+    componentKey: "admin_page_shell.template",
+  });
+  assertEquals(result.ok, false);
+  if (result.ok) return;
+  assertEquals(result.code, "FACTORY_MISSING");
 });
 
 // ─── UX helper: friendly label extraction ────────────────────────────────────

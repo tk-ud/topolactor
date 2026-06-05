@@ -25,6 +25,8 @@ export type RuntimeComponentSpec = {
   eventBinding: Record<string, unknown>;
   className?: string;
   design?: NormalizedDesign;
+  /** UI Builder canvas preview — no runtime event dispatch; relaxed binding checks. */
+  previewMode?: boolean;
 };
 
 type AdaptResult = { ok: true; value: RuntimeComponentSpec } | {
