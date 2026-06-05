@@ -244,27 +244,63 @@ topology-layout-class-ssot.yaml
 - Frontend projects selector candidates only; unknown class refs must fail explicitly (no silent fallback to raw className/Tailwind).
 - Raw `className` / `tailwind` / inline `style` in design payloads are legacy-only for topology layout paths.
 
-## 5.7 UI Builder authoring surfaces (step 4 — v0.8.0)
+## 5.7 UI Builder canvas workspace (step 4 — v0.9.0)
 
-`/admin/ui-builder` step 4 defines four author-facing surfaces in
-`docs/design/admin-console-workflow-ssot.yaml` → `ui_builder_authoring_surfaces`.
-Implementation MUST map to these surfaces exactly; implementation-convenience shortcuts are prohibited.
+`/admin/ui-builder` step 4 is a **canvas workspace** — not a set of separate tabs or surfaces.
+The authoritative contract is `docs/design/admin-console-workflow-ssot.yaml` → `canvas_workspace_contract`.
 
-| Surface | User-facing | Primary persistence |
-|---------|-------------|---------------------|
-| `package_selection` | package決定 | `package_generator:promote_package` |
-| `layout_editor` | layout editor | `layout_patch:preview` → `validate` → `apply` |
-| `component_design_editor` | component design editor | `component_style_design:upsert` |
-| `visual_view` | visual view | read-only projection (no DB write) |
+**Screen layout (canvas is the primary object):**
 
-- **layout_editor** owns nesting (`parentNodeId`), element add/copy/delete, structural HTML nodes
-  (`h1`–`h6`, `div`, `section`, `a`), per-node `layoutClassRefs`, and drag-and-drop move/reorder.
-- **component_design_editor** owns `cssTokenRefs` / `responsiveTokenRefs`, inline text, link href,
-  and `reactionIntent` for both catalog components and `structural_html` nodes from layout editor.
-  Product notes that mention "tailwind 等" map to css-dictionary and topology-layout-class vocabulary —
-  not freeform tailwind strings.
-- **visual_view** is a read-only composite island preview distinct from the layout editor manipulation
-  canvas and distinct from post-apply `/demo` runtime verification.
+| Zone | Position | Content |
+|------|----------|---------|
+| left panel | fixed left | component bucket (icon cards, drag to canvas) + HTML tag palette |
+| **center canvas** | **width: 100% remaining** | **renders actual component previews — not wireframe boxes** |
+| right panel | fixed right | layer inspector + design inspector (selection-driven) |
+| status bar | fixed bottom | _tmp draft state + layout_patch action buttons |
+
+**Two phases only:**
+
+| Phase | User-facing | Primary persistence |
+|-------|-------------|---------------------|
+| `package_selection` | 部品選択でパッケージ化 | `package_generator:promote_package` |
+| `canvas_workspace_edit` | canvas workspace で配置・デザインを編集 | `layout_patch:apply` + `component_style_design:upsert` |
+
+**Inspector panels (right panel, selection-driven):**
+
+- **layer_inspector** — parentNodeId tree, slotKey, orderIndex; drag to reparent/reorder (no arrow buttons).
+- **design_inspector** — cssTokenRefs, responsiveTokenRefs, typography, spacing, layoutClassRefs,
+  inlineText, linkHref, reactionIntent for the selected canvas node.
+  Shows "ノードを選択してください" when nothing is selected.
+
+**Draft persistence (_tmp model):**
+- Any canvas operation (place, move, resize, delete, design change) auto-saves to `_tmp` draft state.
+- Explicit `layout_patch:apply` promotes the draft and removes `_tmp`.
+- Interrupted sessions resume from `_tmp` — no data loss.
+
+**HTML tag palette (structural_html allowlist):**
+
+| Category | Tags |
+|----------|------|
+| block | `div`, `section`, `article`, `aside`, `header`, `footer`, `main`, `nav` |
+| heading | `h1`–`h6` |
+| text | `p`, `span`, `strong`, `em`, `blockquote`, `pre`, `code` |
+| link | `a` |
+| form | `form`, `fieldset`, `legend`, `label`, `button`, `input`, `textarea`, `select`, `option` |
+| media | `img`, `picture`, `figure`, `figcaption`, `video`, `audio` |
+| list | `ul`, `ol`, `li`, `dl`, `dt`, `dd` |
+| table | `table`, `thead`, `tbody`, `tfoot`, `tr`, `th`, `td`, `caption` |
+
+**Removed surfaces (rationale):**
+- `component_design_editor` — design_inspector panel is the design surface; no separate tab needed.
+- `visual_view` — canvas renders actual component previews; canvas IS the preview.
+
+Product notes that mention "tailwind 等" map to css-dictionary-ssot and topology-layout-class-ssot
+vocabulary — not freeform tailwind strings.
+
+**Prohibited:**
+- Separate tabs, routes, or modals for layout vs design vs preview.
+- Wireframe rectangles or placeholder boxes as canvas rendering primitives.
+- Raw `className` / tailwind / inline `style` as the normal authoring path.
 
 ## 6. Validation Model
 
@@ -449,7 +485,7 @@ not add canonical routes outside that registry.
 |-----------------|----------------|
 | `/admin` | Canonical admin workflow entry |
 | `/admin/contents` | Data-shaped single-page manifest creation: DB reference, columns, initial-data topology intent, optional table relation intent, search key, aggregation/display selection, draft, validate, preview, explicit manifest promote/register. Actual business-row insertion remains the separate `content_bundle` validated draft -> preview -> explicit promote route. |
-| `/admin/ui-builder` | Step 4 UI Builder: four authoring surfaces (package selection → layout editor → component design editor → visual view). Component bucket → package generation; package-only layout nesting/placement (structural HTML, layoutClassRefs, drag-and-drop); component design (cssTokenRefs, inline text, links); read-only island composite preview; validate → explicit apply; CI/local governance audit handoff. See admin-console-workflow-ssot `ui_builder_authoring_surfaces` and §5.7. |
+| `/admin/ui-builder` | Step 4 UI Builder: canvas workspace (full-width center canvas + docked panels). Phase A: component bucket → package generation. Phase B: canvas workspace — place actual component previews, edit design in right inspector panel, layer tree for nesting, _tmp auto-save, explicit apply. No separate layout/design/preview tabs. See admin-console-workflow-ssot `canvas_workspace_contract` and §5.7. |
 | `/admin/manifests` | Created manifest hub membership, inter-manifest relations, navigation ordering, and page-group continuity |
 | `/admin/enums` | Enum dictionary master roster: group and item CRUD, search, show-all, modal create, inline update, confirm delete |
 | `/admin/users` | Auth user master roster and state management (approve, status enum select, suspension window, state_note); `last_login_at` readonly |
