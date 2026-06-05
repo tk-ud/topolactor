@@ -878,3 +878,45 @@ Deno.test("resolveNodeWrapperPreviewClassName: adds preview_state when selected"
     "topolactor-topology-layout-card-surface topolactor-topology-layout-state-selected",
   );
 });
+
+// ─── UX surface label distinctions (TODO: layout/design/visual surface separation) ──
+
+import {
+  UX_LAYOUT_EDITOR_SURFACE,
+  UX_DESIGN_EDITOR_SURFACE,
+  UX_VISUAL_VIEW_SURFACE,
+  UX_UI_BUILDER_TAB_LABELS,
+} from "../content/adminUxTerms.ts";
+
+Deno.test("UX surface labels: layout, design, visual are distinct strings", () => {
+  assertNotEquals(UX_LAYOUT_EDITOR_SURFACE, UX_DESIGN_EDITOR_SURFACE);
+  assertNotEquals(UX_DESIGN_EDITOR_SURFACE, UX_VISUAL_VIEW_SURFACE);
+  assertNotEquals(UX_LAYOUT_EDITOR_SURFACE, UX_VISUAL_VIEW_SURFACE);
+});
+
+Deno.test("UX surface labels: design and visual are marked read-only", () => {
+  assertEquals(UX_DESIGN_EDITOR_SURFACE.includes("読み取り専用"), true);
+  assertEquals(UX_VISUAL_VIEW_SURFACE.includes("読み取り専用"), true);
+});
+
+Deno.test("UX surface labels: layout editor surface is NOT read-only", () => {
+  assertFalse(UX_LAYOUT_EDITOR_SURFACE.includes("読み取り専用"));
+});
+
+Deno.test("UX_UI_BUILDER_TAB_LABELS: visual tab label signals read-only", () => {
+  assertEquals(UX_UI_BUILDER_TAB_LABELS.visual.includes("読み取り専用"), true);
+});
+
+Deno.test("UX_UI_BUILDER_TAB_LABELS: layout, design, visual tabs have distinct labels", () => {
+  assertNotEquals(UX_UI_BUILDER_TAB_LABELS.layout, UX_UI_BUILDER_TAB_LABELS.design);
+  assertNotEquals(UX_UI_BUILDER_TAB_LABELS.layout, UX_UI_BUILDER_TAB_LABELS.visual);
+  assertNotEquals(UX_UI_BUILDER_TAB_LABELS.design, UX_UI_BUILDER_TAB_LABELS.visual);
+});
+
+Deno.test("UX_UI_BUILDER_TAB_LABELS: layout tab does NOT contain 読み取り専用", () => {
+  assertFalse(UX_UI_BUILDER_TAB_LABELS.layout.includes("読み取り専用"));
+});
+
+Deno.test("UX_UI_BUILDER_TAB_LABELS: design tab does NOT contain 読み取り専用", () => {
+  assertFalse(UX_UI_BUILDER_TAB_LABELS.design.includes("読み取り専用"));
+});

@@ -262,11 +262,16 @@ export const NORMAL_VIEW_BANNED_TERMS = [
 
 /** UI ビルダー内部タブ ID → 通常表示ラベル（主導線に raw id を出さない） */
 export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
-  bucket: "package決定",
-  layout: "layout editor",
-  design: "component design editor",
-  visual: "visual view",
+  bucket: "部品登録",
+  layout: "配置を編集",
+  design: "デザインを編集",
+  visual: "最終確認（読み取り専用）",
   css: "スタイル辞書",
   catalog: "部品カタログ（参照）",
   ci: "CI ガイダンス（参照）",
 };
+
+/** UI ビルダーの 3 authoring surface — ラベル区別用（表示・テスト用） */
+export const UX_LAYOUT_EDITOR_SURFACE = "配置編集キャンバス";
+export const UX_DESIGN_EDITOR_SURFACE = "デザインプレビュー（読み取り専用）";
+export const UX_VISUAL_VIEW_SURFACE = "最終確認プレビュー（読み取り専用）";
