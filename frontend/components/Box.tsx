@@ -4,7 +4,7 @@ export type BoxProps = {
   children?: ComponentChildren;
   className?: string;
   style?: Record<string, string>;
-  role?: string;
+  role?: JSX.HTMLAttributes<HTMLDivElement>["role"];
   "aria-label"?: string;
 };
 
