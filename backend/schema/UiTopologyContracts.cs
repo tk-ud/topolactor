@@ -56,6 +56,36 @@ public record PackageGenerateBatchRequestDto(
 );
 
 /// <summary>
+/// Request to remove component keys from a route package (canvas last-node delete sync).
+/// </summary>
+public record PackageDetachComponentsRequestDto(
+    [property: JsonPropertyName("routeKey")]       string RouteKey,
+    [property: JsonPropertyName("componentKeys")] IReadOnlyList<string> ComponentKeys
+);
+
+/// <summary>
+/// Internal result of detach_package_components.
+/// </summary>
+public record PackageDetachComponentsResult(
+    PackageGenerateCode Code,
+    Guid? PackageId,
+    IReadOnlyList<string> DetachedComponentKeys,
+    string? ErrorCode = null,
+    string? Message = null
+);
+
+/// <summary>
+/// API response for package_generator:detach_package_components.
+/// </summary>
+public record PackageDetachComponentsResponseDto(
+    [property: JsonPropertyName("ok")]                    bool Ok,
+    [property: JsonPropertyName("packageId")]             string? PackageId,
+    [property: JsonPropertyName("detachedComponentKeys")] IReadOnlyList<string> DetachedComponentKeys,
+    [property: JsonPropertyName("message")]               string Message,
+    [property: JsonPropertyName("errorCode")]              string? ErrorCode = null
+);
+
+/// <summary>
 /// Result code for PackageGeneratorRuntime.GenerateAsync / UiTopologyRepository.PromoteBucketItemAsync.
 /// </summary>
 public enum PackageGenerateCode

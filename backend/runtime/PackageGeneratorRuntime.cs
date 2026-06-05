@@ -121,10 +121,6 @@ public class PackageGeneratorRuntime
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(routeKey);
-        if (bucketItemIds.Count == 0)
-            return new PackageGenerateBatchResult(
-                PackageGenerateCode.NotFound, null, null, null, null, [], [],
-                "BUCKET_ITEM_IDS_REQUIRED", "At least one bucketItemId is required.");
 
         _logger.LogDebug(
             "PackageGeneratorRuntime.PromotePackageAsync: routeKey={Route}, count={Count}.",
@@ -174,6 +170,44 @@ public class PackageGeneratorRuntime
             _logger.LogInformation(
                 "PackageGeneratorRuntime.PromotePackageAsync: success packageId={PkgId}, routeKey={Route}, components={Count}.",
                 result.PackageId, routeKey, result.ComponentIds.Count);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Removes component keys from a route package (canvas last-node delete sync).
+    /// </summary>
+    public async Task<PackageDetachComponentsResult> DetachPackageComponentsAsync(
+        string routeKey,
+        IReadOnlyList<string> componentKeys,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(routeKey);
+        if (componentKeys.Count == 0)
+            return new PackageDetachComponentsResult(
+                PackageGenerateCode.NotFound, null, [],
+                "COMPONENT_KEYS_REQUIRED", "At least one componentKey is required.");
+
+        PackageDetachComponentsResult result;
+        try
+        {
+            result = await _repository.DetachPackageComponentsAsync(routeKey, componentKeys, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "PackageGeneratorRuntime.DetachPackageComponentsAsync: failed for routeKey={Route}.", routeKey);
+            return new PackageDetachComponentsResult(
+                PackageGenerateCode.DbUnavailable, null, [],
+                "DB_UNAVAILABLE", "Repository unavailable during detach.");
+        }
+
+        if (result.Code == PackageGenerateCode.Success)
+        {
+            _logger.LogInformation(
+                "PackageGeneratorRuntime.DetachPackageComponentsAsync: success packageId={PkgId}, detached={Count}.",
+                result.PackageId, result.DetachedComponentKeys.Count);
         }
 
         return result;

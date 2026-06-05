@@ -180,10 +180,22 @@ public class AdminRuntimePackageGenerateTests
     }
 
     [Fact]
-    public async Task ExecuteDataAsync_PromotePackage_EmptyBucketItemIds_ReturnsError()
+    public async Task ExecuteDataAsync_PromotePackage_EmptyBucketItemIds_CreatesShellPackage()
     {
+        var tensorId = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+        var layoutId = Guid.NewGuid();
+        var wiringId = Guid.NewGuid();
+
+        var batchResult = new PackageGenerateBatchResult(
+            PackageGenerateCode.Success,
+            tensorId, packageId, layoutId, wiringId,
+            [],
+            []);
+
         var runtime = CreateRuntime(new StubUiTopologyRepository(
-            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null)));
+            new PackageGenerateResult(PackageGenerateCode.Success, null, null, null, null, null),
+            batchResult: batchResult));
 
         var vector = new OperationVector("admin", "package_generator", "promote_package", null, "admin",
             JsonSerializer.SerializeToElement(new
@@ -193,9 +205,13 @@ public class AdminRuntimePackageGenerateTests
             }), null);
 
         var (data, error) = await runtime.ExecuteDataAsync(vector);
-        Assert.Null(data);
-        Assert.NotNull(error);
-        Assert.Equal("BUCKET_ITEM_IDS_REQUIRED", error!.Code);
+
+        Assert.Null(error);
+        Assert.NotNull(data);
+        Assert.True(data!.Value.GetProperty("ok").GetBoolean());
+        Assert.Equal(packageId.ToString(), data.Value.GetProperty("packageId").GetString());
+        Assert.Equal(layoutId.ToString(), data.Value.GetProperty("layoutId").GetString());
+        Assert.Empty(data.Value.GetProperty("componentIds").EnumerateArray().ToList());
     }
 
     [Fact]

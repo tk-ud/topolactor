@@ -33,7 +33,7 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
   prerequisites: ["先にログインしてください"],
   howToSteps: [
     `${UX_CONTENTS_PAGE}で step 1→3（空登録・テーブル・関連・ページ設定）を順に保存する`,
-    `${UX_UI_BUILDER}で canvas workspace（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）を行う`,
+    `${UX_UI_BUILDER}で canvas workspace（ルート選択 → 配置・デザイン設定・保存反映）を行う`,
     `${UX_HUB_MANIFESTS_PAGE}で作成済みページの所属先、ページ間のつながり、表示順を管理する`,
     `必要に応じてデモ画面で表示と操作を確認する`,
   ],
@@ -52,22 +52,22 @@ export const ADMIN_INDEX_GUIDE: AdminGuide = {
 export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
   title: UX_UI_BUILDER,
   purpose:
-    "使いたい部品を登録し、ページ上の配置や見た目を整えて保存反映する画面です。",
+    "ルートを選び、canvas 上に部品を置いて見た目を整え、保存反映する画面です。パッケージは自動生成されます。",
   prerequisites: [
     "先にログインしてください",
     `${UX_CONTENTS_PAGE}でページ内容と${UX_DATA_SHAPE}を用意してください`,
   ],
   howToSteps: [
-    "Phase A: 部品カードを複数選択し、1 回でパッケージ化する",
-    "Phase B: パッケージを選び、左パネルの配置可能カードをドラッグして canvas に置く。配置・デザインインスペクタで parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する",
+    "ルートを選択する（パッケージは自動で用意されます）",
+    "左パネルのカードをドラッグして canvas に配置する",
+    "配置・デザインインスペクタで parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する",
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],
-  inputs: ["選択する部品、パッケージ、配置とデザインの意図"],
+  inputs: ["ページルート、配置とデザインの意図"],
   actions: [
-    "Phase A: 部品選択でパッケージ化",
-    "Phase B: canvas workspace で配置・デザイン設定・配線を保存",
-    "配置: プレビュー → 検証 → 保存反映（パッケージ選択必須）",
+    "canvas workspace で配置・デザイン設定・配線を保存",
+    "配置: プレビュー → 検証 → 保存反映（ルート選択必須）",
   ],
   outputs: ["配置可能な部品", "保存反映されたレイアウト"],
   nextSteps: ["デモ画面で表示を確認する"],
@@ -76,8 +76,8 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     "直接 DB 編集は不可。",
   ],
   errorGuide: [
-    "部品が表示されない場合は、部品登録を先に完了してください。",
-    "保存反映できない場合は、未登録の部品を解消してください。",
+    "部品が表示されない場合は、先に contents でページルート候補を用意してください。",
+    "保存反映できない場合は、ルート選択と canvas 上の未登録部品を確認してください。",
   ],
   caution: "保存反映するとページのレイアウト設定が更新されます。",
 };
@@ -157,11 +157,12 @@ export const ADMIN_ROUTE_CARDS: {
   {
     href: "/admin/ui-builder",
     label: UX_UI_BUILDER,
-    purpose: "canvas workspace — 部品のパッケージ化と配置・デザイン設定",
+    purpose: "canvas workspace — ルート選択後に配置・デザイン設定",
     relation: "画面づくり（canvas workspace）",
     howToSummary: [
-      "部品を複数選択してパッケージ化",
-      "配置とデザイン設定を編集して保存反映",
+      "ルートを選ぶ（パッケージは自動生成）",
+      "左パネルから canvas にドラッグして配置・デザインを編集",
+      "保存反映",
     ],
   },
   {
@@ -267,7 +268,7 @@ export const ADMIN_MAIN_FLOW_STEPS: AcceptanceFlowStep[] = [
     step: 2,
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
-    purpose: "canvas workspace（部品選択でパッケージ化 → 配置・デザイン設定・保存反映）",
+    purpose: "canvas workspace（ルート選択 → 配置・デザイン設定・保存反映）",
     completionSign: "配置の保存反映が完了していること",
     nextLabel: `${UX_HUB_MANIFESTS}へ`,
   },
@@ -304,8 +305,8 @@ export const ACCEPTANCE_CHECKLIST: AcceptanceCheckItem[] = [
     label: UX_UI_BUILDER,
     href: "/admin/ui-builder",
     checks: [
-      "部品を複数選択してパッケージ化できること",
-      "パッケージ選択後に canvas で layout draft をプレビューし、parentNodeId・slotKey・orderIndex を編集できること",
+      "ルート選択後に canvas workspace が使えること",
+      "左パネルのカードを canvas にドロップして layout draft をプレビューし、parentNodeId・slotKey・orderIndex を編集できること",
     ],
   },
   {

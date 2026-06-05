@@ -1,64 +1,70 @@
 import { JSX } from "preact";
 
 /**
- * /admin/ui-builder canvas workspace phase guide.
- * SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract
+ * /admin/ui-builder canvas workspace flow guide.
+ * SSOT: admin-console-workflow-ssot.yaml §authoring_flow
  *
- * Authoring model: two phases (select+package, then canvas workspace edit).
- * No separate layout/design/visual surfaces — all editing in the unified canvas workspace.
+ * Single unified flow: route selection → canvas drop/edit (implicit package).
  */
 
-export type UiBuilderPhaseId = "package" | "canvas";
+export type UiBuilderFlowStepId = "route" | "canvas_edit" | "persist";
 
-/** 通常表示用フェーズラベル（内部 id は主導線に出さない） */
-export const UI_BUILDER_PHASE_LABELS: Record<UiBuilderPhaseId, string> = {
-  package: "部品選択でパッケージ化",
-  canvas: "canvas workspace で配置・デザインを編集",
+/** 通常表示用ステップラベル */
+export const UI_BUILDER_FLOW_LABELS: Record<UiBuilderFlowStepId, string> = {
+  route: "ルート選択",
+  canvas_edit: "canvas workspace で配置・デザインを編集",
+  persist: "保存反映",
 };
 
-type PhaseSpec = {
+type FlowStepSpec = {
   id: number;
-  phaseId: UiBuilderPhaseId;
+  stepId: UiBuilderFlowStepId;
   label: string;
   detail: string;
   note?: string;
 };
 
-/** SSOT: canvas_workspace_contract — 2 authoring phases. */
-export const UI_BUILDER_CANVAS_PHASES: PhaseSpec[] = [
+/** SSOT: canvas_workspace_contract — implicit package, single authoring flow. */
+export const UI_BUILDER_CANVAS_FLOW: FlowStepSpec[] = [
   {
     id: 1,
-    phaseId: "package",
-    label: "部品選択でパッケージ化",
+    stepId: "route",
+    label: "ルートを選ぶ",
     detail:
-      "components_bucket から部品を選択し、1 回の package_generator でパッケージ化します。",
-    note: "カタログ・CI は画面下部の参照専用セクションにあります。",
+      "ページルートを選択または入力すると、該当ルートのパッケージがなければ自動生成されます。",
+    note: "パッケージ化ボタンはありません。",
   },
   {
     id: 2,
-    phaseId: "canvas",
+    stepId: "canvas_edit",
     label: "canvas workspace で配置・デザインを編集",
     detail:
-      "パッケージを選んで canvas workspace で配置・デザインを統合編集します。" +
+      "左パネルの部品カードを canvas にドロップすると自動でパッケージに追加されます。" +
       " 配置（parentNodeId / slotKey / orderIndex / layoutClassRefs）は layout_patch:apply で保存。" +
-      " デザイントークン（cssTokenRefs / responsiveTokenRefs / inlineText / linkHref）は component_style_design:upsert で保存。" +
-      " canvas が主対象で、tab 切り替えなし・separate surface なし。",
+      " デザイントークンは component_style_design:upsert で保存。",
+  },
+  {
+    id: 3,
+    stepId: "persist",
+    label: "プレビュー → 検証 → 保存反映",
+    detail: "layout_patch の preview / validate / apply で canvas 配置を永続化します。",
   },
 ];
 
-export function getActivePhaseIds(phaseId: UiBuilderPhaseId): number[] {
-  if (phaseId === "package") return [1];
-  if (phaseId === "canvas") return [2];
+export function getActiveFlowStepIds(stepId: UiBuilderFlowStepId): number[] {
+  if (stepId === "route") return [1];
+  if (stepId === "canvas_edit") return [2];
+  if (stepId === "persist") return [3];
   return [];
 }
 
 export default function UiBuilderFlowStepper({
-  activePhase,
+  activeStep,
 }: {
-  activePhase: UiBuilderPhaseId;
+  activeStep: UiBuilderFlowStepId;
 }): JSX.Element {
-  const activePhaseIds = getActivePhaseIds(activePhase);
-  const activeLabel = UI_BUILDER_PHASE_LABELS[activePhase] ?? activePhase;
+  const activeStepIds = getActiveFlowStepIds(activeStep);
+  const activeLabel = UI_BUILDER_FLOW_LABELS[activeStep] ?? activeStep;
 
   return (
     <div
@@ -74,10 +80,10 @@ export default function UiBuilderFlowStepper({
       </div>
 
       <div class="flex items-start overflow-x-auto pb-1" role="list">
-        {UI_BUILDER_CANVAS_PHASES.map((phase, i) => {
-          const isActive = activePhaseIds.includes(phase.id);
+        {UI_BUILDER_CANVAS_FLOW.map((step, i) => {
+          const isActive = activeStepIds.includes(step.id);
           return (
-            <div key={phase.id} class="flex items-center" role="listitem">
+            <div key={step.id} class="flex items-center" role="listitem">
               {i > 0 && <div class="mx-1 mt-3 h-px w-4 shrink-0 bg-blue-200" aria-hidden="true" />}
               <div class="flex min-w-[120px] max-w-[180px] flex-col items-center">
                 <div
@@ -88,12 +94,12 @@ export default function UiBuilderFlowStepper({
                   }`}
                   aria-current={isActive ? "step" : undefined}
                 >
-                  {phase.id}
+                  {step.id}
                 </div>
                 <div class={`mt-1 text-center text-[0.63rem] font-medium ${isActive ? "text-blue-800" : "text-gray-500"}`}>
-                  {phase.label}
+                  {step.label}
                 </div>
-                {phase.id === 2 && (
+                {step.id === 2 && (
                   <a href="/demo" class="mt-1 text-[0.58rem] text-blue-600 underline">
                     確認 →
                   </a>
@@ -104,11 +110,11 @@ export default function UiBuilderFlowStepper({
         })}
       </div>
 
-      {UI_BUILDER_CANVAS_PHASES.filter((p) => activePhaseIds.includes(p.id)).map((phase) => (
-        <div key={phase.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
-          <p class="font-semibold text-blue-900">フェーズ {phase.id}: {phase.label}</p>
-          <p class="text-gray-700">{phase.detail}</p>
-          {phase.note && <p class="text-amber-700">{phase.note}</p>}
+      {UI_BUILDER_CANVAS_FLOW.filter((s) => activeStepIds.includes(s.id)).map((step) => (
+        <div key={step.id} class="mt-3 rounded border border-blue-200 bg-white p-2 text-xs">
+          <p class="font-semibold text-blue-900">ステップ {step.id}: {step.label}</p>
+          <p class="text-gray-700">{step.detail}</p>
+          {step.note && <p class="text-amber-700">{step.note}</p>}
         </div>
       ))}
     </div>

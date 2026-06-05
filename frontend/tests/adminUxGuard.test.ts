@@ -1048,15 +1048,16 @@ Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy 
   );
 });
 
-Deno.test("v0.8.0: UiBuilderFlowStepper reflects canvas workspace phases (not separate tabs)", async () => {
+Deno.test("v0.9.0: UiBuilderFlowStepper reflects implicit package canvas flow", async () => {
   const source = await Deno.readTextFile(
     new URL("../components/UiBuilderFlowStepper.tsx", import.meta.url),
   );
-  // Canvas workspace: two phases instead of four separate tab surfaces
-  assertEquals(source.includes("部品選択でパッケージ化"), true);
+  assertEquals(source.includes("UI_BUILDER_CANVAS_FLOW"), true);
+  assertEquals(source.includes("UiBuilderFlowStepId"), true);
+  assertEquals(source.includes("ルートを選ぶ"), true);
   assertEquals(source.includes("canvas workspace"), true);
-  assertEquals(source.includes("UI_BUILDER_CANVAS_PHASES"), true);
-  assertEquals(source.includes("UiBuilderPhaseId"), true);
+  assertFalse(source.includes("部品選択でパッケージ化"));
+  assertFalse(source.includes("UiBuilderPhaseId"));
   // Old tab-based vocabulary must be gone
   assertFalse(
     source.includes('"layout editor"'),
@@ -1152,7 +1153,8 @@ Deno.test("UiBuilderAdmin: bucket card drag source and canvas drop path exist", 
       src.includes("draggable\n              placementReady"),
     "bucket cards must expose conditional drag source",
   );
-  assert(src.includes("rejectDraftPaletteEntry"), "unpromoted drop must fail-close");
+  assert(src.includes("onRegisterComponentBeforePlace"), "drop must auto-register component to package");
+  assert(src.includes("ensureShellPackageForRoute"), "route must auto-generate shell package");
 });
 
 Deno.test("UiBuilderAdmin: bucket card shows source_path on card face", async () => {
@@ -1196,7 +1198,7 @@ Deno.test("UiBuilderAdmin: empty canvas guidance promotes drag-to-canvas", async
     new URL("../content/adminUxTerms.ts", import.meta.url),
   );
   assert(src.includes("UX_EMPTY_CANVAS_DRAG_GUIDANCE"));
-  assert(src.includes("UX_PACKAGE_REQUIRED_FOR_CANVAS"));
+  assert(src.includes("UX_ROUTE_KEY_REQUIRED_FOR_CANVAS"));
   assert(terms.includes("左パネルのカードをドラッグしてキャンバスへ配置"));
 });
 
@@ -1224,8 +1226,7 @@ Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw phase id in default 
     source.includes("現在: <strong>{activePhase}</strong>"),
     "raw phase id must not be shown in stepper header",
   );
-  // Phase labels used instead of raw IDs
-  assertEquals(source.includes("UI_BUILDER_PHASE_LABELS"), true);
+  assertEquals(source.includes("UI_BUILDER_FLOW_LABELS"), true);
 });
 
 Deno.test("ManifestsAdmin empty state aligns with step3 → ui-builder flow", async () => {

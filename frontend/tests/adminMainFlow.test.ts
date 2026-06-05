@@ -103,7 +103,7 @@ Deno.test("ADMIN_MAIN_FLOW_STEPS: contents subSteps have unique labels for stepp
 
 Deno.test("ADMIN_MAIN_FLOW_STEPS: ui-builder step references canvas workspace", () => {
   const ui = ADMIN_MAIN_FLOW_STEPS.find((s) => s.href === "/admin/ui-builder")!;
-  assertEquals(ui.purpose.includes("パッケージ"), true);
+  assertEquals(ui.purpose.includes("ルート"), true);
   assertEquals(ui.purpose.includes("canvas workspace"), true);
 });
 
