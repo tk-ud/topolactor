@@ -336,10 +336,20 @@ admin_console_workflow_ssot:
                 - treating promoted_palette component list as the edit root instead of package
         ui_builder_authoring_surfaces:
           note: >
-            Four author-facing surfaces on /admin/ui-builder. Implementation MUST map to these
-            surfaces exactly; implementation-convenience shortcuts or alternate interpretations are
+            Two author-facing surfaces on /admin/ui-builder arranged as a panel-based layout:
+            a full-width main canvas surrounded by fixed peripheral panels. Implementation MUST
+            map to these surfaces exactly; tab-based or workflow-step interpretations are
             prohibited. Styling vocabulary authority remains css-dictionary-ssot and
             topology-layout-class-ssot (raw tailwind/className is legacy-only).
+            REMOVED surfaces: component_design_editor (merged into layout_editor inspector panel),
+            visual_view (canvas now renders actual component previews — no separate read-only tab).
+          panel_layout:
+            main_canvas:
+              description: >
+                Full-width center canvas that renders actual catalog component previews and
+                structural HTML nodes in their placed positions. Not wireframe rectangles.
+              left_panel: components_bucket and html_tag_palette (fixed)
+              right_panel: component_inspector and layer_inspector (fixed, selection-driven)
           surfaces:
             - id: package_selection
               order: 1
@@ -348,7 +358,7 @@ admin_console_workflow_ssot:
                 Select required components from components_bucket and generate a package for the
                 target route.
               responsibilities:
-                - present components_bucket as staging for TS component candidates
+                - present components_bucket as icon-style small-format cards (not text-only list)
                 - author selects one or more catalog components
                 - single package_generator promote_package submit creates or updates package entity and registry links
               persistence:
@@ -361,19 +371,43 @@ admin_console_workflow_ssot:
               internal_sequential_submit_ref: sub_step 4.1
               prohibited:
                 - separate author-facing register step before packaging
-                - opening layout_editor, component_design_editor, or visual_view before a package exists
+                - opening layout_editor before a package exists
             - id: layout_editor
               order: 2
               user_facing_label: layout editor
               purpose: >
-                Configure nesting and placement of components and structural HTML elements inside
-                the selected package.
+                Configure nesting, placement, and presentation of components and structural HTML
+                elements inside the selected package. Unified panel-based editor — the canvas
+                renders actual component previews; design properties are edited in the right
+                inspector panel without switching surfaces.
+              panel_structure:
+                left_panel:
+                  - components_bucket: icon-style cards, drag-to-canvas to place
+                  - html_tag_palette: allowlist tags as draggable palette items
+                center_canvas:
+                  - renders actual catalog component previews (not abstract rectangles)
+                  - selected node highlighted with handles for resize/move
+                  - snap grid: 10px
+                right_panel:
+                  component_inspector:
+                    - color, shape, spacing, radius, typography via cssTokenRefs and responsiveTokenRefs
+                    - inline text content for display text and child text nodes
+                    - link href and link target for anchor nodes and link-bearing components
+                    - reactionIntent for interaction presentation intent
+                    - style_vocabulary_authority_ref: docs/design/css-dictionary-ssot.yaml
+                  layer_inspector:
+                    - tree view of parentNodeId nesting
+                    - selection-driven; no free-floating layer move arrows
+                    - selected node properties shown in component_inspector above
               responsibilities:
                 - nest package-bound catalog components via parentNodeId tree
                 - add, copy, and delete layout nodes (catalog_component and structural_html)
                 - add structural HTML elements from the allowlist as first-class layout nodes
                 - assign layoutClassRefs per node from topology-layout-class-ssot vocabulary
-                - move and reorder nodes via intuitive drag-and-drop (mouse-primary interaction)
+                - move and reorder nodes via drag-and-drop on the main canvas
+                - edit design properties (color, shape, text, links, reactions) in the right inspector panel
+                - canvas auto-saves all operations to _tmp draft state (no data loss on interruption)
+                - explicit apply promotes _tmp draft and removes the _tmp marker
               node_kind_contract:
                 catalog_component:
                   description: promoted palette or component registry entry bound inside the package
@@ -381,66 +415,41 @@ admin_console_workflow_ssot:
                 structural_html:
                   description: general Preact-renderable HTML scaffold node added in layout editor
                   required_fields: [nodeId, nodeKind, htmlTag, parentNodeId, slotKey, orderIndex]
-                  html_tag_allowlist: [h1, h2, h3, h4, h5, h6, div, section, a]
+                  html_tag_allowlist:
+                    block: [div, section, article, aside, header, footer, main, nav]
+                    heading: [h1, h2, h3, h4, h5, h6]
+                    inline: [span, p, a, strong, em, label]
+                    form: [button, input, textarea, select, form, fieldset, legend]
+                    media: [img, figure, figcaption]
+                    list: [ul, ol, li, dl, dt, dd]
+                    table: [table, thead, tbody, tfoot, tr, th, td]
                   extension_policy: allowlist changes require SSOT amendment only
               layout_class_authority_ref: docs/design/topology-layout-class-ssot.yaml
               persistence:
+                draft_model:
+                  description: >
+                    Canvas operations auto-save to _tmp draft state so interrupted sessions can
+                    resume without data loss. The _tmp attribute is removed when apply is called.
+                  auto_save_trigger: any canvas placement, move, resize, or delete operation
+                  promote_trigger: explicit layout_patch:apply call
+                  _tmp_cleared_by: layout_patch:apply
                 backend_actions:
                   - layout_patch:preview
                   - layout_patch:validate
                   - layout_patch:apply
+                  - component_style_design:upsert
                 persists_under:
                   - topology.components_layout_design
                   - topology.ui_topology_tensor layout_patch_json
+                  - topology.components_style_design
               accessibility_ref: docs/system-roadmap.yaml admin_visual_layout_builder keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
               prohibited:
                 - raw className, raw tailwind, or inline style as the normal layout authoring path
                 - frontend direct DB write
                 - authoring layout against bucket rows, catalog-only entries, or non-package roots
-            - id: component_design_editor
-              order: 3
-              user_facing_label: component design editor
-              purpose: >
-                Set presentation properties (color, shape, inline text, links, reactions) for
-                package-bound catalog components and structural_html nodes added in layout editor.
-              responsibilities:
-                - color, shape, spacing, radius, typography via cssTokenRefs and responsiveTokenRefs
-                - inline text content for display text and child text nodes
-                - link href and link target for anchor nodes and link-bearing components
-                - reactionIntent for interaction presentation intent
-                - edit structural_html nodes created in layout_editor with the same design surface
-              style_vocabulary_authority_ref: docs/design/css-dictionary-ssot.yaml
-              memo_tailwind_mapping: >
-                Author-facing "tailwind 等" in product notes maps to bounded css-dictionary token
-                refs and topology-layout-class refs — not freeform tailwind strings.
-              persistence:
-                backend_actions:
-                  - component_style_design:upsert
-                persists_under:
-                  - topology.components_style_design
-              prohibited:
-                - raw tailwind or raw className as the normal component design authoring path
-                - persisting design tokens through layout_patch:apply (layout_patch owns placement/tensor only)
-                - frontend direct DB write
-            - id: visual_view
-              order: 4
-              user_facing_label: visual view
-              purpose: >
-                Read-only composite preview that renders the configured package layout and
-                component_design as the target island would appear.
-              responsibilities:
-                - render persisted layout + component_design state for the selected package
-                - optionally overlay local draft state before explicit apply
-                - remain distinct from layout_editor manipulation canvas (no placement authoring)
-                - remain distinct from post-apply /demo runtime verification handoff
-              projection_refs:
-                - frontend/components/LayoutVisualAuditCanvas.tsx
-                - frontend/runtime/layoutComponentPreview.ts
-                - frontend/runtime/projectionConstructor.ts
-              prohibited:
-                - runtime topology judgment from visual preview
-                - treating visual_view as a substitute for layout_patch validate/apply persistence
-                - frontend direct DB write
+                - persisting design tokens through layout_patch:apply (layout_patch owns placement/tensor only; design uses component_style_design:upsert)
+                - separate tab or surface for design editing (inspector panel is the design surface)
+                - separate read-only visual preview tab (canvas itself renders actual previews)
         prohibited:
           - non_package_roots_for_layout_or_design_authoring
           - ui_topology_component_catalog_only_interpretation_without_db_persistence
@@ -519,16 +528,16 @@ admin_console_workflow_ssot:
     admin_ui_builder:
       route: /admin/ui-builder
       island: frontend/islands/UiBuilderAdmin.tsx
-      ux_label: 部品選択でパッケージ化 → パッケージの layout / component design 編集（step 4）
+      ux_label: 部品選択でパッケージ化 → パッケージの配置・デザイン統合編集（step 4）
       pipeline_step: 4
       domain_ownership:
-        - phase A — component select then package (components_bucket staging + package_generator)
-        - phase B — package-only edit root; child layout (UI 配置) and child component_design (色・形・リアクション等)
-        - ui_builder_authoring_surfaces — package_selection, layout_editor, component_design_editor, visual_view (ref step 4 ui_builder_authoring_surfaces)
-      edit_target_contract_ref: canonical_sequential_authoring_pipeline.steps[4].edit_target_contract
-      ui_builder_authoring_surfaces_ref: canonical_sequential_authoring_pipeline.steps[4].ui_builder_authoring_surfaces
+        - phase A — component select then package (components_bucket icon-card staging + package_generator)
+        - phase B — package-only edit root; unified panel-based layout+design editor (配置・色・形・リアクション等)
+        - ui_builder_authoring_surfaces — package_selection, layout_editor (ref step 4 ui_builder_authoring_surfaces)
         - component-level wiring from registry references
         - post-apply CI / guard handoff (does not change runtime semantics)
+      edit_target_contract_ref: canonical_sequential_authoring_pipeline.steps[4].edit_target_contract
+      ui_builder_authoring_surfaces_ref: canonical_sequential_authoring_pipeline.steps[4].ui_builder_authoring_surfaces
       explicitly_out_of_scope:
         - manifest empty register and logical/physical table authoring (steps 1–3 — /admin/contents)
         - runtime judgment ownership
@@ -576,9 +585,11 @@ admin_console_workflow_ssot:
       route: /admin/contents
       submit: single_submit_sequential_db_update
     - step: 4
-      label: ui_topology_select_package_then_edit_package_children
+      label: ui_topology_select_package_then_unified_layout_design_editor
       route: /admin/ui-builder
-      submit: internal_sequential_submits_per_4_1_select_and_package_4_2_package_layout_and_component_design
+      submit: internal_sequential_submits_per_4_1_select_and_package_4_2_unified_panel_layout_and_design
+      panel_layout: full_width_canvas_with_fixed_peripheral_panels
+      auto_save: _tmp_draft_on_canvas_ops_apply_promotes_and_removes_tmp
     - step: post
       label: hub_relation_navigation
       route: /admin/manifests
