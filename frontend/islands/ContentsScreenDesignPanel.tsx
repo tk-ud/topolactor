@@ -678,7 +678,7 @@ export default function ContentsScreenDesignPanel({
     const nextKinds = has
       ? design.operationKinds.filter((k) => k !== kind)
       : [...design.operationKinds, kind];
-    const resolvedKinds = nextKinds.length > 0 ? nextKinds : ["list"];
+    const resolvedKinds: ScreenOperationKind[] = nextKinds.length > 0 ? nextKinds : ["list"];
     const nextBindings = has
       ? design.operationEntityBindings.filter((b) => b.operationKind !== kind)
       : [
