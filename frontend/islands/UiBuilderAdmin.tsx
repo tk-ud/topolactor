@@ -145,7 +145,7 @@ type PaletteEntry = {
   routeKey?: string;
 };
 
-type TabId = "ci" | "catalog" | "bucket" | "css" | "layout" | "design";
+type TabId = "ci" | "catalog" | "bucket" | "layout" | "design";
 
 // Gap 1: Lifecycle state machine
 type LifecyclePhase =
@@ -323,8 +323,8 @@ const ERROR_CODE_FIX: Record<string, { cause: string; suggestion: string; naviga
   },
   CSS_TOKEN_INVALID: {
     cause: "CSSトークン参照が無効です",
-    suggestion: "「CSS設定」タブで正しいトークンを選択してください",
-    navigateTo: "css",
+    suggestion: "「デザイン設定」タブで正しいトークンを選択してください",
+    navigateTo: "design",
   },
   LAYOUT_CLASS_REF_INVALID: {
     cause: "レイアウトクラス参照が解決できません",
@@ -651,7 +651,7 @@ function ActionableValidationErrorPanel({
             const tab = fix.navigateTo;
             const label = tab === "bucket" ? "→ 部品登録タブへ移動"
               : tab === "layout" ? "→ レイアウト選択へ移動"
-              : "→ CSS設定タブへ移動";
+              : "→ デザイン設定タブへ移動";
             navButtons.push(
               <button
                 key={tab}
@@ -3870,9 +3870,8 @@ function LayoutBuilderSection({
 
 const TABS: { id: TabId; label: string; hint?: string }[] = [
   { id: "bucket", label: "部品選択でパッケージ化", hint: "複数選択 → 1 回でパッケージ化" },
-  { id: "layout", label: "配置", hint: "画面上の配置・枠・レイアウトクラス" },
-  { id: "design", label: "デザイン設定（色・形）", hint: "色・形・反応・イベント配線" },
-  { id: "css", label: "スタイル辞書", hint: "色・余白などの共通スタイル" },
+  { id: "layout", label: "配置を編集", hint: "画面上の配置・構造・レイアウトクラス（位置・スロット・順序）" },
+  { id: "design", label: "デザインを編集", hint: "色・形・反応・CSS トークン（cssTokenRefs）をパッケージ単位で保存" },
 ];
 
 // ─── メインエクスポート ────────────────────────────────────────────────────────
@@ -4188,8 +4187,12 @@ function PackageDesignPanel({
   const [reactionIntent, setReactionIntent] = useState("");
   const [cssTokenRefs, setCssTokenRefs] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
+  const [saveOk, setSaveOk] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
   const [packageComponents, setPackageComponents] = useState<AdminPackageComponentRow[]>([]);
   const [componentsLoadStatus, setComponentsLoadStatus] = useState<string | null>(null);
+
+  const canSave = Boolean(selectedPackageId && componentId && designName.trim());
 
   const toggleCssToken = (tokenKey: string) => {
     setCssTokenRefs((prev) =>
@@ -4202,6 +4205,8 @@ function PackageDesignPanel({
       setPackageComponents([]);
       setComponentId("");
       setComponentsLoadStatus(null);
+      setStatus(null);
+      setSaveOk(null);
       return;
     }
     (async () => {
@@ -4225,24 +4230,42 @@ function PackageDesignPanel({
   }, [selectedPackageId]);
 
   const handleUpsertDesign = async () => {
-    if (!selectedPackageId || !componentId || !designName) {
-      setStatus("パッケージ・部品 ID・デザイン名を入力してください。");
+    if (!canSave) {
+      setStatus("パッケージ・部品・デザイン名を指定してください。");
+      setSaveOk(false);
       return;
     }
     if (!(await confirm("部品デザインを保存します。よろしいですか？"))) {
       return;
     }
-    const body = await dispatchAdminOp("component_style_design", "upsert", {
-      packageId: selectedPackageId,
-      componentId,
-      name: designName,
-      classname: classname.trim(),
-      tailwind: tailwind.trim(),
-      cssTokenRefs,
-      reactionIntent: reactionIntent.trim(),
-    });
-    setStatus(body?.success ? "部品デザインを保存しました。" : "保存に失敗しました。");
+    setSaving(true);
+    setStatus(null);
+    setSaveOk(null);
+    try {
+      const body = await dispatchAdminOp("component_style_design", "upsert", {
+        packageId: selectedPackageId,
+        componentId,
+        name: designName.trim(),
+        classname: classname.trim(),
+        tailwind: tailwind.trim(),
+        cssTokenRefs,
+        reactionIntent: reactionIntent.trim(),
+      });
+      const ok = Boolean(body?.success);
+      setSaveOk(ok);
+      setStatus(ok
+        ? "デザイン設定を保存しました。"
+        : (body?.errors?.[0]?.message ?? "保存に失敗しました。"));
+    } catch (e) {
+      setSaveOk(false);
+      setStatus(`保存エラー: ${e}`);
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const noPackage = !selectedPackageId;
+  const noComponent = selectedPackageId && !componentId;
 
   return (
     <section class="mb-4 rounded border border-slate-200 p-3 text-sm">
@@ -4250,21 +4273,37 @@ function PackageDesignPanel({
         packages={packages}
         selectedPackageId={selectedPackageId}
         onSelectPackage={onSelectPackage}
-        heading="デザイン設定（色・形・トークン）"
+        heading="デザインを編集（component_design child）"
       />
-      <p class="text-muted-xs mb-2 text-amber-800">
-        色・形・トークン・リアクション意図を保存します。
-        「配置」タブでは位置と枠のみ編集してください。
+
+      {noPackage && (
+        <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+          <strong>パッケージ未選択</strong> — 上でパッケージを選択してください。デザイン設定の保存はパッケージが必須です。
+        </div>
+      )}
+
+      {!noPackage && noComponent && packageComponents.length === 0 && !componentsLoadStatus && (
+        <div class="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900" role="alert">
+          <strong>部品なし</strong> — このパッケージに部品が登録されていません。「部品選択でパッケージ化」タブでパッケージ化してください。
+        </div>
+      )}
+
+      <p class="text-muted-xs mb-2">
+        cssTokenRefs・color・spacing・radius・typography・reactionIntent を保存します。
+        配置（x/y/width/height）は「配置を編集」タブで保存してください。
       </p>
+
       {selectedPackageId && (
         <PackageWiringEditor
           selectedPackageId={selectedPackageId}
           packageComponents={packageComponents}
         />
       )}
+
       {componentsLoadStatus && (
         <p class="mb-2 text-xs text-slate-500">{componentsLoadStatus}</p>
       )}
+
       <div class="grid gap-2 sm:grid-cols-2">
         <label class="text-xs">
           部品
@@ -4288,18 +4327,44 @@ function PackageDesignPanel({
             class="mt-1 w-full rounded border px-2 py-1 text-xs"
             value={designName}
             onInput={(e) => setDesignName((e.target as HTMLInputElement).value)}
+            placeholder="例: primary_card_design"
           />
         </label>
         <label class="text-xs sm:col-span-2">
-          classname（補助）
+          リアクション意図（hover / focus 等）
+          <input
+            class="mt-1 w-full rounded border px-2 py-1 text-xs"
+            value={reactionIntent}
+            onInput={(e) => setReactionIntent((e.target as HTMLInputElement).value)}
+            placeholder="例: ホバーで背景を primary に変化"
+          />
+        </label>
+      </div>
+
+      <div class="mt-3 rounded border border-slate-100 bg-slate-50 p-2">
+        <p class="mb-1 text-xs font-semibold text-slate-700">
+          cssTokenRefs — CSS 辞書トークン（保存の正式参照）
+        </p>
+        <p class="text-muted-xs mb-2">
+          選択後は「デザイン設定を保存」でデザイン設定として保存されます。
+        </p>
+        <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
+      </div>
+
+      <AdvancedManualOverride title="上級者向け — classname / tailwind 手入力（補助メモのみ・保存対象外）">
+        <p class="text-muted-xs mb-2">
+          通常は cssTokenRefs を使ってください。入力した文字列は補助メモとしてのみ保存され、投影の正式参照にはなりません。
+        </p>
+        <label class="mb-2 block text-xs">
+          classname（補助メモ）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             value={classname}
             onInput={(e) => setClassname((e.target as HTMLInputElement).value)}
-            placeholder="例: btn-primary"
+            placeholder="例: btn-primary（cssTokenRefs を優先）"
           />
         </label>
-        <label class="text-xs sm:col-span-2">
+        <label class="block text-xs">
           tailwind（非正本・補助メモ）
           <input
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
@@ -4308,24 +4373,33 @@ function PackageDesignPanel({
             placeholder="辞書トークンを優先してください"
           />
         </label>
-        <label class="text-xs sm:col-span-2">
-          リアクション意図（hover / focus 等の説明）
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 text-xs"
-            value={reactionIntent}
-            onInput={(e) => setReactionIntent((e.target as HTMLInputElement).value)}
-            placeholder="例: ホバーで背景を primary に"
-          />
-        </label>
-      </div>
-      <div class="mt-3 rounded border border-slate-100 bg-slate-50 p-2">
-        <p class="mb-1 text-xs font-medium text-slate-700">cssTokenRefs（CSS 辞書）</p>
-        <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
-      </div>
-      <button type="button" class="btn-primary mt-2 text-xs" onClick={handleUpsertDesign}>
-        デザイン設定を保存
+      </AdvancedManualOverride>
+
+      {!canSave && selectedPackageId && (
+        <p class="mt-2 text-xs text-amber-800">
+          {!componentId ? "部品を選択してください。" : "デザイン名を入力してください。"}
+        </p>
+      )}
+
+      <button
+        type="button"
+        class={`btn-primary mt-3 text-xs ${(!canSave || saving) ? "opacity-50 cursor-not-allowed" : ""}`}
+        onClick={handleUpsertDesign}
+        disabled={!canSave || saving}
+        aria-disabled={!canSave || saving}
+      >
+        {saving ? "保存中…" : "デザイン設定を保存"}
       </button>
-      {status && <p class="mt-2 text-xs">{status}</p>}
+
+      {status && (
+        <p
+          class={`mt-2 text-xs font-semibold ${saveOk === true ? "text-green-700" : saveOk === false ? "text-red-700" : "text-slate-700"}`}
+          role={saveOk === false ? "alert" : "status"}
+        >
+          {status}
+        </p>
+      )}
+
       <ConfirmDialogHost />
     </section>
   );
@@ -4389,14 +4463,13 @@ export default function UiBuilderAdmin(): JSX.Element {
         {activeTab === "bucket" && (
           <BucketSection onNavigate={setActiveTab} onPackaged={handlePackaged} />
         )}
-        {activeTab === "css" && <CssTokenSelectorSection />}
         {activeTab === "layout" && (
           <>
             <PackageScopeSelector
               packages={packages}
               selectedPackageId={selectedPackageId}
               onSelectPackage={setSelectedPackageId}
-              heading="配置（パッケージ単位）"
+              heading="配置を編集（layout child）"
             />
             <LayoutBuilderSection
               onNavigate={setActiveTab}
@@ -4431,10 +4504,21 @@ export default function UiBuilderAdmin(): JSX.Element {
           参照専用: CI ガイダンス（編集ルートではない）
         </summary>
         <p class="mt-2 text-xs text-slate-500">
-          保存前の注意喚起です。配置・デザインの編集は上の「配置」「デザイン設定」タブで行います。
+          保存前の注意喚起です。配置・デザインの編集は上の「配置を編集」「デザインを編集」タブで行います。
         </p>
         <div class="mt-2">
           <CiAttentionGuidanceSection />
+        </div>
+      </details>
+      <details class="mb-4 rounded border border-slate-200 p-3 text-sm">
+        <summary class="cursor-pointer font-medium text-slate-700">
+          参照専用: CSS 辞書トークン一覧（保存は「デザインを編集」タブで行います）
+        </summary>
+        <p class="mt-2 text-xs text-slate-500">
+          ここでは選択しても保存されません。cssTokenRefs の保存は「デザインを編集」タブ → cssTokenRefs セクションを使ってください。
+        </p>
+        <div class="mt-2">
+          <CssTokenSelectorSection />
         </div>
       </details>
     </main>

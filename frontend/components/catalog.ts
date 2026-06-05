@@ -28,6 +28,11 @@ export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] =
       sourcePath: "frontend/components/Table.tsx",
     },
     {
+      componentKey: "box.primitive",
+      componentKind: "layout/box",
+      sourcePath: "frontend/components/Box.tsx",
+    },
+    {
       componentKey: "card.primitive",
       componentKind: "display/card",
       sourcePath: "frontend/components/Card.tsx",
@@ -224,6 +229,19 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["selectable", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
+  },
+  {
+    componentKey: "box.primitive",
+    componentKind: "layout/box",
+    sourcePath: "frontend/components/Box.tsx",
+    componentFamily: "primitive",
+    semanticRole: "layout_shell",
+    visualRole: "box",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: ["accepts_children", "accepts_layout", "accepts_design"],
+    runtimeConnected: true,
+    registrationRequired: true,
+    notes: "neutral layout container — no semantic meaning; use instead of card/panel for structural placement",
   },
   {
     componentKey: "card.primitive",

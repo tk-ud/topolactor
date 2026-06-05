@@ -1,4 +1,4 @@
-import { h, type VNode } from "preact";
+import { h, type JSX, type VNode } from "preact";
 import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
@@ -87,6 +87,7 @@ import { NormalizeAddressCandidate } from "../components/NormalizeAddressCandida
 import { LookupCandidateConfirmPanel } from "../components/LookupCandidateConfirmPanel.tsx";
 import { BulkImportCandidatePanel } from "../components/BulkImportCandidatePanel.tsx";
 import { DocumentCanvasTemplateEditor } from "../components/DocumentCanvasTemplateEditor.tsx";
+import Box from "../components/Box.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
@@ -1856,6 +1857,22 @@ function documentCanvasTemplateEditorFactory(spec: RuntimeComponentSpec): Render
   };
 }
 
+function boxFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const style = (typeof props.style === "object" && props.style !== null && !Array.isArray(props.style))
+    ? props.style as Record<string, string>
+    : undefined;
+  return {
+    ok: true,
+    node: h(Box, {
+      className: spec.className,
+      style,
+      role: props.role as JSX.HTMLAttributes<HTMLDivElement>["role"],
+      "aria-label": props["aria-label"] as string | undefined,
+    }),
+  };
+}
+
 function thinPreviewFactory(component: any, requiredBinding?: string): (spec: RuntimeComponentSpec)=>RenderResult {
   return (spec) => {
     if (requiredBinding) { const check = requireBinding(spec, requiredBinding); if (!check.ok) return check; }
@@ -2009,4 +2026,5 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["design_token/layout_grid_editor"], render: layoutGridEditorFactory },
   { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
   { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
+  { componentKinds: ["layout/box"], render: boxFactory },
 ];

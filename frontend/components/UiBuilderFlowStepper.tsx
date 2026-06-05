@@ -1,14 +1,13 @@
 import { JSX } from "preact";
 
 /** Tab IDs for /admin/ui-builder — must stay in sync with UiBuilderAdmin.tsx TabId */
-export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "css" | "layout" | "design";
+export type UiBuilderTabId = "ci" | "catalog" | "bucket" | "layout" | "design";
 
 /** 通常表示用タブラベル（内部 TabId は主導線に出さない） */
 export const UI_BUILDER_TAB_LABELS: Record<UiBuilderTabId, string> = {
   bucket: "部品選択でパッケージ化",
-  layout: "配置",
-  design: "デザイン設定",
-  css: "スタイル辞書",
+  layout: "配置を編集",
+  design: "デザインを編集",
   catalog: "部品カタログ（参照）",
   ci: "CI ガイダンス（参照）",
 };
@@ -34,16 +33,16 @@ export const UI_BUILDER_FLOW_STEPS: StepSpec[] = [
   },
   {
     id: 2,
-    label: "配置",
+    label: "配置を編集",
     detail:
-      "パッケージを選び、画面上の配置・枠・レイアウトクラスを保存します。色・形はデザイン設定タブです。",
+      "パッケージを選び、x/y/width/height・slotKey・layoutClassRefs を保存します（layout child）。色・形は「デザインを編集」タブです。",
     tabTarget: "layout",
   },
   {
     id: 2.5,
-    label: "デザイン設定（色・形）",
+    label: "デザインを編集",
     detail:
-      "色・形・反応・イベント配線を整え、デザイン設定として保存します。",
+      "cssTokenRefs・color・spacing・radius・reactionIntent を保存します（component_design child）。配置（位置）は「配置を編集」タブです。",
     tabTarget: "design",
   },
   {
@@ -58,7 +57,6 @@ export function getActiveStepIds(activeTab: UiBuilderTabId): number[] {
   if (activeTab === "bucket") return [1];
   if (activeTab === "layout") return [2];
   if (activeTab === "design") return [2.5];
-  if (activeTab === "css") return [2, 2.5];
   return [];
 }
 
