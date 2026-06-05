@@ -314,8 +314,16 @@ Deno.test("UiBuilderAdmin: layout patch JSON uses buildVisualLayoutPatchJson onl
   );
   assertEquals(src.includes("function buildLayoutPatchJson"), false,
     "legacy buildLayoutPatchJson must be removed");
-  assert(src.includes("buildVisualLayoutPatchJson(draftNodes, selectedLayoutClassRefs)"),
-    "tensorPatchJson must be built via buildVisualLayoutPatchJson");
+  const patchBuildStart = src.indexOf(
+    "const tensorPatchJson = buildVisualLayoutPatchJson",
+  );
+  assert(patchBuildStart >= 0, "tensorPatchJson must be built via buildVisualLayoutPatchJson");
+  const patchBuild = src.slice(patchBuildStart, src.indexOf("const effectiveLayoutId", patchBuildStart));
+  assert(patchBuild.includes("draftNodes"), "buildVisualLayoutPatchJson must receive draftNodes");
+  assert(
+    patchBuild.includes("selectedLayoutClassRefs"),
+    "buildVisualLayoutPatchJson must receive selectedLayoutClassRefs",
+  );
   assert(src.includes("submittedTensorPatchJson = tensorPatchJson"),
     "preview/validate/apply must submit the visual layout patch");
 });
@@ -324,13 +332,16 @@ Deno.test("UiBuilderAdmin: component_style_design upsert retains design editor f
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  const upsertMatches = [
-    ...src.matchAll(
-      /dispatchAdminOp\("component_style_design", "upsert"[\s\S]*?\}\);/g,
-    ),
-  ];
-  assert(upsertMatches.length >= 1, "component_style_design upsert dispatch must exist");
-  const allUpsertBlocks = upsertMatches.map((m) => m[0]).join("\n");
+  assert(
+    /dispatchAdminOp\([\s\S]*?"component_style_design"[\s\S]*?"upsert"/.test(src),
+    "component_style_design upsert dispatch must exist",
+  );
+  const payloadStart = src.indexOf("const buildDesignPayload = () =>");
+  assert(payloadStart >= 0, "buildDesignPayload helper must exist for upsert/save_tmp");
+  const payloadBlock = src.slice(
+    payloadStart,
+    src.indexOf("const reloadSavedDesigns", payloadStart),
+  );
   for (const field of [
     "cssTokenRefs",
     "responsiveTokenRefs: filterEmptyResponsiveRules",
@@ -340,10 +351,14 @@ Deno.test("UiBuilderAdmin: component_style_design upsert retains design editor f
     "layoutNodeId",
   ]) {
     assert(
-      allUpsertBlocks.includes(field),
-      `upsert payload surface must include ${field} across layout/design editors`,
+      payloadBlock.includes(field),
+      `design payload must include ${field} for upsert/save_tmp`,
     );
   }
+  assert(
+    /"component_style_design"[\s\S]*?"upsert"[\s\S]*?buildDesignPayload\(\)/.test(src),
+    "upsert must submit buildDesignPayload()",
+  );
 });
 
 Deno.test("UiBuilderAdmin: layout_patch apply opens post-apply handoff modal", async () => {
