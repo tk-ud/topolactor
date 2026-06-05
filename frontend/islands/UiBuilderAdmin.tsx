@@ -4343,7 +4343,7 @@ function PackageDesignPanel({
 
       <div class="mt-3 rounded border border-slate-100 bg-slate-50 p-2">
         <p class="mb-1 text-xs font-semibold text-slate-700">
-          cssTokenRefs — CSS 辞書トークン（canonical persistence）
+          cssTokenRefs — CSS 辞書トークン（保存の正式参照）
         </p>
         <p class="text-muted-xs mb-2">
           選択後は「デザイン設定を保存」で component_design child に保存されます。
@@ -4351,9 +4351,9 @@ function PackageDesignPanel({
         <CssTokenPicker selectedTokenRefs={cssTokenRefs} onToggle={toggleCssToken} />
       </div>
 
-      <AdvancedManualOverride title="上級者向け — raw classname / tailwind（補助メモのみ・canonical persistence 対象外）">
+      <AdvancedManualOverride title="上級者向け — raw classname / tailwind（補助メモのみ・保存対象外）">
         <p class="text-muted-xs mb-2">
-          通常は cssTokenRefs を使ってください。raw 文字列は補助メモとしてのみ保存され、runtime 投影の canonical 参照にはなりません。
+          通常は cssTokenRefs を使ってください。raw 文字列は補助メモとしてのみ保存され、runtime 投影の正式参照にはなりません。
         </p>
         <label class="mb-2 block text-xs">
           classname（補助メモ）
@@ -4361,7 +4361,7 @@ function PackageDesignPanel({
             class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
             value={classname}
             onInput={(e) => setClassname((e.target as HTMLInputElement).value)}
-            placeholder="例: btn-primary（canonical は cssTokenRefs を優先）"
+            placeholder="例: btn-primary（cssTokenRefs を優先）"
           />
         </label>
         <label class="block text-xs">
