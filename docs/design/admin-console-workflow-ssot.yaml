@@ -15,12 +15,12 @@ admin_console_workflow_ssot:
       - /admin/ui-builder
 
   purpose:
-    - keep the admin authoring workflow aligned with runtime-orchestration route authority
-    - define the canonical sequential authoring pipeline (single submit per numbered step, sequential DB persistence)
+    - keep the admin authoring routes aligned with runtime-orchestration route authority
+    - define the canonical sequential authoring pipeline (single submit per numbered step, sequential DB persistence) for /admin/contents steps 1–3
     - define /admin/contents as steps 1–3 of that pipeline (manifest shell through physical page binding)
-    - define /admin/ui-builder as step 4 (component select → package; then package-only authoring of layout and component design children)
-    - define step 4 canvas_workspace_contract: full-width canvas workspace with docked panels (component bucket, html tag palette, layer inspector, design inspector, status bar); no separate layout/design/preview surfaces
-    - define /admin/manifests as post-pipeline page-group hub / relation / navigation management (outside steps 1–4)
+    - define /admin/ui-builder as a canvas workspace route (NOT a pipeline step): full-width canvas with docked panels; no separate surfaces, no sequential step framing
+    - define canvas_workspace_contract: panel layout, _tmp auto-save, layer_inspector, design_inspector, html_tag allowlist
+    - define /admin/manifests as post-contents hub / relation / navigation management
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
   does_not_own:
@@ -267,68 +267,60 @@ admin_console_workflow_ssot:
           - unresolved topology.physical_tables table_ref mismatch must not silent_no_op
         handoff_after_success: /admin/ui-builder
 
-      - step: 4
-        label: ui_topology_package_then_canvas_workspace_edit
-        route: /admin/ui-builder
-        user_facing_goal: >
-          部品を選んでパッケージ化し、canvas workspace 上で配置・デザインを統合編集する。
-          canvas が主対象であり、画面遷移・タブ切り替えなしで操作が完結する。
-        design_rationale: >
-          Canvas renders actual catalog component previews — not wireframe rectangles or abstract boxes.
-          Because the canvas IS the preview, a separate read-only visual_view surface is unnecessary.
-          Because design is applied to the selected canvas object via a docked inspector panel,
-          a separate component_design_editor surface is unnecessary.
-          Implementation MUST NOT introduce tabs, steps, or separate routes for layout vs design vs preview.
-        edit_target_contract:
-          sole_authoring_target: package
-          rule: >
-            After packaging, the canvas workspace selects and mutates packages only.
-            Bucket rows, bare component catalog entries, and unpackaged component ids are not
-            parallel edit targets. Placement and design are both scoped to the selected package.
-        ux_phases:
-          - phase: select_and_package
-            user_facing: 部品選択 → パッケージ化
-            note: >
-              Authors pick catalog components from the bucket panel (icon-card format, not text list).
-              A single packaging submit creates or updates the package entity and its registry links.
-          - phase: canvas_workspace_edit
-            user_facing: canvas workspace で配置・デザインを編集
-            note: >
-              Full-width canvas is the primary workspace. Author drags components onto canvas,
-              selects placed nodes, and edits placement + design in docked inspector panels
-              without leaving the canvas workspace or switching surfaces.
-        authority_ref:
-          - docs/framework-policy.yaml ui_topology_tensor_persistence
-          - docs/design/db-schema.yaml packages / components_layout_design / components_style_design
-        internal_sequential_submits:
-          note: >
-            Step 4 has two user phases. Phase B (canvas workspace) never leaves the canvas workspace;
-            bucket, catalog-only, or free-floating components are not the primary canvas objects.
-          sub_steps:
-            - sub_step: 4.1
-              label: component_select_and_package
-              user_facing_label: 部品選択でパッケージ化
-              responsibility:
-                - present components_bucket as icon-style small-format cards (component_key, source_path, component_kind)
-                - user selects one or more components; packaging submit follows for route_key
-                - backend: package_generator generate then promote; yields package_id and linked layout_id, wiring_id, component_id set
-              prohibited:
-                - text-only list presentation for bucket components
-                - separate author-facing register step before packaging
-                - opening canvas workspace before a package exists
-            - sub_step: 4.2
-              label: canvas_workspace_edit
-              user_facing_label: canvas workspace で配置・デザインを編集
-              responsibility:
-                - all placement AND design authoring happens inside the unified canvas workspace
-                - require package selection as the sole edit root
-                - layout_patch pipeline: preview → validate → apply for placement persistence
-                - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
-                - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
-              prohibited:
-                - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
-                - treating promoted_palette component list as the edit root instead of package
-                - separate tab, route, or surface for placement vs design vs preview
+  # ---------------------------------------------------------------------------
+  # UI Builder canvas workspace (/admin/ui-builder)
+  # NOT a pipeline step — a standalone canvas workspace route entered after
+  # contents pipeline (steps 1–3) produces a manifest with physical binding.
+  # ---------------------------------------------------------------------------
+
+  ui_builder_canvas_workspace:
+    route: /admin/ui-builder
+    entered_after: canonical_sequential_authoring_pipeline steps 1–3
+    user_facing_goal: >
+      部品を選んでパッケージ化し、canvas workspace 上で配置・デザインを統合編集する。
+      canvas が主対象であり、画面遷移・タブ切り替えなしで操作が完結する。
+    design_rationale: >
+      Canvas renders actual catalog component previews — not wireframe rectangles or abstract boxes.
+      Because the canvas IS the preview, a separate read-only preview surface is unnecessary.
+      Because design is applied to the selected canvas object via a docked inspector panel,
+      a separate design editor surface is unnecessary.
+      Implementation MUST NOT introduce tabs, separate routes, or pipeline-step framing
+      for placement vs design vs preview within this workspace.
+    edit_target_contract:
+      sole_authoring_target: package
+      rule: >
+        The canvas workspace selects and mutates packages only.
+        Bucket rows, bare component catalog entries, and unpackaged component ids are not
+        parallel edit targets. Placement and design are both scoped to the selected package.
+    authoring_phases:
+      note: >
+        Two user-facing phases. Phase B (canvas workspace) never leaves the canvas workspace;
+        bucket, catalog-only, or free-floating components are not the primary canvas objects.
+      phases:
+        - phase: A
+          label: component_select_and_package
+          user_facing_label: 部品選択でパッケージ化
+          responsibility:
+            - present components_bucket as icon-style small-format cards (component_key, source_path, component_kind)
+            - user selects one or more components; packaging submit follows for route_key
+            - backend: package_generator generate then promote; yields package_id and linked layout_id, wiring_id, component_id set
+          prohibited:
+            - text-only list presentation for bucket components
+            - separate author-facing register step before packaging
+            - opening canvas workspace before a package exists
+        - phase: B
+          label: canvas_workspace_edit
+          user_facing_label: canvas workspace で配置・デザインを編集
+          responsibility:
+            - all placement AND design authoring happens inside the unified canvas workspace
+            - require package selection as the sole edit root
+            - layout_patch backend actions: preview → validate → apply for placement persistence
+            - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
+            - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
+          prohibited:
+            - authoring layout or design against bucket rows, catalog-only entries, or non-package roots
+            - treating promoted_palette component list as the edit root instead of package
+            - separate tab, route, or surface for placement vs design vs preview
         canvas_workspace_contract:
           overview: >
             The canvas workspace is the primary UI of /admin/ui-builder.
@@ -445,13 +437,19 @@ admin_console_workflow_ssot:
             - frontend direct DB write
             - non-package roots for layout or design authoring
             - implementation_convenience_shortcuts_that_add_surfaces_not_in_this_contract
-        prohibited:
-          - non_package_roots_for_layout_or_design_authoring
-          - ui_topology_component_catalog_only_interpretation_without_db_persistence
-          - direct_DB_write_from_frontend
-          - tab_based_or_step_based_surface_separation_for_layout_vs_design_vs_preview
+    prohibited:
+      - non_package_roots_for_layout_or_design_authoring
+      - ui_topology_component_catalog_only_interpretation_without_db_persistence
+      - direct_DB_write_from_frontend
+      - tab_based_or_step_based_surface_separation_for_layout_vs_design_vs_preview
+      - framing_ui_builder_as_a_pipeline_step_or_workflow_step
 
-    post_pipeline_surfaces:
+  # ---------------------------------------------------------------------------
+  # Other admin routes (post-contents, master rosters)
+  # ---------------------------------------------------------------------------
+
+  other_admin_routes:
+    post_contents_surfaces:
       - route: /admin/manifests
         label: created_manifest_hub_relation_navigation
         note: >
@@ -473,18 +471,19 @@ admin_console_workflow_ssot:
           seed, suspension window, state_note). last_login_at is readonly projection.
 
   shared_authoring_boundary:
-    persistence_model_ref: canonical_sequential_authoring_pipeline.persistence_model
+    contents_pipeline_persistence_model_ref: canonical_sequential_authoring_pipeline.persistence_model
     prohibited:
       - direct_DB_write_from_admin_UI
       - silent_fallback_or_silent_write
       - adding_noncanonical_admin_or_dev_admin_helper_routes
       - treating_frontend_projection_as_runtime_judgment_owner
-      - merging pipeline steps 1, 2, 2.5, 3 into one frontend submit unless backend exposes one registered bundle action for that atomicity
+      - merging contents pipeline steps 1, 2, 2.5, 3 into one frontend submit unless backend exposes one registered bundle action for that atomicity
+      - framing_ui_builder_as_a_pipeline_step
 
   page_responsibility:
     admin_index:
       route: /admin
-      responsibility: canonical admin workflow entry; presents sequential pipeline steps 1→4 then post-pipeline /admin/manifests
+      responsibility: canonical admin authoring entry; presents contents pipeline (steps 1→3) → /admin/ui-builder canvas workspace → optional /admin/manifests
 
     admin_contents:
       route: /admin/contents
@@ -512,7 +511,7 @@ admin_console_workflow_ssot:
           - canonical_admin_route_/admin/import
           - frontend_db_direct_write
       explicitly_out_of_scope:
-        - component bucket, package_generator, layout_patch (step 4 — /admin/ui-builder only)
+        - component bucket, package_generator, layout_patch (/admin/ui-builder canvas workspace only)
         - created manifest hub membership and inter-manifest navigation (post-pipeline — /admin/manifests)
         - actual initial-data business-row insertion (content_bundle explicit route, not default form submit)
         - presenting file import as a canonical admin route
@@ -523,23 +522,22 @@ admin_console_workflow_ssot:
     admin_ui_builder:
       route: /admin/ui-builder
       island: frontend/islands/UiBuilderAdmin.tsx
-      ux_label: 部品選択でパッケージ化 → パッケージの配置・デザイン統合編集（step 4）
-      pipeline_step: 4
+      ux_label: 部品選択でパッケージ化 → canvas workspace で配置・デザインを統合編集
+      entered_after: /admin/contents contents pipeline completion
       domain_ownership:
         - phase A — component select then package (components_bucket icon-card staging + package_generator)
-        - phase B — package-only edit root; unified panel-based layout+design editor (配置・色・形・リアクション等)
-        - canvas_workspace_contract: full-width canvas + docked panels (ref step 4 canvas_workspace_contract)
+        - phase B — package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
+        - canvas_workspace_contract: full-width canvas + docked panels (ref ui_builder_canvas_workspace.canvas_workspace_contract)
         - component-level wiring from registry references
         - post-apply CI / guard handoff (does not change runtime semantics)
-      edit_target_contract_ref: canonical_sequential_authoring_pipeline.steps[4].edit_target_contract
-      canvas_workspace_contract_ref: canonical_sequential_authoring_pipeline.steps[4].canvas_workspace_contract
+      edit_target_contract_ref: ui_builder_canvas_workspace.edit_target_contract
+      canvas_workspace_contract_ref: ui_builder_canvas_workspace.canvas_workspace_contract
       explicitly_out_of_scope:
-        - manifest empty register and logical/physical table authoring (steps 1–3 — /admin/contents)
+        - manifest empty register and logical/physical table authoring (contents pipeline steps 1–3 — /admin/contents)
         - runtime judgment ownership
         - direct_DB_write_from_frontend
         - raw dispatcher fields as the normal-view authoring path
-      authoring_workflow:
-        ref: canonical_sequential_authoring_pipeline.steps[4].internal_sequential_submits
+      authoring_phases_ref: ui_builder_canvas_workspace.authoring_phases
 
     admin_manifests:
       route: /admin/manifests
@@ -553,42 +551,46 @@ admin_console_workflow_ssot:
         - navigation ordering and hub_navigation_ordering
         - page-group continuity management across created manifests
       explicitly_out_of_scope:
-        - pipeline steps 1–4 (manifest shell, tables, relationships, physical bind, ui bucket/package/layout)
+        - contents pipeline steps 1–3 and /admin/ui-builder canvas workspace (manifest shell, tables, relationships, physical bind, ui bucket/package/layout)
         - raw manifest JSON editing in the default path
 
-  canonical_workflow:
+  canonical_authoring_order:
     note: >
-      Primary authoring order is canonical_sequential_authoring_pipeline (steps 1, 2, 2.5, 3, 4).
-      /admin/manifests is after page exists, not a substitute for steps 1–3.
-    - step: 1
-      label: manifest_empty_register
-      route: /admin/contents
-      submit: single_submit_sequential_db_update
-    - step: 2
-      label: logical_table_definitions
-      route: /admin/contents
-      submit: single_submit_sequential_db_update
-    - step: 2.5
-      label: relationship_configuration
-      route: /admin/contents
-      submit: single_submit_sequential_db_update
-      relationship_remote_targets:
-        list_action: manifest:list_relationship_remote_targets
-        status_filter: active
-    - step: 3
-      label: physical_table_and_page_binding
-      route: /admin/contents
-      submit: single_submit_sequential_db_update
-    - step: 4
-      label: ui_topology_select_package_then_unified_layout_design_editor
+      Primary authoring order: /admin/contents (sequential pipeline steps 1–3) →
+      /admin/ui-builder (canvas workspace, entered after step 3 success) →
+      /admin/manifests (optional post-contents hub/relation/navigation management).
+      /admin/ui-builder is NOT a pipeline step; it is a separate canvas workspace route.
+    contents_pipeline:
+      - step: 1
+        label: manifest_empty_register
+        route: /admin/contents
+        submit: single_submit_sequential_db_update
+      - step: 2
+        label: logical_table_definitions
+        route: /admin/contents
+        submit: single_submit_sequential_db_update
+      - step: 2.5
+        label: relationship_configuration
+        route: /admin/contents
+        submit: single_submit_sequential_db_update
+        relationship_remote_targets:
+          list_action: manifest:list_relationship_remote_targets
+          status_filter: active
+      - step: 3
+        label: physical_table_and_page_binding
+        route: /admin/contents
+        submit: single_submit_sequential_db_update
+    canvas_workspace_entry:
+      label: ui_topology_package_then_canvas_workspace_edit
       route: /admin/ui-builder
-      submit: internal_sequential_submits_per_4_1_select_and_package_4_2_unified_panel_layout_and_design
+      entered_after: step 3 physical_table_and_page_binding success
+      authoring_model: canvas_workspace (ref ui_builder_canvas_workspace)
       panel_layout: full_width_canvas_with_fixed_peripheral_panels
       auto_save: _tmp_draft_on_canvas_ops_apply_promotes_and_removes_tmp
-    - step: post
+    post_contents_entry:
       label: hub_relation_navigation
       route: /admin/manifests
-      note: optional after steps 1–4; not part of ui-builder discussion scope
+      note: optional after contents pipeline; not part of canvas workspace scope
 
   removed_legacy_wrapper_routes:
     policy: deleted
@@ -618,7 +620,7 @@ admin_console_workflow_ssot:
       - silent_fallback_on_unknown_operator
     searchConditions:
       interpretation: abstract_operator_vocabulary_over_initialDataRows
-      operators_ref: canonical_sequential_authoring_pipeline.steps[2].search_aggregation_display.search_conditions.searchConditions
+      operators_ref: canonical_sequential_authoring_pipeline.steps[2 logical_table_definitions].search_aggregation_display.search_conditions.searchConditions
       logicalConnector: joins condition[i] to condition[i+1] via conditions[i].logicalConnector (and|or|not)
     havingConditions:
       interpretation: filter_aggregation_groups_by_measure_result
