@@ -26,8 +26,13 @@ import AdminHelpPanel, {
 } from "../components/AdminHelpPanel.tsx";
 import { ADMIN_UI_BUILDER_GUIDE } from "../content/adminGuides.ts";
 import {
+  UX_COMPONENT_BUCKET_CARD_DRAG_HINT,
   UX_DESIGN_EDITOR_SURFACE,
+  UX_DESIGN_INSPECTOR_SECTION,
+  UX_EMPTY_CANVAS_DRAG_GUIDANCE,
   UX_LAYOUT_EDITOR_SURFACE,
+  UX_LAYOUT_INSPECTOR_SECTION,
+  UX_PACKAGE_REQUIRED_FOR_CANVAS,
   UX_UI_BUILDER_TAB_LABELS,
 } from "../content/adminUxTerms.ts";
 import {
@@ -201,6 +206,69 @@ type CanvasResizeState = {
   startNodeH: number;
 } | null;
 
+type BucketCardDragPayload = {
+  componentKey: string;
+  componentKind: string;
+  statusLabel: string;
+  isDraftOnly: boolean;
+  componentId?: string;
+  packageId?: string;
+  layoutId?: string;
+  wiringId?: string;
+  tensorId?: string;
+  routeKey?: string;
+};
+
+const BUCKET_CARD_DRAG_MIME = "application/x-topolactor-bucket-card";
+
+function paletteEntryFromDragPayload(payload: BucketCardDragPayload): PaletteEntry {
+  return {
+    componentKey: payload.componentKey,
+    componentKind: payload.componentKind,
+    isDraftOnly: payload.isDraftOnly,
+    componentId: payload.componentId,
+    packageId: payload.packageId,
+    layoutId: payload.layoutId,
+    wiringId: payload.wiringId,
+    tensorId: payload.tensorId,
+    routeKey: payload.routeKey,
+  };
+}
+
+function bucketCardDragPayloadFromEntry(
+  entry: PaletteEntry,
+  statusLabel: string,
+): BucketCardDragPayload {
+  return {
+    componentKey: entry.componentKey,
+    componentKind: entry.componentKind,
+    statusLabel,
+    isDraftOnly: entry.isDraftOnly,
+    componentId: entry.componentId,
+    packageId: entry.packageId,
+    layoutId: entry.layoutId,
+    wiringId: entry.wiringId,
+    tensorId: entry.tensorId,
+    routeKey: entry.routeKey,
+  };
+}
+
+function writeBucketCardDragData(e: DragEvent, payload: BucketCardDragPayload): void {
+  e.dataTransfer?.setData(BUCKET_CARD_DRAG_MIME, JSON.stringify(payload));
+  e.dataTransfer?.setData("text/plain", payload.componentKey);
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = "copy";
+}
+
+function readBucketCardDragPayload(e: DragEvent): BucketCardDragPayload | null {
+  const raw = e.dataTransfer?.getData(BUCKET_CARD_DRAG_MIME);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as BucketCardDragPayload;
+  } catch {
+    return null;
+  }
+}
+
 type DragSrc =
   | { kind: "palette"; entry: PaletteEntry }
   | { kind: "canvas"; nodeId: string };
@@ -295,6 +363,227 @@ function StatusBadge(
     info: "badge-info",
   }[variant];
   return <span class={cls}>{text}</span>;
+}
+
+const LAYOUT_RIGHT_DOCK_WIDTH = "clamp(320px, 24vw, 420px)";
+
+const COMPONENT_BUCKET_KIND_ICONS: Record<string, string> = {
+  primitive: "◆",
+  display: "▣",
+  action: "▶",
+  form: "☰",
+  layout: "▦",
+  data_display: "▤",
+};
+
+function bucketKindIcon(componentKind: string): string {
+  const base = componentKind.split("/")[0]?.split(".")[0] ?? componentKind;
+  return COMPONENT_BUCKET_KIND_ICONS[base] ?? "◈";
+}
+
+function ComponentBucketCard({
+  componentKey,
+  componentKind,
+  sourcePath,
+  statusLabel,
+  statusVariant,
+  selected = false,
+  selectable = false,
+  draggable = false,
+  placementReady = true,
+  onSelect,
+  onDragStart,
+  dragPayload,
+  onAddToCanvas,
+}: {
+  componentKey: string;
+  componentKind: string;
+  sourcePath?: string;
+  statusLabel: string;
+  statusVariant: "ok" | "warn" | "error" | "info";
+  selected?: boolean;
+  selectable?: boolean;
+  draggable?: boolean;
+  placementReady?: boolean;
+  onSelect?: () => void;
+  onDragStart?: (e: DragEvent, payload: BucketCardDragPayload) => void;
+  dragPayload?: BucketCardDragPayload;
+  onAddToCanvas?: () => void;
+}): JSX.Element {
+  const blocked = !placementReady;
+  const cardClass = blocked
+    ? "border-amber-300 bg-amber-50"
+    : selected
+    ? "border-blue-500 bg-blue-50 ring-2 ring-blue-300"
+    : "border-slate-200 bg-white hover:border-blue-300";
+
+  return (
+    <div
+      class={`component-bucket-card flex flex-col rounded-lg border p-2 text-left shadow-sm transition-colors ${cardClass}`}
+      role={selectable ? "option" : "listitem"}
+      aria-selected={selectable ? selected : undefined}
+      data-component-key={componentKey}
+      data-placement-ready={placementReady ? "true" : "false"}
+    >
+      <div
+        draggable={draggable && placementReady}
+        onDragStart={(e: DragEvent) => {
+          if (!draggable || !placementReady || !onDragStart || !dragPayload) return;
+          writeBucketCardDragData(e, dragPayload);
+          onDragStart(e, dragPayload);
+        }}
+        class={`component-bucket-card__body flex gap-2 ${draggable && placementReady ? "cursor-grab" : ""}`}
+      >
+        <div
+          class="component-bucket-card__icon flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-base text-slate-700"
+          aria-hidden="true"
+          title={componentKind}
+        >
+          {bucketKindIcon(componentKind)}
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-xs font-semibold text-slate-900" title={componentKey}>
+            {friendlyComponentLabel(componentKey)}
+          </div>
+          <div class="truncate font-mono text-[0.6rem] text-slate-500" title={componentKey}>
+            {componentKey}
+          </div>
+          <div class="mt-0.5 truncate text-[0.6rem] text-slate-600">{componentKind}</div>
+          {sourcePath && (
+            <div
+              class="component-bucket-card__source-path mt-0.5 truncate font-mono text-[0.55rem] text-slate-500"
+              title={sourcePath}
+            >
+              {sourcePath}
+            </div>
+          )}
+          <div class="mt-1">
+            <StatusBadge text={statusLabel} variant={statusVariant} />
+          </div>
+        </div>
+      </div>
+
+      {selectable && (
+        <button
+          type="button"
+          onClick={onSelect}
+          class="component-bucket-card__select mt-2 w-full rounded border border-slate-200 bg-slate-50 px-1 py-0.5 text-[0.62rem] font-medium text-slate-700 hover:bg-slate-100"
+          aria-pressed={selected}
+        >
+          {selected ? "選択中" : "選択"}
+        </button>
+      )}
+
+      {draggable && (
+        <p class="component-bucket-card__drag-hint mt-1 text-[0.58rem] text-slate-500">
+          {placementReady
+            ? UX_COMPONENT_BUCKET_CARD_DRAG_HINT
+            : "先にパッケージ化・配置可能化が必要です"}
+        </p>
+      )}
+
+      {onAddToCanvas && (
+        <button
+          type="button"
+          onClick={onAddToCanvas}
+          disabled={blocked}
+          class="component-bucket-card__add mt-1 w-full rounded border border-blue-200 bg-blue-50 px-1 py-0.5 text-[0.62rem] font-medium text-blue-800 hover:bg-blue-100 disabled:opacity-40"
+        >
+          + キャンバスに追加
+        </button>
+      )}
+
+      {sourcePath && (
+        <details class="mt-1">
+          <summary class="cursor-pointer text-[0.55rem] text-gray-400">技術詳細</summary>
+          <code class="block break-all text-[0.55rem] text-gray-500">{sourcePath}</code>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function LayoutRightDock({
+  draftNodes,
+  selectedNodeId,
+  selectedNode,
+  packageId,
+  onSelectNode,
+  onReparent,
+  onCopy,
+  onDelete,
+  slotKeyCandidates,
+  onUpdateNode,
+  onCommitNode,
+  onToggleLayoutClassRef,
+}: {
+  draftNodes: DraftNode[];
+  selectedNodeId: string | null;
+  selectedNode: DraftNode | null;
+  packageId: string;
+  onSelectNode: (id: string | null) => void;
+  onReparent: (nodeId: string, newParentId: string | null, insertBeforeId: string | null) => void;
+  onCopy: (id: string) => void;
+  onDelete: (id: string) => void;
+  slotKeyCandidates: string[];
+  onUpdateNode: (updates: Partial<DraftNode>) => void;
+  onCommitNode: (updates: Partial<DraftNode>, label: string) => void;
+  onToggleLayoutClassRef: (classKey: string) => void;
+}): JSX.Element {
+  return (
+    <aside
+      class="layout-right-dock flex shrink-0 flex-col gap-2 overflow-y-auto"
+      style={{ width: LAYOUT_RIGHT_DOCK_WIDTH, minWidth: "320px", maxWidth: "420px" }}
+      aria-label="レイアウト編集ドック"
+      data-selected-node-id={selectedNodeId ?? ""}
+    >
+      <Accordion title={`レイヤー (${draftNodes.length})`} defaultOpen={true}>
+        <LayerTree
+          embedded
+          draftNodes={draftNodes}
+          selectedNodeId={selectedNodeId}
+          onSelect={(id) => onSelectNode(id === selectedNodeId ? null : id)}
+          onReparent={onReparent}
+          onCopy={onCopy}
+          onDelete={onDelete}
+        />
+      </Accordion>
+
+      {selectedNode ? (
+        <>
+          <Accordion
+            title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            defaultOpen={true}
+          >
+            <CanvasInspector
+              embedded
+              node={selectedNode}
+              draftNodes={draftNodes}
+              slotKeyCandidates={slotKeyCandidates}
+              onUpdate={onUpdateNode}
+              onCommit={onCommitNode}
+              onToggleLayoutClassRef={onToggleLayoutClassRef}
+              onCopy={() => onCopy(selectedNode.nodeId)}
+              onClose={() => onSelectNode(null)}
+            />
+          </Accordion>
+          <Accordion
+            title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}
+            defaultOpen={false}
+          >
+            <PackageDesignPanel
+              selectedPackageId={packageId}
+              selectedCanvasNode={selectedNode}
+            />
+          </Accordion>
+        </>
+      ) : (
+        <p class="rounded border border-dashed border-gray-200 px-2 py-3 text-center text-xs text-gray-500">
+          ノードを選択してください
+        </p>
+      )}
+    </aside>
+  );
 }
 
 // ─── ヘルパー ─────────────────────────────────────────────────────────────────
@@ -2227,49 +2516,62 @@ function BucketSection({
           </button>
         </div>
 
-        <div class="table-wrap max-h-64 overflow-y-auto">
-          <table class="table font-mono text-xs">
-            <thead>
-              <tr>
-                {["選択", "部品名", "種別", "ステータス"].map((h) => (
-                  <th key={h}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredCatalog.map((c) => {
-                const st = resolveBucketStatus(
-                  c.componentKey,
-                  items,
-                  promotedKeys,
-                );
-                return (
-                  <tr
-                    key={c.componentKey}
-                    class={selectedCatalogKey === c.componentKey
-                      ? "bg-blue-50"
-                      : ""}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedCatalogKeys.has(c.componentKey)}
-                        onChange={() => toggleCatalogKey(c.componentKey)}
-                      />
-                    </td>
-                    <td>
-                      <code>{c.componentKey}</code>
-                    </td>
-                    <td>{c.componentKind}</td>
-                    <td>
-                      <StatusBadge text={st.label} variant={st.variant} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div
+          class="component-bucket-panel grid grid-cols-2 gap-2 max-h-80 overflow-y-auto sm:grid-cols-3"
+          role="listbox"
+          aria-label="部品カタログ — パッケージ化する部品を選択"
+          aria-multiselectable="true"
+        >
+          {filteredCatalog.map((c) => {
+            const st = resolveBucketStatus(c.componentKey, items, promotedKeys);
+            return (
+              <ComponentBucketCard
+                key={c.componentKey}
+                componentKey={c.componentKey}
+                componentKind={c.componentKind}
+                sourcePath={c.sourcePath}
+                statusLabel={st.label}
+                statusVariant={st.variant}
+                selected={selectedCatalogKeys.has(c.componentKey)}
+                selectable
+                placementReady={st.status === "promoted"}
+                onSelect={() => toggleCatalogKey(c.componentKey)}
+              />
+            );
+          })}
         </div>
+
+        {filteredCatalog.length === 0 && (
+          <p class="py-4 text-center text-xs text-gray-400">該当する部品がありません</p>
+        )}
+
+        <details class="mt-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+          <summary class="cursor-pointer font-medium text-slate-600">技術詳細 — 表形式一覧</summary>
+          <div class="table-wrap mt-2 max-h-48 overflow-y-auto">
+            <table class="table font-mono text-xs">
+              <thead>
+                <tr>
+                  {["部品名", "source_path", "種別", "ステータス"].map((h) => (
+                    <th key={h}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCatalog.map((c) => {
+                  const st = resolveBucketStatus(c.componentKey, items, promotedKeys);
+                  return (
+                    <tr key={`detail-${c.componentKey}`}>
+                      <td><code>{c.componentKey}</code></td>
+                      <td class="text-[0.6rem]">{c.sourcePath}</td>
+                      <td>{c.componentKind}</td>
+                      <td><StatusBadge text={st.label} variant={st.variant} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </details>
 
         <BucketPackageRouteFields
           routeKey={routeKey}
@@ -2325,52 +2627,60 @@ function BucketSection({
 
       {(items.length > 0 || selectedId) && (
         <Accordion title="詳細 — 登録済み部品の個別操作" defaultOpen={false}>
-          <div class="table-wrap mb-3">
-            <table class="table font-mono text-sm">
-              <thead>
-                <tr>
-                  {["選択", "部品名", "種別", "状態"].map((h) => (
-                    <th key={h}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.filter((i) =>
-                  i.status !== "promoted"
-                ).map((item) => (
-                  <tr
-                    key={item.bucketItemId}
-                    class={selectedId === item.bucketItemId ? "bg-blue-50" : ""}
-                  >
-                    <td>
-                      <input
-                        type="radio"
-                        name="bucketItem"
-                        checked={selectedId === item.bucketItemId}
-                        onChange={() => setSelectedId(item.bucketItemId)}
-                      />
-                    </td>
-                    <td>
-                      <code>{item.componentKey}</code>
-                    </td>
-                    <td>{item.componentKind}</td>
-                    <td>
-                      {(() => {
-                        const st = resolveBucketStatus(
-                          item.componentKey,
-                          items,
-                          promotedKeys,
-                        );
-                        return (
-                          <StatusBadge text={st.label} variant={st.variant} />
-                        );
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div
+            class="component-bucket-panel mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3"
+            role="listbox"
+            aria-label="登録済み部品 — 単体操作"
+          >
+            {items.filter((i) => i.status !== "promoted").map((item) => {
+              const st = resolveBucketStatus(item.componentKey, items, promotedKeys);
+              const catalogEntry = COMPONENT_CATALOG_ENTRIES.find(
+                (c) => c.componentKey === item.componentKey,
+              );
+              return (
+                <ComponentBucketCard
+                  key={item.bucketItemId}
+                  componentKey={item.componentKey}
+                  componentKind={item.componentKind}
+                  sourcePath={catalogEntry?.sourcePath ?? item.sourcePath}
+                  statusLabel={st.label}
+                  statusVariant={st.variant}
+                  selected={selectedId === item.bucketItemId}
+                  selectable
+                  placementReady={false}
+                  onSelect={() => setSelectedId(item.bucketItemId)}
+                />
+              );
+            })}
           </div>
+
+          <details class="mb-3 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs">
+            <summary class="cursor-pointer font-medium text-slate-600">技術詳細 — 表形式一覧</summary>
+            <div class="table-wrap mt-2 max-h-48 overflow-y-auto">
+              <table class="table font-mono text-xs">
+                <thead>
+                  <tr>
+                    {["部品名", "source_path", "種別", "状態"].map((h) => (
+                      <th key={h}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.filter((i) => i.status !== "promoted").map((item) => {
+                    const st = resolveBucketStatus(item.componentKey, items, promotedKeys);
+                    return (
+                      <tr key={`legacy-${item.bucketItemId}`}>
+                        <td><code>{item.componentKey}</code></td>
+                        <td class="text-[0.6rem]">{item.sourcePath}</td>
+                        <td>{item.componentKind}</td>
+                        <td><StatusBadge text={st.label} variant={st.variant} /></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
 
           <BucketPackageRouteFields
             routeKey={routeKey}
@@ -3019,20 +3329,26 @@ function VisualLayoutCanvas({
     >
       {/* Gap 7: First-run empty state with quick-start actions */}
       {draftNodes.length === 0 && (
-        <div class="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4 p-6 text-center">
           <div class="text-4xl text-gray-200" aria-hidden="true">☐</div>
           <div>
-            <p class="text-base font-semibold text-gray-500">
-              layout draft が空です
+            <p class="text-base font-semibold text-gray-500">layout draft が空です</p>
+            <p class="mt-1 text-sm text-gray-500">
+              {UX_EMPTY_CANVAS_DRAG_GUIDANCE}
             </p>
-            <p class="mt-1 text-sm text-gray-400">
-              {allowEmptyStateTemplates
-                ? "左のパレットで部品を追加すると、ここに layout draft のリアルタイムプレビューが表示されます。追加後にドラッグ・リサイズで位置を調整できます。"
-                : "左のパレット（パッケージ内の配置可能部品）で「追加」すると layout draft のプレビューが表示されます。"}
-            </p>
+            {!allowEmptyStateTemplates && (
+              <p class="mt-1 text-xs text-amber-800">
+                {UX_PACKAGE_REQUIRED_FOR_CANVAS}
+              </p>
+            )}
+            {allowEmptyStateTemplates && (
+              <p class="mt-1 text-xs text-gray-400">
+                補助: 下のテンプレートボタンから一括追加もできます。
+              </p>
+            )}
           </div>
           {onAddFromEmptyState && allowEmptyStateTemplates && (
-            <div class="flex flex-wrap justify-center gap-2">
+            <div class="pointer-events-auto flex flex-wrap justify-center gap-2">
               <button
                 type="button"
                 onClick={() => onAddFromEmptyState("starter_header_main")}
@@ -3119,6 +3435,7 @@ function LayerTree({
   onSelect,
   onCopy,
   onDelete,
+  embedded = false,
   onReparent,
 }: {
   draftNodes: DraftNode[];
@@ -3126,6 +3443,7 @@ function LayerTree({
   onSelect: (nodeId: string) => void;
   onCopy: (nodeId: string) => void;
   onDelete: (nodeId: string) => void;
+  embedded?: boolean;
   onReparent: (
     nodeId: string,
     newParentId: string | null,
@@ -3173,15 +3491,17 @@ function LayerTree({
   };
 
   return (
-    <div class="w-44 shrink-0 rounded-lg border border-gray-200 bg-white">
-      <div class="border-b border-gray-200 px-2 py-1.5">
-        <h4 class="text-xs font-semibold text-gray-600">
-          レイヤー ({draftNodes.length})
-        </h4>
-        <p class="text-[0.6rem] text-gray-400">
-          ドラッグで並び替え・入れ子変更
-        </p>
-      </div>
+    <div class={`${embedded ? "w-full" : "w-44 shrink-0"} rounded-lg border border-gray-200 bg-white`}>
+      {!embedded && (
+        <div class="border-b border-gray-200 px-2 py-1.5">
+          <h4 class="text-xs font-semibold text-gray-600">
+            レイヤー ({draftNodes.length})
+          </h4>
+          <p class="text-[0.6rem] text-gray-400">
+            ドラッグで並び替え・入れ子変更
+          </p>
+        </div>
+      )}
       <div
         role="treegrid"
         aria-label="レイヤーツリー"
@@ -3301,6 +3621,7 @@ function CanvasInspector({
   onCopy,
   onEditDesign,
   onClose,
+  embedded = false,
 }: {
   node: DraftNode;
   draftNodes: DraftNode[];
@@ -3311,6 +3632,7 @@ function CanvasInspector({
   onCopy: () => void;
   onEditDesign?: () => void;
   onClose: () => void;
+  embedded?: boolean;
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
@@ -3359,12 +3681,12 @@ function CanvasInspector({
   return (
     <div
       role="complementary"
-      aria-label={`${friendlyNodeLabel(node)} のプロパティ`}
-      class="w-52 shrink-0 overflow-y-auto rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs"
-      style="max-height:440px;"
+      aria-label={`${friendlyNodeLabel(node)} の${UX_LAYOUT_INSPECTOR_SECTION}`}
+      class={`${embedded ? "w-full" : "w-52 shrink-0"} overflow-y-auto rounded-lg border border-blue-600 bg-blue-50 p-2.5 font-mono text-xs`}
+      style={embedded ? "max-height:520px;" : "max-height:440px;"}
     >
       <div class="mb-2 flex items-center justify-between">
-        <strong class="text-sm">プロパティ</strong>
+        <strong class="text-sm">{UX_LAYOUT_INSPECTOR_SECTION}</strong>
         <button
           type="button"
           onClick={onClose}
@@ -3783,7 +4105,7 @@ function LayoutPalette({
   status,
   packageOnly = false,
 }: {
-  onDragStart: (entry: PaletteEntry) => void;
+  onDragStart: (entry: PaletteEntry, payload: BucketCardDragPayload) => void;
   onAddToCanvas: (entry: PaletteEntry) => void;
   entries: PaletteEntry[];
   status: string | null;
@@ -3802,10 +4124,9 @@ function LayoutPalette({
     : scopeEntries;
 
   return (
-    <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[480px]">
-      <h4 class="mb-1 text-sm font-semibold">部品</h4>
+    <div class="component-bucket-panel-left w-[11.5rem] shrink-0 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-2 max-h-[480px]">
+      <h4 class="mb-1 text-sm font-semibold">配置可能部品</h4>
 
-      {/* Gap 5: Filter so users can find components without scrolling */}
       <input
         value={filter}
         onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
@@ -3815,8 +4136,7 @@ function LayoutPalette({
       />
 
       <p class="mb-1.5 text-[0.62rem] text-gray-500">
-        「追加」で layout node として追加。canvas
-        上でドラッグして位置調整できます。
+        {UX_COMPONENT_BUCKET_CARD_DRAG_HINT}。未配置可能なカードは drop できません。
       </p>
       {status && <p class="text-[0.62rem] text-gray-400">{status}</p>}
 
@@ -3824,56 +4144,32 @@ function LayoutPalette({
         <p class="py-3 text-center text-[0.65rem] text-gray-400">該当なし</p>
       )}
 
-      {filtered.map((c) => {
-        const draftOnly = c.isDraftOnly;
-        return (
-          <div
-            key={c.componentKey}
-            class={`mb-1 rounded border font-mono text-xs ${
-              draftOnly
-                ? "border-yellow-300 bg-yellow-50"
-                : "border-blue-200 bg-blue-50"
-            }`}
-          >
-            {/* Drag target area */}
-            <div
-              draggable={true}
-              onDragStart={() => onDragStart(c)}
-              class="cursor-grab px-1.5 pt-1 pb-0.5"
-              aria-label={`${friendlyComponentLabel(c.componentKey)}をドラッグ`}
-              title="ドラッグしてキャンバスへ"
-            >
-              <div class="font-bold truncate" title={c.componentKey}>
-                {friendlyComponentLabel(c.componentKey)}
-                {draftOnly && (
-                  <span
-                    class="ml-1 font-normal text-yellow-700 text-[0.6rem]"
-                    title="この部品はまだ登録されていません。部品登録タブでパッケージ化してから使用してください。"
-                  >
-                    ⚠ まだ使えません
-                  </span>
-                )}
-              </div>
-              <div class="text-[0.62rem] text-gray-500">{c.componentKind}</div>
-            </div>
-            {/* Gap 5: Non-drag "追加" button */}
-            <button
-              type="button"
-              onClick={() => onAddToCanvas(c)}
-              class={`w-full rounded-b border-t px-1.5 py-0.5 text-[0.65rem] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-400 ${
-                draftOnly
-                  ? "border-yellow-200 text-yellow-700 hover:bg-yellow-100"
-                  : "border-blue-100 text-blue-700 hover:bg-blue-100"
-              }`}
-              aria-label={`${
-                friendlyComponentLabel(c.componentKey)
-              }をキャンバスに追加`}
-            >
-              + 追加
-            </button>
-          </div>
-        );
-      })}
+      <div class="component-bucket-panel flex flex-col gap-1.5" role="list">
+        {filtered.map((c) => {
+          const draftOnly = c.isDraftOnly;
+          const catalogEntry = COMPONENT_CATALOG_ENTRIES.find(
+            (e) => e.componentKey === c.componentKey,
+          );
+          return (
+            <ComponentBucketCard
+              key={c.componentKey}
+              componentKey={c.componentKey}
+              componentKind={c.componentKind}
+              sourcePath={catalogEntry?.sourcePath}
+              statusLabel={draftOnly ? "未配置可能" : "配置可能"}
+              statusVariant={draftOnly ? "warn" : "ok"}
+              draggable
+              placementReady={!draftOnly}
+              dragPayload={bucketCardDragPayloadFromEntry(
+                c,
+                draftOnly ? "未配置可能" : "配置可能",
+              )}
+              onDragStart={(_e, payload) => onDragStart(c, payload)}
+              onAddToCanvas={() => onAddToCanvas(c)}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -3886,21 +4182,30 @@ function StructuralHtmlPalette({
   disabled?: boolean;
 }): JSX.Element {
   return (
-    <div class="w-44 shrink-0 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50 p-2 max-h-[480px]">
+    <div class="component-bucket-panel-left w-[11.5rem] shrink-0 overflow-y-auto rounded-lg border border-emerald-200 bg-emerald-50 p-2 max-h-[480px]">
       <h4 class="mb-1 text-sm font-semibold text-emerald-900">構造 HTML</h4>
       <p class="mb-1.5 text-[0.62rem] text-emerald-800">
         SSOT 許可タグを layout ノードとして追加します。
       </p>
-      <div class="flex flex-col gap-1">
+      <div class="component-bucket-panel flex flex-col gap-1.5" role="list">
         {STRUCTURAL_HTML_TAG_ALLOWLIST.map((tag) => (
           <button
             key={tag}
             type="button"
             disabled={disabled}
             onClick={() => onAddTag(tag)}
-            class="rounded border border-emerald-300 bg-white px-2 py-1 text-left font-mono text-xs text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+            class="component-bucket-card flex items-center gap-2 rounded-lg border border-emerald-300 bg-white p-2 text-left shadow-sm hover:bg-emerald-100 disabled:opacity-40"
           >
-            + &lt;{tag}&gt;
+            <span
+              class="component-bucket-card__icon flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-emerald-200 bg-emerald-50 font-mono text-xs text-emerald-900"
+              aria-hidden="true"
+            >
+              &lt;{tag.slice(0, 1)}&gt;
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-mono text-xs font-semibold text-emerald-950">&lt;{tag}&gt;</span>
+              <span class="block truncate text-[0.58rem] text-emerald-800">構造 HTML</span>
+            </span>
           </button>
         ))}
       </div>
@@ -4027,9 +4332,15 @@ function LayoutBuilderSection({
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (entry.isDraftOnly) {
-      announce(
-        "この部品はまだパッケージに含まれていません。部品登録パネルで配置可能化してください。",
-      );
+      announce("この部品はまだ配置可能ではありません。先にパッケージ化・配置可能化してください。");
+      return true;
+    }
+    if (!packageScopedLayout) {
+      announce(UX_PACKAGE_REQUIRED_FOR_CANVAS);
+      return true;
+    }
+    if (scopedPackageId && entry.packageId && entry.packageId !== scopedPackageId) {
+      announce("選択中パッケージに属さない部品は配置できません。");
       return true;
     }
     return false;
@@ -4838,7 +5149,7 @@ function LayoutBuilderSection({
   };
 
   // ── palette drag ─────────────────────────────────────────────────────────
-  const handleDragStartPalette = (entry: PaletteEntry) => {
+  const handleDragStartPalette = (entry: PaletteEntry, _payload: BucketCardDragPayload) => {
     dragSrc.current = { kind: "palette", entry };
   };
 
@@ -4848,21 +5159,23 @@ function LayoutBuilderSection({
 
   const handleDropOnCanvas = (e: Event) => {
     e.preventDefault();
-    const src = dragSrc.current;
+    const de = e as DragEvent;
+    let entry: PaletteEntry | null = null;
+    const payload = readBucketCardDragPayload(de);
+    if (payload) {
+      entry = paletteEntryFromDragPayload(payload);
+    } else if (dragSrc.current?.kind === "palette") {
+      entry = dragSrc.current.entry;
+    }
     dragSrc.current = null;
-    if (!src || src.kind !== "palette") return;
-    if (rejectDraftPaletteEntry(src.entry)) return;
-    const de = e as unknown as DragEvent;
+    if (!entry) return;
+    if (rejectDraftPaletteEntry(entry)) return;
     const rect = canvasRef.current?.getBoundingClientRect();
-    const dropX = rect
-      ? snapToGrid(Math.max(0, de.clientX - rect.left), SNAP_SIZE)
-      : 20;
-    const dropY = rect
-      ? snapToGrid(Math.max(0, de.clientY - rect.top), SNAP_SIZE)
-      : 20;
-    if (src.entry.routeKey && !routeKey) setRouteKey(src.entry.routeKey);
-    if (src.entry.layoutId && !layoutId) setLayoutId(src.entry.layoutId);
-    addNode(makeNewNode(src.entry, dropX, dropY));
+    const dropX = rect ? snapToGrid(Math.max(0, de.clientX - rect.left), SNAP_SIZE) : 20;
+    const dropY = rect ? snapToGrid(Math.max(0, de.clientY - rect.top), SNAP_SIZE) : 20;
+    if (entry.routeKey && !routeKey) setRouteKey(entry.routeKey);
+    if (entry.layoutId && !layoutId) setLayoutId(entry.layoutId);
+    addNode(makeNewNode(entry, dropX, dropY));
   };
 
   // Gap 5: Non-drag add from palette button
@@ -5246,11 +5559,9 @@ function LayoutBuilderSection({
             {UX_LAYOUT_EDITOR_SURFACE}
           </strong>
           <span class="text-[0.7rem] text-blue-700">
-            編集対象: 位置 (x/y)・サイズ
-            (幅/高さ)・親部品・配置スロット・表示順・layoutClassRefs —
-            パレットで部品を追加し、canvas
-            上でドラッグ・リサイズして位置を調整します。
-            構造設定は右のインスペクタで編集してください。
+            左パネルの配置可能カードをドラッグして canvas に置き、ドラッグ・リサイズで x/y/width/height を調整します。
+            parentNodeId・slotKey・orderIndex は右ドックの配置インスペクタで編集してください。
+            layoutClassRefs は下の「スタイルクラス設定」で選択し、プレビュー → 検証 → 保存反映します。
           </span>
         </div>
       )}
@@ -5320,24 +5631,22 @@ function LayoutBuilderSection({
 
       {/* layout draft プレビュー & 操作エリア: palette + live canvas + inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>
-        {packageScopedLayout
-          ? (
-            <>
-              <LayoutPalette
-                onDragStart={handleDragStartPalette}
-                onAddToCanvas={handleAddFromPalette}
-                entries={paletteEntries}
-                status={paletteStatus}
-                packageOnly={true}
-              />
-              <StructuralHtmlPalette onAddTag={addStructuralHtmlNode} />
-            </>
-          )
-          : (
-            <div class="w-44 shrink-0 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
-              パッケージ選択後にパレットが有効になります
-            </div>
-          )}
+        {packageScopedLayout ? (
+          <>
+            <LayoutPalette
+              onDragStart={handleDragStartPalette}
+              onAddToCanvas={handleAddFromPalette}
+              entries={paletteEntries}
+              status={paletteStatus}
+              packageOnly={true}
+            />
+            <StructuralHtmlPalette onAddTag={addStructuralHtmlNode} />
+          </>
+        ) : (
+          <div class="component-bucket-panel-left w-[11.5rem] shrink-0 rounded-lg border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
+            パッケージ選択後に配置可能カードが表示されます
+          </div>
+        )}
 
         <div class="min-w-0 flex-1">
           <VisualLayoutCanvas
@@ -5367,45 +5676,21 @@ function LayoutBuilderSection({
           />
         </div>
 
-        {/* right panel: layer tree + inspector */}
-        <div class="flex shrink-0 flex-col gap-2" style="width:200px;">
-          <LayerTree
-            draftNodes={draftNodes}
-            selectedNodeId={selectedNodeId}
-            onSelect={(id) =>
-              setSelectedNodeId(id === selectedNodeId ? null : id)}
-            onCopy={copyNode}
-            onDelete={removeNode}
-            onReparent={reparentNode}
-          />
-          {selectedNode
-            ? (
-              <CanvasInspector
-                node={selectedNode}
-                draftNodes={draftNodes}
-                slotKeyCandidates={slotKeyCandidates}
-                onUpdate={(updates) => updateNode(selectedNode.nodeId, updates)}
-                onCommit={(updates, label) =>
-                  commitNodeUpdate(selectedNode.nodeId, updates, label)}
-                onToggleLayoutClassRef={(classKey) =>
-                  toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
-                onCopy={() => copyNode(selectedNode.nodeId)}
-                onClose={() => setSelectedNodeId(null)}
-              />
-            )
-            : (
-              <div class="rounded border border-dashed border-gray-200 bg-gray-50 p-3 text-center text-xs text-gray-400">
-                canvas またはレイヤーから要素を選択してください
-              </div>
-            )}
-          <section class="rounded border border-slate-200 bg-white p-2" aria-label="デザインインスペクタ">
-            <h4 class="mb-2 text-xs font-semibold text-slate-700">デザインインスペクタ</h4>
-            <PackageDesignPanel
-              selectedPackageId={scopedPackageId?.trim() ?? ""}
-              selectedCanvasNode={selectedNode}
-            />
-          </section>
-        </div>
+        <LayoutRightDock
+          draftNodes={draftNodes}
+          selectedNodeId={selectedNodeId}
+          selectedNode={selectedNode}
+          packageId={scopedPackageId ?? ""}
+          onSelectNode={setSelectedNodeId}
+          onReparent={reparentNode}
+          onCopy={copyNode}
+          onDelete={removeNode}
+          slotKeyCandidates={slotKeyCandidates}
+          onUpdateNode={(updates) => selectedNode && updateNode(selectedNode.nodeId, updates)}
+          onCommitNode={(updates, label) => selectedNode && commitNodeUpdate(selectedNode.nodeId, updates, label)}
+          onToggleLayoutClassRef={(classKey) =>
+            selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+        />
       </div>
 
       <Accordion

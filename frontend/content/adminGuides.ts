@@ -58,8 +58,8 @@ export const ADMIN_UI_BUILDER_GUIDE: AdminGuide = {
     `${UX_CONTENTS_PAGE}でページ内容と${UX_DATA_SHAPE}を用意してください`,
   ],
   howToSteps: [
-    "Phase A: 部品を複数選択し、1 回でパッケージ化する",
-    "Phase B: パッケージを選んで canvas workspace 上で配置し、選択中ノードを右パネルのデザインインスペクタで編集する",
+    "Phase A: 部品カードを複数選択し、1 回でパッケージ化する",
+    "Phase B: パッケージを選び、左パネルの配置可能カードをドラッグして canvas に置く。配置・デザインインスペクタで parentNodeId・slotKey・orderIndex・layoutClassRefs を編集する",
     "プレビュー → 検証 → 保存反映の順で layout を確定する",
     "デモ画面で動作を確認する",
   ],

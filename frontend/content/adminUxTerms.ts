@@ -283,6 +283,24 @@ export const UX_UI_BUILDER_TAB_LABELS: Record<string, string> = {
   ci: "CI ガイダンス（参照）",
 };
 
+/** layout editor 空キャンバス — 主導線は左パネルカードの drag-to-canvas */
+export const UX_EMPTY_CANVAS_DRAG_GUIDANCE =
+  "左パネルのカードをドラッグしてキャンバスへ配置してください。";
+
+/** layout editor — パッケージ未選択時の案内 */
+export const UX_PACKAGE_REQUIRED_FOR_CANVAS =
+  "先にパッケージを作成または選択してください。";
+
+/** component bucket panel — 配置可能カードの drag ヒント */
+export const UX_COMPONENT_BUCKET_CARD_DRAG_HINT =
+  "ドラッグしてキャンバスへ配置";
+
+/** layout editor 右ドック — 配置インスペクタ見出し */
+export const UX_LAYOUT_INSPECTOR_SECTION = "配置インスペクタ";
+
+/** layout editor 右ドック — デザインインスペクタ見出し（選択ノードと連動） */
+export const UX_DESIGN_INSPECTOR_SECTION = "デザインインスペクタ";
+
 /** /admin/ui-builder は canvas workspace + docked inspectors の単一 authoring surface。 */
 export const UX_LAYOUT_EDITOR_SURFACE = "canvas workspace";
 export const UX_DESIGN_EDITOR_SURFACE = "デザインインスペクタ";
