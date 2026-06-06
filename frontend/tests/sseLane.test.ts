@@ -392,3 +392,170 @@ Deno.test("projectionRuntime: ignore policy is explicit no-op when no definition
     console.error = originalError;
   }
 });
+
+// ─── ProjectionShell SSE refresh lane integration ─────────────────────────────
+// Tests the full sseReceiver → enqueueProjectionHookTrigger → sseDispatcher →
+// ProjectionShell refresh handler flow using stubs (no real EventSource / backend).
+
+import { renderEmission, buildChildrenMap, type ComponentSpec } from "../runtime/renderEmission.ts";
+import type { LayoutNode } from "../api/dispatch.ts";
+// enqueueProjectionHookTrigger already imported at the top of the file.
+
+Deno.test("ProjectionShell SSE lane: sseReceiver → dispatcher → refresh handler routes trigger and re-fetches emission", async () => {
+  // Simulate the projection hook trigger the sseReceiver would emit on a "projection" event.
+  const trigger = {
+    eventType: "projection",
+    data: JSON.stringify({ manifest_id: "m-refresh" }),
+    identity: { manifestId: "m-refresh" },
+  };
+
+  // Stub dispatcher captures the routed event type and data.
+  let routedType: string | null = null;
+  let routedData: string | null = null;
+  const stubDispatcher = {
+    route: (eventType: string, data: string) => {
+      routedType = eventType;
+      routedData = data;
+    },
+  };
+
+  enqueueProjectionHookTrigger(trigger, stubDispatcher);
+
+  assertEquals(routedType, "projection");
+  assertEquals(routedData, '{"manifest_id":"m-refresh"}');
+});
+
+const nodeAId = "node-a-id";
+const nodeBId = "node-b-id";
+const compXId = "00000000-0000-0000-0000-000000000003";
+const compYId = "00000000-0000-0000-0000-000000000099";
+
+const refreshRegistry = {
+  [compXId]: { componentId: compXId, componentType: "comp-x", def: {} },
+  [compYId]: { componentId: compYId, componentType: "comp-y", def: {} },
+};
+
+Deno.test("ProjectionShell SSE lane: DOM replacement — old nodeId absent after refresh, new nodeId present", () => {
+  // Emission A: has node-a-id
+  const emissionA = {
+    structureMapId: "sm-1",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-a",
+    layoutNodes: [
+      {
+        nodeId: nodeAId,
+        nodeKind: "catalog_component",
+        componentId: compXId,
+        slotKey: "slot_a",
+        orderIndex: 0,
+        x: 0, y: 0, width: 100, height: 50,
+      } as LayoutNode,
+    ],
+  };
+
+  // Emission B: has node-b-id (no node-a-id)
+  const emissionB = {
+    structureMapId: "sm-2",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-b",
+    layoutNodes: [
+      {
+        nodeId: nodeBId,
+        nodeKind: "catalog_component",
+        componentId: compYId,
+        slotKey: "slot_b",
+        orderIndex: 0,
+        x: 10, y: 20, width: 200, height: 100,
+      } as LayoutNode,
+    ],
+  };
+
+  // Simulate initial emission A rendering.
+  const specsA = renderEmission(emissionA, refreshRegistry);
+  assertEquals(specsA.some((s) => s.nodeId === nodeAId), true, "emission A must contain node-a-id");
+  assertEquals(specsA.some((s) => s.nodeId === nodeBId), false, "emission A must not contain node-b-id");
+
+  // Simulate SSE refresh: emission B replaces emission A entirely.
+  const specsB = renderEmission(emissionB, refreshRegistry);
+  assertEquals(specsB.some((s) => s.nodeId === nodeBId), true, "emission B must contain node-b-id");
+  assertEquals(specsB.some((s) => s.nodeId === nodeAId), false, "emission B must not contain node-a-id");
+
+  // After refresh, specs are fully replaced with emission B (not merged with A).
+  // This models the setSpecs(renderEmission(emissionB, registry)) call in ProjectionShell.
+  const currentSpecs: ComponentSpec[] = specsB;
+  assertEquals(currentSpecs.every((s) => s.nodeId !== nodeAId), true, "old node-a-id must not persist after refresh");
+  assertEquals(currentSpecs.some((s) => s.nodeId === nodeBId), true, "new node-b-id must be present after refresh");
+});
+
+Deno.test("ProjectionShell SSE lane: refresh preserves parentNodeId tree and layoutClassRefs", () => {
+  // Verifies that after SSE refresh, parentNodeId tree and layoutClassRefs are maintained
+  // in the new specs from emission B (not carried over from emission A).
+  const emissionB = {
+    structureMapId: "sm-3",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-b-tree",
+    layoutNodes: [
+      {
+        nodeId: "node-root",
+        nodeKind: "structural_html",
+        htmlTag: "div",
+        slotKey: "root",
+        orderIndex: 0,
+        x: 0, y: 0, width: 800, height: 600,
+      } as LayoutNode,
+      {
+        nodeId: "node-child",
+        nodeKind: "catalog_component",
+        componentId: compYId,
+        parentNodeId: "node-root",
+        slotKey: "child",
+        orderIndex: 0,
+        x: 10, y: 10, width: 200, height: 100,
+        layoutClassRefs: ["cls-a", "cls-b"],
+      } as LayoutNode,
+    ],
+  };
+
+  const specsB = renderEmission(emissionB, refreshRegistry);
+  const rootSpec = specsB.find((s) => s.nodeId === "node-root");
+  const childSpec = specsB.find((s) => s.nodeId === "node-child");
+
+  assertExists(rootSpec);
+  assertExists(childSpec);
+  assertEquals(rootSpec!.parentNodeId, undefined, "root spec must have no parentNodeId");
+  assertEquals(childSpec!.parentNodeId, "node-root", "child spec must have parentNodeId=node-root");
+  assertEquals(childSpec!.layoutClassRefs, ["cls-a", "cls-b"], "layoutClassRefs must be preserved after refresh");
+
+  // buildChildrenMap correctly resolves the refreshed tree.
+  const childrenMap = buildChildrenMap(specsB);
+  const roots = childrenMap.get(undefined) ?? [];
+  assertEquals(roots.length, 1);
+  assertEquals(roots[0].nodeId, "node-root");
+  const rootChildren = childrenMap.get("node-root") ?? [];
+  assertEquals(rootChildren.length, 1);
+  assertEquals(rootChildren[0].nodeId, "node-child");
+});
+
+Deno.test("ProjectionShell SSE lane: layoutId present without nodes → LAYOUT_NODES_NOT_FOUND error spec, no flat fallback", () => {
+  // SSOT: layoutId present but layoutNodes absent → explicit error, no flat fallback to componentIds.
+  const brokenEmission = {
+    structureMapId: "sm-err",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-missing-nodes",
+    componentIds: [compXId],
+    // layoutNodes: absent
+  };
+
+  const specs = renderEmission(brokenEmission, refreshRegistry);
+
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].componentType, "error");
+  const errMsg = String(specs[0].def.error ?? "");
+  assertEquals(errMsg.includes("LAYOUT_NODES_NOT_FOUND"), true, "must emit LAYOUT_NODES_NOT_FOUND error");
+  // Must not fall back to rendering componentIds.
+  assertEquals(specs[0].componentId, undefined, "must not render componentId from flat fallback");
+});

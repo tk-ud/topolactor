@@ -619,6 +619,21 @@ runtime_orchestration_ssot:
     symmetry:
       description: frontend_and_backend_scheduler_are_isomorphic_queue_structures
       pattern: external_event_listener_feeds_hook_trigger_into_scheduler_queue
+    sse_hook_trigger_projection_refresh:
+      description: >
+        SSE hook_trigger received by frontend can start a frontend projection runtime refresh.
+        The SSE payload is treated as an invalidation/refresh trigger only. Frontend must not
+        perform topology or layout judgment from the SSE payload. Backend runtime remains the
+        sole authority for topology and layout resolution. On SSE projection event receipt,
+        ProjectionShell re-fetches the latest emission from the backend runtime via
+        queueClientCommand (api_command_lane). renderEmission() produces the updated DOM tree
+        from the fresh emission. This closes the sse_projection_lane and layout_projection_dom_lane
+        merge at the projection_shell_sse_refresh_boundary node.
+      frontend_judgment_boundary:
+        - frontend_must_not_interpret_sse_payload_for_topology_judgment
+        - frontend_must_not_interpret_sse_payload_for_layout_judgment
+        - backend_runtime_is_topology_and_layout_authority
+        - sse_event_is_invalidation_trigger_not_topology_command
     invariants:
       - notify_payload_preserves_runtime_identity
       - listen_event_enters_scheduler_before_projection_runtime
@@ -626,6 +641,8 @@ runtime_orchestration_ssot:
       - client_or_request_trigger_cannot_directly_enter_db_notify_projection_runtime
       - ci_attention_fragment_is_projection_assistance_not_frontend_lock_authority
       - canonical_promotion_gate_may_consume_fragment_state_in_backend_runtime_guard
+      - sse_hook_trigger_may_start_frontend_projection_refresh_via_api_command_lane
+      - sse_payload_must_not_be_used_for_frontend_topology_or_layout_judgment
 
   minimal_event_shape:
     fields:
