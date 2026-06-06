@@ -627,26 +627,36 @@ pipeline_continuity_ssot:
       description: >
         Admin-configured component wiring (UI Builder) connects to runtime execution.
         Backend LayoutNode enrichment: catalog_component nodes are enriched with
-        componentKind (from ui_component_registry) and runtimeDispatchAction (derived
-        from ui_wiring_registry.wiring_kind via ui_topology_tensor JOIN).
+        componentKind (from ui_component_registry) and the full wiring spec
+        (wiring_id, wiring_key, wiring_kind, target_surface, target_ref) from
+        ui_wiring_registry via ui_topology_tensor LEFT JOIN.
         Frontend renderEmission: catalog_component nodes with componentKind build a
-        ComponentDataHub → adaptComponentDataHub → RuntimeComponentSpec, stored in
-        ComponentSpec.runtimeSpec. ProjectionShell renders catalog_component nodes via
-        renderRuntimeComponent(runtimeSpec) instead of SpecCard.
+        RuntimeDispatchSpec (operationType, target, layer, action, wiringKey, wiringId,
+        targetRef) via buildRuntimeDispatchSpec. ComponentDataHub → adaptComponentDataHub
+        → RuntimeComponentSpec stored in ComponentSpec.runtimeSpec. ProjectionShell
+        renders catalog_component nodes via renderRuntimeComponent(runtimeSpec).
         User events fire TWO explicitly separated lanes:
           1. frontend_component_event_log_lane: emitComponentOperationEvent (observation, always)
-          2. component_wiring_execution_lane: enqueueRuntimeComponentCommand → queueClientCommand (dispatch, when runtimeDispatch configured)
+          2. component_wiring_execution_lane: enqueueRuntimeComponentCommand → queueAdminClientCommand
+             (dispatch, when runtimeDispatch configured)
         Frontend is a projection surface only — does NOT judge topology, layout, or promotion.
-        wiring_kind → action mapping: search→Search, aggregate→Search, create→Create, update→diffUpdate, delete→logicalDelete
+        wiring_kind → layer mapping: search→screen_list, aggregate→screen_aggregation, CRUD→entity.
+        wiring_kind → action mapping: search→Search, aggregate→Search, create→Create, update→diffUpdate, delete→logicalDelete.
+        target_ref routing: when payload carries target_ref="manifest:<uuid>:<wiring_key>",
+        ManifestDispatcher resolves the manifest by UUID (LoadByIdAsync) instead of axes.
+        This ensures admin-chosen manifest selection (PackageWiringEditor) is honoured at runtime.
       direction: client_to_server
 
       required_identity:
         - componentId
         - componentKind
-        - runtimeDispatchAction
+        - wiringKind
         - action
         - target
         - layer
+        - wiringKey
+        - wiringId
+        - targetRef
 
       nodes:
         - node: backend.layout_node_enrichment
@@ -655,31 +665,41 @@ pipeline_continuity_ssot:
             - backend/repository/TopologyRepository.cs
             - backend/runtime/StructureMapResolver.cs
           implementation_note: >
-            NpgsqlTopologyRepository.LoadLayoutNodesAsync JOINs ui_wiring_registry to get
-            wiring_kind and maps it to runtimeDispatchAction. LoadComponentKindsByIdsAsync
-            batch-queries ui_component_registry by componentId. Both fields are set on
-            LayoutNodeRecord and forwarded to LayoutNode by StructureMapResolver.
+            NpgsqlTopologyRepository.LoadLayoutNodesAsync LEFT JOINs ui_wiring_registry to read
+            wiring_kind, wiring_id, wiring_key, target_surface, target_ref and derives
+            runtimeDispatchAction from wiring_kind. LoadComponentKindsByIdsAsync batch-queries
+            ui_component_registry by componentId. All fields are set on LayoutNodeRecord and
+            forwarded to LayoutNode by StructureMapResolver.
 
         - node: backend.layout_node_contract
           files:
             - backend/schema/Contracts.cs
           implementation_note: >
-            LayoutNode record gains ComponentKind (string?) and RuntimeDispatchAction (string?)
-            as optional nullable fields. These are serialized to JSON in Emission.layoutNodes
-            and read by the frontend renderEmission path.
+            LayoutNode record carries ComponentKind, RuntimeDispatchAction, WiringId, WiringKey,
+            WiringKind, TargetSurface, TargetRef as optional nullable fields. Serialized to JSON
+            in Emission.layoutNodes and read by the frontend renderEmission path.
+
+        - node: backend.manifest_dispatcher_target_ref
+          files:
+            - backend/runtime/ManifestDispatcher.cs
+          implementation_note: >
+            TryExtractTargetRefManifestId parses target_ref from dispatch payload in
+            "manifest:{uuid}:{wiring_key}" format. When present, ManifestDispatcher calls
+            LoadByIdAsync to resolve the exact admin-chosen manifest rather than axes-based
+            ResolveActiveManifestAsync. Absent target_ref falls through to axes resolution.
+            Missing manifest after target_ref parse returns MANIFEST_NOT_FOUND.
 
         - node: frontend.render_emission_catalog_component
           files:
             - frontend/runtime/renderEmission.ts
             - frontend/api/dispatch.ts
           implementation_note: >
-            LayoutNode type gains componentKind and runtimeDispatchAction fields.
-            renderEmission: catalog_component nodes with componentKind → ComponentDataHub →
-            adaptComponentDataHub → RuntimeComponentSpec stored in ComponentSpec.runtimeSpec.
-            buildCatalogComponentEventBinding: creates bindings for standard triggers (click,
-            change, select, submit, toggle) each carrying runtimeDispatch.action when
-            runtimeDispatchAction is present. Absence of componentKind → explicit error spec,
-            not silent skip.
+            LayoutNode type carries componentKind, wiringId, wiringKey, wiringKind,
+            targetSurface, targetRef. renderEmission: buildRuntimeDispatchSpec derives full
+            RuntimeDispatchSpec from node wiring metadata. buildCatalogComponentEventBinding
+            populates standard triggers (click, change, select, submit, toggle) each carrying
+            full runtimeDispatch spec. Absence of componentKind → explicit CATALOG_COMPONENT_KIND_REQUIRED
+            error spec, not silent skip. No static registry fallback.
 
         - node: frontend.projection_shell_runtime_render
           files:
@@ -696,14 +716,23 @@ pipeline_continuity_ssot:
             - frontend/runtime/runtimeComponentFactory.ts
             - frontend/runtime/frontendScheduler.ts
           implementation_note: >
-            EventBindingValue gains runtimeDispatch?: { action: string }.
+            EventBindingValue.runtimeDispatch carries full RuntimeDispatchSpec
+            { operationType, target, layer, action, wiringKey?, wiringId?, targetRef? }.
             emitBoundEvent fires BOTH lanes:
               Lane 1 (always): emitComponentOperationEvent → frontend_component_event_log_lane
               Lane 2 (when runtimeDispatch present): enqueueRuntimeComponentCommand →
-              queueClientCommand → api_command_lane → backend dispatch.
+              queueAdminClientCommand → api_command_lane → backend dispatch.
             Lanes are explicitly separated — observation log does NOT drive backend dispatch.
-            enqueueRuntimeComponentCommand reads token from sessionStorage and calls
-            queueAdminClientCommand with operationType=action, target=default, layer=entity.
+            enqueueRuntimeComponentCommand forwards wiringKey as wiring_key, wiringId as
+            wiring_id, and targetRef as target_ref in the dispatch payload. target and layer
+            come from admin-configured wiring (targetSurface, wiringKind) — not hardcoded.
+
+      wiring_kind_layer_mapping:
+        search: screen_list
+        aggregate: screen_aggregation
+        create: entity
+        update: entity
+        delete: entity
 
       wiring_kind_action_mapping:
         search: Search
@@ -718,6 +747,8 @@ pipeline_continuity_ssot:
         - observation_log_driving_backend_dispatch
         - frontend_topology_or_layout_judgment
         - dispatch_firing_without_runtimedispatch_configured
+        - hardcoded_target_default_layer_entity_in_enqueue
+        - wiring_key_or_wiring_id_dropped_before_backend
 
       pipeline_body_test:
         kind: unit_boundary_contract
@@ -725,10 +756,13 @@ pipeline_continuity_ssot:
         test_files:
           - frontend/tests/adminWiringExecutionLane.test.ts
           - backend/tests/Topolactor.Runtime.Tests/AdminWiringExecutionLaneTests.cs
+          - backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs
         verifies:
-          - LayoutNode carries ComponentKind and RuntimeDispatchAction
+          - LayoutNode carries ComponentKind, WiringId, WiringKey, WiringKind, TargetSurface, TargetRef
           - renderEmission builds runtimeSpec for catalog_component with componentKind
           - renderEmission produces error spec when componentKind absent
-          - parseEventBinding parses runtimeDispatch field
+          - buildRuntimeDispatchSpec includes targetRef from node
+          - parseEventBinding parses full RuntimeDispatchSpec
           - emitBoundEvent fires both log lane and dispatch lane when runtimeDispatch present
-          - enqueueRuntimeComponentCommand routes through queueAdminClientCommand
+          - enqueueRuntimeComponentCommand forwards wiringKey/wiringId/targetRef in payload
+          - ManifestDispatcher routes to specific manifest when target_ref present in payload

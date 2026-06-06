@@ -162,6 +162,24 @@ public class ManifestDispatcher
                             $"No manifest found for db_notify manifest_id={dbNotifyManifestId}.")]);
                 }
             }
+            else if (TryExtractTargetRefManifestId(request, out var targetRefManifestId))
+            {
+                // target_ref in payload specifies the exact admin-chosen manifest (PackageWiringEditor).
+                // Format: "manifest:<uuid>:<wiring_key>" — bypasses axes-based resolution.
+                manifest = await _manifestRepository.LoadByIdAsync(targetRefManifestId, ct);
+                if (manifest is null)
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: manifest not found for target_ref manifest_id={ManifestId}.",
+                        targetRefManifestId);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "MANIFEST_NOT_FOUND",
+                            $"No manifest found for target_ref manifest_id={targetRefManifestId}.")]);
+                }
+            }
             else
             {
                 manifest = await _manifestRepository.ResolveActiveManifestAsync(
@@ -245,6 +263,35 @@ public class ManifestDispatcher
             return false;
 
         return Guid.TryParse(manifestIdEl.GetString(), out manifestId);
+    }
+
+    /// <summary>
+    /// Parses target_ref from payload in "manifest:{uuid}:{wiring_key}" format.
+    /// Returns true and sets manifestId when a valid manifest UUID is found.
+    /// Used by the production dispatch path to route to the admin-chosen manifest
+    /// (PackageWiringEditor) instead of resolving by axes alone.
+    /// </summary>
+    private static bool TryExtractTargetRefManifestId(EndpointRequestDto request, out Guid manifestId)
+    {
+        manifestId = Guid.Empty;
+        if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var payload = request.Payload.Value;
+        if (!payload.TryGetProperty("target_ref", out var targetRefEl) ||
+            targetRefEl.ValueKind != JsonValueKind.String)
+            return false;
+
+        var targetRef = targetRefEl.GetString();
+        if (string.IsNullOrWhiteSpace(targetRef)) return false;
+
+        // Expected format: "manifest:{guid}:{wiring_key}"
+        if (!targetRef.StartsWith("manifest:", StringComparison.OrdinalIgnoreCase)) return false;
+
+        var parts = targetRef.Split(':', 3);
+        if (parts.Length < 2) return false;
+
+        return Guid.TryParse(parts[1], out manifestId);
     }
 
     private Task<EndpointResponseDto> DispatchToHandlerAsync(

@@ -85,6 +85,7 @@ export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispa
     action,
     wiringKey: (node.wiringKey && node.wiringKey.trim()) ? node.wiringKey.trim() : undefined,
     wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : undefined,
+    targetRef: (node.targetRef && node.targetRef.trim()) ? node.targetRef.trim() : undefined,
   };
 }
 

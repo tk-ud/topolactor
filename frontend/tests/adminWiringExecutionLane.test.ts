@@ -96,6 +96,44 @@ Deno.test("buildRuntimeDispatchSpec: absent targetSurface defaults to 'default'"
   assertEquals(spec!.layer, "screen_list");
 });
 
+Deno.test("buildRuntimeDispatchSpec: targetRef forwarded when present", () => {
+  const manifestId = "aaaaaaaa-bbbb-cccc-dddd-000000000001";
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "search",
+    targetSurface: "screen",
+    wiringKey: "search_key",
+    wiringId: "wiring-001",
+    targetRef: `manifest:${manifestId}:search_key`,
+  });
+  assertExists(spec);
+  assertEquals(spec!.targetRef, `manifest:${manifestId}:search_key`);
+  assertEquals(spec!.wiringKey, "search_key");
+  assertEquals(spec!.wiringId, "wiring-001");
+});
+
+Deno.test("buildRuntimeDispatchSpec: targetRef absent when node has no targetRef", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "search",
+    targetSurface: "screen",
+    wiringKey: "search_key",
+    wiringId: "wiring-002",
+  });
+  assertExists(spec);
+  assertEquals(spec!.targetRef, undefined);
+});
+
+Deno.test("buildRuntimeDispatchSpec: null targetRef coerced to undefined", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "search",
+    targetRef: null,
+  });
+  assertExists(spec);
+  assertEquals(spec!.targetRef, undefined);
+});
+
 // ─── buildCatalogComponentEventBinding ────────────────────────────────────────
 
 Deno.test("buildCatalogComponentEventBinding: null spec returns empty object", () => {
@@ -137,6 +175,25 @@ Deno.test("buildCatalogComponentEventBinding: Create spec sets correct dispatch 
   assertEquals(rd.action, "Create");
   assertEquals(rd.target, "default");
   assertEquals(rd.layer, "entity");
+});
+
+Deno.test("buildCatalogComponentEventBinding: spec with targetRef carries it to runtimeDispatch", () => {
+  const manifestId = "aaaaaaaa-bbbb-cccc-dddd-000000000001";
+  const spec: RuntimeDispatchSpec = {
+    operationType: "Search",
+    target: "screen",
+    layer: "screen_list",
+    action: "Search",
+    wiringKey: "search_key",
+    wiringId: "wiring-001",
+    targetRef: `manifest:${manifestId}:search_key`,
+  };
+  const binding = buildCatalogComponentEventBinding(spec);
+  const clickBinding = binding.click as Record<string, unknown>;
+  const rd = clickBinding.runtimeDispatch as Record<string, unknown>;
+  assertEquals(rd.targetRef, `manifest:${manifestId}:search_key`);
+  assertEquals(rd.wiringKey, "search_key");
+  assertEquals(rd.wiringId, "wiring-001");
 });
 
 // ─── adaptComponentDataHub with full runtimeDispatch spec ────────────────────

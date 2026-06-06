@@ -333,6 +333,9 @@ export async function queueAdminClientCommand(
  * Full dispatch spec derived from ui_wiring_registry via backend emission.
  * Carries the complete routing tuple for component_wiring_execution_lane dispatch.
  * target and layer are derived from targetSurface and wiringKind by renderEmission.
+ * targetRef carries the admin-configured manifest reference (e.g. "manifest:<uuid>:<wiringKey>")
+ * and is forwarded as target_ref in the dispatch payload so the backend can route to the
+ * specific manifest chosen in PackageWiringEditor instead of resolving by axes alone.
  */
 export type RuntimeDispatchSpec = {
   operationType: string;
@@ -341,6 +344,8 @@ export type RuntimeDispatchSpec = {
   action: string;
   wiringKey?: string;
   wiringId?: string;
+  /** Admin-configured target reference: "manifest:<uuid>:<wiringKey>" or similar. */
+  targetRef?: string;
 };
 
 /**
@@ -351,6 +356,8 @@ export type RuntimeDispatchSpec = {
  *
  * Receives the full dispatch spec from backend emission (not just an action string).
  * target/layer come from the admin-configured wiring (targetSurface, wiringKind).
+ * wiringKey, wiringId, and targetRef are forwarded in the payload so the backend can
+ * route to the exact admin-chosen manifest when target_ref is present.
  * Reads token from sessionStorage (same source as flushComponentEvents).
  * Uses queueAdminClientCommand so triggerKind="client" is always injected.
  */
@@ -358,12 +365,17 @@ export async function enqueueRuntimeComponentCommand(
   spec: RuntimeDispatchSpec,
 ): Promise<ScheduledCommandResult> {
   const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
+  const payload: Record<string, unknown> = {};
+  if (spec.wiringKey) payload.wiring_key = spec.wiringKey;
+  if (spec.wiringId) payload.wiring_id = spec.wiringId;
+  if (spec.targetRef) payload.target_ref = spec.targetRef;
   return queueAdminClientCommand(
     {
       operationType: spec.operationType,
       target: spec.target,
       layer: spec.layer,
       action: spec.action,
+      ...(Object.keys(payload).length > 0 ? { payload } : {}),
     },
     token,
   );
