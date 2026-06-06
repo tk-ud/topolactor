@@ -162,6 +162,38 @@ public class ManifestDispatcher
                             $"No manifest found for db_notify manifest_id={dbNotifyManifestId}.")]);
                 }
             }
+            else if (TryGetRawTargetRef(request, out var rawTargetRef))
+            {
+                // target_ref present in payload — must parse as "manifest:{uuid}:{wiring_key}".
+                // Malformed target_ref returns TARGET_REF_INVALID: silent axes-fallback risks
+                // routing to an unintended manifest when the admin-configured ref is broken.
+                if (!TryParseManifestTargetRef(rawTargetRef!, out var targetRefManifestId))
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: malformed target_ref '{TargetRef}' — expected manifest:{{uuid}}:{{key}} format.",
+                        rawTargetRef);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "TARGET_REF_INVALID",
+                            $"target_ref '{rawTargetRef}' is not a valid manifest reference. Expected format: manifest:<uuid>:<wiring_key>.")]);
+                }
+
+                manifest = await _manifestRepository.LoadByIdAsync(targetRefManifestId, ct);
+                if (manifest is null)
+                {
+                    _logger.LogWarning(
+                        "ManifestDispatcher: manifest not found for target_ref manifest_id={ManifestId}.",
+                        targetRefManifestId);
+                    return new EndpointResponseDto(
+                        Success: false,
+                        Emission: null,
+                        Errors: [new ValidationError(
+                            "MANIFEST_NOT_FOUND",
+                            $"No manifest found for target_ref manifest_id={targetRefManifestId}.")]);
+                }
+            }
             else
             {
                 manifest = await _manifestRepository.ResolveActiveManifestAsync(
@@ -245,6 +277,48 @@ public class ManifestDispatcher
             return false;
 
         return Guid.TryParse(manifestIdEl.GetString(), out manifestId);
+    }
+
+    /// <summary>
+    /// Extracts the raw target_ref string from payload when the field is present and non-empty.
+    /// Returns false when target_ref is absent, null, or empty — falling through to axes resolution.
+    /// Returns true with the raw string when present, regardless of format validity.
+    /// The caller must then call TryParseManifestTargetRef to validate the format.
+    /// </summary>
+    private static bool TryGetRawTargetRef(EndpointRequestDto request, out string? rawTargetRef)
+    {
+        rawTargetRef = null;
+        if (!request.Payload.HasValue || request.Payload.Value.ValueKind != JsonValueKind.Object)
+            return false;
+
+        var payload = request.Payload.Value;
+        if (!payload.TryGetProperty("target_ref", out var targetRefEl) ||
+            targetRefEl.ValueKind != JsonValueKind.String)
+            return false;
+
+        var value = targetRefEl.GetString();
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        rawTargetRef = value;
+        return true;
+    }
+
+    /// <summary>
+    /// Parses a raw target_ref string in "manifest:{uuid}:{wiring_key}" format.
+    /// Returns true and sets manifestId when the format is valid.
+    /// Returns false for any other format — caller must treat this as TARGET_REF_INVALID.
+    /// Silent axes-fallback for malformed refs risks routing to an unintended manifest.
+    /// </summary>
+    private static bool TryParseManifestTargetRef(string rawTargetRef, out Guid manifestId)
+    {
+        manifestId = Guid.Empty;
+        if (!rawTargetRef.StartsWith("manifest:", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var parts = rawTargetRef.Split(':', 3);
+        if (parts.Length < 2) return false;
+
+        return Guid.TryParse(parts[1], out manifestId);
     }
 
     private Task<EndpointResponseDto> DispatchToHandlerAsync(

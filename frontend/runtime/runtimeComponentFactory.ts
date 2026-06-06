@@ -91,7 +91,9 @@ import Box from "../components/Box.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
   emitComponentOperationEvent,
+  enqueueRuntimeComponentCommand,
   type NormalizedComponentEventType,
+  type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 
@@ -104,6 +106,8 @@ type EventBindingValue = {
   eventType: NormalizedComponentEventType;
   actorOrSource?: string;
   payload?: Record<string, unknown>;
+  /** component_wiring_execution_lane: when present, emitBoundEvent fires runtime dispatch via enqueueRuntimeComponentCommand. */
+  runtimeDispatch?: RuntimeDispatchSpec;
 };
 
 function parseEventBinding(value: unknown): EventBindingValue | null {
@@ -135,10 +139,37 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     payload !== undefined &&
     (typeof payload !== "object" || payload === null || Array.isArray(payload))
   ) return null;
+  const runtimeDispatchRaw = (value as Record<string, unknown>).runtimeDispatch;
+  let runtimeDispatch: RuntimeDispatchSpec | undefined;
+  if (runtimeDispatchRaw !== undefined) {
+    if (
+      typeof runtimeDispatchRaw !== "object" ||
+      runtimeDispatchRaw === null ||
+      Array.isArray(runtimeDispatchRaw)
+    ) return null;
+    const rd = runtimeDispatchRaw as Record<string, unknown>;
+    const action = rd.action;
+    const target = rd.target;
+    const layer = rd.layer;
+    if (typeof action !== "string" || !action.trim()) return null;
+    if (typeof target !== "string" || !target.trim()) return null;
+    if (typeof layer !== "string" || !layer.trim()) return null;
+    const operationType = typeof rd.operationType === "string" ? rd.operationType.trim() : action.trim();
+    runtimeDispatch = {
+      operationType,
+      target: target.trim(),
+      layer: layer.trim(),
+      action: action.trim(),
+      wiringKey: typeof rd.wiringKey === "string" ? rd.wiringKey : undefined,
+      wiringId: typeof rd.wiringId === "string" ? rd.wiringId : undefined,
+      targetRef: typeof rd.targetRef === "string" ? rd.targetRef : undefined,
+    };
+  }
   return {
     eventType: eventType as NormalizedComponentEventType,
     actorOrSource,
     payload: (payload as Record<string, unknown> | undefined) ?? {},
+    runtimeDispatch,
   };
 }
 
@@ -159,7 +190,8 @@ function emitBoundEvent(
       error: `RUNTIME_PRIMITIVE_RENDERER_INVALID_EVENT_BINDING: ${trigger}`,
     };
   }
-  return emitComponentOperationEvent({
+  // Lane 1: frontend_component_event_log_lane — observation log (always).
+  const logResult = emitComponentOperationEvent({
     componentId: spec.componentId,
     packageId: spec.packageId,
     layoutId: spec.layoutId,
@@ -168,6 +200,13 @@ function emitBoundEvent(
     actorOrSource: binding.actorOrSource ?? "runtime_primitive_renderer",
     payload: { ...binding.payload, ...payload },
   });
+  if (!logResult.ok) return logResult;
+  // Lane 2: component_wiring_execution_lane — runtime dispatch (when configured).
+  // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
+  if (binding.runtimeDispatch) {
+    void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
+  }
+  return { ok: true };
 }
 
 function requireBinding(
@@ -2057,3 +2096,7 @@ export {
   resolveComponentKindForLayoutPreview,
 } from "./layoutComponentPreview.ts";
 export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";
+
+export const __testOnly = {
+  parseEventBinding,
+};

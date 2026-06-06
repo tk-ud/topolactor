@@ -66,6 +66,8 @@ public record OperationVector(
 /// ParentNodeId establishes the DOM nesting tree; OrderIndex drives sibling render order.
 /// X/Y/Width/Height are canvas geometry for DOM style projection.
 /// LayoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
+/// WiringId/WiringKey/WiringKind/TargetSurface/TargetRef carry the full admin-configured
+/// wiring spec from ui_wiring_registry — used by the frontend to build the executable dispatch spec.
 /// </summary>
 public record LayoutNode(
     string NodeId,
@@ -80,7 +82,17 @@ public record LayoutNode(
     double Y,
     double Width,
     double Height,
-    IReadOnlyList<string>? LayoutClassRefs = null
+    IReadOnlyList<string>? LayoutClassRefs = null,
+    /// <summary>Component kind from ui_component_registry — required for runtime rendering of catalog_component nodes.</summary>
+    string? ComponentKind = null,
+    /// <summary>Runtime dispatch action derived from ui_wiring_registry.wiring_kind via tensor JOIN. Null when no wiring configured.</summary>
+    string? RuntimeDispatchAction = null,
+    // Wiring spec from ui_wiring_registry — carried for frontend dispatch spec construction.
+    string? WiringId = null,
+    string? WiringKey = null,
+    string? WiringKind = null,
+    string? TargetSurface = null,
+    string? TargetRef = null
 );
 
 /// <summary>

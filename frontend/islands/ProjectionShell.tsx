@@ -4,6 +4,7 @@ import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type SseReceiver } from "../runtime/sseReceiver.ts";
 import type { Emission } from "../api/dispatch.ts";
@@ -35,6 +36,32 @@ function LayoutNode(
       { style: Object.keys(style).length > 0 ? style : undefined, class: className, "data-node-id": spec.nodeId },
       ...childElements,
     ) as JSX.Element;
+  }
+
+  // catalog_component primary path: render via runtimeComponentFactory when runtimeSpec is present.
+  if (spec.runtimeSpec) {
+    const rendered = renderRuntimeComponent(spec.runtimeSpec);
+    if (rendered.ok) {
+      return (
+        <div style={Object.keys(style).length > 0 ? style : undefined} class={className} data-node-id={spec.nodeId}>
+          {rendered.node}
+          {childElements}
+        </div>
+      );
+    }
+    // renderRuntimeComponent failed — explicit error, not silent fallback.
+    console.warn(`[ProjectionShell] catalog_component render failed for node '${spec.nodeId}': ${rendered.error}`);
+    return (
+      <div style={Object.keys(style).length > 0 ? style : undefined} class={className} data-node-id={spec.nodeId}>
+        <SpecCard spec={{ ...spec, componentType: "error", def: { error: rendered.error } }} index={0} />
+        {childElements}
+      </div>
+    );
+  }
+
+  // No runtimeSpec on catalog_component: explicit warning (not silent), fall back to SpecCard.
+  if (spec.nodeKind === "catalog_component") {
+    console.warn(`[ProjectionShell] catalog_component node '${spec.nodeId}' has no runtimeSpec — componentKind absent or adaptation failed.`);
   }
 
   return (

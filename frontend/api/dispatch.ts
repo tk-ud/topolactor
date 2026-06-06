@@ -61,6 +61,16 @@ export type LayoutNode = {
   width?: number;
   height?: number;
   layoutClassRefs?: string[];
+  /** Component kind from ui_component_registry — present on catalog_component nodes when wiring is configured. */
+  componentKind?: string;
+  /** Runtime dispatch action derived from ui_wiring_registry.wiring_kind. Null when no wiring is configured. */
+  runtimeDispatchAction?: string | null;
+  /** Full wiring spec from ui_wiring_registry — used by frontend to build executable dispatch spec. */
+  wiringId?: string | null;
+  wiringKey?: string | null;
+  wiringKind?: string | null;
+  targetSurface?: string | null;
+  targetRef?: string | null;
 };
 
 export type Emission = {

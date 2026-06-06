@@ -4,6 +4,7 @@ import { renderToString } from "preact-render-to-string";
 import { createSseDispatcher } from "../runtime/sseDispatcher.ts";
 import { queueClientCommand } from "../runtime/frontendScheduler.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
+import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
 
@@ -153,10 +154,14 @@ Deno.test("layout DOM: structural_html node renders with componentType='structur
 });
 
 Deno.test("layout DOM: catalog_component node carries all layout projection fields", () => {
+  // componentKind required per SSOT — no registry fallback. Use display/card which renders without required props.
+  ensureRuntimeComponentRegistryInitialized();
   const layoutNodes: LayoutNode[] = [
     {
       nodeId: "node-card",
       nodeKind: "catalog_component",
+      componentKind: "display/card",
+      componentKey: "Card",
       componentId: compAId,
       parentNodeId: undefined,
       slotKey: "slot_a",
@@ -180,7 +185,7 @@ Deno.test("layout DOM: catalog_component node carries all layout projection fiel
   const specs = renderEmission(emission, twoCompRegistry);
 
   assertEquals(specs.length, 1);
-  assertEquals(specs[0].componentType, "default");
+  assertEquals(specs[0].componentType, "display/card");
   assertEquals(specs[0].componentId, compAId);
   assertEquals(specs[0].nodeId, "node-card");
   assertEquals(specs[0].nodeKind, "catalog_component");
@@ -242,14 +247,14 @@ Deno.test("layout DOM: parentNodeId is preserved in ComponentSpec for tree build
 
 Deno.test("layout DOM: DB-equivalent emission with full node fields projects correctly", () => {
   // Closes the layout_patch_json.nodes[] → frontend DOM projection continuity.
-  // Mirrors the shape produced by the backend LayoutProjectionContinuityLiveDbEndToEndTests
-  // after inserting a tensor row with full nodes[]: nodeId, nodeKind, componentId, x/y/w/h,
-  // layoutClassRefs, parentNodeId, slotKey, orderIndex.
+  // componentKind required per SSOT — no registry fallback on catalog_component nodes.
+  ensureRuntimeComponentRegistryInitialized();
   const layoutNodes: LayoutNode[] = [
     // node-slot-b: orderIndex=0, first after sort
     {
       nodeId: "node-slot-b",
       nodeKind: "catalog_component",
+      componentKind: "display/card",
       componentKey: "card",
       componentId: compAId,
       slotKey: "slot_b",
@@ -260,6 +265,7 @@ Deno.test("layout DOM: DB-equivalent emission with full node fields projects cor
     {
       nodeId: "node-slot-a",
       nodeKind: "catalog_component",
+      componentKind: "display/card",
       componentKey: "card",
       componentId: compBId,
       slotKey: "slot_a",
@@ -284,7 +290,7 @@ Deno.test("layout DOM: DB-equivalent emission with full node fields projects cor
   // slot_b: orderIndex=0 → specs[0]
   assertEquals(specs[0].nodeId, "node-slot-b");
   assertEquals(specs[0].componentId, compAId);
-  assertEquals(specs[0].componentType, "default");
+  assertEquals(specs[0].componentType, "display/card");
   assertEquals(specs[0].slotKey, "slot_b");
   assertEquals(specs[0].orderIndex, 0);
   assertEquals(specs[0].x, 10);
@@ -295,7 +301,7 @@ Deno.test("layout DOM: DB-equivalent emission with full node fields projects cor
   // slot_a: orderIndex=1 → specs[1]
   assertEquals(specs[1].nodeId, "node-slot-a");
   assertEquals(specs[1].componentId, compBId);
-  assertEquals(specs[1].componentType, "secondary");
+  assertEquals(specs[1].componentType, "display/card");
   assertEquals(specs[1].slotKey, "slot_a");
   assertEquals(specs[1].orderIndex, 1);
   assertEquals(specs[1].x, 50);
