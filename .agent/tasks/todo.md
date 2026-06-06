@@ -9,7 +9,7 @@
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
 | `owner-decision-required-sso-audit` | SSO/Auth 監査 owner 判断待ち | partial | 3 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
-| `sso-audit-fixes` | SSO/Auth 監査 follow-up 修正 | not_started | 5 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
+| `sso-audit-fixes` | SSO/Auth 監査 follow-up 修正 | done | 5 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -45,38 +45,12 @@
 
 ## Bundle `sso-audit-fixes`
 
-**Status:** not_started  
+**Status:** done  
 **SSOT:** `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml`  
-**Audit date:** 2026-06-06
+**Audit date:** 2026-06-06  
+**Closed:** 2026-06-06
 
-### A: `AdminMasterRosterAudit.AppendAsync` — after フィールドにフル envelope を書き込むバグ
-- **ファイル:** `backend/runtime/AdminMasterRosterAudit.cs`
-- **不整合:** `after is null ? "{}" : json` の `json` は envelope 全体（actor / target_table / timestamp 等を含む）をシリアライズしたもの。`AppendLogsDiffAsync` の `after_state_or_diff_json` 引数には after オブジェクト単体を渡す必要がある。
-- **修正:** `after is null ? "{}" : json` → `after is null ? "{}" : JsonSerializer.Serialize(after)`
-- [ ] `AdminMasterRosterAudit.AppendAsync` の after 引数を `JsonSerializer.Serialize(after)` に修正
-
-### B: `authApi.ts` に `logoutUser()` が存在しない
-- **ファイル:** `frontend/api/authApi.ts`
-- **不整合:** SSOT `auth_runtime_actions.logout` は定義済み。プロキシ `POST /api/auth/logout` も存在するが、フロントエンド API クライアント関数がない。
-- **境界:** admin 専用 logout route は現行 SSOT で独立定義されていないため、`logoutAdmin()` は owner 判断なしに追加しない。
-- [ ] `authApi.ts` に `logoutUser()` 関数を追加（`POST /api/auth/logout`）
-
-### C: `authApi.ts` に `refreshAdminSession()` が存在しない
-- **ファイル:** `frontend/api/authApi.ts`
-- **不整合:** `refreshUserSession()` は実装済みだが、admin 向けの `refreshAdminSession()` がない。プロキシ `POST /api/super_auth/refresh` は存在する。
-- [ ] `authApi.ts` に `refreshAdminSession()` 関数を追加（`POST /api/super_auth/refresh`）
-
-### D: `DEMO_JWT_EXPIRY_HOURS` が事実上必須なのに `.env.example` では optional と記載
-- **ファイル:** `backend/service/JwtTokenIssuer.cs`, `infra/.env.example`, `docs/design/auth-db-session-credential-ssot.yaml`
-- **不整合:** `ValidateConfiguration()` は `DEMO_JWT_EXPIRY_HOURS` が未設定 or 非正整数の場合に `AUTH_JWT_EXPIRY_NOT_CONFIGURED` を返す（ログイン不能）。一方 `.env.example` は `# Backend — optional (defaults shown)` と記載しており矛盾している。SSOT の `signing_key` セクションにもこの変数の記載がない。
-- [ ] `.env.example` の `DEMO_JWT_EXPIRY_HOURS` コメントを required 側へ移す
-- [ ] `auth-db-session-credential-ssot.yaml` の `signing_key` セクションに `DEMO_JWT_EXPIRY_HOURS` を必須として追記
-
-### E: JWT session cookie の `Max-Age` と `DEMO_JWT_EXPIRY_HOURS` の関係が未定義
-- **ファイル:** `frontend/lib/demoSession.ts`, `backend/schema/AuthContracts.cs`, `docs/design/auth-db-session-credential-ssot.yaml`
-- **不整合:** `DEFAULT_MAX_AGE_SEC = 60 * 60 * 24`（ハードコード24h）。`DEMO_JWT_EXPIRY_HOURS` を変更してもフロントエンドの cookie 存続期間は変わらない。一方、現行 `LoginResponseDto` / `RefreshResponseDto` は expiry を返していないため、ログインレスポンスに合わせる実装方針は未確定。
-- **設計選択:** 次のいずれかを選ぶ。1) backend response に `expiresAt` / `expiryHours` を追加して cookie `Max-Age` と連動する。2) frontend が JWT `exp` を読み cookie `Max-Age` を導出する。3) SSOT に「JWT session cookie `Max-Age` は access JWT expiry と独立」と明記する。
-- [ ] cookie `Max-Age` と JWT expiry の関係を SSOT で確定し、その方針に合わせて実装または明記する
+全 5 項目解消済み（A–E）。詳細は実装コミット参照。
 
 ---
 
