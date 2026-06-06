@@ -10,7 +10,7 @@ namespace Topolactor.Repository;
 
 /// <summary>
 /// Production Npgsql implementation of ContextRouteRepository.
-/// Replaces all in-memory skeleton stubs with real SQL operations against context_route_tables.sql.
+/// Replaces all base test-double defaults with real SQL operations against context_route_tables.sql.
 ///
 /// Canonical tables used:
 ///   context_session, context_event, context_token_registry,
@@ -24,7 +24,7 @@ namespace Topolactor.Repository;
 ///   Runs as a 2-step transaction (upsert edge hits, then recompute scope totals) inline on each event append.
 ///
 /// Wiring: inject NpgsqlContextRouteRepository wherever ContextRouteRepository is required
-/// in production DI. Tests continue to use in-memory stubs via virtual method overrides.
+/// in production DI. Tests continue to use in-memory test doubles via virtual method overrides.
 /// </summary>
 public class NpgsqlContextRouteRepository : ContextRouteRepository
 {

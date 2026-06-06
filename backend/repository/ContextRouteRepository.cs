@@ -7,9 +7,9 @@ namespace Topolactor.Repository;
 /// Repository for context route recommendation data:
 /// context events, token registry, prefix vector caches, and transition stats.
 ///
-/// In-memory skeleton: all reads return empty results and all writes are no-ops.
-/// This proves the canonical route integration without requiring a running database.
-/// Production implementation replaces these stubs with real DB queries against
+/// Base test-double behavior: reads return empty results and writes are no-ops.
+/// This keeps unit tests explicit without entering the production DI path.
+/// Production DI uses NpgsqlContextRouteRepository with real DB queries against
 /// context_route_tables.sql.
 /// </summary>
 public class ContextRouteRepository
@@ -30,30 +30,30 @@ public class ContextRouteRepository
     public virtual Task<bool> AppendComponentOperationEventLogAsync(ComponentOperationEventLogRecord ev, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ev);
-        _logger.LogDebug("ContextRouteRepository.AppendComponentOperationEventLogAsync: in-memory skeleton — no-op for key={Key}.", ev.IdempotencyKey);
+        _logger.LogDebug("ContextRouteRepository.AppendComponentOperationEventLogAsync: base test-double default — no-op for key={Key}.", ev.IdempotencyKey);
         return Task.FromResult(true);
     }
 
     /// <summary>
     /// Appends a context event to context_event (append-only).
-    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task AppendContextEventAsync(ContextEventRecord ev, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(ev);
-        _logger.LogDebug("ContextRouteRepository.AppendContextEventAsync: in-memory skeleton — no-op for event={EventId}.", ev.EventId);
+        _logger.LogDebug("ContextRouteRepository.AppendContextEventAsync: base test-double default — no-op for event={EventId}.", ev.EventId);
         return Task.CompletedTask;
     }
 
     /// <summary>
     /// Loads active token records for the given token IDs from context_token_registry.
-    /// In-memory skeleton: returns empty list. Override in tests or production.
+    /// Base test-double behavior: returns empty list. Override in tests or production.
     /// </summary>
     public virtual Task<IReadOnlyList<ContextTokenRecord>> LoadActiveTokensAsync(
         IEnumerable<Guid> tokenIds,
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.LoadActiveTokensAsync: in-memory skeleton — returning empty.");
+        _logger.LogDebug("ContextRouteRepository.LoadActiveTokensAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextTokenRecord>>([]);
     }
 
@@ -62,7 +62,7 @@ public class ContextRouteRepository
     /// Each record includes NextOperation and NextTokenIdsHint from the event
     /// that follows the prefix in the original session, enabling neighbor-derived
     /// next operation and token candidates without a second round-trip.
-    /// In-memory skeleton: returns empty list. Override in tests or production.
+    /// Base test-double behavior: returns empty list. Override in tests or production.
     /// </summary>
     public virtual Task<IReadOnlyList<ContextPrefixVectorRecord>> LoadRecentPrefixVectorsAsync(
         string? tableName,
@@ -70,13 +70,13 @@ public class ContextRouteRepository
         int? maxDays,
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.LoadRecentPrefixVectorsAsync: in-memory skeleton — returning empty.");
+        _logger.LogDebug("ContextRouteRepository.LoadRecentPrefixVectorsAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextPrefixVectorRecord>>([]);
     }
 
     /// <summary>
     /// Loads transition statistics for a given previous operation.
-    /// In-memory skeleton: returns empty list. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty list. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<ContextTransitionStat>> GetTransitionStatsAsync(
         string prevOperation,
@@ -84,14 +84,14 @@ public class ContextRouteRepository
         int candidateLimit,
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.GetTransitionStatsAsync: in-memory skeleton — returning empty for prevOp='{PrevOp}'.", prevOperation);
+        _logger.LogDebug("ContextRouteRepository.GetTransitionStatsAsync: base test-double default — returning empty for prevOp='{PrevOp}'.", prevOperation);
         return Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
     }
 
     /// <summary>
     /// Computes windowed transition stats directly from context_event raw rows.
     /// Uses aggregation_limit (count window) and optional recent_days (date window).
-    /// In-memory skeleton: returns empty list. Override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty list. Override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<ContextTransitionStat>> GetWindowedTransitionStatsAsync(
         string prevOperation,
@@ -100,7 +100,7 @@ public class ContextRouteRepository
         int candidateLimit,
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.GetWindowedTransitionStatsAsync: in-memory skeleton — returning empty.");
+        _logger.LogDebug("ContextRouteRepository.GetWindowedTransitionStatsAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextTransitionStat>>([]);
     }
 
@@ -113,7 +113,7 @@ public class ContextRouteRepository
     {
         ArgumentNullException.ThrowIfNull(ev);
         _logger.LogDebug(
-            "ContextRouteRepository.AppendContextEnumTransitionAsync: in-memory skeleton — no-op for event={EventId}.",
+            "ContextRouteRepository.AppendContextEnumTransitionAsync: base test-double default — no-op for event={EventId}.",
             ev.EventId);
         return Task.CompletedTask;
     }
@@ -128,42 +128,42 @@ public class ContextRouteRepository
         int candidateLimit,
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.GetEnumTransitionStatsAsync: in-memory skeleton — returning empty.");
+        _logger.LogDebug("ContextRouteRepository.GetEnumTransitionStatsAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextEnumTransitionStat>>([]);
     }
 
     /// <summary>
     /// Upserts an event vector cache entry into context_event_vector_cache.
-    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task UpsertEventVectorCacheAsync(ContextEventVector vec, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(vec);
-        _logger.LogDebug("ContextRouteRepository.UpsertEventVectorCacheAsync: in-memory skeleton — no-op for event={EventId}.", vec.EventId);
+        _logger.LogDebug("ContextRouteRepository.UpsertEventVectorCacheAsync: base test-double default — no-op for event={EventId}.", vec.EventId);
         return Task.CompletedTask;
     }
 
     /// <summary>
     /// Upserts a prefix vector cache entry into context_prefix_vector_cache.
-    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task UpsertPrefixVectorCacheAsync(ContextPrefixVectorRecord vec, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(vec);
-        _logger.LogDebug("ContextRouteRepository.UpsertPrefixVectorCacheAsync: in-memory skeleton — no-op for session={SessionId} prefix={PrefixIndex}.", vec.SessionId, vec.PrefixIndex);
+        _logger.LogDebug("ContextRouteRepository.UpsertPrefixVectorCacheAsync: base test-double default — no-op for session={SessionId} prefix={PrefixIndex}.", vec.SessionId, vec.PrefixIndex);
         return Task.CompletedTask;
     }
 
     /// <summary>
     /// Deletes context_event rows older than coldDays in batches of batchSize.
     /// If hotDays is specified, events within the hot window are excluded from deletion.
-    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<int> DeleteOldContextEventsAsync(
         int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.DeleteOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
+            "ContextRouteRepository.DeleteOldContextEventsAsync: base test-double default — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
             coldDays, batchSize, hotDays);
         return Task.FromResult(0);
     }
@@ -171,13 +171,13 @@ public class ContextRouteRepository
     /// <summary>
     /// Moves context_event rows older than coldDays to context_event_cold (cold storage).
     /// If hotDays is specified, events within the hot window are excluded from archival.
-    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<int> ArchiveOldContextEventsAsync(
         int coldDays, int batchSize, int? hotDays = null, CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.ArchiveOldContextEventsAsync: in-memory skeleton — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
+            "ContextRouteRepository.ArchiveOldContextEventsAsync: base test-double default — no-op (cold_days={ColdDays}, batch_size={BatchSize}, hot_days={HotDays}).",
             coldDays, batchSize, hotDays);
         return Task.FromResult(0);
     }
@@ -188,12 +188,12 @@ public class ContextRouteRepository
 
     /// <summary>
     /// Returns all tokens from context_token_registry regardless of status.
-    /// In-memory skeleton: returns empty list. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty list. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<ContextTokenRecord>> ListAllContextTokensAsync(
         CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.ListAllContextTokensAsync: in-memory skeleton — returning empty.");
+        _logger.LogDebug("ContextRouteRepository.ListAllContextTokensAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<ContextTokenRecord>>([]);
     }
 
@@ -201,7 +201,7 @@ public class ContextRouteRepository
     /// Inserts a new token into context_token_registry with status='active'.
     /// Returns CreateTokenResult.Success with the new tokenId on success.
     /// Returns CreateTokenResult.Conflict when UNIQUE(label, "group") is violated.
-    /// In-memory skeleton: throws InvalidOperationException — production requires NpgsqlContextRouteRepository.
+    /// Base test-double behavior: throws InvalidOperationException — production requires NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<CreateTokenResult> CreateContextTokenAsync(
         string label, string? group, float value, CancellationToken ct = default)
@@ -213,12 +213,12 @@ public class ContextRouteRepository
     /// Sets context_token_registry status to 'deprecated' for the given tokenId.
     /// Returns true when the token was found and updated (or was already deprecated).
     /// Returns false when the token does not exist.
-    /// In-memory skeleton: returns false. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns false. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<bool> DeprecateContextTokenAsync(
         Guid tokenId, CancellationToken ct = default)
     {
-        _logger.LogDebug("ContextRouteRepository.DeprecateContextTokenAsync: in-memory skeleton — no-op for tokenId={TokenId}.", tokenId);
+        _logger.LogDebug("ContextRouteRepository.DeprecateContextTokenAsync: base test-double default — no-op for tokenId={TokenId}.", tokenId);
         return Task.FromResult(false);
     }
 
@@ -234,7 +234,7 @@ public class ContextRouteRepository
     /// multi-hot cosine: intersection_count / sqrt(cardinality(a) * cardinality(b))
     ///
     /// Returns empty when queryIds is empty (zero_vector case — caller handles explicitly).
-    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<RegistryVectorNeighbor>> FindRegistryVectorNeighborsAsync(
         string registryTable,
@@ -244,7 +244,7 @@ public class ContextRouteRepository
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.FindRegistryVectorNeighborsAsync: in-memory skeleton — returning empty for table={Table}.",
+            "ContextRouteRepository.FindRegistryVectorNeighborsAsync: base test-double default — returning empty for table={Table}.",
             registryTable);
         return Task.FromResult<IReadOnlyList<RegistryVectorNeighbor>>([]);
     }
@@ -260,7 +260,7 @@ public class ContextRouteRepository
     /// Pass: no neighbor above relatedThreshold.
     ///
     /// All thresholds come from caller (read from policy) — never hardcoded here.
-    /// In-memory skeleton: returns Pass with empty neighbors.
+    /// Base test-double behavior: returns Pass with empty neighbors.
     /// </summary>
     public virtual Task<RegistryVectorValidationResult> ValidateRegistryVectorAsync(
         string registryTable,
@@ -272,7 +272,7 @@ public class ContextRouteRepository
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.ValidateRegistryVectorAsync: in-memory skeleton — returning Pass for table={Table}.",
+            "ContextRouteRepository.ValidateRegistryVectorAsync: base test-double default — returning Pass for table={Table}.",
             registryTable);
         if (queryIds.Count == 0)
         {
@@ -298,7 +298,7 @@ public class ContextRouteRepository
     /// Returns ordered by rank ASC, attention_score DESC.
     ///
     /// scope_limit must be one of {1000, 3000, 10000}. Caller validates from policy.
-    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<HubAttentionCurrentRecord>> LoadHubAttentionCurrentAsync(
         Guid hubId,
@@ -306,7 +306,7 @@ public class ContextRouteRepository
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.LoadHubAttentionCurrentAsync: in-memory skeleton — returning empty for hub={HubId} scope={Scope}.",
+            "ContextRouteRepository.LoadHubAttentionCurrentAsync: base test-double default — returning empty for hub={HubId} scope={Scope}.",
             hubId, scopeLimit);
         return Task.FromResult<IReadOnlyList<HubAttentionCurrentRecord>>([]);
     }
@@ -315,7 +315,7 @@ public class ContextRouteRepository
     /// Upserts a hub attention current row into context_hub_recommendation_current.
     /// ON CONFLICT (hub_id, target_table, candidate_kind, candidate_id, scope_limit) DO UPDATE.
     ///
-    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task UpsertHubAttentionCurrentAsync(
         HubAttentionCurrentRecord record,
@@ -323,7 +323,7 @@ public class ContextRouteRepository
     {
         ArgumentNullException.ThrowIfNull(record);
         _logger.LogDebug(
-            "ContextRouteRepository.UpsertHubAttentionCurrentAsync: in-memory skeleton — no-op for hub={HubId} scope={Scope}.",
+            "ContextRouteRepository.UpsertHubAttentionCurrentAsync: base test-double default — no-op for hub={HubId} scope={Scope}.",
             record.HubId, record.ScopeLimit);
         return Task.CompletedTask;
     }
@@ -332,7 +332,7 @@ public class ContextRouteRepository
     /// Recalculates and updates rank for all rows with the given hub_id and scope_limit,
     /// ordered by attention_score DESC. Runs after a batch of upserts.
     ///
-    /// In-memory skeleton: no-op. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task RecalculateHubAttentionRanksAsync(
         Guid hubId,
@@ -340,7 +340,7 @@ public class ContextRouteRepository
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.RecalculateHubAttentionRanksAsync: in-memory skeleton — no-op for hub={HubId} scope={Scope}.",
+            "ContextRouteRepository.RecalculateHubAttentionRanksAsync: base test-double default — no-op for hub={HubId} scope={Scope}.",
             hubId, scopeLimit);
         return Task.CompletedTask;
     }
@@ -354,7 +354,7 @@ public class ContextRouteRepository
     /// applies the delta to feedback_adjustment in context_hub_recommendation_current.
     ///
     /// delta values come from caller (read from FeedbackWeightUpdatePolicy) — never hardcoded.
-    /// In-memory skeleton: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: no-op, returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<int> ApplyFeedbackWeightUpdateAsync(
         IReadOnlyList<HubFeedbackEvent> events,
@@ -362,7 +362,7 @@ public class ContextRouteRepository
     {
         ArgumentNullException.ThrowIfNull(events);
         _logger.LogDebug(
-            "ContextRouteRepository.ApplyFeedbackWeightUpdateAsync: in-memory skeleton — no-op for {Count} events.",
+            "ContextRouteRepository.ApplyFeedbackWeightUpdateAsync: base test-double default — no-op for {Count} events.",
             events.Count);
         return Task.FromResult(0);
     }
@@ -377,13 +377,13 @@ public class ContextRouteRepository
     /// HasEvidence is true when evidence_json contains at least one element.
     ///
     /// Used by SystemOperationCiRuntime cron-triggered checks.
-    /// In-memory skeleton: returns empty. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns empty. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<IReadOnlyList<HubAttentionCiSummary>> LoadHubAttentionSummaryForCiAsync(
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.LoadHubAttentionSummaryForCiAsync: in-memory skeleton — returning empty.");
+            "ContextRouteRepository.LoadHubAttentionSummaryForCiAsync: base test-double default — returning empty.");
         return Task.FromResult<IReadOnlyList<HubAttentionCiSummary>>([]);
     }
 
@@ -392,12 +392,12 @@ public class ContextRouteRepository
     /// Used by SystemOperationCiRuntime to check current rebuildability:
     /// if hub attention records exist but event count is 0, current is not rebuildable.
     ///
-    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<long> CountContextEventsAsync(CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.CountContextEventsAsync: in-memory skeleton — returning 0.");
+            "ContextRouteRepository.CountContextEventsAsync: base test-double default — returning 0.");
         return Task.FromResult(0L);
     }
 
@@ -406,12 +406,12 @@ public class ContextRouteRepository
     /// Used by SystemOperationCiRuntime rebuildability check as a secondary event source:
     /// if context_event is empty but feedback events exist, current is still rebuildable.
     ///
-    /// In-memory skeleton: returns 0. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns 0. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<long> CountFeedbackEventsAsync(CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.CountFeedbackEventsAsync: in-memory skeleton — returning 0.");
+            "ContextRouteRepository.CountFeedbackEventsAsync: base test-double default — returning 0.");
         return Task.FromResult(0L);
     }
 
@@ -421,13 +421,13 @@ public class ContextRouteRepository
     /// hub attention record (candidate_kind = 'token').
     ///
     /// Used by SystemOperationCiRuntime to detect orphaned active registry tokens.
-    /// In-memory skeleton: returns zero counts. Production: override in NpgsqlContextRouteRepository.
+    /// Base test-double behavior: returns zero counts. Production: override in NpgsqlContextRouteRepository.
     /// </summary>
     public virtual Task<RegistryTokenCiSummary> LoadRegistryTokenSummaryForCiAsync(
         CancellationToken ct = default)
     {
         _logger.LogDebug(
-            "ContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: in-memory skeleton — returning zero counts.");
+            "ContextRouteRepository.LoadRegistryTokenSummaryForCiAsync: base test-double default — returning zero counts.");
         return Task.FromResult(new RegistryTokenCiSummary(TotalActiveTokens: 0, UnreferencedTokenCount: 0));
     }
 }

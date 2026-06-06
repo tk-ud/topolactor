@@ -693,24 +693,25 @@ system_roadmap_ssot:
         - manual acceptance / hand-debug verification remains before production-ready promotion
 
     product.dynamic_support_nocode_loop:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M6_external_integration
       public_summary: >
-        Dynamic-support no-code loop implementation boundaries are closed for CI Attention
-        authoring guidance and SQL Attention recommendation feedback UX. The M6 self-hosted admin
-        route split is canonical. frontend.admin_routes detailed no-code wizard bundle is now
-        implemented (all 8 /admin/contents authoring steps, structured field persistence,
-        explicit wiring failure, /admin/ui-builder authoring surface). Combined UX manual
-        acceptance / hand-debug verification remains pending. Future optional external
-        connector surfaces remain outside M6 scope. M7 SQL Attention canonical alignment blockers
-        are implemented under SQLA-IDSPACE-STEP4 and SQLA-GENERATION-STEP4; combined UX manual verification remains separate.
+        Dynamic-support no-code loop implementation boundaries are closed for runtime dispatch,
+        projection loop, recommend child island, SQL Attention recommendation feedback UX,
+        admin CSV/JSON import, and the M6 self-hosted admin route split. frontend.admin_routes
+        detailed no-code wizard bundle is implemented (all /admin/contents authoring steps,
+        structured field persistence, explicit wiring failure, /admin/ui-builder authoring surface).
+        Remaining work is manual acceptance / hand-debug verification of the combined UX loop,
+        tracked separately as product-nocode-loop-acceptance; it is not a runtime implementation gap.
+        Future optional external connector surfaces remain outside M6 scope.
       completion_condition:
-        - frontend_admin_routes_detailed_nocode_wizard_bundle_is_completed
-        - manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux
+        - runtime_dispatch_loop_is_wired_through_scheduler_dispatcher_runtime_executor
+        - projection_loop_refreshes_backend_emission_without_frontend_topology_judgment
+        - recommend_child_island_and_SQL_attention_feedback_projection_are_wired
+        - admin_csv_json_import_and_admin_authoring_routes_are_available_for_self_hosted_M6_loop
       known_gap_ref:
-        - frontend.admin_routes detailed no-code wizard bundle is now implemented (see frontend.admin_routes entry)
-        - manual acceptance / hand-debug verification pending for combined UX loop
+        - manual acceptance / hand-debug verification pending for combined UX loop (product-nocode-loop-acceptance)
 
     backend.sql_attention_topology_projection:
       status: implemented
@@ -885,6 +886,41 @@ system_roadmap_ssot:
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
+    backend.screen_data_shape_runtime_query_evaluator:
+      status: implemented
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        ScreenDataShapeQueryRuntime is invoked from RuntimeExecutor for manifest-scoped
+        screen_list/screen_read actions after manifestId resolution. It loads screen_data_shape
+        topology from ManifestRepository, evaluates searchConditions, havingConditions,
+        aggregation/aggregationBlocks, displayColumns, and displayColumnMode over initialDataRows,
+        and uses screenReadQueryWiring valueSource bindings to resolve runtime values. Results are
+        attached to emission.Data. Remaining evidence is broader real-DB/fixture manual acceptance,
+        not a runtime implementation gap.
+      files:
+        - backend/runtime/ScreenDataShapeQueryRuntime.cs
+        - backend/runtime/RuntimeExecutor.cs
+        - backend/tests/Topolactor.Runtime.Tests/ScreenDataShapeQueryRuntimeTests.cs
+        - frontend/lib/screenReadQueryWiring.ts
+        - frontend/tests/screenReadQueryWiring.test.ts
+      evidence:
+        tests:
+          - ScreenDataShapeQueryRuntimeTests
+          - screenReadQueryWiring.test.ts
+        ci:
+          - backend-tests
+          - frontend-types
+      completion_condition:
+        - screen_data_shape_topology_is_loaded_by_manifest_id_for_screen_read_actions
+        - searchConditions_havingConditions_aggregation_and_displayColumnMode_are_evaluated
+        - screenReadQueryWiring_valueSource_bindings_are_consumed_by_runtime_query_evaluator
+        - RuntimeExecutor_attaches_screen_data_shape_result_to_emission_Data
+      known_gap_ref:
+        - real DB / manifest fixture acceptance remains evidence-only before production-ready promotion
+      detail_ssot:
+        - docs/design/admin-console-workflow-ssot.yaml
+
     backend.runtime_executor:
       status: implemented
       production_ready: false
@@ -1017,19 +1053,19 @@ system_roadmap_ssot:
 
 
     backend.output_lanes:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M3_unified_timeline_and_output_lanes
       public_summary: >
         OutputLaneRouter called from RuntimeExecutor pipeline after emission. db_notify_emission
         sends pg_notify with {table_id, table_registry_id, manifest_id} (manifestId forwarded
         from ManifestDispatcher). registry_attractor_update lane now enqueues
-        AttractorRebuildSignal to RebuildSignalChannel (bounded Channel, Gap-6 skeleton
-        replaced with real in-process signal queue). SystemOperationCiScheduler now consumes
+        AttractorRebuildSignal to RebuildSignalChannel (bounded Channel, real in-process
+        signal queue). SystemOperationCiScheduler now consumes
         this signal channel and triggers rebuildability inspection.
         SseProjectionRuntime added as sse_projection_runtime handler: db_notify hook triggers
         are routed through ManifestDispatcher to SseProjectionRuntime → SseEventBroadcaster.
-        AdminRuntime live verification is in check-runtime-environment.sh. db_notify dispatch now resolves source manifest identity via manifest_id and uses db_notify_projection_mapping (not runtime_mapping) to reach sse_projection_runtime. OutputLaneRouter full db_notify/SSE live verification remains TODO.
+        check-runtime-environment.sh covers the live pg_notify/listen/SSE probe. db_notify dispatch resolves source manifest identity via manifest_id and uses db_notify_projection_mapping (not runtime_mapping) to reach sse_projection_runtime; remaining production_readiness is deployment evidence, not implementation.
       files:
         - backend/runtime/OutputLaneRouter.cs
         - backend/runtime/RuntimeExecutor.cs
@@ -1054,7 +1090,7 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
 
     backend.sse_emitter:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M4_projection_runtime
       public_summary: >
@@ -1065,7 +1101,7 @@ system_roadmap_ssot:
         removed; canonical route invariant satisfied. check-runtime-environment.sh now
         verifies live pg_notify -> DbNotifyListener -> scheduler -> ManifestDispatcher ->
         SseProjectionRuntime -> SseEventBroadcaster -> /sse by observing probe_id on SSE.
-        Remaining: SSE projection lane dispatcher/receiver/projection_runtime wiring (M4).
+        Frontend receiver/dispatcher/projection-shell refresh are tracked as implemented M4 entries.
       files:
         - backend/endpoint/SseEndpoint.cs
         - backend/Program.cs
@@ -1363,8 +1399,6 @@ system_roadmap_ssot:
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
-        - screen_data_shape_runtime_query_evaluator_via_topology_transform_runtime
-        - screen_read_query_wiring_ui_builder_manifest_target_binding_candidates
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
@@ -1614,17 +1648,32 @@ system_roadmap_ssot:
         - keyboard_or_button_alternatives_for_drag_move_resize_and_reorder (accessibility — tracked separately per SSOT accessibility_ref)
 
     backend.context_route_repository:
-      status: partial
+      status: implemented
       production_ready: false
       milestone: M5_admin_and_ui_topology
-      public_summary: Context route repository surfaces exist, with placeholder and stub paths still present.
+      public_summary: >
+        Production DI fail-closes when DATABASE_URL is missing and injects NpgsqlContextRouteRepository
+        for ContextRouteRepository. NpgsqlContextRouteRepository implements real SQL paths for
+        context_token_registry, component_operation_event_log, context_event,
+        context_transition_stats, context_enum_transition_stats, context event/prefix vector caches,
+        and hub attention/feedback read-write surfaces. The base class remains a unit-test double
+        default and is not wired into production runtime.
       files:
+        - backend/Program.cs
         - backend/repository/ContextRouteRepository.cs
         - backend/repository/NpgsqlContextRouteRepository.cs
+      evidence:
+        tests:
+          - ContextRouteRecommendationResolverTests
+          - TopologyVectorRuntimeTests
+        ci:
+          - backend-tests
       completion_condition:
+        - production_DI_injects_NpgsqlContextRouteRepository
+        - DATABASE_URL_missing_fails_close_without_in_memory_fallback
         - context_route_repository_uses_production_runtime_paths_without_placeholder_behavior
-      known_gap_ref:
-        - Gap-10 context_route_repository implementation hardening
+        - context_route_SQL_surfaces_cover_token_registry_event_logs_transition_stats_enum_stats_and_prefix_vectors
+      known_gap_ref: []
 
     backend.topology_repository:
       status: implemented

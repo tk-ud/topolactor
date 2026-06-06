@@ -1,6 +1,6 @@
 # Agent Task List
 
-未処理は **bundle 単位**で実装・レビューする。掲載は `not_started` / `partial` のみ。
+未処理は **bundle 単位**で実装・レビューする。掲載は `not_started` / `partial` / `acceptance_pending` のみ。
 
 ---
 
@@ -11,7 +11,7 @@
 | `owner-decision-required-sso-audit` | SSO/Auth 監査 owner 判断待ち | partial | 3 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
 
@@ -47,7 +47,7 @@
 **Status:** not_started  
 **SSOT:** `docs/design/extended-runtime-bundle-registry-ssot.yaml`
 
-- [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhooks / external REST API connectors / `dynamic_support_nocode_loop_bundle` は、個別 SSOT が揃うまで実装しない
+- [ ] Notion / Google Sheets / Slack / GitHub Issues / generic webhooks / external REST API connectors は、個別 SSOT と connector adapter contract が揃うまで optional external surface として実装しない（CSV/JSON admin import と M6 self-hosted no-code loop とは別 bundle）
 
 ---
 
@@ -65,7 +65,9 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `product-nocode-loop-acceptance`
 
-**Status:** not_started  
+**Status:** acceptance_pending  
 **Roadmap/status SSOT:** `docs/system-roadmap.yaml`
 
-- [ ] `product.dynamic_support_nocode_loop` の `manual_acceptance_confirms_authoring_guidance_sql_attention_feedback_and_m6_admin_loop_as_one_ux` を手動受入 / hand-debug で確認する
+実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
+
+- [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
