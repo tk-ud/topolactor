@@ -970,14 +970,12 @@ system_roadmap_ssot:
         Auth MVP scaffold is implemented for DB-backed user credentials, sessions, hashed refresh
         tokens, login audit, realm/audience-separated user and admin login/refresh/logout routes,
         and environment-sourced demo JWT signing. This is intentionally scoped to the DB
-        credential/session/refresh-token + demo JWT scaffold MVP; production auth hardening is
-        not complete and remains a carry-over bundle.
-      remaining_production_hardening_scope:
-        - replace_demo_jwt_secret_contract_with_production_key_management_rotation_and_algorithm_policy
-        - harden_refresh_cookie_policy_csrf_expiry_revocation_reuse_detection_and_device_session_controls
-        - add_rate_limit_lockout_password_policy_and_login_abuse_detection
-        - complete_admin_authorization_scopes_grants_and_audit_review_for_production_operations
-        - complete_live_db_and_security_regression_coverage_for_auth_failure_paths
+        credential/session/refresh-token + demo JWT scaffold MVP; projection app auth boundary
+        residue remains a carry-over bundle.
+      remaining_projection_app_auth_boundary_scope:
+        - normal_user_registration_projection_surface_is_not_implemented
+        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
+        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
       files:
         - db/auth_tables.sql
         - db/auth_seed.sql
@@ -1008,7 +1006,9 @@ system_roadmap_ssot:
         - login_denial_codes_cover_inactive_unapproved_and_suspended_users
         - jwt_signing_secret_is_environment_sourced_and_not_stored_in_topology_hubs_or_manifest
       known_gap_ref:
-        - production_auth_hardening_remaining_scope_is_key_management_cookie_csrf_rate_limit_lockout_authorization_audit_and_live_security_regression_coverage
+        - normal_user_registration_projection_surface_is_not_implemented
+        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
+        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
       detail_ssot:
         - docs/design/auth-db-session-credential-ssot.yaml
         - docs/design/runtime-orchestration-ssot.yaml

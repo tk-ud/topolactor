@@ -9,7 +9,7 @@
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
-| `production-auth-hardening` | Production auth hardening | partial | 1 | `docs/design/auth-db-session-credential-ssot.yaml` |
+| `projection-app-auth-boundary` | Projection app auth boundary | partial | 1 | `docs/design/auth-db-session-credential-ssot.yaml` |
 
 ---
 
@@ -33,13 +33,13 @@
 
 ---
 
-## Bundle `production-auth-hardening`
+## Bundle `projection-app-auth-boundary`
 
 **Status:** partial
 **SSOT:** `docs/design/auth-db-session-credential-ssot.yaml`
-**Roadmap:** `backend.auth_db_session_credential_mvp` / `known_gap_ref: production_auth_hardening_remaining_scope_is_key_management_cookie_csrf_rate_limit_lockout_authorization_audit_and_live_security_regression_coverage`
+**Roadmap:** `backend.auth_db_session_credential_mvp` / `known_gap_ref: normal_user_registration_projection_surface_is_not_implemented`, `projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented`, `admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary`
 
-- [ ] Production auth hardening bundle — replace demo JWT scaffold with production key management/rotation/algorithm policy, harden refresh cookie + CSRF + expiry/revocation/reuse/device-session controls, add rate-limit/lockout/password policy/login abuse detection, complete admin scopes/grants/audit review, and add live DB/security regression coverage for auth failure paths.
+- [ ] Projection app auth boundary bundle — implement normal user registration projection surface, projection app auth fallback to login/register projection, and frontend projection boundary guard that blocks admin access for non-admin user tokens.
 
 ---
 
