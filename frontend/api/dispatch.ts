@@ -61,7 +61,7 @@ export type RecommendProjectionCandidate = {
 
 export type RecommendProjectionSection = {
   lane: "ui_pressure" | "state_pressure";
-  candidateKind: "next_operation" | "next_component" | "next_route_action" | "next_enum_item" | "likely_status" | "state_shift_candidate";
+  candidateKind: "next_operation" | "next_component" | "next_route_action" | "next_context_token" | "next_enum_item" | "likely_status" | "state_shift_candidate";
   title: string;
   status: RecommendProjectionStatus;
   statusDetail?: string | null;

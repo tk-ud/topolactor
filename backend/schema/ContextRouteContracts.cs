@@ -195,8 +195,8 @@ public enum RecommendProjectionStatus
 /// <summary>
 /// Backend-resolved, render-only lane section for the recommend child island.
 /// CandidateKind is the backend-authored display semantic (next_operation,
-/// next_component, next_route_action, next_enum_item, likely_status,
-/// state_shift_candidate, next_hub_projection_candidate).
+/// next_component, next_route_action, next_context_token, next_enum_item,
+/// likely_status, state_shift_candidate, next_hub_projection_candidate).
 /// </summary>
 public record RecommendProjectionSection(
     string Lane,
@@ -239,13 +239,10 @@ public record RecommendNavigationProjectionSpec(
         var status = ToProjectionStatus(recommendation?.Status);
         var detail = recommendation?.StatusDetail;
 
-        var uiCandidates = new List<RecommendProjectionCandidate>();
-        if (recommendation is not null)
-        {
-            uiCandidates.AddRange(recommendation.NextOperations.Select(ToProjectionCandidate));
-            uiCandidates.AddRange(recommendation.NextTokens.Select(ToProjectionCandidate));
-        }
-
+        var operationCandidates = recommendation?.NextOperations.Select(ToProjectionCandidate).ToArray()
+            ?? [];
+        var contextTokenCandidates = recommendation?.NextTokens.Select(ToProjectionCandidate).ToArray()
+            ?? [];
         var stateCandidates = recommendation?.NextEnumItems.Select(ToProjectionCandidate).ToArray()
             ?? [];
 
@@ -267,7 +264,14 @@ public record RecommendNavigationProjectionSpec(
                     Title: "UI / operation pressure",
                     Status: status,
                     StatusDetail: detail,
-                    Candidates: uiCandidates.Where(c => c.Lane == RecommendationPressureLanes.UiPressure).ToArray()),
+                    Candidates: operationCandidates.Where(c => c.Lane == RecommendationPressureLanes.UiPressure).ToArray()),
+                new RecommendProjectionSection(
+                    Lane: RecommendationPressureLanes.UiPressure,
+                    CandidateKind: "next_context_token",
+                    Title: "Context token pressure",
+                    Status: status,
+                    StatusDetail: detail,
+                    Candidates: contextTokenCandidates.Where(c => c.Lane == RecommendationPressureLanes.UiPressure).ToArray()),
                 new RecommendProjectionSection(
                     Lane: RecommendationPressureLanes.StatePressure,
                     CandidateKind: "next_enum_item",

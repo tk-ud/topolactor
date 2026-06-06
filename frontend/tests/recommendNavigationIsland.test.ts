@@ -14,6 +14,7 @@ Deno.test("RecommendNavigationIsland contract: hub-local lanes are distinct and 
   const sqlBlock = await Deno.readTextFile(new URL("../components/SqlAttentionProjectionBlock.tsx", import.meta.url));
   assertStringIncludes(hubBlock, 'section.lane === "ui_pressure"');
   assertStringIncludes(hubBlock, 'section.lane === "state_pressure"');
+  assertStringIncludes(hubBlock, "candidateKind");
   assert(!hubBlock.includes("sql_attention_projection"), "hub-local block must not render SQL Attention lane candidates");
   assertStringIncludes(sqlBlock, 'data-recommend-lane="sql_attention_projection"');
   assertStringIncludes(sqlBlock, "explicit unavailable");
@@ -33,6 +34,13 @@ Deno.test("RecommendNavigationProjectionSpec type carries backend-resolved child
         candidates: [{ value: "Search", score: 0.9, evidence: ["transition"], lane: "ui_pressure" }],
       },
       {
+        lane: "ui_pressure",
+        candidateKind: "next_context_token",
+        title: "Context token pressure",
+        status: "ok",
+        candidates: [{ value: "token-a", score: 0.8, evidence: ["neighbor"], lane: "ui_pressure" }],
+      },
+      {
         lane: "state_pressure",
         candidateKind: "next_enum_item",
         title: "State / enum pressure",
@@ -49,6 +57,12 @@ Deno.test("RecommendNavigationProjectionSpec type carries backend-resolved child
     },
   };
 
-  assertEquals(spec.hubLocalSections.map((section) => section.lane), ["ui_pressure", "state_pressure"]);
+  assertEquals(spec.hubLocalSections.map((section) => section.candidateKind), ["next_operation", "next_context_token", "next_enum_item"]);
   assertEquals(spec.sqlAttentionProjection.status, "explicit_unavailable");
+});
+
+Deno.test("RecommendationPanel labels nextTokens as context tokens, not component or route-action candidates", async () => {
+  const panel = await Deno.readTextFile(new URL("../components/RecommendationPanel.tsx", import.meta.url));
+  assertStringIncludes(panel, "next_context_token candidates");
+  assert(!panel.includes("next_component / next_route_action candidates"));
 });

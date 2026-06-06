@@ -13,7 +13,10 @@ public class RecommendNavigationProjectionSpecTests
             [
                 new RecommendationCandidate("Search", 0.9f, 0.8f, ["operation transition"], RecommendationPressureLanes.UiPressure)
             ],
-            NextTokens: [],
+            NextTokens:
+            [
+                new RecommendationCandidate("ctx-token", 0.8f, 0.7f, ["token vote"], RecommendationPressureLanes.UiPressure)
+            ],
             NextEnumItems:
             [
                 new RecommendationCandidate("Approved", 0.7f, 0.6f, ["enum transition"], RecommendationPressureLanes.StatePressure)
@@ -27,7 +30,8 @@ public class RecommendNavigationProjectionSpecTests
 
         Assert.Equal("main_projection_island", spec.MainProjectionIslandId);
         Assert.Equal("recommend_navigation_child_island", spec.ChildIslandId);
-        Assert.Contains(spec.HubLocalSections, section => section.Lane == RecommendationPressureLanes.UiPressure && section.Candidates.Single().Value == "Search");
+        Assert.Contains(spec.HubLocalSections, section => section.Lane == RecommendationPressureLanes.UiPressure && section.CandidateKind == "next_operation" && section.Candidates.Single().Value == "Search");
+        Assert.Contains(spec.HubLocalSections, section => section.Lane == RecommendationPressureLanes.UiPressure && section.CandidateKind == "next_context_token" && section.Candidates.Single().Value == "ctx-token");
         Assert.Contains(spec.HubLocalSections, section => section.Lane == RecommendationPressureLanes.StatePressure && section.Candidates.Single().Value == "Approved");
         Assert.DoesNotContain(spec.HubLocalSections.SelectMany(section => section.Candidates), candidate => candidate.Lane == RecommendationPressureLanes.SqlAttentionProjection);
         Assert.Equal(RecommendationPressureLanes.SqlAttentionProjection, spec.SqlAttentionProjection.Lane);
@@ -52,7 +56,10 @@ public class RecommendNavigationProjectionSpecTests
             [
                 new RecommendationCandidate("Create", 0.5f, null, ["neighbor"], RecommendationPressureLanes.UiPressure)
             ],
-            NextTokens: [],
+            NextTokens:
+            [
+                new RecommendationCandidate("ctx-token", 0.8f, 0.7f, ["token vote"], RecommendationPressureLanes.UiPressure)
+            ],
             NextEnumItems: [],
             NearestPrefixSessionIds: [],
             ContributingTokens: [],
@@ -60,7 +67,7 @@ public class RecommendNavigationProjectionSpecTests
             StatusDetail: null);
 
         var spec = RecommendNavigationProjectionSpec.FromRecommendation(result, "source_set_1");
-        var candidate = spec.HubLocalSections.Single(section => section.Lane == RecommendationPressureLanes.UiPressure).Candidates.Single();
+        var candidate = spec.HubLocalSections.Single(section => section.Lane == RecommendationPressureLanes.UiPressure && section.CandidateKind == "next_operation").Candidates.Single();
 
         Assert.Null(candidate.RuntimeDispatchSpec);
     }

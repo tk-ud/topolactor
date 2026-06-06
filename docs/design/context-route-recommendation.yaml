@@ -615,6 +615,7 @@ hub_local_recommendation_pressure_lanes:
                 - next_operation
                 - next_component
                 - next_route_action
+                - next_context_token
             state_pressure:
               block: hub_local_recommendation_block
               space: current_hub_internal_state_enum_pressure

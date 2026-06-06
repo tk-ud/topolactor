@@ -4,13 +4,23 @@ import type { RecommendProjectionSection } from "../api/dispatch.ts";
 export function HubLocalRecommendationBlock(
   { sections }: { sections: RecommendProjectionSection[] },
 ): JSX.Element {
-  const uiSection = sections.find((section) => section.lane === "ui_pressure");
-  const stateSection = sections.find((section) => section.lane === "state_pressure");
+  const uiSections = sections.filter((section) => section.lane === "ui_pressure");
+  const stateSections = sections.filter((section) => section.lane === "state_pressure");
+  const renderSections = [
+    ...(uiSections.length > 0 ? uiSections : [undefined]),
+    ...(stateSections.length > 0 ? stateSections : [undefined]),
+  ];
 
   return (
     <div class="grid gap-3 md:grid-cols-2" data-recommend-scope="hub-local">
-      <RecommendationLaneSection section={uiSection} fallbackLane="ui_pressure" fallbackTitle="UI / operation pressure" />
-      <RecommendationLaneSection section={stateSection} fallbackLane="state_pressure" fallbackTitle="State / enum pressure" />
+      {renderSections.map((section, index) => (
+        <RecommendationLaneSection
+          key={section ? `${section.lane}:${section.candidateKind}` : `missing-${index}`}
+          section={section}
+          fallbackLane={index === 0 ? "ui_pressure" : "state_pressure"}
+          fallbackTitle={index === 0 ? "UI / operation pressure" : "State / enum pressure"}
+        />
+      ))}
     </div>
   );
 }

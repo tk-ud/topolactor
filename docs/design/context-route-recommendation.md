@@ -384,7 +384,7 @@ schema contract を前提にする。
 - child recommend island は backend が解決した Lane 別 recommend projection spec を受け取り、frontend は spec 通りに表示するだけとする。
 - frontend は topology 意味判断、promotion 判断、wiring 判断、lane mixing 判断をしない。
 - hub-local block は `ui_pressure` と `state_pressure` を別セクションに分離して表示する。
-  - `ui_pressure`: current hub 内の UI / operation pressure。出力は `next_operation` / `next_component` / `next_route_action`。
+  - `ui_pressure`: current hub 内の UI / operation pressure。出力は `next_operation` / `next_component` / `next_route_action`。既存 `ContextRouteRecommendationResult.nextTokens` は context token 候補であり、component / route action 候補として表示してはいけない。child island spec では `next_context_token` として明示する。
   - `state_pressure`: current hub 内の state / enum pressure。出力は `next_enum_item` / `likely_status` / `state_shift_candidate`。
 - SQL Attention projection block は `sql_attention_projection` lane として別表示する。出力は `next_hub_projection_candidate`。
 - `sql_attention_projection` を hub-local の `next_operation` / `next_enum_item` / `state_pressure` candidate に混入してはいけない。
