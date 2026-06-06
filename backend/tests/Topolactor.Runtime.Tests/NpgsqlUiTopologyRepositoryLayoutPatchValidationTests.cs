@@ -115,7 +115,7 @@ public class NpgsqlUiTopologyRepositoryLayoutPatchValidationTests
             {
               "nodeId": "html-1",
               "nodeKind": "structural_html",
-              "htmlTag": "article",
+              "htmlTag": "marquee",
               "componentKey": "layout/structural_html",
               "slotKey": "",
               "orderIndex": 0

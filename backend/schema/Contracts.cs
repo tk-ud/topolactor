@@ -58,17 +58,29 @@ public record OperationVector(
 );
 
 /// <summary>
-/// A single tensor-derived layout node in the Emission.
-/// Represents one slot position within the admin-authored layout structure.
-/// ComponentId is assigned positionally from structure_maps.component_ids.
-/// SlotKey names the slot within the layout template. OrderIndex drives render order.
-/// LayoutPatchJson carries optional per-slot overrides from ui_topology_tensor.layout_patch_json.
+/// A single layout projection node in the Emission, derived from layout_patch_json.nodes[].
+/// Carries the full structural and positional fields authored in the UI builder canvas.
+/// ComponentId comes from nodes[].componentId (not positional structure_maps.component_ids).
+/// NodeKind is "catalog_component" | "structural_html".
+/// structural_html nodes carry HtmlTag; catalog_component nodes carry ComponentKey.
+/// ParentNodeId establishes the DOM nesting tree; OrderIndex drives sibling render order.
+/// X/Y/Width/Height are canvas geometry for DOM style projection.
+/// LayoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
 /// </summary>
 public record LayoutNode(
+    string NodeId,
+    string? NodeKind,
+    string? HtmlTag,
+    string? ComponentKey,
+    string? ComponentId,
+    string? ParentNodeId,
     string? SlotKey,
     int OrderIndex,
-    string? ComponentId,
-    string? LayoutPatchJson
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    IReadOnlyList<string>? LayoutClassRefs = null
 );
 
 /// <summary>
@@ -112,10 +124,12 @@ public record RuntimeWorkingShape(
 /// projection_constructor_mapping entry exists in the manifest topology.
 /// LayoutId is the optional admin-authored layout reference from structure_maps.layout_id.
 /// Null when no layout is bound to the resolved structure map entry.
-/// LayoutNodes carries tensor-derived slot placement ordered by order_index. Present when
-/// LayoutId is set and topology.ui_topology_tensor rows exist for that layout_id.
+/// LayoutNodes carries the full layout projection spec from layout_patch_json.nodes[],
+/// ordered by OrderIndex. Present when LayoutId is set and tensor rows contain nodes.
 /// Absent (not null — absent) when no layout is bound. Frontend must not silently fall back
 /// to flat componentIds rendering when LayoutId is present but LayoutNodes is absent.
+/// Each LayoutNode includes NodeId, NodeKind, HtmlTag, ComponentKey, ComponentId,
+/// ParentNodeId, SlotKey, OrderIndex, X, Y, Width, Height, and LayoutClassRefs.
 /// </summary>
 public record Emission(
     string? StructureMapId,

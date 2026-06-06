@@ -1,11 +1,48 @@
 import { useEffect, useState } from "preact/hooks";
-import { JSX } from "preact";
+import { h, type JSX } from "preact";
 import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
-import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import type { Emission } from "../api/dispatch.ts";
+
+/** Recursively renders a single layout node as a DOM element with its children. */
+function LayoutNode(
+  { spec, childrenMap }: { spec: ComponentSpec; childrenMap: Map<string | undefined, ComponentSpec[]> },
+): JSX.Element {
+  const children = childrenMap.get(spec.nodeId) ?? [];
+
+  const style: Record<string, string> = {};
+  if (spec.x !== undefined || spec.y !== undefined || spec.width !== undefined || spec.height !== undefined) {
+    style.position = "absolute";
+    if (spec.x !== undefined) style.left = `${spec.x}px`;
+    if (spec.y !== undefined) style.top = `${spec.y}px`;
+    if (spec.width !== undefined) style.width = `${spec.width}px`;
+    if (spec.height !== undefined) style.height = `${spec.height}px`;
+  }
+
+  const className = spec.layoutClassRefs?.join(" ") || undefined;
+
+  const childElements = children.map((child) => (
+    <LayoutNode key={child.nodeId ?? child.slotKey ?? child.componentId} spec={child} childrenMap={childrenMap} />
+  ));
+
+  if (spec.nodeKind === "structural_html" && spec.htmlTag) {
+    return h(
+      spec.htmlTag,
+      { style: Object.keys(style).length > 0 ? style : undefined, class: className, "data-node-id": spec.nodeId },
+      ...childElements,
+    ) as JSX.Element;
+  }
+
+  return (
+    <div style={Object.keys(style).length > 0 ? style : undefined} class={className} data-node-id={spec.nodeId}>
+      <SpecCard spec={spec} index={0} />
+      {childElements}
+    </div>
+  );
+}
 
 function SpecCard({ spec, index }: { spec: ComponentSpec; index: number }): JSX.Element {
   const isError = spec.componentType === "error";
@@ -130,6 +167,29 @@ export default function ProjectionShell(): JSX.Element {
 
   const hasLayout = Boolean(emission?.layoutId);
   const hasErrors = specs.some((s) => s.componentType === "error");
+  const hasTreeNodes = hasLayout && specs.some((s) => s.nodeId !== undefined);
+
+  if (hasLayout && hasTreeNodes && !hasErrors) {
+    const childrenMap = buildChildrenMap(specs);
+    const rootSpecs = childrenMap.get(undefined) ?? [];
+
+    return (
+      <div>
+        <p class="mb-3 text-xs font-mono text-blue-500">
+          layout: {emission!.layoutId}
+        </p>
+        <div class="relative">
+          {rootSpecs.map((spec) => (
+            <LayoutNode
+              key={spec.nodeId ?? spec.slotKey ?? spec.componentId}
+              spec={spec}
+              childrenMap={childrenMap}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

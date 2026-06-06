@@ -9,11 +9,47 @@ export type ComponentSpec = {
   componentType: string;
   def: Record<string, unknown>;
   runtime?: RuntimeComponentSpec;
+  /** Node identifier from layout_patch_json — present only when rendered from layoutNodes. */
+  nodeId?: string;
+  /** "catalog_component" | "structural_html" — present only when rendered from layoutNodes. */
+  nodeKind?: string;
+  /** HTML element tag for structural_html nodes — present only when nodeKind="structural_html". */
+  htmlTag?: string;
+  /** Parent node for DOM nesting — present only when rendered from layoutNodes. */
+  parentNodeId?: string;
   /** Slot name within the layout template — present only when rendered from layoutNodes. */
   slotKey?: string;
-  /** Render order from tensor row — present only when rendered from layoutNodes. */
+  /** Render order from layout node — present only when rendered from layoutNodes. */
   orderIndex?: number;
+  /** Canvas x position in px — for position:absolute style projection. */
+  x?: number;
+  /** Canvas y position in px — for position:absolute style projection. */
+  y?: number;
+  /** Canvas width in px — for position:absolute style projection. */
+  width?: number;
+  /** Canvas height in px — for position:absolute style projection. */
+  height?: number;
+  /** SSOT topology-layout-class vocabulary refs for className resolution. */
+  layoutClassRefs?: string[];
 };
+
+/**
+ * Builds a map from nodeId → children (sorted by orderIndex) for tree rendering.
+ * Root nodes have parentNodeId === undefined; look them up with key undefined.
+ * Pure function — no DOM or Preact dependency.
+ */
+export function buildChildrenMap(specs: ComponentSpec[]): Map<string | undefined, ComponentSpec[]> {
+  const map = new Map<string | undefined, ComponentSpec[]>();
+  for (const spec of specs) {
+    const key = spec.parentNodeId ?? undefined;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(spec);
+  }
+  for (const children of map.values()) {
+    children.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+  }
+  return map;
+}
 
 export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): ComponentSpec[] {
   return componentDataHubs.map((hub) => {
@@ -68,20 +104,42 @@ export function renderEmission(
       ];
     }
 
-    // Render in tensor slot order. Each node carries slotKey, orderIndex, componentId.
+    // Render in slot order. Each node carries full layout projection fields.
     return [...emission.layoutNodes]
       .sort((a, b) => a.orderIndex - b.orderIndex)
       .map((node): ComponentSpec => {
+        const layoutFields = {
+          nodeId: node.nodeId,
+          nodeKind: node.nodeKind,
+          htmlTag: node.htmlTag,
+          parentNodeId: node.parentNodeId,
+          slotKey: node.slotKey,
+          orderIndex: node.orderIndex,
+          x: node.x,
+          y: node.y,
+          width: node.width,
+          height: node.height,
+          layoutClassRefs: node.layoutClassRefs,
+        };
+
+        // structural_html nodes render as actual HTML elements — no registry lookup.
+        if (node.nodeKind === "structural_html") {
+          return {
+            componentType: "structural_html",
+            def: {},
+            ...layoutFields,
+          };
+        }
+
         if (!node.componentId) {
           return {
             componentType: "error",
             def: {
-              error: `Layout slot "${node.slotKey ?? "(unnamed)"}" (orderIndex=${node.orderIndex}) has no componentId assigned.`,
+              error: `Layout node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}" (orderIndex=${node.orderIndex}) has no componentId assigned.`,
               slotKey: node.slotKey,
               orderIndex: node.orderIndex,
             },
-            slotKey: node.slotKey,
-            orderIndex: node.orderIndex,
+            ...layoutFields,
           };
         }
 
@@ -91,12 +149,11 @@ export function renderEmission(
             componentId: node.componentId,
             componentType: "error",
             def: {
-              error: `ComponentRegistry: unknown componentId "${node.componentId}" in slot "${node.slotKey ?? "(unnamed)"}"`,
+              error: `ComponentRegistry: unknown componentId "${node.componentId}" in node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}"`,
               missingId: node.componentId,
               slotKey: node.slotKey,
             },
-            slotKey: node.slotKey,
-            orderIndex: node.orderIndex,
+            ...layoutFields,
           };
         }
 
@@ -104,8 +161,7 @@ export function renderEmission(
           componentId: entry.componentId,
           componentType: entry.componentType,
           def: entry.def,
-          slotKey: node.slotKey,
-          orderIndex: node.orderIndex,
+          ...layoutFields,
         };
       });
   }

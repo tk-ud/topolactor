@@ -529,7 +529,22 @@ app.MapPost("/draft-preview/preview", async (
 
     var orderedNodes = tensorRows
         .OrderBy(r => r.OrderIndex)
-        .Select(r => new { slotKey = r.SlotKey, orderIndex = r.OrderIndex, layoutPatchJson = r.LayoutPatchJson })
+        .Select(r => new
+        {
+            nodeId = r.NodeId,
+            nodeKind = r.NodeKind,
+            htmlTag = r.HtmlTag,
+            componentKey = r.ComponentKey,
+            componentId = r.ComponentId,
+            parentNodeId = r.ParentNodeId,
+            slotKey = r.SlotKey,
+            orderIndex = r.OrderIndex,
+            x = r.X,
+            y = r.Y,
+            width = r.Width,
+            height = r.Height,
+            layoutClassRefs = r.LayoutClassRefs,
+        })
         .ToList();
 
     return Results.Json(new

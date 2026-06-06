@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
+using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Runtime;
 using Topolactor.Schema;
@@ -8,18 +9,17 @@ using Xunit;
 namespace Topolactor.Integration.Tests;
 
 /// <summary>
-/// Real-DB E2E proof for the layout application projection continuity:
-///   structure_maps.layout_id + ui_topology_tensor rows
-///   → NpgsqlTopologyRepository.LoadLayoutNodesAsync (ORDER BY order_index)
-///   → StructureMapResolver builds LayoutNodes with positional componentId assignment
-///   → EmissionBuilder preserves LayoutNodes order through to Emission
+/// Real-DB E2E proof for the layout projection continuity:
+///   ONE tensor row with layout_patch_json.nodes[] (full canvas JSON)
+///   → NpgsqlTopologyRepository.LoadLayoutNodesAsync (parsed from JSON, sorted by orderIndex)
+///   → StructureMapResolver builds LayoutNodes with componentId from nodes[].componentId
+///   → EmissionBuilder preserves LayoutNodes order and all fields through to Emission
 ///
-/// Insertion order is reversed relative to order_index (slot_a inserted before slot_b
-/// but slot_b has order_index=0) to prove ORDER BY order_index — not insertion order.
+/// The JSON nodes array has node-slot-a (orderIndex=1) before node-slot-b (orderIndex=0)
+/// to prove sorting by orderIndex — not JSON array order.
 ///
-/// The Emission produced here has the same shape as the DB-equivalent fixture used by
-/// frontend/tests/defaultEntitySearch.test.ts "layout projection continuity" test:
-/// slot_b@orderIndex=0 is ComponentSpec[0], slot_a@orderIndex=1 is ComponentSpec[1].
+/// componentId in LayoutNodes comes from nodes[].componentId — NOT positional from
+/// structure_maps.component_ids. This is the canonical post-canvas-apply data flow.
 ///
 /// TOPOLACTOR_TEST_DB_CONNECTION unset → explicit local skip.
 /// Set TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 to require live DB in CI.
@@ -28,7 +28,7 @@ public class LayoutProjectionContinuityLiveDbEndToEndTests
 {
     [Fact]
     [Trait("Category", "RequiresDatabase")]
-    public async Task RealTensorRows_LayoutNodesOrderedByOrderIndex_ReachEmission()
+    public async Task LayoutPatchJsonNodes_ParsedAndSortedByOrderIndex_ReachEmission()
     {
         var cs = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
         if (string.IsNullOrWhiteSpace(cs))
@@ -44,13 +44,50 @@ public class LayoutProjectionContinuityLiveDbEndToEndTests
         var packageId = Guid.NewGuid();
         var wiringId  = Guid.NewGuid();
         var smId      = Guid.NewGuid();
-        var comp1Id   = Guid.NewGuid();
-        var comp2Id   = Guid.NewGuid();
-        // structure_maps.package_id / schema_id have no FK constraint — use test-local UUIDs.
+        var comp1Id   = Guid.NewGuid();  // slot_b (orderIndex=0)
+        var comp2Id   = Guid.NewGuid();  // slot_a (orderIndex=1)
         var smPkgId   = Guid.NewGuid();
         var smSchId   = Guid.NewGuid();
 
         var repo = new NpgsqlTopologyRepository(NullLogger<NpgsqlTopologyRepository>.Instance, cs);
+
+        // layout_patch_json.nodes[] in REVERSE orderIndex order to prove sort-by-orderIndex.
+        // node-slot-a (orderIndex=1) appears first in JSON; node-slot-b (orderIndex=0) appears second.
+        // After parse-and-sort, node-slot-b must be at index 0 and node-slot-a at index 1.
+        var patchJson = JsonSerializer.Serialize(new
+        {
+            grid = new { cols = 12 },
+            nodes = new object[]
+            {
+                new
+                {
+                    nodeId = "node-slot-a",
+                    nodeKind = "catalog_component",
+                    componentKey = "card",
+                    componentId = comp2Id.ToString(),
+                    slotKey = "slot_a",
+                    orderIndex = 1,
+                    x = 50.0,
+                    y = 200.0,
+                    width = 200.0,
+                    height = 100.0,
+                    layoutClassRefs = new[] { "card-ref" },
+                },
+                new
+                {
+                    nodeId = "node-slot-b",
+                    nodeKind = "catalog_component",
+                    componentKey = "card",
+                    componentId = comp1Id.ToString(),
+                    slotKey = "slot_b",
+                    orderIndex = 0,
+                    x = 10.0,
+                    y = 20.0,
+                    width = 300.0,
+                    height = 150.0,
+                },
+            },
+        });
 
         try
         {
@@ -90,30 +127,23 @@ public class LayoutProjectionContinuityLiveDbEndToEndTests
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // Insert two tensor rows in REVERSE order_index insertion order.
-            // slot_a is inserted first but has order_index=1; slot_b has order_index=0.
-            // This proves LoadLayoutNodesAsync uses ORDER BY order_index, not insertion order.
+            // ONE tensor row with full layout_patch_json nodes[].
+            // This is the canonical post-layout_patch:apply shape.
             await using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = @"
-INSERT INTO topology.ui_topology_tensor
-  (tensor_id, route_key, package_id, layout_id, wiring_id, slot_key, order_index)
-VALUES
-  (@tid1, @route, @pkg, @layout, @wiring, 'slot_a', 1),
-  (@tid2, @route, @pkg, @layout, @wiring, 'slot_b', 0)";
-                cmd.Parameters.AddWithValue("tid1",   Guid.NewGuid());
-                cmd.Parameters.AddWithValue("tid2",   Guid.NewGuid());
+                cmd.CommandText =
+                    "INSERT INTO topology.ui_topology_tensor " +
+                    "  (tensor_id, route_key, package_id, layout_id, wiring_id, layout_patch_json) " +
+                    "VALUES (@tid, @route, @pkg, @layout, @wiring, @patch::jsonb)";
+                cmd.Parameters.AddWithValue("tid",    Guid.NewGuid());
                 cmd.Parameters.AddWithValue("route",  $"test-e2e-{suffix}");
                 cmd.Parameters.AddWithValue("pkg",    packageId);
                 cmd.Parameters.AddWithValue("layout", layoutId);
                 cmd.Parameters.AddWithValue("wiring", wiringId);
+                cmd.Parameters.AddWithValue("patch",  patchJson);
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // structure_map: component_ids=[comp1Id, comp2Id]
-            // Positional assignment after ORDER BY order_index:
-            //   tensor[0] (slot_b, order=0) → comp1Id (component_ids[0])
-            //   tensor[1] (slot_a, order=1) → comp2Id (component_ids[1])
             await using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
@@ -134,18 +164,39 @@ VALUES
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // ── 1. LoadLayoutNodesAsync: ORDER BY order_index, not insertion order ──
+            // ── 1. LoadLayoutNodesAsync: parses nodes[], sorts by orderIndex ──
             var nodes = await repo.LoadLayoutNodesAsync(layoutId);
 
             Assert.Equal(2, nodes.Count);
-            // slot_b was inserted second but has order_index=0 → must be first
-            Assert.Equal("slot_b", nodes[0].SlotKey);
-            Assert.Equal(0,        nodes[0].OrderIndex);
-            // slot_a was inserted first but has order_index=1 → must be second
-            Assert.Equal("slot_a", nodes[1].SlotKey);
-            Assert.Equal(1,        nodes[1].OrderIndex);
 
-            // ── 2. StructureMapResolver: LayoutNodes with positional componentId assignment ──
+            // node-slot-b is second in JSON but has orderIndex=0 → must be first after sort
+            Assert.Equal("node-slot-b",    nodes[0].NodeId);
+            Assert.Equal("catalog_component", nodes[0].NodeKind);
+            Assert.Equal("card",           nodes[0].ComponentKey);
+            Assert.Equal(comp1Id.ToString(), nodes[0].ComponentId);
+            Assert.Equal("slot_b",         nodes[0].SlotKey);
+            Assert.Equal(0,                nodes[0].OrderIndex);
+            Assert.Equal(10.0,             nodes[0].X);
+            Assert.Equal(20.0,             nodes[0].Y);
+            Assert.Equal(300.0,            nodes[0].Width);
+            Assert.Equal(150.0,            nodes[0].Height);
+            Assert.Null(nodes[0].LayoutClassRefs);
+
+            // node-slot-a is first in JSON but has orderIndex=1 → must be second after sort
+            Assert.Equal("node-slot-a",    nodes[1].NodeId);
+            Assert.Equal("catalog_component", nodes[1].NodeKind);
+            Assert.Equal(comp2Id.ToString(), nodes[1].ComponentId);
+            Assert.Equal("slot_a",         nodes[1].SlotKey);
+            Assert.Equal(1,                nodes[1].OrderIndex);
+            Assert.Equal(50.0,             nodes[1].X);
+            Assert.Equal(200.0,            nodes[1].Y);
+            Assert.Equal(200.0,            nodes[1].Width);
+            Assert.Equal(100.0,            nodes[1].Height);
+            Assert.NotNull(nodes[1].LayoutClassRefs);
+            Assert.Single(nodes[1].LayoutClassRefs!);
+            Assert.Equal("card-ref",       nodes[1].LayoutClassRefs![0]);
+
+            // ── 2. StructureMapResolver: LayoutNodes with componentId from nodes[].componentId ──
             var resolver  = new StructureMapResolver(repo);
             var attractor = new AttractorResult(
                 AttractorKey:   $"test:e2e:{suffix}",
@@ -160,17 +211,26 @@ VALUES
             Assert.NotNull(shape.LayoutNodes);
             Assert.Equal(2, shape.LayoutNodes!.Count);
 
-            // tensor[0] = slot_b (order=0) → comp1Id (component_ids[0])
+            // componentId comes from nodes[].componentId — NOT positional from component_ids
+            Assert.Equal("node-slot-b",      shape.LayoutNodes[0].NodeId);
             Assert.Equal("slot_b",           shape.LayoutNodes[0].SlotKey);
             Assert.Equal(0,                  shape.LayoutNodes[0].OrderIndex);
             Assert.Equal(comp1Id.ToString(), shape.LayoutNodes[0].ComponentId);
+            Assert.Equal(10.0,               shape.LayoutNodes[0].X);
+            Assert.Equal(20.0,               shape.LayoutNodes[0].Y);
+            Assert.Equal(300.0,              shape.LayoutNodes[0].Width);
+            Assert.Equal(150.0,              shape.LayoutNodes[0].Height);
 
-            // tensor[1] = slot_a (order=1) → comp2Id (component_ids[1])
+            Assert.Equal("node-slot-a",      shape.LayoutNodes[1].NodeId);
             Assert.Equal("slot_a",           shape.LayoutNodes[1].SlotKey);
             Assert.Equal(1,                  shape.LayoutNodes[1].OrderIndex);
             Assert.Equal(comp2Id.ToString(), shape.LayoutNodes[1].ComponentId);
+            Assert.Equal(50.0,               shape.LayoutNodes[1].X);
+            Assert.Equal(200.0,              shape.LayoutNodes[1].Y);
+            Assert.NotNull(shape.LayoutNodes[1].LayoutClassRefs);
+            Assert.Equal("card-ref",         shape.LayoutNodes[1].LayoutClassRefs![0]);
 
-            // ── 3. EmissionBuilder: LayoutNodes order survives to Emission ──
+            // ── 3. EmissionBuilder: all fields survive to Emission ──
             var builder  = new EmissionBuilder();
             var emission = builder.Build(shape);
 
@@ -178,16 +238,21 @@ VALUES
             Assert.NotNull(emission.LayoutNodes);
             Assert.Equal(2, emission.LayoutNodes!.Count);
 
-            // Emission.LayoutNodes mirrors the DB-equivalent fixture in
-            // frontend/tests/defaultEntitySearch.test.ts "layout projection continuity":
-            // slot_b@0 first, slot_a@1 second — renderEmission produces ComponentSpec[0]=slot_b, [1]=slot_a.
+            Assert.Equal("node-slot-b",      emission.LayoutNodes[0].NodeId);
             Assert.Equal("slot_b",           emission.LayoutNodes[0].SlotKey);
             Assert.Equal(0,                  emission.LayoutNodes[0].OrderIndex);
             Assert.Equal(comp1Id.ToString(), emission.LayoutNodes[0].ComponentId);
+            Assert.Equal(10.0,               emission.LayoutNodes[0].X);
+            Assert.Equal(20.0,               emission.LayoutNodes[0].Y);
+            Assert.Equal(300.0,              emission.LayoutNodes[0].Width);
+            Assert.Equal(150.0,              emission.LayoutNodes[0].Height);
 
+            Assert.Equal("node-slot-a",      emission.LayoutNodes[1].NodeId);
             Assert.Equal("slot_a",           emission.LayoutNodes[1].SlotKey);
             Assert.Equal(1,                  emission.LayoutNodes[1].OrderIndex);
             Assert.Equal(comp2Id.ToString(), emission.LayoutNodes[1].ComponentId);
+            Assert.NotNull(emission.LayoutNodes[1].LayoutClassRefs);
+            Assert.Equal("card-ref",         emission.LayoutNodes[1].LayoutClassRefs![0]);
         }
         finally
         {

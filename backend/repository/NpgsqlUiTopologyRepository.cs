@@ -481,9 +481,25 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
         return keys;
     }
 
+    // SSOT: admin-console-workflow-ssot.yaml layout_editor.node_kind_contract.structural_html.allowlist
     private static readonly HashSet<string> StructuralHtmlTagAllowlist = new(StringComparer.Ordinal)
     {
-        "h1", "h2", "h3", "h4", "h5", "h6", "div", "section", "a",
+        // block
+        "div", "section", "article", "aside", "header", "footer", "main", "nav",
+        // heading
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        // text
+        "p", "span", "strong", "em", "blockquote", "pre", "code",
+        // link
+        "a",
+        // form
+        "form", "fieldset", "legend", "label", "button", "input", "textarea", "select", "option",
+        // media
+        "img", "picture", "figure", "figcaption", "video", "audio",
+        // list
+        "ul", "ol", "li", "dl", "dt", "dd",
+        // table
+        "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
     };
 
     private static List<string> ExtractLayoutClassRefs(string tensorPatchJson)
