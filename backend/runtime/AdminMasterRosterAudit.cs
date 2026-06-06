@@ -43,7 +43,7 @@ public static class AdminMasterRosterAudit
             targetId,
             operation,
             before is null ? "{}" : JsonSerializer.Serialize(before),
-            after is null ? "{}" : json,
+            after is null ? "{}" : JsonSerializer.Serialize(after),
             DateTimeOffset.UtcNow,
             actor,
             "required"), ct);

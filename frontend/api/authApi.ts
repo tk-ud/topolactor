@@ -29,6 +29,11 @@ export type RegisterResponse = {
 
 export type RefreshResponse = LoginResponse;
 
+export type LogoutResponse = {
+  success: boolean;
+  errors?: AuthError[];
+};
+
 /** Response from GET /api/auth/session. */
 export type SessionResponse = {
   success: boolean;
@@ -141,6 +146,57 @@ export async function refreshUserSession(): Promise<RefreshResponse> {
       return json as RefreshResponse;
     }
     return { success: false, errors: [{ message: "auth: refresh failed" }] };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [{ message }] };
+  }
+}
+
+/** User logout — POST /api/auth/logout */
+export async function logoutUser(): Promise<LogoutResponse> {
+  try {
+    const response = await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: "{}",
+    });
+    const json: unknown = await response.json();
+    if (
+      typeof json === "object" &&
+      json !== null &&
+      !Array.isArray(json) &&
+      "success" in json
+    ) {
+      return json as LogoutResponse;
+    }
+    return { success: false, errors: [{ message: "auth: unexpected logout response shape" }] };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [{ message }] };
+  }
+}
+
+/** Admin session refresh — POST /api/super_auth/refresh */
+export async function refreshAdminSession(): Promise<RefreshResponse> {
+  try {
+    const response = await fetch("/api/super_auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: "{}",
+    });
+    const json: unknown = await response.json();
+    if (
+      response.ok &&
+      typeof json === "object" &&
+      json !== null &&
+      !Array.isArray(json) &&
+      "success" in json
+    ) {
+      return json as RefreshResponse;
+    }
+    return { success: false, errors: [{ message: "auth: admin refresh failed" }] };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, errors: [{ message }] };
