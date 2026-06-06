@@ -25,10 +25,65 @@ type PreviewState =
     };
 
 /**
+ * Maps entity JSON fields into a single slot frame.
+ *
+ * Strategy:
+ *   1. If a field name matches the slotKey (case-insensitive), show it alone.
+ *   2. Otherwise distribute all fields across slots by position so every slot
+ *      receives a distinct subset of the entity data.
+ *   This simulates component projection: ordered slots drive content placement.
+ */
+function renderEntityInSlot(
+  entityJson: Record<string, unknown>,
+  slotKey: string | undefined,
+  slotIndex: number,
+  totalSlots: number,
+): JSX.Element {
+  const entries = Object.entries(entityJson).filter(
+    ([, v]) => v !== null && v !== undefined,
+  );
+
+  const slotName = (slotKey ?? "").toLowerCase();
+  const directMatch = entries.find(([k]) => k.toLowerCase() === slotName);
+  if (directMatch) {
+    return (
+      <dl class="space-y-1 text-sm">
+        <div class="flex gap-2">
+          <dt class="font-medium text-gray-600 shrink-0">{directMatch[0]}:</dt>
+          <dd class="break-all text-gray-800">{String(directMatch[1])}</dd>
+        </div>
+      </dl>
+    );
+  }
+
+  const fieldsPerSlot = Math.max(1, Math.ceil(entries.length / Math.max(totalSlots, 1)));
+  const start = slotIndex * fieldsPerSlot;
+  const slotFields = entries.slice(start, start + fieldsPerSlot);
+
+  if (slotFields.length === 0) {
+    return <p class="text-xs italic text-gray-400">(このスロットにマップされたフィールドなし)</p>;
+  }
+
+  return (
+    <dl class="space-y-1 text-sm">
+      {slotFields.map(([k, v]) => (
+        <div key={k} class="flex gap-2">
+          <dt class="shrink-0 font-medium text-gray-600">{k}:</dt>
+          <dd class="break-all text-gray-800">
+            {typeof v === "object" ? JSON.stringify(v) : String(v)}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/**
  * /demo — draft preview surface.
  * Fetches admin-authored layouts and draft content entities on mount.
- * When both are selected, fetches preview: layout tensor nodes + draft entity JSON.
- * Renders slot-ordered layout nodes reflecting admin-authored tensor ordering.
+ * When both are selected, fetches preview and renders draft content projected
+ * through layout slots ordered by tensor orderIndex.
+ * Each slot frame contains its slice of the draft entity data — not a raw JSON blob.
  */
 export default function DraftPreviewShell(): JSX.Element {
   const [layouts, setLayouts] = useState<DraftPreviewLayout[]>([]);
@@ -48,20 +103,20 @@ export default function DraftPreviewShell(): JSX.Element {
       ]);
 
       if (!layoutsRes.success) {
-        const msg =
+        setLoadError(
           layoutsRes.errors?.[0]?.message ??
-          layoutsRes.errors?.[0]?.code ??
-          "レイアウト一覧の取得に失敗しました";
-        setLoadError(msg);
+            layoutsRes.errors?.[0]?.code ??
+            "レイアウト一覧の取得に失敗しました",
+        );
         setInitLoading(false);
         return;
       }
       if (!draftsRes.success) {
-        const msg =
+        setLoadError(
           draftsRes.errors?.[0]?.message ??
-          draftsRes.errors?.[0]?.code ??
-          "ドラフト一覧の取得に失敗しました";
-        setLoadError(msg);
+            draftsRes.errors?.[0]?.code ??
+            "ドラフト一覧の取得に失敗しました",
+        );
         setInitLoading(false);
         return;
       }
@@ -79,11 +134,13 @@ export default function DraftPreviewShell(): JSX.Element {
     const result = await fetchDraftPreview(selectedLayoutId, selectedDraftId, token);
 
     if (!result.success) {
-      const msg =
-        result.errors?.[0]?.message ??
-        result.errors?.[0]?.code ??
-        "プレビューの取得に失敗しました";
-      setPreview({ status: "error", message: msg });
+      setPreview({
+        status: "error",
+        message:
+          result.errors?.[0]?.message ??
+          result.errors?.[0]?.code ??
+          "プレビューの取得に失敗しました",
+      });
       return;
     }
 
@@ -116,9 +173,10 @@ export default function DraftPreviewShell(): JSX.Element {
 
   return (
     <div class="space-y-6">
+      {/* Selectors */}
       <section class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" htmlFor="layout-select">
+          <label class="mb-1 block text-sm font-medium text-gray-700" htmlFor="layout-select">
             レイアウト
           </label>
           {layouts.length === 0 ? (
@@ -144,7 +202,7 @@ export default function DraftPreviewShell(): JSX.Element {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1" htmlFor="draft-select">
+          <label class="mb-1 block text-sm font-medium text-gray-700" htmlFor="draft-select">
             ドラフトコンテンツ
           </label>
           {drafts.length === 0 ? (
@@ -178,6 +236,7 @@ export default function DraftPreviewShell(): JSX.Element {
         </button>
       </section>
 
+      {/* Error */}
       {preview.status === "error" && (
         <div class="rounded-lg border border-red-200 bg-red-50 p-4">
           <p class="font-semibold text-red-700">プレビューエラー</p>
@@ -185,54 +244,53 @@ export default function DraftPreviewShell(): JSX.Element {
         </div>
       )}
 
-      {preview.status === "success" && (
-        <section class="space-y-4">
-          <div class="rounded-lg border border-blue-100 bg-blue-50 p-3 text-xs font-mono">
-            <p>layout: {preview.layoutId}</p>
-            <p>draft: {preview.draftId}</p>
-            {preview.draftStatus && <p>status: {preview.draftStatus}</p>}
-          </div>
+      {/* Projection: draft content flowed into ordered layout slots */}
+      {preview.status === "success" && (() => {
+        const sortedNodes = preview.layoutNodes
+          .slice()
+          .sort((a, b) => a.orderIndex - b.orderIndex);
+        const entityJson = preview.draftEntityJson ?? {};
 
-          <div>
-            <h2 class="mb-2 text-sm font-semibold text-gray-700">
-              レイアウトスロット ({preview.layoutNodes.length}件)
-            </h2>
-            {preview.layoutNodes.length === 0 ? (
+        return (
+          <section class="space-y-3">
+            <div class="rounded border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-mono">
+              <span>layout: {preview.layoutId}</span>
+              {"  "}
+              <span>draft: {preview.draftId}</span>
+              {preview.draftStatus && <span>{"  "}status: {preview.draftStatus}</span>}
+            </div>
+
+            <p class="text-xs text-gray-400">
+              ドラフトコンテンツを tensor orderIndex 順のスロットに投影しています ({sortedNodes.length} スロット)
+            </p>
+
+            {sortedNodes.length === 0 ? (
               <p class="text-sm text-gray-400">スロットなし</p>
             ) : (
               <div class="space-y-2">
-                {preview.layoutNodes
-                  .slice()
-                  .sort((a, b) => a.orderIndex - b.orderIndex)
-                  .map((node, i) => (
-                    <div
-                      key={node.slotKey ?? `node-${i}`}
-                      class="rounded border border-gray-200 bg-white p-3"
-                    >
-                      <p class="text-xs font-mono text-blue-500">
-                        slot: {node.slotKey ?? "(unnamed)"} — order: {node.orderIndex}
-                      </p>
+                {sortedNodes.map((node, i) => (
+                  <div
+                    key={node.slotKey ?? `node-${i}`}
+                    class="rounded-lg border border-gray-200 bg-white"
+                  >
+                    {/* Slot header — driven by orderIndex */}
+                    <div class="border-b border-gray-100 bg-gray-50 px-3 py-1.5 text-xs font-mono text-blue-600">
+                      [{i}] slot: {node.slotKey ?? "(unnamed)"} — order: {node.orderIndex}
                       {node.layoutPatchJson && (
-                        <p class="mt-1 text-xs text-gray-500 font-mono truncate">
-                          patch: {node.layoutPatchJson}
-                        </p>
+                        <span class="ml-2 text-gray-400">patch: {node.layoutPatchJson}</span>
                       )}
                     </div>
-                  ))}
+                    {/* Draft content projected into this slot */}
+                    <div class="px-3 py-2">
+                      {renderEntityInSlot(entityJson, node.slotKey, i, sortedNodes.length)}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-
-          {preview.draftEntityJson && (
-            <div>
-              <h2 class="mb-2 text-sm font-semibold text-gray-700">ドラフトエンティティ</h2>
-              <pre class="rounded border border-gray-200 bg-gray-50 p-3 text-xs font-mono overflow-auto max-h-64 whitespace-pre-wrap">
-                {JSON.stringify(preview.draftEntityJson, null, 2)}
-              </pre>
-            </div>
-          )}
-        </section>
-      )}
+          </section>
+        );
+      })()}
     </div>
   );
 }
