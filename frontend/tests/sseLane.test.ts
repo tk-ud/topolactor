@@ -394,8 +394,11 @@ Deno.test("projectionRuntime: ignore policy is explicit no-op when no definition
 });
 
 // ─── ProjectionShell SSE refresh lane integration ─────────────────────────────
-// Tests the full sseReceiver → enqueueProjectionHookTrigger → sseDispatcher →
-// ProjectionShell refresh handler flow using stubs (no real EventSource / backend).
+// Tests the spec replacement model that drives ProjectionShell's SSE refresh:
+//   sseReceiver trigger routing → renderEmission(emissionB) → ComponentSpec[] replaced entirely.
+// These tests do not mount ProjectionShell or trigger the Preact state handler directly;
+// they verify the renderEmission() spec replacement contract that the handler relies on.
+// The trigger routing (sseReceiver → dispatcher) is verified via the stub dispatcher test below.
 
 import { renderEmission, buildChildrenMap, type ComponentSpec } from "../runtime/renderEmission.ts";
 import type { LayoutNode } from "../api/dispatch.ts";
@@ -435,8 +438,11 @@ const refreshRegistry = {
   [compYId]: { componentId: compYId, componentType: "comp-y", def: {} },
 };
 
-Deno.test("ProjectionShell SSE lane: DOM replacement — old nodeId absent after refresh, new nodeId present", () => {
-  // Emission A: has node-a-id
+Deno.test("ProjectionShell SSE lane: spec replacement — renderEmission(emissionB) produces only emissionB nodeIds, emissionA nodeIds absent", () => {
+  // Verifies the spec replacement contract: renderEmission(emissionA) and renderEmission(emissionB)
+  // are independent — the new specs contain only emissionB nodes.
+  // In ProjectionShell this models setSpecs(renderEmission(emissionB, registry)):
+  // the old specs from emissionA are discarded in full, not merged with emissionB.
   const emissionA = {
     structureMapId: "sm-1",
     packageId: "00000000-0000-0000-0000-000000000001",
@@ -454,7 +460,6 @@ Deno.test("ProjectionShell SSE lane: DOM replacement — old nodeId absent after
     ],
   };
 
-  // Emission B: has node-b-id (no node-a-id)
   const emissionB = {
     structureMapId: "sm-2",
     packageId: "00000000-0000-0000-0000-000000000001",
@@ -472,26 +477,19 @@ Deno.test("ProjectionShell SSE lane: DOM replacement — old nodeId absent after
     ],
   };
 
-  // Simulate initial emission A rendering.
   const specsA = renderEmission(emissionA, refreshRegistry);
-  assertEquals(specsA.some((s) => s.nodeId === nodeAId), true, "emission A must contain node-a-id");
-  assertEquals(specsA.some((s) => s.nodeId === nodeBId), false, "emission A must not contain node-b-id");
+  assertEquals(specsA.some((s) => s.nodeId === nodeAId), true, "specsA must contain node-a-id");
+  assertEquals(specsA.some((s) => s.nodeId === nodeBId), false, "specsA must not contain node-b-id");
 
-  // Simulate SSE refresh: emission B replaces emission A entirely.
   const specsB = renderEmission(emissionB, refreshRegistry);
-  assertEquals(specsB.some((s) => s.nodeId === nodeBId), true, "emission B must contain node-b-id");
-  assertEquals(specsB.some((s) => s.nodeId === nodeAId), false, "emission B must not contain node-a-id");
-
-  // After refresh, specs are fully replaced with emission B (not merged with A).
-  // This models the setSpecs(renderEmission(emissionB, registry)) call in ProjectionShell.
-  const currentSpecs: ComponentSpec[] = specsB;
-  assertEquals(currentSpecs.every((s) => s.nodeId !== nodeAId), true, "old node-a-id must not persist after refresh");
-  assertEquals(currentSpecs.some((s) => s.nodeId === nodeBId), true, "new node-b-id must be present after refresh");
+  assertEquals(specsB.some((s) => s.nodeId === nodeBId), true, "specsB must contain node-b-id");
+  assertEquals(specsB.some((s) => s.nodeId === nodeAId), false, "specsB must not contain node-a-id (full replacement, not merge)");
 });
 
-Deno.test("ProjectionShell SSE lane: refresh preserves parentNodeId tree and layoutClassRefs", () => {
-  // Verifies that after SSE refresh, parentNodeId tree and layoutClassRefs are maintained
-  // in the new specs from emission B (not carried over from emission A).
+Deno.test("ProjectionShell SSE lane: new specs from renderEmission preserve parentNodeId tree and layoutClassRefs", () => {
+  // Verifies that specs produced by renderEmission(emissionB) carry parentNodeId tree and
+  // layoutClassRefs intact — these fields are present in the replacement spec array,
+  // not carried over from a previous emission.
   const emissionB = {
     structureMapId: "sm-3",
     packageId: "00000000-0000-0000-0000-000000000001",

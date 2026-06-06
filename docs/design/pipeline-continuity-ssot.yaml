@@ -436,7 +436,7 @@ pipeline_continuity_ssot:
         perform topology or layout judgment from the SSE payload. On receipt, ProjectionShell
         re-fetches the latest emission from the backend runtime via queueClientCommand and replaces
         the current DOM tree with the refreshed specs from renderEmission(). Old DOM nodes are
-        discarded in full; partial patch from SSE payload is prohibited.
+        discarded in full; patching from the SSE payload directly is prohibited.
       direction: server_to_client
       event_types:
         - projection
@@ -500,7 +500,7 @@ pipeline_continuity_ssot:
         trigger_source: sse_projection_event
         trigger_role: invalidation_refresh_trigger_only
         refresh_action: queueClientCommand_re_fetch_latest_emission
-        dom_replacement: full_replacement_via_renderEmission_no_partial_patch
+        dom_replacement: full_replacement_via_renderEmission_no_payload_patch
         race_control: generation_counter_latest_wins
         failure_policy: explicit_error_log_retain_old_dom
         topology_judgment: frontend_must_not_judge_from_sse_payload
