@@ -17,6 +17,10 @@ namespace Topolactor.Integration.Tests;
 /// Insertion order is reversed relative to order_index (slot_a inserted before slot_b
 /// but slot_b has order_index=0) to prove ORDER BY order_index — not insertion order.
 ///
+/// The Emission produced here has the same shape as the DB-equivalent fixture used by
+/// frontend/tests/defaultEntitySearch.test.ts "layout projection continuity" test:
+/// slot_b@orderIndex=0 is ComponentSpec[0], slot_a@orderIndex=1 is ComponentSpec[1].
+///
 /// TOPOLACTOR_TEST_DB_CONNECTION unset → explicit local skip.
 /// Set TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 to require live DB in CI.
 /// </summary>
@@ -35,16 +39,16 @@ public class LayoutProjectionContinuityLiveDbEndToEndTests
             return;
         }
 
-        var suffix     = Guid.NewGuid().ToString("N")[..12];
-        var layoutId   = Guid.NewGuid();
-        var packageId  = Guid.NewGuid();
-        var wiringId   = Guid.NewGuid();
-        var smId       = Guid.NewGuid();
-        var comp1Id    = Guid.NewGuid();
-        var comp2Id    = Guid.NewGuid();
-        // Deterministic seed IDs present on any bootstrapped DB (seed_empty.sql)
-        var seedPkgId  = Guid.Parse("00000000-0000-0000-0000-000000000001");
-        var seedSchId  = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        var suffix    = Guid.NewGuid().ToString("N")[..12];
+        var layoutId  = Guid.NewGuid();
+        var packageId = Guid.NewGuid();
+        var wiringId  = Guid.NewGuid();
+        var smId      = Guid.NewGuid();
+        var comp1Id   = Guid.NewGuid();
+        var comp2Id   = Guid.NewGuid();
+        // structure_maps.package_id / schema_id have no FK constraint — use test-local UUIDs.
+        var smPkgId   = Guid.NewGuid();
+        var smSchId   = Guid.NewGuid();
 
         var repo = new NpgsqlTopologyRepository(NullLogger<NpgsqlTopologyRepository>.Instance, cs);
 
@@ -106,30 +110,31 @@ VALUES
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // structure_map references layout_id and uses seed package/schema IDs.
-            // component_ids=[comp1Id, comp2Id] — positional assignment maps
-            //   tensor[0] (slot_b, order=0) → comp1Id
-            //   tensor[1] (slot_a, order=1) → comp2Id
+            // structure_map: component_ids=[comp1Id, comp2Id]
+            // Positional assignment after ORDER BY order_index:
+            //   tensor[0] (slot_b, order=0) → comp1Id (component_ids[0])
+            //   tensor[1] (slot_a, order=1) → comp2Id (component_ids[1])
             await using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
 INSERT INTO topology.structure_maps
-  (structure_map_id, attractor_key, package_id, schema_id,
+  (structure_map_id, name, attractor_key, package_id, schema_id,
    component_ids, layout_id, active)
 VALUES
-  (@smid, @key, @pkg, @sch,
+  (@smid, @name, @key, @pkg, @sch,
    ARRAY[@comp1, @comp2]::uuid[], @layout, true)";
                 cmd.Parameters.AddWithValue("smid",   smId);
+                cmd.Parameters.AddWithValue("name",   $"test-e2e-{suffix}");
                 cmd.Parameters.AddWithValue("key",    $"test:e2e:{suffix}");
-                cmd.Parameters.AddWithValue("pkg",    seedPkgId);
-                cmd.Parameters.AddWithValue("sch",    seedSchId);
+                cmd.Parameters.AddWithValue("pkg",    smPkgId);
+                cmd.Parameters.AddWithValue("sch",    smSchId);
                 cmd.Parameters.AddWithValue("comp1",  comp1Id);
                 cmd.Parameters.AddWithValue("comp2",  comp2Id);
                 cmd.Parameters.AddWithValue("layout", layoutId);
                 await cmd.ExecuteNonQueryAsync();
             }
 
-            // ── 1. LoadLayoutNodesAsync: verify ORDER BY order_index, not insertion order ──
+            // ── 1. LoadLayoutNodesAsync: ORDER BY order_index, not insertion order ──
             var nodes = await repo.LoadLayoutNodesAsync(layoutId);
 
             Assert.Equal(2, nodes.Count);
@@ -140,13 +145,13 @@ VALUES
             Assert.Equal("slot_a", nodes[1].SlotKey);
             Assert.Equal(1,        nodes[1].OrderIndex);
 
-            // ── 2. StructureMapResolver: LayoutNodes built with positional componentId assignment ──
-            var resolver = new StructureMapResolver(repo);
+            // ── 2. StructureMapResolver: LayoutNodes with positional componentId assignment ──
+            var resolver  = new StructureMapResolver(repo);
             var attractor = new AttractorResult(
                 AttractorKey:   $"test:e2e:{suffix}",
                 StructureMapId: smId.ToString(),
-                PackageId:      seedPkgId,
-                SchemaId:       seedSchId);
+                PackageId:      smPkgId,
+                SchemaId:       smSchId);
 
             var shape = await resolver.Resolve(attractor);
 
@@ -155,17 +160,17 @@ VALUES
             Assert.NotNull(shape.LayoutNodes);
             Assert.Equal(2, shape.LayoutNodes!.Count);
 
-            // tensor[0] = slot_b (order=0) → positionally assigned to comp1Id (component_ids[0])
+            // tensor[0] = slot_b (order=0) → comp1Id (component_ids[0])
             Assert.Equal("slot_b",           shape.LayoutNodes[0].SlotKey);
             Assert.Equal(0,                  shape.LayoutNodes[0].OrderIndex);
             Assert.Equal(comp1Id.ToString(), shape.LayoutNodes[0].ComponentId);
 
-            // tensor[1] = slot_a (order=1) → positionally assigned to comp2Id (component_ids[1])
+            // tensor[1] = slot_a (order=1) → comp2Id (component_ids[1])
             Assert.Equal("slot_a",           shape.LayoutNodes[1].SlotKey);
             Assert.Equal(1,                  shape.LayoutNodes[1].OrderIndex);
             Assert.Equal(comp2Id.ToString(), shape.LayoutNodes[1].ComponentId);
 
-            // ── 3. EmissionBuilder: LayoutNodes order survives through to Emission ──
+            // ── 3. EmissionBuilder: LayoutNodes order survives to Emission ──
             var builder  = new EmissionBuilder();
             var emission = builder.Build(shape);
 
@@ -173,6 +178,9 @@ VALUES
             Assert.NotNull(emission.LayoutNodes);
             Assert.Equal(2, emission.LayoutNodes!.Count);
 
+            // Emission.LayoutNodes mirrors the DB-equivalent fixture in
+            // frontend/tests/defaultEntitySearch.test.ts "layout projection continuity":
+            // slot_b@0 first, slot_a@1 second — renderEmission produces ComponentSpec[0]=slot_b, [1]=slot_a.
             Assert.Equal("slot_b",           emission.LayoutNodes[0].SlotKey);
             Assert.Equal(0,                  emission.LayoutNodes[0].OrderIndex);
             Assert.Equal(comp1Id.ToString(), emission.LayoutNodes[0].ComponentId);
