@@ -44,6 +44,7 @@ system_roadmap_ssot:
       - docs/framework-core.yaml
       - docs/framework-policy.yaml
       - docs/design/css-dictionary-ssot.yaml
+      - docs/design/auth-db-session-credential-ssot.yaml
     task_queue:
       - .agent/tasks/todo.md
     audit_reports:
@@ -960,6 +961,58 @@ system_roadmap_ssot:
       known_gap_ref: []
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
+
+    backend.auth_db_session_credential_mvp:
+      status: implemented
+      production_ready: false
+      milestone: M2_manifest_runtime
+      public_summary: >
+        Auth MVP scaffold is implemented for DB-backed user credentials, sessions, hashed refresh
+        tokens, login audit, realm/audience-separated user and admin login/refresh/logout routes,
+        and environment-sourced demo JWT signing. This is intentionally scoped to the DB
+        credential/session/refresh-token + demo JWT scaffold MVP; projection app auth boundary
+        residue remains a carry-over bundle.
+      remaining_projection_app_auth_boundary_scope:
+        - normal_user_registration_projection_surface_is_not_implemented
+        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
+        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
+      files:
+        - db/auth_tables.sql
+        - db/auth_seed.sql
+        - backend/Program.cs
+        - backend/endpoint/AuthEndpoint.cs
+        - backend/runtime/AuthRuntime.cs
+        - backend/service/AuthService.cs
+        - backend/service/JwtTokenIssuer.cs
+        - backend/guard/JwtGuard.cs
+        - backend/repository/NpgsqlAuthRepository.cs
+        - backend/schema/AuthContracts.cs
+        - backend/schema/AuthRealm.cs
+        - backend/tests/Topolactor.Integration.Tests/AuthEndpointTests.cs
+        - backend/tests/Topolactor.Integration.Tests/RealmAudienceSeparationTests.cs
+        - backend/tests/Topolactor.Integration.Tests/JwtGuardTests.cs
+      evidence:
+        tests:
+          - AuthEndpointTests
+          - RealmAudienceSeparationTests
+          - JwtGuardTests
+        ci:
+          - backend-tests
+          - runtime-semantics
+      completion_condition:
+        - credentials_are_loaded_from_auth_credentials_not_topology_or_manifest_json
+        - sessions_and_refresh_tokens_are_persisted_in_auth_schema_with_plaintext_refresh_token_excluded_from_db
+        - user_and_admin_realms_have_separate_jwt_claims_audience_and_routes
+        - login_denial_codes_cover_inactive_unapproved_and_suspended_users
+        - jwt_signing_secret_is_environment_sourced_and_not_stored_in_topology_hubs_or_manifest
+      known_gap_ref:
+        - normal_user_registration_projection_surface_is_not_implemented
+        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
+        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
+      detail_ssot:
+        - docs/design/auth-db-session-credential-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+
 
     backend.output_lanes:
       status: partial

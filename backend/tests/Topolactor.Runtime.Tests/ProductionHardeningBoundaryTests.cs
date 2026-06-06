@@ -118,6 +118,18 @@ public class ProductionHardeningBoundaryTests
 
 
     [Fact]
+    public void NpgsqlDiffLogRepository_AppendEditSql_UsesCanonicalTopologySchema()
+    {
+        var repositoryPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../../../backend/repository/NpgsqlDiffLogRepository.cs");
+        var source = File.ReadAllText(repositoryPath);
+
+        Assert.Contains("INSERT INTO topology.topology_edit_log", source);
+        Assert.DoesNotContain("INSERT INTO topology_edit_log", source);
+    }
+
+    [Fact]
     public void NpgsqlTopologyRepository_DemoTransitionSql_UsesCanonicalTopologySchema()
     {
         var repositoryPath = Path.Combine(

@@ -6,10 +6,10 @@ namespace Topolactor.Repository;
 
 /// <summary>
 /// Production Npgsql implementation of DiffLogRepository.
-/// Persists edit diff log entries to topology_edit_log (append-only).
+/// Persists edit diff log entries to topology.topology_edit_log (append-only).
 ///
 /// Replaces the ILogger-only base class implementation.
-/// Uses topology_edit_log schema from db/topology_tables.sql.
+/// Uses topology.topology_edit_log schema from db/topology_tables.sql.
 ///
 /// Wiring: inject NpgsqlDiffLogRepository wherever DiffLogRepository is required
 /// in production DI. Tests continue to use the in-memory base class via override.
@@ -29,7 +29,7 @@ public class NpgsqlDiffLogRepository : DiffLogRepository
     }
 
     /// <summary>
-    /// Appends an edit diff log entry to topology_edit_log (append-only INSERT).
+    /// Appends an edit diff log entry to topology.topology_edit_log (append-only INSERT).
     /// Non-fatal: callers catch exceptions and continue.
     /// </summary>
     public override async Task AppendEditAsync(
@@ -49,7 +49,7 @@ public class NpgsqlDiffLogRepository : DiffLogRepository
 
             await using var cmd = conn.CreateCommand();
             cmd.CommandText =
-                "INSERT INTO topology_edit_log " +
+                "INSERT INTO topology.topology_edit_log " +
                 "(target_table, target_id, operation, before_json, after_json, diff_json, actor) " +
                 "VALUES (@targetTable, @targetId, @operation, @beforeJson::jsonb, @afterJson::jsonb, @diffJson::jsonb, @actor)";
 
@@ -70,7 +70,7 @@ public class NpgsqlDiffLogRepository : DiffLogRepository
         catch (Exception ex)
         {
             _npgsqlLogger.LogError(ex,
-                "NpgsqlDiffLogRepository.AppendEditAsync: INSERT to topology_edit_log failed for targetTable={TargetTable} operation={Operation}.",
+                "NpgsqlDiffLogRepository.AppendEditAsync: INSERT to topology.topology_edit_log failed for targetTable={TargetTable} operation={Operation}.",
                 targetTable, operation);
             throw;
         }
