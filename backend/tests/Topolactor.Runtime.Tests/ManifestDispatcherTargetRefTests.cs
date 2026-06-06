@@ -107,32 +107,37 @@ public class ManifestDispatcherTargetRefTests
         Assert.True(repo.ResolveAxesCalled);
     }
 
-    // ─── invalid target_ref format: falls through to axes resolution ──────────
+    // ─── invalid target_ref format: explicit TARGET_REF_INVALID error ───────────
+    // Rationale: silent axes-fallback for a malformed admin-configured ref risks routing
+    // to an unintended manifest. An explicit error surfaces the broken configuration.
 
     [Fact]
-    public async Task DispatchAsync_TargetRef_NonManifestPrefix_FallsThroughToAxes()
+    public async Task DispatchAsync_TargetRef_NonManifestPrefix_ReturnsTargetRefInvalidError()
     {
         var repo = new TrackingManifestRepository(KnownManifestId);
         var dispatcher = BuildDispatcher(repo);
 
-        // "screen:..." is not manifest:<uuid> format — must not trigger LoadByIdAsync
-        await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: "screen:some-ref")));
+        var response = await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: "screen:some-ref")));
 
-        Assert.False(repo.LoadByIdCalled);
-        Assert.True(repo.ResolveAxesCalled);
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_INVALID");
+        Assert.False(repo.LoadByIdCalled, "LoadByIdAsync must not be called for malformed target_ref");
+        Assert.False(repo.ResolveAxesCalled, "Axes resolution must not be called when target_ref is present but malformed");
     }
 
     [Fact]
-    public async Task DispatchAsync_TargetRef_InvalidUuid_FallsThroughToAxes()
+    public async Task DispatchAsync_TargetRef_InvalidUuid_ReturnsTargetRefInvalidError()
     {
         var repo = new TrackingManifestRepository(KnownManifestId);
         var dispatcher = BuildDispatcher(repo);
 
-        // "manifest:" prefix but invalid UUID portion — must not trigger LoadByIdAsync
-        await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: "manifest:not-a-uuid:key")));
+        // "manifest:" prefix but invalid UUID portion — must return explicit error, not axes fallback
+        var response = await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: "manifest:not-a-uuid:key")));
 
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_INVALID");
         Assert.False(repo.LoadByIdCalled);
-        Assert.True(repo.ResolveAxesCalled);
+        Assert.False(repo.ResolveAxesCalled);
     }
 
     // ─── valid target_ref format but manifest not found ───────────────────────

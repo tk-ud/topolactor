@@ -8,6 +8,7 @@ import {
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
+import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
 
 // ─── mapWiringKindToLayer ─────────────────────────────────────────────────────
 
@@ -280,6 +281,66 @@ Deno.test("adaptComponentDataHub: missing componentKind returns explicit error",
   assertEquals(result.ok, false);
   if (result.ok) return;
   assertEquals(result.error, "RUNTIME_COMPONENT_ADAPTER_MISSING_COMPONENT_KIND");
+});
+
+// ─── parseEventBinding: targetRef preserved through round-trip ───────────────
+
+Deno.test("parseEventBinding: targetRef is preserved in parsed runtimeDispatch", () => {
+  const manifestId = "aaaaaaaa-bbbb-cccc-dddd-000000000001";
+  const rawBinding = {
+    eventType: "click",
+    runtimeDispatch: {
+      operationType: "Search",
+      target: "screen",
+      layer: "screen_list",
+      action: "Search",
+      wiringKey: "search_key",
+      wiringId: "wiring-001",
+      targetRef: `manifest:${manifestId}:search_key`,
+    },
+  };
+  const parsed = factoryTestOnly.parseEventBinding(rawBinding);
+  assertExists(parsed, "parseEventBinding must return a value for valid binding");
+  assertExists(parsed!.runtimeDispatch, "runtimeDispatch must be present");
+  assertEquals(parsed!.runtimeDispatch!.targetRef, `manifest:${manifestId}:search_key`);
+  assertEquals(parsed!.runtimeDispatch!.wiringKey, "search_key");
+  assertEquals(parsed!.runtimeDispatch!.wiringId, "wiring-001");
+  assertEquals(parsed!.runtimeDispatch!.target, "screen");
+  assertEquals(parsed!.runtimeDispatch!.layer, "screen_list");
+});
+
+Deno.test("parseEventBinding: absent targetRef produces undefined in runtimeDispatch", () => {
+  const rawBinding = {
+    eventType: "click",
+    runtimeDispatch: {
+      operationType: "Search",
+      target: "screen",
+      layer: "screen_list",
+      action: "Search",
+      wiringKey: "search_key",
+    },
+  };
+  const parsed = factoryTestOnly.parseEventBinding(rawBinding);
+  assertExists(parsed);
+  assertExists(parsed!.runtimeDispatch);
+  assertEquals(parsed!.runtimeDispatch!.targetRef, undefined);
+});
+
+Deno.test("parseEventBinding: non-string targetRef is coerced to undefined", () => {
+  const rawBinding = {
+    eventType: "click",
+    runtimeDispatch: {
+      operationType: "Search",
+      target: "screen",
+      layer: "screen_list",
+      action: "Search",
+      targetRef: 42,
+    },
+  };
+  const parsed = factoryTestOnly.parseEventBinding(rawBinding);
+  assertExists(parsed);
+  assertExists(parsed!.runtimeDispatch);
+  assertEquals(parsed!.runtimeDispatch!.targetRef, undefined);
 });
 
 // ─── renderEmission: catalog_component path ───────────────────────────────────

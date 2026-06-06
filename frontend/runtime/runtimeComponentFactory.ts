@@ -162,6 +162,7 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       action: action.trim(),
       wiringKey: typeof rd.wiringKey === "string" ? rd.wiringKey : undefined,
       wiringId: typeof rd.wiringId === "string" ? rd.wiringId : undefined,
+      targetRef: typeof rd.targetRef === "string" ? rd.targetRef : undefined,
     };
   }
   return {
@@ -2095,3 +2096,7 @@ export {
   resolveComponentKindForLayoutPreview,
 } from "./layoutComponentPreview.ts";
 export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";
+
+export const __testOnly = {
+  parseEventBinding,
+};
