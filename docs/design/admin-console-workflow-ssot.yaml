@@ -342,7 +342,7 @@ admin_console_workflow_ssot:
                   content: structural HTML tags from the allowlist as palette items
                   interaction: drag tag onto canvas to place a structural_html node
             center_canvas:
-              position: full remaining width (width: 100% of viewport minus docked panels)
+              position: "full remaining width (width: 100% of viewport minus docked panels)"
               rendering: >
                 Renders actual catalog component previews and structural HTML nodes
                 in their placed positions. NOT wireframe rectangles or placeholder boxes.
@@ -629,7 +629,7 @@ admin_console_workflow_ssot:
       logicalConnector: joins condition[i] to condition[i+1] via conditions[i].logicalConnector (and|or|not)
     havingConditions:
       interpretation: filter_aggregation_groups_by_measure_result
-      operators: [=, !=, <>, >, >=, <, <=]
+      operators: ["=", "!=", "<>", ">", ">=", "<", "<="]
     displayColumnMode:
       none: aggregate_results_only_no_row_columns
       selected: displayColumns_only
