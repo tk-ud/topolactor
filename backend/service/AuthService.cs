@@ -22,6 +22,28 @@ public class AuthService
         _jwtTokenIssuer = jwtTokenIssuer ?? throw new ArgumentNullException(nameof(jwtTokenIssuer));
     }
 
+    public async Task<RegisterResponseDto> RegisterUserAsync(
+        RegisterRequestDto? request,
+        CancellationToken ct = default)
+    {
+        if (request is null)
+            return RegisterFail("AUTH_REGISTER_REQUEST_NULL", "Registration request must not be null.");
+
+        var username = request.Username?.Trim();
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(request.Password))
+            return RegisterFail("AUTH_REGISTER_CREDENTIALS_REQUIRED", "Username and password are required.");
+
+        var existing = await _authRepository.FindUserByUsernameAsync(username, ct);
+        if (existing is not null)
+            return RegisterFail("AUTH_REGISTER_USERNAME_EXISTS", "Username is already registered.");
+
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+        var user = await _authRepository.CreatePendingUserWithCredentialAsync(username, passwordHash, ct);
+
+        _logger.LogDebug("Normal user registration created pending approval username='{Username}'.", user.Username);
+        return new RegisterResponseDto(true, user.Username, user.Approve, user.Status, []);
+    }
+
     public async Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginAsync(
         LoginRequestDto? request,
         AuthRealmContext realmContext,
@@ -162,6 +184,9 @@ public class AuthService
 
     private static LoginResponseDto Fail(string code, string message) =>
         new(false, null, [new ValidationError(code, message)]);
+
+    private static RegisterResponseDto RegisterFail(string code, string message) =>
+        new(false, null, null, null, [new ValidationError(code, message)]);
 
     private static RefreshResponseDto RefreshFail(string code, string message) =>
         new(false, null, [new ValidationError(code, message)]);

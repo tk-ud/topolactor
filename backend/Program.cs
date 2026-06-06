@@ -246,7 +246,12 @@ app.MapPost("/dispatch", async (
     JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);
-    var authErrors = jwtGuard.Validate(token);
+    var isAdminSurface =
+        string.Equals(request.OperationType, "admin", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(request.Target, "admin", StringComparison.OrdinalIgnoreCase);
+    var authErrors = isAdminSurface
+        ? jwtGuard.ValidateForContext(token, AuthRealm.AdminRealm, AuthRealm.AdminAudience, AuthRealm.AdminRole)
+        : jwtGuard.Validate(token);
     if (authErrors.Count > 0)
         return Results.Json(new EndpointResponseDto(false, null, authErrors), statusCode: 401);
 
@@ -320,6 +325,13 @@ static string? ReadRefreshCookie(HttpRequest request)
         return null;
     return string.IsNullOrWhiteSpace(value) ? null : Uri.UnescapeDataString(value);
 }
+
+// POST /auth/register — normal user realm registration (pending approval; no session issuance)
+app.MapPost("/auth/register", async (HttpContext ctx, RegisterRequestDto request, AuthEndpoint auth) =>
+{
+    var result = await auth.RegisterUserAsync(request, ctx.RequestAborted);
+    return Results.Json(result, statusCode: result.Success ? 201 : 409);
+});
 
 // POST /auth/login — user realm (auth_runtime.login)
 app.MapPost("/auth/login", async (HttpContext ctx, LoginRequestDto request, AuthEndpoint auth) =>

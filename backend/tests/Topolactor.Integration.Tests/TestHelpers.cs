@@ -38,12 +38,14 @@ internal static class TestJwtBuilder
         string subject = "testuser",
         string role = "test",
         long? expUnix = null,
-        bool includeExp = true)
+        bool includeExp = true,
+        string? realm = null,
+        string? audience = null)
     {
         var exp = expUnix ?? DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds();
         object payloadObj = includeExp
-            ? new { sub = subject, role, exp }
-            : (object)new { sub = subject, role };
+            ? new { sub = subject, role, realm, aud = audience, exp }
+            : (object)new { sub = subject, role, realm, aud = audience };
         return BuildTokenFromPayloadObject(secret, payloadObj);
     }
 

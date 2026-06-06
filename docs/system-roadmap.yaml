@@ -969,13 +969,12 @@ system_roadmap_ssot:
       public_summary: >
         Auth MVP scaffold is implemented for DB-backed user credentials, sessions, hashed refresh
         tokens, login audit, realm/audience-separated user and admin login/refresh/logout routes,
-        and environment-sourced demo JWT signing. This is intentionally scoped to the DB
-        credential/session/refresh-token + demo JWT scaffold MVP; projection app auth boundary
-        residue remains a carry-over bundle.
-      remaining_projection_app_auth_boundary_scope:
-        - normal_user_registration_projection_surface_is_not_implemented
-        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
-        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
+        environment-sourced demo JWT signing, normal user registration projection with pending
+        approval, projection app auth fallback to login/register, and frontend/backend admin
+        access blocking for non-admin user tokens. This remains intentionally scoped to the
+        DB credential/session/refresh-token + demo JWT scaffold MVP, not production auth
+        hardening.
+      remaining_projection_app_auth_boundary_scope: []
       files:
         - db/auth_tables.sql
         - db/auth_seed.sql
@@ -991,11 +990,13 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Integration.Tests/AuthEndpointTests.cs
         - backend/tests/Topolactor.Integration.Tests/RealmAudienceSeparationTests.cs
         - backend/tests/Topolactor.Integration.Tests/JwtGuardTests.cs
+        - frontend/tests/projectionAuthBoundary.test.ts
       evidence:
         tests:
           - AuthEndpointTests
           - RealmAudienceSeparationTests
           - JwtGuardTests
+          - projectionAuthBoundary.test.ts
         ci:
           - backend-tests
           - runtime-semantics
@@ -1005,10 +1006,10 @@ system_roadmap_ssot:
         - user_and_admin_realms_have_separate_jwt_claims_audience_and_routes
         - login_denial_codes_cover_inactive_unapproved_and_suspended_users
         - jwt_signing_secret_is_environment_sourced_and_not_stored_in_topology_hubs_or_manifest
-      known_gap_ref:
-        - normal_user_registration_projection_surface_is_not_implemented
-        - projection_app_auth_fallback_to_login_or_register_projection_is_not_implemented
-        - admin_access_block_for_non_admin_user_token_is_not_fully_guarded_in_frontend_projection_boundary
+        - normal_user_registration_projection_surface_uses_auth_schema_with_pending_approval
+        - projection_app_auth_fallback_returns_to_login_or_register_projection
+        - admin_access_block_for_non_admin_user_token_is_guarded_in_frontend_and_backend_boundaries
+      known_gap_ref: []
       detail_ssot:
         - docs/design/auth-db-session-credential-ssot.yaml
         - docs/design/runtime-orchestration-ssot.yaml

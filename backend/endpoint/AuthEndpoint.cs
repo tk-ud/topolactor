@@ -15,6 +15,10 @@ public class AuthEndpoint
         LoginRequestDto? request, CancellationToken ct = default) =>
         _authRuntime.LoginUserAsync(request, ct);
 
+    public Task<RegisterResponseDto> RegisterUserAsync(
+        RegisterRequestDto? request, CancellationToken ct = default) =>
+        _authRuntime.RegisterUserAsync(request, ct);
+
     public Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginAdminAsync(
         LoginRequestDto? request, CancellationToken ct = default) =>
         _authRuntime.LoginAdminAsync(request, ct);

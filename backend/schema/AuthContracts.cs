@@ -13,6 +13,15 @@ public record LoginRequestDto(string? Username, string? Password);
 /// </summary>
 public record LoginResponseDto(bool Success, string? Token, IReadOnlyList<ValidationError> Errors);
 
+public record RegisterRequestDto(string? Username, string? Password);
+
+public record RegisterResponseDto(
+    bool Success,
+    string? Username,
+    bool? Approve,
+    string? Status,
+    IReadOnlyList<ValidationError> Errors);
+
 public record RefreshRequestDto(string? RefreshToken);
 
 public record RefreshResponseDto(bool Success, string? Token, IReadOnlyList<ValidationError> Errors);

@@ -129,6 +129,22 @@ public class JwtGuardTests
     }
 
     [Fact]
+    public void UserRealmToken_ValidateForAdminContext_ReturnsRealmMismatch()
+    {
+        using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret);
+        var token = TestJwtBuilder.BuildToken(
+            TestSecret,
+            role: "user",
+            realm: "user",
+            audience: "user_app");
+        var guard = new JwtGuard();
+
+        var errors = guard.ValidateForContext(token, "admin/system", "admin_console", "admin");
+
+        Assert.Contains(errors, e => e.Code == "AUTH_TOKEN_REALM_MISMATCH");
+    }
+
+    [Fact]
     public void TokenWithoutSub_TryGetSubject_Returns_Null()
     {
         using var env = new EnvScope().Set("DEMO_JWT_SECRET", TestSecret);

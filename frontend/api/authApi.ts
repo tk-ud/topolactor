@@ -19,6 +19,16 @@ export type LoginResponse = {
   errors?: AuthError[];
 };
 
+export type RegisterResponse = {
+  success: boolean;
+  username?: string;
+  approve?: boolean;
+  status?: string;
+  errors?: AuthError[];
+};
+
+export type RefreshResponse = LoginResponse;
+
 /** Response from GET /api/auth/session. */
 export type SessionResponse = {
   success: boolean;
@@ -86,6 +96,55 @@ async function postLogin(path: string, req: LoginRequest): Promise<LoginResponse
 /** User realm login — POST /api/auth/login */
 export async function loginUser(req: LoginRequest): Promise<LoginResponse> {
   return await postLogin("/api/auth/login", req);
+}
+
+export async function registerUser(req: LoginRequest): Promise<RegisterResponse> {
+  try {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(req),
+    });
+    const json: unknown = await response.json();
+    if (
+      typeof json === "object" &&
+      json !== null &&
+      !Array.isArray(json) &&
+      "success" in json
+    ) {
+      return json as RegisterResponse;
+    }
+    return { success: false, errors: [{ message: "auth: unexpected register response shape" }] };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [{ message }] };
+  }
+}
+
+export async function refreshUserSession(): Promise<RefreshResponse> {
+  try {
+    const response = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: "{}",
+    });
+    const json: unknown = await response.json();
+    if (
+      response.ok &&
+      typeof json === "object" &&
+      json !== null &&
+      !Array.isArray(json) &&
+      "success" in json
+    ) {
+      return json as RefreshResponse;
+    }
+    return { success: false, errors: [{ message: "auth: refresh failed" }] };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [{ message }] };
+  }
 }
 
 /** Admin realm login — POST /api/super_auth/login */

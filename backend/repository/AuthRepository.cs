@@ -31,6 +31,9 @@ public abstract class AuthRepository
     public abstract Task<string?> GetPasswordHashAsync(
         Guid userId, CancellationToken ct = default);
 
+    public abstract Task<AuthUserRecord> CreatePendingUserWithCredentialAsync(
+        string username, string passwordHash, CancellationToken ct = default);
+
     public abstract Task<string?> GetGrantRoleForRealmAsync(
         Guid userId, string realm, CancellationToken ct = default);
 

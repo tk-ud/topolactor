@@ -1,11 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import { JSX } from "preact";
+import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
+import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import type { Emission } from "../api/dispatch.ts";
-
-const SESSION_TOKEN_KEY = "demo_jwt_token";
 
 function SpecCard({ spec, index }: { spec: ComponentSpec; index: number }): JSX.Element {
   const isError = spec.componentType === "error";
@@ -47,15 +47,29 @@ export default function ProjectionShell(): JSX.Element {
   const [emission, setEmission] = useState<Emission | null>(null);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [authFallback, setAuthFallback] = useState(false);
 
   useEffect(() => {
     startComponentEventRuntime();
-    const token = sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined;
 
     (async () => {
+      let token = readClientSessionToken();
+      if (!token || !(await probeSessionToken(token, "user"))) {
+        const refreshed = await refreshUserSession();
+        if (refreshed.success && refreshed.token) {
+          persistSessionToken(refreshed.token);
+          token = refreshed.token;
+        } else {
+          clearSessionToken();
+          setAuthFallback(true);
+          setLoading(false);
+          return;
+        }
+      }
+
       const response = await queueClientCommand(
         { operationType: "Search", target: "default", layer: "entity", action: "Search" },
-        token,
+        token ?? undefined,
         {},
       );
 
@@ -64,11 +78,18 @@ export default function ProjectionShell(): JSX.Element {
         setEmission(em);
         setSpecs(renderEmission(em, defaultComponentRegistry));
       } else {
-        const msg =
-          response.errors?.[0]?.Message ??
-          response.errors?.[0]?.message ??
-          "投影の取得に失敗しました";
-        setError(msg);
+        const firstError = response.errors?.[0];
+        const code = firstError?.Code ?? firstError?.code ?? "";
+        if (code.startsWith("AUTH_")) {
+          clearSessionToken();
+          setAuthFallback(true);
+        } else {
+          const msg =
+            firstError?.Message ??
+            firstError?.message ??
+            "投影の取得に失敗しました";
+          setError(msg);
+        }
       }
       setLoading(false);
     })();
@@ -78,6 +99,22 @@ export default function ProjectionShell(): JSX.Element {
     return (
       <div class="py-8 text-center text-gray-400" aria-busy="true" aria-live="polite">
         投影を取得中...
+      </div>
+    );
+  }
+
+  if (authFallback) {
+    return (
+      <div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+        <p class="font-semibold text-blue-800">ログインが必要です</p>
+        <p class="mt-1 text-sm text-blue-700">
+          未ログイン、期限切れ、または更新失敗のため投影アプリを安全に停止しました。
+          ログインまたは新規登録から再開してください。
+        </p>
+        <div class="mt-3 flex gap-3 text-sm">
+          <a href="/auth" class="link font-semibold">ログインへ</a>
+          <a href="/auth#register" class="link font-semibold">新規登録へ</a>
+        </div>
       </div>
     );
   }

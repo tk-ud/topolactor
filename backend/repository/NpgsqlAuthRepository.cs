@@ -43,6 +43,64 @@ public class NpgsqlAuthRepository : AuthRepository
         return result as string;
     }
 
+    public override async Task<AuthUserRecord> CreatePendingUserWithCredentialAsync(
+        string username, string passwordHash, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+
+        try
+        {
+            await using var userCmd = conn.CreateCommand();
+            userCmd.Transaction = tx;
+            userCmd.CommandText =
+                """
+                INSERT INTO auth.users (username, active, approve, status, state_note)
+                VALUES (@u, true, false, 'active', 'normal_user_registration_pending_approval')
+                RETURNING user_id, username, active, approve, status, suspended_from, suspended_until
+                """;
+            userCmd.Parameters.AddWithValue("u", username);
+
+            AuthUserRecord record;
+            await using (var reader = await userCmd.ExecuteReaderAsync(ct))
+            {
+                await reader.ReadAsync(ct);
+                record = new AuthUserRecord(
+                    reader.GetGuid(0),
+                    reader.GetString(1),
+                    reader.GetBoolean(2),
+                    reader.GetBoolean(3),
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    reader.IsDBNull(5) ? null : reader.GetFieldValue<DateTimeOffset>(5),
+                    reader.IsDBNull(6) ? null : reader.GetFieldValue<DateTimeOffset>(6));
+            }
+
+            await using var credentialCmd = conn.CreateCommand();
+            credentialCmd.Transaction = tx;
+            credentialCmd.CommandText =
+                "INSERT INTO auth.credentials (user_id, password_hash) VALUES (@uid, @hash)";
+            credentialCmd.Parameters.AddWithValue("uid", record.UserId);
+            credentialCmd.Parameters.AddWithValue("hash", passwordHash);
+            await credentialCmd.ExecuteNonQueryAsync(ct);
+
+            await using var grantCmd = conn.CreateCommand();
+            grantCmd.Transaction = tx;
+            grantCmd.CommandText =
+                "INSERT INTO auth.grants (user_id, role_name, realm) VALUES (@uid, 'user', 'user')";
+            grantCmd.Parameters.AddWithValue("uid", record.UserId);
+            await grantCmd.ExecuteNonQueryAsync(ct);
+
+            await tx.CommitAsync(ct);
+            return record;
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
     public override async Task<string?> GetGrantRoleForRealmAsync(
         Guid userId, string realm, CancellationToken ct = default)
     {

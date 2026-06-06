@@ -23,6 +23,10 @@ public class AuthRuntime
         LoginRequestDto? request, CancellationToken ct = default) =>
         _authService.LoginAsync(request, AuthRealm.User, ct);
 
+    public Task<RegisterResponseDto> RegisterUserAsync(
+        RegisterRequestDto? request, CancellationToken ct = default) =>
+        _authService.RegisterUserAsync(request, ct);
+
     public Task<(LoginResponseDto Response, string? RefreshTokenPlaintext)> LoginAdminAsync(
         LoginRequestDto? request, CancellationToken ct = default) =>
         _authService.LoginAsync(request, AuthRealm.Admin, ct);
