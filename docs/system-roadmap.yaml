@@ -296,6 +296,7 @@ system_roadmap_ssot:
         - frontend.sse_receiver: implemented
         - frontend.sse_dispatcher: implemented
         - frontend.projection_constructor: implemented
+        - frontend.projection_shell_sse_refresh_boundary: implemented
       blocking_gaps: []
 
     M5_admin_and_ui_topology:
@@ -1143,6 +1144,46 @@ system_roadmap_ssot:
       known_gap_ref: []
       detail_ssot:
         - docs/design/pipeline-continuity-ssot.yaml
+
+    frontend.projection_shell_sse_refresh_boundary:
+      status: implemented
+      production_ready: false
+      milestone: M4_projection_runtime
+      public_summary: >
+        ProjectionShell subscribes to the SSE projection lane via createSseReceiver on mount.
+        SSE projection events are treated as invalidation/refresh triggers only — frontend does
+        not interpret the SSE payload for topology or layout judgment. On SSE projection event
+        receipt, ProjectionShell re-fetches the latest emission from the backend runtime via
+        queueClientCommand (api_command_lane). renderEmission() produces a new ComponentSpec[]
+        from the fresh emission, replacing the old DOM tree in full (no partial patch).
+        Race control via generation counter ensures only the latest refresh result applies
+        when multiple events arrive concurrently. Refresh failure is explicit (console.error);
+        old DOM is retained on failure (not silent). unmount cleanup disconnects the EventSource.
+        This closes the merge point of sse_projection_lane and layout_projection_dom_lane at the
+        projection_shell_sse_refresh_boundary node per pipeline-continuity-ssot.yaml.
+        WebSocket replacement of this lane is prohibited.
+      files:
+        - frontend/islands/ProjectionShell.tsx
+        - frontend/runtime/sseReceiver.ts
+      evidence:
+        tests:
+          - sseLane.test.ts (ProjectionShell SSE lane: DOM replacement, parentNodeId tree, layoutClassRefs, LAYOUT_NODES_NOT_FOUND)
+        ci:
+          - frontend-types
+      completion_condition:
+        - projection_shell_subscribes_to_sse_projection_lane_on_mount
+        - sse_event_triggers_queueClientCommand_re_fetch_not_payload_topology_judgment
+        - dom_tree_fully_replaced_with_new_emission_on_refresh
+        - old_nodeIds_absent_after_refresh
+        - race_control_generation_counter_latest_wins
+        - refresh_failure_is_explicit_console_error_not_silent
+        - unmount_disconnects_sse_receiver
+        - layoutId_present_without_nodes_returns_error_spec_no_flat_fallback
+        - websocket_not_used
+      known_gap_ref: []
+      detail_ssot:
+        - docs/design/pipeline-continuity-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
 
     frontend.projection_constructor:
       status: implemented

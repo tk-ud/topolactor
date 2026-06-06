@@ -1,10 +1,11 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { h, type JSX } from "preact";
 import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
+import { createSseReceiver, type SseReceiver } from "../runtime/sseReceiver.ts";
 import type { Emission } from "../api/dispatch.ts";
 
 /** Recursively renders a single layout node as a DOM element with its children. */
@@ -77,7 +78,8 @@ function SpecCard({ spec, index }: { spec: ComponentSpec; index: number }): JSX.
 /**
  * Production application projection shell.
  * Dispatches default:entity:search on mount and renders the emission
- * using layout-aware renderEmission(). No static preset wizard.
+ * using layout-aware renderEmission(). Subscribes to SSE projection events
+ * to refresh the DOM tree when the backend emits a projection event.
  */
 export default function ProjectionShell(): JSX.Element {
   const [loading, setLoading] = useState(true);
@@ -86,8 +88,14 @@ export default function ProjectionShell(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [authFallback, setAuthFallback] = useState(false);
 
+  // Generation counter prevents stale SSE refresh responses from overwriting newer results.
+  const refreshGenRef = useRef(0);
+  // Holds the SSE receiver so unmount cleanup can disconnect it.
+  const sseReceiverRef = useRef<SseReceiver | null>(null);
+
   useEffect(() => {
     startComponentEventRuntime();
+    let mounted = true;
 
     (async () => {
       let token = readClientSessionToken();
@@ -98,8 +106,10 @@ export default function ProjectionShell(): JSX.Element {
           token = refreshed.token;
         } else {
           clearSessionToken();
-          setAuthFallback(true);
-          setLoading(false);
+          if (mounted) {
+            setAuthFallback(true);
+            setLoading(false);
+          }
           return;
         }
       }
@@ -109,6 +119,8 @@ export default function ProjectionShell(): JSX.Element {
         token ?? undefined,
         {},
       );
+
+      if (!mounted) return;
 
       if (response.emission) {
         const em = response.emission;
@@ -129,7 +141,67 @@ export default function ProjectionShell(): JSX.Element {
         }
       }
       setLoading(false);
+
+      if (!mounted) return;
+
+      // Connect SSE after auth succeeds. The receiver reads the token from sessionStorage.
+      // SSE projection events are treated as invalidation/refresh triggers only —
+      // the payload is not interpreted for topology or layout judgment.
+      const capturedToken = token;
+      const receiver = createSseReceiver({
+        onProjectionHookTrigger: (_trigger) => {
+          if (!mounted) return;
+          const gen = ++refreshGenRef.current;
+          void (async () => {
+            try {
+              const refreshResponse = await queueClientCommand(
+                { operationType: "Search", target: "default", layer: "entity", action: "Search" },
+                capturedToken ?? undefined,
+                {},
+              );
+              // Discard stale refresh: if a newer SSE event triggered another refresh,
+              // only the latest result applies (explicit race control, not silent failure).
+              if (gen !== refreshGenRef.current || !mounted) return;
+
+              if (refreshResponse.emission) {
+                const em = refreshResponse.emission;
+                setEmission(em);
+                setSpecs(renderEmission(em, defaultComponentRegistry));
+              } else {
+                const firstError = refreshResponse.errors?.[0];
+                const code = firstError?.Code ?? firstError?.code ?? "";
+                if (code.startsWith("AUTH_")) {
+                  clearSessionToken();
+                  setAuthFallback(true);
+                } else {
+                  // Refresh failed: log explicitly and retain old DOM. Never silent failure.
+                  const msg =
+                    firstError?.Message ??
+                    firstError?.message ??
+                    "SSE projection refresh failed";
+                  console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_FAILED:", msg);
+                }
+              }
+            } catch (err) {
+              if (gen !== refreshGenRef.current || !mounted) return;
+              console.error("[ProjectionShell] SSE_PROJECTION_REFRESH_ERROR:", err);
+            }
+          })();
+        },
+        onError: (state) => {
+          console.error("[ProjectionShell] SSE connection error:", state);
+        },
+      });
+
+      sseReceiverRef.current = receiver;
+      receiver.connect();
     })();
+
+    return () => {
+      mounted = false;
+      sseReceiverRef.current?.disconnect();
+      sseReceiverRef.current = null;
+    };
   }, []);
 
   if (loading) {

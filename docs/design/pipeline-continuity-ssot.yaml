@@ -431,6 +431,12 @@ pipeline_continuity_ssot:
       description: >
         server event propagates through backend_sse_emitter, frontend_sse_receiver,
         frontend_sse_dispatcher, and projects through projection_runtime. Node wiring in this document declares canonical route boundaries and identity continuity. End-to-end SSE data flow follows this lane contract.
+        Merges with layout_projection_dom_lane at the projection_shell_sse_refresh_boundary node:
+        SSE projection events are treated as invalidation/refresh triggers only — frontend does not
+        perform topology or layout judgment from the SSE payload. On receipt, ProjectionShell
+        re-fetches the latest emission from the backend runtime via queueClientCommand and replaces
+        the current DOM tree with the refreshed specs from renderEmission(). Old DOM nodes are
+        discarded in full; patching from the SSE payload directly is prohibited.
       direction: server_to_client
       event_types:
         - projection
@@ -474,6 +480,38 @@ pipeline_continuity_ssot:
           files:
             - frontend/components/ProjectionView.tsx
 
+        - node: frontend.projection_shell_sse_refresh_boundary
+          files:
+            - frontend/islands/ProjectionShell.tsx
+          implementation_note: >
+            Merge point of sse_projection_lane and layout_projection_dom_lane.
+            SSE projection event is received as hook_trigger and treated as an
+            invalidation/refresh trigger only. ProjectionShell calls queueClientCommand
+            to re-fetch the latest emission from the backend runtime. renderEmission()
+            produces a new ComponentSpec[] from the fresh emission, replacing the old DOM tree
+            in full. Race control via generation counter ensures only the latest refresh result
+            applies when multiple events arrive concurrently. Refresh failure is explicit
+            (console.error); old DOM is retained on failure. Frontend does not interpret
+            SSE payload for topology or layout judgment. layoutId present without nodes
+            → LAYOUT_NODES_NOT_FOUND error spec, no flat fallback. WebSocket replacement
+            of this lane is prohibited.
+
+      refresh_boundary_policy:
+        trigger_source: sse_projection_event
+        trigger_role: invalidation_refresh_trigger_only
+        refresh_action: queueClientCommand_re_fetch_latest_emission
+        dom_replacement: full_replacement_via_renderEmission_no_payload_patch
+        race_control: generation_counter_latest_wins
+        failure_policy: explicit_error_log_retain_old_dom
+        topology_judgment: frontend_must_not_judge_from_sse_payload
+        websocket_replacement: prohibited
+
+      prohibited:
+        - websocket_replacement_for_sse_lane_without_ssot_update
+        - stale_dom_retained_after_projection_refresh
+        - sse_event_direct_frontend_topology_judgment
+        - projection_refresh_flat_fallback_when_layoutId_present
+
       required_endpoint:
         path: /api/sse
         frontend_route: frontend/routes/api/sse.ts
@@ -484,10 +522,13 @@ pipeline_continuity_ssot:
         ci_script: .agent/tests/check-default-entity-search.sh
         note: >
           SSE lane unit tests cover dispatcher/receiver/projection identity via
-          frontend/tests/pipelineContinuity.test.ts. End-to-end SSE integration test
+          frontend/tests/pipelineContinuity.test.ts. ProjectionShell SSE refresh boundary
+          tests cover the merge point of sse_projection_lane and layout_projection_dom_lane
+          via frontend/tests/sseLane.test.ts. End-to-end SSE integration test
           (real server push through full lane) requires full lane event emission and verification under this contract.
         test_files:
           - frontend/tests/pipelineContinuity.test.ts
+          - frontend/tests/sseLane.test.ts
 
       contract_guard: >
         Node contract must be validated by listed files and pipeline body tests.
