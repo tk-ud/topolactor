@@ -1483,7 +1483,7 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     admin_visual_layout_builder:
-      status: implemented
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
@@ -1543,6 +1543,14 @@ system_roadmap_ssot:
         - component_style_design_layoutNodeId_package_membership_validation_fails_closed
         - layer_inspector_tree_drag_reparent_and_reorder_no_freestanding_arrow_buttons
         - structural_html_tag_allowlist_full_ssot_set_all_categories
+        - layout_patch_json_nodes_flow_to_dom_projection_full_field_continuity
+      incomplete:
+        - layout_patch_json_nodes_to_dom_projection: >
+            canvas layout_patch_json.nodes[] → backend emission → frontend DOM is implemented
+            (LayoutNode full field set, structural_html/catalog_component rendering, parentNodeId
+            tree, x/y/width/height CSS, layoutClassRefs className, validation at runtime).
+            Not yet production-ready: canvas authoring → promotion → live DOM full round-trip
+            manual acceptance pending.
       evidence:
         tests:
           - visualLayoutBuilder.test.ts (layoutId round-trip: 5 tests)

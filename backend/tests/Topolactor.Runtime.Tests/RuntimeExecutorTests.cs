@@ -645,8 +645,26 @@ public class RuntimeExecutorTests
         var layoutId = Guid.NewGuid().ToString();
         var layoutNodes = new List<LayoutNode>
         {
-            new("slot_b", 0, "00000000-0000-0000-0000-000000000099", null),
-            new("slot_a", 1, TopologyRepository.DefaultComponentId, null),
+            new LayoutNode(
+                NodeId: "node-slot-b",
+                NodeKind: "catalog_component",
+                HtmlTag: null,
+                ComponentKey: null,
+                ComponentId: "00000000-0000-0000-0000-000000000099",
+                ParentNodeId: null,
+                SlotKey: "slot_b",
+                OrderIndex: 0,
+                X: 0, Y: 0, Width: 0, Height: 0),
+            new LayoutNode(
+                NodeId: "node-slot-a",
+                NodeKind: "catalog_component",
+                HtmlTag: null,
+                ComponentKey: null,
+                ComponentId: TopologyRepository.DefaultComponentId,
+                ParentNodeId: null,
+                SlotKey: "slot_a",
+                OrderIndex: 1,
+                X: 0, Y: 0, Width: 0, Height: 0),
         };
         var shape = new RuntimeWorkingShape(
             Vector: null,
@@ -767,8 +785,28 @@ internal class StubTopologyRepositoryWithLayoutAndNodes(Guid layoutId)
     {
         IReadOnlyList<LayoutNodeRecord> rows =
         [
-            new LayoutNodeRecord(SlotKey: "slot_b", OrderIndex: 0, LayoutPatchJson: null),
-            new LayoutNodeRecord(SlotKey: "slot_a", OrderIndex: 1, LayoutPatchJson: null),
+            new LayoutNodeRecord(
+                NodeId: "node-slot-b",
+                NodeKind: "catalog_component",
+                HtmlTag: null,
+                ComponentKey: null,
+                ComponentId: SecondaryComponentId.ToString(),
+                ParentNodeId: null,
+                SlotKey: "slot_b",
+                OrderIndex: 0,
+                X: 0, Y: 0, Width: 0, Height: 0,
+                LayoutClassRefs: null),
+            new LayoutNodeRecord(
+                NodeId: "node-slot-a",
+                NodeKind: "catalog_component",
+                HtmlTag: null,
+                ComponentKey: null,
+                ComponentId: DefaultComponentId.ToString(),
+                ParentNodeId: null,
+                SlotKey: "slot_a",
+                OrderIndex: 1,
+                X: 0, Y: 0, Width: 0, Height: 0,
+                LayoutClassRefs: null),
         ];
         return Task.FromResult(rows);
     }

@@ -204,11 +204,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
     }
 
     /// <summary>
-    /// Loads tensor-derived layout nodes for the given layout_id from topology.ui_topology_tensor,
-    /// ordered by order_index. Returns empty list when no rows exist — callers treat as
-    /// LAYOUT_NODES_NOT_FOUND when layout_id is set on the structure_map.
-    /// SQL: SELECT slot_key, order_index, layout_patch_json::text FROM topology.ui_topology_tensor
-    ///   WHERE layout_id = @layoutId ORDER BY order_index
+    /// Loads layout nodes for the given layout_id by parsing layout_patch_json.nodes[]
+    /// from the most recently updated topology.ui_topology_tensor row.
+    /// Returns nodes sorted by orderIndex. Returns empty list when no row exists or nodes[] is absent.
+    /// SQL: SELECT layout_patch_json::text FROM topology.ui_topology_tensor
+    ///   WHERE layout_id = @layoutId ORDER BY updated_at DESC LIMIT 1
     /// </summary>
     public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
         Guid layoutId, CancellationToken ct = default)
@@ -218,24 +218,105 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
-            "SELECT slot_key, order_index, layout_patch_json::text " +
+            "SELECT layout_patch_json::text " +
             "FROM topology.ui_topology_tensor " +
             "WHERE layout_id = @layoutId " +
-            "ORDER BY order_index";
+            "ORDER BY updated_at DESC " +
+            "LIMIT 1";
         cmd.Parameters.AddWithValue("layoutId", layoutId);
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        var nodes = new List<LayoutNodeRecord>();
-        while (await reader.ReadAsync(ct))
+        var rawJson = (string?)await cmd.ExecuteScalarAsync(ct);
+        if (rawJson is null)
         {
-            nodes.Add(new LayoutNodeRecord(
-                SlotKey: reader.IsDBNull(0) ? null : reader.GetString(0),
-                OrderIndex: reader.GetInt32(1),
-                LayoutPatchJson: reader.IsDBNull(2) ? null : reader.GetString(2)
-            ));
+            _npgsqlLogger.LogDebug(
+                "NpgsqlTopologyRepository.LoadLayoutNodesAsync: no tensor row for layoutId='{LayoutId}'.",
+                layoutId);
+            return Array.Empty<LayoutNodeRecord>();
         }
 
-        return nodes;
+        return ParseNodesFromLayoutPatchJson(rawJson, layoutId);
+    }
+
+    private IReadOnlyList<LayoutNodeRecord> ParseNodesFromLayoutPatchJson(string json, Guid layoutId)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("nodes", out var nodesEl) ||
+                nodesEl.ValueKind != JsonValueKind.Array)
+                return Array.Empty<LayoutNodeRecord>();
+
+            var result = new List<LayoutNodeRecord>();
+            foreach (var node in nodesEl.EnumerateArray())
+            {
+                if (node.ValueKind != JsonValueKind.Object) continue;
+
+                var nodeId = node.TryGetProperty("nodeId", out var nid) && nid.ValueKind == JsonValueKind.String
+                    ? nid.GetString()
+                    : null;
+                if (string.IsNullOrWhiteSpace(nodeId)) continue;
+
+                var nodeKind = node.TryGetProperty("nodeKind", out var nk) && nk.ValueKind == JsonValueKind.String
+                    ? nk.GetString() : null;
+                var htmlTag = node.TryGetProperty("htmlTag", out var ht) && ht.ValueKind == JsonValueKind.String
+                    ? ht.GetString() : null;
+                var componentKey = node.TryGetProperty("componentKey", out var ck) && ck.ValueKind == JsonValueKind.String
+                    ? ck.GetString() : null;
+                var componentId = node.TryGetProperty("componentId", out var ci) && ci.ValueKind == JsonValueKind.String
+                    ? ci.GetString() : null;
+                var parentNodeId = node.TryGetProperty("parentNodeId", out var pni) && pni.ValueKind == JsonValueKind.String
+                    ? pni.GetString() : null;
+                var slotKey = node.TryGetProperty("slotKey", out var sk) && sk.ValueKind == JsonValueKind.String
+                    ? sk.GetString() : null;
+                var orderIndex = node.TryGetProperty("orderIndex", out var oi) && oi.ValueKind == JsonValueKind.Number
+                    ? oi.GetInt32() : 0;
+                var x = node.TryGetProperty("x", out var xv) && xv.ValueKind == JsonValueKind.Number
+                    ? xv.GetDouble() : 0.0;
+                var y = node.TryGetProperty("y", out var yv) && yv.ValueKind == JsonValueKind.Number
+                    ? yv.GetDouble() : 0.0;
+                var width = node.TryGetProperty("width", out var wv) && wv.ValueKind == JsonValueKind.Number
+                    ? wv.GetDouble() : 0.0;
+                var height = node.TryGetProperty("height", out var hv) && hv.ValueKind == JsonValueKind.Number
+                    ? hv.GetDouble() : 0.0;
+
+                IReadOnlyList<string>? layoutClassRefs = null;
+                if (node.TryGetProperty("layoutClassRefs", out var lcrEl) && lcrEl.ValueKind == JsonValueKind.Array)
+                {
+                    var refs = lcrEl.EnumerateArray()
+                        .Where(e => e.ValueKind == JsonValueKind.String)
+                        .Select(e => e.GetString()!)
+                        .ToList();
+                    if (refs.Count > 0) layoutClassRefs = refs;
+                }
+
+                result.Add(new LayoutNodeRecord(
+                    NodeId: nodeId!,
+                    NodeKind: nodeKind,
+                    HtmlTag: htmlTag,
+                    ComponentKey: componentKey,
+                    ComponentId: componentId,
+                    ParentNodeId: parentNodeId,
+                    SlotKey: slotKey,
+                    OrderIndex: orderIndex,
+                    X: x,
+                    Y: y,
+                    Width: width,
+                    Height: height,
+                    LayoutClassRefs: layoutClassRefs
+                ));
+            }
+
+            result.Sort((a, b) => a.OrderIndex.CompareTo(b.OrderIndex));
+            return result;
+        }
+        catch (JsonException ex)
+        {
+            _npgsqlLogger.LogWarning(
+                ex,
+                "NpgsqlTopologyRepository.ParseNodesFromLayoutPatchJson: JSON parse error for layoutId='{LayoutId}'. Returning empty.",
+                layoutId);
+            return Array.Empty<LayoutNodeRecord>();
+        }
     }
 
     // ─── Demo entity defaults — production registry resolution ───────────────

@@ -38,17 +38,29 @@ export type ContextRouteRecommendation = {
 };
 
 /**
- * A single tensor-derived layout node in the Emission.
- * Represents one slot position within the admin-authored layout structure.
- * slotKey names the slot within the layout template. orderIndex drives render order.
- * componentId is assigned positionally from structure_maps.component_ids.
- * layoutPatchJson carries optional per-slot overrides from ui_topology_tensor.layout_patch_json.
+ * A single layout node in the Emission, derived from layout_patch_json.nodes[].
+ * Carries the full structural and positional fields authored in the UI builder canvas.
+ * nodeKind: "catalog_component" | "structural_html"
+ * structural_html nodes render as actual HTML elements (htmlTag); catalog_component nodes
+ * render via the component registry (componentId).
+ * parentNodeId establishes the DOM nesting tree. orderIndex drives sibling render order.
+ * x/y/width/height are canvas geometry for DOM style projection (position:absolute).
+ * layoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
  */
 export type LayoutNode = {
+  nodeId?: string;
+  nodeKind?: string;
+  htmlTag?: string;
+  componentKey?: string;
+  componentId?: string;
+  parentNodeId?: string;
   slotKey?: string;
   orderIndex: number;
-  componentId?: string;
-  layoutPatchJson?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  layoutClassRefs?: string[];
 };
 
 export type Emission = {

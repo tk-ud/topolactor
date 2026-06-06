@@ -150,8 +150,8 @@ public class TopologyRepository
     }
 
     /// <summary>
-    /// Loads tensor-derived layout nodes for the given layout_id from topology.ui_topology_tensor,
-    /// ordered by order_index. Returns empty list when no rows exist (base/test double).
+    /// Loads layout nodes by parsing layout_patch_json.nodes[] from topology.ui_topology_tensor
+    /// for the given layout_id. Returns empty list (base/test double).
     /// LAYOUT_NODES_NOT_FOUND is signaled by an empty list — callers must treat empty as a
     /// broken layout configuration when layout_id is set.
     /// </summary>
@@ -225,12 +225,22 @@ public record DemoEntityProjection(Guid EntityId, string Title, string Status);
 public record DemoTransitionResult(bool Success, string? ErrorCode, string? ErrorMessage);
 
 /// <summary>
-/// A single tensor-derived layout node: slot placement for one component.
-/// Loaded from topology.ui_topology_tensor for a given layout_id.
-/// ComponentId is assigned positionally from structure_maps.component_ids.
+/// A single layout node parsed from layout_patch_json.nodes[].
+/// Loaded from topology.ui_topology_tensor.layout_patch_json for a given layout_id.
+/// ComponentId comes from nodes[].componentId — not positionally from structure_maps.component_ids.
 /// </summary>
 public record LayoutNodeRecord(
+    string NodeId,
+    string? NodeKind,
+    string? HtmlTag,
+    string? ComponentKey,
+    string? ComponentId,
+    string? ParentNodeId,
     string? SlotKey,
     int OrderIndex,
-    string? LayoutPatchJson
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    IReadOnlyList<string>? LayoutClassRefs
 );

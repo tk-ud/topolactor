@@ -492,3 +492,92 @@ pipeline_continuity_ssot:
       contract_guard: >
         Node contract must be validated by listed files and pipeline body tests.
         Route changes require explicit SSOT contract updates.
+
+    layout_projection_dom_lane:
+      description: >
+        layout_patch_json.nodes[] authored in the UI builder canvas flows from the real DB
+        through backend runtime emission to frontend DOM projection. Each node carries the
+        full structural and positional spec: nodeId, nodeKind, htmlTag, componentKey, componentId,
+        parentNodeId, slotKey, orderIndex, x, y, width, height, layoutClassRefs.
+        structural_html nodes render as real HTML elements; catalog_component nodes render via
+        the component registry. parentNodeId establishes the DOM nesting tree.
+        x/y/width/height project as position:absolute CSS. layoutClassRefs project as className.
+        No silent fallback: layoutId present without nodes → LAYOUT_NODES_NOT_FOUND error.
+      direction: db_to_frontend_dom
+      status: implemented
+
+      required_identity:
+        - nodeId
+        - nodeKind
+        - htmlTag (structural_html only)
+        - componentId (catalog_component only)
+        - parentNodeId
+        - slotKey
+        - orderIndex
+        - x
+        - y
+        - width
+        - height
+        - layoutClassRefs
+
+      nodes:
+        - node: backend.tensor_row
+          files:
+            - db/ui_topology_tables.sql
+          implementation_note: >
+            topology.ui_topology_tensor.layout_patch_json stores the full canvas JSON
+            authored via layout_patch:apply. One canonical tensor row per layout_id.
+
+        - node: backend.load_layout_nodes
+          files:
+            - backend/repository/NpgsqlTopologyRepository.cs
+            - backend/repository/TopologyRepository.cs
+          implementation_note: >
+            NpgsqlTopologyRepository.LoadLayoutNodesAsync reads layout_patch_json::text
+            (ORDER BY updated_at DESC LIMIT 1) and parses nodes[] into LayoutNodeRecord[],
+            sorted by orderIndex. Empty tensor row or absent nodes[] → returns empty list.
+
+        - node: backend.structure_map_resolver
+          files:
+            - backend/runtime/StructureMapResolver.cs
+          implementation_note: >
+            Validates parsed nodes: duplicate nodeId, missing parent, parent cycle,
+            structural_html tag allowlist. Builds LayoutNode[] using componentId from
+            nodes[].componentId — NOT positional from structure_maps.component_ids.
+
+        - node: backend.emission_builder
+          files:
+            - backend/runtime/EmissionBuilder.cs
+          implementation_note: >
+            Forwards LayoutNodes from RuntimeWorkingShape to Emission.layoutNodes unchanged.
+
+        - node: frontend.render_emission
+          files:
+            - frontend/runtime/renderEmission.ts
+            - frontend/api/dispatch.ts
+          implementation_note: >
+            renderEmission maps layoutNodes to ComponentSpec[] (flat, sorted by orderIndex).
+            structural_html nodes produce componentType="structural_html" with htmlTag.
+            catalog_component nodes resolve componentId through ComponentRegistry.
+            All layout projection fields (nodeId, nodeKind, htmlTag, parentNodeId, x, y,
+            width, height, layoutClassRefs) are preserved in ComponentSpec.
+
+        - node: frontend.projection_shell
+          files:
+            - frontend/islands/ProjectionShell.tsx
+          implementation_note: >
+            Builds DOM tree from parentNodeId using buildChildrenMap. Renders structural_html
+            nodes as actual HTML elements with style (position/left/top/width/height) and
+            class (from layoutClassRefs). catalog_component nodes render within the tree.
+
+      prohibited:
+        - silent_fallback_to_flat_componentIds_when_layoutId_present
+        - positional_componentId_assignment_from_structure_map_component_ids
+        - c_sharp_building_react_or_dom
+        - frontend_direct_db_write
+        - layout_nodes_not_validated_at_runtime
+
+      test_files:
+        - backend/tests/Topolactor.Integration.Tests/LayoutProjectionContinuityLiveDbEndToEndTests.cs
+        - frontend/tests/pipelineContinuity.test.ts
+        - frontend/tests/defaultEntitySearch.test.ts
