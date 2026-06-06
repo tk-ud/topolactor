@@ -9,7 +9,6 @@
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
 | `owner-decision-required-sso-audit` | SSO/Auth 監査 owner 判断待ち | partial | 3 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
-| `sso-audit-fixes` | SSO/Auth 監査 follow-up 修正 | done | 5 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -40,17 +39,6 @@
 - **現状:** `HttpOnly; SameSite=Lax` のみ。`Secure` フラグなし。
 - **SSOT 不整合:** `auth-db-session-credential-ssot.yaml` の `refresh_token_cookie` に `secure` 指定がない。
 - **判断待ち:** デモ HTTP 前提なら SSOT に `secure: demo_http_only` を明記する。HTTPS 化を見据えるなら `Secure` を追加し SSOT も更新する。
-
----
-
-## Bundle `sso-audit-fixes`
-
-**Status:** done  
-**SSOT:** `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml`  
-**Audit date:** 2026-06-06  
-**Closed:** 2026-06-06
-
-全 5 項目解消済み（A–E）。詳細は実装コミット参照。
 
 ---
 
