@@ -683,11 +683,14 @@ pipeline_continuity_ssot:
           files:
             - backend/runtime/ManifestDispatcher.cs
           implementation_note: >
-            TryExtractTargetRefManifestId parses target_ref from dispatch payload in
-            "manifest:{uuid}:{wiring_key}" format. When present, ManifestDispatcher calls
-            LoadByIdAsync to resolve the exact admin-chosen manifest rather than axes-based
-            ResolveActiveManifestAsync. Absent target_ref falls through to axes resolution.
-            Missing manifest after target_ref parse returns MANIFEST_NOT_FOUND.
+            TryGetRawTargetRef extracts target_ref string from dispatch payload when present.
+            TryParseManifestTargetRef validates "manifest:{uuid}:{wiring_key}" format.
+            When target_ref is present and valid, ManifestDispatcher calls LoadByIdAsync to
+            resolve the exact admin-chosen manifest rather than axes-based ResolveActiveManifestAsync.
+            Absent or empty target_ref falls through to axes resolution.
+            Malformed target_ref (non-manifest prefix or invalid UUID) returns TARGET_REF_INVALID —
+            no silent axes-fallback, which could misroute to an unintended active manifest.
+            Missing manifest after valid target_ref parse returns MANIFEST_NOT_FOUND.
 
         - node: frontend.render_emission_catalog_component
           files:
