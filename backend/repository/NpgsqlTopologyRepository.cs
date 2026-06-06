@@ -203,6 +203,41 @@ public class NpgsqlTopologyRepository : TopologyRepository
         return (string)result;
     }
 
+    /// <summary>
+    /// Loads tensor-derived layout nodes for the given layout_id from topology.ui_topology_tensor,
+    /// ordered by order_index. Returns empty list when no rows exist — callers treat as
+    /// LAYOUT_NODES_NOT_FOUND when layout_id is set on the structure_map.
+    /// SQL: SELECT slot_key, order_index, layout_patch_json::text FROM topology.ui_topology_tensor
+    ///   WHERE layout_id = @layoutId ORDER BY order_index
+    /// </summary>
+    public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT slot_key, order_index, layout_patch_json::text " +
+            "FROM topology.ui_topology_tensor " +
+            "WHERE layout_id = @layoutId " +
+            "ORDER BY order_index";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var nodes = new List<LayoutNodeRecord>();
+        while (await reader.ReadAsync(ct))
+        {
+            nodes.Add(new LayoutNodeRecord(
+                SlotKey: reader.IsDBNull(0) ? null : reader.GetString(0),
+                OrderIndex: reader.GetInt32(1),
+                LayoutPatchJson: reader.IsDBNull(2) ? null : reader.GetString(2)
+            ));
+        }
+
+        return nodes;
+    }
+
     // ─── Demo entity defaults — production registry resolution ───────────────
     // Resolves hub_id and relation_id exclusively from function_parameters.
     // Missing parameter is an explicit failure — no seeded fallback.

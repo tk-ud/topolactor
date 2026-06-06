@@ -28,7 +28,8 @@ public class EmissionBuilder
             Errors: errors,
             JumpEvents: shape.JumpEvents,
             ContextRouteRecommendation: shape.ContextRouteRecommendation,
-            LayoutId: shape.LayoutId
+            LayoutId: shape.LayoutId,
+            LayoutNodes: shape.LayoutNodes
         );
     }
 }

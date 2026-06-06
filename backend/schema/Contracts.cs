@@ -58,6 +58,20 @@ public record OperationVector(
 );
 
 /// <summary>
+/// A single tensor-derived layout node in the Emission.
+/// Represents one slot position within the admin-authored layout structure.
+/// ComponentId is assigned positionally from structure_maps.component_ids.
+/// SlotKey names the slot within the layout template. OrderIndex drives render order.
+/// LayoutPatchJson carries optional per-slot overrides from ui_topology_tensor.layout_patch_json.
+/// </summary>
+public record LayoutNode(
+    string? SlotKey,
+    int OrderIndex,
+    string? ComponentId,
+    string? LayoutPatchJson
+);
+
+/// <summary>
 /// Internal runtime concept. Public only for C# accessibility consistency.
 /// Must not be returned to the frontend, exposed through EndpointResponseDto,
 /// or persisted as a business fact.
@@ -66,6 +80,7 @@ public record OperationVector(
 /// and forwarded to EmissionBuilder.
 /// LayoutId is the optional admin-authored layout reference from structure_maps.layout_id,
 /// forwarded to EmissionBuilder for inclusion in Emission.
+/// LayoutNodes carries tensor-derived slot placement when LayoutId is set and tensor rows exist.
 /// </summary>
 public record RuntimeWorkingShape(
     OperationVector? Vector,
@@ -82,7 +97,8 @@ public record RuntimeWorkingShape(
     // to resolve a scoped context_route_policy_ref instead of the global default_policy.
     string? StructureMapStatePolicyJson = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
-    string? LayoutId = null
+    string? LayoutId = null,
+    IReadOnlyList<LayoutNode>? LayoutNodes = null
 );
 
 /// <summary>
@@ -96,6 +112,10 @@ public record RuntimeWorkingShape(
 /// projection_constructor_mapping entry exists in the manifest topology.
 /// LayoutId is the optional admin-authored layout reference from structure_maps.layout_id.
 /// Null when no layout is bound to the resolved structure map entry.
+/// LayoutNodes carries tensor-derived slot placement ordered by order_index. Present when
+/// LayoutId is set and topology.ui_topology_tensor rows exist for that layout_id.
+/// Absent (not null — absent) when no layout is bound. Frontend must not silently fall back
+/// to flat componentIds rendering when LayoutId is present but LayoutNodes is absent.
 /// </summary>
 public record Emission(
     string? StructureMapId,
@@ -108,7 +128,8 @@ public record Emission(
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
     JsonElement? ProjectionDefinition = null,
     IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null,
-    string? LayoutId = null
+    string? LayoutId = null,
+    IReadOnlyList<LayoutNode>? LayoutNodes = null
 );
 
 /// <summary>SSOT runtime_jump_event_contract: scope, from, to, reason (+ planned for user_action).</summary>

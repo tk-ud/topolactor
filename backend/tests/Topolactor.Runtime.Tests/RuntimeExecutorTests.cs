@@ -579,13 +579,106 @@ public class RuntimeExecutorTests
         Assert.True(response.Success);
         Assert.NotNull(response.Emission);
         Assert.Null(response.Emission!.LayoutId);
+        Assert.Null(response.Emission.LayoutNodes);
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_LayoutId_WithNoNodes_ReturnsLayoutNodesNotFoundError()
+    {
+        // When layout_id is set but ui_topology_tensor has no rows, expect LAYOUT_NODES_NOT_FOUND.
+        // StubTopologyRepositoryWithLayout inherits base LoadLayoutNodesAsync which returns empty.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var repo = new StubTopologyRepositoryWithLayout(layoutId);
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+
+        Assert.Equal(layoutId.ToString(), shape.LayoutId);
+        Assert.Null(shape.LayoutNodes);
+        Assert.NotNull(shape.Errors);
+        Assert.Contains(shape.Errors!, e => e.Code == "LAYOUT_NODES_NOT_FOUND");
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_LayoutId_WithNodes_ReturnsOrderedLayoutNodes()
+    {
+        // When layout_id is set and tensor rows exist, LayoutNodes are built positionally.
+        // StubTopologyRepositoryWithLayoutAndNodes returns 2 tensor rows and 2 component_ids.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var repo = new StubTopologyRepositoryWithLayoutAndNodes(layoutId);
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+
+        Assert.Equal(layoutId.ToString(), shape.LayoutId);
+        Assert.Null(shape.Errors);
+        Assert.NotNull(shape.LayoutNodes);
+        Assert.Equal(2, shape.LayoutNodes!.Count);
+
+        // Verify positional assignment: tensor[0] → componentIds[0]
+        Assert.Equal("slot_b", shape.LayoutNodes[0].SlotKey);
+        Assert.Equal(0, shape.LayoutNodes[0].OrderIndex);
+        Assert.Equal("00000000-0000-0000-0000-000000000099", shape.LayoutNodes[0].ComponentId);
+
+        Assert.Equal("slot_a", shape.LayoutNodes[1].SlotKey);
+        Assert.Equal(1, shape.LayoutNodes[1].OrderIndex);
+        Assert.Equal(TopologyRepository.DefaultComponentId, shape.LayoutNodes[1].ComponentId);
+    }
+
+    [Fact]
+    public void EmissionBuilder_LayoutNodes_IsPreservedFromWorkingShape()
+    {
+        // Verifies LayoutNodes pipeline: RuntimeWorkingShape.LayoutNodes → Emission.LayoutNodes.
+        var builder = new EmissionBuilder();
+        var layoutId = Guid.NewGuid().ToString();
+        var layoutNodes = new List<LayoutNode>
+        {
+            new("slot_b", 0, "00000000-0000-0000-0000-000000000099", null),
+            new("slot_a", 1, TopologyRepository.DefaultComponentId, null),
+        };
+        var shape = new RuntimeWorkingShape(
+            Vector: null,
+            StructureMapId: "00000000-0000-0000-0000-000000000004",
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId,
+            ComponentIds: [TopologyRepository.DefaultComponentId],
+            PackageDef: null,
+            SchemaDef: null,
+            ResolvedData: null,
+            Errors: null,
+            LayoutId: layoutId,
+            LayoutNodes: layoutNodes
+        );
+
+        var emission = builder.Build(shape);
+
+        Assert.Equal(layoutId, emission.LayoutId);
+        Assert.NotNull(emission.LayoutNodes);
+        Assert.Equal(2, emission.LayoutNodes!.Count);
+        Assert.Equal("slot_b", emission.LayoutNodes[0].SlotKey);
+        Assert.Equal(0, emission.LayoutNodes[0].OrderIndex);
+        Assert.Equal("00000000-0000-0000-0000-000000000099", emission.LayoutNodes[0].ComponentId);
     }
 
 }
 
 /// <summary>
 /// Test stub: TopologyRepository that returns the default structure map with a bound LayoutId.
-/// Used to verify StructureMapRecord.LayoutId -> RuntimeWorkingShape.LayoutId pipeline.
+/// LoadLayoutNodesAsync returns empty (inherited base) — models LAYOUT_NODES_NOT_FOUND case.
+/// Used to verify StructureMapRecord.LayoutId → RuntimeWorkingShape.LayoutId pipeline
+/// and the explicit LAYOUT_NODES_NOT_FOUND error path.
 /// </summary>
 internal class StubTopologyRepositoryWithLayout(Guid layoutId)
     : TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")
@@ -607,6 +700,48 @@ internal class StubTopologyRepositoryWithLayout(Guid layoutId)
             ));
         }
         return Task.FromResult<StructureMapRecord?>(null);
+    }
+}
+
+/// <summary>
+/// Test stub: TopologyRepository that returns the default structure map with a bound LayoutId
+/// AND returns 2 tensor rows from LoadLayoutNodesAsync.
+/// Used to verify the full LayoutNodes positional assignment pipeline.
+/// Tensor rows: slot_b (order=0) → componentIds[0] = "00000000-0000-0000-0000-000000000099"
+///              slot_a (order=1) → componentIds[1] = DefaultComponentId
+/// </summary>
+internal class StubTopologyRepositoryWithLayoutAndNodes(Guid layoutId)
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")
+{
+    private readonly Guid _layoutId = layoutId;
+    private const string SecondaryComponentId = "00000000-0000-0000-0000-000000000099";
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key == DefaultAttractorKey || key == DefaultStructureMapId)
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: DefaultStructureMapId,
+                AttractorKey:   DefaultAttractorKey,
+                PackageId:      DefaultPackageId,
+                SchemaId:       DefaultSchemaId,
+                ComponentIds:   [SecondaryComponentId, DefaultComponentId],
+                StatePolicyJson: null,
+                LayoutId: _layoutId
+            ));
+        }
+        return Task.FromResult<StructureMapRecord?>(null);
+    }
+
+    public override Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        IReadOnlyList<LayoutNodeRecord> rows =
+        [
+            new LayoutNodeRecord(SlotKey: "slot_b", OrderIndex: 0, LayoutPatchJson: null),
+            new LayoutNodeRecord(SlotKey: "slot_a", OrderIndex: 1, LayoutPatchJson: null),
+        ];
+        return Task.FromResult(rows);
     }
 }
 

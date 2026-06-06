@@ -3,7 +3,7 @@ import { renderEmission } from "../runtime/renderEmission.ts";
 import { validationErrorText } from "../api/dispatch.ts";
 import { summarizeEmission } from "../runtime/emissionSummary.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import type { Emission, ValidationError } from "../api/dispatch.ts";
+import type { Emission, LayoutNode, ValidationError } from "../api/dispatch.ts";
 
 // Fixtures use backend-shaped data matching the canonical default:entity:search emission.
 const successEmission: Emission = {
@@ -13,13 +13,45 @@ const successEmission: Emission = {
   componentIds: ["00000000-0000-0000-0000-000000000003"],
 };
 
-// Fixture with layoutId — models structure_map with bound admin-authored layout.
-const emissionWithLayout: Emission = {
+// Fixture: layoutId set but layoutNodes absent — explicit broken-layout state.
+const emissionWithLayoutIdOnly: Emission = {
   structureMapId: "00000000-0000-0000-0000-000000000004",
   packageId: "00000000-0000-0000-0000-000000000001",
   schemaId: "00000000-0000-0000-0000-000000000002",
   componentIds: ["00000000-0000-0000-0000-000000000003"],
   layoutId: "aaaaaaaa-0000-0000-0000-000000000001",
+};
+
+// Two-component registry for layout ordering tests.
+const twoComponentRegistry = {
+  ...defaultComponentRegistry,
+  "00000000-0000-0000-0000-000000000003": {
+    componentId: "00000000-0000-0000-0000-000000000003",
+    componentType: "default",
+    def: { label: "component-A" },
+  },
+  "00000000-0000-0000-0000-000000000099": {
+    componentId: "00000000-0000-0000-0000-000000000099",
+    componentType: "secondary",
+    def: { label: "component-B" },
+  },
+};
+
+// Layout nodes: slot_b (orderIndex=0) → component-B, slot_a (orderIndex=1) → component-A.
+// This reversal verifies that renderEmission respects tensor ordering, not componentIds order.
+const layoutNodesReversed: LayoutNode[] = [
+  { slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
+  { slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
+];
+
+// Fixture: emission with layoutId AND layoutNodes — full layout-aware state.
+const emissionWithLayout: Emission = {
+  structureMapId: "00000000-0000-0000-0000-000000000004",
+  packageId: "00000000-0000-0000-0000-000000000001",
+  schemaId: "00000000-0000-0000-0000-000000000002",
+  componentIds: ["00000000-0000-0000-0000-000000000003", "00000000-0000-0000-0000-000000000099"],
+  layoutId: "aaaaaaaa-0000-0000-0000-000000000001",
+  layoutNodes: layoutNodesReversed,
 };
 
 const attractorFailedError: ValidationError = {
@@ -75,19 +107,62 @@ Deno.test("emission layout identity: layoutId absent when structure_map has no l
   assertEquals(summary.layoutId, undefined);
 });
 
-Deno.test("emission layout identity: layoutId preserved when structure_map has bound layout", () => {
+Deno.test("emission layout identity: layoutId preserved in summary when structure_map has bound layout", () => {
   assertEquals(emissionWithLayout.layoutId, "aaaaaaaa-0000-0000-0000-000000000001");
   const summary = summarizeEmission(emissionWithLayout);
   assertEquals(summary.layoutId, "aaaaaaaa-0000-0000-0000-000000000001");
 });
 
-Deno.test("emission layout identity: renderEmission works regardless of layoutId presence", () => {
-  const specsNoLayout = renderEmission(successEmission, defaultComponentRegistry);
-  const specsWithLayout = renderEmission(emissionWithLayout, defaultComponentRegistry);
+Deno.test("layout projection: layoutId set but layoutNodes absent → explicit error spec (no silent fallback)", () => {
+  // SSOT contract: layoutId present without layoutNodes is a broken-layout failure.
+  // renderEmission must NOT fall back to flat componentIds rendering.
+  const specs = renderEmission(emissionWithLayoutIdOnly, defaultComponentRegistry);
 
-  assertEquals(specsNoLayout.length, 1);
-  assertEquals(specsWithLayout.length, 1);
-  assertEquals(specsNoLayout[0].componentId, specsWithLayout[0].componentId);
-  assertEquals(specsNoLayout[0].componentType !== "error", true);
-  assertEquals(specsWithLayout[0].componentType !== "error", true);
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].componentType, "error");
+  assertStringIncludes(
+    String(specs[0].def.error),
+    "LAYOUT_NODES_NOT_FOUND",
+  );
+});
+
+Deno.test("layout projection: layoutNodes ordering drives ComponentSpec order (not componentIds order)", () => {
+  // Core contract: when layoutNodes are present, renderEmission MUST use tensor slot ordering.
+  // emissionWithLayout has layoutNodes with slot_b (orderIndex=0) → component-B, slot_a (orderIndex=1) → component-A.
+  // componentIds order is [component-A, component-B] — the opposite.
+  // This test verifies that slot ordering wins over componentIds position.
+  const specs = renderEmission(emissionWithLayout, twoComponentRegistry);
+
+  assertEquals(specs.length, 2);
+
+  // First spec must be component-B (orderIndex=0, slotKey="slot_b"), not component-A
+  assertEquals(specs[0].componentId, "00000000-0000-0000-0000-000000000099");
+  assertEquals(specs[0].componentType, "secondary");
+  assertEquals(specs[0].slotKey, "slot_b");
+  assertEquals(specs[0].orderIndex, 0);
+
+  // Second spec must be component-A (orderIndex=1, slotKey="slot_a")
+  assertEquals(specs[1].componentId, "00000000-0000-0000-0000-000000000003");
+  assertEquals(specs[1].componentType, "default");
+  assertEquals(specs[1].slotKey, "slot_a");
+  assertEquals(specs[1].orderIndex, 1);
+});
+
+Deno.test("layout projection: ComponentSpec carries slotKey and orderIndex from tensor nodes", () => {
+  const specs = renderEmission(emissionWithLayout, twoComponentRegistry);
+
+  for (const spec of specs) {
+    assertEquals(spec.componentType !== "error", true);
+    assertEquals(typeof spec.slotKey, "string");
+    assertEquals(typeof spec.orderIndex, "number");
+  }
+});
+
+Deno.test("layout projection: flat renderEmission has no slotKey or orderIndex", () => {
+  // Verifies flat path does not leak layout-only fields.
+  const specs = renderEmission(successEmission, defaultComponentRegistry);
+
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].slotKey, undefined);
+  assertEquals(specs[0].orderIndex, undefined);
 });

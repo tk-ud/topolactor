@@ -9,6 +9,10 @@ export type ComponentSpec = {
   componentType: string;
   def: Record<string, unknown>;
   runtime?: RuntimeComponentSpec;
+  /** Slot name within the layout template — present only when rendered from layoutNodes. */
+  slotKey?: string;
+  /** Render order from tensor row — present only when rendered from layoutNodes. */
+  orderIndex?: number;
 };
 
 export function renderRuntimeComponents(componentDataHubs: ComponentDataHub[]): ComponentSpec[] {
@@ -48,6 +52,65 @@ export function renderEmission(
   emission: Emission,
   registry: ComponentRegistry,
 ): ComponentSpec[] {
+  // Layout-aware path: when layoutId is set, layoutNodes must be present.
+  // Absent layoutNodes with a present layoutId is an explicit broken-layout failure —
+  // no silent fallback to flat componentIds rendering.
+  if (emission.layoutId !== undefined) {
+    if (!emission.layoutNodes || emission.layoutNodes.length === 0) {
+      return [
+        {
+          componentType: "error",
+          def: {
+            error: `LAYOUT_NODES_NOT_FOUND: layoutId "${emission.layoutId}" is set but layoutNodes is absent or empty. Broken layout configuration — no fallback.`,
+            layoutId: emission.layoutId,
+          },
+        },
+      ];
+    }
+
+    // Render in tensor slot order. Each node carries slotKey, orderIndex, componentId.
+    return [...emission.layoutNodes]
+      .sort((a, b) => a.orderIndex - b.orderIndex)
+      .map((node): ComponentSpec => {
+        if (!node.componentId) {
+          return {
+            componentType: "error",
+            def: {
+              error: `Layout slot "${node.slotKey ?? "(unnamed)"}" (orderIndex=${node.orderIndex}) has no componentId assigned.`,
+              slotKey: node.slotKey,
+              orderIndex: node.orderIndex,
+            },
+            slotKey: node.slotKey,
+            orderIndex: node.orderIndex,
+          };
+        }
+
+        const entry = registry[node.componentId];
+        if (!entry) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: {
+              error: `ComponentRegistry: unknown componentId "${node.componentId}" in slot "${node.slotKey ?? "(unnamed)"}"`,
+              missingId: node.componentId,
+              slotKey: node.slotKey,
+            },
+            slotKey: node.slotKey,
+            orderIndex: node.orderIndex,
+          };
+        }
+
+        return {
+          componentId: entry.componentId,
+          componentType: entry.componentType,
+          def: entry.def,
+          slotKey: node.slotKey,
+          orderIndex: node.orderIndex,
+        };
+      });
+  }
+
+  // No layout: flat componentIds rendering.
   const componentIds = emission.componentIds ?? [];
 
   return componentIds.map((componentId): ComponentSpec => {

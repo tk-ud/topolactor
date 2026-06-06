@@ -37,6 +37,20 @@ export type ContextRouteRecommendation = {
   statusDetail?: string;
 };
 
+/**
+ * A single tensor-derived layout node in the Emission.
+ * Represents one slot position within the admin-authored layout structure.
+ * slotKey names the slot within the layout template. orderIndex drives render order.
+ * componentId is assigned positionally from structure_maps.component_ids.
+ * layoutPatchJson carries optional per-slot overrides from ui_topology_tensor.layout_patch_json.
+ */
+export type LayoutNode = {
+  slotKey?: string;
+  orderIndex: number;
+  componentId?: string;
+  layoutPatchJson?: string;
+};
+
 export type Emission = {
   structureMapId?: string;
   packageId?: string;
@@ -59,6 +73,14 @@ export type Emission = {
    * When present, identifies which topology.components_layout_design row governs the projection.
    */
   layoutId?: string;
+  /**
+   * Tensor-derived layout nodes ordered by orderIndex.
+   * Present when layoutId is set and topology.ui_topology_tensor rows exist for that layout_id.
+   * Absent when no layout is bound to the resolved structure map entry.
+   * renderEmission MUST NOT silently fall back to flat componentIds rendering when
+   * layoutId is present but layoutNodes is absent — that is an explicit failure state.
+   */
+  layoutNodes?: LayoutNode[];
 };
 
 export type DispatchRequest = {

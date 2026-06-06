@@ -149,6 +149,21 @@ public class TopologyRepository
         return Task.FromResult<string?>(null);
     }
 
+    /// <summary>
+    /// Loads tensor-derived layout nodes for the given layout_id from topology.ui_topology_tensor,
+    /// ordered by order_index. Returns empty list when no rows exist (base/test double).
+    /// LAYOUT_NODES_NOT_FOUND is signaled by an empty list — callers must treat empty as a
+    /// broken layout configuration when layout_id is set.
+    /// </summary>
+    public virtual Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "TopologyRepository.LoadLayoutNodesAsync: returning empty list for layoutId='{LayoutId}' (base/test double).",
+            layoutId);
+        return Task.FromResult<IReadOnlyList<LayoutNodeRecord>>(Array.Empty<LayoutNodeRecord>());
+    }
+
     public virtual Task<IReadOnlyList<DemoEntityProjection>> LoadDemoEntityListAsync(CancellationToken ct = default)
         => Task.FromException<IReadOnlyList<DemoEntityProjection>>(new InvalidOperationException("TOPOLOGY_REPOSITORY_NOT_CONNECTED"));
 
@@ -208,3 +223,14 @@ public record ComponentRecord(
 
 public record DemoEntityProjection(Guid EntityId, string Title, string Status);
 public record DemoTransitionResult(bool Success, string? ErrorCode, string? ErrorMessage);
+
+/// <summary>
+/// A single tensor-derived layout node: slot placement for one component.
+/// Loaded from topology.ui_topology_tensor for a given layout_id.
+/// ComponentId is assigned positionally from structure_maps.component_ids.
+/// </summary>
+public record LayoutNodeRecord(
+    string? SlotKey,
+    int OrderIndex,
+    string? LayoutPatchJson
+);
