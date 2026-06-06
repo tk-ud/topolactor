@@ -6,6 +6,7 @@ export type EmissionSummary = {
   structureMapId?: string;
   packageId?: string;
   schemaId?: string;
+  layoutId?: string;
   componentCount: number;
   recommendationStatus?: string;
   recommendationDetail?: string;
@@ -21,6 +22,7 @@ export function summarizeEmission(emission: Emission): EmissionSummary {
     structureMapId: emission.structureMapId,
     packageId: emission.packageId,
     schemaId: emission.schemaId,
+    layoutId: emission.layoutId,
     componentCount: emission.componentIds?.length ?? 0,
     recommendationStatus: rec?.status,
     recommendationDetail: rec?.statusDetail,
@@ -35,6 +37,7 @@ export type UserFacingResult = {
   itemCount: number;
   hasRecommendation: boolean;
   recommendationSummary?: string;
+  layoutId?: string;
 };
 
 export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
@@ -61,5 +64,6 @@ export function toUserFacingResult(summary: EmissionSummary): UserFacingResult {
     itemCount: count,
     hasRecommendation: hasRec,
     recommendationSummary: hasRec ? "レコメンドが見つかりました" : undefined,
+    layoutId: summary.layoutId,
   };
 }

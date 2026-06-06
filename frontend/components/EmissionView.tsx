@@ -20,6 +20,7 @@ export function EmissionView({ emission }: Props): JSX.Element {
         <table class="table">
           <tbody>
             <Row label="structureMapId" value={emission.structureMapId} />
+            <Row label="layoutId" value={emission.layoutId} />
             <Row label="packageId" value={emission.packageId} />
             <Row label="schemaId" value={emission.schemaId} />
             <Row

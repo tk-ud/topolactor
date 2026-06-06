@@ -35,6 +35,11 @@ export function UserDemoResultCard({ result }: Props): JSX.Element {
           {result.detail && (
             <p class="mt-1 text-sm text-gray-600">{result.detail}</p>
           )}
+          {result.layoutId && (
+            <p class="mt-3 font-mono text-xs text-gray-500">
+              layout: <code>{result.layoutId}</code>
+            </p>
+          )}
           {result.hasRecommendation && result.recommendationSummary && (
             <p class="mt-3 inline-block rounded bg-blue-100 px-3 py-1 text-sm text-blue-800">
               {result.recommendationSummary}

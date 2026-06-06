@@ -41,7 +41,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT structure_map_id::text, attractor_key, package_id, schema_id, " +
-            "       component_ids, state_policy::text " +
+            "       component_ids, state_policy::text, layout_id " +
             "FROM topology.structure_maps " +
             "WHERE (attractor_key = @key OR structure_map_id::text = @key) " +
             "  AND active = true " +
@@ -66,7 +66,8 @@ public class NpgsqlTopologyRepository : TopologyRepository
             PackageId:      reader.GetGuid(2),
             SchemaId:       reader.GetGuid(3),
             ComponentIds:   componentIds,
-            StatePolicyJson: reader.IsDBNull(5) ? null : reader.GetString(5)
+            StatePolicyJson: reader.IsDBNull(5) ? null : reader.GetString(5),
+            LayoutId: reader.IsDBNull(6) ? null : reader.GetGuid(6)
         );
     }
 
@@ -200,6 +201,41 @@ public class NpgsqlTopologyRepository : TopologyRepository
         }
 
         return (string)result;
+    }
+
+    /// <summary>
+    /// Loads tensor-derived layout nodes for the given layout_id from topology.ui_topology_tensor,
+    /// ordered by order_index. Returns empty list when no rows exist — callers treat as
+    /// LAYOUT_NODES_NOT_FOUND when layout_id is set on the structure_map.
+    /// SQL: SELECT slot_key, order_index, layout_patch_json::text FROM topology.ui_topology_tensor
+    ///   WHERE layout_id = @layoutId ORDER BY order_index
+    /// </summary>
+    public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT slot_key, order_index, layout_patch_json::text " +
+            "FROM topology.ui_topology_tensor " +
+            "WHERE layout_id = @layoutId " +
+            "ORDER BY order_index";
+        cmd.Parameters.AddWithValue("layoutId", layoutId);
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var nodes = new List<LayoutNodeRecord>();
+        while (await reader.ReadAsync(ct))
+        {
+            nodes.Add(new LayoutNodeRecord(
+                SlotKey: reader.IsDBNull(0) ? null : reader.GetString(0),
+                OrderIndex: reader.GetInt32(1),
+                LayoutPatchJson: reader.IsDBNull(2) ? null : reader.GetString(2)
+            ));
+        }
+
+        return nodes;
     }
 
     // ─── Demo entity defaults — production registry resolution ───────────────

@@ -6,7 +6,7 @@
 
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
-| `layout-application-projection-continuity` | admin layout authoring → application/draft projection continuity | partial | 1 | `docs/design/pipeline-continuity-ssot.yaml` |
+| `layout-application-projection-continuity` | layout 投影 continuity | partial | 4 | `docs/design/pipeline-continuity-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル | not_started | 3 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | not_started | 1 | `docs/system-roadmap.yaml`（参照のみ・正本ではない） |
@@ -15,30 +15,30 @@
 
 ## Bundle `layout-application-projection-continuity`
 
-**Status:** partial  
-**SSOT:** `docs/design/pipeline-continuity-ssot.yaml`  
-**Supporting SSOT:** `docs/design/runtime-orchestration-ssot.yaml`, `docs/design/db-schema.yaml`
+**Status:** partial
+**SSOT:** `docs/design/pipeline-continuity-ssot.yaml`
 
-**Problem:** admin canvas authoring can persist layout design into `topology.components_layout_design`, but the production application projection path does not preserve or consume layout identity. The current `/` route is an admin/demo guide surface, while runtime projection remains `structure_map -> packageId/schemaId/componentIds -> Emission -> renderEmission()`, so authored layout cannot reach the application projection surface. The current `/demo` surface is also not a coherent product preview because it does not let the user select an admin-authored layout and project draft content through that layout.
+### 完了済み（PR #367 + このコミット）
 
-**Target surfaces:**
-- `frontend/routes/index.tsx` — remove guide-only top behavior from `/`; make `/` the production application projection shell or bridge to it
-- admin guide content currently on `/` — move into `/admin` flow or a clearly admin/help/manual surface; do not keep it as top-level product entry
-- `frontend/routes/demo.tsx` — either delete as obsolete, or repurpose as an explicit draft preview surface that selects an admin-authored layout and projects draft content through it
-- `frontend/routes/demo/debug.tsx` — delete if no longer useful after coherent draft preview exists; otherwise keep only as developer raw-runtime inspection linked from dev-facing surfaces, not product flow
-- `backend/schema/Contracts.cs` — `RuntimeWorkingShape`, `Emission`
-- `backend/runtime/EmissionBuilder.cs` — `EmissionBuilder.Build`
-- `frontend/api/dispatch.ts` — `Emission`
-- `frontend/runtime/renderEmission.ts` — `renderEmission`
-- `frontend/components/EmissionView.tsx` / `frontend/components/ProjectionView.tsx` — application projection consumers
-- `topology.structure_maps` / related seed or migration surfaces — layout identity mapping
-- `topology.components_layout_design` — authored layout source
-- draft/content source surfaces used by admin contents authoring
+- [x] `structure_maps.layout_id` カラム追加（bootstrap DDL + migration FK）
+- [x] LayoutId identity plumbing: DB → StructureMapRecord → RuntimeWorkingShape → Emission → frontend Emission type
+- [x] `LayoutNode` 型追加（backend Contracts.cs + frontend dispatch.ts）
+- [x] `LayoutNodeRecord` + `LoadLayoutNodesAsync` 追加（TopologyRepository + NpgsqlTopologyRepository）
+- [x] `StructureMapResolver`: layout_id 設定時に ui_topology_tensor から tensor rows をロードし LayoutNodes を構成
+- [x] `layoutId` 設定だが tensor rows ゼロ → `LAYOUT_NODES_NOT_FOUND` ValidationError（silent fallback なし）
+- [x] `EmissionBuilder`: LayoutNodes を Emission に転送
+- [x] `renderEmission()`: layoutNodes 存在時は tensor slot 順で ComponentSpec を構成
+- [x] `renderEmission()`: layoutId 設定だが layoutNodes なし → 明示的 error spec
+- [x] `ComponentSpec`: slotKey / orderIndex フィールド追加
+- [x] `/` を production application projection shell に変更（UserDemoStepper を除去）
+- [x] `/demo` から UserDemoStepper を除去（draft preview 未実装として明示）
+- [x] Backend tests: LayoutNodes pipeline、LAYOUT_NODES_NOT_FOUND エラーパス
+- [x] Frontend tests: layout ordering が projection structure を変えることを検証
 
-**Completion condition / TODO:**
-- [ ] Replace the current guide-only `/` with a production application projection shell or explicit bridge to that shell; move the guide content into `/admin` or another admin/help surface if still useful.
-- [ ] Preserve layout identity/payload as one canonical pipeline bundle from admin-authored layout storage through backend emission to the application projection surface, including explicit failure for missing/malformed layout refs and tests covering emission identity, structure-map layout mapping, production route projection, `renderEmission()`, and projection component consumption.
-- [ ] Decide `/demo` by implementation value only: delete it if it remains a vague demo page; otherwise repurpose it into a draft preview surface where the user selects an admin-authored layout and projects selected draft content through that layout. Do not keep the current vague demo state.
+### 残タスク
+
+- [ ] `/demo` 本格実装: admin-authored layout セレクター + content_entity_drafts ドラフトコンテンツセレクター + 選択 layout への draft 投影プレビュー（content_entity_drafts API endpoint が必要）
+- [ ] production integration test: real tensor rows → LayoutNodes → renderEmission ordering 変化の E2E 検証
 
 ---
 

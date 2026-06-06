@@ -1,30 +1,33 @@
 import { JSX } from "preact";
-import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 
-/** /demo — user-facing preview. Configuration and editing stay under /admin. */
+/**
+ * /demo — draft preview surface (not yet implemented).
+ * Draft preview requires: layout selector (admin-authored layouts) + draft content selector
+ * (content_entity_drafts). Both require API endpoints not yet available here.
+ * Use /demo/debug for runtime inspection.
+ */
 export default function Demo(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — デモ</h1>
+      <h1 class="page-title">topolactor — ドラフトプレビュー</h1>
 
       <div class="alert-info mb-6">
-        <strong>デモ:</strong> 設定済みページの表示と操作を確認できます。 先に
-        {" "}
-        <a href="/auth" class="link">ログイン</a> してください。 ページの設定は
-        {" "}
-        <a href="/admin" class="link">管理画面</a> から行えます。
+        <p class="font-semibold">ドラフトプレビューは未実装です</p>
+        <p class="mt-2 text-sm">
+          admin-authored layout とドラフトコンテンツを選択して投影する機能は今後実装されます。
+          runtime の検証は
+          {" "}<a href="/demo/debug" class="link">開発者向け検証</a>{" "}
+          を利用してください。
+          layout・コンテンツの構築は
+          {" "}<a href="/admin" class="link">管理画面</a>{" "}
+          で行います。
+        </p>
       </div>
-
-      <section class="mb-8">
-        <UserDemoStepper />
-      </section>
 
       <div class="nav-footer">
         <a href="/" class="link">トップ</a>
         {" · "}
         <a href="/demo/debug" class="link">開発者向け検証</a>
-        {" · "}
-        <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}
         <a href="/admin" class="link">管理画面</a>
       </div>
