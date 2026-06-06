@@ -1,6 +1,7 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import { renderEmission } from "../runtime/renderEmission.ts";
 import { validationErrorText } from "../api/dispatch.ts";
+import { summarizeEmission } from "../runtime/emissionSummary.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import type { Emission, ValidationError } from "../api/dispatch.ts";
 
@@ -10,6 +11,15 @@ const successEmission: Emission = {
   packageId: "00000000-0000-0000-0000-000000000001",
   schemaId: "00000000-0000-0000-0000-000000000002",
   componentIds: ["00000000-0000-0000-0000-000000000003"],
+};
+
+// Fixture with layoutId — models structure_map with bound admin-authored layout.
+const emissionWithLayout: Emission = {
+  structureMapId: "00000000-0000-0000-0000-000000000004",
+  packageId: "00000000-0000-0000-0000-000000000001",
+  schemaId: "00000000-0000-0000-0000-000000000002",
+  componentIds: ["00000000-0000-0000-0000-000000000003"],
+  layoutId: "aaaaaaaa-0000-0000-0000-000000000001",
 };
 
 const attractorFailedError: ValidationError = {
@@ -57,4 +67,27 @@ Deno.test("validationErrorText: ATTRACTOR_RESOLVE_FAILED error is rendered corre
 
   // Broken attractor error must be surfaced — no silent fallback.
   assertStringIncludes(text, "ATTRACTOR_RESOLVE_FAILED");
+});
+
+Deno.test("emission layout identity: layoutId absent when structure_map has no layout", () => {
+  assertEquals(successEmission.layoutId, undefined);
+  const summary = summarizeEmission(successEmission);
+  assertEquals(summary.layoutId, undefined);
+});
+
+Deno.test("emission layout identity: layoutId preserved when structure_map has bound layout", () => {
+  assertEquals(emissionWithLayout.layoutId, "aaaaaaaa-0000-0000-0000-000000000001");
+  const summary = summarizeEmission(emissionWithLayout);
+  assertEquals(summary.layoutId, "aaaaaaaa-0000-0000-0000-000000000001");
+});
+
+Deno.test("emission layout identity: renderEmission works regardless of layoutId presence", () => {
+  const specsNoLayout = renderEmission(successEmission, defaultComponentRegistry);
+  const specsWithLayout = renderEmission(emissionWithLayout, defaultComponentRegistry);
+
+  assertEquals(specsNoLayout.length, 1);
+  assertEquals(specsWithLayout.length, 1);
+  assertEquals(specsNoLayout[0].componentId, specsWithLayout[0].componentId);
+  assertEquals(specsNoLayout[0].componentType !== "error", true);
+  assertEquals(specsWithLayout[0].componentType !== "error", true);
 });

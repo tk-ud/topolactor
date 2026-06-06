@@ -1,18 +1,21 @@
 import { JSX } from "preact";
 import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 
-/** /demo — user-facing preview. Configuration and editing stay under /admin. */
+/**
+ * /demo — draft preview surface.
+ * Selects an admin-authored projection and projects draft content through it.
+ * Layout identity (emission.layoutId) is surfaced in the result when the
+ * resolved structure map has a bound layout. Configuration stays under /admin.
+ */
 export default function Demo(): JSX.Element {
   return (
     <main class="page-main max-w-4xl font-sans">
-      <h1 class="page-title">topolactor — デモ</h1>
+      <h1 class="page-title">topolactor — ドラフトプレビュー</h1>
 
       <div class="alert-info mb-6">
-        <strong>デモ:</strong> 設定済みページの表示と操作を確認できます。 先に
-        {" "}
-        <a href="/auth" class="link">ログイン</a> してください。 ページの設定は
-        {" "}
-        <a href="/admin" class="link">管理画面</a> から行えます。
+        <strong>ドラフトプレビュー:</strong> admin で構築したレイアウト・コンテンツの投影を確認できます。
+        先に <a href="/auth" class="link">ログイン</a> してください。
+        ページの構築は <a href="/admin" class="link">管理画面</a> から行います。
       </div>
 
       <section class="mb-8">
@@ -23,8 +26,6 @@ export default function Demo(): JSX.Element {
         <a href="/" class="link">トップ</a>
         {" · "}
         <a href="/demo/debug" class="link">開発者向け検証</a>
-        {" · "}
-        <a href="/demo-static" class="link">デモ（静的）</a>
         {" · "}
         <a href="/admin" class="link">管理画面</a>
       </div>

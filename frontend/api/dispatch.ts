@@ -53,6 +53,12 @@ export type Emission = {
    * projection_constructor_mapping entry exists.
    */
   projectionDefinition?: ProjectionDefinition;
+  /**
+   * Admin-authored layout identity from structure_maps.layout_id.
+   * Absent when no layout is bound to the resolved structure map entry.
+   * When present, identifies which topology.components_layout_design row governs the projection.
+   */
+  layoutId?: string;
 };
 
 export type DispatchRequest = {

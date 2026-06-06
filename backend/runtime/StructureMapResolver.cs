@@ -34,6 +34,8 @@ public class StructureMapResolver
         // Vector is set later by RuntimeExecutor after this step returns.
         // StatePolicyJson is forwarded to allow ContextRouteRecommendationResolver
         // to resolve a scoped policy_ref from structure_maps.state_policy.
+        // LayoutId is forwarded from structure_maps.layout_id to preserve layout identity
+        // through the pipeline into Emission.LayoutId.
         return new RuntimeWorkingShape(
             Vector: null,
             StructureMapId: record.StructureMapId,
@@ -44,7 +46,8 @@ public class StructureMapResolver
             SchemaDef: null,
             ResolvedData: null,
             Errors: null,
-            StructureMapStatePolicyJson: record.StatePolicyJson
+            StructureMapStatePolicyJson: record.StatePolicyJson,
+            LayoutId: record.LayoutId?.ToString()
         );
     }
 }

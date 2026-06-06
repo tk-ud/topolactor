@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS topology.structure_maps (
     schema_id             UUID,                           -- references schema_registry
     component_ids         UUID[]      NOT NULL DEFAULT '{}',  -- references component_registry entries
     relation_registry_id  UUID,                           -- scoping relation for this map
+    layout_id             UUID        REFERENCES topology.components_layout_design (layout_id) ON DELETE SET NULL,
     state_policy          JSONB       NOT NULL DEFAULT '{}',  -- state-conditional resolution rules
     active                BOOLEAN     NOT NULL DEFAULT true,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -257,6 +258,11 @@ COMMENT ON COLUMN topology.structure_maps.state_policy IS
 COMMENT ON COLUMN topology.structure_maps.component_ids IS
     'Ordered array of component_registry ids to expand during component_expand. '
     'Order determines expansion sequence in the canonical flow.';
+
+COMMENT ON COLUMN topology.structure_maps.layout_id IS
+    'Optional reference to the admin-authored layout in topology.components_layout_design. '
+    'When set, layout_id is forwarded through EmissionBuilder into Emission.LayoutId '
+    'and returned to the frontend as emission.layoutId. Null is valid (no layout bound).';
 
 CREATE INDEX IF NOT EXISTS idx_structure_maps_attractor_key
     ON topology.structure_maps (attractor_key);

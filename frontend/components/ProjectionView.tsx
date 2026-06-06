@@ -47,6 +47,16 @@ export function ProjectionView({ emission, structureMap }: Props): JSX.Element {
         </div>
       )}
 
+      {emission.layoutId && (
+        <div class="card">
+          <h3 class="mb-3 font-semibold">レイアウト</h3>
+          <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
+            <dt class="font-semibold text-gray-600">layoutId</dt>
+            <dd><code>{emission.layoutId}</code></dd>
+          </dl>
+        </div>
+      )}
+
       <div class="card">
         <h3 class="mb-3 font-semibold">コンポーネント projection</h3>
         {(emission.componentIds ?? []).length === 0 ? (

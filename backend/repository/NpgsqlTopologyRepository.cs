@@ -41,7 +41,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT structure_map_id::text, attractor_key, package_id, schema_id, " +
-            "       component_ids, state_policy::text " +
+            "       component_ids, state_policy::text, layout_id " +
             "FROM topology.structure_maps " +
             "WHERE (attractor_key = @key OR structure_map_id::text = @key) " +
             "  AND active = true " +
@@ -66,7 +66,8 @@ public class NpgsqlTopologyRepository : TopologyRepository
             PackageId:      reader.GetGuid(2),
             SchemaId:       reader.GetGuid(3),
             ComponentIds:   componentIds,
-            StatePolicyJson: reader.IsDBNull(5) ? null : reader.GetString(5)
+            StatePolicyJson: reader.IsDBNull(5) ? null : reader.GetString(5),
+            LayoutId: reader.IsDBNull(6) ? null : reader.GetGuid(6)
         );
     }
 

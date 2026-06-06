@@ -64,6 +64,8 @@ public record OperationVector(
 /// Holds intermediate resolved state as the runtime progresses through the pipeline.
 /// ContextRouteRecommendation is populated by context_route_recommendation_resolve
 /// and forwarded to EmissionBuilder.
+/// LayoutId is the optional admin-authored layout reference from structure_maps.layout_id,
+/// forwarded to EmissionBuilder for inclusion in Emission.
 /// </summary>
 public record RuntimeWorkingShape(
     OperationVector? Vector,
@@ -79,7 +81,8 @@ public record RuntimeWorkingShape(
     // Raw JSONB from structure_maps.state_policy — used by ContextRouteRecommendationResolver
     // to resolve a scoped context_route_policy_ref instead of the global default_policy.
     string? StructureMapStatePolicyJson = null,
-    ContextRouteRecommendationResult? ContextRouteRecommendation = null
+    ContextRouteRecommendationResult? ContextRouteRecommendation = null,
+    string? LayoutId = null
 );
 
 /// <summary>
@@ -91,6 +94,8 @@ public record RuntimeWorkingShape(
 /// topology entry. Frontend uses this to call setProjectionDefinition on the projection runtime
 /// before processing SSE projection events. Null when no manifest is configured or no
 /// projection_constructor_mapping entry exists in the manifest topology.
+/// LayoutId is the optional admin-authored layout reference from structure_maps.layout_id.
+/// Null when no layout is bound to the resolved structure map entry.
 /// </summary>
 public record Emission(
     string? StructureMapId,
@@ -102,7 +107,8 @@ public record Emission(
     IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
     JsonElement? ProjectionDefinition = null,
-    IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null
+    IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null,
+    string? LayoutId = null
 );
 
 /// <summary>SSOT runtime_jump_event_contract: scope, from, to, reason (+ planned for user_action).</summary>

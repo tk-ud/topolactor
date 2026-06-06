@@ -27,7 +27,8 @@ public class EmissionBuilder
             Data: shape.ResolvedData,
             Errors: errors,
             JumpEvents: shape.JumpEvents,
-            ContextRouteRecommendation: shape.ContextRouteRecommendation
+            ContextRouteRecommendation: shape.ContextRouteRecommendation,
+            LayoutId: shape.LayoutId
         );
     }
 }

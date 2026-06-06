@@ -167,6 +167,7 @@ public class TopologyRepository
 /// Maps an attractor key to its associated package, schema, and component definitions.
 /// StatePolicyJson holds the raw JSONB from structure_maps.state_policy, used by
 /// ContextRouteRecommendationResolver to resolve a scoped policy_ref.
+/// LayoutId is the optional admin-authored layout reference (topology.components_layout_design).
 /// </summary>
 public record StructureMapRecord(
     string StructureMapId,
@@ -174,7 +175,8 @@ public record StructureMapRecord(
     Guid PackageId,
     Guid SchemaId,
     IReadOnlyList<string> ComponentIds,
-    string? StatePolicyJson = null
+    string? StatePolicyJson = null,
+    Guid? LayoutId = null
 );
 
 /// <summary>

@@ -498,6 +498,116 @@ public class RuntimeExecutorTests
         }
     }
 
+    // --- Layout identity pipeline tests ---
+
+    [Fact]
+    public void EmissionBuilder_LayoutId_IsPreservedFromWorkingShape()
+    {
+        // Verifies layout identity pipeline: RuntimeWorkingShape.LayoutId -> Emission.LayoutId.
+        var builder = new EmissionBuilder();
+        var layoutId = Guid.NewGuid().ToString();
+        var shape = new RuntimeWorkingShape(
+            Vector: null,
+            StructureMapId: "00000000-0000-0000-0000-000000000004",
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId,
+            ComponentIds: [TopologyRepository.DefaultComponentId],
+            PackageDef: null,
+            SchemaDef: null,
+            ResolvedData: null,
+            Errors: null,
+            LayoutId: layoutId
+        );
+
+        var emission = builder.Build(shape);
+
+        Assert.Equal(layoutId, emission.LayoutId);
+    }
+
+    [Fact]
+    public void EmissionBuilder_LayoutId_IsNullWhenNotConfigured()
+    {
+        // Verifies that null layout_id in structure_map produces null Emission.LayoutId.
+        var builder = new EmissionBuilder();
+        var shape = new RuntimeWorkingShape(
+            Vector: null,
+            StructureMapId: "00000000-0000-0000-0000-000000000004",
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId,
+            ComponentIds: [TopologyRepository.DefaultComponentId],
+            PackageDef: null,
+            SchemaDef: null,
+            ResolvedData: null,
+            Errors: null,
+            LayoutId: null
+        );
+
+        var emission = builder.Build(shape);
+
+        Assert.Null(emission.LayoutId);
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_LayoutId_IsForwardedFromRecord()
+    {
+        // Verifies StructureMapRecord.LayoutId -> RuntimeWorkingShape.LayoutId.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var repo = new StubTopologyRepositoryWithLayout(layoutId);
+        var resolver = new StructureMapResolver(repo);
+        var attractor = new AttractorResult(
+            AttractorKey: TopologyRepository.DefaultAttractorKey,
+            StructureMapId: TopologyRepository.DefaultStructureMapId,
+            PackageId: TopologyRepository.DefaultPackageId,
+            SchemaId: TopologyRepository.DefaultSchemaId
+        );
+
+        var shape = await resolver.Resolve(attractor);
+
+        Assert.Equal(layoutId.ToString(), shape.LayoutId);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DefaultRoute_LayoutIdIsNullWhenNotConfigured()
+    {
+        // Default in-memory TopologyRepository has no layout_id configured.
+        // Emission.LayoutId must be null — not an error.
+        var executor = CreateExecutor();
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Null(response.Emission!.LayoutId);
+    }
+
+}
+
+/// <summary>
+/// Test stub: TopologyRepository that returns the default structure map with a bound LayoutId.
+/// Used to verify StructureMapRecord.LayoutId -> RuntimeWorkingShape.LayoutId pipeline.
+/// </summary>
+internal class StubTopologyRepositoryWithLayout(Guid layoutId)
+    : TopologyRepository(NullLogger<TopologyRepository>.Instance, "test-double")
+{
+    private readonly Guid _layoutId = layoutId;
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(string key, CancellationToken ct = default)
+    {
+        if (key == DefaultAttractorKey || key == DefaultStructureMapId)
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: DefaultStructureMapId,
+                AttractorKey:   DefaultAttractorKey,
+                PackageId:      DefaultPackageId,
+                SchemaId:       DefaultSchemaId,
+                ComponentIds:   [DefaultComponentId],
+                StatePolicyJson: null,
+                LayoutId: _layoutId
+            ));
+        }
+        return Task.FromResult<StructureMapRecord?>(null);
+    }
 }
 
 public class SchedulerDispatcherChainTests
