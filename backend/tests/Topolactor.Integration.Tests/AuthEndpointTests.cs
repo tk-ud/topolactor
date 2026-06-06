@@ -52,6 +52,35 @@ public class AuthEndpointTests
     }
 
     [Fact]
+    public async Task RegisterUser_CreatesPendingApprovalNormalUserWithoutToken()
+    {
+        var repo = new FakeAuthRepository([]);
+        var endpoint = CreateEndpoint(repo);
+
+        var response = await endpoint.RegisterUserAsync(new("new-user", "new-password"));
+
+        Assert.True(response.Success);
+        Assert.Equal("new-user", response.Username);
+        Assert.False(response.Approve);
+        Assert.Equal("active", response.Status);
+        Assert.NotNull(repo.LastCreatedPendingUser);
+        Assert.True(BCrypt.Net.BCrypt.Verify("new-password", repo.LastCreatedPasswordHash));
+        Assert.Equal(AuthRealm.UserRole, await repo.GetGrantRoleForRealmAsync(repo.LastCreatedPendingUser!.UserId, AuthRealm.UserRealm));
+        Assert.Null(await repo.GetGrantRoleForRealmAsync(repo.LastCreatedPendingUser.UserId, AuthRealm.AdminRealm));
+    }
+
+    [Fact]
+    public async Task RegisterExistingUsername_ReturnsExplicitDuplicateError()
+    {
+        var endpoint = CreateEndpoint();
+
+        var response = await endpoint.RegisterUserAsync(new(TestUsername, "new-password"));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "AUTH_REGISTER_USERNAME_EXISTS");
+    }
+
+    [Fact]
     public async Task WrongPassword_Returns_AUTH_INVALID_CREDENTIALS()
     {
         using var env = new EnvScope()

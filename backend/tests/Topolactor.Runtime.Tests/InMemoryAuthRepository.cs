@@ -29,6 +29,16 @@ public sealed class InMemoryAuthRepository : AuthRepository
     public override Task<string?> GetPasswordHashAsync(Guid userId, CancellationToken ct = default) =>
         Task.FromResult(_passwords.TryGetValue(userId, out var h) ? h : null);
 
+    public override Task<AuthUserRecord> CreatePendingUserWithCredentialAsync(
+        string username, string passwordHash, CancellationToken ct = default)
+    {
+        var user = new AuthUserRecord(Guid.NewGuid(), username, Active: true, Approve: false, Status: "active");
+        _users[user.UserId] = user;
+        _passwords[user.UserId] = passwordHash;
+        _grants.Add((user.UserId, "user", "user"));
+        return Task.FromResult(user);
+    }
+
     public override Task<string?> GetGrantRoleForRealmAsync(Guid userId, string realm, CancellationToken ct = default)
     {
         var grant = _grants.FirstOrDefault(g => g.UserId == userId && g.Realm == realm);

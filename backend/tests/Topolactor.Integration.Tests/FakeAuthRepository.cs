@@ -6,6 +6,8 @@ namespace Topolactor.Integration.Tests;
 internal sealed class FakeAuthRepository : AuthRepository
 {
     private readonly Dictionary<string, (Guid UserId, string PasswordHash, string Role, string Realm)> _users;
+    public AuthUserRecord? LastCreatedPendingUser { get; private set; }
+    public string? LastCreatedPasswordHash { get; private set; }
 
     public FakeAuthRepository(
         IEnumerable<(string Username, Guid UserId, string PasswordHash, string Role, string Realm)> users)
@@ -28,6 +30,16 @@ internal sealed class FakeAuthRepository : AuthRepository
     {
         var entry = _users.FirstOrDefault(kv => kv.Value.UserId == userId);
         return Task.FromResult(entry.Key is null ? null : entry.Value.PasswordHash);
+    }
+
+    public override Task<AuthUserRecord> CreatePendingUserWithCredentialAsync(
+        string username, string passwordHash, CancellationToken ct = default)
+    {
+        var userId = Guid.NewGuid();
+        _users[username] = (userId, passwordHash, "user", "user");
+        LastCreatedPasswordHash = passwordHash;
+        LastCreatedPendingUser = new AuthUserRecord(userId, username, Active: true, Approve: false, Status: "active");
+        return Task.FromResult(LastCreatedPendingUser);
     }
 
     public override Task<string?> GetGrantRoleForRealmAsync(Guid userId, string realm, CancellationToken ct = default)
