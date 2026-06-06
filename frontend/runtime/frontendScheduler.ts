@@ -330,20 +330,41 @@ export async function queueAdminClientCommand(
 
 
 /**
+ * Full dispatch spec derived from ui_wiring_registry via backend emission.
+ * Carries the complete routing tuple for component_wiring_execution_lane dispatch.
+ * target and layer are derived from targetSurface and wiringKind by renderEmission.
+ */
+export type RuntimeDispatchSpec = {
+  operationType: string;
+  target: string;
+  layer: string;
+  action: string;
+  wiringKey?: string;
+  wiringId?: string;
+};
+
+/**
  * Enqueues a runtime component command through the api_command_lane.
- * Called by emitBoundEvent when a binding carries runtimeDispatch.action.
+ * Called by emitBoundEvent when a binding carries runtimeDispatch.
  * This is the component_wiring_execution_lane — explicitly separate from the
  * frontend_component_event_log_lane (emitComponentOperationEvent).
  *
+ * Receives the full dispatch spec from backend emission (not just an action string).
+ * target/layer come from the admin-configured wiring (targetSurface, wiringKind).
  * Reads token from sessionStorage (same source as flushComponentEvents).
  * Uses queueAdminClientCommand so triggerKind="client" is always injected.
  */
 export async function enqueueRuntimeComponentCommand(
-  action: string,
+  spec: RuntimeDispatchSpec,
 ): Promise<ScheduledCommandResult> {
   const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
   return queueAdminClientCommand(
-    { operationType: action, target: "default", layer: "entity", action },
+    {
+      operationType: spec.operationType,
+      target: spec.target,
+      layer: spec.layer,
+      action: spec.action,
+    },
     token,
   );
 }

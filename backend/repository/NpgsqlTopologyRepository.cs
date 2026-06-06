@@ -221,6 +221,10 @@ public class NpgsqlTopologyRepository : TopologyRepository
     {
         string? firstJson = null;
         string? wiringKind = null;
+        string? wiringId = null;
+        string? wiringKey = null;
+        string? targetSurface = null;
+        string? targetRef = null;
 
         {
             await using var conn = new NpgsqlConnection(_connectionString);
@@ -230,7 +234,8 @@ public class NpgsqlTopologyRepository : TopologyRepository
             // LIMIT 2: detect ambiguity without silent "latest wins" ORDER BY.
             // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
             cmd.CommandText =
-                "SELECT t.layout_patch_json::text, w.wiring_kind " +
+                "SELECT t.layout_patch_json::text, w.wiring_kind, " +
+                "       w.wiring_id::text, w.wiring_key, w.target_surface, w.target_ref " +
                 "FROM topology.ui_topology_tensor t " +
                 "LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
                 "WHERE t.layout_id = @layoutId " +
@@ -247,6 +252,10 @@ public class NpgsqlTopologyRepository : TopologyRepository
                 {
                     firstJson = reader.IsDBNull(0) ? null : reader.GetString(0);
                     wiringKind = reader.IsDBNull(1) ? null : reader.GetString(1);
+                    wiringId = reader.IsDBNull(2) ? null : reader.GetString(2);
+                    wiringKey = reader.IsDBNull(3) ? null : reader.GetString(3);
+                    targetSurface = reader.IsDBNull(4) ? null : reader.GetString(4);
+                    targetRef = reader.IsDBNull(5) ? null : reader.GetString(5);
                 }
                 if (rowCount == 2)
                     throw new InvalidOperationException(
@@ -279,7 +288,8 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
         var componentKindMap = await LoadComponentKindsByIdsAsync(catalogComponentIds, ct);
 
-        if (runtimeDispatchAction is null && componentKindMap.Count == 0)
+        var hasWiring = runtimeDispatchAction is not null || wiringId is not null;
+        if (!hasWiring && componentKindMap.Count == 0)
             return baseNodes;
 
         return baseNodes.Select(n =>
@@ -287,7 +297,16 @@ public class NpgsqlTopologyRepository : TopologyRepository
             if (n.NodeKind is not "catalog_component")
                 return n;
             var kind = n.ComponentId is not null && componentKindMap.TryGetValue(n.ComponentId, out var k) ? k : null;
-            return n with { ComponentKind = kind, RuntimeDispatchAction = runtimeDispatchAction };
+            return n with
+            {
+                ComponentKind = kind,
+                RuntimeDispatchAction = runtimeDispatchAction,
+                WiringId = wiringId,
+                WiringKey = wiringKey,
+                WiringKind = wiringKind,
+                TargetSurface = targetSurface,
+                TargetRef = targetRef,
+            };
         }).ToList();
     }
 

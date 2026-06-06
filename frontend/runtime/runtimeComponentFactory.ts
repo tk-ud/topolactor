@@ -93,6 +93,7 @@ import {
   emitComponentOperationEvent,
   enqueueRuntimeComponentCommand,
   type NormalizedComponentEventType,
+  type RuntimeDispatchSpec,
 } from "./frontendScheduler.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 
@@ -106,7 +107,7 @@ type EventBindingValue = {
   actorOrSource?: string;
   payload?: Record<string, unknown>;
   /** component_wiring_execution_lane: when present, emitBoundEvent fires runtime dispatch via enqueueRuntimeComponentCommand. */
-  runtimeDispatch?: { action: string };
+  runtimeDispatch?: RuntimeDispatchSpec;
 };
 
 function parseEventBinding(value: unknown): EventBindingValue | null {
@@ -139,16 +140,29 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
     (typeof payload !== "object" || payload === null || Array.isArray(payload))
   ) return null;
   const runtimeDispatchRaw = (value as Record<string, unknown>).runtimeDispatch;
-  let runtimeDispatch: { action: string } | undefined;
+  let runtimeDispatch: RuntimeDispatchSpec | undefined;
   if (runtimeDispatchRaw !== undefined) {
     if (
       typeof runtimeDispatchRaw !== "object" ||
       runtimeDispatchRaw === null ||
       Array.isArray(runtimeDispatchRaw)
     ) return null;
-    const action = (runtimeDispatchRaw as Record<string, unknown>).action;
+    const rd = runtimeDispatchRaw as Record<string, unknown>;
+    const action = rd.action;
+    const target = rd.target;
+    const layer = rd.layer;
     if (typeof action !== "string" || !action.trim()) return null;
-    runtimeDispatch = { action: action.trim() };
+    if (typeof target !== "string" || !target.trim()) return null;
+    if (typeof layer !== "string" || !layer.trim()) return null;
+    const operationType = typeof rd.operationType === "string" ? rd.operationType.trim() : action.trim();
+    runtimeDispatch = {
+      operationType,
+      target: target.trim(),
+      layer: layer.trim(),
+      action: action.trim(),
+      wiringKey: typeof rd.wiringKey === "string" ? rd.wiringKey : undefined,
+      wiringId: typeof rd.wiringId === "string" ? rd.wiringId : undefined,
+    };
   }
   return {
     eventType: eventType as NormalizedComponentEventType,
@@ -189,7 +203,7 @@ function emitBoundEvent(
   // Lane 2: component_wiring_execution_lane — runtime dispatch (when configured).
   // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
   if (binding.runtimeDispatch) {
-    void enqueueRuntimeComponentCommand(binding.runtimeDispatch.action);
+    void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
   }
   return { ok: true };
 }

@@ -112,7 +112,12 @@ public class StructureMapResolver
                         Height: row.Height,
                         LayoutClassRefs: row.LayoutClassRefs,
                         ComponentKind: row.ComponentKind,
-                        RuntimeDispatchAction: row.RuntimeDispatchAction
+                        RuntimeDispatchAction: row.RuntimeDispatchAction,
+                        WiringId: row.WiringId,
+                        WiringKey: row.WiringKey,
+                        WiringKind: row.WiringKind,
+                        TargetSurface: row.TargetSurface,
+                        TargetRef: row.TargetRef
                     )).ToList();
                 }
             }

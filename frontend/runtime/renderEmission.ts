@@ -1,9 +1,10 @@
-import type { Emission } from "../api/dispatch.ts";
+import type { Emission, LayoutNode as EmissionLayoutNode } from "../api/dispatch.ts";
 import type { ComponentRegistry } from "../registry/componentRegistry.ts";
 import { adaptComponentDataHub, type RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
 import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
+import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
 
 export type ComponentSpec = {
   componentId?: string;
@@ -41,19 +42,78 @@ export type ComponentSpec = {
 };
 
 /**
- * Builds an eventBinding for a catalog_component node from its runtimeDispatchAction.
+ * Maps wiring_kind to the canonical layer for backend dispatch routing.
+ * search → screen_list (ScreenDataShapeQueryRuntime), aggregate → screen_aggregation,
+ * CRUD kinds → entity (RuntimeExecutor CRUD path).
+ */
+export function mapWiringKindToLayer(wiringKind: string): string {
+  if (wiringKind === "search") return "screen_list";
+  if (wiringKind === "aggregate") return "screen_aggregation";
+  return "entity";
+}
+
+/**
+ * Maps wiring_kind to the canonical action string for backend dispatch.
+ * Mirrors the backend MapWiringKindToDispatchAction mapping.
+ */
+export function mapWiringKindToAction(wiringKind: string): string {
+  switch (wiringKind) {
+    case "search": return "Search";
+    case "aggregate": return "Search";
+    case "create": return "Create";
+    case "update": return "diffUpdate";
+    case "delete": return "logicalDelete";
+    default: return wiringKind;
+  }
+}
+
+/**
+ * Builds a RuntimeDispatchSpec from a layout node's wiring metadata.
+ * Returns null when no wiringKind is set (no wiring configured → log lane only).
+ * target = targetSurface || "default"; layer derived from wiringKind.
+ */
+export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispatchSpec | null {
+  const wiringKind = node.wiringKind;
+  if (!wiringKind) return null;
+  const action = mapWiringKindToAction(wiringKind);
+  const layer = mapWiringKindToLayer(wiringKind);
+  const target = (node.targetSurface && node.targetSurface.trim()) ? node.targetSurface.trim() : "default";
+  return {
+    operationType: action,
+    target,
+    layer,
+    action,
+    wiringKey: (node.wiringKey && node.wiringKey.trim()) ? node.wiringKey.trim() : undefined,
+    wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : undefined,
+  };
+}
+
+/**
+ * Builds minimum renderable props for a catalog_component node.
+ * Uses componentKey as label for button/action components.
+ * All factories handle absent/optional fields gracefully.
+ */
+function buildDefaultCatalogComponentProps(node: EmissionLayoutNode): Record<string, unknown> {
+  const label = (node.componentKey && node.componentKey.trim())
+    ? node.componentKey.trim()
+    : (node.nodeId ?? "Component");
+  return { data: { label } };
+}
+
+/**
+ * Builds an eventBinding for a catalog_component node from its RuntimeDispatchSpec.
  * Populates standard triggers (click, change, select, submit, toggle) each carrying
- * runtimeDispatch.action so emitBoundEvent fires both log and dispatch lanes.
- * Returns empty object when runtimeDispatchAction is null/absent (log lane only).
+ * the full runtimeDispatch spec so emitBoundEvent fires both log and dispatch lanes.
+ * Returns empty object when spec is null/absent (log lane only).
  */
 export function buildCatalogComponentEventBinding(
-  runtimeDispatchAction: string | null,
+  spec: RuntimeDispatchSpec | null,
 ): Record<string, unknown> {
-  if (!runtimeDispatchAction) return {};
+  if (!spec) return {};
   const triggers = ["click", "change", "select", "submit", "toggle"] as const;
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
-    binding[trigger] = { eventType: trigger, runtimeDispatch: { action: runtimeDispatchAction } };
+    binding[trigger] = { eventType: trigger, runtimeDispatch: spec };
   }
   return binding;
 }
@@ -168,56 +228,50 @@ export function renderEmission(
           };
         }
 
-        // catalog_component primary path: componentKind present → build runtimeSpec via adaptComponentDataHub.
-        if (node.componentKind) {
-          ensureRuntimeComponentRegistryInitialized();
-          const hub: ComponentDataHub = {
-            componentId: node.componentId,
-            componentKind: node.componentKind,
-            packageId: emission.packageId ?? null,
-            layoutId: emission.layoutId ?? null,
-            wiringId: null,
-            props: {},
-            eventBinding: buildCatalogComponentEventBinding(node.runtimeDispatchAction ?? null),
-            design: undefined,
-          };
-          const adapted = adaptComponentDataHub(hub);
-          if (!adapted.ok) {
-            return {
-              componentId: node.componentId,
-              componentType: "error",
-              def: { error: adapted.error, componentId: node.componentId },
-              ...layoutFields,
-            };
-          }
-          return {
-            componentId: node.componentId,
-            componentType: node.componentKind,
-            def: {},
-            runtimeSpec: adapted.value,
-            ...layoutFields,
-          };
-        }
-
-        // Fallback: static registry lookup (no componentKind — legacy/test path, no runtimeSpec).
-        const entry = registry[node.componentId];
-        if (!entry) {
+        // catalog_component: componentKind required — absent componentKind is an explicit error.
+        // SSOT: componentKind must be present on all catalog_component nodes. No registry fallback.
+        if (!node.componentKind) {
           return {
             componentId: node.componentId,
             componentType: "error",
             def: {
-              error: `ComponentRegistry: unknown componentId "${node.componentId}" in node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}"`,
-              missingId: node.componentId,
+              error: `CATALOG_COMPONENT_KIND_REQUIRED: catalog_component node "${node.nodeId ?? node.slotKey ?? "(unnamed)"}" (componentId="${node.componentId}") has no componentKind. Ensure ui_component_registry has a component_kind for this component.`,
+              code: "CATALOG_COMPONENT_KIND_REQUIRED",
+              componentId: node.componentId,
               slotKey: node.slotKey,
             },
             ...layoutFields,
           };
         }
 
+        // Build full dispatch spec from admin-configured wiring metadata.
+        const dispatchSpec = buildRuntimeDispatchSpec(node);
+
+        ensureRuntimeComponentRegistryInitialized();
+        const hub: ComponentDataHub = {
+          componentId: node.componentId,
+          componentKind: node.componentKind,
+          packageId: emission.packageId ?? null,
+          layoutId: emission.layoutId ?? null,
+          wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
+          props: buildDefaultCatalogComponentProps(node),
+          eventBinding: buildCatalogComponentEventBinding(dispatchSpec),
+          design: undefined,
+        };
+        const adapted = adaptComponentDataHub(hub);
+        if (!adapted.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: { error: adapted.error, componentId: node.componentId },
+            ...layoutFields,
+          };
+        }
         return {
-          componentId: entry.componentId,
-          componentType: entry.componentType,
-          def: entry.def,
+          componentId: node.componentId,
+          componentType: node.componentKind,
+          def: {},
+          runtimeSpec: adapted.value,
           ...layoutFields,
         };
       });

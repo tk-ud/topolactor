@@ -8,9 +8,9 @@ namespace Topolactor.Runtime.Tests;
 
 /// <summary>
 /// Verifies the component_wiring_execution_lane contract:
-/// - LayoutNode carries ComponentKind and RuntimeDispatchAction
-/// - LayoutNodeRecord carries ComponentKind and RuntimeDispatchAction
-/// - StructureMapResolver forwards enriched fields to LayoutNode
+/// - LayoutNode carries ComponentKind, RuntimeDispatchAction, and full wiring spec fields
+/// - LayoutNodeRecord carries ComponentKind, RuntimeDispatchAction, and full wiring spec fields
+/// - StructureMapResolver forwards all enriched fields to LayoutNode
 /// - Base TopologyRepository.LoadComponentKindsByIdsAsync returns empty dict
 /// </summary>
 public class AdminWiringExecutionLaneTests
@@ -46,6 +46,29 @@ public class AdminWiringExecutionLaneTests
     }
 
     [Fact]
+    public void LayoutNode_CarriesFullWiringSpec()
+    {
+        var node = new LayoutNode(
+            NodeId: "n2w", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-002w", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 100, Height: 50,
+            LayoutClassRefs: null,
+            ComponentKind: "action/button",
+            RuntimeDispatchAction: "Search",
+            WiringId: "wiring-uuid-001",
+            WiringKey: "search_key",
+            WiringKind: "search",
+            TargetSurface: "screen",
+            TargetRef: "manifest-uuid-001");
+
+        Assert.Equal("wiring-uuid-001", node.WiringId);
+        Assert.Equal("search_key", node.WiringKey);
+        Assert.Equal("search", node.WiringKind);
+        Assert.Equal("screen", node.TargetSurface);
+        Assert.Equal("manifest-uuid-001", node.TargetRef);
+    }
+
+    [Fact]
     public void LayoutNode_ComponentKind_DefaultsToNull()
     {
         var node = new LayoutNode(
@@ -56,6 +79,9 @@ public class AdminWiringExecutionLaneTests
 
         Assert.Null(node.ComponentKind);
         Assert.Null(node.RuntimeDispatchAction);
+        Assert.Null(node.WiringId);
+        Assert.Null(node.WiringKind);
+        Assert.Null(node.TargetSurface);
     }
 
     // ─── LayoutNodeRecord contract shape ────────────────────────────────────
@@ -76,6 +102,29 @@ public class AdminWiringExecutionLaneTests
     }
 
     [Fact]
+    public void LayoutNodeRecord_CarriesFullWiringSpec()
+    {
+        var record = new LayoutNodeRecord(
+            NodeId: "r1w", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-001w", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null,
+            ComponentKind: "display/card",
+            RuntimeDispatchAction: "Search",
+            WiringId: "wiring-uuid-r1",
+            WiringKey: "search_screen",
+            WiringKind: "search",
+            TargetSurface: "screen",
+            TargetRef: "manifest-uuid-r1");
+
+        Assert.Equal("wiring-uuid-r1", record.WiringId);
+        Assert.Equal("search_screen", record.WiringKey);
+        Assert.Equal("search", record.WiringKind);
+        Assert.Equal("screen", record.TargetSurface);
+        Assert.Equal("manifest-uuid-r1", record.TargetRef);
+    }
+
+    [Fact]
     public void LayoutNodeRecord_ComponentKind_DefaultsToNull()
     {
         var record = new LayoutNodeRecord(
@@ -86,6 +135,9 @@ public class AdminWiringExecutionLaneTests
 
         Assert.Null(record.ComponentKind);
         Assert.Null(record.RuntimeDispatchAction);
+        Assert.Null(record.WiringId);
+        Assert.Null(record.WiringKind);
+        Assert.Null(record.TargetSurface);
     }
 
     // ─── StructureMapResolver: ComponentKind + RuntimeDispatchAction forwarded ─
@@ -110,6 +162,11 @@ public class AdminWiringExecutionLaneTests
         var catalogNode = shape.LayoutNodes!.First(n => n.NodeKind == "catalog_component");
         Assert.Equal("action/button", catalogNode.ComponentKind);
         Assert.Equal("Search", catalogNode.RuntimeDispatchAction);
+        Assert.Equal("wiring-stub-001", catalogNode.WiringId);
+        Assert.Equal("search_wiring", catalogNode.WiringKey);
+        Assert.Equal("search", catalogNode.WiringKind);
+        Assert.Equal("screen", catalogNode.TargetSurface);
+        Assert.Equal("manifest-stub-001", catalogNode.TargetRef);
     }
 
     [Fact]
@@ -185,7 +242,7 @@ file class EnrichedLayoutNodeStubRepository : TopologyRepository
                 NodeId: "node-btn",
                 NodeKind: "catalog_component",
                 HtmlTag: null,
-                ComponentKey: null,
+                ComponentKey: "Search Btn",
                 ComponentId: "comp-btn-001",
                 ParentNodeId: null,
                 SlotKey: "slot_btn",
@@ -193,7 +250,12 @@ file class EnrichedLayoutNodeStubRepository : TopologyRepository
                 X: 0, Y: 0, Width: 100, Height: 40,
                 LayoutClassRefs: null,
                 ComponentKind: "action/button",
-                RuntimeDispatchAction: "Search"),
+                RuntimeDispatchAction: "Search",
+                WiringId: "wiring-stub-001",
+                WiringKey: "search_wiring",
+                WiringKind: "search",
+                TargetSurface: "screen",
+                TargetRef: "manifest-stub-001"),
         ];
         return Task.FromResult(rows);
     }

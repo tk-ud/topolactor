@@ -3,6 +3,7 @@ import { renderEmission } from "../runtime/renderEmission.ts";
 import { validationErrorText } from "../api/dispatch.ts";
 import { summarizeEmission } from "../runtime/emissionSummary.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
+import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import type { Emission, LayoutNode, ValidationError } from "../api/dispatch.ts";
 
 // Fixtures use backend-shaped data matching the canonical default:entity:search emission.
@@ -39,9 +40,10 @@ const twoComponentRegistry = {
 
 // Layout nodes: slot_b (orderIndex=0) → component-B, slot_a (orderIndex=1) → component-A.
 // This reversal verifies that renderEmission respects tensor ordering, not componentIds order.
+// componentKind required on catalog_component nodes per SSOT (no registry fallback).
 const layoutNodesReversed: LayoutNode[] = [
-  { slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
-  { slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
+  { nodeKind: "catalog_component", componentKind: "display/card", slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
+  { nodeKind: "catalog_component", componentKind: "display/card", slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
 ];
 
 // Fixture: emission with layoutId AND layoutNodes — full layout-aware state.
@@ -131,24 +133,27 @@ Deno.test("layout projection: layoutNodes ordering drives ComponentSpec order (n
   // emissionWithLayout has layoutNodes with slot_b (orderIndex=0) → component-B, slot_a (orderIndex=1) → component-A.
   // componentIds order is [component-A, component-B] — the opposite.
   // This test verifies that slot ordering wins over componentIds position.
+  // componentKind="display/card" on nodes — SSOT requires componentKind on all catalog_component nodes.
+  ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(emissionWithLayout, twoComponentRegistry);
 
   assertEquals(specs.length, 2);
 
   // First spec must be component-B (orderIndex=0, slotKey="slot_b"), not component-A
   assertEquals(specs[0].componentId, "00000000-0000-0000-0000-000000000099");
-  assertEquals(specs[0].componentType, "secondary");
+  assertEquals(specs[0].componentType, "display/card");
   assertEquals(specs[0].slotKey, "slot_b");
   assertEquals(specs[0].orderIndex, 0);
 
   // Second spec must be component-A (orderIndex=1, slotKey="slot_a")
   assertEquals(specs[1].componentId, "00000000-0000-0000-0000-000000000003");
-  assertEquals(specs[1].componentType, "default");
+  assertEquals(specs[1].componentType, "display/card");
   assertEquals(specs[1].slotKey, "slot_a");
   assertEquals(specs[1].orderIndex, 1);
 });
 
 Deno.test("layout projection: ComponentSpec carries slotKey and orderIndex from tensor nodes", () => {
+  ensureRuntimeComponentRegistryInitialized();
   const specs = renderEmission(emissionWithLayout, twoComponentRegistry);
 
   for (const spec of specs) {
@@ -181,6 +186,7 @@ Deno.test("layout projection continuity: DB-equivalent Emission fixture → rend
   // This test proves: an Emission with that shape → renderEmission() produces
   // ComponentSpec[] where slot_b (orderIndex=0) is first and slot_a (orderIndex=1) is second,
   // regardless of componentIds array order or alphabetical slot name order.
+  ensureRuntimeComponentRegistryInitialized();
   const dbEquivalentEmission: Emission = {
     structureMapId: "00000000-0000-0000-0000-000000000004",
     packageId: "00000000-0000-0000-0000-000000000001",
@@ -190,8 +196,9 @@ Deno.test("layout projection continuity: DB-equivalent Emission fixture → rend
     layoutNodes: [
       // Mirrors backend test output after ORDER BY order_index:
       // slot_b@0 first (lower orderIndex wins), slot_a@1 second
-      { slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
-      { slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
+      // componentKind required per SSOT — no registry fallback for catalog_component nodes.
+      { nodeKind: "catalog_component", componentKind: "display/card", slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
+      { nodeKind: "catalog_component", componentKind: "display/card", slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
     ],
   };
 
@@ -203,11 +210,11 @@ Deno.test("layout projection continuity: DB-equivalent Emission fixture → rend
   assertEquals(specs[0].slotKey, "slot_b");
   assertEquals(specs[0].orderIndex, 0);
   assertEquals(specs[0].componentId, "00000000-0000-0000-0000-000000000099");
-  assertEquals(specs[0].componentType, "secondary");
+  assertEquals(specs[0].componentType, "display/card");
 
   // slot_a has orderIndex=1 → ComponentSpec[1]
   assertEquals(specs[1].slotKey, "slot_a");
   assertEquals(specs[1].orderIndex, 1);
   assertEquals(specs[1].componentId, "00000000-0000-0000-0000-000000000003");
-  assertEquals(specs[1].componentType, "default");
+  assertEquals(specs[1].componentType, "display/card");
 });

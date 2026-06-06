@@ -243,6 +243,8 @@ public record DemoTransitionResult(bool Success, string? ErrorCode, string? Erro
 /// A single layout node parsed from layout_patch_json.nodes[].
 /// Loaded from topology.ui_topology_tensor.layout_patch_json for a given layout_id.
 /// ComponentId comes from nodes[].componentId — not positionally from structure_maps.component_ids.
+/// WiringId/WiringKey/WiringKind/TargetSurface/TargetRef carry the full admin-configured
+/// wiring spec from ui_wiring_registry for frontend dispatch spec construction.
 /// </summary>
 public record LayoutNodeRecord(
     string NodeId,
@@ -259,5 +261,10 @@ public record LayoutNodeRecord(
     double Height,
     IReadOnlyList<string>? LayoutClassRefs,
     string? ComponentKind = null,
-    string? RuntimeDispatchAction = null
+    string? RuntimeDispatchAction = null,
+    string? WiringId = null,
+    string? WiringKey = null,
+    string? WiringKind = null,
+    string? TargetSurface = null,
+    string? TargetRef = null
 );
