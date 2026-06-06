@@ -28,16 +28,14 @@ export function RecommendationPanel(props: RecommendationPanelProps): JSX.Elemen
       </p>
       {props.status === "ok" && (
         <>
-          <h4>Next Operations</h4>
-          <CandidateList candidates={props.nextOperations} />
-          <h4>Next Token Candidates</h4>
-          <CandidateList candidates={props.nextTokens} />
-          {props.nextEnumItems && props.nextEnumItems.length > 0 && (
-            <>
-              <h4>Next Enum Items (state pressure)</h4>
-              <CandidateList candidates={props.nextEnumItems} />
-            </>
-          )}
+          <h4>UI / operation pressure</h4>
+          <h5>next_operation</h5>
+          <CandidateList candidates={props.nextOperations.filter((candidate) => candidate.lane === "ui_pressure")} />
+          <h5>next_component / next_route_action candidates</h5>
+          <CandidateList candidates={props.nextTokens.filter((candidate) => candidate.lane === "ui_pressure")} />
+          <h4>State / enum pressure</h4>
+          <h5>next_enum_item / likely_status / state_shift_candidate</h5>
+          <CandidateList candidates={(props.nextEnumItems ?? []).filter((candidate) => candidate.lane === "state_pressure")} />
         </>
       )}
     </section>

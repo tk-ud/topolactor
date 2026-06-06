@@ -180,6 +180,24 @@ recommendation_pressure_lane_boundary:
     hub_local_lanes:
       - ui_pressure
       - state_pressure
+  child_island_projection_contract:
+    parent_island: main_projection_island
+    child_island: recommend_navigation_child_island
+    block: sql_attention_projection_block
+    receives: lane_recommend_projection_spec_or_dedicated_api_result
+    frontend_responsibility: render_only
+    source_resolution:
+      source_set_id_required_for_fetch: true
+      unresolved_source_set_id_status: explicit_unavailable
+      fixed_frontend_fallback_source_set_id: prohibited
+    prohibited_mixing:
+      - injecting_next_hub_projection_candidate_into_ui_pressure
+      - injecting_next_hub_projection_candidate_into_state_pressure
+      - treating_sql_attention_candidate_as_next_operation
+      - treating_sql_attention_candidate_as_next_enum_item
+    executable_candidate_policy:
+      frontend_fixed_dispatch: prohibited
+      required_route: backend_resolved_runtime_dispatch_spec_or_wiring
     canonical_reference:
       - docs/design/context-route-recommendation.yaml
       - docs/design/context-route-recommendation.md

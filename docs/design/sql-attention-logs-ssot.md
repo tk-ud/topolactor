@@ -213,3 +213,9 @@ The canonical route above retains the following structural vocabulary for cross-
 - The legacy phrase `hub-attractor exploration` must be interpreted as manifest-scoped `hubs.hub_relations` exploration, not as `logs.hub_current` exploration authority.
 - Hubs surfaces remain vectorizable Tensor coordinates for observation and recommendation evidence.
 - `attractor_key` may remain support identity in evidence or cache projections; it does not replace `hub_relation_id / topology_manifest_id / hub_id` hit identity.
+
+## SQL Attention recommendation child projection lane
+
+SQL Attention projection recommendation is rendered as the `sql_attention_projection` section of the `recommend_navigation_child_island` under `main_projection_island`. It is a sibling lane to hub-local recommendation pressure, not an input to hub-local `next_operation`, `next_enum_item`, or `state_pressure` arrays.
+
+The backend resolves the source context (`sourceSetId`) and exposes either a fetchable/renderable SQL Attention projection spec or an explicit unavailable/error status. The frontend must not supply a fixed sourceSetId fallback, infer topology promotion, or convert SQL Attention candidates into UI operation or enum candidates. Executable actions, if later attached to a recommendation candidate, must use backend-resolved runtime dispatch wiring rather than frontend-derived target/layer/action.

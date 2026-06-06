@@ -376,3 +376,19 @@ schema contract を前提にする。
 - context route recommendation current は SQL Attention の child projection/consumer であり、本体の観測・推薦根拠層ではない。
 - SQL Attention は hub/log/relation/attractor evidence から hub構築・接続・候補・projection候補を推薦する。
 - fixed route の自動上書き、registry/topology の自動 mutation は禁止。
+
+### Main projection child island contract（SSOT）
+
+`main_projection_island` は primary DOM projection を持つ。recommend navigation はこの main projection island の child island（`recommend_navigation_child_island`）として投影する。
+
+- child recommend island は backend が解決した Lane 別 recommend projection spec を受け取り、frontend は spec 通りに表示するだけとする。
+- frontend は topology 意味判断、promotion 判断、wiring 判断、lane mixing 判断をしない。
+- hub-local block は `ui_pressure` と `state_pressure` を別セクションに分離して表示する。
+  - `ui_pressure`: current hub 内の UI / operation pressure。出力は `next_operation` / `next_component` / `next_route_action`。
+  - `state_pressure`: current hub 内の state / enum pressure。出力は `next_enum_item` / `likely_status` / `state_shift_candidate`。
+- SQL Attention projection block は `sql_attention_projection` lane として別表示する。出力は `next_hub_projection_candidate`。
+- `sql_attention_projection` を hub-local の `next_operation` / `next_enum_item` / `state_pressure` candidate に混入してはいけない。
+- `sourceSetId` または recommendation context が未解決の場合、frontend は手入力・固定値 fallback を行わず、`explicit_unavailable` / `explicit_error` を表示する。
+- recommend candidate を実行可能にする場合は、frontend 固定 dispatch ではなく backend-resolved `runtimeDispatchSpec` / wiring を通す。`runtimeDispatchSpec` が無い candidate は非実行 candidate として表示する。
+
+この contract は PR #376 の runtime dispatch lane そのものではなく、同型の backend-resolved-spec → frontend-render-only 境界を recommendation projection に適用するものである。

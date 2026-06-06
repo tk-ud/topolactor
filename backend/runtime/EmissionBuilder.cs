@@ -28,6 +28,7 @@ public class EmissionBuilder
             Errors: errors,
             JumpEvents: shape.JumpEvents,
             ContextRouteRecommendation: shape.ContextRouteRecommendation,
+            RecommendNavigationProjection: shape.RecommendNavigationProjection,
             LayoutId: shape.LayoutId,
             LayoutNodes: shape.LayoutNodes
         );
