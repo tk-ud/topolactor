@@ -413,6 +413,42 @@ public class NpgsqlContentBundleRepository : ContentBundleRepository
             reader.GetFieldValue<DateTimeOffset>(3).ToString("o")), null);
     }
 
+    /// <summary>
+    /// Lists content_entity_drafts with status='draft', ordered by created_at DESC.
+    /// Label is extracted from entity_jsonb (label/name/title), falling back to "Draft {id-prefix}".
+    /// SQL: SELECT draft_id, entity_jsonb->>'label', hub_id, status, created_at
+    ///   FROM topology.content_entity_drafts WHERE status = 'draft' ORDER BY created_at DESC LIMIT 100
+    /// </summary>
+    public override async Task<IReadOnlyList<EntityDraftListItemDto>> ListEntityDraftsAsync(
+        CancellationToken ct = default)
+    {
+        await using var conn = await OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT draft_id::text, " +
+            "  COALESCE(entity_jsonb->>'label', entity_jsonb->>'name', entity_jsonb->>'title', " +
+            "           'Draft ' || left(draft_id::text, 8)) AS label, " +
+            "  hub_id::text, status, created_at " +
+            "FROM topology.content_entity_drafts " +
+            "WHERE status = 'draft' " +
+            "ORDER BY created_at DESC " +
+            "LIMIT 100";
+
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var drafts = new List<EntityDraftListItemDto>();
+        while (await reader.ReadAsync(ct))
+        {
+            drafts.Add(new EntityDraftListItemDto(
+                DraftId: reader.GetString(0),
+                Label: reader.GetString(1),
+                HubId: reader.GetString(2),
+                Status: reader.GetString(3),
+                CreatedAt: reader.GetFieldValue<DateTimeOffset>(4)
+            ));
+        }
+        return drafts;
+    }
+
     public override async Task<ContentEntityDraftRecord?> LoadDraftAsync(Guid draftId, CancellationToken ct = default)
     {
         await using var conn = await OpenAsync(ct);

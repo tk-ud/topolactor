@@ -672,6 +672,35 @@ public class RuntimeExecutorTests
         Assert.Equal("00000000-0000-0000-0000-000000000099", emission.LayoutNodes[0].ComponentId);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WithLayoutNodes_EmissionHasLayoutNodesInSlotOrder()
+    {
+        // Full executor pipeline with tensor rows: verifies that real tensor rows from
+        // StubTopologyRepositoryWithLayoutAndNodes produce Emission.LayoutNodes ordered by
+        // OrderIndex, with slot_b (order=0) before slot_a (order=1).
+        // component_ids=[secondary, default]; tensor[0]=slot_b→secondary, tensor[1]=slot_a→default.
+        var layoutId = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000001");
+        var repo = new StubTopologyRepositoryWithLayoutAndNodes(layoutId);
+        var executor = CreateExecutor(repo);
+        var request = new EndpointRequestDto("Search", "default", "entity", "Search", null, null, null);
+
+        var response = await executor.ExecuteAsync(request);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.Emission);
+        Assert.Equal(layoutId.ToString(), response.Emission!.LayoutId);
+        Assert.NotNull(response.Emission.LayoutNodes);
+        Assert.Equal(2, response.Emission.LayoutNodes!.Count);
+        // slot_b has orderIndex=0 → must be first
+        Assert.Equal("slot_b", response.Emission.LayoutNodes[0].SlotKey);
+        Assert.Equal(0, response.Emission.LayoutNodes[0].OrderIndex);
+        Assert.Equal("00000000-0000-0000-0000-000000000099", response.Emission.LayoutNodes[0].ComponentId);
+        // slot_a has orderIndex=1 → must be second
+        Assert.Equal("slot_a", response.Emission.LayoutNodes[1].SlotKey);
+        Assert.Equal(1, response.Emission.LayoutNodes[1].OrderIndex);
+        Assert.Equal(TopologyRepository.DefaultComponentId, response.Emission.LayoutNodes[1].ComponentId);
+    }
+
 }
 
 /// <summary>
