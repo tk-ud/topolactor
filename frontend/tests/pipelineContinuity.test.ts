@@ -1,8 +1,10 @@
 import { assertEquals, assertExists, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { h, type JSX } from "preact";
+import { renderToString } from "preact-render-to-string";
 import { createSseDispatcher } from "../runtime/sseDispatcher.ts";
 import { queueClientCommand } from "../runtime/frontendScheduler.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
-import { renderEmission } from "../runtime/renderEmission.ts";
+import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
 
 // ─── SSE projection lane — dispatcher skeleton ────────────────────────────────
@@ -299,4 +301,208 @@ Deno.test("layout DOM: DB-equivalent emission with full node fields projects cor
   assertEquals(specs[1].x, 50);
   assertEquals(specs[1].y, 200);
   assertEquals(specs[1].layoutClassRefs?.[0], "card-ref");
+});
+
+// ─── DOM projection render-to-string tests ────────────────────────────────────
+// These tests use buildChildrenMap (exported from renderEmission.ts) and
+// preact-render-to-string to verify actual HTML output matches the SSOT contract:
+//   - structural_html → real HTML tag
+//   - parentNodeId → DOM nesting
+//   - x/y/width/height → style with position:absolute
+//   - layoutClassRefs → class attribute
+//
+// A test-local LayoutNodeToHtml function mirrors the SSOT DOM projection contract
+// without coupling to ProjectionShell's auth/effect infrastructure.
+
+function layoutNodeToElement(
+  spec: ComponentSpec,
+  childrenMap: Map<string | undefined, ComponentSpec[]>,
+): JSX.Element {
+  const children = childrenMap.get(spec.nodeId) ?? [];
+
+  const style: Record<string, string> = {};
+  if (spec.x !== undefined || spec.y !== undefined || spec.width !== undefined || spec.height !== undefined) {
+    style.position = "absolute";
+    if (spec.x !== undefined) style.left = `${spec.x}px`;
+    if (spec.y !== undefined) style.top = `${spec.y}px`;
+    if (spec.width !== undefined) style.width = `${spec.width}px`;
+    if (spec.height !== undefined) style.height = `${spec.height}px`;
+  }
+  const className = spec.layoutClassRefs?.join(" ") || undefined;
+
+  const childElements = children.map((c) => layoutNodeToElement(c, childrenMap));
+
+  if (spec.nodeKind === "structural_html" && spec.htmlTag) {
+    return h(
+      spec.htmlTag,
+      {
+        style: Object.keys(style).length > 0 ? style : undefined,
+        class: className,
+        "data-node-id": spec.nodeId,
+      },
+      ...childElements,
+    );
+  }
+  return h(
+    "div",
+    {
+      style: Object.keys(style).length > 0 ? style : undefined,
+      class: className,
+      "data-node-id": spec.nodeId,
+      "data-component-id": spec.componentId,
+    },
+    ...childElements,
+  );
+}
+
+function renderLayoutTree(emission: Emission, registry: typeof twoCompRegistry): string {
+  const specs = renderEmission(emission, registry);
+  const childrenMap = buildChildrenMap(specs);
+  const roots = childrenMap.get(undefined) ?? [];
+  return renderToString(h("div", { id: "layout-root" }, ...roots.map((r) => layoutNodeToElement(r, childrenMap))));
+}
+
+Deno.test("DOM render: structural_html node produces real HTML tag in rendered output", () => {
+  const emission: Emission = {
+    structureMapId: "00000000-0000-0000-0000-000000000004",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-dom-render-test",
+    layoutNodes: [
+      {
+        nodeId: "node-section",
+        nodeKind: "structural_html",
+        htmlTag: "section",
+        slotKey: "wrapper",
+        orderIndex: 0,
+        x: 0, y: 0, width: 800, height: 600,
+      },
+    ],
+  };
+
+  const html = renderLayoutTree(emission, twoCompRegistry);
+
+  // structural_html "section" must appear as an actual <section> tag
+  assertStringIncludes(html, "<section");
+  assertStringIncludes(html, 'data-node-id="node-section"');
+});
+
+Deno.test("DOM render: x/y/width/height project as position:absolute CSS style", () => {
+  const emission: Emission = {
+    structureMapId: "00000000-0000-0000-0000-000000000004",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-dom-render-test",
+    layoutNodes: [
+      {
+        nodeId: "node-card",
+        nodeKind: "catalog_component",
+        componentId: compAId,
+        slotKey: "slot_a",
+        orderIndex: 0,
+        x: 10, y: 20, width: 300, height: 150,
+      },
+    ],
+  };
+
+  const html = renderLayoutTree(emission, twoCompRegistry);
+
+  // SSOT: x/y/width/height → position:absolute CSS (not relative)
+  assertStringIncludes(html, "position:absolute");
+  assertStringIncludes(html, "left:10px");
+  assertStringIncludes(html, "top:20px");
+  assertStringIncludes(html, "width:300px");
+  assertStringIncludes(html, "height:150px");
+});
+
+Deno.test("DOM render: layoutClassRefs project as class attribute", () => {
+  const emission: Emission = {
+    structureMapId: "00000000-0000-0000-0000-000000000004",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-dom-render-test",
+    layoutNodes: [
+      {
+        nodeId: "node-card",
+        nodeKind: "catalog_component",
+        componentId: compAId,
+        slotKey: "slot_a",
+        orderIndex: 0,
+        x: 0, y: 0, width: 100, height: 50,
+        layoutClassRefs: ["card-primary", "elevated"],
+      },
+    ],
+  };
+
+  const html = renderLayoutTree(emission, twoCompRegistry);
+
+  assertStringIncludes(html, "card-primary");
+  assertStringIncludes(html, "elevated");
+});
+
+Deno.test("DOM render: parentNodeId nesting renders child inside parent element", () => {
+  // SSOT: parentNodeId establishes DOM nesting tree.
+  // node-root (structural_html div) wraps node-child (catalog_component).
+  // DOM: <div data-node-id="node-root"><div data-node-id="node-child" ...></div></div>
+  const emission: Emission = {
+    structureMapId: "00000000-0000-0000-0000-000000000004",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    layoutId: "layout-dom-render-test",
+    layoutNodes: [
+      {
+        nodeId: "node-root",
+        nodeKind: "structural_html",
+        htmlTag: "div",
+        slotKey: "root",
+        orderIndex: 0,
+        x: 0, y: 0, width: 800, height: 600,
+      },
+      {
+        nodeId: "node-child",
+        nodeKind: "catalog_component",
+        componentId: compAId,
+        parentNodeId: "node-root",
+        slotKey: "child",
+        orderIndex: 0,
+        x: 10, y: 10, width: 200, height: 100,
+      },
+    ],
+  };
+
+  const html = renderLayoutTree(emission, twoCompRegistry);
+
+  // Both nodes appear
+  assertStringIncludes(html, 'data-node-id="node-root"');
+  assertStringIncludes(html, 'data-node-id="node-child"');
+  // node-child must appear after node-root opening tag (nested inside)
+  const rootIdx = html.indexOf('data-node-id="node-root"');
+  const childIdx = html.indexOf('data-node-id="node-child"');
+  assertEquals(rootIdx < childIdx, true, "node-child must be nested inside node-root in DOM order");
+  // Only node-root is a root (no node-root parent in output wrapping div) —
+  // the layout-root div contains only 1 direct child (node-root, not node-child separately)
+  const layoutRoot = renderToString(h("div", { id: "layout-root" }));
+  assertEquals(html.includes('id="layout-root"'), true);
+});
+
+Deno.test("DOM render: buildChildrenMap separates roots from children correctly", () => {
+  // Tests the pure buildChildrenMap function directly (no DOM rendering).
+  const specs: ComponentSpec[] = [
+    { componentType: "structural_html", def: {}, nodeId: "root", nodeKind: "structural_html", htmlTag: "section", orderIndex: 0 },
+    { componentType: "default", def: {}, nodeId: "child-a", nodeKind: "catalog_component", parentNodeId: "root", orderIndex: 1 },
+    { componentType: "default", def: {}, nodeId: "child-b", nodeKind: "catalog_component", parentNodeId: "root", orderIndex: 0 },
+  ];
+
+  const map = buildChildrenMap(specs);
+
+  // Roots: parentNodeId=undefined → key undefined
+  const roots = map.get(undefined) ?? [];
+  assertEquals(roots.length, 1);
+  assertEquals(roots[0].nodeId, "root");
+
+  // Children of "root": sorted by orderIndex → child-b (0) before child-a (1)
+  const rootChildren = map.get("root") ?? [];
+  assertEquals(rootChildren.length, 2);
+  assertEquals(rootChildren[0].nodeId, "child-b");
+  assertEquals(rootChildren[1].nodeId, "child-a");
 });

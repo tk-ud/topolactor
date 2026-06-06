@@ -63,7 +63,19 @@ public class StructureMapResolver
 
         if (record.LayoutId.HasValue)
         {
-            var parsedNodes = await _topologyRepository.LoadLayoutNodesAsync(record.LayoutId.Value, ct);
+            IReadOnlyList<LayoutNodeRecord> parsedNodes;
+            try
+            {
+                parsedNodes = await _topologyRepository.LoadLayoutNodesAsync(record.LayoutId.Value, ct);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.StartsWith("LAYOUT_NODES_AMBIGUOUS_SELECTOR"))
+            {
+                layoutErrors =
+                [
+                    new ValidationError("LAYOUT_NODES_AMBIGUOUS_SELECTOR", ex.Message)
+                ];
+                goto buildShape;
+            }
 
             if (parsedNodes.Count == 0)
             {
@@ -103,6 +115,8 @@ public class StructureMapResolver
                 }
             }
         }
+
+        buildShape:
 
         return new RuntimeWorkingShape(
             Vector: null,

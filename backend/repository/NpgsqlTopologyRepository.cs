@@ -205,10 +205,12 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
     /// <summary>
     /// Loads layout nodes for the given layout_id by parsing layout_patch_json.nodes[]
-    /// from the most recently updated topology.ui_topology_tensor row.
+    /// from topology.ui_topology_tensor. Reads at most 2 rows to detect selector ambiguity.
     /// Returns nodes sorted by orderIndex. Returns empty list when no row exists or nodes[] is absent.
+    /// Throws InvalidOperationException("LAYOUT_NODES_AMBIGUOUS_SELECTOR:...") when multiple
+    /// rows exist for the same layout_id — caller must convert to an explicit ValidationError.
     /// SQL: SELECT layout_patch_json::text FROM topology.ui_topology_tensor
-    ///   WHERE layout_id = @layoutId ORDER BY updated_at DESC LIMIT 1
+    ///   WHERE layout_id = @layoutId LIMIT 2
     /// </summary>
     public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
         Guid layoutId, CancellationToken ct = default)
@@ -217,16 +219,32 @@ public class NpgsqlTopologyRepository : TopologyRepository
         await conn.OpenAsync(ct);
 
         await using var cmd = conn.CreateCommand();
+        // LIMIT 2: detect ambiguity without silent "latest wins" ORDER BY.
+        // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
         cmd.CommandText =
             "SELECT layout_patch_json::text " +
             "FROM topology.ui_topology_tensor " +
             "WHERE layout_id = @layoutId " +
-            "ORDER BY updated_at DESC " +
-            "LIMIT 1";
+            "LIMIT 2";
         cmd.Parameters.AddWithValue("layoutId", layoutId);
 
-        var rawJson = (string?)await cmd.ExecuteScalarAsync(ct);
-        if (rawJson is null)
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        string? firstJson = null;
+        var rowCount = 0;
+
+        while (await reader.ReadAsync(ct))
+        {
+            rowCount++;
+            if (rowCount == 1)
+                firstJson = reader.IsDBNull(0) ? null : reader.GetString(0);
+            if (rowCount == 2)
+                throw new InvalidOperationException(
+                    $"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'. " +
+                    "Cannot safely resolve layout nodes without a disambiguating selector (route_key or package_id). " +
+                    "Ensure a unique (layout_id, route_key) or (layout_id, package_id) selector is used at apply time.");
+        }
+
+        if (firstJson is null)
         {
             _npgsqlLogger.LogDebug(
                 "NpgsqlTopologyRepository.LoadLayoutNodesAsync: no tensor row for layoutId='{LayoutId}'.",
@@ -234,7 +252,7 @@ public class NpgsqlTopologyRepository : TopologyRepository
             return Array.Empty<LayoutNodeRecord>();
         }
 
-        return ParseNodesFromLayoutPatchJson(rawJson, layoutId);
+        return ParseNodesFromLayoutPatchJson(firstJson, layoutId);
     }
 
     private IReadOnlyList<LayoutNodeRecord> ParseNodesFromLayoutPatchJson(string json, Guid layoutId)

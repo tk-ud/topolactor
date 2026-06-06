@@ -3,23 +3,9 @@ import { h, type JSX } from "preact";
 import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
-import { renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import type { Emission } from "../api/dispatch.ts";
-
-/** Builds a map from nodeId → children (sorted by orderIndex), for tree rendering. */
-function buildChildrenMap(specs: ComponentSpec[]): Map<string | undefined, ComponentSpec[]> {
-  const map = new Map<string | undefined, ComponentSpec[]>();
-  for (const spec of specs) {
-    const key = spec.parentNodeId ?? undefined;
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(spec);
-  }
-  for (const children of map.values()) {
-    children.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-  }
-  return map;
-}
 
 /** Recursively renders a single layout node as a DOM element with its children. */
 function LayoutNode(
@@ -29,7 +15,7 @@ function LayoutNode(
 
   const style: Record<string, string> = {};
   if (spec.x !== undefined || spec.y !== undefined || spec.width !== undefined || spec.height !== undefined) {
-    style.position = "relative";
+    style.position = "absolute";
     if (spec.x !== undefined) style.left = `${spec.x}px`;
     if (spec.y !== undefined) style.top = `${spec.y}px`;
     if (spec.width !== undefined) style.width = `${spec.width}px`;

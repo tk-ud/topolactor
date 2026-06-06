@@ -504,7 +504,6 @@ pipeline_continuity_ssot:
         x/y/width/height project as position:absolute CSS. layoutClassRefs project as className.
         No silent fallback: layoutId present without nodes → LAYOUT_NODES_NOT_FOUND error.
       direction: db_to_frontend_dom
-      status: implemented
 
       required_identity:
         - nodeId
