@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS topology.structure_maps (
     schema_id             UUID,                           -- references schema_registry
     component_ids         UUID[]      NOT NULL DEFAULT '{}',  -- references component_registry entries
     relation_registry_id  UUID,                           -- scoping relation for this map
-    layout_id             UUID        REFERENCES topology.components_layout_design (layout_id) ON DELETE SET NULL,
+    layout_id             UUID,                           -- soft ref to topology.components_layout_design (FK added via migration)
     state_policy          JSONB       NOT NULL DEFAULT '{}',  -- state-conditional resolution rules
     active                BOOLEAN     NOT NULL DEFAULT true,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
