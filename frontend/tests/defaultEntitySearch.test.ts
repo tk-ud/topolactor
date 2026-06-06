@@ -166,3 +166,48 @@ Deno.test("layout projection: flat renderEmission has no slotKey or orderIndex",
   assertEquals(specs[0].slotKey, undefined);
   assertEquals(specs[0].orderIndex, undefined);
 });
+
+Deno.test("layout projection continuity: DB-equivalent Emission fixture → renderEmission slot/order change", () => {
+  // Closes the real DB → renderEmission projection continuity proof.
+  //
+  // This fixture mirrors the Emission produced by the backend live DB test
+  // LayoutProjectionContinuityLiveDbEndToEndTests. That test inserts two tensor rows:
+  //   slot_a at order_index=1 (inserted first)
+  //   slot_b at order_index=0 (inserted second — reversed insertion order)
+  // After ORDER BY order_index, LoadLayoutNodesAsync returns [slot_b@0, slot_a@1].
+  // StructureMapResolver assigns positionally: slot_b@0 → componentIds[0], slot_a@1 → componentIds[1].
+  // EmissionBuilder forwards the result as Emission.layoutNodes in that order.
+  //
+  // This test proves: an Emission with that shape → renderEmission() produces
+  // ComponentSpec[] where slot_b (orderIndex=0) is first and slot_a (orderIndex=1) is second,
+  // regardless of componentIds array order or alphabetical slot name order.
+  const dbEquivalentEmission: Emission = {
+    structureMapId: "00000000-0000-0000-0000-000000000004",
+    packageId: "00000000-0000-0000-0000-000000000001",
+    schemaId: "00000000-0000-0000-0000-000000000002",
+    componentIds: ["00000000-0000-0000-0000-000000000099", "00000000-0000-0000-0000-000000000003"],
+    layoutId: "test-layout-e2e",
+    layoutNodes: [
+      // Mirrors backend test output after ORDER BY order_index:
+      // slot_b@0 first (lower orderIndex wins), slot_a@1 second
+      { slotKey: "slot_b", orderIndex: 0, componentId: "00000000-0000-0000-0000-000000000099" },
+      { slotKey: "slot_a", orderIndex: 1, componentId: "00000000-0000-0000-0000-000000000003" },
+    ],
+  };
+
+  const specs = renderEmission(dbEquivalentEmission, twoComponentRegistry);
+
+  assertEquals(specs.length, 2);
+
+  // slot_b has orderIndex=0 → ComponentSpec[0], even though "slot_a" comes first alphabetically
+  assertEquals(specs[0].slotKey, "slot_b");
+  assertEquals(specs[0].orderIndex, 0);
+  assertEquals(specs[0].componentId, "00000000-0000-0000-0000-000000000099");
+  assertEquals(specs[0].componentType, "secondary");
+
+  // slot_a has orderIndex=1 → ComponentSpec[1]
+  assertEquals(specs[1].slotKey, "slot_a");
+  assertEquals(specs[1].orderIndex, 1);
+  assertEquals(specs[1].componentId, "00000000-0000-0000-0000-000000000003");
+  assertEquals(specs[1].componentType, "default");
+});
