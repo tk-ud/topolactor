@@ -227,9 +227,18 @@ public class RuntimeExecutor : IDispatchableRuntime
             );
         }
 
+        var recommendProjectionSpec = RecommendNavigationProjectionSpec.FromRecommendation(
+            recommendation,
+            TryResolveContextValue(request.Context, "sql_attention_source_set_id", "SQL_ATTENTION_SOURCE_SET_ID"));
+
         var userActionJump = BuildUserActionJumpEvent(request.Context);
         var jumpEvents = userActionJump is null ? null : new[] { userActionJump };
-        workingShape = workingShape with { ContextRouteRecommendation = recommendation, JumpEvents = jumpEvents };
+        workingShape = workingShape with
+        {
+            ContextRouteRecommendation = recommendation,
+            RecommendNavigationProjection = recommendProjectionSpec,
+            JumpEvents = jumpEvents
+        };
 
         // Step 10: Build emission from resolved working shape
         var emission = _emissionBuilder.Build(workingShape);
@@ -297,7 +306,7 @@ public class RuntimeExecutor : IDispatchableRuntime
         };
     }
 
-    private static string ResolveContextValue(Dictionary<string, string>? context, string primaryKey, string fallbackEnvKey)
+    private static string? TryResolveContextValue(Dictionary<string, string>? context, string primaryKey, string fallbackEnvKey)
     {
         if (context is not null && context.TryGetValue(primaryKey, out var value) && !string.IsNullOrWhiteSpace(value))
             return value;
@@ -306,7 +315,13 @@ public class RuntimeExecutor : IDispatchableRuntime
         if (!string.IsNullOrWhiteSpace(env))
             return env;
 
-        throw new InvalidOperationException($"Missing required SQL Attention context value: '{primaryKey}' (or env '{fallbackEnvKey}').");
+        return null;
+    }
+
+    private static string ResolveContextValue(Dictionary<string, string>? context, string primaryKey, string fallbackEnvKey)
+    {
+        return TryResolveContextValue(context, primaryKey, fallbackEnvKey)
+            ?? throw new InvalidOperationException($"Missing required SQL Attention context value: '{primaryKey}' (or env '{fallbackEnvKey}').");
     }
 
     private static EndpointResponseDto ErrorResponse(string code, string message) =>

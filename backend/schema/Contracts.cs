@@ -121,6 +121,7 @@ public record RuntimeWorkingShape(
     // to resolve a scoped context_route_policy_ref instead of the global default_policy.
     string? StructureMapStatePolicyJson = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
+    RecommendNavigationProjectionSpec? RecommendNavigationProjection = null,
     string? LayoutId = null,
     IReadOnlyList<LayoutNode>? LayoutNodes = null
 );
@@ -130,6 +131,9 @@ public record RuntimeWorkingShape(
 /// ContextRouteRecommendation carries next operation and token candidates derived
 /// from the context route recommendation runtime. Status is always explicit —
 /// InsufficientHistory when not enough history exists, never silently null.
+/// RecommendNavigationProjection is the backend-resolved render-only child island
+/// spec under the main projection island; frontend must not derive lane mixing,
+/// topology promotion, or executable wiring from raw candidates.
 /// ProjectionDefinition carries the projection_constructor_mapping from the resolved manifest
 /// topology entry. Frontend uses this to call setProjectionDefinition on the projection runtime
 /// before processing SSE projection events. Null when no manifest is configured or no
@@ -152,6 +156,7 @@ public record Emission(
     IReadOnlyList<ValidationError> Errors,
     IReadOnlyList<RuntimeJumpEvent>? JumpEvents = null,
     ContextRouteRecommendationResult? ContextRouteRecommendation = null,
+    RecommendNavigationProjectionSpec? RecommendNavigationProjection = null,
     JsonElement? ProjectionDefinition = null,
     IReadOnlyList<HubNavigationSequenceItemDto>? NavigationSequence = null,
     string? LayoutId = null,

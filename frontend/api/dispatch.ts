@@ -37,6 +37,52 @@ export type ContextRouteRecommendation = {
   statusDetail?: string;
 };
 
+
+export type RecommendRuntimeDispatchSpec = {
+  operationType: string;
+  target: string;
+  layer: string;
+  action: string;
+  wiringKey?: string | null;
+  wiringId?: string | null;
+  targetRef?: string | null;
+};
+
+export type RecommendProjectionStatus = "ok" | "insufficient_history" | "explicit_unavailable" | "explicit_error";
+
+export type RecommendProjectionCandidate = {
+  value: string;
+  score: number;
+  probability?: number | null;
+  evidence: string[];
+  lane: "ui_pressure" | "state_pressure";
+  runtimeDispatchSpec?: RecommendRuntimeDispatchSpec | null;
+};
+
+export type RecommendProjectionSection = {
+  lane: "ui_pressure" | "state_pressure";
+  candidateKind: "next_operation" | "next_component" | "next_route_action" | "next_context_token" | "next_enum_item" | "likely_status" | "state_shift_candidate";
+  title: string;
+  status: RecommendProjectionStatus;
+  statusDetail?: string | null;
+  candidates: RecommendProjectionCandidate[];
+};
+
+export type SqlAttentionProjectionChildSpec = {
+  lane: "sql_attention_projection";
+  candidateKind: "next_hub_projection_candidate";
+  status: RecommendProjectionStatus;
+  statusDetail?: string | null;
+  sourceSetId?: string | null;
+};
+
+export type RecommendNavigationProjectionSpec = {
+  mainProjectionIslandId: "main_projection_island" | string;
+  childIslandId: "recommend_navigation_child_island" | string;
+  hubLocalSections: RecommendProjectionSection[];
+  sqlAttentionProjection: SqlAttentionProjectionChildSpec;
+};
+
 /**
  * A single layout node in the Emission, derived from layout_patch_json.nodes[].
  * Carries the full structural and positional fields authored in the UI builder canvas.
@@ -81,6 +127,8 @@ export type Emission = {
   data?: Record<string, unknown>;
   errors?: ValidationError[];
   contextRouteRecommendation?: ContextRouteRecommendation;
+  /** Backend-resolved render-only recommendation child island spec. */
+  recommendNavigationProjection?: RecommendNavigationProjectionSpec;
   /**
    * ProjectionDefinition extracted from the manifest topology's projection_constructor_mapping entry.
    * Supplied by the backend ManifestDispatcher when a manifest with a projection_constructor_mapping

@@ -593,6 +593,54 @@ hub_local_recommendation_pressure_lanes:
         - state_pressure
       prohibited_lane_values:
         - sql_attention_projection
+  child_island_projection_contract:
+    main_projection_island:
+      role: primary_dom_projection_owner
+      primary_dom_projection_required: true
+      child_islands:
+        recommend_navigation_child_island:
+          role: recommend_navigation_projection_block
+          receives: backend_resolved_lane_recommend_projection_spec
+          frontend_responsibility: render_only
+          prohibited_frontend_judgments:
+            - topology_meaning_judgment
+            - promotion_judgment
+            - wiring_judgment
+            - lane_mixing_judgment
+          lanes:
+            ui_pressure:
+              block: hub_local_recommendation_block
+              space: current_hub_internal_ui_operation_pressure
+              outputs:
+                - next_operation
+                - next_component
+                - next_route_action
+                - next_context_token
+            state_pressure:
+              block: hub_local_recommendation_block
+              space: current_hub_internal_state_enum_pressure
+              outputs:
+                - next_enum_item
+                - likely_status
+                - state_shift_candidate
+            sql_attention_projection:
+              block: sql_attention_projection_block
+              space: inter_hub_inter_projection_topology_concept_space
+              outputs:
+                - next_hub_projection_candidate
+              prohibited_mixing:
+                - hub_local_next_operation
+                - hub_local_next_enum_item
+                - hub_local_state_pressure_candidate
+          unresolved_context_policy:
+            source_set_id_unresolved: explicit_unavailable
+            recommendation_context_unresolved: explicit_error
+            silent_fallback: prohibited
+            fixed_frontend_source_set_fallback: prohibited
+          executable_candidate_policy:
+            frontend_fixed_dispatch: prohibited
+            required_route: backend_resolved_runtime_dispatch_spec_or_wiring
+            absent_runtime_dispatch_spec: render_non_executable
   transition_stats_separation:
     context_transition_stats:
       transition_kind: operation

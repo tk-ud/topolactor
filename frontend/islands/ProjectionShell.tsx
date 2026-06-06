@@ -8,6 +8,7 @@ import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type SseReceiver } from "../runtime/sseReceiver.ts";
 import type { Emission } from "../api/dispatch.ts";
+import { RecommendNavigationIsland } from "../components/RecommendNavigationIsland.tsx";
 
 /** Recursively renders a single layout node as a DOM element with its children. */
 function LayoutNode(
@@ -114,6 +115,7 @@ export default function ProjectionShell(): JSX.Element {
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [authFallback, setAuthFallback] = useState(false);
+  const [projectionToken, setProjectionToken] = useState<string | undefined>(undefined);
 
   // Generation counter prevents stale SSE refresh responses from overwriting newer results.
   const refreshGenRef = useRef(0);
@@ -140,6 +142,8 @@ export default function ProjectionShell(): JSX.Element {
           return;
         }
       }
+
+      if (mounted) setProjectionToken(token ?? undefined);
 
       const response = await queueClientCommand(
         { operationType: "Search", target: "default", layer: "entity", action: "Search" },
@@ -268,16 +272,18 @@ export default function ProjectionShell(): JSX.Element {
   const hasErrors = specs.some((s) => s.componentType === "error");
   const hasTreeNodes = hasLayout && specs.some((s) => s.nodeId !== undefined);
 
+  const recommendProjection = emission?.recommendNavigationProjection;
+
   if (hasLayout && hasTreeNodes && !hasErrors) {
     const childrenMap = buildChildrenMap(specs);
     const rootSpecs = childrenMap.get(undefined) ?? [];
 
     return (
-      <div>
+      <div data-projection-island="main_projection_island">
         <p class="mb-3 text-xs font-mono text-blue-500">
           layout: {emission!.layoutId}
         </p>
-        <div class="relative">
+        <div class="relative" data-primary-dom-projection="true">
           {rootSpecs.map((spec) => (
             <LayoutNode
               key={spec.nodeId ?? spec.slotKey ?? spec.componentId}
@@ -286,12 +292,15 @@ export default function ProjectionShell(): JSX.Element {
             />
           ))}
         </div>
+        {recommendProjection && (
+          <RecommendNavigationIsland spec={recommendProjection} token={projectionToken} />
+        )}
       </div>
     );
   }
 
   return (
-    <div>
+    <div data-projection-island="main_projection_island">
       {hasLayout && (
         <p class="mb-3 text-xs font-mono text-blue-500">
           layout: {emission!.layoutId}
@@ -312,6 +321,10 @@ export default function ProjectionShell(): JSX.Element {
         <p class="mt-3 text-xs text-red-500">
           一部のコンポーネントで投影エラーが発生しています。
         </p>
+      )}
+
+      {recommendProjection && (
+        <RecommendNavigationIsland spec={recommendProjection} token={projectionToken} />
       )}
     </div>
   );

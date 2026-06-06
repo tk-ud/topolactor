@@ -151,6 +151,157 @@ public record ContextRouteRecommendationResult(
     string? StatusDetail
 );
 
+
+/// <summary>
+/// Runtime dispatch spec for a recommendation candidate. When null, the frontend must
+/// render the candidate as non-executable and must not infer target/layer/action.
+/// Mirrors the backend-resolved wiring pattern used by the runtime dispatch lane.
+/// </summary>
+public record RecommendRuntimeDispatchSpec(
+    string OperationType,
+    string Target,
+    string Layer,
+    string Action,
+    string? WiringKey = null,
+    string? WiringId = null,
+    string? TargetRef = null
+);
+
+/// <summary>
+/// Candidate in a renderable recommend projection section. Lane is backend-resolved;
+/// frontend may display it but must not reclassify or mix candidates across lanes.
+/// </summary>
+public record RecommendProjectionCandidate(
+    string Value,
+    float Score,
+    float? Probability,
+    IReadOnlyList<string> Evidence,
+    string Lane,
+    RecommendRuntimeDispatchSpec? RuntimeDispatchSpec = null
+);
+
+/// <summary>
+/// Explicit status for a renderable recommendation projection section.
+/// ExplicitUnavailable is used for unresolved context/source surfaces; no silent fallback.
+/// </summary>
+public enum RecommendProjectionStatus
+{
+    Ok,
+    InsufficientHistory,
+    ExplicitUnavailable,
+    ExplicitError
+}
+
+/// <summary>
+/// Backend-resolved, render-only lane section for the recommend child island.
+/// CandidateKind is the backend-authored display semantic (next_operation,
+/// next_component, next_route_action, next_context_token, next_enum_item,
+/// likely_status, state_shift_candidate, next_hub_projection_candidate).
+/// </summary>
+public record RecommendProjectionSection(
+    string Lane,
+    string CandidateKind,
+    string Title,
+    RecommendProjectionStatus Status,
+    string? StatusDetail,
+    IReadOnlyList<RecommendProjectionCandidate> Candidates
+);
+
+/// <summary>
+/// SQL Attention child projection lane descriptor. When SourceSetId is absent the
+/// frontend renders ExplicitUnavailable and must not fetch with a hard-coded fallback.
+/// </summary>
+public record SqlAttentionProjectionChildSpec(
+    string Lane,
+    string CandidateKind,
+    RecommendProjectionStatus Status,
+    string? StatusDetail,
+    string? SourceSetId
+);
+
+/// <summary>
+/// Renderable recommendation navigation child island spec carried by Emission.
+/// The main projection island remains the primary DOM projection; this spec declares
+/// the recommend navigation block as its child island and keeps hub-local and
+/// SQL Attention projection lanes separated.
+/// </summary>
+public record RecommendNavigationProjectionSpec(
+    string MainProjectionIslandId,
+    string ChildIslandId,
+    IReadOnlyList<RecommendProjectionSection> HubLocalSections,
+    SqlAttentionProjectionChildSpec SqlAttentionProjection
+)
+{
+    public static RecommendNavigationProjectionSpec FromRecommendation(
+        ContextRouteRecommendationResult? recommendation,
+        string? sqlAttentionSourceSetId)
+    {
+        var status = ToProjectionStatus(recommendation?.Status);
+        var detail = recommendation?.StatusDetail;
+
+        var operationCandidates = recommendation?.NextOperations.Select(ToProjectionCandidate).ToArray()
+            ?? [];
+        var contextTokenCandidates = recommendation?.NextTokens.Select(ToProjectionCandidate).ToArray()
+            ?? [];
+        var stateCandidates = recommendation?.NextEnumItems.Select(ToProjectionCandidate).ToArray()
+            ?? [];
+
+        var sqlStatus = string.IsNullOrWhiteSpace(sqlAttentionSourceSetId)
+            ? RecommendProjectionStatus.ExplicitUnavailable
+            : RecommendProjectionStatus.Ok;
+        var sqlDetail = string.IsNullOrWhiteSpace(sqlAttentionSourceSetId)
+            ? "sql_attention_source_set_id is not resolved for this emission."
+            : "sourceSetId resolved by backend emission context; frontend may fetch the dedicated SQL Attention projection API.";
+
+        return new RecommendNavigationProjectionSpec(
+            MainProjectionIslandId: "main_projection_island",
+            ChildIslandId: "recommend_navigation_child_island",
+            HubLocalSections:
+            [
+                new RecommendProjectionSection(
+                    Lane: RecommendationPressureLanes.UiPressure,
+                    CandidateKind: "next_operation",
+                    Title: "UI / operation pressure",
+                    Status: status,
+                    StatusDetail: detail,
+                    Candidates: operationCandidates.Where(c => c.Lane == RecommendationPressureLanes.UiPressure).ToArray()),
+                new RecommendProjectionSection(
+                    Lane: RecommendationPressureLanes.UiPressure,
+                    CandidateKind: "next_context_token",
+                    Title: "Context token pressure",
+                    Status: status,
+                    StatusDetail: detail,
+                    Candidates: contextTokenCandidates.Where(c => c.Lane == RecommendationPressureLanes.UiPressure).ToArray()),
+                new RecommendProjectionSection(
+                    Lane: RecommendationPressureLanes.StatePressure,
+                    CandidateKind: "next_enum_item",
+                    Title: "State / enum pressure",
+                    Status: status,
+                    StatusDetail: detail,
+                    Candidates: stateCandidates.Where(c => c.Lane == RecommendationPressureLanes.StatePressure).ToArray())
+            ],
+            SqlAttentionProjection: new SqlAttentionProjectionChildSpec(
+                Lane: RecommendationPressureLanes.SqlAttentionProjection,
+                CandidateKind: "next_hub_projection_candidate",
+                Status: sqlStatus,
+                StatusDetail: sqlDetail,
+                SourceSetId: string.IsNullOrWhiteSpace(sqlAttentionSourceSetId) ? null : sqlAttentionSourceSetId.Trim())
+        );
+    }
+
+    private static RecommendProjectionCandidate ToProjectionCandidate(RecommendationCandidate candidate) =>
+        new(candidate.Value, candidate.Score, candidate.Probability, candidate.Evidence, candidate.Lane);
+
+    private static RecommendProjectionStatus ToProjectionStatus(RecommendationStatus? status) => status switch
+    {
+        RecommendationStatus.Ok => RecommendProjectionStatus.Ok,
+        RecommendationStatus.InsufficientHistory => RecommendProjectionStatus.InsufficientHistory,
+        RecommendationStatus.ExplicitError => RecommendProjectionStatus.ExplicitError,
+        null => RecommendProjectionStatus.ExplicitUnavailable,
+        _ => RecommendProjectionStatus.ExplicitError
+    };
+}
+
 // =============================================================================
 // Topology Vector Runtime contracts
 // =============================================================================
