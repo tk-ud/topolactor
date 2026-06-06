@@ -330,6 +330,25 @@ export async function queueAdminClientCommand(
 
 
 /**
+ * Enqueues a runtime component command through the api_command_lane.
+ * Called by emitBoundEvent when a binding carries runtimeDispatch.action.
+ * This is the component_wiring_execution_lane — explicitly separate from the
+ * frontend_component_event_log_lane (emitComponentOperationEvent).
+ *
+ * Reads token from sessionStorage (same source as flushComponentEvents).
+ * Uses queueAdminClientCommand so triggerKind="client" is always injected.
+ */
+export async function enqueueRuntimeComponentCommand(
+  action: string,
+): Promise<ScheduledCommandResult> {
+  const token = globalThis.sessionStorage?.getItem("demo_jwt_token") ?? undefined;
+  return queueAdminClientCommand(
+    { operationType: action, target: "default", layer: "entity", action },
+    token,
+  );
+}
+
+/**
  * Enqueues a projection hook trigger from the SSE receiver into the SSE dispatcher.
  *
  * Bridge in the sse_projection_lane:

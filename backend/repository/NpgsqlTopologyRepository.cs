@@ -205,43 +205,55 @@ public class NpgsqlTopologyRepository : TopologyRepository
 
     /// <summary>
     /// Loads layout nodes for the given layout_id by parsing layout_patch_json.nodes[]
-    /// from topology.ui_topology_tensor. Reads at most 2 rows to detect selector ambiguity.
+    /// from topology.ui_topology_tensor, enriched with componentKind (from ui_component_registry)
+    /// and runtimeDispatchAction (from ui_wiring_registry.wiring_kind via tensor JOIN).
+    /// Reads at most 2 rows to detect selector ambiguity.
     /// Returns nodes sorted by orderIndex. Returns empty list when no row exists or nodes[] is absent.
     /// Throws InvalidOperationException("LAYOUT_NODES_AMBIGUOUS_SELECTOR:...") when multiple
     /// rows exist for the same layout_id — caller must convert to an explicit ValidationError.
-    /// SQL: SELECT layout_patch_json::text FROM topology.ui_topology_tensor
-    ///   WHERE layout_id = @layoutId LIMIT 2
+    /// SQL: SELECT t.layout_patch_json::text, w.wiring_kind
+    ///   FROM topology.ui_topology_tensor t
+    ///   LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id
+    ///   WHERE t.layout_id = @layoutId LIMIT 2
     /// </summary>
     public override async Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
         Guid layoutId, CancellationToken ct = default)
     {
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = conn.CreateCommand();
-        // LIMIT 2: detect ambiguity without silent "latest wins" ORDER BY.
-        // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
-        cmd.CommandText =
-            "SELECT layout_patch_json::text " +
-            "FROM topology.ui_topology_tensor " +
-            "WHERE layout_id = @layoutId " +
-            "LIMIT 2";
-        cmd.Parameters.AddWithValue("layoutId", layoutId);
-
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
         string? firstJson = null;
-        var rowCount = 0;
+        string? wiringKind = null;
 
-        while (await reader.ReadAsync(ct))
         {
-            rowCount++;
-            if (rowCount == 1)
-                firstJson = reader.IsDBNull(0) ? null : reader.GetString(0);
-            if (rowCount == 2)
-                throw new InvalidOperationException(
-                    $"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'. " +
-                    "Cannot safely resolve layout nodes without a disambiguating selector (route_key or package_id). " +
-                    "Ensure a unique (layout_id, route_key) or (layout_id, package_id) selector is used at apply time.");
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
+
+            await using var cmd = conn.CreateCommand();
+            // LIMIT 2: detect ambiguity without silent "latest wins" ORDER BY.
+            // 0 rows → empty (LAYOUT_NODES_NOT_FOUND); 1 row → parse; 2+ rows → explicit error.
+            cmd.CommandText =
+                "SELECT t.layout_patch_json::text, w.wiring_kind " +
+                "FROM topology.ui_topology_tensor t " +
+                "LEFT JOIN topology.ui_wiring_registry w ON w.wiring_id = t.wiring_id " +
+                "WHERE t.layout_id = @layoutId " +
+                "LIMIT 2";
+            cmd.Parameters.AddWithValue("layoutId", layoutId);
+
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            var rowCount = 0;
+
+            while (await reader.ReadAsync(ct))
+            {
+                rowCount++;
+                if (rowCount == 1)
+                {
+                    firstJson = reader.IsDBNull(0) ? null : reader.GetString(0);
+                    wiringKind = reader.IsDBNull(1) ? null : reader.GetString(1);
+                }
+                if (rowCount == 2)
+                    throw new InvalidOperationException(
+                        $"LAYOUT_NODES_AMBIGUOUS_SELECTOR: multiple tensor rows for layout_id='{layoutId}'. " +
+                        "Cannot safely resolve layout nodes without a disambiguating selector (route_key or package_id). " +
+                        "Ensure a unique (layout_id, route_key) or (layout_id, package_id) selector is used at apply time.");
+            }
         }
 
         if (firstJson is null)
@@ -252,7 +264,82 @@ public class NpgsqlTopologyRepository : TopologyRepository
             return Array.Empty<LayoutNodeRecord>();
         }
 
-        return ParseNodesFromLayoutPatchJson(firstJson, layoutId);
+        var runtimeDispatchAction = MapWiringKindToDispatchAction(wiringKind);
+        var baseNodes = ParseNodesFromLayoutPatchJson(firstJson, layoutId);
+
+        if (baseNodes.Count == 0)
+            return baseNodes;
+
+        // Batch-fetch componentKind for catalog_component nodes.
+        var catalogComponentIds = baseNodes
+            .Where(n => n.NodeKind is "catalog_component" && n.ComponentId is not null)
+            .Select(n => n.ComponentId!)
+            .Distinct()
+            .ToList();
+
+        var componentKindMap = await LoadComponentKindsByIdsAsync(catalogComponentIds, ct);
+
+        if (runtimeDispatchAction is null && componentKindMap.Count == 0)
+            return baseNodes;
+
+        return baseNodes.Select(n =>
+        {
+            if (n.NodeKind is not "catalog_component")
+                return n;
+            var kind = n.ComponentId is not null && componentKindMap.TryGetValue(n.ComponentId, out var k) ? k : null;
+            return n with { ComponentKind = kind, RuntimeDispatchAction = runtimeDispatchAction };
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Maps ui_wiring_registry.wiring_kind to the canonical RuntimeDispatchAction.
+    /// search/aggregate → Search, create → Create, update → diffUpdate, delete → logicalDelete.
+    /// Returns null for unknown or null wiring_kind.
+    /// </summary>
+    private static string? MapWiringKindToDispatchAction(string? wiringKind) => wiringKind switch
+    {
+        "search" => "Search",
+        "aggregate" => "Search",
+        "create" => "Create",
+        "update" => "diffUpdate",
+        "delete" => "logicalDelete",
+        _ => null,
+    };
+
+    /// <inheritdoc/>
+    public override async Task<IReadOnlyDictionary<string, string>> LoadComponentKindsByIdsAsync(
+        IReadOnlyList<string> componentIds, CancellationToken ct = default)
+    {
+        if (componentIds.Count == 0)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var ids = componentIds
+            .Where(id => Guid.TryParse(id, out _))
+            .Select(Guid.Parse)
+            .Distinct()
+            .ToArray();
+
+        if (ids.Length == 0)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        await using var conn = new NpgsqlConnection(_connectionString);
+        await conn.OpenAsync(ct);
+
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT component_id::text, component_kind " +
+            "FROM topology.ui_component_registry " +
+            "WHERE component_id = ANY(@ids)";
+        cmd.Parameters.AddWithValue("ids", ids);
+
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct))
+        {
+            if (!reader.IsDBNull(0) && !reader.IsDBNull(1))
+                result[reader.GetString(0)] = reader.GetString(1);
+        }
+        return result;
     }
 
     private IReadOnlyList<LayoutNodeRecord> ParseNodesFromLayoutPatchJson(string json, Guid layoutId)

@@ -621,3 +621,114 @@ pipeline_continuity_ssot:
         - backend/tests/Topolactor.Integration.Tests/LayoutProjectionContinuityLiveDbEndToEndTests.cs
         - frontend/tests/pipelineContinuity.test.ts
         - frontend/tests/defaultEntitySearch.test.ts
+
+    component_wiring_execution_lane:
+      status: implemented_contract
+      description: >
+        Admin-configured component wiring (UI Builder) connects to runtime execution.
+        Backend LayoutNode enrichment: catalog_component nodes are enriched with
+        componentKind (from ui_component_registry) and runtimeDispatchAction (derived
+        from ui_wiring_registry.wiring_kind via ui_topology_tensor JOIN).
+        Frontend renderEmission: catalog_component nodes with componentKind build a
+        ComponentDataHub → adaptComponentDataHub → RuntimeComponentSpec, stored in
+        ComponentSpec.runtimeSpec. ProjectionShell renders catalog_component nodes via
+        renderRuntimeComponent(runtimeSpec) instead of SpecCard.
+        User events fire TWO explicitly separated lanes:
+          1. frontend_component_event_log_lane: emitComponentOperationEvent (observation, always)
+          2. component_wiring_execution_lane: enqueueRuntimeComponentCommand → queueClientCommand (dispatch, when runtimeDispatch configured)
+        Frontend is a projection surface only — does NOT judge topology, layout, or promotion.
+        wiring_kind → action mapping: search→Search, aggregate→Search, create→Create, update→diffUpdate, delete→logicalDelete
+      direction: client_to_server
+
+      required_identity:
+        - componentId
+        - componentKind
+        - runtimeDispatchAction
+        - action
+        - target
+        - layer
+
+      nodes:
+        - node: backend.layout_node_enrichment
+          files:
+            - backend/repository/NpgsqlTopologyRepository.cs
+            - backend/repository/TopologyRepository.cs
+            - backend/runtime/StructureMapResolver.cs
+          implementation_note: >
+            NpgsqlTopologyRepository.LoadLayoutNodesAsync JOINs ui_wiring_registry to get
+            wiring_kind and maps it to runtimeDispatchAction. LoadComponentKindsByIdsAsync
+            batch-queries ui_component_registry by componentId. Both fields are set on
+            LayoutNodeRecord and forwarded to LayoutNode by StructureMapResolver.
+
+        - node: backend.layout_node_contract
+          files:
+            - backend/schema/Contracts.cs
+          implementation_note: >
+            LayoutNode record gains ComponentKind (string?) and RuntimeDispatchAction (string?)
+            as optional nullable fields. These are serialized to JSON in Emission.layoutNodes
+            and read by the frontend renderEmission path.
+
+        - node: frontend.render_emission_catalog_component
+          files:
+            - frontend/runtime/renderEmission.ts
+            - frontend/api/dispatch.ts
+          implementation_note: >
+            LayoutNode type gains componentKind and runtimeDispatchAction fields.
+            renderEmission: catalog_component nodes with componentKind → ComponentDataHub →
+            adaptComponentDataHub → RuntimeComponentSpec stored in ComponentSpec.runtimeSpec.
+            buildCatalogComponentEventBinding: creates bindings for standard triggers (click,
+            change, select, submit, toggle) each carrying runtimeDispatch.action when
+            runtimeDispatchAction is present. Absence of componentKind → explicit error spec,
+            not silent skip.
+
+        - node: frontend.projection_shell_runtime_render
+          files:
+            - frontend/islands/ProjectionShell.tsx
+          implementation_note: >
+            LayoutNode component: spec.runtimeSpec present → renderRuntimeComponent(runtimeSpec).
+            renderRuntimeComponent failure → explicit error SpecCard (not silent fallback).
+            spec.runtimeSpec absent on catalog_component → console.warn + SpecCard.
+            SpecCard is retained only as an explicit-error/observation fallback — never as
+            the primary catalog_component render path.
+
+        - node: frontend.component_wiring_dispatch
+          files:
+            - frontend/runtime/runtimeComponentFactory.ts
+            - frontend/runtime/frontendScheduler.ts
+          implementation_note: >
+            EventBindingValue gains runtimeDispatch?: { action: string }.
+            emitBoundEvent fires BOTH lanes:
+              Lane 1 (always): emitComponentOperationEvent → frontend_component_event_log_lane
+              Lane 2 (when runtimeDispatch present): enqueueRuntimeComponentCommand →
+              queueClientCommand → api_command_lane → backend dispatch.
+            Lanes are explicitly separated — observation log does NOT drive backend dispatch.
+            enqueueRuntimeComponentCommand reads token from sessionStorage and calls
+            queueAdminClientCommand with operationType=action, target=default, layer=entity.
+
+      wiring_kind_action_mapping:
+        search: Search
+        aggregate: Search
+        create: Create
+        update: diffUpdate
+        delete: logicalDelete
+
+      prohibited:
+        - catalog_component_rendered_as_speccard_in_primary_path
+        - silent_fallback_when_componentkind_absent
+        - observation_log_driving_backend_dispatch
+        - frontend_topology_or_layout_judgment
+        - dispatch_firing_without_runtimedispatch_configured
+
+      pipeline_body_test:
+        kind: unit_boundary_contract
+        ci_script: .agent/tests/check-pipeline-continuity.sh
+        test_files:
+          - frontend/tests/adminWiringExecutionLane.test.ts
+          - backend/tests/Topolactor.Runtime.Tests/AdminWiringExecutionLaneTests.cs
+        verifies:
+          - LayoutNode carries ComponentKind and RuntimeDispatchAction
+          - renderEmission builds runtimeSpec for catalog_component with componentKind
+          - renderEmission produces error spec when componentKind absent
+          - parseEventBinding parses runtimeDispatch field
+          - emitBoundEvent fires both log lane and dispatch lane when runtimeDispatch present
+          - enqueueRuntimeComponentCommand routes through queueAdminClientCommand

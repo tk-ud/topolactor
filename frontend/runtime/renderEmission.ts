@@ -3,12 +3,19 @@ import type { ComponentRegistry } from "../registry/componentRegistry.ts";
 import { adaptComponentDataHub, type RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
 import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
 import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
+import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
 
 export type ComponentSpec = {
   componentId?: string;
   componentType: string;
   def: Record<string, unknown>;
   runtime?: RuntimeComponentSpec;
+  /**
+   * Resolved RuntimeComponentSpec for catalog_component nodes.
+   * Present when componentKind is known and adaptComponentDataHub succeeded.
+   * ProjectionShell uses this to render via renderRuntimeComponent instead of SpecCard.
+   */
+  runtimeSpec?: RuntimeComponentSpec;
   /** Node identifier from layout_patch_json — present only when rendered from layoutNodes. */
   nodeId?: string;
   /** "catalog_component" | "structural_html" — present only when rendered from layoutNodes. */
@@ -32,6 +39,24 @@ export type ComponentSpec = {
   /** SSOT topology-layout-class vocabulary refs for className resolution. */
   layoutClassRefs?: string[];
 };
+
+/**
+ * Builds an eventBinding for a catalog_component node from its runtimeDispatchAction.
+ * Populates standard triggers (click, change, select, submit, toggle) each carrying
+ * runtimeDispatch.action so emitBoundEvent fires both log and dispatch lanes.
+ * Returns empty object when runtimeDispatchAction is null/absent (log lane only).
+ */
+export function buildCatalogComponentEventBinding(
+  runtimeDispatchAction: string | null,
+): Record<string, unknown> {
+  if (!runtimeDispatchAction) return {};
+  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const binding: Record<string, unknown> = {};
+  for (const trigger of triggers) {
+    binding[trigger] = { eventType: trigger, runtimeDispatch: { action: runtimeDispatchAction } };
+  }
+  return binding;
+}
 
 /**
  * Builds a map from nodeId → children (sorted by orderIndex) for tree rendering.
@@ -143,6 +168,38 @@ export function renderEmission(
           };
         }
 
+        // catalog_component primary path: componentKind present → build runtimeSpec via adaptComponentDataHub.
+        if (node.componentKind) {
+          ensureRuntimeComponentRegistryInitialized();
+          const hub: ComponentDataHub = {
+            componentId: node.componentId,
+            componentKind: node.componentKind,
+            packageId: emission.packageId ?? null,
+            layoutId: emission.layoutId ?? null,
+            wiringId: null,
+            props: {},
+            eventBinding: buildCatalogComponentEventBinding(node.runtimeDispatchAction ?? null),
+            design: undefined,
+          };
+          const adapted = adaptComponentDataHub(hub);
+          if (!adapted.ok) {
+            return {
+              componentId: node.componentId,
+              componentType: "error",
+              def: { error: adapted.error, componentId: node.componentId },
+              ...layoutFields,
+            };
+          }
+          return {
+            componentId: node.componentId,
+            componentType: node.componentKind,
+            def: {},
+            runtimeSpec: adapted.value,
+            ...layoutFields,
+          };
+        }
+
+        // Fallback: static registry lookup (no componentKind — legacy/test path, no runtimeSpec).
         const entry = registry[node.componentId];
         if (!entry) {
           return {

@@ -150,6 +150,21 @@ public class TopologyRepository
     }
 
     /// <summary>
+    /// Batch-loads component_kind from topology.ui_component_registry for the given component IDs.
+    /// Returns a dictionary mapping componentId (string) → componentKind (string).
+    /// Returns empty dict (base/test double). Missing IDs are simply absent from the result.
+    /// Production: override in NpgsqlTopologyRepository.
+    /// </summary>
+    public virtual Task<IReadOnlyDictionary<string, string>> LoadComponentKindsByIdsAsync(
+        IReadOnlyList<string> componentIds, CancellationToken ct = default)
+    {
+        _logger.LogDebug(
+            "TopologyRepository.LoadComponentKindsByIdsAsync: returning empty dict (base/test double).");
+        return Task.FromResult<IReadOnlyDictionary<string, string>>(
+            new Dictionary<string, string>(StringComparer.Ordinal));
+    }
+
+    /// <summary>
     /// Loads layout nodes by parsing layout_patch_json.nodes[] from topology.ui_topology_tensor
     /// for the given layout_id. Returns empty list (base/test double).
     /// LAYOUT_NODES_NOT_FOUND is signaled by an empty list — callers must treat empty as a
@@ -242,5 +257,7 @@ public record LayoutNodeRecord(
     double Y,
     double Width,
     double Height,
-    IReadOnlyList<string>? LayoutClassRefs
+    IReadOnlyList<string>? LayoutClassRefs,
+    string? ComponentKind = null,
+    string? RuntimeDispatchAction = null
 );

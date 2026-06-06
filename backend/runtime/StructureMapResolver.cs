@@ -110,7 +110,9 @@ public class StructureMapResolver
                         Y: row.Y,
                         Width: row.Width,
                         Height: row.Height,
-                        LayoutClassRefs: row.LayoutClassRefs
+                        LayoutClassRefs: row.LayoutClassRefs,
+                        ComponentKind: row.ComponentKind,
+                        RuntimeDispatchAction: row.RuntimeDispatchAction
                     )).ToList();
                 }
             }
