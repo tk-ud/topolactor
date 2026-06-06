@@ -64,6 +64,13 @@ public abstract class ContentBundleRepository
 
     public abstract Task<ContentEntityDraftRecord?> LoadDraftAsync(Guid draftId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Lists content_entity_drafts with status='draft', ordered by created_at DESC.
+    /// Used by the /demo draft preview surface to populate the draft selector.
+    /// Returns empty list when no drafts exist — not an error.
+    /// </summary>
+    public abstract Task<IReadOnlyList<EntityDraftListItemDto>> ListEntityDraftsAsync(CancellationToken ct = default);
+
     public abstract Task<ContentBundleRefContext> LoadRefContextAsync(
         Guid hubId,
         IReadOnlyList<Guid> relationIds,

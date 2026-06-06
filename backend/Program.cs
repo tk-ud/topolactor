@@ -437,6 +437,100 @@ app.MapGet("/sql-attention/topology-projection", async (
 });
 
 
+// ─── Draft Preview surface endpoints (/draft-preview/*) ──────────────────────
+// Read-only surface for the /demo draft preview UI.
+// All 3 endpoints are JWT-guarded. No write operations, no topology transform pipeline.
+// Explicit failure — no silent fallback.
+
+// GET /draft-preview/layouts — lists admin-authored layout candidates with tensor slots
+app.MapGet("/draft-preview/layouts", async (
+    HttpContext ctx,
+    UiTopologyRepository uiRepo,
+    JwtGuard jwtGuard,
+    CancellationToken ct) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
+
+    var layouts = await uiRepo.ListLayoutCandidatesAsync(ct);
+    return Results.Json(new { success = true, layouts });
+});
+
+// GET /draft-preview/drafts — lists content_entity_drafts with status='draft'
+app.MapGet("/draft-preview/drafts", async (
+    HttpContext ctx,
+    ContentBundleRepository contentRepo,
+    JwtGuard jwtGuard,
+    CancellationToken ct) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
+
+    var drafts = await contentRepo.ListEntityDraftsAsync(ct);
+    return Results.Json(new { success = true, drafts });
+});
+
+// POST /draft-preview/preview — loads layout nodes + draft content for projection preview
+// Request: { layoutId: string, draftId: string }
+// Response: { success, layoutId, draftId, layoutNodes: [{slotKey, orderIndex}], draftEntityJson, draftStatus }
+app.MapPost("/draft-preview/preview", async (
+    HttpContext ctx,
+    DraftPreviewRequest request,
+    TopologyRepository topoRepo,
+    ContentBundleRepository contentRepo,
+    JwtGuard jwtGuard,
+    CancellationToken ct) =>
+{
+    var token = ExtractBearerToken(ctx);
+    var authErrors = jwtGuard.Validate(token);
+    if (authErrors.Count > 0)
+        return Results.Json(new { success = false, errors = authErrors }, statusCode: 401);
+
+    if (string.IsNullOrWhiteSpace(request.LayoutId) || !Guid.TryParse(request.LayoutId, out var layoutId))
+        return Results.Json(new { success = false,
+            errors = new[] { new ValidationError("MALFORMED_LAYOUT_ID", "layoutId must be a non-empty valid UUID.") }
+        }, statusCode: 422);
+
+    if (string.IsNullOrWhiteSpace(request.DraftId) || !Guid.TryParse(request.DraftId, out var draftId))
+        return Results.Json(new { success = false,
+            errors = new[] { new ValidationError("MALFORMED_DRAFT_ID", "draftId must be a non-empty valid UUID.") }
+        }, statusCode: 422);
+
+    var tensorRows = await topoRepo.LoadLayoutNodesAsync(layoutId, ct);
+    if (tensorRows.Count == 0)
+        return Results.Json(new { success = false,
+            errors = new[] { new ValidationError("LAYOUT_NODES_NOT_FOUND",
+                $"layout_id '{layoutId}' has no tensor rows in ui_topology_tensor. " +
+                "Broken layout configuration — no fallback.") }
+        }, statusCode: 422);
+
+    var draft = await contentRepo.LoadDraftAsync(draftId, ct);
+    if (draft is null)
+        return Results.Json(new { success = false,
+            errors = new[] { new ValidationError("DRAFT_NOT_FOUND",
+                $"draft_id '{draftId}' not found in content_entity_drafts.") }
+        }, statusCode: 404);
+
+    var orderedNodes = tensorRows
+        .OrderBy(r => r.OrderIndex)
+        .Select(r => new { slotKey = r.SlotKey, orderIndex = r.OrderIndex, layoutPatchJson = r.LayoutPatchJson })
+        .ToList();
+
+    return Results.Json(new
+    {
+        success = true,
+        layoutId = layoutId.ToString(),
+        draftId = draftId.ToString(),
+        layoutNodes = orderedNodes,
+        draftEntityJson = System.Text.Json.JsonSerializer.Deserialize<object>(draft.EntityJsonb),
+        draftStatus = draft.Status,
+    });
+});
+
 app.MapGet("/sse", async (HttpContext ctx, SseEndpoint sse, JwtGuard jwtGuard) =>
 {
     var token = ExtractBearerToken(ctx);

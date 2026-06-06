@@ -205,6 +205,28 @@ internal sealed class InMemoryContentBundleRepository : ContentBundleRepository
                 existing.CreatedAt.ToString("o"), now.ToString("o")), null));
     }
 
+    public override Task<IReadOnlyList<EntityDraftListItemDto>> ListEntityDraftsAsync(CancellationToken ct = default)
+    {
+        var items = _drafts
+            .Where(d => d.Status == "draft")
+            .OrderByDescending(d => d.CreatedAt)
+            .Select(d =>
+            {
+                string label;
+                try
+                {
+                    var json = System.Text.Json.JsonDocument.Parse(d.EntityJsonb).RootElement;
+                    label = json.TryGetProperty("label", out var l) ? l.GetString() ?? $"Draft {d.DraftId.ToString()[..8]}" :
+                            json.TryGetProperty("name",  out var n) ? n.GetString() ?? $"Draft {d.DraftId.ToString()[..8]}" :
+                            $"Draft {d.DraftId.ToString()[..8]}";
+                }
+                catch { label = $"Draft {d.DraftId.ToString()[..8]}"; }
+                return new EntityDraftListItemDto(d.DraftId.ToString(), label, d.HubId.ToString(), d.Status, d.CreatedAt);
+            })
+            .ToList();
+        return Task.FromResult<IReadOnlyList<EntityDraftListItemDto>>(items);
+    }
+
     public override Task<ContentEntityDraftRecord?> LoadDraftAsync(Guid draftId, CancellationToken ct = default)
         => Task.FromResult(_drafts.FirstOrDefault(d => d.DraftId == draftId));
 

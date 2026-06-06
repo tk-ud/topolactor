@@ -185,3 +185,22 @@ public record ExistingSystemChangeIntakeResponseDto(
     string? QueueStatus,
     IReadOnlyList<ValidationError> Errors
 );
+
+/// <summary>
+/// A draft content entity for the /demo draft preview selector.
+/// Source: topology.content_entity_drafts WHERE status='draft'.
+/// Label is extracted from entity_jsonb (label/name/title fields), fallback to "Draft {id-prefix}".
+/// </summary>
+public record EntityDraftListItemDto(
+    [property: System.Text.Json.Serialization.JsonPropertyName("draftId")] string DraftId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("label")] string Label,
+    [property: System.Text.Json.Serialization.JsonPropertyName("hubId")] string HubId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("status")] string Status,
+    [property: System.Text.Json.Serialization.JsonPropertyName("createdAt")] DateTimeOffset CreatedAt
+);
+
+/// <summary>Request body for POST /draft-preview/preview.</summary>
+public record DraftPreviewRequest(
+    [property: System.Text.Json.Serialization.JsonPropertyName("layoutId")] string? LayoutId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("draftId")] string? DraftId
+);
