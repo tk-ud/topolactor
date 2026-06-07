@@ -60,4 +60,11 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
   - target_ref: "route:<routeKey>" 形式で保存（manifest:... と衝突しない）
   - raw dispatcher fields は <details> PackageWiringEditor のみ（通常導線に出さない）
   - SSOT (admin-console-workflow-ssot.yaml) / roadmap / tests 同一 bundle で更新済み
-  - 残ギャップ: 投影 runtime での route navigation 実行は既存 ui_wiring_registry 行を使用（既存 runtime 判断）
+- [x] 投影 runtime での route navigation 実行を frontend-local lane として実装（runtime 閉鎖）
+  - isNavigationWiringKind / buildRouteNavigationEventBinding を renderEmission.ts に追加
+  - buildRuntimeDispatchSpec: navigation wiringKind → null（backend dispatch しない）
+  - runtimeComponentFactory.ts emitBoundEvent: routeNavigation binding → globalThis.location.href
+  - ManifestDispatcherTargetRefTests: route: prefix → TARGET_REF_INVALID 防衛テスト追加
+  - pipeline-continuity-ssot.yaml: navigation_wiring_execution_contract 追加
+  - admin-console-workflow-ssot.yaml: route_navigation.runtime_execution 追加
+  - roadmap known_gap_ref から runtime navigation gap を削除

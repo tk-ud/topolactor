@@ -637,11 +637,16 @@ pipeline_continuity_ssot:
         renders catalog_component nodes via renderRuntimeComponent(runtimeSpec).
         User events fire TWO explicitly separated lanes:
           1. frontend_component_event_log_lane: emitComponentOperationEvent (observation, always)
-          2. component_wiring_execution_lane: enqueueRuntimeComponentCommand → queueAdminClientCommand
-             (dispatch, when runtimeDispatch configured)
+          2a. component_wiring_execution_lane: enqueueRuntimeComponentCommand → queueAdminClientCommand
+              (dispatch, when runtimeDispatch configured — all wiring kinds except navigation)
+          2b. navigation_wiring_execution_lane: globalThis.location.href
+              (frontend-local, when routeNavigation configured — navigation wiringKind only)
         Frontend is a projection surface only — does NOT judge topology, layout, or promotion.
         wiring_kind → layer mapping: search→screen_list, aggregate→screen_aggregation, CRUD→entity.
         wiring_kind → action mapping: search→Search, aggregate→Search, create→Create, update→diffUpdate, delete→logicalDelete.
+        navigation wiringKind is frontend-local: buildRuntimeDispatchSpec returns null;
+        buildRouteNavigationEventBinding produces routeNavigation binding; route:<routeKey>
+        must never reach ManifestDispatcher as target_ref (TARGET_REF_INVALID if it does).
         target_ref routing: when payload carries target_ref="manifest:<uuid>:<wiring_key>",
         ManifestDispatcher resolves the manifest by UUID (LoadByIdAsync) instead of axes.
         This ensures admin-chosen manifest selection (PackageWiringEditor) is honoured at runtime.
@@ -736,6 +741,7 @@ pipeline_continuity_ssot:
         create: entity
         update: entity
         delete: entity
+        note: navigation is intentionally absent — navigation wiringKind is frontend-local only (see navigation_wiring_execution_contract)
 
       wiring_kind_action_mapping:
         search: Search
@@ -743,6 +749,27 @@ pipeline_continuity_ssot:
         create: Create
         update: diffUpdate
         delete: logicalDelete
+        note: navigation is intentionally absent — navigation wiringKind is frontend-local only (see navigation_wiring_execution_contract)
+
+      navigation_wiring_execution_contract:
+        wiring_kind: navigation
+        execution_lane: frontend_local_only
+        produces_runtime_dispatch_spec: false
+        produces_route_navigation_binding: true
+        target_ref_format: "route:<routeKey>"
+        execution: globalThis.location.href
+        rationale: >
+          navigation wiringKind is frontend-local: buildRuntimeDispatchSpec returns null,
+          buildRouteNavigationEventBinding produces { routeNavigation: { targetRef } } instead
+          of { runtimeDispatch }. emitBoundEvent fires lane 1 (event log) always, then executes
+          client-side navigation from routeNavigation.targetRef. route:<routeKey> must never
+          reach ManifestDispatcher as target_ref — TryParseManifestTargetRef rejects non-manifest
+          prefixes with TARGET_REF_INVALID.
+        backend_dispatch_fields: none
+        defensive_test: >
+          ManifestDispatcherTargetRefTests.DispatchAsync_TargetRef_RoutePrefix_ReturnsTargetRefInvalidError
+          verifies that route: prefix as target_ref returns TARGET_REF_INVALID even if it ever
+          reaches ManifestDispatcher (misconfiguration guard).
 
       prohibited:
         - catalog_component_rendered_as_speccard_in_primary_path
@@ -752,6 +779,8 @@ pipeline_continuity_ssot:
         - dispatch_firing_without_runtimedispatch_configured
         - hardcoded_target_default_layer_entity_in_enqueue
         - wiring_key_or_wiring_id_dropped_before_backend
+        - navigation_wiringkind_in_wiring_kind_layer_or_action_mapping
+        - route_prefix_reaching_manifest_dispatcher_as_target_ref
 
       pipeline_body_test:
         kind: unit_boundary_contract
@@ -765,7 +794,11 @@ pipeline_continuity_ssot:
           - renderEmission builds runtimeSpec for catalog_component with componentKind
           - renderEmission produces error spec when componentKind absent
           - buildRuntimeDispatchSpec includes targetRef from node
-          - parseEventBinding parses full RuntimeDispatchSpec
+          - buildRuntimeDispatchSpec returns null for navigation wiringKind (frontend-local lane)
+          - buildRouteNavigationEventBinding produces routeNavigation binding for route: targetRef
+          - parseEventBinding parses routeNavigation binding; rejects non-route: prefix
           - emitBoundEvent fires both log lane and dispatch lane when runtimeDispatch present
+          - emitBoundEvent executes frontend-local navigation when routeNavigation present
           - enqueueRuntimeComponentCommand forwards wiringKey/wiringId/targetRef in payload
           - ManifestDispatcher routes to specific manifest when target_ref present in payload
+          - ManifestDispatcher returns TARGET_REF_INVALID for route: prefix target_ref (defensive)

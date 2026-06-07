@@ -108,6 +108,8 @@ type EventBindingValue = {
   payload?: Record<string, unknown>;
   /** component_wiring_execution_lane: when present, emitBoundEvent fires runtime dispatch via enqueueRuntimeComponentCommand. */
   runtimeDispatch?: RuntimeDispatchSpec;
+  /** navigation_wiring_execution_lane: when present, emitBoundEvent navigates to route: targetRef locally — no backend dispatch. */
+  routeNavigation?: { targetRef: string };
 };
 
 function parseEventBinding(value: unknown): EventBindingValue | null {
@@ -165,11 +167,27 @@ function parseEventBinding(value: unknown): EventBindingValue | null {
       targetRef: typeof rd.targetRef === "string" ? rd.targetRef : undefined,
     };
   }
+  const routeNavigationRaw = (value as Record<string, unknown>).routeNavigation;
+  let routeNavigation: { targetRef: string } | undefined;
+  if (routeNavigationRaw !== undefined) {
+    if (
+      typeof routeNavigationRaw === "object" &&
+      routeNavigationRaw !== null &&
+      !Array.isArray(routeNavigationRaw)
+    ) {
+      const rn = routeNavigationRaw as Record<string, unknown>;
+      const rnTargetRef = rn.targetRef;
+      if (typeof rnTargetRef === "string" && rnTargetRef.trim().startsWith("route:")) {
+        routeNavigation = { targetRef: rnTargetRef.trim() };
+      }
+    }
+  }
   return {
     eventType: eventType as NormalizedComponentEventType,
     actorOrSource,
     payload: (payload as Record<string, unknown> | undefined) ?? {},
     runtimeDispatch,
+    routeNavigation,
   };
 }
 
@@ -205,6 +223,16 @@ function emitBoundEvent(
   // Fire-and-forget: the FIFO queue in frontendScheduler handles ordering and error propagation.
   if (binding.runtimeDispatch) {
     void enqueueRuntimeComponentCommand(binding.runtimeDispatch);
+  }
+  // Lane 2 (navigation): frontend-local route navigation — no backend dispatch.
+  // route:<routeKey> must not reach ManifestDispatcher; navigation executes client-side only.
+  if (binding.routeNavigation) {
+    const ref = binding.routeNavigation.targetRef;
+    const routeKey = ref.startsWith("route:") ? ref.slice("route:".length).trim() : null;
+    if (routeKey) {
+      const href = routeKey.startsWith("/") ? routeKey : `/${routeKey}`;
+      globalThis.location.href = href;
+    }
   }
   return { ok: true };
 }

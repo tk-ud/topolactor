@@ -42,9 +42,20 @@ export type ComponentSpec = {
 };
 
 /**
+ * Returns true when wiringKind designates frontend-local route navigation.
+ * navigation wiring does NOT produce a backend RuntimeDispatchSpec — execution is
+ * client-side only (globalThis.location.href). route:<routeKey> must never reach
+ * ManifestDispatcher as target_ref.
+ */
+export function isNavigationWiringKind(wiringKind: string): boolean {
+  return wiringKind === "navigation";
+}
+
+/**
  * Maps wiring_kind to the canonical layer for backend dispatch routing.
  * search → screen_list (ScreenDataShapeQueryRuntime), aggregate → screen_aggregation,
  * CRUD kinds → entity (RuntimeExecutor CRUD path).
+ * navigation is excluded — it is frontend-local and must not enter this mapping.
  */
 export function mapWiringKindToLayer(wiringKind: string): string {
   if (wiringKind === "search") return "screen_list";
@@ -70,11 +81,13 @@ export function mapWiringKindToAction(wiringKind: string): string {
 /**
  * Builds a RuntimeDispatchSpec from a layout node's wiring metadata.
  * Returns null when no wiringKind is set (no wiring configured → log lane only).
+ * Returns null for navigation wiringKind — navigation is frontend-local, not backend dispatch.
  * target = targetSurface || "default"; layer derived from wiringKind.
  */
 export function buildRuntimeDispatchSpec(node: EmissionLayoutNode): RuntimeDispatchSpec | null {
   const wiringKind = node.wiringKind;
   if (!wiringKind) return null;
+  if (isNavigationWiringKind(wiringKind)) return null;
   const action = mapWiringKindToAction(wiringKind);
   const layer = mapWiringKindToLayer(wiringKind);
   const target = (node.targetSurface && node.targetSurface.trim()) ? node.targetSurface.trim() : "default";
@@ -115,6 +128,26 @@ export function buildCatalogComponentEventBinding(
   const binding: Record<string, unknown> = {};
   for (const trigger of triggers) {
     binding[trigger] = { eventType: trigger, runtimeDispatch: spec };
+  }
+  return binding;
+}
+
+/**
+ * Builds an eventBinding for a navigation wiringKind node.
+ * Populates standard triggers each carrying routeNavigation: { targetRef } instead of
+ * runtimeDispatch, so emitBoundEvent executes frontend-local route navigation (not backend dispatch).
+ * Returns empty object when targetRef is absent or not a route: prefix.
+ */
+export function buildRouteNavigationEventBinding(
+  targetRef: string | null | undefined,
+): Record<string, unknown> {
+  if (!targetRef) return {};
+  const ref = targetRef.trim();
+  if (!ref.startsWith("route:")) return {};
+  const triggers = ["click", "change", "select", "submit", "toggle"] as const;
+  const binding: Record<string, unknown> = {};
+  for (const trigger of triggers) {
+    binding[trigger] = { eventType: trigger, routeNavigation: { targetRef: ref } };
   }
   return binding;
 }
@@ -245,8 +278,11 @@ export function renderEmission(
           };
         }
 
-        // Build full dispatch spec from admin-configured wiring metadata.
-        const dispatchSpec = buildRuntimeDispatchSpec(node);
+        // navigation wiring: frontend-local route navigation binding; other wiring kinds: backend dispatch spec.
+        const nodeWiringKind = node.wiringKind ?? "";
+        const componentEventBinding = isNavigationWiringKind(nodeWiringKind)
+          ? buildRouteNavigationEventBinding(node.targetRef)
+          : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
 
         ensureRuntimeComponentRegistryInitialized();
         const hub: ComponentDataHub = {
@@ -256,7 +292,7 @@ export function renderEmission(
           layoutId: emission.layoutId ?? null,
           wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
           props: buildDefaultCatalogComponentProps(node),
-          eventBinding: buildCatalogComponentEventBinding(dispatchSpec),
+          eventBinding: componentEventBinding,
           design: undefined,
         };
         const adapted = adaptComponentDataHub(hub);

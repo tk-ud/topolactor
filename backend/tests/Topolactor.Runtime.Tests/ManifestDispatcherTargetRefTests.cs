@@ -140,6 +140,25 @@ public class ManifestDispatcherTargetRefTests
         Assert.False(repo.ResolveAxesCalled);
     }
 
+    // ─── route: prefix target_ref: explicit TARGET_REF_INVALID ──────────────
+    // Defensive: navigation wiring is frontend-local, so route:<routeKey> must not
+    // reach ManifestDispatcher. If it ever does (misconfiguration), ManifestDispatcher
+    // returns TARGET_REF_INVALID explicitly — no silent axes-fallback.
+
+    [Fact]
+    public async Task DispatchAsync_TargetRef_RoutePrefix_ReturnsTargetRefInvalidError()
+    {
+        var repo = new TrackingManifestRepository(KnownManifestId);
+        var dispatcher = BuildDispatcher(repo);
+
+        var response = await dispatcher.DispatchAsync(MakeRequest(BuildPayload(targetRef: "route:/admin/manifests")));
+
+        Assert.False(response.Success);
+        Assert.Contains(response.Errors, e => e.Code == "TARGET_REF_INVALID");
+        Assert.False(repo.LoadByIdCalled, "LoadByIdAsync must not be called for route: target_ref");
+        Assert.False(repo.ResolveAxesCalled, "Axes resolution must not be called when target_ref is present but malformed");
+    }
+
     // ─── valid target_ref format but manifest not found ───────────────────────
 
     [Fact]

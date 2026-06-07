@@ -1405,7 +1405,6 @@ system_roadmap_ssot:
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
-        - route navigation projection at runtime uses existing ui_wiring_registry row; no additional backend projection code added in this bundle (existing runtime judgment)
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
