@@ -36,6 +36,10 @@ import {
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
   UX_ROUTE_KEY_REQUIRED_FOR_CANVAS,
+  UX_ROUTE_NAVIGATION_NONE_LABEL,
+  UX_ROUTE_NAVIGATION_PRESET_LABEL,
+  UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL,
+  UX_ROUTE_NAVIGATION_SAVE_LABEL,
   UX_UI_BUILDER_TAB_LABELS,
 } from "../content/adminUxTerms.ts";
 import {
@@ -76,10 +80,13 @@ import { PACKAGE_WIRING_TARGET_SURFACES } from "../lib/packageWiringOptions.ts";
 import {
   buildWiringKindSelectOptions,
   encodeManifestPackageTargetRef,
+  encodeRouteNavigationTargetRef,
+  isRouteNavigationTargetRef,
   manifestIdFromTargetRef,
   type ManifestPickerOption,
   manifestWiringKeyFromTargetRef,
   mergeManifestPickerOptions,
+  parseRouteNavigationTargetRef,
 } from "../lib/packageWiringPicker.ts";
 import {
   buildScreenReadQueryWiringCandidates,
@@ -519,6 +526,7 @@ function LayoutRightDock({
   onUpdateNode,
   onCommitNode,
   onToggleLayoutClassRef,
+  routeCandidates,
 }: {
   draftNodes: DraftNode[];
   selectedNodeId: string | null;
@@ -532,6 +540,7 @@ function LayoutRightDock({
   onUpdateNode: (updates: Partial<DraftNode>) => void;
   onCommitNode: (updates: Partial<DraftNode>, label: string) => void;
   onToggleLayoutClassRef: (classKey: string) => void;
+  routeCandidates?: string[];
 }): JSX.Element {
   return (
     <aside
@@ -577,6 +586,7 @@ function LayoutRightDock({
             <PackageDesignPanel
               selectedPackageId={packageId}
               selectedCanvasNode={selectedNode}
+              routeCandidates={routeCandidates}
             />
           </Accordion>
         </>
@@ -4332,6 +4342,7 @@ function LayoutBuilderSection({
     !packageAuthoringReady;
   const canPatch = packageAuthoringReady &&
     Boolean(effectiveLayoutId && effectiveRouteKey);
+  const routeOptions = uniqueRouteKeys(layoutCandidates);
 
   const rejectDraftPaletteEntry = (entry: PaletteEntry): boolean => {
     if (!packageScopedLayout) {
@@ -5711,6 +5722,7 @@ function LayoutBuilderSection({
           onCommitNode={(updates, label) => selectedNode && commitNodeUpdate(selectedNode.nodeId, updates, label)}
           onToggleLayoutClassRef={(classKey) =>
             selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+          routeCandidates={routeOptions}
         />
       </div>
 
@@ -5919,6 +5931,158 @@ type AdminPackageWiringRow = {
   targetSurface: string;
   targetRef?: string | null;
 };
+
+/**
+ * Normal-view route navigation preset for package-level wiring.
+ * Allows authors to configure "click → navigate to route" in business vocabulary
+ * without exposing raw dispatcher fields.
+ * Raw wiring fields remain in <details> PackageWiringEditor below.
+ */
+function RouteNavigationWiringPreset({
+  selectedPackageId,
+  routeCandidates,
+}: {
+  selectedPackageId: string;
+  routeCandidates: string[];
+}): JSX.Element {
+  const [savedRouteKey, setSavedRouteKey] = useState<string | null>(null);
+  const [selectedRouteKey, setSelectedRouteKey] = useState("");
+  const [wiringId, setWiringId] = useState<string | null>(null);
+  const [loadStatus, setLoadStatus] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!selectedPackageId) {
+      setSavedRouteKey(null);
+      setSelectedRouteKey("");
+      setWiringId(null);
+      setLoadStatus(null);
+      setSaveStatus(null);
+      return;
+    }
+    (async () => {
+      setLoadStatus("読み込み中…");
+      setSaveStatus(null);
+      const body = await dispatchAdminOp("ui_topology", "get_package_wiring", {
+        packageId: selectedPackageId,
+      });
+      const data = body?.emission?.data as AdminPackageWiringRow | undefined;
+      if (data?.wiringId) {
+        setWiringId(data.wiringId);
+        if (isRouteNavigationTargetRef(data.targetRef)) {
+          const rk = parseRouteNavigationTargetRef(data.targetRef ?? "");
+          setSavedRouteKey(rk);
+          setSelectedRouteKey(rk ?? "");
+        } else {
+          setSavedRouteKey(null);
+          setSelectedRouteKey("");
+        }
+        setLoadStatus(null);
+      } else {
+        setWiringId(null);
+        setSavedRouteKey(null);
+        setLoadStatus(
+          body?.errors?.[0]?.message ?? "配線が未登録です（ルートを確定後に配線が生成されます）。",
+        );
+      }
+    })();
+  }, [selectedPackageId]);
+
+  const handleSaveRouteNavigation = async () => {
+    if (!wiringId) {
+      setSaveStatus("配線が未登録です。先にルートを選択してパッケージを確定してください。");
+      return;
+    }
+    setSaving(true);
+    setSaveStatus(null);
+    const nextTargetRef = selectedRouteKey
+      ? encodeRouteNavigationTargetRef(selectedRouteKey)
+      : null;
+    try {
+      const body = await dispatchAdminOp(
+        "ui_topology",
+        "update_package_wiring",
+        {
+          packageId: selectedPackageId,
+          wiringId,
+          wiringKind: "navigation",
+          targetSurface: "route",
+          targetRef: nextTargetRef,
+        },
+      );
+      const refreshed = body?.emission?.data?.wiring as
+        | AdminPackageWiringRow
+        | undefined;
+      if (body?.success && refreshed?.wiringId) {
+        setWiringId(refreshed.wiringId);
+        if (isRouteNavigationTargetRef(refreshed.targetRef)) {
+          const rk = parseRouteNavigationTargetRef(refreshed.targetRef ?? "");
+          setSavedRouteKey(rk);
+          setSelectedRouteKey(rk ?? "");
+        } else {
+          setSavedRouteKey(null);
+          setSelectedRouteKey("");
+        }
+        setSaveStatus("ルート遷移の配線を保存しました。");
+      } else {
+        setSaveStatus(body?.errors?.[0]?.message ?? "保存に失敗しました。");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isDirty = selectedRouteKey !== (savedRouteKey ?? "");
+
+  return (
+    <section class="mb-4 rounded border border-emerald-100 bg-emerald-50/40 p-3 text-xs">
+      <h4 class="mb-1 font-semibold text-emerald-900">
+        {UX_ROUTE_NAVIGATION_PRESET_LABEL}
+      </h4>
+      {loadStatus
+        ? <p class="text-slate-600">{loadStatus}</p>
+        : (
+          <>
+            <label class="block">
+              {UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL}
+              <select
+                class="mt-1 w-full rounded border bg-white px-2 py-1 text-xs"
+                value={selectedRouteKey}
+                onChange={(e) =>
+                  setSelectedRouteKey((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">{UX_ROUTE_NAVIGATION_NONE_LABEL}</option>
+                {routeCandidates.map((rk) => (
+                  <option key={rk} value={rk}>{rk}</option>
+                ))}
+              </select>
+            </label>
+            {savedRouteKey && (
+              <p class="mt-1 text-[0.7rem] text-emerald-800">
+                保存済み: <span class="font-mono">{savedRouteKey}</span>
+              </p>
+            )}
+            <button
+              type="button"
+              class={`btn-primary mt-2 text-xs ${
+                (!isDirty || saving || !wiringId)
+                  ? "opacity-50 cursor-not-allowed"
+                  : ""
+              }`}
+              disabled={!isDirty || saving || !wiringId}
+              onClick={handleSaveRouteNavigation}
+            >
+              {saving ? "保存中…" : UX_ROUTE_NAVIGATION_SAVE_LABEL}
+            </button>
+          </>
+        )}
+      {saveStatus && (
+        <p class="mt-2 text-xs font-semibold text-emerald-900">{saveStatus}</p>
+      )}
+    </section>
+  );
+}
 
 function PackageWiringEditor({
   selectedPackageId,
@@ -6397,9 +6561,11 @@ function mapSavedDesignRow(
 function PackageDesignPanel({
   selectedPackageId,
   selectedCanvasNode,
+  routeCandidates,
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
+  routeCandidates?: string[];
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [designName, setDesignName] = useState("");
@@ -6831,6 +6997,13 @@ function PackageDesignPanel({
           placeholder="例: ホバーで背景を primary に変化"
         />
       </label>
+
+      {selectedPackageId && (
+        <RouteNavigationWiringPreset
+          selectedPackageId={selectedPackageId}
+          routeCandidates={routeCandidates ?? []}
+        />
+      )}
 
       <details class="mb-4 rounded border border-slate-200 p-3">
         <summary class="cursor-pointer text-xs font-semibold text-slate-700">

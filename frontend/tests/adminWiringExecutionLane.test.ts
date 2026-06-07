@@ -1,7 +1,9 @@
 import { assertEquals, assertExists, assertStringIncludes } from "https://deno.land/std@0.208.0/assert/mod.ts";
 import {
   buildCatalogComponentEventBinding,
+  buildRouteNavigationEventBinding,
   buildRuntimeDispatchSpec,
+  isNavigationWiringKind,
   mapWiringKindToAction,
   mapWiringKindToLayer,
 } from "../runtime/renderEmission.ts";
@@ -473,4 +475,140 @@ Deno.test("renderEmission: catalog_component dispatch spec uses screen_list laye
   assertEquals(rd.layer, "screen_list");
   assertEquals(rd.target, "screen");
   assertEquals(rd.action, "Search");
+});
+
+// ─── isNavigationWiringKind ───────────────────────────────────────────────────
+
+Deno.test("isNavigationWiringKind: navigation returns true", () => {
+  assertEquals(isNavigationWiringKind("navigation"), true);
+});
+
+Deno.test("isNavigationWiringKind: search/create/update/delete/empty return false", () => {
+  assertEquals(isNavigationWiringKind("search"), false);
+  assertEquals(isNavigationWiringKind("create"), false);
+  assertEquals(isNavigationWiringKind("update"), false);
+  assertEquals(isNavigationWiringKind("delete"), false);
+  assertEquals(isNavigationWiringKind(""), false);
+});
+
+// ─── buildRuntimeDispatchSpec: navigation guard ────────────────────────────────
+
+Deno.test("buildRuntimeDispatchSpec: navigation wiringKind returns null (frontend-local lane)", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "navigation",
+    targetSurface: "route",
+    targetRef: "route:/admin/manifests",
+  });
+  assertEquals(spec, null, "navigation wiringKind must not produce a backend dispatch spec");
+});
+
+Deno.test("buildRuntimeDispatchSpec: route: targetRef never appears in dispatch spec for navigation wiring", () => {
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "navigation",
+    targetSurface: "route",
+    targetRef: "route:/admin",
+  });
+  assertEquals(spec, null, "no dispatch spec means route: prefix cannot reach ManifestDispatcher");
+});
+
+// ─── buildRouteNavigationEventBinding ─────────────────────────────────────────
+
+Deno.test("buildRouteNavigationEventBinding: valid route: targetRef builds routeNavigation binding", () => {
+  const binding = buildRouteNavigationEventBinding("route:/admin/manifests");
+  const triggers = ["click", "change", "select", "submit", "toggle"];
+  for (const trigger of triggers) {
+    assertExists(binding[trigger], `trigger '${trigger}' must be present`);
+    const val = binding[trigger] as Record<string, unknown>;
+    assertEquals(val.eventType, trigger);
+    const rn = val.routeNavigation as Record<string, unknown>;
+    assertExists(rn, "routeNavigation must be present");
+    assertEquals(rn.targetRef, "route:/admin/manifests");
+    assertEquals(val.runtimeDispatch, undefined, "runtimeDispatch must NOT be present on navigation binding");
+  }
+});
+
+Deno.test("buildRouteNavigationEventBinding: manifest: targetRef returns empty binding", () => {
+  const binding = buildRouteNavigationEventBinding("manifest:aaaaaaaa-bbbb-cccc-dddd-000000000001:key");
+  assertEquals(Object.keys(binding).length, 0);
+});
+
+Deno.test("buildRouteNavigationEventBinding: null/undefined/empty targetRef returns empty binding", () => {
+  assertEquals(Object.keys(buildRouteNavigationEventBinding(null)).length, 0);
+  assertEquals(Object.keys(buildRouteNavigationEventBinding(undefined)).length, 0);
+  assertEquals(Object.keys(buildRouteNavigationEventBinding("")).length, 0);
+});
+
+// ─── parseEventBinding: routeNavigation ──────────────────────────────────────
+
+Deno.test("parseEventBinding: routeNavigation binding is parsed correctly", () => {
+  const rawBinding = {
+    eventType: "click",
+    routeNavigation: { targetRef: "route:/admin/manifests" },
+  };
+  const parsed = factoryTestOnly.parseEventBinding(rawBinding);
+  assertExists(parsed, "parseEventBinding must return a value");
+  assertExists(parsed!.routeNavigation, "routeNavigation must be parsed");
+  assertEquals(parsed!.routeNavigation!.targetRef, "route:/admin/manifests");
+  assertEquals(parsed!.runtimeDispatch, undefined, "runtimeDispatch must be absent on navigation binding");
+});
+
+Deno.test("parseEventBinding: non-route: routeNavigation targetRef is rejected (undefined)", () => {
+  const rawBinding = {
+    eventType: "click",
+    routeNavigation: { targetRef: "screen:some-key" },
+  };
+  const parsed = factoryTestOnly.parseEventBinding(rawBinding);
+  assertExists(parsed, "parseEventBinding must return non-null for valid eventType");
+  assertEquals(parsed!.routeNavigation, undefined, "routeNavigation must be rejected for non-route: prefix");
+});
+
+// ─── manifest wiring regression: unchanged by navigation changes ───────────────
+
+Deno.test("buildRuntimeDispatchSpec: manifest wiring (search) still produces backend dispatch spec", () => {
+  const manifestId = "aaaaaaaa-bbbb-cccc-dddd-000000000001";
+  const spec = buildRuntimeDispatchSpec({
+    orderIndex: 0,
+    wiringKind: "search",
+    targetSurface: "screen",
+    targetRef: `manifest:${manifestId}:search_key`,
+    wiringKey: "search_key",
+    wiringId: "wiring-001",
+  });
+  assertExists(spec);
+  assertEquals(spec!.layer, "screen_list");
+  assertEquals(spec!.targetRef, `manifest:${manifestId}:search_key`);
+  assertEquals(spec!.action, "Search");
+});
+
+// ─── renderEmission: navigation wiring uses routeNavigation binding ───────────
+
+Deno.test("renderEmission: catalog_component with navigation wiringKind uses routeNavigation binding not runtimeDispatch", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-nav-001",
+    layoutNodes: [
+      {
+        nodeId: "node-nav-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-nav-001",
+        componentKind: "action/button",
+        componentKey: "GoToManifests",
+        wiringKind: "navigation",
+        targetSurface: "route",
+        targetRef: "route:/admin/manifests",
+        orderIndex: 0,
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry);
+  assertEquals(specs.length, 1);
+  assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
+  const clickBinding = specs[0].runtimeSpec!.eventBinding["click"] as Record<string, unknown>;
+  assertExists(clickBinding, "click binding must be present");
+  const rn = clickBinding.routeNavigation as Record<string, unknown>;
+  assertExists(rn, "routeNavigation must be present for navigation wiring");
+  assertEquals(rn.targetRef, "route:/admin/manifests");
+  assertEquals(clickBinding.runtimeDispatch, undefined, "runtimeDispatch must NOT be present for navigation wiring");
 });

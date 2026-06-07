@@ -1,6 +1,28 @@
 import { mergeWiringKindSuggestions } from "./packageWiringOptions.ts";
 import type { ScreenReadQueryWiringCandidate } from "./screenReadQueryWiring.ts";
 
+/** Prefix for route navigation target_ref. Distinct from manifest:<uuid>:... */
+export const ROUTE_NAV_PREFIX = "route:";
+
+/** Encode a routeKey as a route navigation target_ref. */
+export function encodeRouteNavigationTargetRef(routeKey: string): string {
+  return `${ROUTE_NAV_PREFIX}${routeKey.trim()}`;
+}
+
+/** Extract routeKey from a route navigation target_ref, or null if not a route nav ref. */
+export function parseRouteNavigationTargetRef(targetRef: string): string | null {
+  const trimmed = targetRef.trim();
+  if (!trimmed.startsWith(ROUTE_NAV_PREFIX)) return null;
+  const key = trimmed.slice(ROUTE_NAV_PREFIX.length).trim();
+  return key || null;
+}
+
+/** Returns true when target_ref encodes a route navigation wiring. */
+export function isRouteNavigationTargetRef(targetRef: string | null | undefined): boolean {
+  if (!targetRef) return false;
+  return targetRef.trim().startsWith(ROUTE_NAV_PREFIX);
+}
+
 export type ManifestPickerOption = {
   manifestId: string;
   label: string;

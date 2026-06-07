@@ -307,3 +307,9 @@ export const UX_DESIGN_INSPECTOR_SECTION = "デザインインスペクタ";
 /** /admin/ui-builder は canvas workspace + docked inspectors の単一 authoring surface。 */
 export const UX_LAYOUT_EDITOR_SURFACE = "canvas workspace";
 export const UX_DESIGN_EDITOR_SURFACE = "デザインインスペクタ";
+
+/** Route navigation default wiring preset — normal-view labels. */
+export const UX_ROUTE_NAVIGATION_PRESET_LABEL = "クリック時に指定ルートへ移動";
+export const UX_ROUTE_NAVIGATION_NONE_LABEL = "（移動しない）";
+export const UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL = "移動先ルートを選択";
+export const UX_ROUTE_NAVIGATION_SAVE_LABEL = "ルート遷移の配線を保存";

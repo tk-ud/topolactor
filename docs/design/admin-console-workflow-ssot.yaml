@@ -534,9 +534,39 @@ admin_console_workflow_ssot:
         - package-only canvas workspace (配置・色・形・リアクション等 in docked inspector panels)
         - canvas_workspace_contract: full-width canvas + docked panels (ref ui_builder_canvas_workspace.canvas_workspace_contract)
         - component-level wiring from registry references
+        - default_route_navigation_wiring: normal-view preset allowing authors to configure
+            "click → navigate to route" via RouteNavigationWiringPreset without exposing raw
+            dispatcher fields; saved as targetSurface:route / targetRef:route:<routeKey> /
+            wiringKind:navigation via ui_topology:update_package_wiring; raw wiring fields
+            remain in advanced details disclosure only
         - post-apply CI / guard handoff (does not change runtime semantics)
       edit_target_contract_ref: ui_builder_canvas_workspace.edit_target_contract
       canvas_workspace_contract_ref: ui_builder_canvas_workspace.canvas_workspace_contract
+      default_wiring_presets:
+        route_navigation:
+          normal_view_label: "クリック時に指定ルートへ移動"
+          target_ref_format: "route:<routeKey>"
+          target_surface: route
+          wiring_kind: navigation
+          route_candidates_source: ui_topology:layout_candidates uniqueRouteKeys
+          prohibited:
+            - raw wiring_kind / target_surface / wiring_id in normal view
+            - frontend direct DB write
+            - free text route entry (candidates only from layout_candidates)
+          encode_helper: frontend/lib/packageWiringPicker.ts encodeRouteNavigationTargetRef
+          parse_helper: frontend/lib/packageWiringPicker.ts parseRouteNavigationTargetRef
+          runtime_execution:
+            lane: frontend_local_only
+            execution: globalThis.location.href from routeNavigation.targetRef
+            backend_dispatch: none
+            guard: >
+              buildRuntimeDispatchSpec returns null for navigation wiringKind;
+              route:<routeKey> does not reach ManifestDispatcher.
+              Defensive: if route: prefix reaches ManifestDispatcher (misconfiguration),
+              TryParseManifestTargetRef returns false → TARGET_REF_INVALID.
+            implementation_ref: >
+              frontend/runtime/renderEmission.ts isNavigationWiringKind / buildRouteNavigationEventBinding;
+              frontend/runtime/runtimeComponentFactory.ts emitBoundEvent routeNavigation lane
       explicitly_out_of_scope:
         - manifest empty register and logical/physical table authoring (contents pipeline steps 1–3 — /admin/contents)
         - runtime judgment ownership
