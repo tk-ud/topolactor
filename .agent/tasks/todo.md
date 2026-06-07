@@ -8,27 +8,11 @@
 
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
-| `auth-refresh-state-revalidation` | Auth refresh 状態再検証 gap | not_started | 1 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
 | `auth-users-update-state-action-alignment` | Auth users update_state action 整合 gap | not_started | 1 | `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `auth-refresh-cookie-secure-policy` | Auth refresh cookie Secure policy gap | not_started | 1 | `docs/design/auth-db-session-credential-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-
----
-
-## Bundle `auth-refresh-state-revalidation`
-
-**Status:** not_started  
-**SSOT:** `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml`  
-**Source:** reclassified from `owner-decision-required-sso-audit` OD-1 on 2026-06-07
-
-SSOT 上、`active=false` / `approve=false` / `suspended` / suspension window は login denial condition であり、refresh token による新 JWT 発行経路で例外扱いする設計根拠はない。Owner 判断待ちではなく、SSOT に対する実装不足として扱う。
-
-- [ ] `backend/service/AuthService.cs#RefreshAsync` は refresh token の realm/audience 検証後、新 access JWT 発行前に現在の `auth.users` 状態を再取得し、`EvaluateLoginState` 相当で fail-close する
-- [ ] `backend/repository/AuthRepository.cs` / `backend/repository/NpgsqlAuthRepository.cs` / test fake repositories は refresh record から再検証に必要な user state を取得できるようにする
-- [ ] state 再検証で拒否した場合は新 refresh token を発行せず、可能なら該当 refresh token/session を revoke する
-- [ ] refresh state denial の回帰テストを追加する
 
 ---
 

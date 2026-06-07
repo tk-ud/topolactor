@@ -57,6 +57,20 @@ internal sealed class FakeAuthRepository : AuthRepository
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
         Task.FromResult(Guid.NewGuid());
 
+    private readonly Dictionary<Guid, AuthUserRecord> _userStates = new();
+
+    public void SetUserState(AuthUserRecord record) =>
+        _userStates[record.UserId] = record;
+
+    public override Task<AuthUserRecord?> GetUserStateByIdAsync(Guid userId, CancellationToken ct = default)
+    {
+        if (_userStates.TryGetValue(userId, out var r)) return Task.FromResult<AuthUserRecord?>(r);
+        var entry = _users.FirstOrDefault(kv => kv.Value.UserId == userId);
+        if (entry.Key is null) return Task.FromResult<AuthUserRecord?>(null);
+        return Task.FromResult<AuthUserRecord?>(new AuthUserRecord(
+            entry.Value.UserId, entry.Key, Active: true, Approve: true, Status: "active"));
+    }
+
     private readonly Dictionary<string, AuthRefreshTokenRecord> _refresh = new();
 
     public void SeedRefreshToken(string plain, AuthRefreshTokenRecord record) =>
