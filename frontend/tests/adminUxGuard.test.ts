@@ -38,9 +38,21 @@ import {
   UX_FIELD_SEARCH_CONDITIONS,
   UX_FIELD_SEARCH_KEY,
   UX_MAIN_FLOW_STEP_LABELS,
+  UX_ROUTE_NAVIGATION_NONE_LABEL,
+  UX_ROUTE_NAVIGATION_PRESET_LABEL,
+  UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL,
+  UX_ROUTE_NAVIGATION_SAVE_LABEL,
   UX_RUNTIME_DESTINATION_LABELS,
   UX_STATUS_LABELS,
 } from "../content/adminUxTerms.ts";
+import {
+  encodeManifestPackageTargetRef,
+  encodeRouteNavigationTargetRef,
+  isRouteNavigationTargetRef,
+  parseManifestPackageTargetRef,
+  parseRouteNavigationTargetRef,
+  ROUTE_NAV_PREFIX,
+} from "../lib/packageWiringPicker.ts";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
   clearManifestScreenDesignLocal,
@@ -1846,4 +1858,142 @@ Deno.test("adminUxTerms: Step3 progressive disclosure labels are non-empty", () 
   assertEquals(UX_FIELD_ADD_SEARCH_CONDITION, "検索条件を追加");
   assertEquals(UX_FIELD_LOGICAL_CONDITION, "論理条件");
   assertEquals(UX_FIELD_HAVING_CONDITIONS, "集計後の絞り込み（詳細）");
+});
+
+// ─── Route navigation wiring preset ──────────────────────────────────────────
+
+Deno.test("encodeRouteNavigationTargetRef: round-trip with parseRouteNavigationTargetRef", () => {
+  const routeKey = "admin/demo";
+  const encoded = encodeRouteNavigationTargetRef(routeKey);
+  assertEquals(encoded, `${ROUTE_NAV_PREFIX}${routeKey}`);
+  assertEquals(parseRouteNavigationTargetRef(encoded), routeKey);
+});
+
+Deno.test("encodeRouteNavigationTargetRef: produces route: prefix not manifest: prefix", () => {
+  const encoded = encodeRouteNavigationTargetRef("some/route");
+  assert(encoded.startsWith("route:"), "must start with route:");
+  assertFalse(encoded.startsWith("manifest:"), "must not start with manifest:");
+});
+
+Deno.test("parseRouteNavigationTargetRef: returns null for manifest: refs", () => {
+  const manifestRef =
+    "manifest:00000000-0000-0000-0000-000000000001:someWiringKey";
+  assertEquals(
+    parseRouteNavigationTargetRef(manifestRef),
+    null,
+    "manifest: ref must not parse as route navigation",
+  );
+});
+
+Deno.test("parseRouteNavigationTargetRef: returns null for empty string", () => {
+  assertEquals(parseRouteNavigationTargetRef(""), null);
+  assertEquals(parseRouteNavigationTargetRef("route:"), null, "bare prefix without key must return null");
+});
+
+Deno.test("isRouteNavigationTargetRef: true for route: refs, false for others", () => {
+  assert(isRouteNavigationTargetRef("route:admin/demo"));
+  assertFalse(isRouteNavigationTargetRef("manifest:uuid:key"));
+  assertFalse(isRouteNavigationTargetRef(""));
+  assertFalse(isRouteNavigationTargetRef(null));
+  assertFalse(isRouteNavigationTargetRef(undefined));
+});
+
+Deno.test("encodeManifestPackageTargetRef round-trip still works after route nav addition", () => {
+  // Existing manifest wiring must not be broken
+  const encoded = encodeManifestPackageTargetRef(
+    "00000000-0000-0000-0000-000000000001",
+    "someKey",
+  );
+  assertEquals(
+    encoded,
+    "manifest:00000000-0000-0000-0000-000000000001:someKey",
+  );
+  const parsed = parseManifestPackageTargetRef(encoded);
+  assertEquals(parsed?.manifestId, "00000000-0000-0000-0000-000000000001");
+  assertEquals(parsed?.wiringKey, "someKey");
+});
+
+Deno.test("UX route navigation labels: are user-facing and non-empty without internal terms", () => {
+  for (const label of [
+    UX_ROUTE_NAVIGATION_PRESET_LABEL,
+    UX_ROUTE_NAVIGATION_NONE_LABEL,
+    UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL,
+    UX_ROUTE_NAVIGATION_SAVE_LABEL,
+  ]) {
+    assert(label.length > 0, `label must be non-empty: ${label}`);
+    assertFalse(
+      label.toLowerCase().includes("dispatcher"),
+      `label must not expose dispatcher: ${label}`,
+    );
+    assertFalse(
+      label.toLowerCase().includes("wiring_kind"),
+      `label must not expose wiring_kind: ${label}`,
+    );
+    assertFalse(
+      label.toLowerCase().includes("target_ref"),
+      `label must not expose target_ref: ${label}`,
+    );
+  }
+});
+
+Deno.test("UiBuilderAdmin: route navigation preset exists in normal view without raw dispatcher fields", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // RouteNavigationWiringPreset component must exist
+  assert(
+    src.includes("RouteNavigationWiringPreset"),
+    "RouteNavigationWiringPreset component must exist",
+  );
+  // Must use UX labels (not raw field names)
+  assert(
+    src.includes("UX_ROUTE_NAVIGATION_PRESET_LABEL"),
+    "must use UX_ROUTE_NAVIGATION_PRESET_LABEL",
+  );
+  assert(
+    src.includes("UX_ROUTE_NAVIGATION_SAVE_LABEL"),
+    "must use UX_ROUTE_NAVIGATION_SAVE_LABEL",
+  );
+  // Must use encode/parse helpers
+  assert(
+    src.includes("encodeRouteNavigationTargetRef"),
+    "must use encodeRouteNavigationTargetRef",
+  );
+  assert(
+    src.includes("isRouteNavigationTargetRef"),
+    "must use isRouteNavigationTargetRef",
+  );
+  // RouteNavigationWiringPreset must be placed BEFORE the <details> wiring section
+  const presetIdx = src.indexOf("<RouteNavigationWiringPreset");
+  const detailsIdx = src.indexOf(
+    '<details class="mb-4 rounded border border-slate-200 p-3">',
+  );
+  assert(presetIdx >= 0, "RouteNavigationWiringPreset must be rendered");
+  assert(detailsIdx >= 0, "details wiring section must exist");
+  assert(
+    presetIdx < detailsIdx,
+    "preset must appear before technical details section",
+  );
+});
+
+Deno.test("UiBuilderAdmin: raw dispatcher fields remain inside details disclosure not in normal path", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // Verify that 'wiringKind' (raw field) remains only inside PackageWiringEditor (inside <details>)
+  // and not exposed by RouteNavigationWiringPreset
+  const presetStart = src.indexOf("function RouteNavigationWiringPreset(");
+  const presetEnd = src.indexOf("\nfunction PackageWiringEditor(");
+  assert(presetStart >= 0, "RouteNavigationWiringPreset must exist");
+  assert(presetEnd > presetStart, "PackageWiringEditor must follow");
+  const presetBody = src.slice(presetStart, presetEnd);
+  // Preset should NOT render raw wiringKind select, targetSurface select, or wiringId
+  assertFalse(
+    presetBody.includes("配線種別 (wiring_kind)"),
+    "preset must not show raw wiring_kind label",
+  );
+  assertFalse(
+    presetBody.includes("接続先サーフェス"),
+    "preset must not show raw target surface select",
+  );
 });

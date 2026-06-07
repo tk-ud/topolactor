@@ -1344,6 +1344,11 @@ system_roadmap_ssot:
         selectable settings, validate→preview→explicit apply route, and CI audit handoff.
         Raw dispatcher fields (role/target/layer/action) and advanced wiring inputs are
         isolated in AdvancedManualOverride disclosures. Legacy/debug wrappers deleted.
+        Default route navigation wiring preset added: RouteNavigationWiringPreset in
+        PackageDesignPanel normal view allows authors to set "click → navigate to route" via
+        business-language UI (クリック時に指定ルートへ移動); saved as route:<routeKey> in
+        ui_wiring_registry via existing update_package_wiring; raw dispatcher fields remain
+        in details disclosure only; encode/parse round-trip tested in adminUxGuard.test.ts.
         Regression coverage in adminUxGuard.test.ts and AdminRuntimeManifestManagementTests.cs.
       files:
         - frontend/routes/admin/
@@ -1370,7 +1375,7 @@ system_roadmap_ssot:
         - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
       evidence:
         tests:
-          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, progressive disclosure/raw input guards, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields)
+          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, progressive disclosure/raw input guards, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields, route navigation encode/parse round-trip, manifest wiring regression, normal view raw field guard)
           - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
         ci:
           - frontend-types
@@ -1386,6 +1391,7 @@ system_roadmap_ssot:
         - admin_manifests_route_owns_existing_manifest_relation_hub_navigation_and_page_group_operations
         - admin_contents_wizard_supports_DB_reference_columns_initial_data_optional_table_relation_search_key_aggregation_display_group_sample_preview_and_explicit_register
         - admin_ui_builder_supports_component_placement_selectable_design_layout_and_wiring_preview_explicit_apply_and_CI_audit_handoff
+        - admin_ui_builder_default_route_navigation_wiring_preset_in_normal_view
         - screen_data_shape_topology_extension_persists_structured_relation_join_and_aggregation_display_fields
         - screen_data_shape_persists_searchConditions_with_15_operators_and_logicalConnector
         - screen_data_shape_persists_havingConditions_with_7_operators_including_ne_alias
@@ -1399,6 +1405,7 @@ system_roadmap_ssot:
       known_gap_ref:
         - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
         - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
+        - route navigation projection at runtime uses existing ui_wiring_registry row; no additional backend projection code added in this bundle (existing runtime judgment)
       detail_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
