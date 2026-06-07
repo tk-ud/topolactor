@@ -8,24 +8,10 @@
 
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
-| `auth-users-update-state-action-alignment` | Auth users update_state action 整合 gap | not_started | 1 | `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `auth-refresh-cookie-secure-policy` | Auth refresh cookie Secure policy gap | not_started | 1 | `docs/design/auth-db-session-credential-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-
----
-
-## Bundle `auth-users-update-state-action-alignment`
-
-**Status:** not_started  
-**SSOT:** `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`  
-**Source:** reclassified from `owner-decision-required-sso-audit` OD-2 on 2026-06-07
-
-`auth_users:update_state` は SSOT / runtime orchestration の action vocabulary に存在するが、現 frontend API / AdminUsersRoster は `auth_users:update` のみを呼び、backend dispatch も `update_state` を `DataAuthUsersUpdateAsync` に alias している。Owner 判断待ちではなく、未使用または曖昧な admin action vocabulary と runtime dispatch の SSOT 整合 gap として扱う。
-
-- [ ] active manifest / frontend / tests の実使用を確認し、`auth_users:update_state` が不要なら `admin-master-roster-management-ssot.yaml` と `runtime-orchestration-ssot.yaml` の action vocabulary、および `backend/runtime/AdminRuntime.cs` の dispatch から削除する
-- [ ] `auth_users:update_state` を残す必要がある場合は、SSOT に alias contract ではなく state-only contract を明記し、`username` 変更不可の dedicated handler / DTO / regression test を実装する
 
 ---
 

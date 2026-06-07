@@ -138,7 +138,6 @@ admin_master_roster_management_ssot:
       - auth_users:create
       - auth_users:update
       - auth_users:delete
-      - auth_users:update_state
 
   fail_close:
     reuse_enum_error_codes_from: enum-dictionary-ssot.yaml

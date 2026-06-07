@@ -306,7 +306,6 @@ runtime_orchestration_ssot:
         - auth_users:create
         - auth_users:update
         - auth_users:delete
-        - auth_users:update_state
     trigger_kinds:
       - cron
       - hook
