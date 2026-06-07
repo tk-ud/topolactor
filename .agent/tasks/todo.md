@@ -8,8 +8,9 @@
 
 | Bundle ID | 名称 | Status | 件数 | 主 SSOT |
 |-----------|------|--------|------|---------|
-| `owner-decision-required-sso-audit` | SSO/Auth 監査 owner 判断待ち | partial | 2 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
+| `owner-decision-required-sso-audit` | SSO/Auth 監査 owner 判断待ち | partial | 1 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
 | `auth-refresh-state-revalidation` | Auth refresh 状態再検証 gap | not_started | 1 | `docs/design/auth-db-session-credential-ssot.yaml`, `docs/design/admin-master-roster-management-ssot.yaml` |
+| `auth-users-update-state-action-alignment` | Auth users update_state action 整合 gap | not_started | 1 | `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml` |
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
@@ -23,12 +24,6 @@
 **Audit date:** 2026-06-06
 
 以下は設計判断が必要なため、Owner 方針が確定するまで実装 bundle に移さない。
-
-### OD-2: `auth_users:update_state` が `auth_users:update` と同一ハンドラに dispatch
-- **ファイル:** `backend/runtime/AdminRuntime.cs`
-- **現状:** `"auth_users:update_state" => DataAuthUsersUpdateAsync(vector, ct)` で update と同じ。
-- **SSOT 不整合:** `admin-master-roster-management-ssot.yaml` は `update` と `update_state` を別アクションとして列挙している。
-- **判断待ち:** 意図的 alias なら SSOT の `admin_runtime_actions` から `update_state` を削除するか「alias to update」と注記する。別実装が必要なら state 列のみ変更可・username/password 変更不可の dedicated handler に分離する。
 
 ### OD-3: refresh token cookie の Secure フラグ方針
 - **ファイル:** `backend/Program.cs#AppendRefreshCookie`
@@ -50,6 +45,19 @@ SSOT 上、`active=false` / `approve=false` / `suspended` / suspension window �
 - [ ] `backend/repository/AuthRepository.cs` / `backend/repository/NpgsqlAuthRepository.cs` / test fake repositories は refresh record から再検証に必要な user state を取得できるようにする
 - [ ] state 再検証で拒否した場合は新 refresh token を発行せず、可能なら該当 refresh token/session を revoke する
 - [ ] refresh state denial の回帰テストを追加する
+
+---
+
+## Bundle `auth-users-update-state-action-alignment`
+
+**Status:** not_started  
+**SSOT:** `docs/design/admin-master-roster-management-ssot.yaml`, `docs/design/runtime-orchestration-ssot.yaml`  
+**Source:** reclassified from `owner-decision-required-sso-audit` OD-2 on 2026-06-07
+
+`auth_users:update_state` は SSOT / runtime orchestration の action vocabulary に存在するが、現 frontend API / AdminUsersRoster は `auth_users:update` のみを呼び、backend dispatch も `update_state` を `DataAuthUsersUpdateAsync` に alias している。Owner 判断待ちではなく、未使用または曖昧な admin action vocabulary と runtime dispatch の SSOT 整合 gap として扱う。
+
+- [ ] active manifest / frontend / tests の実使用を確認し、`auth_users:update_state` が不要なら `admin-master-roster-management-ssot.yaml` と `runtime-orchestration-ssot.yaml` の action vocabulary、および `backend/runtime/AdminRuntime.cs` の dispatch から削除する
+- [ ] `auth_users:update_state` を残す必要がある場合は、SSOT に alias contract ではなく state-only contract を明記し、`username` 変更不可の dedicated handler / DTO / regression test を実装する
 
 ---
 
