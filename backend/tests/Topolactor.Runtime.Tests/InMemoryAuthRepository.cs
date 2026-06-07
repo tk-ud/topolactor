@@ -53,6 +53,9 @@ public sealed class InMemoryAuthRepository : AuthRepository
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default) =>
         Task.FromResult(Guid.NewGuid());
 
+    public override Task<AuthUserRecord?> GetUserStateByIdAsync(Guid userId, CancellationToken ct = default) =>
+        Task.FromResult(_users.TryGetValue(userId, out var u) ? u : null);
+
     public override Task<AuthRefreshTokenRecord?> FindActiveRefreshTokenByHashAsync(
         string tokenHash, CancellationToken ct = default) =>
         Task.FromResult<AuthRefreshTokenRecord?>(null);

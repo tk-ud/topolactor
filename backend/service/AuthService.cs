@@ -131,6 +131,22 @@ public class AuthService
             !string.Equals(record.Audience, expectedRealm.Audience, StringComparison.Ordinal))
             return (RefreshFail("AUTH_REALM_MISMATCH", "Refresh token realm does not match."), null);
 
+        var user = await _authRepository.GetUserStateByIdAsync(record.UserId, ct);
+        if (user is null)
+        {
+            await _authRepository.RevokeRefreshTokenAsync(record.RefreshTokenId, ct);
+            await _authRepository.RevokeSessionAsync(record.SessionId, ct);
+            return (RefreshFail("AUTH_REFRESH_USER_NOT_FOUND", "User account no longer exists."), null);
+        }
+
+        var stateBlock = EvaluateLoginState(user);
+        if (stateBlock is not null)
+        {
+            await _authRepository.RevokeRefreshTokenAsync(record.RefreshTokenId, ct);
+            await _authRepository.RevokeSessionAsync(record.SessionId, ct);
+            return (RefreshFail(stateBlock.Value.Code, stateBlock.Value.Message), null);
+        }
+
         await _authRepository.RevokeRefreshTokenAsync(record.RefreshTokenId, ct);
 
         var sessionExpires = DateTimeOffset.UtcNow.AddDays(RefreshTokenDays);

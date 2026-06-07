@@ -43,6 +43,9 @@ public abstract class AuthRepository
     public abstract Task<Guid> CreateRefreshTokenAsync(
         Guid sessionId, string tokenHash, DateTimeOffset expiresAt, CancellationToken ct = default);
 
+    public abstract Task<AuthUserRecord?> GetUserStateByIdAsync(
+        Guid userId, CancellationToken ct = default);
+
     public abstract Task<AuthRefreshTokenRecord?> FindActiveRefreshTokenByHashAsync(
         string tokenHash, CancellationToken ct = default);
 
