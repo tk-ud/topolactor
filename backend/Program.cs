@@ -224,6 +224,11 @@ builder.Services.AddHostedService(sp => new DbNotifyListener(
 // ---------------------------------------------------------------------------
 var port = Environment.GetEnvironmentVariable("BACKEND_PORT") ?? "5000";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+// COOKIE_SECURE controls refresh token cookie Secure attribute per SSOT policy.
+// Set to "true" for HTTPS/production; absent or not "true" is explicit local/demo HTTP exception.
+var cookieSecure = string.Equals(
+    Environment.GetEnvironmentVariable("COOKIE_SECURE"),
+    "true", StringComparison.OrdinalIgnoreCase);
 
 var app = builder.Build();
 
@@ -308,16 +313,20 @@ app.MapPost("/intake/legacy-change", (
     return Results.Json(result, statusCode: result.Accepted ? 202 : 422);
 });
 
-static void AppendRefreshCookie(HttpResponse response, string refreshPlain)
+void AppendRefreshCookie(HttpResponse response, string refreshPlain)
 {
     var maxAge = 60 * 60 * 24 * 7;
+    var secureAttr = cookieSecure ? "; Secure" : "";
     response.Headers.Append("Set-Cookie",
-        $"{AuthCookieNames.RefreshToken}={Uri.EscapeDataString(refreshPlain)}; Path=/; HttpOnly; SameSite=Lax; Max-Age={maxAge}");
+        $"{AuthCookieNames.RefreshToken}={Uri.EscapeDataString(refreshPlain)}; Path=/; HttpOnly; SameSite=Lax; Max-Age={maxAge}{secureAttr}");
 }
 
-static void ClearRefreshCookie(HttpResponse response) =>
+void ClearRefreshCookie(HttpResponse response)
+{
+    var secureAttr = cookieSecure ? "; Secure" : "";
     response.Headers.Append("Set-Cookie",
-        $"{AuthCookieNames.RefreshToken}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+        $"{AuthCookieNames.RefreshToken}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0{secureAttr}");
+}
 
 static string? ReadRefreshCookie(HttpRequest request)
 {
