@@ -270,7 +270,6 @@ public partial class AdminRuntime
             "auth_users:create"                           => await DataAuthUsersCreateAsync(vector, ct),
             "auth_users:update"                           => await DataAuthUsersUpdateAsync(vector, ct),
             "auth_users:delete"                           => await DataAuthUsersDeleteAsync(vector, ct),
-            "auth_users:update_state"                     => await DataAuthUsersUpdateAsync(vector, ct),
             "promotion_manifest:list"                   => await DataPromotionManifestListAsync(vector, ct),
             "promotion_manifest:get"                    => await DataPromotionManifestGetAsync(vector, ct),
             "promotion_manifest:validate"               => await DataPromotionManifestValidateAsync(vector, ct),
