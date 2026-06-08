@@ -431,6 +431,9 @@ team_markdown_dashboard_saved_view_ssot:
     ui_builder:
       ref: docs/design/admin-console-workflow-ssot.yaml
       role: optional component/dashboard placement surface, not the saved view authority
+    framework_core_data_driven_runtime:
+      ref: docs/framework-core.yaml#framework_principles
+      interpretation: template_registration_modal_or_drawer and bind_template_to_record_modal_or_drawer are seed-driven authoring surfaces using existing component bucket parts; they are not requests to create bespoke Markdown-only modal/drawer components.
     runtime_orchestration:
       ref: docs/design/runtime-orchestration-ssot.yaml
       role: backend action boundary and explicit failure behavior
