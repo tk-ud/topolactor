@@ -256,13 +256,17 @@ system_roadmap_ssot:
     M5_admin_and_ui_topology:
       title: Admin topology authoring and preset ecosystem
       status: partial
-      summary: Admin UI, UI topology, visual builder, primitive catalog, mock preset intake, and preset child saved-view work are tracked as product authoring bundles.
+      summary: Admin UI, UI topology, visual builder, primitive catalog, mock preset intake, Preset DB seed registration, Markdown authoring/projection, and md_viewer display are tracked as product authoring capabilities.
       bundle_refs:
         - product.admin_topology_authoring
         - product.frontend_projection_surface_ux_acceptance
-        - product.preset_team_markdown_saved_view_seed
+        - product.preset_db_seed_registration
+        - product.component_markdown_authoring_projection
+        - product.md_viewer_projection_component
+        - product.completed_preset_seed_projection_gate
       detail_ref:
         - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
 
     M6_external_integration:
@@ -574,28 +578,126 @@ system_roadmap_ssot:
       known_gap_ref:
         - helper_manual_policy_writing_not_started
 
-    product.preset_team_markdown_saved_view_seed:
-      bundle_id: preset_team_markdown_saved_view_seed
-      title: Preset ecosystem saved Markdown view / md_viewer
+    product.preset_db_seed_registration:
+      bundle_id: preset_db_seed_registration
+      title: Preset DB seed and data-driven registration
       status: not_started
       production_ready: false
-      public_summary: Team shared saved Markdown view remains a preset ecosystem child bundle under md_viewer; physical tables/jsonb records stay canonical and rendered Markdown is projection only.
+      public_summary: Preset bootstrap belongs to DB seed/catalog data and data-driven registration metadata; it does not include hardcoded md_viewer rendering or Markdown saved-view UI behavior.
       scope:
-        - team_markdown_template_registry
-        - team_markdown_saved_view
-        - completed_preset_seed_json_hard_gate
-        - md_viewer_projection_surface
-        - ui_builder_preset_ecosystem_child_surface
+        - preset_catalog_seed_data
+        - preset_metadata_registration
+        - bootstrap_data_driven_registration
+        - reusable_ui_preset_registry_membership
+      boundary:
+        owns:
+          - DB_seed_rows_for_preset_catalog_and_metadata
+          - bootstrap_registration_of_preset_definitions
+          - catalog_data_needed_to_load_reusable_presets
+        does_not_own:
+          - hardcoded_md_viewer_component_implementation
+          - saved_markdown_view_projection_UI
+          - component_field_binding_authoring_UI
+          - completed_preset_seed_json_refresh_rebind_clone_gate
+      detail_ref:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - docs/design/db-schema.yaml
+        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      known_gap_ref:
+        - preset_catalog_seed_data_not_created
+        - bootstrap_data_driven_registration_not_created
+        - preset_metadata_DB_shape_not_migrated
+
+    product.component_markdown_authoring_projection:
+      bundle_id: component_markdown_authoring_projection
+      title: Component DB bind and Markdown saved-view authoring UI
+      status: not_started
+      production_ready: false
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT.
+      scope:
+        - markdown_template_registration_UI
+        - component_DB_bind_authoring
+        - markdown_saved_view_create_edit_archive_UI
+        - saved_view_backend_runtime_actions
+        - saved_view_search_and_card_projection
+      boundary:
+        owns:
+          - user_selected_binding_between_template_slots_and_registered_data_sources
+          - rendered_markdown_snapshot_save_edit_archive_flow
+          - saved_view_search_card_projection_from_persisted_data
+        does_not_own:
+          - preset_catalog_bootstrap_seed_registration
+          - hardcoded_md_viewer_component_rendering_code
+          - physical_record_truth_or_schema_mutation
       detail_ref:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
-        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - docs/design/db-schema.yaml
         - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
       known_gap_ref:
-        - db_migration_not_created
-        - backend_runtime_actions_not_created
-        - frontend_md_viewer_not_created
+        - markdown_saved_view_DB_migration_not_created
+        - saved_view_backend_runtime_actions_not_created
+        - component_DB_bind_authoring_UI_not_created
+        - markdown_data_save_edit_UI_not_created
+
+    product.md_viewer_projection_component:
+      bundle_id: md_viewer_projection_component
+      title: md_viewer hardcoded Markdown projection component
+      status: not_started
+      production_ready: false
+      public_summary: md_viewer is a hardcoded projection component that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text.
+      scope:
+        - md_viewer_component_registration
+        - rendered_markdown_display
+        - saved_view_drawer_or_panel_projection
+        - seed_summary_and_source_ref_display
+      boundary:
+        owns:
+          - hardcoded_component_for_rendering_saved_markdown_projection
+          - read_only_display_of_completed_seed_summary_and_source_reference
+          - explicit_error_display_when_required_projection_data_is_missing
+        does_not_own:
+          - preset_DB_seed_bootstrap
+          - Markdown_template_binding_decisions
+          - completed_preset_seed_json_authoritative_validation
+          - physical_record_or_topology_mutation
+      detail_ref:
+        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      known_gap_ref:
+        - frontend_md_viewer_component_not_created
+        - md_viewer_projection_error_states_not_created
+
+    product.completed_preset_seed_projection_gate:
+      bundle_id: completed_preset_seed_projection_gate
+      title: Completed preset seed validation gate for saved-view projection
+      status: not_started
+      production_ready: false
+      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; it verifies DB-seed-derived/template/binding/render metadata before refresh, rebind, clone, or projection and must not be confused with Preset DB seed registration itself.
+      scope:
+        - completed_preset_seed_json_required_persistence
+        - seed_builder_and_validator
+        - refresh_rebind_clone_blocking_gate
+        - projection_save_view_validation
+      boundary:
+        owns:
+          - validation_that_saved_view_has_template_source_binding_render_dashboard_and_lineage_refs
+          - blocking_refresh_rebind_clone_when_completed_seed_is_missing_or_invalid
+          - preserving_seed_as_structured_contract_separate_from_rendered_markdown_body
+        does_not_own:
+          - bootstrap_creation_of_preset_catalog_seed_rows
+          - hardcoded_md_viewer_component_implementation
+          - physical_table_schema_or_record_truth
+      detail_ref:
+        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        - docs/design/db-schema.yaml
+        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      known_gap_ref:
+        - completed_preset_seed_json_builder_not_created
         - completed_preset_seed_json_validator_not_created
+        - refresh_rebind_clone_seed_gate_not_created
 
     backend.sql_attention_logs_current:
       bundle_id: product.sql_attention_observation_runtime
