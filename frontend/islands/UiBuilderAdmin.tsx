@@ -105,6 +105,7 @@ import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExten
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { LayoutPreviewNodeFrame } from "../components/LayoutPreviewNodeFrame.tsx";
 import TeamMarkdownDashboard from "./TeamMarkdownDashboard.tsx";
+import { MdTranslationAuthoringSeedSurface } from "../components/MdTranslationAuthoringSeedSurface.tsx";
 import {
   enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
@@ -2228,6 +2229,8 @@ function BucketPackageRouteFields({
 
 function UiBuilderPresetEcosystemPanel(): JSX.Element {
   const [open, setOpen] = useState(false);
+  const [authoringOpen, setAuthoringOpen] = useState(false);
+  const [authoringNotice, setAuthoringNotice] = useState<string | null>(null);
 
   return (
     <details
@@ -2251,8 +2254,47 @@ function UiBuilderPresetEcosystemPanel(): JSX.Element {
         team_markdown search projection.
       </p>
       {open && (
-        <div class="rounded border border-emerald-100 bg-white p-3">
-          <TeamMarkdownDashboard placement="ui_builder_child_surface" />
+        <div class="space-y-3">
+          <div class="rounded border border-emerald-100 bg-white p-3">
+            <TeamMarkdownDashboard placement="ui_builder_child_surface" />
+          </div>
+          <details
+            class="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
+            data-preset-authoring-surface="md_translation"
+            open={authoringOpen}
+            onToggle={(e: Event) =>
+              setAuthoringOpen((e.target as HTMLDetailsElement).open)}
+          >
+            <summary class="cursor-pointer text-amber-900">
+              <span class="mr-2 font-semibold">
+                md translation preset authoring
+              </span>
+              <StatusBadge text="registry-driven" variant="warning" />
+            </summary>
+            <p class="mb-2 mt-2 text-xs text-amber-800">
+              Registry-driven md translation authoring surface. Creates saved
+              Markdown views via team_markdown API — does NOT mutate UIBuilder
+              canvas, package edit root, preview/validate/apply flow, or active
+              topology. Binding is user-selected only; no AI inference.
+            </p>
+            {authoringOpen && (
+              <div class="rounded border border-amber-100 bg-white p-3">
+                {authoringNotice && (
+                  <p class="mb-2 text-xs text-emerald-700">{authoringNotice}</p>
+                )}
+                <MdTranslationAuthoringSeedSurface
+                  placement="ui_builder_child_surface"
+                  onSaved={(savedViewId) => {
+                    setAuthoringNotice(
+                      `Saved view created: ${savedViewId}. Open projection view to search and display.`,
+                    );
+                    setAuthoringOpen(false);
+                  }}
+                  onCancel={() => setAuthoringOpen(false)}
+                />
+              </div>
+            )}
+          </details>
         </div>
       )}
     </details>

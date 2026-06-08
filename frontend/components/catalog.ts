@@ -132,6 +132,11 @@ export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] =
       componentKind: "data_display/md_viewer",
       sourcePath: "frontend/components/MdViewer.tsx",
     },
+    {
+      componentKey: "md_translation_authoring_surface.authoring",
+      componentKind: "authoring/md_translation",
+      sourcePath: "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+    },
   ];
 
 export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
@@ -365,6 +370,25 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     registrationRequired: false,
     notes:
       "UIBuilder preset_ecosystem child projection surface; not a preset DB seed registration mechanism, runtime registry component, or package canvas edit root",
+  },
+  {
+    componentKey: "md_translation_authoring_surface.authoring",
+    componentKind: "authoring/md_translation",
+    sourcePath: "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+    componentFamily: "composite",
+    semanticRole: "authoring",
+    visualRole: "panel",
+    lifecycleStatus: "registered",
+    capabilityTags: [
+      "registry_driven",
+      "explicit_binding_only",
+      "admin_only",
+      "emits_event",
+    ],
+    runtimeConnected: false,
+    registrationRequired: false,
+    notes:
+      "registry-driven md translation authoring surface; UIBuilder preset_ecosystem child authoring entry; not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference",
   },
   {
     componentKey: "form_field.template",

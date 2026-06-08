@@ -650,6 +650,8 @@ system_roadmap_ssot:
         - frontend/islands/TeamMarkdownDashboard.tsx
         - frontend/routes/admin/team-dashboard/index.tsx
         - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/components/MdTranslationAuthoringSeedSurface.tsx
+        - frontend/lib/mdTranslationSeedBuilder.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
       completion_condition:
@@ -658,6 +660,7 @@ system_roadmap_ssot:
         - frontend_search_and_card_projection_from_persisted_data
         - frontend_does_not_write_DB_directly
         - markdown_body_is_not_runtime_SSOT
+        - registry_driven_authoring_surface_template_and_binding_selection
       known_gap_ref:
         - md_translation_template_seed_registration_surface_completion_pending
         - md_translation_binding_seed_authoring_surface_completion_pending
@@ -735,6 +738,7 @@ system_roadmap_ssot:
         - backend/runtime/AdminRuntime.TeamMarkdown.cs
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
         - frontend/api/teamMarkdownApi.ts
+        - frontend/lib/mdTranslationSeedBuilder.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
       completion_condition:
         - CompletedPresetSeedValidator_blocks_incomplete_seed_with_explicit_error
@@ -744,6 +748,7 @@ system_roadmap_ssot:
         - unresolved_required_placeholder_arrays_block_seed_persistence
         - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
         - seed_invalid_state_disables_refresh_clone_in_frontend_MdViewer
+        - client_side_seed_builder_assembled_without_markdown_body_parsing
       known_gap_ref:
         - clone_action_backend_implementation_pending
         - rebind_action_not_designed_or_implemented
