@@ -10,13 +10,16 @@ team_markdown_dashboard_saved_view_ssot:
       Users can register Markdown templates, bind sections to physical table records
       or jsonb paths, save rendered Markdown views as team-visible dashboard entries,
       search those saved views, and click a result to expand it in a drawer/panel.
-      This is a dashboard/read-work surface, not a standalone Notion clone and not
-      the runtime source of truth.
+      Completed saved views must preserve a structured preset seed so the view can be
+      rehydrated, refreshed, searched, cloned, and re-bound without depending on the
+      rendered Markdown body as authority. This is a dashboard/read-work surface, not
+      a standalone Notion clone and not the runtime source of truth.
     goals:
       - provide_team_shared_markdown_dashboard
       - allow_users_to_register_markdown_view_templates
       - bind_markdown_template_slots_to_physical_table_columns_or_jsonb_paths
       - save_rendered_markdown_views_as_searchable_team_dashboard_entries
+      - persist_completed_preset_seed_for_rehydrate_refresh_clone_and_rebind
       - allow_search_result_click_to_expand_saved_markdown_view
       - preserve_physical_table_records_as_canonical_data_authority
       - allow_small_human_adjustments_to_saved_view_without_turning_markdown_into_runtime_ssot
@@ -32,6 +35,28 @@ team_markdown_dashboard_saved_view_ssot:
       - replacing_physical_table_or_jsonb_authority
       - external_connector_bundle_implementation
 
+  ux_principle:
+    summary: >-
+      The quality of this feature is determined by preset seed completeness. A saved
+      Markdown view is useful only when the system can reconstruct what template was
+      used, which record and fields were bound, what the rendered snapshot looked like,
+      what manual adjustments were applied, and how the dashboard card/search entry was
+      derived. Rendering Markdown alone is insufficient.
+    seed_is_required_for:
+      - rehydrate_saved_view_after_reload
+      - refresh_from_source_record
+      - preserve_user_adjustments_during_refresh
+      - clone_saved_view_to_another_record
+      - show_search_result_card_without_recomputing_full_context
+      - audit_binding_and_source_record_lineage
+      - recover_from_template_or_record_label_changes
+    prohibited_shortcuts:
+      - treating_rendered_markdown_as_the_only_saved_state
+      - losing_binding_json_after_save
+      - losing_template_ref_after_save
+      - storing_search_card_metadata_only_as_unstructured_text
+      - relying_on_ai_to_reconstruct_missing_seed
+
   authority_boundary:
     physical_record:
       role: canonical_data_authority
@@ -46,6 +71,7 @@ team_markdown_dashboard_saved_view_ssot:
         - dashboard_card_layout
         - markdown_section_order
         - saved_view_title_override
+        - completed_preset_seed_shape
     markdown_template:
       role: reusable_projection_template
       owns:
@@ -58,6 +84,21 @@ team_markdown_dashboard_saved_view_ssot:
         - table_schema
         - component_bucket_identity
         - runtime_topology_identity
+    completed_preset_seed:
+      role: structured_rehydration_and_refresh_contract
+      owns:
+        - template_ref
+        - source_record_ref
+        - binding_json
+        - rendered_snapshot_ref
+        - user_adjustment_patch_ref
+        - dashboard_card_metadata
+        - search_index_basis
+      does_not_own:
+        - canonical_record_value
+        - physical_table_schema
+        - topology_promotion_state
+        - event_wiring_authority
     saved_markdown_view:
       role: team_shared_dashboard_projection
       owns:
@@ -66,6 +107,7 @@ team_markdown_dashboard_saved_view_ssot:
         - search_index_text
         - source_record_ref
         - template_ref
+        - completed_preset_seed_json
         - user_adjustment_patch
       does_not_own:
         - canonical_record_value
@@ -85,13 +127,16 @@ team_markdown_dashboard_saved_view_ssot:
     - user_selects_physical_table_or_saved_query_result
     - user_maps_template_placeholders_to_columns_or_jsonb_paths
     - system_renders_markdown_preview_from_bound_record
+    - system_builds_completed_preset_seed_candidate
     - user_saves_rendered_markdown_view_to_team_dashboard
+    - system_persists_rendered_markdown_and_completed_preset_seed
     - system_updates_search_index_text_for_saved_view
     - team_user_searches_dashboard
     - search_results_show_saved_markdown_view_cards
     - user_clicks_saved_view_card
     - dashboard_expands_markdown_view_in_drawer_or_panel
     - user_optionally_adjusts_view_text_or_binding
+    - system_updates_completed_preset_seed_when_binding_or_adjustment_changes
     - user_saves_view_update_or_archives_saved_view
 
   dashboard_surface_contract:
@@ -120,12 +165,14 @@ team_markdown_dashboard_saved_view_ssot:
       - source_record_ref
       - binding_summary
       - template_ref
+      - preset_seed_summary
       - adjustment_status
       - actions
     actions:
       - open_source_record
       - edit_saved_view_adjustment
       - refresh_from_source_record
+      - clone_saved_view_to_another_record
       - archive_saved_view
       - copy_markdown
       - create_follow_up_todo_candidate
@@ -191,6 +238,70 @@ team_markdown_dashboard_saved_view_ssot:
       - binding_preview_must_show_resolved_values_before_save
       - refresh_from_source_record_recomputes_bound_sections_and_preserves_user_adjustment_patch
 
+  completed_preset_seed_contract:
+    role: saved_view_rehydration_refresh_clone_and_search_basis
+    required: true
+    summary: >-
+      Every saved Markdown view must persist a structured completed_preset_seed_json.
+      The seed is not the runtime source of truth, but it is the UX contract that lets
+      the dashboard reopen, refresh, search, clone, audit, and safely edit a saved view.
+      If the seed is missing or incomplete, the saved view must be treated as invalid
+      for refresh/rebind operations even if rendered_markdown exists.
+    required_fields:
+      seed_version: text
+      template_ref:
+        template_id: uuid_or_stable_template_key
+        template_key: text
+        template_version: optional_text
+      source_ref:
+        source_table_ref: text
+        source_record_ref: text
+        source_record_label: optional_text
+        source_record_updated_at_at_render: optional_timestamp
+      binding_ref:
+        binding_json: jsonb
+        placeholder_to_field_map: jsonb
+        required_placeholder_keys: text_array
+        optional_placeholder_keys: text_array
+      render_ref:
+        rendered_markdown_hash: text
+        rendered_at: timestamptz
+        renderer_version: text
+        unresolved_placeholder_keys: text_array
+      adjustment_ref:
+        user_adjustment_patch_json: jsonb
+        adjustment_mode: none_patch_or_full_override
+        adjustment_updated_at: optional_timestamp
+      dashboard_ref:
+        title: text
+        excerpt: text
+        tags: text_array
+        card_metadata_json: jsonb
+        search_index_basis_json: jsonb
+      lineage_ref:
+        created_by: uuid_nullable
+        updated_by: uuid_nullable
+        created_from: template_record_or_clone
+        parent_saved_view_id: uuid_nullable
+    seed_rules:
+      - completed_preset_seed_json_is_written_on_create
+      - completed_preset_seed_json_is_updated_on_binding_or_adjustment_change
+      - rendered_markdown_must_match_rendered_markdown_hash_at_save_time
+      - search_card_metadata_is_derived_from_seed_and_rendered_markdown
+      - refresh_from_source_record_uses_seed_binding_json_not_rendered_markdown_parsing
+      - clone_to_another_record_reuses_template_ref_and_binding_shape_with_new_source_ref
+      - seed_validation_failure_blocks_refresh_rebind_and_clone
+      - seed_is_not_allowed_to_create_or_mutate_physical_table_schema
+      - seed_is_not_allowed_to_promote_topology
+    seed_completion_gate:
+      - template_ref_present
+      - source_ref_present
+      - binding_ref_present
+      - render_ref_present
+      - dashboard_ref_present
+      - unresolved_required_placeholder_keys_empty_or_explicitly_accepted
+      - user_adjustment_patch_separate_from_bound_record_values
+
   saved_view_persistence_contract:
     status: planned_schema_surface
     schema: topology
@@ -216,9 +327,11 @@ team_markdown_dashboard_saved_view_ssot:
           - source_table_ref text not null
           - source_record_ref text not null
           - binding_json jsonb not null
+          - completed_preset_seed_json jsonb not null
           - rendered_markdown text not null
           - user_adjustment_patch_json jsonb not null
           - search_index_text text not null
+          - card_metadata_json jsonb not null
           - status text not null # active | archived
           - created_by uuid nullable
           - updated_by uuid nullable
@@ -229,15 +342,17 @@ team_markdown_dashboard_saved_view_ssot:
         fields:
           - event_id uuid primary key
           - saved_view_id uuid references topology.team_markdown_saved_view
-          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate
+          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate | clone
           - actor_id uuid nullable
           - event_payload_json jsonb not null
           - created_at timestamptz
     persistence_rules:
       - saved_view_is_projection_not_canonical_record
+      - completed_preset_seed_json_is_required_for_every_active_saved_view
       - rendered_markdown_snapshot_can_be_refreshed_from_source_record
+      - refresh_uses_completed_preset_seed_binding_not_markdown_body_parsing
       - user_adjustment_patch_is_separate_from_bound_record_values
-      - search_index_text_is_derived_from_rendered_markdown_and_metadata
+      - search_index_text_is_derived_from_rendered_markdown_seed_and_metadata
       - archive_preserves_history_unless_explicit_delete_policy_exists
 
   search_contract:
@@ -251,6 +366,7 @@ team_markdown_dashboard_saved_view_ssot:
     search_behavior:
       - default_filters_status_active
       - results_are_saved_view_cards
+      - result_cards_use_completed_preset_seed_dashboard_ref
       - click_result_expands_drawer_or_panel
       - search_must_not_mutate_saved_view
       - search_must_not_query_unregistered_physical_tables_directly
@@ -290,6 +406,9 @@ team_markdown_dashboard_saved_view_ssot:
       - TEMPLATE_NOT_FOUND
       - TEMPLATE_MARKDOWN_INVALID
       - REQUIRED_PLACEHOLDER_UNBOUND
+      - COMPLETED_PRESET_SEED_MISSING
+      - COMPLETED_PRESET_SEED_INVALID
+      - COMPLETED_PRESET_SEED_RENDER_HASH_MISMATCH
       - PHYSICAL_TABLE_REF_NOT_REGISTERED
       - SOURCE_RECORD_NOT_FOUND
       - JSONB_PATH_INVALID
@@ -322,28 +441,37 @@ team_markdown_dashboard_saved_view_ssot:
       - db migration for topology.team_markdown_template_registry
       - db migration for topology.team_markdown_saved_view
       - db migration for topology.team_markdown_saved_view_event
+      - completed_preset_seed_json schema and validation
       - backend admin runtime actions for template create_list_get_update_archive
       - backend admin runtime actions for saved_view create_search_get_refresh_update_archive
       - backend markdown template renderer with explicit placeholder binding
+      - backend completed preset seed builder and validator
       - frontend team dashboard search surface
       - frontend saved markdown view result cards
       - frontend click_to_expand drawer_or_panel
+      - frontend preset seed summary in expanded view
       - frontend template registration modal_or_drawer
       - frontend record binding modal_or_drawer
       - tests for markdown_not_runtime_ssot_boundary
+      - tests for completed_preset_seed_required_on_save
       - tests for search_click_expand_behavior
+      - tests for refresh_uses_seed_not_markdown_parsing
       - tests for binding_refresh_preserves_user_adjustment_patch
 
   completion_condition:
     - markdown_template_registry_table_exists_under_topology_schema
     - saved_markdown_view_table_exists_under_topology_schema
     - saved_view_event_table_exists_under_topology_schema
+    - completed_preset_seed_json_exists_on_saved_view
+    - completed_preset_seed_validation_blocks_incomplete_seed
     - markdown_template_create_list_get_update_archive_actions_exist
     - saved_view_create_search_get_refresh_update_archive_actions_exist
     - markdown_renderer_resolves_explicit_bindings_without_ai_inference
     - unresolved_required_placeholders_block_save
     - saved_views_are_searchable_from_team_dashboard
     - search_result_click_expands_saved_view_panel_or_drawer
+    - result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed
+    - refresh_from_source_record_uses_seed_binding_json
     - saved_view_does_not_become_physical_record_authority
     - refresh_from_source_record_preserves_user_adjustment_patch
     - docs_system_roadmap_and_todo_are_updated_when_implementation_begins
