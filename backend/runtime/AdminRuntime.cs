@@ -31,6 +31,7 @@ public partial class AdminRuntime
     private readonly AuthMasterRepository? _authMasterRepository;
     private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
     private readonly MockPresetRepository? _mockPresetRepository;
+    private readonly TeamMarkdownRepository? _teamMarkdownRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -56,7 +57,8 @@ public partial class AdminRuntime
         EnumDictionaryRepository? enumDictionaryRepository = null,
         AuthMasterRepository? authMasterRepository = null,
         SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
-        MockPresetRepository? mockPresetRepository = null)
+        MockPresetRepository? mockPresetRepository = null,
+        TeamMarkdownRepository? teamMarkdownRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -75,6 +77,7 @@ public partial class AdminRuntime
         _authMasterRepository = authMasterRepository;
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
         _mockPresetRepository = mockPresetRepository;
+        _teamMarkdownRepository = teamMarkdownRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -303,6 +306,8 @@ public partial class AdminRuntime
             "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
             "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
             "mock_preset:save_mappings"                 => await DataMockPresetSaveMappingsAsync(vector, ct),
+            var a when a.StartsWith("team_markdown:", StringComparison.OrdinalIgnoreCase)
+                                                        => await ExecuteTeamMarkdownAsync(vector with { Action = a["team_markdown:".Length..] }, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };

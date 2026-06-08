@@ -1,0 +1,97 @@
+using Microsoft.Extensions.Logging;
+using Topolactor.Schema;
+
+namespace Topolactor.Repository;
+
+// ---------------------------------------------------------------------------
+// TeamMarkdownRepository — abstract base for topology.team_markdown_* tables.
+// SSOT: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+// Production implementation: NpgsqlTeamMarkdownRepository
+//
+// Authority invariants:
+//   - saved Markdown view is a projection; physical records are canonical data authority
+//   - completed_preset_seed_json is required (NOT NULL)
+//   - refresh uses seed binding_json, not Markdown body parsing
+// ---------------------------------------------------------------------------
+
+public abstract class TeamMarkdownRepository
+{
+    protected readonly ILogger<TeamMarkdownRepository> _logger;
+
+    protected TeamMarkdownRepository(ILogger<TeamMarkdownRepository> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    // ─── template create ─────────────────────────────────────────────────────
+
+    public virtual Task<(string? TemplateId, string? ErrorCode, string? Message)>
+        CreateTemplateAsync(TeamMarkdownTemplateCreateRequest request, CancellationToken ct = default)
+        => Task.FromResult<(string?, string?, string?)>((null, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
+
+    // ─── template list ───────────────────────────────────────────────────────
+
+    public virtual Task<IReadOnlyList<TeamMarkdownTemplateListItem>>
+        ListTemplatesAsync(string status = "active", CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TeamMarkdownTemplateListItem>>([]);
+
+    // ─── template get ────────────────────────────────────────────────────────
+
+    public virtual Task<TeamMarkdownTemplateDetail?>
+        GetTemplateAsync(Guid templateId, CancellationToken ct = default)
+        => Task.FromResult<TeamMarkdownTemplateDetail?>(null);
+
+    // ─── template update ─────────────────────────────────────────────────────
+
+    public virtual Task<(bool Updated, string? ErrorCode, string? Message)>
+        UpdateTemplateAsync(Guid templateId, string label, string markdown, string status, CancellationToken ct = default)
+        => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
+
+    // ─── template archive ────────────────────────────────────────────────────
+
+    public virtual Task<(bool Updated, string? ErrorCode)>
+        ArchiveTemplateAsync(Guid templateId, CancellationToken ct = default)
+        => Task.FromResult<(bool, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED"));
+
+    // ─── saved view create ───────────────────────────────────────────────────
+
+    public virtual Task<(string? SavedViewId, string? ErrorCode, string? Message)>
+        CreateSavedViewAsync(TeamMarkdownSavedViewCreateRequest request, CancellationToken ct = default)
+        => Task.FromResult<(string?, string?, string?)>((null, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
+
+    // ─── saved view search ───────────────────────────────────────────────────
+
+    public virtual Task<IReadOnlyList<TeamMarkdownSavedViewCard>>
+        SearchSavedViewsAsync(string? query, string status = "active", int limit = 50, CancellationToken ct = default)
+        => Task.FromResult<IReadOnlyList<TeamMarkdownSavedViewCard>>([]);
+
+    // ─── saved view get ──────────────────────────────────────────────────────
+
+    public virtual Task<TeamMarkdownSavedViewDetail?>
+        GetSavedViewAsync(Guid savedViewId, CancellationToken ct = default)
+        => Task.FromResult<TeamMarkdownSavedViewDetail?>(null);
+
+    // ─── saved view update ───────────────────────────────────────────────────
+
+    public virtual Task<(bool Updated, string? ErrorCode, string? Message)>
+        UpdateSavedViewAsync(Guid savedViewId, string? title, string? renderedMarkdown,
+            System.Text.Json.JsonElement? userAdjustmentPatchJson,
+            System.Text.Json.JsonElement? completedPresetSeedJson,
+            string? searchIndexText,
+            System.Text.Json.JsonElement? cardMetadataJson,
+            CancellationToken ct = default)
+        => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
+
+    // ─── saved view archive ──────────────────────────────────────────────────
+
+    public virtual Task<(bool Updated, string? ErrorCode)>
+        ArchiveSavedViewAsync(Guid savedViewId, CancellationToken ct = default)
+        => Task.FromResult<(bool, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED"));
+
+    // ─── event append ────────────────────────────────────────────────────────
+
+    public virtual Task<string?>
+        AppendEventAsync(Guid savedViewId, string eventKind, Guid? actorId,
+            System.Text.Json.JsonElement eventPayloadJson, CancellationToken ct = default)
+        => Task.FromResult<string?>(null);
+}

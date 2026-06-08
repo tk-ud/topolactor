@@ -69,6 +69,10 @@ builder.Services.AddSingleton<MockPresetRepository>(sp =>
     new NpgsqlMockPresetRepository(
         sp.GetRequiredService<ILogger<NpgsqlMockPresetRepository>>(),
         connectionString));
+builder.Services.AddSingleton<TeamMarkdownRepository>(sp =>
+    new NpgsqlTeamMarkdownRepository(
+        sp.GetRequiredService<ILogger<NpgsqlTeamMarkdownRepository>>(),
+        connectionString));
 builder.Services.AddSingleton<HubAttractorExplorationRuntime>();
 builder.Services.AddSingleton<SqlAttentionEvidencePromotionRuntime>();
 builder.Services.AddSingleton<SqlAttentionTopologyProjectionRuntime>();
@@ -114,7 +118,8 @@ builder.Services.AddSingleton<AdminRuntime>(sp =>
         sp.GetRequiredService<EnumDictionaryRepository>(),
         sp.GetRequiredService<AuthMasterRepository>(),
         sp.GetRequiredService<SqlAttentionLogsRepository>(),
-        sp.GetRequiredService<MockPresetRepository>()));
+        sp.GetRequiredService<MockPresetRepository>(),
+        sp.GetRequiredService<TeamMarkdownRepository>()));
 builder.Services.AddSingleton<TopologyFunctionBinder>();
 builder.Services.AddSingleton<HubNavigationResolver>(sp =>
     new HubNavigationResolver(sp.GetRequiredService<ContentBundleRepository>()));
