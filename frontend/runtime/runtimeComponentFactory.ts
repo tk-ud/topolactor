@@ -2127,4 +2127,5 @@ export type { LayoutPreviewRenderResult } from "./layoutComponentPreview.ts";
 
 export const __testOnly = {
   parseEventBinding,
+  emitBoundEvent,
 };
