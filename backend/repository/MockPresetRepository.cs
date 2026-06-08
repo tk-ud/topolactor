@@ -42,6 +42,12 @@ public abstract class MockPresetRepository
         UpsertObjectMappingAsync(Guid presetId, MockPresetObjectMappingRecord mapping, CancellationToken ct = default)
         => Task.FromResult<(string?, string?)>((null, "MOCK_PRESET_REPO_NOT_CONFIGURED"));
 
+    // ─── wiring candidate upsert ─────────────────────────────────────────────
+
+    public virtual Task<(string? WiringCandidateId, string? ErrorCode)>
+        UpsertWiringCandidateAsync(Guid presetId, MockPresetWiringCandidateRecord candidate, CancellationToken ct = default)
+        => Task.FromResult<(string?, string?)>((null, "MOCK_PRESET_REPO_NOT_CONFIGURED"));
+
     // ─── compile snapshot ────────────────────────────────────────────────────
 
     public virtual Task<(string? CompileSnapshotId, string? ErrorCode)>

@@ -179,6 +179,119 @@ Deno.test("mockPresetIntake: bind without routeKey validation error code is ROUT
   assert(expectedErrorCode.length > 0);
 });
 
+// ─── capabilityTags gate UI: interactive wiring controls surface ──────────────
+
+Deno.test("mockPresetIntake: capabilityTags gate UI — emits_event opens wiring kind options", () => {
+  // Validates the wiring kind options surface per SSOT §capability_policy.capability_effects.emits_event
+  // The PresetUploaderDrawer shows these options for catalog_component with emits_event.
+  const WIRING_KIND_OPTIONS_FOR_EMITS_EVENT = [
+    { value: "", label: "配線なし (未設定)" },
+    { value: "route_navigation", label: "ルートナビゲーション (route_navigation)" },
+    { value: "runtime_dispatch", label: "ランタイムディスパッチ (runtime_dispatch)" },
+  ];
+  const values = WIRING_KIND_OPTIONS_FOR_EMITS_EVENT.map((o) => o.value);
+  assert(values.includes("route_navigation"), "emits_event must open route_navigation wiring");
+  assert(values.includes("runtime_dispatch"), "emits_event must open runtime_dispatch wiring");
+  assert(values.includes(""), "must have no-wiring option");
+});
+
+Deno.test("mockPresetIntake: capabilityTags gate UI — controlled_value opens value_binding", () => {
+  const WIRING_KIND_OPTIONS_FOR_CONTROLLED_VALUE = [
+    { value: "", label: "配線なし (未設定)" },
+    { value: "value_binding", label: "値バインディング (value_binding)" },
+  ];
+  const values = WIRING_KIND_OPTIONS_FOR_CONTROLLED_VALUE.map((o) => o.value);
+  assert(values.includes("value_binding"), "controlled_value must open value_binding");
+});
+
+Deno.test("mockPresetIntake: capabilityTags gate UI — field_binding opens db_jsonb_field_binding", () => {
+  const WIRING_KIND_OPTIONS_FOR_FIELD_BINDING = [
+    { value: "", label: "配線なし (未設定)" },
+    { value: "db_jsonb_field_binding", label: "DBフィールドバインディング (db_jsonb_field_binding)" },
+  ];
+  const values = WIRING_KIND_OPTIONS_FOR_FIELD_BINDING.map((o) => o.value);
+  assert(values.includes("db_jsonb_field_binding"), "field_binding must open db_jsonb_field_binding");
+});
+
+// ─── save_mappings round-trip contract ───────────────────────────────────────
+
+Deno.test("mockPresetIntake: mapping persistence round-trip shape contract", () => {
+  // Validates the shape of MockPresetObjectMapping expected by save_mappings backend action.
+  const mapping = {
+    sourceObjectId: "rect_1",
+    nodeId: "preset_node_rect_1",
+    nodeKind: "catalog_component",
+    componentKey: "button.primitive",
+    componentKind: "action/button",
+    htmlTag: undefined as string | undefined,
+    parentSourceObjectId: undefined as string | undefined,
+    slotKey: undefined as string | undefined,
+    orderIndex: 0,
+    bboxJson: { x: 0, y: 0, width: 140, height: 60 },
+    textJson: {},
+    styleCandidateJson: [],
+    mappingStatus: "mapped",
+  };
+
+  assert(typeof mapping.sourceObjectId === "string", "sourceObjectId must be string");
+  assert(typeof mapping.nodeId === "string", "nodeId must be string");
+  assert(typeof mapping.nodeKind === "string", "nodeKind must be string");
+  assert(typeof mapping.mappingStatus === "string", "mappingStatus must be string");
+  assert(["catalog_component", "structural_html", "ignored", "unassigned"].includes(mapping.nodeKind));
+  assert(["unassigned", "mapped", "ignored", "unresolved"].includes(mapping.mappingStatus));
+});
+
+Deno.test("mockPresetIntake: wiring candidate shape contract for save_mappings", () => {
+  const wc = {
+    sourceObjectId: "btn_1",
+    nodeId: "preset_node_btn_1",
+    capabilityTag: "emits_event",
+    wiringKind: "route_navigation",
+    targetSurface: undefined as string | undefined,
+    targetRef: "route:my_route",
+    bindingJson: {},
+    status: "confirmed",
+  };
+
+  assert(typeof wc.sourceObjectId === "string");
+  assert(typeof wc.capabilityTag === "string");
+  assert(["pending", "confirmed", "rejected"].includes(wc.status));
+  assert(typeof wc.wiringKind === "string");
+});
+
+// ─── save canvas as preset — ui_builder_canvas source_kind ───────────────────
+
+Deno.test("mockPresetIntake: ui_builder_canvas sourceKind is valid per SSOT", () => {
+  // SSOT §source_intake_contract.supported_source_kinds includes ui_builder_canvas.
+  const validSourceKinds = ["svg_xml", "generic_xml", "figma_json", "ui_builder_canvas"];
+  assert(validSourceKinds.includes("ui_builder_canvas"), "ui_builder_canvas must be a valid source_kind");
+});
+
+Deno.test("mockPresetIntake: canvas export CanvasPresetSeed structure contract", () => {
+  // Validates the CanvasPresetSeed shape built by handleSaveCanvasAsPreset.
+  const seed = {
+    sourceKind: "ui_builder_canvas" as const,
+    layoutPatchJson: { nodes: [], layoutClassRefs: [] },
+    componentMappings: [
+      {
+        sourceObjectId: "node_abc",
+        nodeId: "node_abc",
+        mappingKind: "catalog_component" as const,
+        componentKey: "button.primitive",
+        componentKind: "action/button",
+        htmlTag: undefined,
+      },
+    ],
+    visualTreeJson: { source_kind: "ui_builder_canvas", nodes: [] },
+    sourceHash: "abc123",
+  };
+
+  assertEquals(seed.sourceKind, "ui_builder_canvas");
+  assert(Array.isArray(seed.componentMappings));
+  assert(typeof seed.sourceHash === "string");
+  assert(seed.componentMappings.every((m) => typeof m.sourceObjectId === "string"));
+});
+
 // ─── Parser does not produce topology entity references ───────────────────────
 
 Deno.test("mockPresetIntake: parsed visual nodes do not have DB-identity fields", () => {

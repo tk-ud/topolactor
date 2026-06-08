@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
-import { PresetUploaderDrawer } from "./PresetUploaderDrawer.tsx";
+import { PresetUploaderDrawer, type CanvasPresetSeed } from "./PresetUploaderDrawer.tsx";
 import {
   bindMockPreset,
   listMockPresets,
   type MockPresetListItem,
 } from "../api/mockPresetApi.ts";
+import { computeSourceHash } from "../runtime/visualMockParser.ts";
 import {
   buildInlineStyleFromCssTokenRefs,
   CSS_DICTIONARY_TOKENS,
@@ -4322,6 +4323,7 @@ function LayoutBuilderSection({
 
   // ── preset intake state ──────────────────────────────────────────────────
   const [presetDrawerOpen, setPresetDrawerOpen] = useState(false);
+  const [canvasPresetSeed, setCanvasPresetSeed] = useState<CanvasPresetSeed | null>(null);
   const [savedPresets, setSavedPresets] = useState<MockPresetListItem[]>([]);
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [presetLoadStatus, setPresetLoadStatus] = useState<"idle" | "loading" | "error">("idle");
@@ -4498,11 +4500,55 @@ function LayoutBuilderSection({
   };
 
   // ── Preset: save current canvas as preset ────────────────────────────────
-  const handleSaveCanvasAsPreset = async () => {
+  // Exports current draftNodes as a CanvasPresetSeed and opens the drawer.
+  // source_kind = ui_builder_canvas. Does NOT write to active topology.
+  // SSOT: docs/design/mock-preset-intake-compiler-ssot.yaml §save_current_canvas_as_preset_button
+  const handleSaveCanvasAsPreset = () => {
     if (draftNodes.length === 0) {
       announce("キャンバスが空です。部品を配置してからプリセット保存してください。");
       return;
     }
+
+    // Build component mappings from current draftNodes.
+    const componentMappings = draftNodes.map((n) => ({
+      sourceObjectId: n.nodeId,
+      nodeId: n.nodeId,
+      mappingKind: (n.nodeKind === "structural_html" ? "structural_html" : "catalog_component") as "catalog_component" | "structural_html",
+      componentKey: n.nodeKind === "structural_html" ? undefined : n.componentKey,
+      componentKind: n.componentKind,
+      htmlTag: n.htmlTag as string | undefined,
+    }));
+
+    // Visual tree JSON: capture current canvas geometry.
+    const visualTreeJson = {
+      source_kind: "ui_builder_canvas",
+      nodes: draftNodes.map((n, idx) => ({
+        source_object_id: n.nodeId,
+        object_type: n.componentKey,
+        parent_source_object_id: n.parentNodeId,
+        z_index: idx,
+        bbox: { x: n.x, y: n.y, width: n.width, height: n.height },
+        transform: null,
+        text_content: null,
+        style_attributes: {},
+        children: [],
+      })),
+    };
+
+    // layout_patch_json from the already-computed tensorPatchJson.
+    const layoutPatchJson = JSON.parse(tensorPatchJson);
+
+    const sourceHash = computeSourceHash(JSON.stringify(visualTreeJson));
+
+    const seed: CanvasPresetSeed = {
+      sourceKind: "ui_builder_canvas",
+      layoutPatchJson,
+      componentMappings,
+      visualTreeJson,
+      sourceHash,
+    };
+
+    setCanvasPresetSeed(seed);
     setPresetDrawerOpen(true);
   };
 
@@ -5814,12 +5860,17 @@ function LayoutBuilderSection({
       {/* Preset uploader drawer — SSOT: mock-preset-intake-compiler-ssot.yaml §preset_uploader_surface */}
       <PresetUploaderDrawer
         open={presetDrawerOpen}
-        onClose={() => setPresetDrawerOpen(false)}
+        onClose={() => {
+          setPresetDrawerOpen(false);
+          setCanvasPresetSeed(null);
+        }}
         onPresetSaved={(preset) => {
           setSavedPresets((prev) => [preset, ...prev]);
           setSelectedPresetId(preset.presetId);
           setPresetsLoaded(true);
+          setCanvasPresetSeed(null);
         }}
+        canvasPreset={canvasPresetSeed}
       />
 
       {/* layout draft プレビュー & 操作エリア: palette + live canvas + inspector */}

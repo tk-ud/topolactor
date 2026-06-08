@@ -302,6 +302,7 @@ public partial class AdminRuntime
             "mock_preset:get"                           => await DataMockPresetGetAsync(vector, ct),
             "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
             "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
+            "mock_preset:save_mappings"                 => await DataMockPresetSaveMappingsAsync(vector, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };

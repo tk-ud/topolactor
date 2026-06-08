@@ -507,6 +507,175 @@ public class AdminRuntimeMockPresetTests
             mockPresetRepository: null);
     }
 
+    // ─── save_mappings ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task MockPresetSaveMappings_ValidPayload_ReturnsOkWithCounts()
+    {
+        var presetId = Guid.NewGuid();
+        var repo = new StubMockPresetRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            presetId = presetId.ToString(),
+            mappings = new[]
+            {
+                new
+                {
+                    sourceObjectId = "rect_1",
+                    nodeId = "preset_node_rect_1",
+                    nodeKind = "catalog_component",
+                    componentKey = "button.primitive",
+                    componentKind = "action/button",
+                    htmlTag = (string?)null,
+                    parentSourceObjectId = (string?)null,
+                    slotKey = (string?)null,
+                    orderIndex = 0,
+                    bboxJson = new { x = 0, y = 0, width = 100, height = 40 },
+                    textJson = new { },
+                    styleCandidateJson = Array.Empty<object>(),
+                    mappingStatus = "mapped",
+                },
+            },
+            wiringCandidates = Array.Empty<object>(),
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "save_mappings", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.TryGetProperty("ok", out var ok));
+        Assert.True(ok.GetBoolean());
+        Assert.True(data.Value.TryGetProperty("savedCount", out var saved));
+        Assert.Equal(1, saved.GetInt32());
+    }
+
+    [Fact]
+    public async Task MockPresetSaveMappings_WithWiringCandidates_SavesBoth()
+    {
+        var presetId = Guid.NewGuid();
+        var repo = new StubMockPresetRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            presetId = presetId.ToString(),
+            mappings = new[]
+            {
+                new
+                {
+                    sourceObjectId = "btn_1",
+                    nodeId = "preset_node_btn_1",
+                    nodeKind = "catalog_component",
+                    componentKey = "button.primitive",
+                    componentKind = "action/button",
+                    orderIndex = 0,
+                    bboxJson = new { },
+                    textJson = new { },
+                    styleCandidateJson = Array.Empty<object>(),
+                    mappingStatus = "mapped",
+                },
+            },
+            wiringCandidates = new[]
+            {
+                new
+                {
+                    sourceObjectId = "btn_1",
+                    nodeId = "preset_node_btn_1",
+                    capabilityTag = "emits_event",
+                    wiringKind = "route_navigation",
+                    targetSurface = (string?)null,
+                    targetRef = "route:my_route_key",
+                    bindingJson = new { },
+                    status = "confirmed",
+                },
+            },
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "save_mappings", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.TryGetProperty("ok", out var ok));
+        Assert.True(ok.GetBoolean());
+        Assert.True(data.Value.TryGetProperty("savedCount", out var saved));
+        Assert.Equal(1, saved.GetInt32());
+        Assert.True(data.Value.TryGetProperty("wiringCandidatesSavedCount", out var wcs));
+        Assert.Equal(1, wcs.GetInt32());
+    }
+
+    [Fact]
+    public async Task MockPresetSaveMappings_MissingPresetId_ReturnsPresetIdRequired()
+    {
+        var repo = new StubMockPresetRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            mappings = Array.Empty<object>(),
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "save_mappings", null, "admin", payload, null), default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("PRESET_ID_REQUIRED", error!.Code);
+    }
+
+    [Fact]
+    public async Task MockPresetSaveMappings_MissingMappingsArray_ReturnsMappingsRequired()
+    {
+        var repo = new StubMockPresetRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            presetId = Guid.NewGuid().ToString(),
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "save_mappings", null, "admin", payload, null), default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("MAPPINGS_REQUIRED", error!.Code);
+    }
+
+    [Fact]
+    public async Task MockPresetSaveMappings_NotConfigured_ReturnsMockPresetNotConfigured()
+    {
+        var runtime = CreateRuntimeNoPresetRepo();
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            presetId = Guid.NewGuid().ToString(),
+            mappings = Array.Empty<object>(),
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "save_mappings", null, "admin", payload, null), default);
+
+        Assert.Null(data);
+        Assert.NotNull(error);
+        Assert.Equal("MOCK_PRESET_NOT_CONFIGURED", error!.Code);
+    }
+
+    [Fact]
+    public async Task MockPresetSaveMappings_UiBuilderCanvasSourceKind_AcceptedByCreate()
+    {
+        // source_kind=ui_builder_canvas must be valid (used by save-canvas-as-preset flow).
+        var repo = new StubMockPresetRepo();
+        var runtime = CreateRuntime(repo);
+        var payload = MakeCreatePayload("canvas_preset", "Canvas Preset", "ui_builder_canvas");
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "mock_preset", "create", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        Assert.True(data.Value.TryGetProperty("ok", out var ok));
+        Assert.True(ok.GetBoolean());
+    }
+
     // ─── stub repositories ────────────────────────────────────────────────────────
 
     private class StubMockPresetRepo(
@@ -528,6 +697,14 @@ public class AdminRuntimeMockPresetTests
         public override Task<MockPresetDetail?>
             GetPresetAsync(Guid presetId, CancellationToken ct = default)
             => Task.FromResult(detail);
+
+        public override Task<(string? MappingId, string? ErrorCode)>
+            UpsertObjectMappingAsync(Guid presetId, MockPresetObjectMappingRecord mapping, CancellationToken ct = default)
+            => Task.FromResult<(string?, string?)>((_stubPresetId, null));
+
+        public override Task<(string? WiringCandidateId, string? ErrorCode)>
+            UpsertWiringCandidateAsync(Guid presetId, MockPresetWiringCandidateRecord candidate, CancellationToken ct = default)
+            => Task.FromResult<(string?, string?)>((_stubPresetId, null));
 
         public override Task<(string? CompileSnapshotId, string? ErrorCode)>
             SaveCompileSnapshotAsync(Guid presetId, MockPresetCompileResult result, CancellationToken ct = default)

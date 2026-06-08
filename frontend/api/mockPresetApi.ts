@@ -116,6 +116,52 @@ export async function compileMockPreset(presetId: string): Promise<MockPresetCom
 }
 
 /**
+ * Save object mappings (and optionally wiring candidates) for a preset.
+ * Called after preset create, before compile/bind.
+ * SSOT: mock-preset-intake-compiler-ssot.yaml §mapping_contract
+ */
+export async function saveMockPresetMappings(params: {
+  presetId: string;
+  mappings: MockPresetObjectMapping[];
+  wiringCandidates?: MockPresetWiringCandidate[];
+}): Promise<{ ok: boolean; savedCount: number; wiringCandidatesSavedCount: number; errors: string[] }> {
+  return dispatchMockPreset("save_mappings", {
+    payload: {
+      presetId: params.presetId,
+      mappings: params.mappings as unknown[],
+      wiringCandidates: (params.wiringCandidates ?? []) as unknown[],
+    },
+  }) as Promise<{ ok: boolean; savedCount: number; wiringCandidatesSavedCount: number; errors: string[] }>;
+}
+
+export type MockPresetWiringCandidate = {
+  sourceObjectId: string;
+  nodeId: string;
+  capabilityTag: string;
+  wiringKind?: string;
+  targetSurface?: string;
+  targetRef?: string;
+  bindingJson?: unknown;
+  status: string;
+};
+
+export type MockPresetObjectMapping = {
+  sourceObjectId: string;
+  nodeId: string;
+  nodeKind: string;
+  componentKey?: string;
+  componentKind?: string;
+  htmlTag?: string;
+  parentSourceObjectId?: string;
+  slotKey?: string;
+  orderIndex: number;
+  bboxJson: unknown;
+  textJson: unknown;
+  styleCandidateJson: unknown;
+  mappingStatus: string;
+};
+
+/**
  * Bind compiled preset to selected route package tmp canvas draft.
  * Returns layout_patch_json as a data payload only.
  * Does NOT write to topology.ui_topology_tensor or canonical topology tables.

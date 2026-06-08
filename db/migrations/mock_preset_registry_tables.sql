@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS topology.mock_preset_object_mapping (
     mapping_status          TEXT        NOT NULL DEFAULT 'unassigned',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_mock_preset_object_mapping_source
+        UNIQUE (preset_id, source_object_id),
     CONSTRAINT ck_mock_preset_object_mapping_node_kind
         CHECK (node_kind IN ('catalog_component', 'structural_html', 'ignored', 'unassigned')),
     CONSTRAINT ck_mock_preset_object_mapping_status
@@ -92,6 +94,8 @@ CREATE TABLE IF NOT EXISTS topology.mock_preset_wiring_candidate (
     status              TEXT        NOT NULL DEFAULT 'pending',
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT uq_mock_preset_wiring_candidate_source_tag
+        UNIQUE (preset_id, source_object_id, capability_tag),
     CONSTRAINT ck_mock_preset_wiring_candidate_status
         CHECK (status IN ('pending', 'confirmed', 'rejected'))
 );

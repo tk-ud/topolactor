@@ -150,6 +150,128 @@ public partial class AdminRuntime
         }), null);
     }
 
+    // ─── save_mappings ───────────────────────────────────────────────────────
+    // Persists object mappings from the drawer to topology.mock_preset_object_mapping.
+    // Called immediately after preset create, before compile.
+
+    private async Task<(JsonElement? data, ValidationError? error)>
+        DataMockPresetSaveMappingsAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (_mockPresetRepository is null)
+            return (null, new ValidationError("MOCK_PRESET_NOT_CONFIGURED", "Mock preset repository is not registered"));
+
+        if (vector.Payload is null)
+            return (null, new ValidationError("PRESET_PAYLOAD_REQUIRED", "payload is required for mock_preset:save_mappings"));
+
+        var payload = vector.Payload.Value;
+        var presetIdStr = payload.TryGetProperty("presetId", out var pi) ? pi.GetString() : null;
+        if (string.IsNullOrWhiteSpace(presetIdStr) || !Guid.TryParse(presetIdStr, out var presetId))
+            return (null, new ValidationError("PRESET_ID_REQUIRED", "payload.presetId (uuid) is required for mock_preset:save_mappings"));
+
+        if (!payload.TryGetProperty("mappings", out var mappingsEl) ||
+            mappingsEl.ValueKind != JsonValueKind.Array)
+            return (null, new ValidationError("MAPPINGS_REQUIRED", "payload.mappings (array) is required for mock_preset:save_mappings"));
+
+        var saved = 0;
+        var errors = new List<string>();
+
+        foreach (var m in mappingsEl.EnumerateArray())
+        {
+            var sourceObjectId = m.TryGetProperty("sourceObjectId", out var soi) ? soi.GetString() : null;
+            var nodeId = m.TryGetProperty("nodeId", out var ni) ? ni.GetString() : null;
+            var nodeKind = m.TryGetProperty("nodeKind", out var nk) ? nk.GetString() : null;
+            var mappingStatus = m.TryGetProperty("mappingStatus", out var ms) ? ms.GetString() : "mapped";
+            var componentKey = m.TryGetProperty("componentKey", out var ck) && ck.ValueKind != JsonValueKind.Null ? ck.GetString() : null;
+            var componentKind = m.TryGetProperty("componentKind", out var ckk) && ckk.ValueKind != JsonValueKind.Null ? ckk.GetString() : null;
+            var htmlTag = m.TryGetProperty("htmlTag", out var ht) && ht.ValueKind != JsonValueKind.Null ? ht.GetString() : null;
+            var parentId = m.TryGetProperty("parentSourceObjectId", out var par) && par.ValueKind != JsonValueKind.Null ? par.GetString() : null;
+            var slotKey = m.TryGetProperty("slotKey", out var sk) && sk.ValueKind != JsonValueKind.Null ? sk.GetString() : null;
+            var orderIndex = m.TryGetProperty("orderIndex", out var oi) && oi.TryGetInt32(out var oidx) ? oidx : 0;
+            var bbox = m.TryGetProperty("bboxJson", out var bj) ? bj : JsonSerializer.SerializeToElement(new { });
+            var text = m.TryGetProperty("textJson", out var tj) ? tj : JsonSerializer.SerializeToElement(new { });
+            var style = m.TryGetProperty("styleCandidateJson", out var scj) ? scj : JsonSerializer.SerializeToElement(Array.Empty<object>());
+
+            if (string.IsNullOrWhiteSpace(sourceObjectId) || string.IsNullOrWhiteSpace(nodeId) || string.IsNullOrWhiteSpace(nodeKind))
+            {
+                errors.Add($"Skipped malformed mapping (missing sourceObjectId/nodeId/nodeKind)");
+                continue;
+            }
+
+            // mappingId not used here (required by record constructor but irrelevant for upsert)
+            var record = new MockPresetObjectMappingRecord(
+                MappingId: "",
+                SourceObjectId: sourceObjectId!,
+                NodeId: nodeId!,
+                NodeKind: nodeKind!,
+                ComponentKey: componentKey,
+                ComponentKind: componentKind,
+                HtmlTag: htmlTag,
+                ParentSourceObjectId: parentId,
+                SlotKey: slotKey,
+                OrderIndex: orderIndex,
+                BboxJson: bbox,
+                TextJson: text,
+                StyleCandidateJson: style,
+                MappingStatus: mappingStatus ?? "mapped"
+            );
+
+            var (_, errorCode) = await _mockPresetRepository.UpsertObjectMappingAsync(presetId, record, ct);
+            if (errorCode is not null)
+                errors.Add($"Failed to upsert {sourceObjectId}: {errorCode}");
+            else
+                saved++;
+        }
+
+        // Optionally persist wiring candidates (payload.wiringCandidates array).
+        var wiringCandidatesSaved = 0;
+        if (payload.TryGetProperty("wiringCandidates", out var wcEl) && wcEl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var wc in wcEl.EnumerateArray())
+            {
+                var wcSourceObjectId = wc.TryGetProperty("sourceObjectId", out var wsoi) ? wsoi.GetString() : null;
+                var wcNodeId = wc.TryGetProperty("nodeId", out var wni) ? wni.GetString() : null;
+                var wcCapabilityTag = wc.TryGetProperty("capabilityTag", out var wct) ? wct.GetString() : null;
+                var wcWiringKind = wc.TryGetProperty("wiringKind", out var wwk) && wwk.ValueKind != JsonValueKind.Null ? wwk.GetString() : null;
+                var wcTargetSurface = wc.TryGetProperty("targetSurface", out var wts) && wts.ValueKind != JsonValueKind.Null ? wts.GetString() : null;
+                var wcTargetRef = wc.TryGetProperty("targetRef", out var wtr) && wtr.ValueKind != JsonValueKind.Null ? wtr.GetString() : null;
+                var wcBinding = wc.TryGetProperty("bindingJson", out var wbj) ? wbj : JsonSerializer.SerializeToElement(new { });
+                var wcStatus = wc.TryGetProperty("status", out var ws) ? ws.GetString() ?? "pending" : "pending";
+
+                if (string.IsNullOrWhiteSpace(wcSourceObjectId) || string.IsNullOrWhiteSpace(wcNodeId) || string.IsNullOrWhiteSpace(wcCapabilityTag))
+                    continue;
+
+                var wcRecord = new MockPresetWiringCandidateRecord(
+                    WiringCandidateId: "",
+                    SourceObjectId: wcSourceObjectId!,
+                    NodeId: wcNodeId!,
+                    CapabilityTag: wcCapabilityTag!,
+                    WiringKind: wcWiringKind,
+                    TargetSurface: wcTargetSurface,
+                    TargetRef: wcTargetRef,
+                    BindingJson: wcBinding,
+                    Status: wcStatus
+                );
+
+                var (_, wcError) = await _mockPresetRepository.UpsertWiringCandidateAsync(presetId, wcRecord, ct);
+                if (wcError is null) wiringCandidatesSaved++;
+                else errors.Add($"WiringCandidate {wcSourceObjectId}/{wcCapabilityTag}: {wcError}");
+            }
+        }
+
+        _logger.LogInformation(
+            "AdminRuntime.MockPreset.SaveMappings: presetId={PresetId} saved={Saved} wirings={Wirings} errors={Errors}",
+            presetId, saved, wiringCandidatesSaved, errors.Count);
+
+        return (JsonSerializer.SerializeToElement(new
+        {
+            ok = errors.Count == 0,
+            presetId = presetIdStr,
+            savedCount = saved,
+            wiringCandidatesSavedCount = wiringCandidatesSaved,
+            errors,
+        }), null);
+    }
+
     // ─── bind ────────────────────────────────────────────────────────────────
     // bind returns compile_snapshot layout_patch_json as a tmp canvas draft payload.
     // It does NOT write to topology.ui_topology_tensor or canonical topology tables.
