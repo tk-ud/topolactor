@@ -621,7 +621,7 @@ system_roadmap_ssot:
       title: Component DB bind and Markdown saved-view authoring UI
       status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, and TeamMarkdownDashboard island are implemented; full binding authoring UI modal/drawer is pending.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, and TeamMarkdownDashboard island are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); dashboard island is not yet mounted at a routable path; markdown binding renderer and required placeholder blocking are not implemented; full binding authoring UI modal/drawer is pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -660,6 +660,9 @@ system_roadmap_ssot:
         - template_bind_authoring_modal_or_drawer_UI_not_created
         - record_markdown_bind_form_not_created
         - template_registration_modal_not_created
+        - search_scope_rendered_markdown_and_tags_not_searched
+        - markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced
+        - dashboard_surface_not_mounted_no_route_for_admin_team_dashboard
 
     product.md_viewer_projection_component:
       bundle_id: md_viewer_projection_component
@@ -700,13 +703,14 @@ system_roadmap_ssot:
       known_gap_ref:
         - UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring_not_created
         - full_drawer_placement_via_UIBuilder_canvas_not_wired
+        - md_viewer_dashboard_action_wiring_incomplete_only_onArchive_onClose_wired
 
     product.completed_preset_seed_projection_gate:
       bundle_id: completed_preset_seed_projection_gate
       title: Completed preset seed validation gate for saved-view projection
       status: partial
       production_ready: false
-      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; CompletedPresetSeedValidator enforces the gate for create/refresh/rebind/clone/projection; saved view DB column is NOT NULL; seed validation failure is an explicit blocking error with no silent fallback.
+      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; CompletedPresetSeedValidator enforces the gate for create/refresh/update/projection (top-level keys and render_ref hash only); saved view DB column is NOT NULL; seed validation failure is an explicit blocking error with no silent fallback; clone and rebind actions are not yet implemented.
       scope:
         - completed_preset_seed_json_required_persistence
         - seed_builder_and_validator
@@ -739,6 +743,8 @@ system_roadmap_ssot:
       known_gap_ref:
         - seed_builder_helper_for_client_side_construction_not_implemented
         - clone_action_backend_implementation_pending
+        - rebind_action_not_designed_or_implemented
+        - seed_validator_depth_nested_fields_not_validated_only_top_level_and_render_hash
 
     backend.sql_attention_logs_current:
       bundle_id: product.sql_attention_observation_runtime
