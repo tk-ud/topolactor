@@ -12,7 +12,6 @@
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
 | `preset_team_markdown_saved_view_seed` | Preset ecosystem child saved Markdown view / md_viewer | not_started | 1 | `docs/design/team-markdown-dashboard-saved-view-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
-| `ui-builder-default-route-navigation` | UI Builder ルート遷移デフォルト配線 | implemented | 1 | `docs/design/admin-console-workflow-ssot.yaml` |
 
 ---
 
@@ -66,27 +65,3 @@ Preset ecosystem / preset seed / saved view 配下の child surface として、
 実装 bundle ではなく、統合 UX の手動受入 / hand-debug evidence gap。runtime dispatch loop、ProjectionShell SSE refresh、recommend child island、SQL Attention feedback projection、admin CSV/JSON import、admin authoring routes は実装済みとして扱い、未実装扱いに戻さない。
 
 - [ ] `product.dynamic_support_nocode_loop` の combined UX を、authoring guidance → SQL Attention feedback → M6 admin loop の通し手動受入 / hand-debug で確認する
-
----
-
-## Bundle `ui-builder-default-route-navigation`
-
-**Status:** implemented  
-**SSOT:** `docs/design/admin-console-workflow-ssot.yaml`
-
-/admin/ui-builder の component-level wiring に、通常導線で「指定されたルートへ飛ぶ」デフォルト配線を追加する。raw dispatcher fields は normal-view に出さず、既存の package wiring / target_ref / route_key / manifest wiring と衝突しない保存形式にする。
-
-- [x] UI Builder で、クリック可能コンポーネントに route navigation のデフォルト配線を設定・保存・再読込・投影できるようにする（SSOT / roadmap / tests も同一 bundle で更新）
-  - RouteNavigationWiringPreset を PackageDesignPanel 通常導線に追加
-  - encodeRouteNavigationTargetRef / parseRouteNavigationTargetRef / isRouteNavigationTargetRef を packageWiringPicker.ts に追加
-  - target_ref: "route:<routeKey>" 形式で保存（manifest:... と衝突しない）
-  - raw dispatcher fields は <details> PackageWiringEditor のみ（通常導線に出さない）
-  - SSOT (admin-console-workflow-ssot.yaml) / roadmap / tests 同一 bundle で更新済み
-- [x] 投影 runtime での route navigation 実行を frontend-local lane として実装（runtime 閉鎖）
-  - isNavigationWiringKind / buildRouteNavigationEventBinding を renderEmission.ts に追加
-  - buildRuntimeDispatchSpec: navigation wiringKind → null（backend dispatch しない）
-  - runtimeComponentFactory.ts emitBoundEvent: routeNavigation binding → globalThis.location.href
-  - ManifestDispatcherTargetRefTests: route: prefix → TARGET_REF_INVALID 防衛テスト追加
-  - pipeline-continuity-ssot.yaml: navigation_wiring_execution_contract 追加
-  - admin-console-workflow-ssot.yaml: route_navigation.runtime_execution 追加
-  - roadmap known_gap_ref から runtime navigation gap を削除
