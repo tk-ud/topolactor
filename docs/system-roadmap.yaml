@@ -16,9 +16,9 @@ system_roadmap_ssot:
 
   document_role:
     summary: >
-      Public-facing project status SSOT. This file describes the system roadmap,
-      milestone state, implementation status, evidence, and completion conditions.
-      It is intentionally higher level than docs/design/* and more structured than README.
+      Feature-bundle catalog and public status index for product capabilities.
+      Read this file for bundle status, summary, scope, known gaps, and detail_ref;
+      do not treat it as an execution evidence ledger or component/runtime surface registry.
     owns:
       - roadmap
       - milestones
@@ -120,81 +120,53 @@ system_roadmap_ssot:
         lifecycle_state_visibility:
           status: implemented
           acceptance: draft_validated_applied_failed_and_persisted_are_visibly_distinguishable
-          implemented_surface:
-            - LifecycleStepIndicator_shows_draft_validated_applied_persisted_steps_with_aria_current
-            - failure_phases_scoped_to_action_preview_fail_stays_previewed_validate_fail_stays_validated_apply_fail_is_applied_fail
-            - draft_only_nodes_are_visibly_marked_and_apply_blocked
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
         recovery_navigation:
           status: implemented
           acceptance: undo_redo_or_at_minimum_clear_cancel_reset_and_revert_paths_exist
-          implemented_surface:
-            - 50_step_undo_redo_history_stack_with_Ctrl_Z_Y_keyboard_shortcuts
-            - clear_canvas_button_in_layout_builder_section
-            - all_node_mutations_push_to_history_including_inspector_commits
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
         actionable_validation_errors:
           status: implemented
           acceptance: validation_errors_show_cause_target_node_and_repair_suggestion_not_internal_code_only
-          implemented_surface:
-            - ActionableValidationErrorPanel_maps_error_code_to_plain_language_cause_and_repair_suggestion
-            - per_error_componentKey_and_nodeId_context_shown_for_node_targeted_errors
-            - raw_error_code_preserved_as_advanced_info_in_small_font
-            - role_alert_on_error_panel
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
+            - .agent/tests/check-accessibility-manual.md
         progressive_disclosure_vocabulary:
           status: implemented
           acceptance: internal_slot_parent_and_grid_vocabulary_is_translated_for_normal_view_and_raw_terms_are_advanced_only
-          implemented_surface:
-            - CanvasInspector_uses_friendly_labels_for_x_y_width_height_parent_slot
-            - raw_componentKey_hidden_in_details_disclosure
-            - raw_SSOT_refs_and_UUIDs_in_AdvancedManualOverride_disclosures
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
         non_pointer_operation:
           status: implemented
           acceptance: drag_move_resize_and_reorder_have_keyboard_or_button_alternatives
-          implemented_surface:
-            - arrow_key_move_for_selected_node_10px_step_50px_with_shift
-            - resize_handle_Enter_Space_keyboard_activate_calls_real_delta_resize_not_mouse_proxy
-            - handleKeyboardResizeNode_applies_SNAP_SIZE_delta_per_direction
-            - palette_add_button_per_entry_for_non_drag_add
-            - layer_tree_up_down_reorder_buttons
-            - Delete_Backspace_key_and_delete_button_for_node_removal
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
+            - .agent/tests/check-accessibility-manual.md
         accessibility_observability:
           status: implemented
           acceptance: focus_order_focus_visible_target_size_and_status_messages_are_testable_and_user_observable
-          implemented_surface:
-            - canvas_role_application_nodes_role_button_tabIndex_0_aria_selected_aria_label
-            - resize_handles_24x24px_touch_target_WCAG_2_5_8_with_12px_visual_dot
-            - focus_visible_ring_on_nodes_resize_handles_palette_buttons_and_action_buttons
-            - aria_live_polite_announce_for_async_status_preview_validate_apply_add_delete
-            - repeatable_manual_check_documented_in_agent_tests_check-accessibility-manual.md
-          unresolved_scope:
-            - manual_check_execution_pending_first_run_before_marking_verified
+          evidence_ref:
+            - .agent/tests/check-accessibility-manual.md
         first_run_guidance:
           status: implemented
           acceptance: empty_state_template_and_example_flow_make_the_first_action_clear
-          implemented_surface:
-            - empty_canvas_CTA_with_three_template_buttons_header_main_card_form
-            - palette_add_button_as_non_drag_first_action_alternative
-          unresolved_scope: []
+          evidence_ref:
+            - frontend/tests/visualLayoutBuilder.test.ts
         css_token_visual_diff:
           status: implemented
           acceptance: css_token_selection_has_visual_preview_and_selection_diff
-          implemented_surface:
-            - CssTokenSwatch_derives_color_from_resolveCssTokenValue_using_SSOT_value_refs_not_hardcoded_role_map
-            - text_color_tokens_show_letter_A_on_gray_background_with_SSOT_foreground_value
-            - spacing_radius_typography_tokens_show_property_specific_preview
-            - selected_token_chip_list_shows_before_state_current_selection_diff
-          unresolved_scope: []
+          evidence_ref:
+            - .agent/tests/check-css-dictionary.sh
+            - frontend/tests/visualLayoutBuilder.test.ts
       verification_policy:
         executable_now:
-          - .agent/tests/check-system-roadmap.sh verifies UX acceptance SSOT criterion closure and authority-boundary declarations
-          - .agent/tests/check-css-dictionary.sh verifies CSS dictionary selector vocabulary binding
-          - .agent/tests/check-ui-ux-executable-component-slice.sh verifies representative primitive factory reachability
-          - frontend/tests/visualLayoutBuilder.test.ts covers keyboard resize delta lifecycle failure phases css token resolution inspector commit boundary and parent cycle helpers (43 tests)
-          - .agent/tests/check-accessibility-manual.md provides repeatable 6-check manual procedure for focus order focus visible target size keyboard alternatives status messages and error identification
+          - .agent/tests/check-system-roadmap.sh
+          - .agent/tests/check-css-dictionary.sh
+          - .agent/tests/check-ui-ux-executable-component-slice.sh
+          - frontend/tests/visualLayoutBuilder.test.ts
+          - .agent/tests/check-accessibility-manual.md
         required_when_implemented: []
 
   external_integration_policy:
@@ -242,1065 +214,230 @@ system_roadmap_ssot:
 
   milestones:
     M1_runtime_skeleton:
-      title: Canonical runtime route skeleton
+      title: Canonical runtime route foundation
       status: partial
-      goal: >
-        Establish visible frontend/backend runtime route boundaries so future work can move
-        behavior into the canonical data-defined route instead of adding direct branches.
-      implemented_scope:
-        - frontend ui action to dispatch api client path
-        - backend dispatch endpoint boundary
-        - backend runtime timeline scheduler skeleton
-        - backend manifest dispatcher skeleton
-        - default entity search vertical slice
-        - SSE endpoint and frontend receiver/dispatcher skeletons
-      remaining_scope:
-        - manifest-driven active routing
-        - real SSE projection event flow
-        - explicit trigger_kind and role request identity
-      detail_ssot:
+      summary: Frontend command entry, backend dispatch, scheduler, dispatcher, executor, and projection shell foundations exist, but the full runtime route remains governed by bundle-level gaps.
+      bundle_refs:
+        - product.core_runtime_route
+        - product.projection_and_output_lanes
+      detail_ref:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/pipeline-continuity-ssot.yaml
 
     M2_manifest_runtime:
       title: Manifest-driven runtime routing
       status: partial
-      goal: >
-        Move runtime destination selection from hardcoded RuntimeExecutor branches into
-        active manifest resolution by role, target, layer, and action.
-      unlocks:
-        - backend.manifest_dispatcher: implemented
-        - backend.runtime_timeline_scheduler: partial
-        - backend.runtime_executor_dispatch_scope: narrowed
-      blocking_gaps: []
+      summary: Manifest route resolution exists as a runtime boundary, with remaining manifest-storage and production-route hardening tracked at bundle level.
+      bundle_refs:
+        - product.core_runtime_route
+      detail_ref:
+        - docs/design/runtime-orchestration-ssot.yaml
 
     M3_unified_timeline_and_output_lanes:
-      title: Unified trigger timeline and output lanes
+      title: Unified trigger timeline and CI lane evidence
       status: partial
-      goal: >
-        Align cron, hook, and client triggers on the same backend runtime timeline,
-        then route effects into response, db_notify, and registry_attractor output lanes.
-      unlocks:
-        - backend.runtime_timeline_scheduler: implemented (queue_boundary_hardening_complete)
-        - backend.output_lane_router: partial
-        - backend.db_notify_listener: implemented (live pg_notify -> scheduler -> SSE gate in check-runtime-environment.sh)
+      summary: Scheduler/output-lane behavior and SSOT wiring audit lanes are tracked as capability bundles rather than per-component proof ledgers.
+      bundle_refs:
+        - product.projection_and_output_lanes
+        - product.system_ci_contract_audit
+      detail_ref:
+        - docs/design/pipeline-continuity-ssot.yaml
+        - docs/design/ci-contract-ssot.yaml
 
     M4_projection_runtime:
       title: SSE and projection runtime
       status: partial
-      goal: >
-        Connect backend projection events through SSE into frontend scheduler,
-        dispatcher, projection runtime, and UI projection without frontend topology judgment.
-      unlocks:
-        - backend.sse_emitter: partial
-        - frontend.sse_receiver: implemented
-        - frontend.sse_dispatcher: implemented
-        - frontend.projection_constructor: implemented
-        - frontend.projection_shell_sse_refresh_boundary: implemented
-      blocking_gaps: []
+      summary: Backend projection events and frontend projection runtime are maintained as projection capability status, not frontend topology authority.
+      bundle_refs:
+        - product.projection_and_output_lanes
+      detail_ref:
+        - docs/design/pipeline-continuity-ssot.yaml
 
     M5_admin_and_ui_topology:
-      title: Admin UI, component topology, and seed runtime
+      title: Admin topology authoring and preset ecosystem
       status: partial
-      goal: >
-        Provide admin-facing registry, seed, component, layout, and projection management
-        surfaces while keeping DB topology and backend runtime as the semantic authority.
-      unlocks:
-        - admin_hub_navigation_write_layer: implemented
-      blocking_gaps:
-        - Issue #84 seed import/export runtime
-        - Issue #86 frontend UI component system
-        - Gap-9 admin route detailed no-code workflow bundle
+      summary: Admin UI, UI topology, visual builder, primitive catalog, mock preset intake, and preset child saved-view work are tracked as product authoring bundles.
+      bundle_refs:
+        - product.admin_topology_authoring
+        - product.frontend_projection_surface_ux_acceptance
+        - product.preset_team_markdown_saved_view_seed
+      detail_ref:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
 
     M6_external_integration:
-      title: Self-hosted admin authoring loop (MVP)
+      title: Self-hosted no-code authoring loop and optional external surfaces
       status: implemented
-      goal: >
-        Establish a self-hosted admin authoring loop where admins define per-manifest content and DB design
-        in admin/contents first (see docs/design/admin-console-workflow-ssot.yaml v0.6), then import CSV/JSON,
-        build UI, group manifests under hubs, validate-preview-apply candidates, with backend-derived
-        manifest/topology (not raw manifest JSON as the default edit surface), user-defined aggregation/display/binding policy, bind DB/JSONB fields into
-        document canvas templates, render invoice/estimate/delivery-note style documents,
-        and export PDF snapshots with canonical diff/audit linkage.
-      primary_entry_surface:
-        - admin_csv_import
-        - admin_json_import
-        - admin_document_canvas
-      future_optional_external_surfaces:
-        - Notion
-        - Google Sheets
-        - Slack
-        - GitHub Issues
-        - generic webhooks
-        - external REST API connectors
-      future_optional_external_surfaces_ssot_ref:
+      summary: Self-hosted CSV/JSON/admin authoring loop is implemented for the declared MVP; optional external connector bundles remain not_started until separate connector contracts exist.
+      bundle_refs:
+        - product.dynamic_support_nocode_loop
+        - product.external_optional_surface_bundle_gate
+        - product.helper_manual_policy
+      detail_ref:
+        - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/extended-runtime-bundle-registry-ssot.yaml
-      intended_non_IT_loop:
-        - admin_imports_csv_or_json_as_candidate_payload
-        - validate_stage_returns_explicit_mapping_required_field_and_policy_errors
-        - preview_stage_shows_manifest_binding_document_and_runtime_effect_candidates
-        - explicit_apply_enters_canonical_runtime_route_without_direct_db_write
-        - jsonb_label_value_manifest_defines_display_aggregation_and_binding_policy
-        - admin_binds_db_jsonb_fields_into_document_canvas_template
-        - invoice_estimate_delivery_note_documents_render_from_bound_data
-        - pdf_export_persists_export_snapshot_and_applied_diff_audit_linkage
-      unlocks:
-        - admin_csv_import_validate_preview_apply: implemented
-        - admin_json_import_validate_preview_apply: implemented
-        - intake_snapshot_and_applied_diff_log: implemented
-        - jsonb_label_value_manifest_runtime: implemented
-        - user_defined_aggregation_display_binding_policy: implemented
-        - DocumentCanvasTemplateEditor_primitive_wiring: implemented
-        - document_canvas_runtime_connected_factory_registration: implemented
-        - data_binding_to_document_canvas: implemented
-        - pdf_export_snapshot_runtime: implemented
-        - scheduler_runtime_load_benchmark: implemented
-      test_bundle_refs:
-        document_canvas_runtime_connected_factory_registration:
-          - document_canvas_runtime_factory_registration
-          - document_canvas_catalog_seed_ssot_consistency
-          - document_canvas_projection_constructor_field_validation
-        data_binding_to_document_canvas:
-          - projection_runtime_component_props_pipeline
-          - document_canvas_projection_constructor_field_validation
-          - jsonb_label_value_manifest_runtime
-          - user_defined_aggregation_display_binding_policy
-          - document_canvas_db_binding_loop
-        jsonb_label_value_manifest_runtime:
-          - jsonb_label_value_manifest_runtime
-        user_defined_aggregation_display_binding_policy:
-          - user_defined_aggregation_display_binding_policy
-        pdf_export_snapshot_runtime:
-          - pdf_export_snapshot_runtime
-        scheduler_runtime_load_benchmark:
-          - scheduler_runtime_load_benchmark
-      blocking_gaps: []
-      completion_condition:
-        - admin_can_import_csv_json_as_candidate_payload
-        - validate_preview_apply_stages_are_separated
-        - broken_mapping_or_missing_required_field_returns_explicit_validation_error
-        - imported_data_does_not_bypass_canonical_runtime_route
-        - jsonb_label_value_manifest_defines_display_aggregation_and_binding_policy
-        - user_can_bind_db_jsonb_fields_into_document_canvas_template
-        - invoice_like_document_can_render_from_bound_data
-        - pdf_export_creates_snapshot_export_record
-        - applied_canonical_diff_and_source_intake_snapshot_are_both_recorded
-      public_summary: >
-        M6 MVP focuses on self-hosted admin authoring, not external connectors. CSV/JSON
-        intake, JSONB manifest policy, document canvas binding, and PDF snapshot/diff
-        evidence are the completion boundary. External APIs remain future optional
-        surfaces and are explicitly outside M6 MVP completion judgment.
+        - docs/design/user-facing-helper-manual-ssot.yaml
 
     M7_sql_attention_observation_runtime:
-      title: SQL Attention observation runtime
+      title: SQL Attention observation and recommendation feedback
       status: partial
-      goal: >
-        Implement SQL Attention as a DB-native manifest-scoped hubs.hub_relations exploration
-        runtime triggered by policy-qualified logs.current topN/rank/norm-level changes.
-        logs.hub_current is an optional support cache / derived current, not the exploration body.
-        Completion requires append-only SQLAT / phaseAT evidence generation-line persistence,
-        ID-space Phase Attention, and explicit-only Draft/adopted reflection boundaries.
-        Topology/context-route recommendation remains a child projection and consumer surface.
-      blocking_gaps: []
-      test_bundle_refs:
-        sql_attention_observation_runtime:
-          - sql_attention_live_db_end_to_end_loop
-          - sql_attention_observation_runtime_production_ready
+      summary: SQL Attention observation, evidence persistence, phase vector generation, topology projection, and user feedback UX are grouped as one observation capability with CI compatibility entries retained below.
+      bundle_refs:
+        - product.sql_attention_observation_runtime
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
 
     UXA_frontend_projection_surface_general_ux:
-      title: Frontend projection surface general UX acceptance
-      status: partial
-      gate_kind: ux_acceptance_milestone
-      independent_of_production_ready: true
-      goal: >
-        Maximize general-user UX for frontend authoring and projection surfaces without moving
-        design/layout/wiring or topology judgment authority out of DB-backed runtime boundaries.
-      implemented_scope:
-        - preview_validate_apply_intent_route_and_draft_only_apply_guard
-        - local_readiness_and_result_summary_projection
-        - basic_backend_validation_error_projection_with_role_alert
-        - admin_how_to_and_help_surface
-        - searchable_filterable_css_token_candidate_selection
-      remaining_scope:
-        - lifecycle_state_visibility_for_draft_validated_applied_failed_persisted
-        - recovery_navigation_for_cancel_reset_revert_or_undo_redo
-        - plain_language_actionable_validation_errors_with_target_node_and_repair_suggestion
-        - progressive_disclosure_for_internal_topology_layout_vocabulary
-        - keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
-        - repeatable_focus_order_focus_visible_target_size_and_status_message_acceptance
-        - actionable_empty_state_template_and_example_flow
-        - css_token_visual_preview_and_before_after_selection_diff
-      completion_condition:
-        - frontend_projection_surface_general_ux_acceptance_gate_is_satisfied
-        - frontend_remains_projection_surface_without_topology_judgment
-        - preview_validate_apply_and_no_direct_DB_write_boundary_is_preserved
+      title: Frontend projection surface UX acceptance gate
+      status: implemented
+      summary: The projection UX gate remains independent from production_ready and is represented as a product UX acceptance bundle.
+      bundle_refs:
+        - product.frontend_projection_surface_ux_acceptance
+      detail_ref:
+        - docs/system-roadmap.yaml#ux_acceptance_gates
 
   implementation_registry:
-    backend.sql_attention_logs_diff:
+    product.core_runtime_route:
+      bundle_id: product.core_runtime_route
+      title: Canonical runtime command route
       status: partial
       production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: logs.diff append boundary and runtime separation from topology_edit_log are implemented; live runtime-environment verification and broader integration hardening remain.
-      files:
-        - backend/runtime/RuntimeExecutor.cs
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/schema/SqlAttentionContracts.cs
+      public_summary: User and admin commands enter through the frontend/API/backend runtime route and preserve scheduler-dispatcher-executor boundaries; remaining gaps are manifest storage and full production route hardening.
+      scope:
+        - frontend_command_entry
+        - backend_dispatch_endpoint
+        - runtime_timeline_scheduler
+        - manifest_dispatcher
+        - runtime_executor_boundary
+      detail_ref:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
-      evidence:
-        tests:
-          - RuntimeExecutorTests
-        ci:
-          - backend-tests
-          - runtime-semantics
+        - backend/tests/Topolactor.Integration.Tests/DefaultEntitySearchIntegrationTests.cs
+        - frontend/tests/defaultEntitySearch.test.ts
       completion_condition:
-        - logs_diff_append_boundary_exists_and_writes_required_fields
-        - runtime_executor_separates_topology_edit_log_audit_from_logs_diff_append
-        - mutation_action_filter_excludes_select_read_list_search
-        - source_set_and_basis_window_resolution_is_data_defined_context_or_env
+        - scheduler_dispatcher_runtime_executor_route_preserves_topology_identity
+        - manifest_storage_and_runtime_destination_resolution_are_production_hardened
       known_gap_ref:
-        - SQLA-7 logs.diff append boundary is implemented, but live DB/runtime verification and broader hardening coverage remain
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    backend.sql_attention_logs_current:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        logs.current refresh and l2 norm watch function is implemented and read through
-        NpgsqlSqlAttentionLogsRepository.LoadWatchCandidatesAsync. Live DB end-to-end
-        loop is proven by SqlAttentionLiveDbEndToEndTests. Production_ready promotion
-        pending CI confirmation of live DB E2E evidence.
+        - manifest_storage_remains_skeleton_scope
+        - full_manifest_driven_active_routing_not_production_ready
       files:
-        - db/sql_attention_logs_tables.sql
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLogsFunctionContractTests
-          - SqlAttentionLiveDbEndToEndTests
-        ci:
-          - backend-tests
-          - Structure Check
-      completion_condition:
-        - logs_refresh_logs_current_watch_function_exists_with_policy_resolver
-        - repository_load_watch_candidates_calls_refresh_logs_current_watch
-        - logs_current_upsert_computes_l2_norm_and_returns_change_candidates
-      known_gap_ref:
-        - live DB end-to-end evidence added; production_ready promotion pending CI confirmation
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
+        - backend/
+        - frontend/
 
-    backend.sql_attention_hub_current:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        logs.hub_current refresh rebuilds attractor_vector_json/population/axis/phase projection
-        fields from append-only logs.attention evidence. This is a support cache / derived current,
-        not the canonical SQL Attention exploration field. Live DB loop proves the existing cache
-        refresh boundary; canonical ID-space runtime does not depend on this cache.
-      files:
-        - db/sql_attention_logs_tables.sql
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLiveDbEndToEndTests
-        ci:
-          - backend-tests
-          - Structure Check
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    backend.sql_attention_scheduler_exploration:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        Scheduler/runtime plumbing retains logs.current trigger and policy validation. Production
-        ExploreAsync resolves explicit physical table manifest bindings, explores manifest-scoped
-        hubs.hub_relations candidates with data-defined relation scores, and never silently loads
-        logs.hub_current cosine candidates. The old cache path remains explicitly named diagnostics only.
-      known_gap_ref:
-        - EMA score integration remains separate; canonical generation rows preserve phase evidence and relation lineage without EMA collapse
-      files:
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/scheduler/SqlAttentionScheduler.cs
-        - backend/Program.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLiveDbEndToEndTests
-        ci:
-          - backend-tests
-          - Structure Check
-      completion_condition:
-        - scheduler is wired as hosted service in production runtime
-        - watch candidates are loaded from logs.refresh_logs_current_watch
-        - related topology_manifest_id arrays are resolved for triggered physical tables
-        - hubs.hub_relations is explored as the canonical manifest-scoped field
-        - logs.hub_current is optional support cache only
-        - exploration policy caps are enforced without hardcoded clamp
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    backend.sql_attention_logs_attention_persistence:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >-
-        Append-only logs.attention persistence stores SQLAT hit and phaseAT q rows on the same
-        generation_line_id, links phaseAT to its source hit through source_attention_id, preserves
-        resolved manifest/relation/hub identity arrays, and records explicit Draft/adoption/rejection
-        lifecycle rows without updating prior evidence rows.
-      files:
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/schema/SqlAttentionContracts.cs
-        - backend/scheduler/SqlAttentionScheduler.cs
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/runtime/SqlAttentionEvidencePromotionRuntime.cs
-        - db/migrations/sql_attention_phase_generation_line.sql
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionPhaseGenerationLineTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLiveDbEndToEndTests
-        ci:
-          - backend-tests
-          - runtime-semantics
-          - unified-test-gate
-          - Structure Check
-      completion_condition:
-        - logs_attention_persists_l2_norm_vector_json_evidence_json
-        - write_path_is_append_only_and_identity_preserving
-        - SQLAT_hit_rows_preserve_physical_table_topology_manifest_hub_relation_hub_identity
-        - phaseAT_rows_preserve_parent_SQLAT_generation_lineage
-      known_gap_ref:
-        - EMA score integration remains separate and is not collapsed into phaseAT identity evidence
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    backend.sql_attention_phase_vector:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        Canonical runtime phase_vector_json generation emits resolved x/y/z IDs, bounded farther
-        relation/manifest/hub ID arrays, and q as append-only logs.attention phaseAT evidence (never Draft).
-        Deprecated support-cache compatibility payloads remain isolated from the canonical scheduler route.
-      files:
-        - db/sql_attention_logs_tables.sql
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/schema/SqlAttentionContracts.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLogsFunctionContractTests
-          - SqlAttentionLiveDbEndToEndTests
-        ci:
-          - backend-tests
-          - Structure Check
-      completion_condition:
-        - w_is_l2_norm
-        - x_y_z_are_hub_relation_topology_manifest_hub_ID_spaces_not_count_scalars
-        - i_j_k_preserve_bounded_farther_ID_space_exploration_evidence
-        - q_is_append_only_logs_attention_phaseAT_evidence_row_not_Draft
-        - no_automatic_topology_registry_manifest_or_hub_relation_mutation
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    backend.sql_attention_observation_runtime:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        logs.diff append and logs.current refresh/watch feed explicit physical table manifest binding
-        resolution, manifest-scoped hubs.hub_relations exploration, and append-only SQLAT / phaseAT
-        generation rows. The old logs.hub_current cosine route is isolated for diagnostics only.
-        Explicit lifecycle commands append Draft/adoption/rejection evidence without automatic canonical
-        mutation. This infrastructure entry must not be read as recommendation UX completion.
-      files:
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLogsFunctionContractTests.cs
-      evidence:
-        tests:
-          - SqlAttentionLiveDbEndToEndTests
-          - SqlAttentionLogsFunctionContractTests
-        ci:
-          - backend-tests
-          - Structure Check
-      completion_condition:
-        - logs_observation_pipeline_refresh_watch_exploration_write_is_stable
-        - canonical_manifest_scoped_hubs_hub_relations_exploration_is_wired
-        - canonical_ID_space_phaseAT_generation_is_wired
-        - append_only_SQLAT_phaseAT_generation_lineage_is_wired
-      known_gap_ref: []
-
-    backend.sql_attention_explicit_evidence_promotion_line:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        Implements the explicit command/user-operation boundary from append-only SQLAT / phaseAT evidence
-        to Draft promotion and explicit adopted reflection. SQL Attention and Phase Attention must
-        never auto-mutate topology, registry, manifests, or hub relations.
-      completion_condition:
-        - phaseAT_evidence_is_not_Draft
-        - Draft_promotion_requires_explicit_command_or_user_operation
-        - adopted_reflection_requires_explicit_operation
-        - non_adopted_evidence_never_mutates_canonical_topology_manifest_or_hub_relation
-      known_gap_ref:
-        - adopted reflection currently records append-only adoption_result evidence and intentionally performs no automatic canonical mutation
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    product.sql_attention_recommendation_feedback_ux:
+    product.projection_and_output_lanes:
+      bundle_id: product.projection_and_output_lanes
+      title: Projection runtime and output lanes
       status: partial
       production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        SQL Attention evidence (logs.attention) is now connected to the user-visible
-        recommendation feedback surface via SqlAttentionTopologyProjectionRuntime (child projection)
-        and SqlAttentionProjectionPanel (frontend projection-only) via authenticated backend/frontend API boundary. Evidence-backed topology
-        projection candidates are returned with evidence layers preserved (statistics/attention/phase_attention).
-        Fixed route / registry / topology mutation is not performed. Explicit failure is implemented
-        for all policy and DB error cases. Frontend is projection-only.
-        Existing evidence is projected to the feedback UX, and parent canonical SQLAT / phaseAT
-        generation-line alignment is wired. Production function_parameters seed for
-        sql_attention_topology_projection is present in seed_empty.sql.
+      public_summary: Response, SSE, db_notify, scheduler, frontend receiver/dispatcher, and projection shell behavior are tracked as one projection/output capability.
+      scope:
+        - backend_output_lanes
+        - sse_projection_event_flow
+        - frontend_projection_runtime
+        - projection_shell_refresh_boundary
+      detail_ref:
+        - docs/design/pipeline-continuity-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+      evidence_ref:
+        - frontend/tests/pipelineContinuity.test.ts
+        - .agent/tests/check-pipeline-continuity.sh
       completion_condition:
-        - sql_attention_evidence_is_consumed_by_user_visible_recommendation_feedback_surfaces
-        - feedback_projection_consumes_canonical_SQLAT_phaseAT_generation_line_without_frontend_authority
+        - output_lanes_preserve_response_db_notify_and_projection_boundaries
+        - real_sse_projection_flow_is_verified_end_to_end
       known_gap_ref:
-        - manual acceptance / hand-debug verification remains before production-ready promotion
+        - projection_runtime_is_not_production_ready_until_full_sse_flow_and_downstream_persistence_are_verified
+      files:
+        - backend/
+        - frontend/
+
+    product.admin_topology_authoring:
+      bundle_id: product.admin_topology_authoring
+      title: Admin topology authoring and UI Builder
+      status: partial
+      production_ready: false
+      public_summary: Admin routes, UI topology registration, primitive catalog, visual layout builder, mock preset intake, and DB-backed design/layout/wiring projection are tracked as one authoring capability bundle.
+      scope:
+        - admin_routes
+        - ui_topology_registration
+        - visual_layout_builder
+        - mock_preset_intake_compiler
+        - primitive_catalog_and_runtime_factory_slice
+      detail_ref:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        - docs/design/abstract-function-primitive-registry-ssot.yaml
+      evidence_ref:
+        - frontend/tests/visualLayoutBuilder.test.ts
+        - frontend/tests/ssotReaderCatalog.test.ts
+        - frontend/tests/abstractFunctionBoundary.test.ts
+        - .agent/tests/check-ui-ux-executable-component-slice.sh
+      completion_condition:
+        - admin_authoring_routes_use_preview_validate_apply_boundary
+        - db_design_layout_wiring_authority_remains_backend_and_topology_owned
+        - mock_preset_intake_and_visual_builder_complete_their_declared_acceptance_scope
+      known_gap_ref:
+        - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
+      files:
+        - backend/
+        - frontend/
 
     product.dynamic_support_nocode_loop:
+      bundle_id: product.dynamic_support_nocode_loop
+      title: Self-hosted dynamic support no-code loop
       status: implemented
       production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        Dynamic-support no-code loop implementation boundaries are closed for runtime dispatch,
-        projection loop, recommend child island, SQL Attention recommendation feedback UX,
-        admin CSV/JSON import, and the M6 self-hosted admin route split. frontend.admin_routes
-        detailed no-code wizard bundle is implemented (all /admin/contents authoring steps,
-        structured field persistence, explicit wiring failure, /admin/ui-builder authoring surface).
-        Remaining work is manual acceptance / hand-debug verification of the combined UX loop,
-        tracked separately as product-nocode-loop-acceptance; it is not a runtime implementation gap.
-        Future optional external connector surfaces remain outside M6 scope.
+      public_summary: Runtime dispatch, projection refresh, recommendation child island, SQL Attention feedback projection, admin CSV/JSON import, and admin authoring routes are implemented for the self-hosted M6 loop; combined UX acceptance remains a non-code verification gap.
+      scope:
+        - runtime_dispatch_loop
+        - projection_loop
+        - recommendation_feedback_projection
+        - admin_csv_json_import
+        - self_hosted_admin_authoring_routes
+      detail_ref:
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs
+        - frontend/tests/adminImport.test.ts
+        - frontend/tests/sqlAttentionProjectionPanel.test.ts
       completion_condition:
         - runtime_dispatch_loop_is_wired_through_scheduler_dispatcher_runtime_executor
         - projection_loop_refreshes_backend_emission_without_frontend_topology_judgment
         - recommend_child_island_and_SQL_attention_feedback_projection_are_wired
         - admin_csv_json_import_and_admin_authoring_routes_are_available_for_self_hosted_M6_loop
       known_gap_ref:
-        - manual acceptance / hand-debug verification pending for combined UX loop (product-nocode-loop-acceptance)
-
-    backend.sql_attention_topology_projection:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        SqlAttentionTopologyProjectionRuntime reads logs.attention evidence (read-only) and
-        projects it into TopologyProjectionCandidate recommendation candidates for
-        user-visible surfaces. Evidence layer separation (statistics/attention/phase_attention)
-        is preserved per SSOT. Policy is resolved from function_parameters (no magic numbers).
-        Explicit failure on policy missing/invalid/DB unavailable (no silent fallback).
-        No registry/topology/fixed-route mutation. Frontend SqlAttentionProjectionPanel
-        is projection-only.
+        - product-nocode-loop-acceptance manual acceptance / hand-debug verification pending
       files:
-        - backend/runtime/SqlAttentionTopologyProjectionRuntime.cs
-        - backend/repository/SqlAttentionLogsRepository.cs
-        - backend/repository/NpgsqlSqlAttentionLogsRepository.cs
-        - backend/schema/SqlAttentionContracts.cs
-        - frontend/components/SqlAttentionProjectionPanel.tsx
-        - backend/Program.cs
-        - frontend/api/sqlAttentionProjection.ts
-        - frontend/routes/api/sql-attention/topology-projection.ts
-        - frontend/islands/OperationPanel.tsx
-        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
-        - frontend/tests/sqlAttentionProjectionPanel.test.ts
-        - db/seed_empty.sql
-      evidence:
-        tests:
-          - SqlAttentionTopologyProjectionRuntimeTests
-          - sqlAttentionProjectionPanel.test.ts
-        ci:
-          - backend-tests
-          - frontend-types
-      completion_condition:
-        - sql_attention_evidence_consumed_by_child_projection_runtime_read_only
-        - evidence_layer_separation_statistics_attention_phase_attention_preserved
-        - policy_resolved_from_function_parameters_no_magic_numbers
-        - explicit_failure_on_policy_missing_invalid_db_unavailable
-        - no_registry_topology_fixed_route_mutation
-        - frontend_is_projection_only_no_cosine_mlp_topology_judgment
-        - parent_sql_attention_semantics_not_redefined
-      known_gap_ref:
-        - SQLA-1..5 parent observation hardening/live verification remain partial
-      detail_ssot:
-        - docs/design/sql-attention-logs-ssot.md
-        - docs/design/sql-attention-logs-ssot.yaml
-
-    frontend.ui_action:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Demo UI operation surface can create a dispatch request.
-      files:
-        - frontend/islands/OperationPanel.tsx
-      evidence:
-        ci:
-          - default-entity-search
-          - frontend-types
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    frontend.api_client:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Frontend dispatch API client exists and sends DispatchRequest to /api/dispatch.
-      files:
-        - frontend/api/dispatch.ts
-        - frontend/routes/api/dispatch.ts
-      evidence:
-        ci:
-          - default-entity-search
-          - frontend-types
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    backend.dispatch_endpoint:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: Backend dispatch endpoint delegates into the runtime timeline scheduler.
-      files:
-        - backend/endpoint/DispatchEndpoint.cs
-        - backend/Program.cs
-      evidence:
-        ci:
-          - backend-tests
-          - default-entity-search
-          - pipeline-continuity
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    backend.runtime_timeline_scheduler:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: >
-        RuntimeTimelineScheduler aligns cron/hook/client triggers through one Channel-based
-        queue and routes them to ManifestDispatcher before runtime execution.
-        Queue persistence boundary is declared in-memory (no DB persistence).
-        Overflow: client triggers return SCHEDULER_QUEUE_FULL; cron/hook return explicit bool false.
-        Cancellation: client triggers return CLIENT_TRIGGER_CANCELED; non-client dispatch
-        cancellation is logged and swallowed (fire-and-forget, service stopping).
-        Gap-14 and Gap-15 runtime boundary verification route are resolved.
-      files:
-        - backend/scheduler/RuntimeTimelineScheduler.cs
-      evidence:
-        tests:
-          - SchedulerDispatcherChainTests
-          - RuntimeExecutorTests
-          - DefaultEntitySearchIntegrationTests
-        ci:
-          - backend-tests
-          - runtime-semantics
-          - default-entity-search
-          - unified-test-gate
-          - Structure Check
-      completion_condition:
-        - cron_hook_client_triggers_are_aligned_in_one_runtime_queue
-        - scheduler_owns_ordering_collision_control_and_execution_boundary
-        - runtime_executor_does_not_own_trigger_alignment
-        - queue_overflow_returns_explicit_signal_for_all_trigger_kinds
-        - cancellation_boundary_is_explicit_for_client_and_non_client_triggers
-        - queue_persistence_boundary_is_declared_in_memory_no_db_persistence
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    backend.manifest_dispatcher:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: >
-        Gap-1 complete (1a+1b): ManifestDispatcher resolves active manifest from DB by
-        role+target+layer+action axes via NpgsqlManifestRepository, then dispatches to the
-        registered IDispatchableRuntime handler selected by runtime_destination.
-        topology_transform_runtime → RuntimeExecutor (canonical topology pipeline).
-        admin_runtime → AdminRuntimeDispatchAdapter → AdminRuntime.ExecuteDataAsync.
-        TargetDispatchOverride is isolated in the null-repository (dev/demo bypass) branch only.
-        MANIFEST_NOT_FOUND, MANIFEST_AMBIGUOUS, RUNTIME_DESTINATION_UNKNOWN are explicit errors.
-        Admin route manifests in seed_empty.sql use runtime_destination=admin_runtime:
-        IDs 50-5a (seed_runtime/context_token/registry_vector/ui_component_bucket/package_generator/system_ci/ci_attention/manifest/content_bundle),
-        IDs 77-7b (hub_navigation: list_manifests/get_hub_relations/create/update/deprecate), 7c (hub_navigation:reorder).
-        Test fixture stubs (FakeDispatchableRuntime) verify selection boundary without
-        contaminating production DI.
-      files:
-        - backend/runtime/ManifestDispatcher.cs
-        - backend/runtime/IDispatchableRuntime.cs
-        - backend/runtime/AdminRuntimeDispatchAdapter.cs
-        - backend/runtime/TargetDispatchOverride.cs
-      evidence:
-        tests:
-          - SchedulerDispatcherChainTests
-          - RuntimeExecutorTests
-          - DefaultEntitySearchIntegrationTests
-          - ManifestDispatcherManifestDrivenTests
-        ci:
-          - backend-tests
-          - runtime-semantics
-          - default-entity-search
-          - unified-test-gate
-          - Structure Check
-          - pipeline-continuity
-      completion_condition:
-        - active_manifest_is_resolved_from_db_by_role_target_layer_action
-        - dispatcher_mapping_and_runtime_mapping_are_used_for_runtime_destination
-        - RuntimeExecutor_target_layer_action_dispatch_branches_are_removed_or_explicitly_isolated
-        - broken_manifest_or_mapping_reference_returns_explicit_error
-        - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
-        - runtime_destination_is_used_for_actual_execution_selection_not_validation_only
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    backend.screen_data_shape_runtime_query_evaluator:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        ScreenDataShapeQueryRuntime is invoked from RuntimeExecutor for manifest-scoped
-        screen_list/screen_read actions after manifestId resolution. It loads screen_data_shape
-        topology from ManifestRepository, evaluates searchConditions, havingConditions,
-        aggregation/aggregationBlocks, displayColumns, and displayColumnMode over initialDataRows,
-        and uses screenReadQueryWiring valueSource bindings to resolve runtime values. Results are
-        attached to emission.Data. Remaining evidence is broader real-DB/fixture manual acceptance,
-        not a runtime implementation gap.
-      files:
-        - backend/runtime/ScreenDataShapeQueryRuntime.cs
-        - backend/runtime/RuntimeExecutor.cs
-        - backend/tests/Topolactor.Runtime.Tests/ScreenDataShapeQueryRuntimeTests.cs
-        - frontend/lib/screenReadQueryWiring.ts
-        - frontend/tests/screenReadQueryWiring.test.ts
-      evidence:
-        tests:
-          - ScreenDataShapeQueryRuntimeTests
-          - screenReadQueryWiring.test.ts
-        ci:
-          - backend-tests
-          - frontend-types
-      completion_condition:
-        - screen_data_shape_topology_is_loaded_by_manifest_id_for_screen_read_actions
-        - searchConditions_havingConditions_aggregation_and_displayColumnMode_are_evaluated
-        - screenReadQueryWiring_valueSource_bindings_are_consumed_by_runtime_query_evaluator
-        - RuntimeExecutor_attaches_screen_data_shape_result_to_emission_Data
-      known_gap_ref:
-        - real DB / manifest fixture acceptance remains evidence-only before production-ready promotion
-      detail_ssot:
-        - docs/design/admin-console-workflow-ssot.yaml
-
-    backend.runtime_executor:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: >
-        RuntimeExecutor executes the canonical pipeline (vector → attractor → structure map →
-        package → schema → emission). No target/layer/action dispatch branches.
-        Gap-1 complete: target_layer_action_destination_selection is moved to ManifestDispatcher.
-        TargetDispatchOverride is isolated in the null-repository branch; not consulted in production.
-        RuntimeExecutor is registered as the handler for topology_transform_runtime;
-        AdminRuntimeDispatchAdapter handles admin_runtime. Each handler implements IDispatchableRuntime.
-      files:
-        - backend/runtime/RuntimeExecutor.cs
-        - backend/runtime/IDispatchableRuntime.cs
-        - backend/runtime/TargetDispatchOverride.cs
-      evidence:
-        tests:
-          - RuntimeExecutorTests
-          - DefaultEntitySearchIntegrationTests
-          - ManifestDispatcherManifestDrivenTests
-        ci:
-          - backend-tests
-          - default-entity-search
-          - pipeline-continuity
-      completion_condition:
-        - runtime_executor_only_executes_resolved_runtime_destination
-        - target_layer_action_destination_selection_is_moved_to_manifest_dispatcher
-        - no_new_hardcoded_dispatch_branch_is_added
-        - runtime_destination_drives_actual_executor_selection
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    backend.manifest_storage:
-      status: skeleton
-      production_ready: false
-      milestone: M2_manifest_runtime
-      public_summary: Manifest table exists, but manifest contract completeness and repository/runtime test coverage for active routing are not yet proven.
-      files:
-        - db/manifest_tables.sql
-        - db/init.sql
-      evidence:
-        ci:
-          - structure-check
-      completion_condition:
-        - manifest_storage_supports_role_definition_route_definition_dispatcher_mapping_runtime_mapping
-        - active_manifest_resolution_can_be_executed_by_manifest_dispatcher
-        - manifest_contract_is_covered_by_repository_or_runtime_tests
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    backend.minimal_event_shape:
-      status: implemented
-      production_ready: false
-      milestone: M2_manifest_runtime
-      public_summary: >
-        trigger_kind and role fields in EndpointRequestDto and DispatchRequest.
-        DispatchEndpoint enforces trigger_kind enum guard: invalid values return TRIGGER_KIND_INVALID
-        before reaching the scheduler. Allowed values: client | hook | cron (case-insensitive).
-        frontend DispatchRequest.triggerKind type is synchronized as "cron" | "hook" | "client".
-      files:
-        - backend/schema/Contracts.cs
-        - backend/endpoint/DispatchEndpoint.cs
-        - frontend/api/dispatch.ts
-      evidence:
-        tests:
-          - TriggerKindGuardTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - request_contract_includes_trigger_kind
-        - request_contract_includes_role_or_role_is_resolved_from_jwt_claim_at_boundary
-        - frontend_and_backend_request_contracts_are_synchronized
-        - trigger_kind_enum_guard_validation_rejects_invalid_values_with_explicit_error
-        - invalid_trigger_kind_does_not_reach_scheduler_or_manifest_dispatcher
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    backend.auth_db_session_credential_mvp:
-      status: implemented
-      production_ready: false
-      milestone: M2_manifest_runtime
-      public_summary: >
-        Auth MVP scaffold is implemented for DB-backed user credentials, sessions, hashed refresh
-        tokens, login audit, realm/audience-separated user and admin login/refresh/logout routes,
-        environment-sourced demo JWT signing, normal user registration projection with pending
-        approval, projection app auth fallback to login/register, and frontend/backend admin
-        access blocking for non-admin user tokens. This remains intentionally scoped to the
-        DB credential/session/refresh-token + demo JWT scaffold MVP, not production auth
-        hardening.
-      remaining_projection_app_auth_boundary_scope: []
-      files:
-        - db/auth_tables.sql
-        - db/auth_seed.sql
-        - backend/Program.cs
-        - backend/endpoint/AuthEndpoint.cs
-        - backend/runtime/AuthRuntime.cs
-        - backend/service/AuthService.cs
-        - backend/service/JwtTokenIssuer.cs
-        - backend/guard/JwtGuard.cs
-        - backend/repository/NpgsqlAuthRepository.cs
-        - backend/schema/AuthContracts.cs
-        - backend/schema/AuthRealm.cs
-        - backend/tests/Topolactor.Integration.Tests/AuthEndpointTests.cs
-        - backend/tests/Topolactor.Integration.Tests/RealmAudienceSeparationTests.cs
-        - backend/tests/Topolactor.Integration.Tests/JwtGuardTests.cs
-        - frontend/tests/projectionAuthBoundary.test.ts
-      evidence:
-        tests:
-          - AuthEndpointTests
-          - RealmAudienceSeparationTests
-          - JwtGuardTests
-          - projectionAuthBoundary.test.ts
-        ci:
-          - backend-tests
-          - runtime-semantics
-      completion_condition:
-        - credentials_are_loaded_from_auth_credentials_not_topology_or_manifest_json
-        - sessions_and_refresh_tokens_are_persisted_in_auth_schema_with_plaintext_refresh_token_excluded_from_db
-        - user_and_admin_realms_have_separate_jwt_claims_audience_and_routes
-        - login_denial_codes_cover_inactive_unapproved_and_suspended_users
-        - jwt_signing_secret_is_environment_sourced_and_not_stored_in_topology_hubs_or_manifest
-        - normal_user_registration_projection_surface_uses_auth_schema_with_pending_approval
-        - projection_app_auth_fallback_returns_to_login_or_register_projection
-        - admin_access_block_for_non_admin_user_token_is_guarded_in_frontend_and_backend_boundaries
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/auth-db-session-credential-ssot.yaml
-        - docs/design/runtime-orchestration-ssot.yaml
-
-
-    backend.output_lanes:
-      status: implemented
-      production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        OutputLaneRouter called from RuntimeExecutor pipeline after emission. db_notify_emission
-        sends pg_notify with {table_id, table_registry_id, manifest_id} (manifestId forwarded
-        from ManifestDispatcher). registry_attractor_update lane now enqueues
-        AttractorRebuildSignal to RebuildSignalChannel (bounded Channel, real in-process
-        signal queue). SystemOperationCiScheduler now consumes
-        this signal channel and triggers rebuildability inspection.
-        SseProjectionRuntime added as sse_projection_runtime handler: db_notify hook triggers
-        are routed through ManifestDispatcher to SseProjectionRuntime → SseEventBroadcaster.
-        check-runtime-environment.sh covers the live pg_notify/listen/SSE probe. db_notify dispatch resolves source manifest identity via manifest_id and uses db_notify_projection_mapping (not runtime_mapping) to reach sse_projection_runtime; remaining production_readiness is deployment evidence, not implementation.
-      files:
-        - backend/runtime/OutputLaneRouter.cs
-        - backend/runtime/RuntimeExecutor.cs
-        - backend/runtime/SseProjectionRuntime.cs
-        - backend/repository/DbNotifyRepository.cs
-        - .agent/tests/check-runtime-environment.sh
-      evidence:
-        tests:
-          - SseEventBroadcasterTests
-          - SseEndpointStreamFormatTests
-          - SseProjectionRuntimeTests
-          - DbNotifyListenerPayloadTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - response_emission_db_notify_emission_and_registry_attractor_update_are_explicit_output_lanes
-        - db_notify_payload_preserves_table_id_table_registry_id_manifest_id
-        - registry_attractor_update_is_not_hidden_in_response_flow
-        - sse_projection_runtime_registered_as_handler_for_db_notify_hook_triggers
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    backend.sse_emitter:
-      status: implemented
-      production_ready: false
-      milestone: M4_projection_runtime
-      public_summary: >
-        SseEndpoint subscribes to SseEventBroadcaster per connection. DbNotifyListener now
-        routes pg_notify events through RuntimeTimelineScheduler as hook triggers, through
-        ManifestDispatcher to SseProjectionRuntime, which broadcasts to SseEventBroadcaster
-        (Gap-7 scheduler routing implemented). Direct broadcast from DbNotifyListener is
-        removed; canonical route invariant satisfied. check-runtime-environment.sh now
-        verifies live pg_notify -> DbNotifyListener -> scheduler -> ManifestDispatcher ->
-        SseProjectionRuntime -> SseEventBroadcaster -> /sse by observing probe_id on SSE.
-        Frontend receiver/dispatcher/projection-shell refresh are tracked as implemented M4 entries.
-      files:
-        - backend/endpoint/SseEndpoint.cs
-        - backend/Program.cs
-        - backend/scheduler/DbNotifyListener.cs
-        - backend/runtime/SseProjectionRuntime.cs
-        - backend/tests/Topolactor.Integration.Tests/SseEndToEndTests.cs
-      evidence:
-        tests:
-          - SseEventBroadcasterTests
-          - SseEndpointStreamFormatTests
-          - DbNotifyListenerPayloadTests
-          - SseProjectionRuntimeTests
-        ci:
-          - default-entity-search
-          - pipeline-continuity
-          - backend-tests
-      completion_condition:
-        - backend_sse_emitter_streams_projection_events_not_only_ping
-        - event_payload_preserves_manifest_id_component_ids_attention_score_or_documented_identity
-        - hook_or_db_notify_event_enters_scheduler_before_sse_emission
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    frontend.sse_receiver:
-      status: implemented
-      production_ready: false
-      milestone: M4_projection_runtime
-      public_summary: >
-        SSE receiver feeds frontend scheduler as projection hook trigger via onProjectionHookTrigger.
-        Projection event identity (manifest_id/table_id/table_registry_id) is preserved in
-        ProjectionHookTrigger.identity. Backend SSE error states are explicit via SseErrorState
-        discriminated union (connection_error | parse_error | connection_closed). Never silent fallback.
-      files:
-        - frontend/runtime/sseReceiver.ts
-        - frontend/routes/api/sse.ts
-      evidence:
-        tests:
-          - pipelineContinuity.test.ts
-          - sseLane.test.ts
-        ci:
-          - frontend-types
-          - default-entity-search
-      completion_condition:
-        - sse_receiver_feeds_frontend_scheduler_as_hook_trigger
-        - receiver_preserves_projection_event_identity
-        - backend_sse_error_states_are_explicit
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    frontend.sse_dispatcher:
-      status: implemented
-      production_ready: false
-      milestone: M4_projection_runtime
-      public_summary: >
-        SSE dispatcher routes projection events to ProjectionRuntime via
-        createSseDispatcherWithProjectionRuntime. Unhandled event policy is explicit:
-        "log" (default) emits SSE_UNHANDLED_EVENT_TYPE warning; "ignore" is an
-        explicitly acknowledged no-op. Projection event identity (manifest_id/table_id/
-        table_registry_id) flows unchanged through route path into projectionRuntime.
-      files:
-        - frontend/runtime/sseDispatcher.ts
-      evidence:
-        tests:
-          - pipelineContinuity.test.ts
-          - sseLane.test.ts
-        ci:
-          - frontend-types
-          - default-entity-search
-      completion_condition:
-        - dispatcher_routes_projection_events_into_projection_runtime
-        - unhandled_event_policy_is_explicit
-        - projection_event_identity_is_preserved
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-
-    frontend.projection_shell_sse_refresh_boundary:
-      status: implemented
-      production_ready: false
-      milestone: M4_projection_runtime
-      public_summary: >
-        ProjectionShell subscribes to the SSE projection lane via createSseReceiver on mount.
-        SSE projection events are treated as invalidation/refresh triggers only — frontend does
-        not interpret the SSE payload for topology or layout judgment. On SSE projection event
-        receipt, ProjectionShell re-fetches the latest emission from the backend runtime via
-        queueClientCommand (api_command_lane). renderEmission() produces a new ComponentSpec[]
-        from the fresh emission, replacing the old DOM tree in full (no partial patch).
-        Race control via generation counter ensures only the latest refresh result applies
-        when multiple events arrive concurrently. Refresh failure is explicit (console.error);
-        old DOM is retained on failure (not silent). unmount cleanup disconnects the EventSource.
-        This closes the merge point of sse_projection_lane and layout_projection_dom_lane at the
-        projection_shell_sse_refresh_boundary node per pipeline-continuity-ssot.yaml.
-        WebSocket replacement of this lane is prohibited.
-      files:
-        - frontend/islands/ProjectionShell.tsx
-        - frontend/runtime/sseReceiver.ts
-      evidence:
-        tests:
-          - sseLane.test.ts (ProjectionShell SSE lane: DOM replacement, parentNodeId tree, layoutClassRefs, LAYOUT_NODES_NOT_FOUND)
-        ci:
-          - frontend-types
-      completion_condition:
-        - projection_shell_subscribes_to_sse_projection_lane_on_mount
-        - sse_event_triggers_queueClientCommand_re_fetch_not_payload_topology_judgment
-        - dom_tree_fully_replaced_with_new_emission_on_refresh
-        - old_nodeIds_absent_after_refresh
-        - race_control_generation_counter_latest_wins
-        - refresh_failure_is_explicit_console_error_not_silent
-        - unmount_disconnects_sse_receiver
-        - layoutId_present_without_nodes_returns_error_spec_no_flat_fallback
-        - websocket_not_used
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/pipeline-continuity-ssot.yaml
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    frontend.projection_constructor:
-      status: implemented
-      production_ready: false
-      milestone: M4_projection_runtime
-      public_summary: >-
-        Projection constructor supply route is closed. backend Emission.ProjectionDefinition carries the projection_constructor_mapping from the resolved manifest topology entry. frontend Emission.projectionDefinition receives it from the dispatch response. Frontend projectionRuntime.setProjectionDefinition() applies it before SSE events arrive. projectionFromEmission / constructProjection end-to-end route is proven in sseLane.test.ts: DispatchResponse.emission.projectionDefinition flows into projectionRuntime and constructProjection without test-local definition bypass. DefinitionMissingPolicy is explicit (default "error" emits PROJECTION_RUNTIME_DEFINITION_MISSING; "ignore" is declared no-op). RuntimeTopologyComponentProps envelope, runtime adapter, runtime factory, and interface boundary remain closed. Frontend does not hold topology judgment or SQL Attention judgment. runtimeConnected:true means factory/constructor reachable.
-      files:
-        - frontend/runtime/projectionConstructor.ts
-        - frontend/runtime/renderEmission.ts
-        - frontend/runtime/projectionRuntime.ts
-        - frontend/runtime/runtimeComponentAdapter.ts
-        - frontend/runtime/runtimePrimitiveRenderer.ts
-        - frontend/api/dispatch.ts
-        - backend/schema/Contracts.cs
-        - backend/runtime/ManifestDispatcher.cs
-        - frontend/tests/projectionConstructor.test.ts
-        - frontend/tests/runtimeComponentAdapter.test.ts
-        - frontend/tests/runtimePrimitiveRenderer.test.ts
-        - frontend/tests/sseLane.test.ts
-      evidence:
-        tests:
-          - projectionConstructor.test.ts
-          - runtimeComponentAdapter.test.ts
-          - runtimePrimitiveRenderer.test.ts
-          - sseLane.test.ts (manifest_response_constructor_mapping_end_to_end_route_is_proven)
-        ci:
-          - check-pipeline-continuity.sh
-      completion_condition:
-        - projection_definition_and_json_key_value_build_form_inputs_component_projection_or_ui_projection
-        - runtime_component_interface_boundary_for_projection_constructor_is_closed
-        - manifest_response_constructor_mapping_end_to_end_route_is_proven
-        - frontend_does_not_make_topology_or_sql_attention_judgment
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
+        - backend/
+        - frontend/
 
     product.frontend_projection_surface_ux_acceptance:
+      bundle_id: product.frontend_projection_surface_ux_acceptance
+      title: Frontend projection UX acceptance gate
       status: implemented
       production_ready: false
-      milestone: UXA_frontend_projection_surface_general_ux
-      public_summary: >
-        All 8 UX acceptance criteria for the frontend projection surface are now implemented:
-        lifecycle state visibility (LifecycleStepIndicator + corrected failure phase semantics),
-        recovery navigation (50-step undo/redo Ctrl+Z/Y + clear canvas + inspector commit history),
-        actionable validation errors (ERROR_CODE_FIX map + per-error componentKey/nodeId context + tab
-        navigate buttons for DRAFT_ONLY_NODES/CSS_TOKEN_INVALID/BUCKET_*/GENERATE_FAILED/PROMOTE_FAILED),
-        progressive disclosure vocabulary (Japanese labels for bucket lifecycle statuses, friendly labels +
-        advanced disclosures for raw terms including sourcePath in catalog/bucket views),
-        non-pointer operation (keyboard move/resize/add/reorder/delete alternatives),
-        accessibility observability (24x24px resize handles, ARIA roles, live regions, manual check doc),
-        first-run guidance (empty state CTA + 3 template buttons),
-        CSS token visual diff (SSOT-derived swatch values via resolveCssTokenValue).
-        resolveBucketStatus extracted to bucketUtils.ts with canonical status field separated from
-        display label — state judgment uses canonical status (promoted/packaging/bucketed/unregistered),
-        not display string. Frontend remains projection-only; DB-backed design/layout/wiring authority
-        and backend validation remain unchanged. accessibility_observability manual check execution pending.
-      files:
-        - docs/system-roadmap.yaml
-        - .agent/tasks/todo.md
-        - frontend/islands/UiBuilderAdmin.tsx
-        - frontend/runtime/bucketUtils.ts
-        - frontend/runtime/cssDictionary.ts
-        - frontend/runtime/visualLayoutUtils.ts
-        - frontend/tests/bucketUtils.test.ts
+      public_summary: The eight frontend projection UX acceptance criteria are implemented while preserving backend/topology authority and preview-validate-apply boundaries.
+      scope:
+        - lifecycle_state_visibility
+        - recovery_navigation
+        - actionable_validation_errors
+        - progressive_disclosure_vocabulary
+        - non_pointer_operation
+        - accessibility_observability
+        - first_run_guidance
+        - css_token_visual_diff
+      detail_ref:
+        - docs/system-roadmap.yaml#ux_acceptance_gates.frontend_projection_surface_general_ux
+      evidence_ref:
         - frontend/tests/visualLayoutBuilder.test.ts
+        - .agent/tests/check-css-dictionary.sh
+        - .agent/tests/check-ui-ux-executable-component-slice.sh
         - .agent/tests/check-accessibility-manual.md
-      evidence:
-        tests:
-          - bucketUtils.test.ts (resolveBucketStatus canonical status / label isolation)
-          - visualLayoutBuilder.test.ts (43 tests)
-          - projectionConstructor.test.ts
-          - runtimeComponentAdapter.test.ts
-          - runtimePrimitiveRenderer.test.ts
-        ci:
-          - check-system-roadmap.sh
-          - check-css-dictionary.sh
-          - check-ui-ux-executable-component-slice.sh
-          - frontend-types
-        manual:
-          - .agent/tests/check-accessibility-manual.md (6-check repeatable manual procedure)
       completion_condition:
         - lifecycle_state_visibility_distinguishes_draft_validated_applied_failed_persisted
         - recovery_navigation_supports_undo_redo_or_clear_cancel_reset_revert
@@ -1312,807 +449,253 @@ system_roadmap_ssot:
         - css_token_selection_has_visual_preview_and_before_after_diff
         - frontend_remains_projection_surface_without_topology_judgment
         - preview_validate_apply_and_no_direct_DB_write_boundary_is_preserved
-        - bucket_status_state_judgment_uses_canonical_status_not_display_label
       known_gap_ref: []
 
-    frontend.admin_routes:
+    product.sql_attention_observation_runtime:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention observation and recommendation feedback
       status: partial
       production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Canonical admin routes match runtime-orchestration SSOT: /admin, /admin/contents,
-        /admin/ui-builder, /admin/manifests, /admin/enums, and /admin/users. Full 4-step /admin/contents authoring wizard:
-        Step 1 空登録, Step 2 テーブル定義, Step 2.5 relationship, Step 3 物理割当・ページ.
-        Structured relation/join intents, searchKeyColumns, aggregationKey, displayColumns,
-        aggregationMeasures, searchConditions (15 operators incl. <> alias), havingConditions,
-        and displayColumnMode (selected/all/none) are all persisted as screen_data_shape topology
-        extension fields. Step3 uses progressive disclosure: display mode/columns, aggregation key/measures,
-        and sample preview are the basic path; searchConditions and havingConditions are advanced disclosures;
-        raw aggregationSpec/searchTargets and AND/OR/NOT logical connectors are pro-facing disclosures.
-        searchConditions use logicalConnector (and/or/not) joining each condition to the next.
-        displayColumnMode eliminates the legacy ambiguous empty-displayColumns=all behavior.
-        Initial data rows are stored as topology intent (no direct DB write).
-        Sample viewing panel applies searchConditions, havingConditions, and displayColumnMode
-        in the frontend preview; topology_transform_runtime (RuntimeExecutor + ScreenDataShapeQueryRuntime)
-        applies the same operator vocabulary over initialDataRows at manifest-scoped Read/Search.
-        screenReadQueryWiring exposes Step3 read/query keys to UI Builder manifest-target event binding.
-        All normal-view UX vocabulary adheres to SSOT: no "group by" in aggregation labels;
-        no internal field names exposed; relation intent is draft data-shape only.
-        topology.physical_tables table_ref mismatch returns WIRING_TABLE_REF_NOT_FOUND
-        (explicit failure, no silent fallback) before canonical projection writes.
-        /admin/ui-builder has component placement from catalog, CSS/design-token/layout-class
-        selectable settings, validate→preview→explicit apply route, and CI audit handoff.
-        Raw dispatcher fields (role/target/layer/action) and advanced wiring inputs are
-        isolated in AdvancedManualOverride disclosures. Legacy/debug wrappers deleted.
-        Default route navigation wiring preset added: RouteNavigationWiringPreset in
-        PackageDesignPanel normal view allows authors to set "click → navigate to route" via
-        business-language UI (クリック時に指定ルートへ移動); saved as route:<routeKey> in
-        ui_wiring_registry via existing update_package_wiring; raw dispatcher fields remain
-        in details disclosure only; encode/parse round-trip tested in adminUxGuard.test.ts.
-        Regression coverage in adminUxGuard.test.ts and AdminRuntimeManifestManagementTests.cs.
-      files:
-        - frontend/routes/admin/
-        - frontend/routes/admin/index.tsx
-        - frontend/routes/admin/manifests.tsx
-        - frontend/routes/admin/contents.tsx
-        - frontend/routes/admin/ui-builder.tsx
-        - frontend/routes/admin/enums.tsx
-        - frontend/routes/admin/users.tsx
-        - frontend/islands/HubNavigationAdmin.tsx
-        - frontend/islands/AdminEnumsRoster.tsx
-        - frontend/islands/AdminUsersRoster.tsx
-        - frontend/islands/ContentsScreenDesignPanel.tsx
-        - frontend/islands/ContentsPromotionPanel.tsx
-        - frontend/islands/UiBuilderAdmin.tsx
-        - frontend/lib/manifestScreenDesign.ts
-        - frontend/lib/manifestTopologyExtensions.ts
-        - frontend/api/adminApi.ts
-        - frontend/content/adminUxTerms.ts
-        - frontend/tests/adminUxGuard.test.ts
-        - backend/schema/ManifestManagementContracts.cs
-        - backend/runtime/AdminRuntime.cs
-        - backend/repository/ManifestCanonicalProjection.cs
-        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeManifestManagementTests.cs
-      evidence:
-        tests:
-          - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, progressive disclosure/raw input guards, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields, route navigation encode/parse round-trip, manifest wiring regression, normal view raw field guard)
-          - 'frontend/tests/adminWiringExecutionLane.test.ts (route navigation runtime closure: navigation wiringKind produces no backend RuntimeDispatchSpec, routeNavigation binding carries route: targetRef without runtimeDispatch, emitBoundEvent click executes frontend-local navigation to /admin/manifests)'
-          - 'backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (defensive backend guard: route: target_ref returns TARGET_REF_INVALID while manifest:<uuid>:<wiringKey> target_ref routing remains valid)'
-          - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
-        ci:
-          - frontend-types
-          - backend-tests
-          - Structure Check
+      public_summary: SQL Attention logs, current/watch refresh, hub support cache, scheduler exploration, append-only attention evidence, phase vector generation, topology projection, and feedback UX are tracked as one observation capability bundle.
+      scope:
+        - logs_current_watch_refresh
+        - logs_attention_append_only_evidence
+        - hub_relation_phase_vector_generation
+        - topology_projection_candidate_feedback
+        - frontend_projection_only_feedback_panel
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.md
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
+        - frontend/tests/sqlAttentionProjectionPanel.test.ts
+        - .agent/tests/check-sql-attention-ssot.sh
       completion_condition:
-        - admin_manifests_route_exists
-        - admin_contents_route_exists
-        - admin_ui_builder_route_exists
-        - admin_enums_route_exists
-        - admin_users_route_exists
-        - admin_master_roster_enum_and_user_crud_with_logs_diff_audit
-        - admin_manifests_route_owns_existing_manifest_relation_hub_navigation_and_page_group_operations
-        - admin_contents_wizard_supports_DB_reference_columns_initial_data_optional_table_relation_search_key_aggregation_display_group_sample_preview_and_explicit_register
-        - admin_ui_builder_supports_component_placement_selectable_design_layout_and_wiring_preview_explicit_apply_and_CI_audit_handoff
-        - admin_ui_builder_default_route_navigation_wiring_preset_in_normal_view
-        - screen_data_shape_topology_extension_persists_structured_relation_join_and_aggregation_display_fields
-        - screen_data_shape_persists_searchConditions_with_15_operators_and_logicalConnector
-        - screen_data_shape_persists_havingConditions_with_7_operators_including_ne_alias
-        - screen_data_shape_persists_displayColumnMode_selected_all_none
-        - step2_re_save_does_not_drop_step3_structured_fields
-        - logicalConnector_stored_on_source_condition_evaluated_as_join_to_next_condition
-        - topology_physical_tables_table_ref_mismatch_fails_explicitly
-        - noncanonical_admin_wrappers_are_deleted_and_future_ui_converges_on_canonical_surfaces
-        - admin_routes_are_wired_to_validated_backend_registry_flows
-        - routes_remain_projection_surfaces_not_runtime_judgment_owners
+        - sql_attention_runtime_observes_physical_table_pressure_without_topology_mutation
+        - append_only_attention_and_phase_evidence_preserves_source_identity
+        - topology_projection_consumes_evidence_read_only
+        - frontend_feedback_surface_remains_projection_only
       known_gap_ref:
-        - admin_visual_layout_builder layoutId round-trip from DB and full responsive token rule UI tracked separately in admin_visual_layout_builder entry
-        - product.dynamic_support_nocode_loop manual acceptance for combined UX loop remains pending
-      detail_ssot:
-        - docs/design/runtime-orchestration-ssot.yaml
-        - docs/design/admin-console-workflow-ssot.yaml
-
-
-    frontend.mock_preset_intake_compiler:
-      status: partial
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Mock Preset Intake Compiler / UIBuilder Preset Registry — core implementation and migration bootstrap path complete.
-        Implemented: DB migration DDL included in db/init.sql (bootstrap) and CI backend-tests.yml schema setup;
-        backend admin runtime actions (create/list/get/compile/bind/save_mappings — DI wired in Program.cs);
-        NpgsqlMockPresetRepository (CreatePreset/ListPresets/GetPreset/UpsertObjectMapping/UpsertWiringCandidate/
-        SaveCompileSnapshot/GetLatestCompileSnapshot); SVG/XML pure-TS visual parser (no AI);
-        PresetUploaderDrawer with capabilityTags interactive gate UI
-        (emits_event/requires_event_binding/controlled_value/field_binding wiring selects + confirm checkbox);
-        mappingArray + wiringCandidates persisted via save_mappings action;
-        handleSaveCanvasAsPreset exports draftNodes as CanvasPresetSeed (source_kind=ui_builder_canvas);
-        load-preset select, bind-to-tmp-canvas-draft, preview/validate/apply boundary preserved;
-        unresolved objects banner; 938 frontend + 723 backend tests green.
-        E2E live DB integration tests pass (MockPresetLiveDbEndToEndTests: 5 tests covering
-        create/save_mappings/wiring_candidates/compile-bind round-trip/list).
-        Bind verified to NOT write to topology.ui_topology_tensor.
-        Remaining: not yet verified against a separate external production deployment environment.
-      completion_condition:
-        - topology_mock_preset_tables_exist_under_topology_schema
-        - svg_xml_or_generic_xml_visual_tree_parser_exists_without_ai_dependency
-        - ui_builder_exposes_preset_uploader_modal_or_drawer
-        - ui_builder_can_save_current_canvas_as_reusable_preset
-        - ui_builder_exposes_saved_preset_load_select
-        - loaded_preset_binds_to_selected_route_package_tmp_canvas_draft_not_active_topology
-        - capability_tags_gate_wiring_and_binding_ui
-        - preview_validate_apply_boundary_is_preserved
-        - unresolved_objects_are_explicitly_visible
-      known_gap_ref:
-        - not_verified_against_separate_external_production_deployment (existing DBs must apply migration manually)
-        - db-schema.yaml mock_preset tables remain at migration_ddl_available_bootstrap_included until external production deployment is verified
+        - SQLA-1..5 parent observation hardening/live verification remain partial
+        - manual acceptance / hand-debug verification remains before production-ready promotion
       files:
-        - db/migrations/mock_preset_registry_tables.sql
-        - db/init.sql
-        - .github/workflows/backend-tests.yml
-        - backend/schema/MockPresetContracts.cs
-        - backend/repository/MockPresetRepository.cs
-        - backend/repository/NpgsqlMockPresetRepository.cs
-        - backend/runtime/AdminRuntime.MockPreset.cs
-        - backend/runtime/AdminRuntime.cs
-        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeMockPresetTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/MockPresetLiveDbEndToEndTests.cs
-        - backend/Program.cs
-        - frontend/runtime/visualMockParser.ts
-        - frontend/api/mockPresetApi.ts
-        - frontend/islands/PresetUploaderDrawer.tsx
-        - frontend/islands/UiBuilderAdmin.tsx
-        - frontend/tests/visualMockParser.test.ts
-        - frontend/tests/mockPresetIntake.test.ts
-      detail_ssot:
-        - docs/design/mock-preset-intake-compiler-ssot.yaml
-        - docs/design/admin-console-workflow-ssot.yaml
-        - docs/design/db-schema.yaml
+        - backend/
+        - frontend/
 
-    frontend.preset_team_markdown_saved_view_seed:
-      status: not_started
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      parent_surface: UIBuilder / Preset ecosystem / preset seed / saved view
-      child_surface: team shared saved markdown view / md_viewer
-      public_summary: >
-        Preset ecosystem child surface for team shared saved Markdown views (md_viewer).
-        This is a saved view / preset seed child under /admin/ui-builder preset_ecosystem,
-        not an independent large feature or Notion clone. Physical table / jsonb records
-        remain the canonical data authority, rendered Markdown is only a projection, and
-        completed_preset_seed_json is the hard gate for create / refresh / rebind / clone /
-        search card rehydrate behavior. Implementation, DB migration, backend runtime actions,
-        and frontend md_viewer UI are intentionally not started in this roadmap/TODO bundle.
-      completion_condition:
-        - db_migration_creates_topology_team_markdown_template_registry_team_markdown_saved_view_and_team_markdown_saved_view_event
-        - completed_preset_seed_json_jsonb_not_null_and_card_metadata_json_jsonb_not_null_exist_on_saved_view_schema
-        - migration_bootstrap_ci_schema_setup_and_docs_design_db_schema_yaml_are_consistent
-        - backend_template_create_list_get_update_archive_actions_exist_with_explicit_errors
-        - backend_saved_view_create_search_get_refresh_update_archive_clone_actions_exist_with_explicit_errors
-        - frontend_direct_db_write_is_prohibited_for_saved_view_mutation
-        - markdown_renderer_resolves_explicit_bindings_for_physical_table_column_jsonb_path_saved_query_field_and_static_text_without_ai_inference
-        - unresolved_required_placeholder_blocks_save_and_optional_placeholder_renders_empty_state
-        - refresh_and_rebind_use_completed_preset_seed_binding_json_not_rendered_markdown_body_parsing
-        - completed_preset_seed_builder_persists_seed_version_template_ref_source_ref_binding_ref_render_ref_adjustment_ref_dashboard_ref_lineage_ref_rendered_markdown_hash_card_metadata_json_and_search_index_basis_json_on_create
-        - missing_or_invalid_completed_preset_seed_json_blocks_refresh_rebind_and_clone_with_explicit_error
-        - frontend_md_viewer_search_cards_click_expand_drawer_or_panel_rendered_markdown_binding_summary_preset_seed_summary_source_record_ref_adjustment_status_and_actions_exist
-        - ui_builder_preset_ecosystem_references_md_viewer_child_surface_and_shows_completed_preset_seed_json_hard_gate
-        - preset_load_binds_to_selected_route_package_tmp_canvas_draft_and_does_not_write_active_topology_until_preview_validate_apply
-        - saved_view_search_covers_title_rendered_markdown_search_index_text_source_table_ref_tags_and_status_with_default_active_filter_and_no_mutation
-        - tests_cover_db_schema_backend_actions_completed_seed_required_incomplete_seed_blocks_renderer_binding_refresh_seed_not_body_adjustment_preserved_frontend_search_expand_seed_summary_preset_load_boundary_and_structure_db_schema_checks
-      known_gap_ref:
-        - db_migration_not_created
-        - backend_runtime_actions_not_created
-        - frontend_md_viewer_not_created
-        - completed_preset_seed_validator_not_created
-        - search_click_expand_not_created
-        - preview_validate_apply_boundary_not_verified
-      detail_ssot:
-        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
-        - docs/design/admin-console-workflow-ssot.yaml
-        - docs/design/mock-preset-intake-compiler-ssot.yaml
-        - docs/design/db-schema.yaml
-        - docs/design/runtime-orchestration-ssot.yaml
-
-    seed_import_export_runtime:
+    product.system_ci_contract_audit:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI contract audit lanes
       status: implemented
       production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Seed Runtime boundary defined in docs/registrar-admin-ui-specification.md §8.5.
-        SeedJsonRepository handles /storage/seed.json save/load.
-        SeedRuntime implements validate/preview/import pipeline.
-        AdminRuntime dispatches seed_runtime:{save,load,validate,preview,import} operations.
-        docker-compose mounts topolactor_seed_storage volume at /storage.
-        The legacy/debug /dev/admin/seed wrapper is deleted; any future seed UI exposure must converge on a canonical surface.
-        SeedRuntime.ImportAsync applies validated declarations through
-        SeedImportApplyRepository.ApplyRuntimeDeclarationAsync and persists
-        active dispatcher/runtime mappings in manifest. Import conflict/failure is
-        explicit (SEED_IMPORT_CONFLICTING_ACTIVE_MAPPING or
-        SEED_IMPORT_RUNTIME_DISPATCH_FAILED), fail-close, and no silent fallback.
-        Remaining scope is generalized external import lanes (M6), not seed route wiring.
-      files:
-        - backend/repository/SeedJsonRepository.cs
-        - backend/runtime/SeedRuntime.cs
-        - backend/schema/SeedContracts.cs
-        - backend/runtime/AdminRuntime.cs
-        - infra/docker-compose.yml
-        - docs/registrar-admin-ui-specification.md
-      completion_condition:
-        - seed_runtime_boundary_is_defined_in_SSOT
-        - save_load_validate_preview_import_are_separated
-        - backend_reads_and_writes_storage_seed_json_through_canonical_route
-        - import_failure_is_explicit_and_fail_close
-        - docker_compose_mounts_storage_volume
-      known_gap_ref: []
-
-    frontend_ui_component_system:
-      public_summary_addendum: "component catalog classification SSOT / full catalog classification entries / catalog seed registration surface / registration continuity (generate→promote→registry/tensor) are implemented. final completion judgment confirms frontend constructor/interface and DB-driven design/layout/wiring projection closure."
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Primitive components (Button, Input, Table, Card) defined in frontend/components/.
-        Components noted as code-only (drift) in /admin/ui-builder catalog.
-        Component bucket → package generator pipeline wired in AdminRuntime and /admin/ui-builder.
-        UI topology DB tables and NpgsqlUiTopologyRepository already implement full promotion.
-        Code-only components are explicitly labeled as drift/GAP.
-        Frontend does not own topology or runtime judgment.
-        Completed sub-scope includes runtime alias coverage, projection constructor/adapter continuity, primitive renderer emit continuity, wiringId continuity, and generate/promote contract separation.
-        Completed sub-scope now also includes catalog registration seed surface (ui_component_bucket bootstrap seed from catalog registrationRequired entries) and registration continuity (`ui_component_bucket -> package_generator(generate/promote) -> componentId/packageId/layoutId/wiringId -> ui_topology_tensor`).
-        Remaining scope is limited to roadmap completion bundle closure for frontend component constructor/interface and DB-driven design/layout/wiring projection (including final frontend projection/component interface alignment judgment).
-        Design/layout/wiring authority remains DB-side (`topology.components_style_design.design` classname/tailwind, package layout mapping, `topology.components_layout_design`, `topology.ui_wiring_registry`, `topology.ui_topology_tensor`); frontend remains a projection surface and must not own topology judgment.
-      files:
-        - frontend/components/Button.tsx
-        - frontend/components/Input.tsx
-        - frontend/components/Table.tsx
-        - frontend/components/Card.tsx
-        - frontend/routes/admin/ui-builder.tsx
-        - db/ui_topology_tables.sql
-      completion_condition:
-        - primitive_and_packaged_component_boundary_is_defined
-        - componentId_packageId_layoutId_wiringId_are_registered_in_UI_topology_DB
-        - code_only_components_are_treated_as_drift_or_gap
-        - frontend_does_not_own_runtime_or_topology_judgment
-
-
-    frontend.ui_ux_executable_component_slice:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      files:
-        - frontend/components/AutoCompleteInput.tsx
-        - frontend/components/SearchCombobox.tsx
-        - frontend/components/CandidateConfidenceBadge.tsx
-        - frontend/components/InlineEditableField.tsx
-        - frontend/components/PatchPreviewPanel.tsx
-        - frontend/components/ApplyConfirmDialog.tsx
-        - frontend/components/StyleTokenPicker.tsx
-        - frontend/components/ThemePreviewPanel.tsx
-        - frontend/components/ValidationErrorPanel.tsx
-        - frontend/components/SuggestInput.tsx
-        - frontend/components/RecentInputSuggest.tsx
-        - frontend/components/RelationCandidatePicker.tsx
-        - frontend/components/DuplicateMergeCandidatePanel.tsx
-        - frontend/components/RelationPathPreview.tsx
-        - frontend/components/FieldResolverInspector.tsx
-        - frontend/components/SchemaPromotionCandidatePanel.tsx
-        - frontend/components/InlineEditableJsonbField.tsx
-        - frontend/components/DiffStrikeText.tsx
-        - frontend/components/AuditDiffDrawer.tsx
-        - frontend/components/OptimisticUpdateBoundary.tsx
-        - frontend/components/ConfirmedUpdateButton.tsx
-        - frontend/components/UndoTimeline.tsx
-        - frontend/components/ConflictResolutionPanel.tsx
-        - frontend/components/FacetedFilterBar.tsx
-        - frontend/components/ColumnFilter.tsx
-        - frontend/components/ColumnVisibilityEditor.tsx
-        - frontend/components/SortControl.tsx
-        - frontend/components/GroupByControl.tsx
-        - frontend/components/SavedViewSelector.tsx
-        - frontend/components/BulkActionPanel.tsx
-        - frontend/components/VirtualizedDataTable.tsx
-        - frontend/components/RowDetailDrawer.tsx
-        - frontend/components/PaginationControl.tsx
-        - frontend/components/ExportCandidatePanel.tsx
-        - frontend/components/FontTokenEditor.tsx
-        - frontend/components/BackgroundColorEditor.tsx
-        - frontend/components/TextColorEditor.tsx
-        - frontend/components/SpacingTokenEditor.tsx
-        - frontend/components/BorderRadiusEditor.tsx
-        - frontend/components/CssVariablePreview.tsx
-        - frontend/components/ShadowTokenEditor.tsx
-        - frontend/components/AnimationTokenEditor.tsx
-        - frontend/components/CommandPalette.tsx
-        - frontend/components/EmptyStateActionPanel.tsx
-        - frontend/components/OperationGuardBanner.tsx
-        - frontend/components/MutationBoundaryInspector.tsx
-        - frontend/components/PermissionHintPanel.tsx
-        - frontend/components/DryRunResultPanel.tsx
-        - frontend/components/RollbackCandidatePanel.tsx
-        - frontend/components/OperationAuditLogPanel.tsx
-        - frontend/runtime/runtimeComponentFactory.ts
-        - frontend/runtime/abstractFunctions.ts
-        - frontend/components/catalog.ts
-        - frontend/tests/abstractFunctionBoundary.test.ts
-      evidence:
-        tests:
-          - abstractFunctionBoundary.test.ts (112 tests; all 31 TODO-selected boundary functions)
-        ci:
-          - frontend-types
-          - Structure Check
-      public_summary: >
-        Post-PR #275 executable slice alignment is complete for the promoted set: 93 connected
-        primitives / 93 factory kinds / 6 aliases are synchronized across
-        frontend/runtime/runtimeComponentFactory.ts, frontend/components/catalog.ts,
-        and db/seed_empty.sql, with slice invariants verified by
-        .agent/tests/check-ui-ux-executable-component-slice.sh and runtime-semantics checks.
-        runtimeConnected:true means factory/constructor reachability only (not DB topology
-        entity registration completion). registrationRequired:true remains for explicit
-        DB-side registration/promotion governance.
-        Abstract function primitive boundary coverage added (PR #280): 31 boundary functions
-        across SSOT categories A–F (Search/Suggest, Normalize/Lookup/Import, Candidate
-        Update/Audit, Calculation/Topology, Layout/Design Token, Operation Safety) are unit-tested
-        in frontend/tests/abstractFunctionBoundary.test.ts (112 tests). Mutation chain enforces
-        validate_candidate → apply_confirmed_update → append_diff_log ordering at the function
-        boundary level; SQL Attention functions enforce observation-only (registryMutated:false);
-        external lookups enforce canonical_authority:candidate_surface_not_SSOT.
-      completion_condition:
-        - representative_ui_ux_slice_has_componentKind_selector_and_factory_interface_registration
-        - catalog_entries_for_implemented_primitives_point_to_real_component_source_paths
-        - implemented_primitives_are_runtimeConnected_true_only_after_renderer_adapter_reachability
-        - catalog_to_componentKind_to_factory_interface_reachability_is_proven_by_static_or_type_or_deno_checks
-        - mutation_boundary_primitives_remain_preview_validate_explicit_confirm_only
-        - sql_attention_primitives_remain_observation_or_candidate_surface_only
-        - executable_slice_invariants_are_verified_by_catalog_promotion_checks_and_typescript_deno_checks
-        - primitive_attached_processing_functions_are_unit_tested_as_runtime_function_boundaries
-      known_gap_ref: []
-
-    admin_visual_layout_builder:
-      status: partial
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        /admin/ui-builder canvas workspace aligns with admin-console-workflow-ssot
-        canvas_workspace_contract (PR#364 follow-up). Canvas-first unified workspace — no separate
-        layout/design/visual tabs (UI_BUILDER_WORKSPACE_MODE=canvas_workspace_v2). components_bucket
-        and layout left panel use shared icon-style component-bucket-card vocabulary (not table-primary
-        UX). Placement-ready cards drag to center canvas via handleDragStartPalette/handleDropOnCanvas
-        → makeNewNode → buildVisualLayoutPatchJson; unpromoted or non-package-scoped drops fail-close
-        with explicit guidance (no frontend DB write). layout-right-dock uses clamp(320px, 24vw, 420px)
-        with LayerTree (HTML5 drag reparent/reorder), CanvasInspector, and PackageDesignPanel design
-        inspector on the same selectedNode. Empty canvas primary guidance is drag-to-canvas from left
-        panel cards. _tmp backend persistence: layout_draft_tmp_json / design_draft_tmp_json with
-        save_tmp auto-save and clear on apply/upsert. layout_patch preview reflects to center canvas
-        without separate preview modal. v2 canvas, draft-only apply guard, layoutId round-trip, and
-        responsive token rule UI remain; production_ready still gated on manual acceptance.
-      files:
-        - frontend/islands/UiBuilderAdmin.tsx
-        - frontend/runtime/visualLayoutUtils.ts
-        - frontend/components/UiBuilderFlowStepper.tsx
-        - frontend/content/adminGuides.ts
-        - frontend/runtime/layoutComponentPreview.ts
-        - frontend/runtime/layoutClassPreviewUtils.ts
-        - frontend/components/LayoutComponentPreviewFallback.tsx
-        - frontend/runtime/cssDictionary.ts
-        - backend/runtime/AdminRuntime.cs
-        - backend/schema/UiTopologyContracts.cs
-        - backend/repository/UiTopologyRepository.cs
-        - backend/repository/NpgsqlUiTopologyRepository.cs
-        - frontend/tests/visualLayoutBuilder.test.ts
-        - frontend/tests/adminUxGuard.test.ts
-        - frontend/tests/runtimeComponentFactory.test.ts
-        - db/ui_topology_tables.sql
-        - db/migrations/ui_topology_tensor_layout_draft_tmp.sql
-        - db/migrations/components_style_design_draft_tmp.sql
-      completion_condition:
-        - layout_tensor_and_variable_css_boundaries_are_defined
-        - css_dictionary_ui_binding_is_wired_to_style_selector_candidates
-        - css_dictionary_ci_check_is_wired_and_fail_close
-        - layoutId_styleTokenId_responsiveRuleId_are_saved_to_DB
-        - frontend_adapter_is_a_stable_projection_surface
-        - per_spec_UI_implementation_is_treated_as_drift_unless_explicitly_justified
-        - code_only_drift_components_blocked_from_layout_patch_apply_in_frontend_and_backend_validation
-        - layoutId_round_trip_from_backend_response_updates_frontend_state_with_explicit_mismatch_error
-        - responsive_token_rule_UI_per_breakpoint_with_empty_rule_filter_before_backend_submission
-        - canvas_workspace_ssot_alignment_no_separate_layout_design_visual_tab_surfaces
-        - canvas_workspace_bucket_cards_not_table_primary_ux
-        - canvas_workspace_bucket_card_drag_to_center_canvas_on_promoted_entries
-        - canvas_workspace_right_dock_practical_width_not_200px_fixed
-        - canvas_workspace_empty_canvas_drag_to_canvas_primary_guidance
-        - tmp_draft_backend_persistence_layout_draft_tmp_json_column_save_clear_on_apply
-        - selected_canvas_node_drives_layer_and_design_inspectors
-        - design_token_tmp_backend_persistence_components_style_design_save_resume_clear
-        - layout_patch_save_tmp_missing_target_fails_closed
-        - layout_patch_preview_uses_center_canvas_status_without_separate_preview_modal
-        - design_inspector_is_right_docked_with_layer_inspector_and_no_selection_placeholder
-        - component_style_design_layoutNodeId_package_membership_validation_fails_closed
-        - layer_inspector_tree_drag_reparent_and_reorder_no_freestanding_arrow_buttons
-        - structural_html_tag_allowlist_full_ssot_set_all_categories
-        - layout_patch_json_nodes_flow_to_dom_projection_full_field_continuity
-      incomplete:
-        - layout_patch_json_nodes_to_dom_projection: >
-            canvas layout_patch_json.nodes[] → backend emission → frontend DOM is implemented
-            (LayoutNode full field set, structural_html/catalog_component rendering, parentNodeId
-            tree, x/y/width/height CSS, layoutClassRefs className, validation at runtime).
-            Not yet production-ready: canvas authoring → promotion → live DOM full round-trip
-            manual acceptance pending.
-      evidence:
-        tests:
-          - visualLayoutBuilder.test.ts (layoutId round-trip: 5 tests)
-          - visualLayoutBuilder.test.ts (filterEmptyResponsiveRules: 5 tests)
-          - visualLayoutBuilder.test.ts (responsive rule per-breakpoint: 4 tests)
-          - visualLayoutBuilder.test.ts (RESPONSIVE_BREAKPOINTS export: sm/md/lg/xl)
-          - visualLayoutBuilder.test.ts (canvas workspace bucket card / drag / right dock guards)
-          - visualLayoutBuilder.test.ts (LayerTree tree drag reparent cycle guard: 4 tests)
-          - visualLayoutBuilder.test.ts (canvas workspace contract markers: selected inspector + _tmp backend persistence + inline canvas preview route)
-          - adminUxGuard.test.ts (no LayoutPatchPreviewModal / visual-audit modal in normal authoring route; right-docked selected-node design inspector)
-          - adminUxGuard.test.ts (canvas_workspace_contract bucket cards / drag / right dock)
-          - AdminRuntimeLayoutPatchTests (component_style_design layoutNodeId package membership fail-close)
-          - runtimeComponentFactory.test.ts (layout canvas preview: 8 tests)
-          - visualLayoutBuilder.test.ts (layout canvas live preview: 3 tests)
-          - adminUxGuard.test.ts (UiBuilderFlowStepper canvas workspace phases: 2 tests)
-          - adminUxGuard.test.ts (canvas workspace structural HTML palette + copy ops)
-        ci:
-          - frontend-tests
-      known_gap_ref:
-        - keyboard_or_button_alternatives_for_drag_move_resize_and_reorder (accessibility — tracked separately per SSOT accessibility_ref)
-
-    backend.context_route_repository:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Production DI fail-closes when DATABASE_URL is missing and injects NpgsqlContextRouteRepository
-        for ContextRouteRepository. NpgsqlContextRouteRepository implements real SQL paths for
-        context_token_registry, component_operation_event_log, context_event,
-        context_transition_stats, context_enum_transition_stats, context event/prefix vector caches,
-        and hub attention/feedback read-write surfaces. The base class remains a unit-test double
-        default and is not wired into production runtime.
-      files:
-        - backend/Program.cs
-        - backend/repository/ContextRouteRepository.cs
-        - backend/repository/NpgsqlContextRouteRepository.cs
-      evidence:
-        tests:
-          - ContextRouteRecommendationResolverTests
-          - TopologyVectorRuntimeTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - production_DI_injects_NpgsqlContextRouteRepository
-        - DATABASE_URL_missing_fails_close_without_in_memory_fallback
-        - context_route_repository_uses_production_runtime_paths_without_placeholder_behavior
-        - context_route_SQL_surfaces_cover_token_registry_event_logs_transition_stats_enum_stats_and_prefix_vectors
-      known_gap_ref: []
-
-    backend.topology_repository:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Production topology resolution (LoadStructureMapAsync, LoadPackageAsync, LoadSchemaAsync,
-        LoadFunctionParameterAsync) uses full SQL registry resolution against structure_maps,
-        package_registry, schema_registry, function_parameters tables. Demo entity route
-        (LoadDemoEntityListAsync, ApplyDemoTransitionAsync) resolves hub_id and relation_id
-        exclusively via LoadFunctionParameterAsync("demo_entity_defaults", ...); missing parameter
-        throws DEMO_ENTITY_DEFAULT_HUB_ID_NOT_CONFIGURED or DEMO_ENTITY_DEFAULT_RELATION_ID_NOT_CONFIGURED
-        explicitly — no seeded fallback. Base class demo methods throw TOPOLOGY_REPOSITORY_NOT_CONNECTED
-        explicitly. Gap-11 closure: all hardcoded shortcuts removed, registry resolution adopted throughout,
-        explicit failure boundaries verified by unit tests.
-      files:
-        - backend/repository/NpgsqlTopologyRepository.cs
-        - backend/repository/TopologyRepository.cs
-        - backend/repository/UiTopologyRepository.cs
-        - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
-      evidence:
-        tests:
-          - ProductionHardeningBoundaryTests (base class explicit failure: all 4 demo methods)
-          - ProductionHardeningBoundaryTests (NpgsqlTopologyRepository: missing hub_id/relation_id throws explicit)
-        ci:
-          - backend-tests
-      completion_condition:
-        - topology_repository_removes_skeleton_shortcuts_and_uses_full_registry_resolution
-      known_gap_ref: []
-
-    backend.admin_contracts:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        CreateTokenCode.NotConnected placeholder removed from the production contract enum.
-        ContextRouteRepository.CreateContextTokenAsync (base class) now throws
-        InvalidOperationException(CONTEXT_TOKEN_REGISTRY_NOT_CONNECTED) explicitly, consistent
-        with other not-connected base class methods. Production contract is Success | Conflict only.
-        AdminRuntime.CreateTokenAsync NotConnected handler removed. Gap-12 closure: temporary
-        placeholder replaced with validated runtime schema (explicit throw + production enum).
-      files:
-        - backend/schema/AdminContracts.cs
-        - backend/repository/ContextRouteRepository.cs
-        - backend/runtime/AdminRuntime.cs
-        - backend/tests/Topolactor.Runtime.Tests/ProductionHardeningBoundaryTests.cs
-      evidence:
-        tests:
-          - ProductionHardeningBoundaryTests (CreateContextToken throws, enum has no NotConnected)
-        ci:
-          - backend-tests
-      completion_condition:
-        - admin_contracts_replace_temporary_fields_with_validated_runtime_schema
-      known_gap_ref: []
-
-    backend.hub_navigation_admin:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Hub navigation admin write layer and runtime consumer are fully implemented.
-        AdminRuntime dispatches hub_navigation:{list_manifests,get_hub_relations,create,update,deprecate,reorder}.
-        NpgsqlContentBundleRepository implements all 6 methods against hubs.topology_manifests and
-        hubs.hub_relations. hub_relation lifecycle is immediate-active (no draft stage).
-        create validates manifest existence (MANIFEST_NOT_FOUND) and hub existence (HUB_NOT_FOUND);
-        direct self-loop (source_hub == related_hub) returns SELF_LOOP; update validates hub existence (HUB_NOT_FOUND);
-        sequence conflicts return SEQUENCE_CONFLICT; reorder uses 2-phase transaction to avoid UNIQUE constraint violations.
-        Seed manifest records (IDs 77-7c) registered in seed_empty.sql for all 6 dispatch actions.
-        Runtime consumer: HubNavigationResolver reads manifest-scoped hub_relations via
-        topology_transform_runtime pipeline; uses dispatcher-resolved manifestId (not
-        vector.IdOrHubId) so a hub with multiple topology_manifests returns the correct
-        per-manifest sequence; Emission.NavigationSequence populated when manifestId is present
-        (non-fatal on failure).
-      files:
-        - backend/runtime/AdminRuntime.cs
-        - backend/runtime/HubNavigationResolver.cs
-        - backend/repository/ContentBundleRepository.cs
-        - backend/repository/NpgsqlContentBundleRepository.cs
-        - backend/schema/ContentBundleContracts.cs
-        - backend/schema/Contracts.cs
-        - backend/runtime/RuntimeExecutor.cs
-        - backend/Program.cs
-        - db/seed_empty.sql
-        - frontend/islands/HubNavigationAdmin.tsx
-        - frontend/api/adminApi.ts
-        - frontend/content/adminGuides.ts
-        - docs/design/admin-console-workflow-ssot.yaml
-        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeContentBundleTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/InMemoryContentBundleRepository.cs
-      evidence:
-        tests:
-          - AdminRuntimeContentBundleTests (HubNavigation_ListManifests_ReturnsSeededManifest)
-          - AdminRuntimeContentBundleTests (HubNavigation_GetHubRelations_ReturnsSeededEntry)
-          - AdminRuntimeContentBundleTests (HubNavigation_Create_AddsNewEntry)
-          - AdminRuntimeContentBundleTests (HubNavigation_Create_SequenceConflict_ReturnsError)
-          - AdminRuntimeContentBundleTests (HubNavigation_Create_SelfLoop_ReturnsSelfLoopError)
-          - AdminRuntimeContentBundleTests (HubNavigation_Update_ChangesSequencePosition)
-          - AdminRuntimeContentBundleTests (HubNavigation_Update_InvalidHub_ReturnsHubNotFound)
-          - AdminRuntimeContentBundleTests (HubNavigation_Update_SelfLoop_ReturnsSelfLoopError)
-          - AdminRuntimeContentBundleTests (HubNavigation_Deprecate_SetsDeprecatedStatus)
-          - AdminRuntimeContentBundleTests (HubNavigation_Reorder_ChangesSequencePositions)
-        ci:
-          - backend-tests
-      completion_condition:
-        - hub_navigation_list_manifests_returns_topology_manifests_with_hub_relation_count
-        - hub_navigation_get_hub_relations_returns_manifest_scoped_active_relations
-        - hub_navigation_create_validates_manifest_and_hub_existence
-        - hub_navigation_create_direct_self_loop_returns_SELF_LOOP
-        - hub_navigation_update_validates_hub_existence_returns_HUB_NOT_FOUND
-        - hub_navigation_update_direct_self_loop_returns_SELF_LOOP
-        - hub_navigation_deprecate_sets_status_deprecated
-        - sequence_conflict_returns_SEQUENCE_CONFLICT_not_exception
-        - hub_navigation_reorder_uses_2phase_transaction_avoiding_UNIQUE_constraint
-        - seed_manifest_records_registered_for_all_6_hub_navigation_actions
-        - runtime_consumer_populates_emission_NavigationSequence_via_HubNavigationResolver
-      known_gap_ref: []
-      detail_ssot:
-        - docs/design/admin-console-workflow-ssot.yaml
-
-    frontend.runtime_scheduler:
-      status: implemented
-      production_ready: false
-      milestone: M1_runtime_skeleton
-      public_summary: >
-        Frontend command scheduler implements FIFO serial queue for queueClientCommand.
-        Commands enqueue and execute in order; errors propagate explicitly to the failed
-        command's awaiter only; subsequent commands are unaffected. Queue length and running
-        state are observable via __testOnly surface. Gap-13 closure: client_command_order and
-        async execution are owned by the scheduler module. sse_projection_order, rollback_boundary,
-        optimistic_update_boundary, and collision_control are separate boundary contracts per
-        pipeline-continuity-ssot (frontend.scheduler node).
-      files:
-        - frontend/runtime/frontendScheduler.ts
-        - frontend/tests/frontendScheduler.test.ts
-      evidence:
-        tests:
-          - frontendScheduler.test.ts (FIFO ordering, serial execution, explicit failure, queue drain)
-        ci:
-          - frontend-types
-      completion_condition:
-        - frontend_scheduler_owns_queueing_ordering_and_async_execution_policy
-      known_gap_ref: []
-
-    system_ci.runtime_diagnostic_scheduler:
-      status: partial
-      production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: Runtime diagnostic scheduler and AdminRuntime callable diagnostic surface (`system_ci:list_targets` / `system_ci:inspect`) are implemented, while full diagnostic coverage remains partial.
-      completion_condition:
-        - cron_triggered_runtime_diagnostic_scheduler_wiring_is_implemented
-        - scheduler_executes_hub_attention_current_rebuildability_and_registry_continuity_inspections
-      known_gap_ref:
-        - Diagnostic coverage and downstream persistence/audit integration remain partial
-        - frontend diagnostic panel exposure and broader operational coverage remain follow-up
-
-    backend.system_operation_ci_runtime:
-      status: implemented
-      production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        Infrastructure subpath for runtime CI inspection is implemented
-        (SystemOperationCiRuntime / SystemOperationCiScheduler callable+cron surfaces).
-        This entry tracks backend diagnostic runtime capability only, not end-user guidance UX completion.
-      files:
-        - backend/runtime/SystemOperationCiRuntime.cs
-        - backend/scheduler/SystemOperationCiScheduler.cs
-      completion_condition:
-        - system_operation_ci_runtime_callable_surface_is_wired
-        - cron_scheduler_invokes_system_ci_runtime
-      known_gap_ref:
-        - product.ci_attention_user_guidance_ux remains partial
-
-    product.ci_attention_user_guidance_ux:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Admin UI builder exposes CI Attention guidance projection as read-only authoring hints
-        (missing_input / valid_candidate / structural_violation / break_boundary). Draft editing
-        remains non-blocking on fragment state. Canonical promotion (package_generator:promote,
-        layout_patch:apply) is now fail-close in backend runtime guard when active blocking
-        fragments remain unresolved (CI_ATTENTION_PROMOTION_BLOCKED). Frontend live SSE
-        projection subscription receives fragment events and updates guidance display without
-        draft editing lock or frontend promotion authority. All three completion conditions are
-        satisfied. Broader dynamic_support_nocode_loop (which requires SQL Attention feedback UX
-        + M6 work) remains partial in its own registry entry.
-      evidence:
-        tests:
-          - CiAttentionPromotionGateTests
-          - ciAttentionGuidanceProjection.test.ts
-        ci:
-          - backend-tests
-          - frontend-types
-      completion_condition:
-        - ci_attention_guidance_is_exposed_to_end_users_during_authoring_as_read_only_projection
-        - draft_editing_is_not_locked_by_fragment_state
-        - canonical_promotion_boundary_consumes_fragment_state_in_backend_guard
-      known_gap_ref: []
-
-    design.ci_attention_guidance_fragment_ssot_and_schema:
-      status: partial
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        CI Attention guidance fragment SSOT/schema defines read-only evidence fragments plus
-        backend canonical promotion gate consumption boundary (non-frontend authority).
-        Guidance scope supports payload-defined authoring_surface identity with
-        admin_ui_builder fallback in runtime resolution.
-        Backend promotion gate consumer is implemented: GetActiveBlockingFragmentsAsync
-        queries active blocking fragments and DataPromoteAsync/DataLayoutPatchApplyAsync
-        fail-close with CI_ATTENTION_PROMOTION_BLOCKED when blocking fragments exist.
-        Frontend live projection subscription is implemented: SSE projection events with
-        CiAttentionFragmentProjectionPayload are detected via extractCiAttentionFragmentPayload
-        and update live guidance display without draft editing lock.
-        Representative UI projection surfaces include LayoutDropZone,
-        ComponentPlacementHandle, and SnapGridOverlay.
-        dismissed fragments remain visibility control only and do not unlock promotion.
-      files:
-        - backend/repository/CiAttentionGuidanceRepository.cs
-        - backend/repository/NpgsqlCiAttentionGuidanceRepository.cs
-        - backend/schema/CiAttentionGuidanceContracts.cs
-        - backend/runtime/AdminRuntime.cs
-        - frontend/runtime/sseReceiver.ts
-        - frontend/routes/admin/ui-builder.tsx
-        - backend/tests/Topolactor.Runtime.Tests/CiAttentionPromotionGateTests.cs
-        - frontend/tests/ciAttentionGuidanceProjection.test.ts
-      evidence:
-        tests:
-          - CiAttentionPromotionGateTests
-          - ciAttentionGuidanceProjection.test.ts
-        ci:
-          - backend-tests
-          - frontend-types
-      known_gap_ref: []
-
-
-    design.manifest_routing_jwt_role_authority_boundary:
-      status: implemented
-      production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        Manifest routing role authority is fixed to backend-authenticated JWT role claim.
-        Client body/context role is non-authoritative at dispatch boundary.
-      files:
-        - backend/Program.cs
-        - backend/guard/JwtGuard.cs
-        - backend/runtime/ManifestDispatcher.cs
-        - backend/runtime/OperationVectorResolver.cs
-        - backend/tests/Topolactor.Runtime.Tests/RuntimeExecutorTests.cs
-        - backend/tests/Topolactor.Runtime.Tests/DispatchRoleAuthorityTests.cs
-      evidence:
-        tests:
-          - RuntimeExecutorTests
-          - DispatchRoleAuthorityTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - dispatch_boundary_overrides_request_role_with_validated_jwt_role_claim
-        - manifest_axes_role_source_is_backend_authenticated_claim
-        - client_supplied_role_cannot_override_authenticated_role
-      known_gap_ref: []
-
-    design.authority_visibility_promotion_policy_ssot:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Authority / Visibility / Promotion Policy SSOT is closed as one completion bundle
-        and aligned with promotion-gate implementation boundaries. Draft authoring stays
-        non-blocking from fragment visibility state, canonical promotion authority remains
-        backend runtime guard-owned, frontend remains display-only, and audit evidence
-        visibility is scoped as auditability rather than unrestricted access.
-      files:
-        - docs/framework-policy.yaml
-        - backend/runtime/AdminRuntime.cs
-        - backend/repository/CiAttentionGuidanceRepository.cs
-        - backend/repository/NpgsqlCiAttentionGuidanceRepository.cs
-        - frontend/runtime/sseReceiver.ts
-        - frontend/routes/admin/ui-builder.tsx
-      evidence:
-        tests:
-          - CiAttentionPromotionGateTests
-          - ciAttentionGuidanceProjection.test.ts
-        ci:
-          - backend-tests
-          - frontend-types
-      completion_condition:
-        - draft_authority_is_defined_who_can_author_drafts_and_when
-        - promotion_authority_is_defined_who_can_execute_canonical_promotion
-        - manifest_activation_authority_is_defined_who_can_activate_and_when
-        - ci_attention_refresh_authority_is_defined_who_can_trigger_refresh
-        - audit_evidence_visibility_authority_is_defined_as_auditability_not_unrestricted_access
-        - frontend_display_only_boundary_is_explicitly_declared_no_promotion_judgment
-        - backend_runtime_promotion_guard_authority_is_explicitly_declared_as_final_authority
-        - completion_bundle_closed_as_unit_not_split_into_partial_fragments
-      known_gap_ref: []
-      detail_ssot:
-        - docs/framework-policy.yaml (authority_visibility_promotion_policy)
-
-    system_ci.dotnet_ssot_wiring_audit_tests:
-      status: implemented
-      production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        C# direct AdminRuntime callable semantic tests, shell SSOT wiring check, SSOT vocabulary
-        contract hardening checks, and OutputLaneRouter.RouteAsync direct semantic tests are
-        implemented. Five SSOT wiring audit CI lane test classes are now defined:
-        SsotWiringAuditTopologyRegistrationTests, SsotWiringAuditHubRegistrationTests,
-        SsotWiringAuditSchedulerRuntimeTests, SsotWiringAuditComponentRegistrationTests,
-        SsotWiringAuditDiagnosticsEligibilityTests. Each lane audits a SSOT contract boundary
-        without adding new runtime routes or mutation authority. Diagnostics/evidence/eligibility
-        is scoped to judgment-only.
-      files:
+      public_summary: Dotnet semantic tests and shell checks audit SSOT wiring for topology, hub, scheduler/runtime, component registration, and diagnostics eligibility without adding runtime mutation authority.
+      scope:
+        - topology_registration_ci_lane
+        - hub_registration_ci_lane
+        - scheduler_runtime_ci_lane
+        - component_registration_ci_lane
+        - diagnostics_eligibility_lane
+      detail_ref:
+        - docs/design/ci-contract-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+        - docs/design/system-ci-admin-runtime-callable-surface.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditHubRegistrationTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditDiagnosticsEligibilityTests.cs
         - .agent/tests/check-pipeline-continuity.sh
-      evidence:
-        tests:
-          - SsotWiringAuditTopologyRegistrationTests
-          - SsotWiringAuditHubRegistrationTests
-          - SsotWiringAuditSchedulerRuntimeTests
-          - SsotWiringAuditComponentRegistrationTests
-          - SsotWiringAuditDiagnosticsEligibilityTests
-        ci:
-          - backend-tests
-          - pipeline-continuity
+      completion_condition:
+        - sh_checks_are_kept_as_ai_agent_operational_guard
+        - dotnet_ci_audits_application_wiring_against_ssot_contracts
+        - topology_registration_ci_lane_defined
+        - hub_registration_ci_lane_defined
+        - scheduler_runtime_ci_lane_defined
+        - component_registration_ci_lane_defined
+        - initial_phase_returns_diagnostics_evidence_eligibility_only
+      known_gap_ref: []
+
+    frontend.ui_ux_executable_component_slice:
+      bundle_id: product.admin_topology_authoring
+      title: UI/UX executable primitive slice compatibility entry
+      status: implemented
+      production_ready: false
+      public_summary: >
+        Thin compatibility entry retained for check-ui-ux-executable-component-slice.sh;
+        product capability status is owned by product.admin_topology_authoring.
+        Representative executable primitives: AutoCompleteInput, SearchCombobox,
+        CandidateConfidenceBadge, InlineEditableField, PatchPreviewPanel,
+        ApplyConfirmDialog, FacetedFilterBar, VirtualizedDataTable, LayoutDropZone,
+        ComponentPlacementHandle, SnapGridOverlay, StyleTokenPicker, ThemePreviewPanel,
+        DryRunResultPanel, ValidationErrorPanel.
+      detail_ref:
+        - docs/design/ui-ux-primitive-catalog-ssot.yaml
+        - docs/design/abstract-function-primitive-registry-ssot.yaml
+      evidence_ref:
+        - frontend/components/catalog.ts
+        - frontend/runtime/runtimeComponentFactory.ts
+        - .agent/tests/check-ui-ux-executable-component-slice.sh
+      completion_condition:
+        - representative_ui_ux_primitives_are_cataloged_and_factory_reachable
+        - runtime_connected_catalog_entries_match_runtime_factory
+      known_gap_ref: []
+
+    product.external_optional_surface_bundle_gate:
+      bundle_id: future-external-bundle-gate
+      title: Optional external connector bundle gate
+      status: not_started
+      production_ready: false
+      public_summary: Notion, Google Sheets, Slack, GitHub Issues, generic webhooks, and external REST API connectors stay future optional surfaces until each has a separate connector contract and validate-preview-apply boundary.
+      scope:
+        - external_connector_contract_gate
+        - optional_external_surface_policy
+      detail_ref:
+        - docs/design/extended-runtime-bundle-registry-ssot.yaml
+        - .agent/tasks/todo.md#future-external-bundle-gate
+      known_gap_ref:
+        - connector_adapter_contracts_not_defined
+        - external_surfaces_not_implemented
+
+    product.helper_manual_policy:
+      bundle_id: helper-manual
+      title: User-facing helper and manual policy
+      status: not_started
+      production_ready: false
+      public_summary: Helper/manual category candidates remain policy-writing work for user promise, safety boundary, onboarding, and Desktop AI/CLI/MCP Reader language; site pages and UI components are out of scope.
+      scope:
+        - user_promise_language
+        - safety_boundary_language
+        - onboarding_policy
+        - desktop_ai_cli_mcp_reader_plain_language
+      detail_ref:
+        - docs/design/user-facing-helper-manual-ssot.yaml
+        - .agent/tasks/todo.md#helper-manual
+      known_gap_ref:
+        - helper_manual_policy_writing_not_started
+
+    product.preset_team_markdown_saved_view_seed:
+      bundle_id: preset_team_markdown_saved_view_seed
+      title: Preset ecosystem saved Markdown view / md_viewer
+      status: not_started
+      production_ready: false
+      public_summary: Team shared saved Markdown view remains a preset ecosystem child bundle under md_viewer; physical tables/jsonb records stay canonical and rendered Markdown is projection only.
+      scope:
+        - team_markdown_template_registry
+        - team_markdown_saved_view
+        - completed_preset_seed_json_hard_gate
+        - md_viewer_projection_surface
+        - ui_builder_preset_ecosystem_child_surface
+      detail_ref:
+        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      known_gap_ref:
+        - db_migration_not_created
+        - backend_runtime_actions_not_created
+        - frontend_md_viewer_not_created
+        - completed_preset_seed_json_validator_not_created
+
+    backend.sql_attention_logs_current:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - logs current
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      completion_condition:
+        - logs_current_watch_refresh_exists
+      known_gap_ref: []
+
+    backend.sql_attention_hub_current:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - hub current support cache
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      completion_condition:
+        - logs_hub_current_support_cache_refresh_exists
+      known_gap_ref: []
+
+    backend.sql_attention_scheduler_exploration:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - scheduler exploration
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      completion_condition:
+        - scheduler_exploration_route_exists
+      known_gap_ref:
+        - EMA score integration remains separate
+
+    backend.sql_attention_logs_attention_persistence:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - attention persistence
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionPhaseGenerationLineTests.cs
+      completion_condition:
+        - append_only_logs_attention_persistence_exists
+      known_gap_ref:
+        - EMA score integration remains separate
+
+    backend.sql_attention_phase_vector:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - phase vector
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionLiveDbEndToEndTests.cs
+      completion_condition:
+        - canonical_phase_vector_generation_exists
+      known_gap_ref: []
+
+    backend.sql_attention_topology_projection:
+      bundle_id: product.sql_attention_observation_runtime
+      title: SQL Attention CI compatibility entry - topology projection
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.sql_attention_observation_runtime.
+      detail_ref:
+        - docs/design/sql-attention-logs-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SqlAttentionTopologyProjectionRuntimeTests.cs
+        - frontend/tests/sqlAttentionProjectionPanel.test.ts
+      completion_condition:
+        - sql_attention_topology_projection_runtime_exists
+      known_gap_ref:
+        - SQLA-1..5 parent observation hardening/live verification remain partial
+
+    system_ci.dotnet_ssot_wiring_audit_tests:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI compatibility entry - wiring audit bundle
+      status: implemented
+      production_ready: false
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.system_ci_contract_audit.
+      detail_ref:
+        - docs/design/ci-contract-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+      evidence_ref:
+        - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSsotContractReaderTests.cs
       completion_condition:
         - sh_checks_are_kept_as_ai_agent_operational_guard
         - dotnet_ci_audits_application_wiring_against_ssot_contracts
@@ -2124,22 +707,15 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     system_ci.topology_registration:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI compatibility entry - topology registration lane
       status: implemented
       production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        Topology Registration CI lane is defined with unit-boundary tests that audit:
-        broken package reference → PACKAGE_RESOLVE_FAILED; broken schema reference →
-        SCHEMA_RESOLVE_FAILED; route missing → canonical jump events (not error response);
-        successful pipeline → StructureMapId/PackageId/SchemaId/ComponentIds all preserved.
-      files:
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.system_ci_contract_audit.
+      detail_ref:
+        - docs/design/pipeline-continuity-ssot.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditTopologyRegistrationTests.cs
-      evidence:
-        tests:
-          - SsotWiringAuditTopologyRegistrationTests
-        ci:
-          - backend-tests
-          - pipeline-continuity
       completion_condition:
         - broken_package_reference_returns_package_resolve_failed_not_silence
         - broken_schema_reference_returns_schema_resolve_failed_not_silence
@@ -2148,25 +724,15 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     system_ci.hub_registration:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI compatibility entry - hub registration lane
       status: implemented
       production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        Hub Registration CI lane is defined with unit-boundary tests that audit:
-        InspectAsync routes to correct target by name; all InspectAsync methods return
-        SystemCiDiagnosticResult (read-only; no DB write); hub_id empty → HUB_ID_EMPTY
-        Blocking finding; unknown target → ArgumentException (no silent fallback);
-        InspectedAt and InspectionKind are set in every result; ListTargets includes
-        all three callable targets. SQL Attention auto-mutation is structurally
-        prohibited by the read-only return type.
-      files:
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.system_ci_contract_audit.
+      detail_ref:
+        - docs/design/system-ci-admin-runtime-callable-surface.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditHubRegistrationTests.cs
-      evidence:
-        tests:
-          - SsotWiringAuditHubRegistrationTests
-        ci:
-          - backend-tests
-          - pipeline-continuity
       completion_condition:
         - inspect_async_routes_to_correct_target_by_name
         - all_inspect_methods_return_readonly_diagnostic_result
@@ -2181,25 +747,16 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     system_ci.scheduler_runtime:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI compatibility entry - scheduler/runtime lane
       status: implemented
       production_ready: false
-      milestone: M3_unified_timeline_and_output_lanes
-      public_summary: >
-        Scheduler/Runtime CI lane is defined with unit-boundary tests that audit:
-        canonical route (scheduler → ManifestDispatcher → RuntimeExecutor) preserves
-        topology IDs end-to-end; route missing propagates as jump events through full chain;
-        queue overflow → SCHEDULER_QUEUE_FULL (not silent drop); unknown runtime_destination
-        → RUNTIME_DESTINATION_UNKNOWN (no implicit fallthrough); missing manifest →
-        MANIFEST_NOT_FOUND; db_notify from client trigger → DB_NOTIFY_TRIGGER_KIND_INVALID;
-        registered handler is selected by manifest runtime_destination.
-      files:
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.system_ci_contract_audit.
+      detail_ref:
+        - docs/design/runtime-orchestration-ssot.yaml
+        - docs/design/pipeline-continuity-ssot.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditSchedulerRuntimeTests.cs
-      evidence:
-        tests:
-          - SsotWiringAuditSchedulerRuntimeTests
-        ci:
-          - backend-tests
-          - pipeline-continuity
       completion_condition:
         - canonical_route_scheduler_dispatcher_executor_preserves_topology_ids
         - queue_overflow_returns_explicit_scheduler_queue_full_not_silent_drop
@@ -2209,438 +766,20 @@ system_roadmap_ssot:
       known_gap_ref: []
 
     system_ci.component_registration:
+      bundle_id: product.system_ci_contract_audit
+      title: System CI compatibility entry - component registration lane
       status: implemented
       production_ready: false
-      milestone: M5_admin_and_ui_topology
-      public_summary: >
-        Component Registration CI lane is defined with unit-boundary tests that audit:
-        generate (bucketed → packaging) transitions lifecycle status without issuing IDs;
-        promote issues all five IDs (tensorId/componentId/packageId/layoutId/wiringId);
-        all five IDs are non-empty after successful promote; a broken promote returns
-        explicit error (not partial IDs).
-      files:
+      public_summary: Thin compatibility entry retained for current CI reader; capability status is owned by product.system_ci_contract_audit.
+      detail_ref:
+        - docs/design/component-catalog-classification-ssot.yaml
+      evidence_ref:
         - backend/tests/Topolactor.Runtime.Tests/SsotWiringAuditComponentRegistrationTests.cs
-      evidence:
-        tests:
-          - SsotWiringAuditComponentRegistrationTests
-        ci:
-          - backend-tests
-          - pipeline-continuity
       completion_condition:
         - generate_transitions_to_packaging_without_issuing_ids
         - promote_issues_all_five_ids_non_empty
         - broken_promote_returns_explicit_error_not_partial_ids
       known_gap_ref: []
-
-    ui_ux_primitive_catalog_and_abstract_function_registry:
-      status: implemented
-      production_ready: false
-      milestone: M5_admin_and_ui_topology
-      prerequisite_for:
-        - admin_visual_layout_builder (Issue #89)
-        - no_code_db_driven_ui_operation_surface
-      public_summary: >
-        UI/UX primitive catalog SSOT (docs/design/ui-ux-primitive-catalog-ssot.yaml)
-        and abstract function primitive registry SSOT
-        (docs/design/abstract-function-primitive-registry-ssot.yaml) are defined and
-        wired to the current executable slice boundary. Post-PR #275 runtime/catalog/factory
-        semantics are aligned and all green: runtimeConnected:true entries are factory/constructor-reachable,
-        and the current slice is synchronized across frontend.runtimeComponentFactory.ts,
-        frontend/components/catalog.ts, db/seed_empty.sql, runtime-semantics checks,
-        and UI/UX executable component slice checks. Current implementation shape is
-        65 connected primitives / 93 factory kinds / 6 aliases.
-        runtimeConnected:true means factory/constructor reachability only (not DB topology
-        entity registration completion), and registrationRequired:true remains to preserve
-        explicit registration governance.
-        Abstract function boundary unit test coverage is implemented (PR #280): 31 of the
-        TODO-selected boundary functions (SSOT categories A–F) are covered in
-        frontend/tests/abstractFunctionBoundary.test.ts. The SSOT registry defines
-        60 total functions across 7 categories; the 31 tested functions are the
-        implementation-surface-selected subset for this boundary test closure.
-      files:
-        - docs/design/ui-ux-primitive-catalog-ssot.yaml
-        - docs/design/abstract-function-primitive-registry-ssot.yaml
-        - frontend/components/catalog.ts
-        - frontend/runtime/runtimeComponentFactory.ts
-        - frontend/runtime/abstractFunctions.ts
-        - frontend/tests/ssotReaderCatalog.test.ts
-        - frontend/tests/catalogSubsetCheck.test.ts
-        - frontend/tests/abstractFunctionBoundary.test.ts
-        - db/seed_empty.sql
-        - .agent/tests/check-ui-ux-executable-component-slice.sh
-      completion_condition:
-        - ui_ux_primitive_catalog_ssot_defines_8_categories_with_mutation_boundary
-        - abstract_function_primitive_registry_ssot_defines_7_categories_with_contract
-        - meaning_boundary_documented_frontend_topology_judgment_mutation_calc_lookup_seed_token
-        - implemented_promotion_requires_component_file_factory_registration_sourcepath_runtime_connected_seed_sync_and_reachability_checks
-      known_gap_ref: []
-
-
-    external_connector_contract:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        Future optional external connector contract (Notion/Sheets/Slack/GitHub/webhooks/external APIs)
-        is not defined yet and is explicitly outside M6 MVP completion scope.
-      completion_condition:
-        - connector_adapter_contract_defines_source_identity_auth_scope_snapshot_and_mapping
-        - external_source_identity_is_preserved_through_intake_validate_preview_apply
-        - connector_output_is_topology_payload_candidate_not_canonical_state
-        - connector_failures_return_structured_errors
-        - external_tool_write_permissions_are_never_equivalent_to_runtime_authority
-      known_gap_ref:
-        - future optional external connector contract SSOT not defined (non-blocking for M6 MVP)
-
-    notion_intake_runtime:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        Notion intake runtime remains a future optional external surface and is outside
-        M6 MVP self-hosted admin authoring completion.
-      completion_condition:
-        - notion_database_can_be_registered_as_external_source
-        - notion_pages_and_properties_are_snapshotted_before_mapping
-        - notion_database_properties_map_to_business_vocabulary_state_action_or_table_candidates
-        - validation_reports_ambiguous_property_type_relation_and_required_field_gaps
-        - notion_is_never_treated_as_canonical_topolactor_SSOT
-      known_gap_ref:
-        - future optional Notion intake runtime not implemented (non-blocking for M6 MVP)
-
-
-
-    legacy_island_embedding_intake:
-      status: partial
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: Topolactor core scaffold introduces legacy mirror SQL schema, change-event intake endpoint, table_name -> Target mapping, hook scheduler enqueue, and unsupported operation explicit validation. Production promotion remains adopter-specific integration responsibility and is not production-ready at this stage.
-      files:
-        - db/legacy_mirror_tables.sql
-        - db/init.sql
-        - backend/schema/Contracts.cs
-        - backend/endpoint/LegacyChangeIntakeEndpoint.cs
-        - backend/scheduler/RuntimeTimelineScheduler.cs
-        - backend/runtime/ManifestDispatcher.cs
-      completion_condition:
-        - legacy_physical_table_state_can_be_stored_as_jsonb_mirror_observation_layer
-        - api_change_intake_accepts_table_name_row_id_operation_and_change_payload
-        - table_name_is_used_as_registry_resolution_key_candidate
-        - intake_dispatches_as_hook_trigger_through_scheduler_to_manifest_dispatcher
-        - unresolved_registry_or_manifest_routes_are_explicit_errors_without_silent_fallback
-      known_gap_ref:
-        - Adopter-specific integration: repository persistence / replay / correlation visibility are outside core scaffold and required for production promotion
-        - Issue #134 legacy runtime destination mapping policy for adopter-specific manifest/registry operation remains partial
-
-    external_snapshot_store:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: External source snapshots are not persisted yet, so external-to-canonical diff evidence cannot be audited.
-      completion_condition:
-        - raw_external_snapshot_is_stored_with_source_type_source_id_revision_and_fetched_at
-        - mapped_topology_payload_candidate_is_stored_separately_from_raw_snapshot
-        - applied_canonical_diff_links_back_to_snapshot_id
-        - reimport_can_detect_external_changes_without_silent_overwrite
-      known_gap_ref:
-        - external snapshot storage not implemented
-
-    external_import_preview_runtime:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: General external import preview/validation runtime does not exist beyond the planned seed runtime direction.
-      completion_condition:
-        - external_import_uses_validate_preview_apply_stages
-        - preview_shows_schema_manifest_registry_projection_and_runtime_effect_candidates
-        - apply_requires_explicit_approval_or_policy_defined_auto_apply
-        - invalid_external_mapping_returns_explicit_errors
-        - apply_writes_through_canonical_runtime_route
-      known_gap_ref:
-        - import preview and validation are not generalized beyond seed runtime
-
-    external_approval_workflow:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: Approval and apply workflow for externally-authored changes is not implemented.
-      completion_condition:
-        - approval_subject_preserves_external_source_identity_and_topology_payload_identity
-        - approver_role_and_policy_are_resolved_by_manifest_or_registry_policy
-        - rejected_external_candidate_is_recorded_without_applying_runtime_state
-        - approved_external_candidate_enters_scheduler_before_runtime_execution
-      known_gap_ref:
-        - approval/apply workflow not implemented
-
-    non_IT_business_authoring_loop:
-      status: not_started
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: The planned non-IT loop lets business users define vocabulary, states, actions, tables, and UI drafts from external tools.
-      completion_condition:
-        - business_user_can_author_business_vocabulary_without_code
-        - business_user_can_author_state_and_transition_candidates_without_code
-        - business_user_can_author_table_or_property_candidates_without_code
-        - system_can_validate_and_preview_generated_runtime_topology
-        - CI_or_runtime_diagnostics_detect_semantic_breakage_before_completion_claim
-      known_gap_ref:
-        - non-IT business app authoring loop not implemented
-
-    backend.jsonb_manifest_runtime:
-      status: implemented
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        JsonbManifestRuntime resolves label/value field manifests from raw JSONB data using
-        dot-notation JSON paths and user-defined display policies (as_is, format_currency,
-        format_date, format_number, uppercase, lowercase). Aggregation and display policy
-        responsibilities are separated. Explicit failure for empty source, unknown policy,
-        invalid JSON, missing field key. Read-only — no DB mutation.
-      files:
-        - backend/runtime/JsonbManifestRuntime.cs
-        - backend/schema/JsonbManifestContracts.cs
-        - backend/tests/Topolactor.Runtime.Tests/JsonbManifestRuntimeTests.cs
-      evidence:
-        tests:
-          - JsonbManifestRuntimeTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - jsonb_field_manifest_resolves_label_value_from_raw_jsonb_using_json_path
-        - display_policies_applied_as_is_format_currency_format_date_format_number_uppercase_lowercase
-        - missing_path_resolves_to_null_not_error
-        - empty_source_invalid_json_unknown_policy_missing_key_return_explicit_errors
-        - resolution_is_read_only_no_db_mutation
-      known_gap_ref: []
-
-    backend.document_canvas_binding_policy:
-      status: implemented
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        DocumentCanvasBindingPolicy validates and applies user-defined aggregation/display/binding
-        policy documents for DocumentCanvas template fields. Policy document defines templateKey,
-        backgroundImageUrl, and fields with AggregationPolicy + DisplayPolicy per field.
-        Validation is fail-close: duplicate keys, missing templateKey, empty fields, NaN coordinates
-        all return explicit errors. Apply delegates to JsonbManifestRuntime.
-        Full DB/JSONB → canvas fields loop is proven at unit boundary (invoice example).
-      files:
-        - backend/runtime/DocumentCanvasBindingPolicy.cs
-        - backend/schema/DocumentCanvasContracts.cs
-        - backend/tests/Topolactor.Runtime.Tests/DocumentCanvasBindingPolicyTests.cs
-      evidence:
-        tests:
-          - DocumentCanvasBindingPolicyTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - binding_policy_document_validates_template_key_fields_duplicate_keys_nan_coordinates
-        - apply_delegates_to_jsonb_manifest_runtime_and_returns_canvas_ready_fields
-        - aggregation_and_display_policy_enum_conversion_is_correct
-        - invalid_policy_returns_explicit_canvas_binding_policy_invalid_error
-        - full_db_jsonb_to_canvas_fields_loop_proven_at_unit_boundary
-      known_gap_ref: []
-
-    backend.pdf_export_snapshot_runtime:
-      status: implemented
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        PdfExportSnapshotRuntime implements the PDF export snapshot boundary.
-        Creates an export snapshot record capturing DocumentCanvas state (templateKey,
-        backgroundImageUrl, fields with values) at export request time. Links back to
-        sourceSnapshotId (admin_import_snapshot) and sourceApplyLogId (admin_import_apply_log)
-        for canonical diff/audit evidence. Status is 'snapshot_created'. Does NOT generate
-        PDF bytes — production PDF layout engine is explicitly out of scope.
-        All failure paths return explicit error codes. No silent fallback.
-      files:
-        - backend/runtime/PdfExportSnapshotRuntime.cs
-        - backend/schema/PdfExportContracts.cs
-        - backend/tests/Topolactor.Runtime.Tests/PdfExportSnapshotRuntimeTests.cs
-      evidence:
-        tests:
-          - PdfExportSnapshotRuntimeTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - pdf_export_creates_snapshot_export_record_with_unique_id
-        - snapshot_preserves_template_key_field_count_and_source_linkage
-        - source_snapshot_id_and_apply_log_id_linkage_is_preserved
-        - status_is_snapshot_created_on_success
-        - null_request_empty_template_key_null_fields_field_empty_key_return_explicit_errors
-        - invalid_source_id_uuids_return_explicit_errors
-      known_gap_ref:
-        - PDF byte generation is not implemented (snapshot boundary only; production PDF layout engine is out of scope)
-        - DB persistence is in-memory at MVP boundary (topology.pdf_export_snapshot table is not yet created)
-
-    system_ci.scheduler_runtime_load_benchmark:
-      status: implemented
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        Scheduler/runtime load benchmark test provides performance/load evidence with
-        all required production metrics: input_count, processed_count, rejected_count,
-        timeout_count, backlog_count, queue_full_count, and latency summary (min, max,
-        avg, p50, p95, p99 in ms). Two scenarios: sustained_throughput (all within-capacity
-        requests processed, backlog=0) and high_volume_burst (all outcomes accounted for,
-        no silent drop). This is performance/load evidence, not a protocol test.
-      files:
-        - backend/tests/Topolactor.Runtime.Tests/SchedulerLoadBenchmarkTests.cs
-        - backend/scheduler/RuntimeTimelineScheduler.cs
-      evidence:
-        tests:
-          - SchedulerLoadBenchmarkTests
-        ci:
-          - backend-tests
-      completion_condition:
-        - all_required_load_metrics_captured_input_processed_rejected_timeout_backlog_queue_full
-        - latency_summary_min_max_avg_p50_p95_p99_captured_for_processed_requests
-        - sustained_throughput_all_within_capacity_requests_processed_backlog_zero
-        - high_volume_burst_processed_plus_rejected_plus_timeout_equals_input_no_silent_drop
-        - queue_full_count_equals_rejected_count
-      known_gap_ref:
-        - real production database throughput is not measured (in-memory scheduler boundary)
-        - live SSE pipeline throughput is not measured (integration scope)
-
-    backend.admin_csv_json_import:
-      status: implemented
-      production_ready: false
-      milestone: M6_external_integration
-      public_summary: >
-        Admin CSV/JSON import validate-preview-apply runtime is implemented as a complete bundle.
-        AdminImportRuntime parses CSV/JSON, validates manifest existence (MANIFEST_NOT_FOUND),
-        validates schema_def fail-close (SCHEMA_DEF_INVALID/SCHEMA_FIELDS_REQUIRED/SCHEMA_FIELD_KEY_REQUIRED),
-        validates rows against schema_def conformity (not business/hub lifecycle state),
-        writes admin_import_snapshot and admin_import_records on preview (no canonical mutation),
-        and writes admin_import_apply_log with canonical diff linkage (sourceSnapshotId+manifestId
-        in applied_diff_jsonb, status='staged') on apply. Repository exceptions return
-        REPOSITORY_UNAVAILABLE structured errors. CSV edge cases (unclosed quote per row,
-        field count mismatch, header-only) are explicit errors. Frontend dispatches via
-        /api/dispatch only. Canonical entity/hub mutation is a separate future bundle
-        (beyond this completion boundary).
-      files:
-        - backend/schema/AdminImportContracts.cs
-        - backend/repository/AdminImportRepository.cs
-        - backend/repository/NpgsqlAdminImportRepository.cs
-        - backend/runtime/AdminImportRuntime.cs
-        - backend/runtime/AdminRuntime.cs
-        - backend/Program.cs
-        - frontend/api/adminApi.ts
-        - frontend/routes/admin/index.tsx
-        - frontend/tests/adminImport.test.ts
-        - backend/tests/Topolactor.Runtime.Tests/AdminImportRuntimeTests.cs
-      evidence:
-        tests:
-          - AdminImportRuntimeTests (32 tests: CSV/JSON preview, validation, apply, all explicit error paths, canonical diff linkage, dispatch wiring)
-        ci:
-          - backend-tests
-      completion_condition:
-        - admin_csv_json_import_endpoint_and_upload_ui_wired_through_admin_runtime_dispatch
-        - manifest_existence_validated_before_snapshot_write_manifest_not_found_is_explicit_error
-        - schema_def_validated_fail_close_malformed_def_returns_explicit_error_not_silent_empty_fields
-        - manifest_validation_runtime_marks_rows_valid_or_invalid_per_schema_def_conformity
-        - csv_edge_cases_unclosed_quote_field_count_mismatch_header_only_are_explicit
-        - repository_exception_returns_repository_unavailable_structured_error
-        - validate_preview_apply_stages_are_separated_preview_does_not_mutate_canonical_state
-        - apply_writes_apply_log_with_canonical_diff_linkage_source_snapshot_id_and_manifest_id
-        - frontend_does_not_write_directly_to_db
-        - no_silent_fallback_all_error_paths_return_explicit_error_codes
-      known_gap_ref: []
-
-    design.db_manifest_ui_topology_meaning_split:
-      status: implemented
-      production_ready: false
-      milestone: M7_sql_attention_observation_runtime
-      public_summary: >
-        SSOT canonical vocabulary hard-cut for DB/Manifest/UI Topology/Phase Attention boundaries.
-        Schema namespaces migrated (topologys→topology, hubs.hubs→hubs.hub). New canonical tables
-        introduced: topology.physical_tables, topology.wiring_physical_to_package, hubs.topology_manifests.
-        Hubs space hierarchy: hubs.hub -> hubs.topology_manifests -> hubs.hub_relations.
-        Schema-level hubs.hub_relations manifest-scoped sequence migration is complete.
-        Phase Attention resolved ID-space runtime implementation is wired under SQLA-IDSPACE-STEP4.
-        topology_tables.sql bootstrap is CREATE TABLE IF NOT EXISTS only (no DROP TABLE CASCADE).
-        manifest marked compatibility-only for runtime routing; canonical wiring path is topology.wiring_physical_to_package.
-        CI vocabulary checks enforce canonical naming.
-        admin_import_snapshot FK retired from public.manifest: column renamed to topology_manifest_id,
-        FK now references hubs.topology_manifests. Orphaned existing rows remapped to oldest
-        hubs.topology_manifests row; explicit RAISE EXCEPTION if no topology_manifest exists.
-        admin_import_records.manifest_id renamed to topology_manifest_id (soft reference, linked via snapshot_id).
-        Migration DDL: db/migrations/admin_import_topology_manifest_migration.sql.
-        All public UI component/design/layout/package tables migrated to topology.* canonical schema
-        and retired (DROPped in reverse dependency order): topology.components_bucket,
-        topology.ui_component_registry, topology.ui_component_package, topology.ui_package_component_map,
-        topology.components_layout_design, topology.ui_wiring_registry, topology.ui_topology_tensor,
-        topology.ui_builder_components, topology.components_style_design, topology.components_package_design.
-        Upsert policy: ON CONFLICT (business_key) DO NOTHING; canonical rows take precedence.
-        Migration DDL: db/migrations/ui_topology_to_canonical_schema.sql. Tensor parent self-references
-        are remapped through canonical logical tuples; dangling legacy parent references fail explicitly.
-        DB-backed migration regression runs in runtime-environment-gate; without DB env the same script
-        intentionally provides static-only evidence and must not be treated as DB-backed completion evidence.
-        context_* tables placement decision: stays in public schema as recommendation learning surfaces.
-      files:
-        - docs/design/db-schema.yaml
-        - docs/design/sql-attention-logs-ssot.yaml
-        - docs/design/sql-attention-logs-ssot.md
-        - .agent/tests/check-sql-attention-ssot.sh
-        - .agent/tests/check-structure.sh
-        - .agent/tests/check-migration-ui-topology.sh
-        - .agent/tests/check-runtime-environment.sh
-        - .agent/tests/check-ssot-vocabulary-contract.sh
-        - db/schema.sql
-        - db/topology_tables.sql
-        - db/migrations/hub_relations_legacy_to_manifest_scoped.sql
-        - db/migrations/admin_import_topology_manifest_migration.sql
-        - db/migrations/ui_topology_to_canonical_schema.sql
-        - db/migrations/sql_attention_phase_generation_line.sql
-        - db/manifest_tables.sql
-        - db/ui_topology_tables.sql
-        - db/sql_attention_logs_tables.sql
-        - db/seed_empty.sql
-        - db/demo_seed.sql
-        - backend/runtime/HubAttractorExplorationRuntime.cs
-        - backend/repository/NpgsqlAdminImportRepository.cs
-        - backend/repository/AdminImportRepository.cs
-        - backend/repository/NpgsqlUiTopologyRepository.cs
-      evidence:
-        tests:
-          - check-sql-attention-ssot.sh
-          - check-structure.sh
-          - check-migration-ui-topology.sh
-          - check-backend-tests.sh
-          - check-runtime-semantics.sh
-          - check-default-entity-search.sh
-          - check-unified-test-gate.sh
-          - HubAttractorExplorationRuntime_ExplorationBudgetGateTests
-          - UiTopologyRegistrationContinuityIntegrationTests
-        ci:
-          - structure-check
-          - backend-tests
-          - runtime-semantics
-          - default-entity-search
-          - unified-test-gate
-          - runtime-environment-gate
-      completion_condition:
-        - ssot_canonical_schema_namespaces_match_topology_hubs_logs
-        - phase_attention_axis_definition_uses_hub_relation_topology_manifest_hub_ID_spaces_not_population_count
-        - topologys_naming_drift_absent_from_sql_attention_ssot_files
-        - old_phase_axis_x_y_z_hub_side_record_count_bases_absent_from_canonical_ssot
-        - ci_vocabulary_checks_enforce_all_of_the_above
-        - db_schema_uses_topology_not_topologys
-        - hubs_hub_table_replaces_hubs_hubs
-        - phase_attention_exploration_budget_gate_weak_mid_high_from_w_l2_norm
-        - exploration_budget_limits_sourced_from_function_parameters_not_runtime_magic_numbers
-        - topology_physical_tables_wiring_and_hubs_topology_manifests_introduced
-        - hubs_hub_includes_relation_jsonb_canonical_join_definition
-        - hubs_hub_relations_manifest_scoped_sequence_chain_under_topology_manifests
-        - hubs_hub_relations_uses_topology_manifest_id_related_hub_id_sequence_position
-        - manifest_split_public_manifest_retired_from_main_path
-        - admin_import_snapshot_fk_migrated_to_hubs_topology_manifests
-        - ui_topology_public_tables_migrated_to_topology_canonical_schema
-        - context_tables_placement_decision_documented
-      known_gap_ref:
-        - hubs_hub_relations_legacy_global_graph_data_preserving_migration_ddl_available
-
-
 
   ci_expectations:
     source_of_truth:
@@ -2648,8 +787,8 @@ system_roadmap_ssot:
       - docs/design/pipeline-continuity-ssot.yaml
     rules:
       - roadmap_status_must_not_conflict_with_code_markers
-      - implemented_components_must_have_evidence
-      - production_ready_components_must_not_have_known_blocking_gaps
+      - implemented_feature_bundles_must_have_evidence
+      - production_ready_feature_bundles_must_not_have_known_blocking_gaps
       - skeleton_stub_dummy_markers_are_allowed_only_when_registered_as_skeleton_or_partial
       - tests_or_fixtures_may_use_stub_dummy_mock_only_when_isolated_from_production_runtime
       - external_connector_status_must_not_claim_SSOT_authority_for_external_services
@@ -2663,8 +802,8 @@ system_roadmap_ssot:
 
   public_notes:
     - This roadmap is a status SSOT, not a promise of release dates.
-    - Implementation status is scoped per component and may differ from overall milestone status.
-    - A component can be implemented for a skeleton milestone while still not production_ready.
+    - Implementation status is scoped per feature bundle; compatibility entries exist only where current CI readers require stable keys.
+    - A feature bundle can be implemented for a milestone while still not production_ready.
     - Detailed runtime semantics remain in docs/design/*.
     - External integrations are human editing/intake surfaces; topolactor remains the runtime SSOT.
     - The long-term product direction is non-IT business app authoring through validated topology, manifest, registry, projection, and CI feedback loops.
