@@ -1,0 +1,404 @@
+mock_preset_intake_compiler_ssot:
+  name: mock_preset_intake_compiler
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/mock-preset-intake-compiler-ssot.yaml
+
+  purpose:
+    summary: >-
+      Define the no-AI intake, mapping, persistence, and UIBuilder loading contract for
+      external SVG/XML/Figma-like visual mock presets. A mock preset is a reusable draft
+      template stored in the Topolactor DB. It is not active runtime topology until a user
+      loads it into UIBuilder, binds it to the selected route package, adjusts layout / wiring /
+      binding manually, and runs the existing preview / validate / apply boundary.
+    goals:
+      - import_external_visual_mock_without_ai_inference
+      - preserve_external_mock_as_non_authoritative_visual_source_snapshot
+      - store_reusable_ui_presets_in_db
+      - expose_preset_upload_save_and_load_controls_inside_ui_builder
+      - map_visual_objects_to_topolactor_component_bucket_or_structural_html_by_human_operation
+      - derive_allowed_wiring_and_binding_surfaces_from_topolactor_component_capability_properties
+      - bind_loaded_preset_to_selected_route_package_before_canvas_rendering
+      - keep_loaded_preset_as_ui_builder_tmp_draft_until_explicit_apply
+      - preserve_topolactor_db_topology_as_canonical_runtime_authority
+    non_goals:
+      - ai_semantic_inference
+      - ai_generated_topology_decision
+      - external_mock_as_runtime_ssot
+      - external_file_direct_db_write
+      - automatic_component_identity_decision
+      - automatic_wiring_decision
+      - automatic_topology_promotion
+      - creating_new_runtime_components_from_svg_shapes
+      - bypassing_ui_builder_preview_validate_apply
+
+  authority_boundary:
+    external_mock:
+      role: visual_source_snapshot_only
+      owns:
+        - raw_geometry
+        - visual_grouping
+        - text_content
+        - z_order
+        - source_object_ids
+        - source_file_hash
+      does_not_own:
+        - component_identity
+        - topology_identity
+        - package_identity
+        - layout_identity
+        - wiring_identity
+        - runtime_route
+        - event_semantics
+        - data_binding_semantics
+        - db_persistence_authority
+    topolactor:
+      owns:
+        - component_bucket_identity
+        - component_catalog_property
+        - component_capability_tags
+        - preset_registry
+        - preset_object_mapping
+        - package_binding_boundary
+        - layout_patch_compile_result
+        - wiring_candidate_validation
+        - preview_validate_apply_boundary
+    user:
+      owns:
+        - object_to_component_mapping_confirmation
+        - ignored_object_confirmation
+        - wiring_target_selection
+        - data_binding_selection
+        - preset_save_decision
+        - preset_load_decision
+        - final_apply_decision
+
+  canonical_flow:
+    - ui_builder_user_opens_preset_uploader_modal_or_drawer
+    - user_uploads_or_pastes_external_mock
+    - system_parses_visual_object_tree_without_ai
+    - system_persists_intake_snapshot_as_non_authoritative_source
+    - ui_shows_unassigned_visual_objects
+    - user_maps_objects_to_component_bucket_catalog_entry_or_structural_html_or_ignored
+    - system_derives_allowed_actions_from_component_capability_properties
+    - user_sets_wiring_or_field_binding_only_where_allowed
+    - user_saves_reusable_preset_to_db
+    - ui_builder_saved_preset_select_lists_active_presets
+    - user_selects_saved_preset
+    - system_loads_compile_snapshot_or_recompiles_from_mapping
+    - user_confirms_bind_to_current_route_package
+    - system_saves_package_scoped_preset_membership_candidate_for_selected_route_package
+    - system_binds_compiled_layout_patch_to_ui_builder_tmp_canvas_draft
+    - canvas_renders_loaded_preset_nodes
+    - user_refines_layout_design_wiring_and_binding
+    - user_runs_preview
+    - user_runs_validate
+    - user_runs_explicit_apply
+    - applied_result_persists_to_canonical_ui_topology_surfaces
+
+  ui_builder_integration:
+    entry_surface: /admin/ui-builder
+    placement:
+      canvas_workspace_action_group:
+        position: top_action_bar_or_existing_canvas_status_bar_action_area
+        controls:
+          - open_preset_uploader_button
+          - save_current_canvas_as_preset_button
+          - saved_preset_load_select
+      preset_uploader_surface:
+        ui_kind: modal_or_drawer
+        opened_by: open_preset_uploader_button
+        responsibilities:
+          - upload_or_paste_svg_xml_figma_json_or_generic_xml_mock
+          - parse_visual_object_tree
+          - show_source_snapshot_summary
+          - show_object_tree_preview
+          - allow_user_to_map_objects_to_component_bucket_catalog_entry_or_structural_html
+          - allow_user_to_mark_objects_as_ignored
+          - expose_wiring_and_binding_inputs_only_after_capability_resolution
+          - save_as_reusable_preset
+        prohibited:
+          - direct_apply_to_active_topology
+          - direct_db_write_from_external_mock
+          - automatic_component_identity_decision
+          - automatic_wiring_decision
+          - silent_drop_of_unmapped_objects
+      save_current_canvas_as_preset_button:
+        source: current_ui_builder_canvas_state
+        saves:
+          - current_layout_patch_json
+          - current_component_mapping
+          - current_style_token_refs
+          - current_confirmed_wiring_candidates
+          - source_kind_ui_builder_canvas
+        target: topology.mock_preset_registry
+        note: >-
+          Saving the current canvas as a preset creates a reusable draft template.
+          It does not create or modify active runtime topology.
+      saved_preset_load_select:
+        source: topology.mock_preset_registry where status = active
+        behavior:
+          - user_selects_saved_preset
+          - system_loads_latest_compile_snapshot_or_recompiles_from_mapping
+          - user_confirms_bind_to_current_route_package
+          - preset_is_bound_to_selected_route_package_as_ui_builder_tmp_canvas_draft
+          - user_refines_layout_design_wiring_and_binding_in_canvas
+          - user_runs_preview_validate_apply
+        prohibited:
+          - silent_overwrite_existing_canvas
+          - loading_preset_without_selected_route_key
+          - loading_preset_without_package_shell
+          - loading_preset_directly_into_active_topology
+          - bypassing_preview_validate_apply
+
+    bind_to_canvas_contract:
+      target: selected_route_package
+      preconditions:
+        - route_key_selected
+        - selected_route_package_exists_or_package_shell_generation_succeeds
+        - preset_compile_snapshot_available_or_recompile_succeeds
+      initial_load_persistence:
+        writes_to:
+          - selected_route_package_draft_membership_candidate
+          - ui_builder_tmp_canvas_draft
+        not_to:
+          - active_topology_runtime_projection
+          - applied_ui_topology_tensor
+      after_user_apply_persistence:
+        writes_to:
+          - topology.ui_package_component_map
+          - topology.components_layout_design
+          - topology.components_style_design
+          - topology.ui_wiring_registry
+          - topology.ui_topology_tensor.layout_patch_json
+      overwrite_policy:
+        existing_canvas_nodes_require_user_confirmation: true
+        merge_mode_must_be_explicit: true
+        replace_mode_must_be_explicit: true
+
+  source_intake_contract:
+    supported_source_kinds:
+      - svg_xml
+      - generic_xml
+      - figma_json
+      - ui_builder_canvas
+    parser_output:
+      visual_tree_json:
+        required_fields:
+          - source_object_id
+          - object_type
+          - parent_source_object_id
+          - z_index
+          - bbox
+          - transform
+          - text_content
+          - style_attributes
+          - children
+    parser_rules:
+      - parser_extracts_visual_structure_only
+      - parser_does_not_infer_component_identity
+      - parser_does_not_infer_event_semantics
+      - parser_does_not_infer_data_binding_semantics
+      - parser_preserves_unknown_objects_as_unassigned
+      - parser_failure_is_explicit_not_silent_fallback
+
+  mapping_contract:
+    default_object_state: unassigned
+    allowed_mapping_kinds:
+      - catalog_component
+      - structural_html
+      - ignored
+    rules:
+      - source_objects_do_not_become_topology_nodes_until_user_mapping
+      - catalog_component_mapping_requires_component_key_and_component_kind
+      - structural_html_mapping_requires_allowlisted_html_tag
+      - ignored_objects_are_preserved_in_source_snapshot_but_not_compiled_to_layout_nodes
+      - decorative_shapes_default_to_unassigned_or_ignored
+      - text_inside_group_may_become_inlineText_style_candidate_only_after_user_mapping
+      - unmapped_required_objects_block_compile
+      - unmapped_non_required_objects_remain_visible_as_warnings_until_ignored_or_mapped
+
+  capability_policy:
+    source_of_truth:
+      - topology.components_bucket.metadata_json
+      - frontend/components/catalog.ts component catalog properties
+      - frontend/components/types.ts ComponentCapabilityTag vocabulary
+    rule: >-
+      Wiring and binding controls are opened by Topolactor component capability properties,
+      not by external mock attributes. External mocks provide visual objects only.
+    capability_effects:
+      emits_event:
+        opens:
+          - route_navigation_wiring
+          - runtime_dispatch_wiring
+        requires_user_selection: true
+      requires_event_binding:
+        blocks_apply_until:
+          - wiring_confirmed
+          - explicitly_marked_no_action
+      controlled_value:
+        opens:
+          - value_binding
+      field_binding:
+        opens:
+          - db_jsonb_field_binding
+      accepts_design:
+        opens:
+          - css_token_refs
+          - responsive_token_refs
+          - inline_text_candidate
+      accepts_layout:
+        opens:
+          - parent_slot_order_position_size
+
+  compiler_contract:
+    deterministic: true
+    ai_allowed: false
+    input:
+      - source_snapshot_json
+      - visual_tree_json
+      - object_mapping_rows
+      - component_catalog_entries
+      - component_bucket_entries
+      - confirmed_wiring_candidates
+      - selected_route_key
+      - selected_route_package_identity
+    output:
+      - layout_patch_json
+      - package_membership_candidate_json
+      - wiring_candidate_json
+      - style_candidate_json
+      - unresolved_json
+    output_rules:
+      - compiled_layout_patch_json_must_match_ui_builder_visual_layout_patch_shape
+      - compiled_nodes_use_visual_node_payload_compatible_fields
+      - compiled_nodes_are_package_scoped
+      - compiled_wiring_candidates_do_not_become_active_wiring_until_user_apply
+      - unresolved_json_is_user_visible
+
+  db_model:
+    schema: topology
+    status: planned_schema_surface
+    tables:
+      mock_preset_registry:
+        purpose: store reusable UI preset header and source snapshot
+        fields:
+          - preset_id uuid primary key
+          - preset_key text unique not null
+          - preset_label text not null
+          - source_kind text not null
+          - source_hash text not null
+          - source_snapshot_json jsonb not null
+          - visual_tree_json jsonb not null
+          - status text not null # draft | active | archived
+          - created_by uuid nullable
+          - created_at timestamptz
+          - updated_at timestamptz
+      mock_preset_object_mapping:
+        purpose: store mapping from visual source objects to Topolactor component/layout concepts
+        fields:
+          - mapping_id uuid primary key
+          - preset_id uuid references topology.mock_preset_registry
+          - source_object_id text not null
+          - node_id text not null
+          - node_kind text not null # catalog_component | structural_html | ignored
+          - component_key text nullable
+          - component_kind text nullable
+          - html_tag text nullable
+          - parent_source_object_id text nullable
+          - slot_key text nullable
+          - order_index integer not null
+          - bbox_json jsonb not null
+          - text_json jsonb not null
+          - style_candidate_json jsonb not null
+          - mapping_status text not null # unassigned | mapped | ignored | unresolved
+      mock_preset_wiring_candidate:
+        purpose: store pending or confirmed wiring/data-binding candidates for mapped objects
+        fields:
+          - wiring_candidate_id uuid primary key
+          - preset_id uuid references topology.mock_preset_registry
+          - source_object_id text not null
+          - node_id text not null
+          - capability_tag text not null
+          - wiring_kind text nullable
+          - target_surface text nullable
+          - target_ref text nullable
+          - binding_json jsonb not null
+          - status text not null # pending | confirmed | rejected
+      mock_preset_compile_snapshot:
+        purpose: store deterministic compile output for fast UIBuilder loading
+        fields:
+          - compile_snapshot_id uuid primary key
+          - preset_id uuid references topology.mock_preset_registry
+          - compiler_version text not null
+          - layout_patch_json jsonb not null
+          - package_membership_candidate_json jsonb not null
+          - wiring_candidate_json jsonb not null
+          - style_candidate_json jsonb not null
+          - unresolved_json jsonb not null
+          - compiled_at timestamptz
+
+  validation_policy:
+    blocking_errors:
+      - PRESET_NOT_FOUND
+      - ROUTE_KEY_NOT_SELECTED
+      - PACKAGE_SHELL_UNAVAILABLE
+      - COMPONENT_KEY_NOT_IN_BUCKET_OR_CATALOG
+      - STRUCTURAL_HTML_TAG_NOT_ALLOWLISTED
+      - REQUIRED_EVENT_BINDING_MISSING
+      - TARGET_REF_INVALID
+      - PARENT_CYCLE_DETECTED
+      - DUPLICATE_NODE_ID
+      - UNRESOLVED_REQUIRED_OBJECT
+      - COMPILE_SNAPSHOT_INVALID
+    nonblocking_warnings:
+      - DECORATIVE_OBJECT_IGNORED
+      - RAW_COLOR_HAS_NO_CSS_TOKEN_MATCH
+      - TEXT_GROUP_FLATTENED_TO_INLINE_TEXT_CANDIDATE
+      - SOURCE_OBJECT_OUTSIDE_CANVAS_BOUNDS
+      - UNMAPPED_NON_REQUIRED_OBJECT_REMAINS
+
+  relation_to_existing_surfaces:
+    ui_builder_canvas_workspace:
+      ref: docs/design/admin-console-workflow-ssot.yaml
+      role: receives saved preset into package-scoped canvas draft
+    ui_topology_tables:
+      ref: db/ui_topology_tables.sql
+      role: canonical persistence destination after explicit apply
+    db_schema:
+      ref: docs/design/db-schema.yaml
+      role: topology namespace and DB schema authority
+    component_catalog:
+      ref: frontend/components/catalog.ts
+      role: component candidate and capability source
+    component_capability_vocabulary:
+      ref: frontend/components/types.ts
+      role: capability tag vocabulary source
+    visual_layout_utils:
+      ref: frontend/runtime/visualLayoutUtils.ts
+      role: layout_patch_json and visual node payload compatibility
+
+  implementation_status:
+    current: not_started
+    planned_change_surfaces:
+      - db migration for topology.mock_preset_* tables
+      - backend admin runtime actions for preset create/list/get/compile/bind
+      - frontend UIBuilder preset uploader modal_or_drawer
+      - frontend UIBuilder save current canvas as preset button
+      - frontend UIBuilder saved preset load select
+      - frontend tests for preset load into tmp draft and no direct active topology apply
+      - structure and roadmap/todo impact review when implementation begins
+
+  completion_condition:
+    - mock_preset_registry_tables_exist_under_topology_schema
+    - svg_xml_or_generic_xml_visual_tree_parser_exists_without_ai_dependency
+    - ui_builder_exposes_preset_uploader_modal_or_drawer
+    - ui_builder_can_save_current_canvas_as_reusable_preset
+    - ui_builder_exposes_saved_preset_load_select
+    - loaded_preset_binds_to_selected_route_package_before_canvas_rendering
+    - loaded_preset_enters_ui_builder_tmp_draft_not_active_topology
+    - preset_compile_output_matches_layout_patch_json_contract
+    - object_mapping_uses_bucket_or_catalog_properties
+    - capability_tags_gate_wiring_and_binding_ui
+    - preview_validate_apply_boundary_is_preserved
+    - unresolved_objects_are_explicitly_visible
