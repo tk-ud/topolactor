@@ -306,6 +306,7 @@ db_schema:
       hub_registry: hub_or_relation_composition_definitions
       topology_registry: topology_semantic_space_definitions
       ui_registry: ui_package_layout_wiring_definitions
+      wiring_definition_for_dispatcher_and_projection: topology_ui
       hubs: relation_maps_over_defined_ids_fk_and_reference_arrays
       ui_relation: parent_child_relation_map_parent_data_type_or_physical_table_to_child_package_payload_bundles
       logs: physical_time_axis_observations
