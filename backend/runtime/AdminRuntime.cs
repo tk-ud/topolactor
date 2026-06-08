@@ -30,6 +30,7 @@ public partial class AdminRuntime
     private readonly EnumDictionaryRepository? _enumDictionaryRepository;
     private readonly AuthMasterRepository? _authMasterRepository;
     private readonly SqlAttentionLogsRepository? _sqlAttentionLogsRepository;
+    private readonly MockPresetRepository? _mockPresetRepository;
 
     private static readonly HashSet<string> KnownRuntimeDestinations = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -54,7 +55,8 @@ public partial class AdminRuntime
         TopologyRepository? topologyRepository = null,
         EnumDictionaryRepository? enumDictionaryRepository = null,
         AuthMasterRepository? authMasterRepository = null,
-        SqlAttentionLogsRepository? sqlAttentionLogsRepository = null)
+        SqlAttentionLogsRepository? sqlAttentionLogsRepository = null,
+        MockPresetRepository? mockPresetRepository = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _contextRouteRepository = contextRouteRepository ?? throw new ArgumentNullException(nameof(contextRouteRepository));
@@ -72,6 +74,7 @@ public partial class AdminRuntime
         _enumDictionaryRepository = enumDictionaryRepository;
         _authMasterRepository = authMasterRepository;
         _sqlAttentionLogsRepository = sqlAttentionLogsRepository;
+        _mockPresetRepository = mockPresetRepository;
     }
 
     // ---------------------------------------------------------------------------
@@ -294,6 +297,11 @@ public partial class AdminRuntime
             "hub_navigation:update"                     => await HubNavigationUpdateAsync(vector, ct),
             "hub_navigation:deprecate"                  => await HubNavigationDeprecateAsync(vector, ct),
             "hub_navigation:reorder"                    => await HubNavigationReorderAsync(vector, ct),
+            "mock_preset:create"                        => await DataMockPresetCreateAsync(vector, ct),
+            "mock_preset:list"                          => await DataMockPresetListAsync(vector, ct),
+            "mock_preset:get"                           => await DataMockPresetGetAsync(vector, ct),
+            "mock_preset:compile"                       => await DataMockPresetCompileAsync(vector, ct),
+            "mock_preset:bind"                          => await DataMockPresetBindAsync(vector, ct),
             _ => (null, new ValidationError("ADMIN_OPERATION_NOT_FOUND",
                 $"Unknown admin operation: {layerAction}"))
         };

@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
+import { PresetUploaderDrawer } from "./PresetUploaderDrawer.tsx";
+import {
+  bindMockPreset,
+  listMockPresets,
+  type MockPresetListItem,
+} from "../api/mockPresetApi.ts";
 import {
   buildInlineStyleFromCssTokenRefs,
   CSS_DICTIONARY_TOKENS,
@@ -4314,6 +4320,14 @@ function LayoutBuilderSection({
   // ── palette drag (HTML5 drag API — palette→canvas only) ─────────────────
   const dragSrc = useRef<DragSrc | null>(null);
 
+  // ── preset intake state ──────────────────────────────────────────────────
+  const [presetDrawerOpen, setPresetDrawerOpen] = useState(false);
+  const [savedPresets, setSavedPresets] = useState<MockPresetListItem[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [presetLoadStatus, setPresetLoadStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [presetLoadError, setPresetLoadError] = useState<string | null>(null);
+  const [presetsLoaded, setPresetsLoaded] = useState(false);
+
   // ── derived ─────────────────────────────────────────────────────────────
   const tensorPatchJson = buildVisualLayoutPatchJson(
     draftNodes,
@@ -4412,6 +4426,84 @@ function LayoutBuilderSection({
     setCanRedo(false);
     setLifecyclePhase("idle");
     return true;
+  };
+
+  // ── Preset: load presets list ────────────────────────────────────────────
+  const loadPresetList = async () => {
+    try {
+      const list = await listMockPresets("active");
+      setSavedPresets(list);
+      setPresetsLoaded(true);
+    } catch {
+      setSavedPresets([]);
+    }
+  };
+
+  // ── Preset: load selected preset into tmp canvas draft ───────────────────
+  // SSOT: docs/design/mock-preset-intake-compiler-ssot.yaml §bind_to_canvas_contract
+  // Writes to draftNodes (local tmp canvas state) ONLY.
+  // Does NOT write to topology.ui_topology_tensor or canonical topology tables.
+  const handleLoadPreset = async () => {
+    if (!selectedPresetId) return;
+    const activeRouteKey = scopedRouteKey?.trim() ?? effectiveRouteKey;
+    if (!activeRouteKey) {
+      setPresetLoadError("ルートキーが選択されていません。先にルートパッケージを選択してください。");
+      setPresetLoadStatus("error");
+      return;
+    }
+
+    // Confirm merge/replace when canvas has existing nodes.
+    if (draftNodes.length > 0) {
+      const ok = globalThis.confirm(
+        "既存のキャンバスノードがあります。プリセットを読み込むと現在のキャンバスが置き換えられます。続きますか？",
+      );
+      if (!ok) return;
+    }
+
+    setPresetLoadStatus("loading");
+    setPresetLoadError(null);
+
+    try {
+      const result = await bindMockPreset({
+        presetId: selectedPresetId,
+        routeKey: activeRouteKey,
+      });
+
+      if (!result.ok) {
+        setPresetLoadError(result.message ?? result.errorCode ?? "読み込みに失敗しました");
+        setPresetLoadStatus("error");
+        return;
+      }
+
+      if (!result.layoutPatchJson) {
+        setPresetLoadError("プリセットの layout_patch_json がありません。先にコンパイルしてください。");
+        setPresetLoadStatus("error");
+        return;
+      }
+
+      const patchStr = JSON.stringify(result.layoutPatchJson);
+      const applied = applyCanvasFromTensorPatch(patchStr, "プリセット読み込み", { seedWhenEmpty: false });
+      if (!applied) {
+        setPresetLoadError("プリセットをキャンバスに適用できませんでした。");
+        setPresetLoadStatus("error");
+        return;
+      }
+
+      setPresetLoadStatus("idle");
+      announce("プリセットをキャンバス（一時ドラフト）に読み込みました。active topology には反映されていません。");
+    } catch (err) {
+      setPresetLoadError(err instanceof Error ? err.message : "読み込みに失敗しました");
+      setPresetLoadStatus("error");
+    }
+  };
+
+  // ── Preset: save current canvas as preset ────────────────────────────────
+  const handleSaveCanvasAsPreset = async () => {
+    if (draftNodes.length === 0) {
+      announce("キャンバスが空です。部品を配置してからプリセット保存してください。");
+      return;
+    }
+    setPresetDrawerOpen(true);
   };
 
   // ── Gap 2: History management ─────────────────────────────────────────────
@@ -5653,6 +5745,64 @@ function LayoutBuilderSection({
           </button>
         )}
 
+        <div class="h-4 w-px bg-gray-300" />
+
+        {/* Preset controls — SSOT: mock-preset-intake-compiler-ssot.yaml §canvas_workspace_action_group */}
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs"
+          aria-label="ビジュアルモックをアップロード"
+          title="SVG/XML ビジュアルモックをインポートしてプリセット作成"
+          onClick={() => setPresetDrawerOpen(true)}
+        >
+          ↑ モックをインポート
+        </button>
+
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs"
+          aria-label="現在のキャンバスをプリセットとして保存"
+          title="現在のキャンバス状態をプリセットとして保存"
+          disabled={draftNodes.length === 0}
+          onClick={handleSaveCanvasAsPreset}
+        >
+          ☆ プリセット保存
+        </button>
+
+        <span class="text-[0.6rem] text-gray-400">|</span>
+
+        <select
+          class="rounded border border-gray-300 px-1 py-0.5 text-xs disabled:opacity-50"
+          value={selectedPresetId}
+          aria-label="保存済みプリセットを選択"
+          onFocus={!presetsLoaded ? loadPresetList : undefined}
+          onChange={(e) => setSelectedPresetId((e.target as HTMLSelectElement).value)}
+        >
+          <option value="">プリセットを選択...</option>
+          {savedPresets.map((p) => (
+            <option key={p.presetId} value={p.presetId}>
+              {p.presetLabel}
+            </option>
+          ))}
+        </select>
+
+        <button
+          type="button"
+          class="btn-secondary py-0.5 px-2 text-xs disabled:opacity-50"
+          disabled={!selectedPresetId || presetLoadStatus === "loading" || !packageScopedLayout}
+          aria-label="選択したプリセットをキャンバスに読み込む"
+          title={!packageScopedLayout ? "ルートパッケージを選択してからプリセットを読み込んでください" : "プリセットを一時キャンバスドラフトに読み込む"}
+          onClick={handleLoadPreset}
+        >
+          {presetLoadStatus === "loading" ? "読み込み中..." : "↓ プリセット読み込み"}
+        </button>
+
+        {presetLoadError && (
+          <span class="text-xs text-red-600" role="alert">
+            {presetLoadError}
+          </span>
+        )}
+
         <span class="ml-auto text-xs text-gray-400" aria-live="polite">
           {draftNodes.length} 部品
           {selectedNode
@@ -5660,6 +5810,17 @@ function LayoutBuilderSection({
             : ""}
         </span>
       </div>
+
+      {/* Preset uploader drawer — SSOT: mock-preset-intake-compiler-ssot.yaml §preset_uploader_surface */}
+      <PresetUploaderDrawer
+        open={presetDrawerOpen}
+        onClose={() => setPresetDrawerOpen(false)}
+        onPresetSaved={(preset) => {
+          setSavedPresets((prev) => [preset, ...prev]);
+          setSelectedPresetId(preset.presetId);
+          setPresetsLoaded(true);
+        }}
+      />
 
       {/* layout draft プレビュー & 操作エリア: palette + live canvas + inspector */}
       <div class={`mb-3 flex gap-2.5 ${canvasPreviewClass}`}>

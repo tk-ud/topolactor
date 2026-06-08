@@ -40,20 +40,35 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `mock-preset-intake-compiler`
 
-**Status:** not_started  
+**Status:** partial  
 **SSOT:** `docs/design/mock-preset-intake-compiler-ssot.yaml`
 
 External SVG/XML/Figma-like visual mock は runtime SSOT ではなく、AI inference なしで取り込む non-authoritative visual source snapshot。保存済み preset は reusable draft template であり、load 時は selected route package の tmp canvas draft に bind し、preview / validate / apply を経るまで active topology へ直接保存しない。
 
-- [ ] `topology.mock_preset_*` tables migration を作成する（registry / object_mapping / wiring_candidate / compile_snapshot）
-- [ ] backend admin runtime actions for preset create/list/get/compile/bind を実装する
-- [ ] UIBuilder preset uploader modal_or_drawer を実装する（SVG/XML/Figma-like visual mock intake、AI inference なし）
-- [ ] UIBuilder save current canvas as preset button を実装する
-- [ ] UIBuilder saved preset load select を実装する
-- [ ] loaded preset bind to selected route package tmp canvas draft を実装し、active topology への直接保存を禁止する
-- [ ] capabilityTags gate wiring / binding UI を配線する
-- [ ] preview / validate / apply boundary preservation を検証・実装する
-- [ ] unresolved object visibility を実装する
+- [x] `topology.mock_preset_*` tables migration を作成する（registry / object_mapping / wiring_candidate / compile_snapshot）  
+  → `db/migrations/mock_preset_registry_tables.sql`
+- [x] backend admin runtime actions for preset create/list/get/compile/bind を実装する  
+  → `backend/runtime/AdminRuntime.MockPreset.cs`, `backend/schema/MockPresetContracts.cs`, `backend/repository/MockPresetRepository.cs`, `backend/repository/NpgsqlMockPresetRepository.cs`
+- [x] UIBuilder preset uploader modal_or_drawer を実装する（SVG/XML/Figma-like visual mock intake、AI inference なし）  
+  → `frontend/islands/PresetUploaderDrawer.tsx`, `frontend/runtime/visualMockParser.ts`
+- [x] UIBuilder save current canvas as preset button を実装する  
+  → `frontend/islands/UiBuilderAdmin.tsx` (handleSaveCanvasAsPreset / presetDrawerOpen)
+- [x] UIBuilder saved preset load select を実装する  
+  → `frontend/islands/UiBuilderAdmin.tsx` (loadPresetList / selectedPresetId select)
+- [x] loaded preset bind to selected route package tmp canvas draft を実装し、active topology への直接保存を禁止する  
+  → `frontend/islands/UiBuilderAdmin.tsx` (handleLoadPreset → bindMockPreset → applyCanvasFromTensorPatch)
+- [x] capabilityTags gate wiring / binding UI を配線する  
+  → `frontend/components/types.ts` ComponentCapabilityTag type verified; `frontend/tests/mockPresetIntake.test.ts` capabilityTags vocabulary test  
+  ⚠️ **残課題**: 完全な interactive capability gate UI panel は未実装（type-level のみ）
+- [x] preview / validate / apply boundary preservation を検証・実装する  
+  → bind は draftNodes (local state) のみ更新; canonical topology write は既存 `layout_patch:apply` ルート経由; `frontend/tests/mockPresetIntake.test.ts` bind result shape test
+- [x] unresolved object visibility を実装する  
+  → `frontend/islands/PresetUploaderDrawer.tsx` unmappedCount warning; `frontend/tests/mockPresetIntake.test.ts` unresolvedJson test; `backend/runtime/AdminRuntime.MockPreset.cs` unresolvedJson in compile result
+
+**残課題（partial 理由）:**
+- [ ] NpgsqlMockPresetRepository を本番 DI/startup に配線する（DB integration 未稼働）
+- [ ] capability_tags_gate の完全な interactive wiring/binding UI panel を実装する
+- [ ] E2E DB integration test（live DB 上での topology.mock_preset_* テーブル動作確認）
 
 ## Bundle `product-nocode-loop-acceptance`
 

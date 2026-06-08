@@ -1413,15 +1413,16 @@ system_roadmap_ssot:
 
 
     frontend.mock_preset_intake_compiler:
-      status: not_started
+      status: partial
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Mock Preset Intake Compiler / UIBuilder Preset Registry is planned as a no-AI
-        intake and reusable draft-template lane for SVG/XML/Figma-like visual mocks.
-        Presets are stored as reusable DB draft templates, loaded only into the selected
-        route package tmp canvas draft, and must still pass preview / validate / apply
-        before becoming canonical UI topology. No implementation or DB migration exists yet.
+        Mock Preset Intake Compiler / UIBuilder Preset Registry — core implementation
+        delivered as partial. DB migration, backend admin runtime actions (create/list/get/compile/bind),
+        SVG/XML visual parser (no AI), frontend PresetUploaderDrawer, mockPresetApi, UiBuilderAdmin
+        save-as-preset and load-preset integration, capabilityTags vocabulary, and unresolved object
+        visibility are all implemented. Remaining gap: NpgsqlMockPresetRepository wiring into
+        DI/startup, E2E DB integration test, and full capability_tags_gate wiring/binding UI panel.
       completion_condition:
         - topology_mock_preset_tables_exist_under_topology_schema
         - svg_xml_or_generic_xml_visual_tree_parser_exists_without_ai_dependency
@@ -1433,7 +1434,21 @@ system_roadmap_ssot:
         - preview_validate_apply_boundary_is_preserved
         - unresolved_objects_are_explicitly_visible
       known_gap_ref:
-        - mock preset intake compiler implementation and topology.mock_preset_* migration are not started
+        - NpgsqlMockPresetRepository not yet wired into production DI/startup (DB integration not active)
+        - capability_tags_gate wiring/binding UI panel is type-level only (no full interactive panel)
+        - E2E DB integration test for mock_preset_* tables not yet run against live DB
+      files:
+        - db/migrations/mock_preset_registry_tables.sql
+        - backend/schema/MockPresetContracts.cs
+        - backend/repository/MockPresetRepository.cs
+        - backend/repository/NpgsqlMockPresetRepository.cs
+        - backend/runtime/AdminRuntime.MockPreset.cs
+        - backend/tests/Topolactor.Runtime.Tests/AdminRuntimeMockPresetTests.cs
+        - frontend/runtime/visualMockParser.ts
+        - frontend/api/mockPresetApi.ts
+        - frontend/islands/PresetUploaderDrawer.tsx
+        - frontend/tests/visualMockParser.test.ts
+        - frontend/tests/mockPresetIntake.test.ts
       detail_ssot:
         - docs/design/mock-preset-intake-compiler-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
