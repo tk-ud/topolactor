@@ -1376,8 +1376,8 @@ system_roadmap_ssot:
       evidence:
         tests:
           - adminUxGuard.test.ts (UX vocabulary, structured field round-trip, aggregation/search-key regressions, progressive disclosure/raw input guards, AND/OR/NOT evaluation, <> operator coverage, step2 re-save preserves step3 fields, route navigation encode/parse round-trip, manifest wiring regression, normal view raw field guard)
-          - frontend/tests/adminWiringExecutionLane.test.ts (route navigation runtime closure: navigation wiringKind produces no backend RuntimeDispatchSpec, routeNavigation binding carries route: targetRef without runtimeDispatch, emitBoundEvent click executes frontend-local navigation to /admin/manifests)
-          - backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (defensive backend guard: route: target_ref returns TARGET_REF_INVALID while manifest:<uuid>:<wiringKey> target_ref routing remains valid)
+          - 'frontend/tests/adminWiringExecutionLane.test.ts (route navigation runtime closure: navigation wiringKind produces no backend RuntimeDispatchSpec, routeNavigation binding carries route: targetRef without runtimeDispatch, emitBoundEvent click executes frontend-local navigation to /admin/manifests)'
+          - 'backend/tests/Topolactor.Runtime.Tests/ManifestDispatcherTargetRefTests.cs (defensive backend guard: route: target_ref returns TARGET_REF_INVALID while manifest:<uuid>:<wiringKey> target_ref routing remains valid)'
           - AdminRuntimeManifestManagementTests (AssignScreenDataShape_PersistsStructuredFields, AssignScreenDataShape_Persists_SearchConditions_HavingConditions_DisplayColumnMode, ProjectOnPromote_TableRefMismatch_LeavesNoPartialCanonicalWrite, ManifestCanonicalProjectionUnitTests)
         ci:
           - frontend-types
