@@ -16,9 +16,9 @@ system_roadmap_ssot:
 
   document_role:
     summary: >
-      Public-facing project status SSOT. This file describes the system roadmap,
-      milestone state, implementation status, evidence, and completion conditions.
-      It is intentionally higher level than docs/design/* and more structured than README.
+      Feature-bundle catalog and public status index for product capabilities.
+      Read this file for bundle status, summary, scope, known gaps, and detail_ref;
+      do not treat it as an execution evidence ledger or component/runtime surface registry.
     owns:
       - roadmap
       - milestones
@@ -380,7 +380,6 @@ system_roadmap_ssot:
         - db_design_layout_wiring_authority_remains_backend_and_topology_owned
         - mock_preset_intake_and_visual_builder_complete_their_declared_acceptance_scope
       known_gap_ref:
-        - mock_preset_intake_separate_external_production_deployment_not_verified
         - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
       files:
         - backend/
