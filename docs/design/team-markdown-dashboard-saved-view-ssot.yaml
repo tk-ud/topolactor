@@ -436,7 +436,12 @@ team_markdown_dashboard_saved_view_ssot:
       role: adjacent visual preset intake; not the same feature
 
   implementation_status:
-    current: not_started
+    current: partial
+    unresolved_completion_conditions:
+      - markdown_renderer_resolves_explicit_bindings_without_ai_inference
+      - unresolved_required_placeholders_block_save
+      - result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed
+      - refresh_from_source_record_preserves_user_adjustment_patch
     planned_change_surfaces:
       - db migration for topology.team_markdown_template_registry
       - db migration for topology.team_markdown_saved_view

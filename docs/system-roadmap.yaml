@@ -581,9 +581,9 @@ system_roadmap_ssot:
     product.preset_db_seed_registration:
       bundle_id: preset_db_seed_registration
       title: Preset DB seed and data-driven registration
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: Preset bootstrap belongs to DB seed/catalog data and data-driven registration metadata; it does not include hardcoded md_viewer rendering or Markdown saved-view UI behavior.
+      public_summary: Preset bootstrap belongs to DB seed/catalog data and data-driven registration metadata; topology.team_markdown_template_registry serves as the data-driven template registry for the Markdown saved view preset ecosystem; md_viewer hardcoded rendering is a separate lane.
       scope:
         - preset_catalog_seed_data
         - preset_metadata_registration
@@ -604,17 +604,24 @@ system_roadmap_ssot:
         - docs/design/mock-preset-intake-compiler-ssot.yaml
         - docs/design/db-schema.yaml
         - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      evidence_ref:
+        - db/migrations/team_markdown_registry_tables.sql
+        - backend/repository/NpgsqlTeamMarkdownRepository.cs
+        - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
+      completion_condition:
+        - team_markdown_template_registry_table_exists_as_data_driven_preset_catalog
+        - bootstrap_ddl_included_in_init_sql
+        - NpgsqlTeamMarkdownRepository_wired_in_Program_cs
       known_gap_ref:
-        - preset_catalog_seed_data_not_created
-        - bootstrap_data_driven_registration_not_created
-        - preset_metadata_DB_shape_not_migrated
+        - preset_catalog_seed_data_rows_not_yet_bootstrapped
+        - UIBuilder_preset_ecosystem_load_from_template_registry_not_wired
 
     product.component_markdown_authoring_projection:
       bundle_id: component_markdown_authoring_projection
       title: Component DB bind and Markdown saved-view authoring UI
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, and TeamMarkdownDashboard island are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); dashboard island is not yet mounted at a routable path; markdown binding renderer and required placeholder blocking are not implemented; full binding authoring UI modal/drawer is pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -635,18 +642,34 @@ system_roadmap_ssot:
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/db-schema.yaml
         - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      evidence_ref:
+        - db/migrations/team_markdown_registry_tables.sql
+        - backend/runtime/AdminRuntime.TeamMarkdown.cs
+        - backend/repository/NpgsqlTeamMarkdownRepository.cs
+        - frontend/api/teamMarkdownApi.ts
+        - frontend/islands/TeamMarkdownDashboard.tsx
+        - frontend/tests/teamMarkdownSavedView.test.ts
+        - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
+      completion_condition:
+        - team_markdown_DB_tables_exist_under_topology_schema
+        - saved_view_backend_runtime_actions_exist_template_and_saved_view_CRUD
+        - frontend_search_and_card_projection_from_persisted_data
+        - frontend_does_not_write_DB_directly
+        - markdown_body_is_not_runtime_SSOT
       known_gap_ref:
-        - markdown_saved_view_DB_migration_not_created
-        - saved_view_backend_runtime_actions_not_created
-        - component_DB_bind_authoring_UI_not_created
-        - markdown_data_save_edit_UI_not_created
+        - template_bind_authoring_modal_or_drawer_UI_not_created
+        - record_markdown_bind_form_not_created
+        - template_registration_modal_not_created
+        - search_scope_rendered_markdown_and_tags_not_searched
+        - markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced
+        - dashboard_surface_not_mounted_no_route_for_admin_team_dashboard
 
     product.md_viewer_projection_component:
       bundle_id: md_viewer_projection_component
       title: md_viewer hardcoded Markdown projection component
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: md_viewer is a hardcoded projection component that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text.
+      public_summary: md_viewer is a hardcoded projection component that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, and action toolbar is implemented; UIBuilder preset_ecosystem integration and full drawer placement are pending.
       scope:
         - md_viewer_component_registration
         - rendered_markdown_display
@@ -666,16 +689,28 @@ system_roadmap_ssot:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
         - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      evidence_ref:
+        - frontend/components/MdViewer.tsx
+        - frontend/islands/TeamMarkdownDashboard.tsx
+        - frontend/tests/teamMarkdownSavedView.test.ts
+      completion_condition:
+        - MdViewer_component_renders_saved_markdown_projection
+        - seed_invalid_state_shows_explicit_error_not_silent_fallback
+        - refresh_and_clone_actions_disabled_when_seed_invalid
+        - binding_summary_and_seed_summary_displayed_in_expanded_view
+        - source_record_ref_displayed
+        - adjustment_status_displayed
       known_gap_ref:
-        - frontend_md_viewer_component_not_created
-        - md_viewer_projection_error_states_not_created
+        - UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring_not_created
+        - full_drawer_placement_via_UIBuilder_canvas_not_wired
+        - md_viewer_dashboard_action_wiring_incomplete_only_onArchive_onClose_wired
 
     product.completed_preset_seed_projection_gate:
       bundle_id: completed_preset_seed_projection_gate
       title: Completed preset seed validation gate for saved-view projection
-      status: not_started
+      status: partial
       production_ready: false
-      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; it verifies DB-seed-derived/template/binding/render metadata before refresh, rebind, clone, or projection and must not be confused with Preset DB seed registration itself.
+      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; CompletedPresetSeedValidator enforces the gate for create/refresh/update/projection (top-level keys and render_ref hash only); saved view DB column is NOT NULL; seed validation failure is an explicit blocking error with no silent fallback; clone and rebind actions are not yet implemented.
       scope:
         - completed_preset_seed_json_required_persistence
         - seed_builder_and_validator
@@ -694,10 +729,22 @@ system_roadmap_ssot:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/db-schema.yaml
         - .agent/tasks/todo.md#preset_team_markdown_saved_view_seed
+      evidence_ref:
+        - backend/schema/TeamMarkdownContracts.cs
+        - backend/runtime/AdminRuntime.TeamMarkdown.cs
+        - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
+        - frontend/tests/teamMarkdownSavedView.test.ts
+      completion_condition:
+        - CompletedPresetSeedValidator_blocks_incomplete_seed_with_explicit_error
+        - completed_preset_seed_json_column_is_NOT_NULL_in_saved_view_table
+        - create_refresh_update_with_seed_validates_before_persist
+        - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
+        - seed_invalid_state_disables_refresh_clone_in_frontend_MdViewer
       known_gap_ref:
-        - completed_preset_seed_json_builder_not_created
-        - completed_preset_seed_json_validator_not_created
-        - refresh_rebind_clone_seed_gate_not_created
+        - seed_builder_helper_for_client_side_construction_not_implemented
+        - clone_action_backend_implementation_pending
+        - rebind_action_not_designed_or_implemented
+        - seed_validator_depth_nested_fields_not_validated_only_top_level_and_render_hash
 
     backend.sql_attention_logs_current:
       bundle_id: product.sql_attention_observation_runtime

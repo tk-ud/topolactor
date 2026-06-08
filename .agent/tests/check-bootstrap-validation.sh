@@ -89,6 +89,10 @@ done
 required_topology_tables=(
   "components_bucket"
   "ui_topology_tensor"
+  "mock_preset_registry"
+  "team_markdown_template_registry"
+  "team_markdown_saved_view"
+  "team_markdown_saved_view_event"
 )
 
 for table_name in "${required_topology_tables[@]}"; do

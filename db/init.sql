@@ -27,6 +27,9 @@
 \echo '[init.sql] applying mock_preset_registry_tables.sql'
 \i /db/migrations/mock_preset_registry_tables.sql
 
+\echo '[init.sql] applying team_markdown_registry_tables.sql'
+\i /db/migrations/team_markdown_registry_tables.sql
+
 \echo '[init.sql] applying manifest_tables.sql'
 \i /db/manifest_tables.sql
 

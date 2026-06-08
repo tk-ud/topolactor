@@ -26,6 +26,28 @@ db_schema:
     - auth_identity_session
     - enum_dictionary
 
+  tables:
+    context_transition_stats:
+      schema: public
+      transition_kind: operation
+      recommendation_lane: ui_pressure
+      role: workflow transition probability aggregate for operation-level recommendation pressure
+    context_enum_transition_event:
+      schema: public
+      role: enum value transition events for enum-item recommendation pressure signal collection
+    context_enum_transition_stats:
+      schema: public
+      transition_kind: enum_item
+      recommendation_lane: state_pressure
+      role: enum value transition probability aggregate for enum-item recommendation pressure
+    component_operation_event_log:
+      schema: public
+      role: component operation event log for recommendation pressure signal collection
+
+  meaning_collision_guardrails:
+    - recommendation_lane_boundary: context_transition_stats is ui_pressure only; context_enum_transition_stats is state_pressure only; lanes must not be mixed across these tables
+    - context_transition_stats_vs_enum: context_transition_stats tracks operation-level transitions; context_enum_transition_stats tracks enum-item transitions; recommendation_lane assignment is table-specific and must not be swapped
+
 
 
   canonical_schema_namespaces:
@@ -77,22 +99,22 @@ db_schema:
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
         mock_preset_compile_snapshot: topology.mock_preset_compile_snapshot
-      planned_schema_surfaces:
+      migration_ddl_available_surfaces:
         team_markdown_dashboard_saved_view:
-          status: planned_schema_surface
-          migration_status: not_created
+          status: migration_ddl_available_bootstrap_included
+          migration_status: created
           reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
           parent_surface: Preset / preset seed / saved view ecosystem
           child_surface: team shared saved markdown view
           note: >-
-            Planned Preset child surface only. No DB migration, bootstrap DDL, repository,
-            backend runtime action, or UI component is created by this SSOT wiring. The saved
-            Markdown view is a rendered projection; physical table / jsonb records remain the
-            canonical data authority.
+            DB migration, bootstrap DDL, NpgsqlTeamMarkdownRepository, backend runtime actions,
+            and frontend MdViewer component are available. The saved Markdown view is a
+            rendered projection; physical table / jsonb records remain the canonical data authority.
+            completed_preset_seed_json is the required gate for refresh/rebind/clone/projection.
           ux_hard_gate_columns:
             - completed_preset_seed_json jsonb not null
             - card_metadata_json jsonb not null
-          planned_topology_tables:
+          topology_tables:
             - topology.team_markdown_template_registry
             - topology.team_markdown_saved_view
             - topology.team_markdown_saved_view_event
@@ -170,18 +192,21 @@ db_schema:
           - topology.mock_preset_object_mapping
           - topology.mock_preset_wiring_candidate
           - topology.mock_preset_compile_snapshot
-      planned_schema_surface:
-        status: planned_schema_surface
-        migration_status: not_created
+      migration_ddl_available_team_markdown:
+        status: migration_ddl_available_bootstrap_included
         reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
-        parent_surface: Preset / preset seed / saved view ecosystem
-        child_surface: team shared saved markdown view
-        not_canonical_active: true
-        no_migration_created: true
+        migration_ddl: db/migrations/team_markdown_registry_tables.sql
+        bootstrap_path: db/init.sql (includes team_markdown_registry_tables.sql after mock_preset_registry_tables.sql)
+        ci_path: .github/workflows/backend-tests.yml "Apply DB schema" step
         note: >-
-          Topology placement is planned for the Preset child saved Markdown view surface only.
-          completed_preset_seed_json and card_metadata_json are UX hard-gate JSONB columns,
-          but no migration/DDL exists yet and this surface is not production ready.
+          DDL idempotent migration (CREATE TABLE IF NOT EXISTS) included in db/init.sql bootstrap
+          and CI backend-tests.yml schema setup. completed_preset_seed_json and card_metadata_json
+          are required (NOT NULL) as UX hard-gate JSONB columns. Saved Markdown view is a projection;
+          physical table / jsonb records remain the canonical data authority.
+          NpgsqlTeamMarkdownRepository wired in Program.cs.
+        ux_hard_gate_columns:
+          - completed_preset_seed_json jsonb not null
+          - card_metadata_json jsonb not null
         tables:
           - topology.team_markdown_template_registry
           - topology.team_markdown_saved_view
