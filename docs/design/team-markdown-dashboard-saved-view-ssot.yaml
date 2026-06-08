@@ -1,0 +1,349 @@
+team_markdown_dashboard_saved_view_ssot:
+  name: team_markdown_dashboard_saved_view
+  version: 0.1.0
+  status: ssot_design_document
+  canonical_path: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+
+  purpose:
+    summary: >-
+      Define a team-shared dashboard surface for searchable saved Markdown views.
+      Users can register Markdown templates, bind sections to physical table records
+      or jsonb paths, save rendered Markdown views as team-visible dashboard entries,
+      search those saved views, and click a result to expand it in a drawer/panel.
+      This is a dashboard/read-work surface, not a standalone Notion clone and not
+      the runtime source of truth.
+    goals:
+      - provide_team_shared_markdown_dashboard
+      - allow_users_to_register_markdown_view_templates
+      - bind_markdown_template_slots_to_physical_table_columns_or_jsonb_paths
+      - save_rendered_markdown_views_as_searchable_team_dashboard_entries
+      - allow_search_result_click_to_expand_saved_markdown_view
+      - preserve_physical_table_records_as_canonical_data_authority
+      - allow_small_human_adjustments_to_saved_view_without_turning_markdown_into_runtime_ssot
+      - support_work_log_review_todo_schedule_and_pending_decision_dashboards
+    non_goals:
+      - standalone_notion_clone
+      - slack_canvas_clone
+      - markdown_as_runtime_ssot
+      - markdown_driven_schema_mutation
+      - markdown_driven_component_generation
+      - ai_semantic_inference
+      - direct_topology_promotion_from_markdown
+      - replacing_physical_table_or_jsonb_authority
+      - external_connector_bundle_implementation
+
+  authority_boundary:
+    physical_record:
+      role: canonical_data_authority
+      owns:
+        - table_identity
+        - record_identity
+        - column_values
+        - jsonb_field_values
+        - lifecycle_state
+        - update_authority
+      does_not_own:
+        - dashboard_card_layout
+        - markdown_section_order
+        - saved_view_title_override
+    markdown_template:
+      role: reusable_projection_template
+      owns:
+        - section_structure
+        - placeholder_keys
+        - default_heading_order
+        - default_empty_state_labels
+      does_not_own:
+        - record_truth
+        - table_schema
+        - component_bucket_identity
+        - runtime_topology_identity
+    saved_markdown_view:
+      role: team_shared_dashboard_projection
+      owns:
+        - rendered_markdown_snapshot
+        - dashboard_title
+        - search_index_text
+        - source_record_ref
+        - template_ref
+        - user_adjustment_patch
+      does_not_own:
+        - canonical_record_value
+        - physical_table_schema
+        - topology_promotion_state
+        - event_wiring_authority
+    user:
+      owns:
+        - template_registration_decision
+        - binding_selection
+        - saved_view_create_update_archive_decision
+        - dashboard_click_expand_operation
+        - optional_manual_markdown_adjustment
+
+  canonical_flow:
+    - user_registers_markdown_template
+    - user_selects_physical_table_or_saved_query_result
+    - user_maps_template_placeholders_to_columns_or_jsonb_paths
+    - system_renders_markdown_preview_from_bound_record
+    - user_saves_rendered_markdown_view_to_team_dashboard
+    - system_updates_search_index_text_for_saved_view
+    - team_user_searches_dashboard
+    - search_results_show_saved_markdown_view_cards
+    - user_clicks_saved_view_card
+    - dashboard_expands_markdown_view_in_drawer_or_panel
+    - user_optionally_adjusts_view_text_or_binding
+    - user_saves_view_update_or_archives_saved_view
+
+  dashboard_surface_contract:
+    entry_surface:
+      preferred: /admin/team-dashboard
+      alternative: /admin/ui-builder_or_admin_dashboard_tab
+    primary_ui:
+      - search_input
+      - saved_markdown_view_result_list
+      - saved_markdown_view_cards
+      - click_to_expand_drawer_or_panel
+      - template_registration_modal_or_drawer
+      - bind_template_to_record_modal_or_drawer
+    result_card_fields:
+      - saved_view_id
+      - title
+      - template_key
+      - source_table
+      - source_record_label
+      - updated_at
+      - status
+      - excerpt
+      - tags
+    expanded_view_fields:
+      - rendered_markdown
+      - source_record_ref
+      - binding_summary
+      - template_ref
+      - adjustment_status
+      - actions
+    actions:
+      - open_source_record
+      - edit_saved_view_adjustment
+      - refresh_from_source_record
+      - archive_saved_view
+      - copy_markdown
+      - create_follow_up_todo_candidate
+    prohibited:
+      - silent_write_to_physical_record_from_markdown_edit
+      - hidden_schema_change_from_template
+      - direct_active_topology_mutation
+      - ai_generated_binding_decision_without_user_confirmation
+
+  markdown_template_contract:
+    template_kind: team_dashboard_markdown_template
+    template_format: markdown_with_handlebar_like_placeholders
+    placeholder_examples:
+      - '{{record.summary}}'
+      - '{{record.description}}'
+      - '{{record.todo_list}}'
+      - '{{record.remaining_tasks}}'
+      - '{{record.schedule}}'
+      - '{{record.pending_decisions}}'
+    default_section_preset:
+      markdown: |-
+        # 概要
+        {{record.summary}}
+
+        ## 説明、詳細
+        {{record.description}}
+
+        ## todo
+        {{record.todo_list}}
+
+        ### 残タスク
+        {{record.remaining_tasks}}
+
+        ## スケジュール
+        {{record.schedule}}
+
+        ### 未処理,todo前の判断待ち報告
+        {{record.pending_decisions}}
+    validation_rules:
+      - placeholder_must_resolve_to_allowed_binding_or_empty_state
+      - markdown_template_must_not_contain_executable_script
+      - raw_html_is_disabled_by_default
+      - unresolved_required_placeholder_blocks_save_unless_user_marks_optional
+      - template_registration_does_not_create_physical_table_columns
+
+  binding_contract:
+    binding_sources:
+      - physical_table_column
+      - physical_table_jsonb_path
+      - saved_query_result_field
+      - static_text
+    binding_ref_shape:
+      table_ref: topology.physical_tables_or_registered_table_key
+      record_ref: physical_primary_key_or_record_locator
+      field_ref: column_name_or_jsonb_path
+      transform_ref: optional_render_transform_key
+      empty_state: optional_text
+      required: boolean
+    binding_rules:
+      - binding_is_user_selected_not_inferred_from_markdown_text
+      - binding_must_reference_registered_physical_table_or_allowed_saved_query_result
+      - jsonb_path_binding_must_be_explicit
+      - binding_preview_must_show_resolved_values_before_save
+      - refresh_from_source_record_recomputes_bound_sections_and_preserves_user_adjustment_patch
+
+  saved_view_persistence_contract:
+    status: planned_schema_surface
+    schema: topology
+    planned_tables:
+      team_markdown_template_registry:
+        purpose: reusable_markdown_template_header_and_body
+        fields:
+          - template_id uuid primary key
+          - template_key text unique not null
+          - template_label text not null
+          - template_markdown text not null
+          - placeholder_schema_json jsonb not null
+          - status text not null # draft | active | archived
+          - created_by uuid nullable
+          - created_at timestamptz
+          - updated_at timestamptz
+      team_markdown_saved_view:
+        purpose: searchable_team_dashboard_saved_markdown_projection
+        fields:
+          - saved_view_id uuid primary key
+          - template_id uuid references topology.team_markdown_template_registry
+          - title text not null
+          - source_table_ref text not null
+          - source_record_ref text not null
+          - binding_json jsonb not null
+          - rendered_markdown text not null
+          - user_adjustment_patch_json jsonb not null
+          - search_index_text text not null
+          - status text not null # active | archived
+          - created_by uuid nullable
+          - updated_by uuid nullable
+          - created_at timestamptz
+          - updated_at timestamptz
+      team_markdown_saved_view_event:
+        purpose: append_only_saved_view_activity_log
+        fields:
+          - event_id uuid primary key
+          - saved_view_id uuid references topology.team_markdown_saved_view
+          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate
+          - actor_id uuid nullable
+          - event_payload_json jsonb not null
+          - created_at timestamptz
+    persistence_rules:
+      - saved_view_is_projection_not_canonical_record
+      - rendered_markdown_snapshot_can_be_refreshed_from_source_record
+      - user_adjustment_patch_is_separate_from_bound_record_values
+      - search_index_text_is_derived_from_rendered_markdown_and_metadata
+      - archive_preserves_history_unless_explicit_delete_policy_exists
+
+  search_contract:
+    search_scope:
+      - saved_view_title
+      - rendered_markdown
+      - search_index_text
+      - source_table_ref
+      - tags
+      - status
+    search_behavior:
+      - default_filters_status_active
+      - results_are_saved_view_cards
+      - click_result_expands_drawer_or_panel
+      - search_must_not_mutate_saved_view
+      - search_must_not_query_unregistered_physical_tables_directly
+    ranking_policy:
+      initial: recency_then_text_match
+      future: sql_attention_or_usage_weight_may_rank_saved_views
+
+  component_surface_candidates:
+    markdown_saved_view_card:
+      role: result_card_for_saved_view_search
+      capability_tags:
+        - emits_event
+        - accepts_design
+        - accepts_layout
+    markdown_saved_view_panel:
+      role: expanded_markdown_view_reader
+      capability_tags:
+        - controlled_value
+        - field_binding
+        - accepts_design
+        - accepts_layout
+    markdown_template_registry_form:
+      role: template_registration_and_editing_surface
+      capability_tags:
+        - controlled_value
+        - field_binding
+        - emits_event
+    record_markdown_bind_form:
+      role: map_template_placeholders_to_record_fields
+      capability_tags:
+        - controlled_value
+        - field_binding
+        - emits_event
+
+  validation_policy:
+    blocking_errors:
+      - TEMPLATE_NOT_FOUND
+      - TEMPLATE_MARKDOWN_INVALID
+      - REQUIRED_PLACEHOLDER_UNBOUND
+      - PHYSICAL_TABLE_REF_NOT_REGISTERED
+      - SOURCE_RECORD_NOT_FOUND
+      - JSONB_PATH_INVALID
+      - RAW_HTML_NOT_ALLOWED
+      - SEARCH_INDEX_BUILD_FAILED
+      - SAVED_VIEW_NOT_FOUND
+    nonblocking_warnings:
+      - OPTIONAL_PLACEHOLDER_EMPTY
+      - SOURCE_RECORD_CHANGED_SINCE_LAST_RENDER
+      - USER_ADJUSTMENT_PATCH_PRESENT
+      - ARCHIVED_VIEW_INCLUDED_BY_FILTER
+
+  relation_to_existing_surfaces:
+    physical_table_registry:
+      ref: docs/design/db-schema.yaml
+      role: canonical table and registered physical data authority
+    ui_builder:
+      ref: docs/design/admin-console-workflow-ssot.yaml
+      role: optional component/dashboard placement surface, not the saved view authority
+    runtime_orchestration:
+      ref: docs/design/runtime-orchestration-ssot.yaml
+      role: backend action boundary and explicit failure behavior
+    mock_preset_intake_compiler:
+      ref: docs/design/mock-preset-intake-compiler-ssot.yaml
+      role: adjacent visual preset intake; not the same feature
+
+  implementation_status:
+    current: not_started
+    planned_change_surfaces:
+      - db migration for topology.team_markdown_template_registry
+      - db migration for topology.team_markdown_saved_view
+      - db migration for topology.team_markdown_saved_view_event
+      - backend admin runtime actions for template create_list_get_update_archive
+      - backend admin runtime actions for saved_view create_search_get_refresh_update_archive
+      - backend markdown template renderer with explicit placeholder binding
+      - frontend team dashboard search surface
+      - frontend saved markdown view result cards
+      - frontend click_to_expand drawer_or_panel
+      - frontend template registration modal_or_drawer
+      - frontend record binding modal_or_drawer
+      - tests for markdown_not_runtime_ssot_boundary
+      - tests for search_click_expand_behavior
+      - tests for binding_refresh_preserves_user_adjustment_patch
+
+  completion_condition:
+    - markdown_template_registry_table_exists_under_topology_schema
+    - saved_markdown_view_table_exists_under_topology_schema
+    - saved_view_event_table_exists_under_topology_schema
+    - markdown_template_create_list_get_update_archive_actions_exist
+    - saved_view_create_search_get_refresh_update_archive_actions_exist
+    - markdown_renderer_resolves_explicit_bindings_without_ai_inference
+    - unresolved_required_placeholders_block_save
+    - saved_views_are_searchable_from_team_dashboard
+    - search_result_click_expands_saved_view_panel_or_drawer
+    - saved_view_does_not_become_physical_record_authority
+    - refresh_from_source_record_preserves_user_adjustment_patch
+    - docs_system_roadmap_and_todo_are_updated_when_implementation_begins
