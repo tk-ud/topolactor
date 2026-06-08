@@ -1206,7 +1206,7 @@ db_schema:
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
       migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: Included in db/init.sql bootstrap. UpsertObjectMappingAsync implemented. UNIQUE (preset_id, source_object_id). E2E live DB upsert and round-trip tests pass.
+      note: Included in db/init.sql bootstrap. UpsertObjectMappingAsync active in NpgsqlMockPresetRepository. UNIQUE (preset_id, source_object_id). E2E live DB upsert and round-trip tests pass.
       role: human_confirmed_mapping_from_visual_source_objects_to_catalog_component_structural_html_or_ignored
       boundary:
         - component_identity_is_user_confirmed_not_inferred_from_external_mock
@@ -1218,7 +1218,7 @@ db_schema:
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
       migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: Included in db/init.sql bootstrap. UpsertWiringCandidateAsync implemented. UNIQUE (preset_id, source_object_id, capability_tag). E2E live DB upsert and persistence tests pass.
+      note: Included in db/init.sql bootstrap. UpsertWiringCandidateAsync active in NpgsqlMockPresetRepository. UNIQUE (preset_id, source_object_id, capability_tag). E2E live DB upsert and persistence tests pass.
       role: pending_or_confirmed_capability_gated_wiring_and_data_binding_candidates
       boundary:
         - capability_tags_gate_wiring_and_binding_ui
@@ -1230,7 +1230,7 @@ db_schema:
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
       migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: Included in db/init.sql bootstrap. SaveCompileSnapshotAsync and GetLatestCompileSnapshotAsync implemented. E2E compile-bind round-trip test verifies no write to topology.ui_topology_tensor.
+      note: Included in db/init.sql bootstrap. SaveCompileSnapshotAsync and GetLatestCompileSnapshotAsync active in NpgsqlMockPresetRepository. E2E compile-bind round-trip test verifies no write to topology.ui_topology_tensor.
       role: deterministic_compile_output_for_fast_ui_builder_loading
       boundary:
         - compile_is_ai_free
