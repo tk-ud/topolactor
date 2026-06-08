@@ -17,7 +17,11 @@ import { SESSION_TOKEN_KEY } from "../lib/demoSession.ts";
 
 function getToken(): string | undefined {
   if (typeof globalThis.sessionStorage === "undefined") return undefined;
-  return sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined;
+  const token = sessionStorage.getItem(SESSION_TOKEN_KEY) ?? undefined;
+  if (!token) {
+    console.warn("[teamMarkdownApi] session token not found; admin dispatch may be rejected by backend auth");
+  }
+  return token;
 }
 
 async function dispatchTeamMarkdown(
@@ -34,8 +38,9 @@ async function dispatchTeamMarkdown(
   };
   const result = await queueAdminClientCommand(request, getToken());
   if (!result.success) {
-    const code = result.errors?.[0]?.code ?? result.errors?.[0]?.Code ?? "DISPATCH_FAILED";
-    const msg = result.errors?.[0]?.message ?? result.errors?.[0]?.Message ?? "dispatch failed";
+    // Backend uses camelCase (JsonNamingPolicy.CamelCase in Program.cs)
+    const code = result.errors?.[0]?.code ?? "DISPATCH_FAILED";
+    const msg = result.errors?.[0]?.message ?? "dispatch failed";
     throw new Error(`[${code}] ${msg}`);
   }
   if (!result.emission) throw new Error("dispatch: no emission in response");

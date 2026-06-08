@@ -17,6 +17,7 @@
  *   - Mutation of active topology
  */
 
+import { useState } from "preact/hooks";
 import type { SavedViewDetail, CompletedPresetSeed } from "../api/teamMarkdownApi.ts";
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -124,6 +125,7 @@ function ActionToolbar({
   onOpenSourceRecord,
   onCreateTodoCandidate,
   onCopyMarkdown,
+  copyStatus,
 }: {
   savedView: SavedViewDetail;
   seedValid: boolean;
@@ -134,6 +136,7 @@ function ActionToolbar({
   onOpenSourceRecord?: (tableRef: string, recordRef: string) => void;
   onCreateTodoCandidate?: (id: string) => void;
   onCopyMarkdown: () => void;
+  copyStatus: "idle" | "copied" | "error";
 }) {
   return (
     <div class="md-viewer-action-toolbar" role="toolbar" aria-label="Saved view actions">
@@ -186,8 +189,9 @@ function ActionToolbar({
         class="md-viewer-action-btn"
         onClick={onCopyMarkdown}
         aria-label="Copy Markdown to clipboard"
+        aria-live="polite"
       >
-        Copy Markdown
+        {copyStatus === "copied" ? "Copied!" : copyStatus === "error" ? "Copy failed" : "Copy Markdown"}
       </button>
       {onCreateTodoCandidate && (
         <button
@@ -237,9 +241,22 @@ export function MdViewer({
   onOpenSourceRecord,
   onCreateTodoCandidate,
 }: MdViewerProps) {
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+
   const handleCopyMarkdown = () => {
     if (typeof globalThis.navigator?.clipboard?.writeText === "function") {
-      globalThis.navigator.clipboard.writeText(savedView.renderedMarkdown).catch(() => undefined);
+      globalThis.navigator.clipboard.writeText(savedView.renderedMarkdown)
+        .then(() => {
+          setCopyStatus("copied");
+          globalThis.setTimeout(() => setCopyStatus("idle"), 2000);
+        })
+        .catch(() => {
+          setCopyStatus("error");
+          globalThis.setTimeout(() => setCopyStatus("idle"), 3000);
+        });
+    } else {
+      setCopyStatus("error");
+      globalThis.setTimeout(() => setCopyStatus("idle"), 3000);
     }
   };
 
@@ -281,6 +298,7 @@ export function MdViewer({
         onOpenSourceRecord={onOpenSourceRecord}
         onCreateTodoCandidate={onCreateTodoCandidate}
         onCopyMarkdown={handleCopyMarkdown}
+        copyStatus={copyStatus}
       />
 
       <div class="md-viewer-body">

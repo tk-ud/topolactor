@@ -133,30 +133,76 @@ Deno.test("incomplete seed blocks create — explicit error not silent fallback"
 // ─── MdViewer action boundary tests ──────────────────────────────────────────
 
 Deno.test("MdViewer seed-gated actions are disabled when seedValid=false", () => {
-  const seedValid = false;
-  const seedGatedActions = ["refresh", "clone"];
-  const alwaysAvailableActions = ["copy_markdown", "archive", "open_source_record", "edit_adjustment", "create_todo"];
+  // Models the ActionToolbar gate: disabled={!seedValid} applies to seed-gated actions only.
+  const seedGatedActions = new Set(["refresh", "clone"]);
+  const alwaysAvailableActions = new Set(["copy_markdown", "archive", "open_source_record", "edit_adjustment", "create_todo"]);
 
+  const isDisabled = (action: string, seedValid: boolean) =>
+    seedGatedActions.has(action) && !seedValid;
+
+  // When seedValid=false: seed-gated actions must be disabled
   for (const action of seedGatedActions) {
-    assertEquals(seedValid === false, true,
+    assertEquals(isDisabled(action, false), true,
       `${action} must be disabled when seedValid=false`);
   }
+  // When seedValid=true: seed-gated actions must be enabled
+  for (const action of seedGatedActions) {
+    assertEquals(isDisabled(action, true), false,
+      `${action} must be enabled when seedValid=true`);
+  }
+  // Always-available actions must not be disabled regardless of seed state
   for (const action of alwaysAvailableActions) {
-    assertEquals(alwaysAvailableActions.includes(action), true,
-      `${action} must remain available regardless of seed validity`);
+    assertEquals(isDisabled(action, false), false,
+      `${action} must not be gated by seedValid`);
+    assertEquals(isDisabled(action, true), false,
+      `${action} must not be gated by seedValid`);
+  }
+  // Seed-gated set and always-available set must not overlap
+  for (const action of seedGatedActions) {
+    assertEquals(alwaysAvailableActions.has(action), false,
+      `${action} must not appear in alwaysAvailableActions`);
   }
 });
 
 // ─── boundary: saved view is a projection, not canonical data authority ───────
 
 Deno.test("saved view does not own physical record fields", () => {
-  type SavedViewAuthorityFields = keyof SavedViewDetail;
+  // SavedViewDetail is a projection type; it must not carry canonical-record authority fields.
+  // Verify by checking that every canonical-authority field name is absent from SavedViewDetail keys.
   const canonicalDataAuthorityFields = ["columnValues", "jsonbFieldValues", "lifecycleState", "updateAuthority"];
-  const savedViewFields: SavedViewAuthorityFields[] = ["savedViewId", "title", "renderedMarkdown", "completedPresetSeedJson", "userAdjustmentPatchJson"];
+
+  // Construct a full SavedViewDetail value to extract its runtime keys
+  const sample: SavedViewDetail = {
+    savedViewId: "id",
+    title: "t",
+    templateKey: "k",
+    templateId: "tid",
+    sourceTableRef: "s",
+    sourceRecordRef: "r",
+    status: "active",
+    updatedAt: "2026-01-01T00:00:00Z",
+    createdAt: "2026-01-01T00:00:00Z",
+    cardMetadataJson: {},
+    bindingJson: {},
+    completedPresetSeedJson: {
+      seed_version: "1",
+      template_ref: {},
+      source_ref: {},
+      binding_ref: {},
+      render_ref: { rendered_markdown_hash: "h", rendered_at: "2026-01-01T00:00:00Z", renderer_version: "1.0" },
+      adjustment_ref: {},
+      dashboard_ref: {},
+      lineage_ref: {},
+    },
+    renderedMarkdown: "",
+    userAdjustmentPatchJson: {},
+    searchIndexText: "",
+  };
+  const savedViewKeys = Object.keys(sample);
 
   for (const field of canonicalDataAuthorityFields) {
     assertEquals(
-      (savedViewFields as string[]).includes(field), false,
+      savedViewKeys.includes(field), false,
       `saved view must not own canonical data authority field: ${field}`,
     );
   }
@@ -165,7 +211,9 @@ Deno.test("saved view does not own physical record fields", () => {
 // ─── preset catalog seed registration is separate from md_viewer ─────────────
 
 Deno.test("md_viewer is a projection component, not a preset DB seed registration mechanism", () => {
-  const mdViewerResponsibilities = [
+  // md_viewer surfaces actions against persisted saved views only.
+  // Preset DB seed registration is a separate lane (template_registry / catalog seed data).
+  const mdViewerActions = new Set([
     "render_saved_markdown",
     "show_seed_summary",
     "show_binding_summary",
@@ -177,14 +225,16 @@ Deno.test("md_viewer is a projection component, not a preset DB seed registratio
     "actions_archive",
     "actions_copy_markdown",
     "actions_create_todo",
-  ];
-  const presetDbSeedRegistrationResponsibilities = [
+  ]);
+  const seedRegistrationActions = [
     "create_preset_catalog_seed_rows",
     "bootstrap_registration",
     "register_preset_metadata_in_db",
   ];
-  for (const seedOp of presetDbSeedRegistrationResponsibilities) {
-    assertEquals(mdViewerResponsibilities.includes(seedOp), false,
-      `md_viewer must not include preset DB seed registration: ${seedOp}`);
+  for (const seedOp of seedRegistrationActions) {
+    assertEquals(mdViewerActions.has(seedOp), false,
+      `md_viewer must not include preset DB seed registration action: ${seedOp}`);
   }
+  // md_viewer must include the projection rendering action
+  assertEquals(mdViewerActions.has("render_saved_markdown"), true);
 });

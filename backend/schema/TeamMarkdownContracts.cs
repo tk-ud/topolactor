@@ -128,13 +128,14 @@ public static class CompletedPresetSeedValidator
 
         foreach (var key in RequiredTopLevelKeys)
         {
-            if (!seed.TryGetProperty(key, out _))
+            if (!seed.TryGetProperty(key, out var val) || val.ValueKind == JsonValueKind.Null)
                 return new ValidationError("COMPLETED_PRESET_SEED_MISSING",
-                    $"completed_preset_seed_json is missing required field: {key}");
+                    $"completed_preset_seed_json is missing or null required field: {key}");
         }
 
-        if (!seed.TryGetProperty("render_ref", out var renderRef) ||
-            renderRef.ValueKind != JsonValueKind.Object ||
+        // render_ref presence already checked above; validate the hash value specifically
+        seed.TryGetProperty("render_ref", out var renderRef);
+        if (renderRef.ValueKind != JsonValueKind.Object ||
             !renderRef.TryGetProperty("rendered_markdown_hash", out var hashEl) ||
             string.IsNullOrWhiteSpace(hashEl.GetString()))
         {

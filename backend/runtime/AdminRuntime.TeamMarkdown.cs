@@ -76,7 +76,9 @@ public partial class AdminRuntime
             vector.Payload.Value.TryGetProperty("status", out var statusEl))
             status = statusEl.GetString() ?? "active";
 
-        var items = await _teamMarkdownRepository.ListTemplatesAsync(status, ct);
+        var (items, dbError, dbMsg) = await _teamMarkdownRepository.ListTemplatesAsync(status, ct);
+        if (dbError is not null)
+            return (null, new ValidationError(dbError, dbMsg ?? dbError));
         return (JsonSerializer.SerializeToElement(new { ok = true, templates = items }), null);
     }
 
@@ -92,7 +94,9 @@ public partial class AdminRuntime
         if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var templateId))
             return (null, new ValidationError("TEMPLATE_ID_REQUIRED", "idOrHubId must be a valid template UUID"));
 
-        var detail = await _teamMarkdownRepository.GetTemplateAsync(templateId, ct);
+        var (detail, dbError, dbMsg) = await _teamMarkdownRepository.GetTemplateAsync(templateId, ct);
+        if (dbError is not null)
+            return (null, new ValidationError(dbError, dbMsg ?? dbError));
         if (detail is null)
             return (null, new ValidationError("TEMPLATE_NOT_FOUND", $"Template {templateId} not found"));
 
@@ -128,6 +132,7 @@ public partial class AdminRuntime
 
         _logger.LogInformation("AdminRuntime.TeamMarkdown.TemplateUpdate: templateId={TemplateId}", templateId);
         return (JsonSerializer.SerializeToElement(new { ok = true, templateId = templateId.ToString() }), null);
+
     }
 
     // ─── template archive ────────────────────────────────────────────────────
@@ -209,8 +214,15 @@ public partial class AdminRuntime
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        await _teamMarkdownRepository.AppendEventAsync(
-            Guid.Parse(savedViewId!), "create", null,
+        if (!Guid.TryParse(savedViewId, out var savedViewGuid))
+        {
+            _logger.LogError("CreateSavedViewAsync returned null or unparseable savedViewId after successful insert");
+            return (null, new ValidationError("DB_INCONSISTENCY", "CreateSavedViewAsync returned invalid savedViewId"));
+        }
+
+        // Event append is best-effort: failure does not roll back the saved view creation.
+        _ = await _teamMarkdownRepository.AppendEventAsync(
+            savedViewGuid, "create", null,
             JsonSerializer.SerializeToElement(new { title, templateId = templateIdStr }), ct);
 
         _logger.LogInformation("AdminRuntime.TeamMarkdown.SavedViewCreate: savedViewId={SavedViewId}", savedViewId);
@@ -236,7 +248,9 @@ public partial class AdminRuntime
             if (p.TryGetProperty("limit", out var lEl) && lEl.TryGetInt32(out var l)) limit = Math.Clamp(l, 1, 200);
         }
 
-        var cards = await _teamMarkdownRepository.SearchSavedViewsAsync(query, status, limit, ct);
+        var (cards, searchDbError, searchDbMsg) = await _teamMarkdownRepository.SearchSavedViewsAsync(query, status, limit, ct);
+        if (searchDbError is not null)
+            return (null, new ValidationError(searchDbError, searchDbMsg ?? searchDbError));
         return (JsonSerializer.SerializeToElement(new { ok = true, savedViews = cards }), null);
     }
 
@@ -252,14 +266,17 @@ public partial class AdminRuntime
         if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
 
-        var detail = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        var (detail, getDbError, getDbMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        if (getDbError is not null)
+            return (null, new ValidationError(getDbError, getDbMsg ?? getDbError));
         if (detail is null)
             return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found"));
 
         var seedError = CompletedPresetSeedValidator.Validate(detail.CompletedPresetSeedJson);
         var seedValid = seedError is null;
 
-        await _teamMarkdownRepository.AppendEventAsync(savedViewId, "click_expand", null,
+        // Event append is best-effort: click_expand event failure does not block the get response.
+        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "click_expand", null,
             JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
 
         return (JsonSerializer.SerializeToElement(new { ok = true, savedView = detail, seedValid, seedError = seedError?.Message }), null);
@@ -277,7 +294,9 @@ public partial class AdminRuntime
         if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
 
-        var existing = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        var (existing, refreshDbError, refreshDbMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        if (refreshDbError is not null)
+            return (null, new ValidationError(refreshDbError, refreshDbMsg ?? refreshDbError));
         if (existing is null)
             return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found"));
 
@@ -307,7 +326,8 @@ public partial class AdminRuntime
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        await _teamMarkdownRepository.AppendEventAsync(savedViewId, "refresh", null,
+        // Event append is best-effort.
+        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "refresh", null,
             JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
 
         _logger.LogInformation("AdminRuntime.TeamMarkdown.SavedViewRefresh: savedViewId={SavedViewId}", savedViewId);
@@ -348,7 +368,8 @@ public partial class AdminRuntime
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
-        await _teamMarkdownRepository.AppendEventAsync(savedViewId, "update", null,
+        // Event append is best-effort.
+        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "update", null,
             JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
 
         return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);
@@ -370,7 +391,8 @@ public partial class AdminRuntime
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, $"Archive failed for saved view {savedViewId}"));
 
-        await _teamMarkdownRepository.AppendEventAsync(savedViewId, "archive", null,
+        // Event append is best-effort.
+        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "archive", null,
             JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
 
         return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);

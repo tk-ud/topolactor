@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS topology.team_markdown_template_registry (
     template_label          TEXT        NOT NULL,
     template_markdown       TEXT        NOT NULL DEFAULT '',
     placeholder_schema_json JSONB       NOT NULL DEFAULT '{}'::jsonb,
-    status                  TEXT        NOT NULL DEFAULT 'draft',
+    status                  TEXT        NOT NULL DEFAULT 'active',
     created_by              UUID,
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),

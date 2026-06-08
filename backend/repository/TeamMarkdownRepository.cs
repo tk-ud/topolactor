@@ -31,15 +31,15 @@ public abstract class TeamMarkdownRepository
 
     // ─── template list ───────────────────────────────────────────────────────
 
-    public virtual Task<IReadOnlyList<TeamMarkdownTemplateListItem>>
+    public virtual Task<(IReadOnlyList<TeamMarkdownTemplateListItem> Items, string? ErrorCode, string? Message)>
         ListTemplatesAsync(string status = "active", CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<TeamMarkdownTemplateListItem>>([]);
+        => Task.FromResult<(IReadOnlyList<TeamMarkdownTemplateListItem>, string?, string?)>(([], null, null));
 
     // ─── template get ────────────────────────────────────────────────────────
 
-    public virtual Task<TeamMarkdownTemplateDetail?>
+    public virtual Task<(TeamMarkdownTemplateDetail? Detail, string? ErrorCode, string? Message)>
         GetTemplateAsync(Guid templateId, CancellationToken ct = default)
-        => Task.FromResult<TeamMarkdownTemplateDetail?>(null);
+        => Task.FromResult<(TeamMarkdownTemplateDetail?, string?, string?)>((null, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 
     // ─── template update ─────────────────────────────────────────────────────
 
@@ -61,15 +61,15 @@ public abstract class TeamMarkdownRepository
 
     // ─── saved view search ───────────────────────────────────────────────────
 
-    public virtual Task<IReadOnlyList<TeamMarkdownSavedViewCard>>
+    public virtual Task<(IReadOnlyList<TeamMarkdownSavedViewCard> Cards, string? ErrorCode, string? Message)>
         SearchSavedViewsAsync(string? query, string status = "active", int limit = 50, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<TeamMarkdownSavedViewCard>>([]);
+        => Task.FromResult<(IReadOnlyList<TeamMarkdownSavedViewCard>, string?, string?)>(([], null, null));
 
     // ─── saved view get ──────────────────────────────────────────────────────
 
-    public virtual Task<TeamMarkdownSavedViewDetail?>
+    public virtual Task<(TeamMarkdownSavedViewDetail? Detail, string? ErrorCode, string? Message)>
         GetSavedViewAsync(Guid savedViewId, CancellationToken ct = default)
-        => Task.FromResult<TeamMarkdownSavedViewDetail?>(null);
+        => Task.FromResult<(TeamMarkdownSavedViewDetail?, string?, string?)>((null, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 
     // ─── saved view update ───────────────────────────────────────────────────
 

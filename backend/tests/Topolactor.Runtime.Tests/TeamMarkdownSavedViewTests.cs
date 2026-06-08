@@ -14,8 +14,9 @@ using Xunit;
 ///   - Refresh uses completed_preset_seed_json, not Markdown body parsing
 ///   - User adjustment patch is preserved during refresh
 ///
-/// TOPOLACTOR_TEST_DB_CONNECTION unset means explicit local skip.
-/// Set TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 to require a live database in CI.
+/// TOPOLACTOR_TEST_DB_CONNECTION unset: live-DB tests return early (intentional conditional skip,
+/// not a vacuous pass — tests make no assertions when skipped).
+/// Set TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1 to require a live database in CI (throws if unset).
 ///
 /// SSOT: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
 /// </summary>
@@ -120,7 +121,8 @@ public class TeamMarkdownSavedViewTests
             Assert.NotNull(templateId);
             Assert.True(Guid.TryParse(templateId, out _));
 
-            var fetched = await repo.GetTemplateAsync(Guid.Parse(templateId!));
+            var (fetched, fetchErr, _) = await repo.GetTemplateAsync(Guid.Parse(templateId!));
+            Assert.Null(fetchErr);
             Assert.NotNull(fetched);
             Assert.Equal(request.TemplateKey, fetched!.TemplateKey);
             Assert.Equal(request.TemplateMarkdown, fetched.TemplateMarkdown);
@@ -167,7 +169,8 @@ public class TeamMarkdownSavedViewTests
                 Assert.Null(errorCode);
                 Assert.NotNull(savedViewId);
 
-                var fetched = await templateRepo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+                var (fetched, fetchViewErr, _) = await templateRepo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+                Assert.Null(fetchViewErr);
                 Assert.NotNull(fetched);
                 Assert.Equal("Test Saved View", fetched!.Title);
                 Assert.Equal("active", fetched.Status);
@@ -217,7 +220,8 @@ public class TeamMarkdownSavedViewTests
 
         try
         {
-            var results = await repo.SearchSavedViewsAsync(suffix);
+            var (results, searchErr2, _) = await repo.SearchSavedViewsAsync(suffix);
+            Assert.Null(searchErr2);
             Assert.Contains(results, c => c.SavedViewId == savedViewId);
         }
         finally
@@ -271,7 +275,8 @@ public class TeamMarkdownSavedViewTests
             Assert.Null(errorCode);
             Assert.True(updated);
 
-            var fetched = await repo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+            var (fetched, fetchErr2, _) = await repo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+            Assert.Null(fetchErr2);
             Assert.NotNull(fetched);
             Assert.Equal(refreshedMarkdown, fetched!.RenderedMarkdown);
 
@@ -319,11 +324,13 @@ public class TeamMarkdownSavedViewTests
             Assert.Null(errorCode);
             Assert.True(updated);
 
-            var fetched = await repo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+            var (fetched, fetchErr3, _) = await repo.GetSavedViewAsync(Guid.Parse(savedViewId!));
+            Assert.Null(fetchErr3);
             Assert.NotNull(fetched);
             Assert.Equal("archived", fetched!.Status);
 
-            var activeResults = await repo.SearchSavedViewsAsync(null, "active");
+            var (activeResults, searchErr, _) = await repo.SearchSavedViewsAsync(null, "active");
+            Assert.Null(searchErr);
             Assert.DoesNotContain(activeResults, c => c.SavedViewId == savedViewId);
         }
         finally
@@ -361,7 +368,12 @@ public class TeamMarkdownSavedViewTests
             cmd.Parameters.AddWithValue("id", templateId);
             await cmd.ExecuteNonQueryAsync();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Best-effort cleanup: swallow intentionally so test assertion errors are not masked.
+            // Orphaned rows may remain if this fails repeatedly — check DB manually.
+            _ = ex;
+        }
     }
 
     private static async Task CleanupSavedViewAsync(string cs, Guid savedViewId)
@@ -370,12 +382,21 @@ public class TeamMarkdownSavedViewTests
         {
             await using var conn = new NpgsqlConnection(cs);
             await conn.OpenAsync();
-            await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM topology.team_markdown_saved_view_event WHERE saved_view_id = @id; " +
-                              "DELETE FROM topology.team_markdown_saved_view WHERE saved_view_id = @id";
-            cmd.Parameters.AddWithValue("id", savedViewId);
-            await cmd.ExecuteNonQueryAsync();
+            // Delete events first (FK child), then the saved view row.
+            await using var evtCmd = conn.CreateCommand();
+            evtCmd.CommandText = "DELETE FROM topology.team_markdown_saved_view_event WHERE saved_view_id = @id";
+            evtCmd.Parameters.AddWithValue("id", savedViewId);
+            await evtCmd.ExecuteNonQueryAsync();
+
+            await using var svCmd = conn.CreateCommand();
+            svCmd.CommandText = "DELETE FROM topology.team_markdown_saved_view WHERE saved_view_id = @id";
+            svCmd.Parameters.AddWithValue("id", savedViewId);
+            await svCmd.ExecuteNonQueryAsync();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            // Best-effort cleanup: swallow intentionally so test assertion errors are not masked.
+            _ = ex;
+        }
     }
 }

@@ -96,6 +96,7 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
   };
 
   const handleExpand = async (savedViewId: string) => {
+    if (expandLoading) return;  // prevent concurrent expand requests
     setExpandLoading(true);
     try {
       const result = await getSavedView(savedViewId);

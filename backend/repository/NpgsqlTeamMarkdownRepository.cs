@@ -58,7 +58,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
 
     // ─── template list ───────────────────────────────────────────────────────
 
-    public override async Task<IReadOnlyList<TeamMarkdownTemplateListItem>>
+    public override async Task<(IReadOnlyList<TeamMarkdownTemplateListItem> Items, string? ErrorCode, string? Message)>
         ListTemplatesAsync(string status = "active", CancellationToken ct = default)
     {
         try
@@ -85,18 +85,18 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                     UpdatedAt: reader.GetDateTime(5).ToString("o")
                 ));
             }
-            return results;
+            return (results, null, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "NpgsqlTeamMarkdownRepository.ListTemplatesAsync failed");
-            return [];
+            return ([], "DB_UNAVAILABLE", ex.Message);
         }
     }
 
     // ─── template get ────────────────────────────────────────────────────────
 
-    public override async Task<TeamMarkdownTemplateDetail?>
+    public override async Task<(TeamMarkdownTemplateDetail? Detail, string? ErrorCode, string? Message)>
         GetTemplateAsync(Guid templateId, CancellationToken ct = default)
     {
         try
@@ -111,8 +111,8 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 "WHERE template_id = @id";
             cmd.Parameters.AddWithValue("id", templateId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) return null;
-            return new TeamMarkdownTemplateDetail(
+            if (!await reader.ReadAsync(ct)) return (null, null, null);
+            return (new TeamMarkdownTemplateDetail(
                 TemplateId: reader.GetGuid(0).ToString(),
                 TemplateKey: reader.GetString(1),
                 TemplateLabel: reader.GetString(2),
@@ -121,12 +121,12 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 Status: reader.GetString(5),
                 CreatedAt: reader.GetDateTime(6).ToString("o"),
                 UpdatedAt: reader.GetDateTime(7).ToString("o")
-            );
+            ), null, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "NpgsqlTeamMarkdownRepository.GetTemplateAsync failed");
-            return null;
+            return (null, "DB_UNAVAILABLE", ex.Message);
         }
     }
 
@@ -225,7 +225,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
 
     // ─── saved view search ───────────────────────────────────────────────────
 
-    public override async Task<IReadOnlyList<TeamMarkdownSavedViewCard>>
+    public override async Task<(IReadOnlyList<TeamMarkdownSavedViewCard> Cards, string? ErrorCode, string? Message)>
         SearchSavedViewsAsync(string? query, string status = "active", int limit = 50, CancellationToken ct = default)
     {
         try
@@ -268,18 +268,18 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                     CardMetadataJson: JsonSerializer.Deserialize<JsonElement>(reader.GetString(7))
                 ));
             }
-            return results;
+            return (results, null, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "NpgsqlTeamMarkdownRepository.SearchSavedViewsAsync failed");
-            return [];
+            return ([], "DB_UNAVAILABLE", ex.Message);
         }
     }
 
     // ─── saved view get ──────────────────────────────────────────────────────
 
-    public override async Task<TeamMarkdownSavedViewDetail?>
+    public override async Task<(TeamMarkdownSavedViewDetail? Detail, string? ErrorCode, string? Message)>
         GetSavedViewAsync(Guid savedViewId, CancellationToken ct = default)
     {
         try
@@ -297,8 +297,8 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 "WHERE sv.saved_view_id = @id";
             cmd.Parameters.AddWithValue("id", savedViewId);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
-            if (!await reader.ReadAsync(ct)) return null;
-            return new TeamMarkdownSavedViewDetail(
+            if (!await reader.ReadAsync(ct)) return (null, null, null);
+            return (new TeamMarkdownSavedViewDetail(
                 SavedViewId: reader.GetGuid(0).ToString(),
                 TemplateId: reader.GetGuid(1).ToString(),
                 TemplateKey: reader.GetString(2),
@@ -314,12 +314,12 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 Status: reader.GetString(12),
                 CreatedAt: reader.GetDateTime(13).ToString("o"),
                 UpdatedAt: reader.GetDateTime(14).ToString("o")
-            );
+            ), null, null);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "NpgsqlTeamMarkdownRepository.GetSavedViewAsync failed");
-            return null;
+            return (null, "DB_UNAVAILABLE", ex.Message);
         }
     }
 
