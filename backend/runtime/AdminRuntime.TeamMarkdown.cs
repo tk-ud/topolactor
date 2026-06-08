@@ -90,9 +90,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var templateId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("TEMPLATE_ID_REQUIRED", "idOrHubId must be a valid template UUID"));
+        var templateId = vector.IdOrHubId.Value;
 
         var (detail, dbError, dbMsg) = await _teamMarkdownRepository.GetTemplateAsync(templateId, ct);
         if (dbError is not null)
@@ -111,9 +111,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var templateId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("TEMPLATE_ID_REQUIRED", "idOrHubId must be a valid template UUID"));
+        var templateId = vector.IdOrHubId.Value;
 
         if (vector.Payload is null)
             return (null, new ValidationError("TEMPLATE_PAYLOAD_REQUIRED", "payload is required for team_markdown:template:update"));
@@ -143,9 +143,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var templateId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("TEMPLATE_ID_REQUIRED", "idOrHubId must be a valid template UUID"));
+        var templateId = vector.IdOrHubId.Value;
 
         var (updated, errorCode) = await _teamMarkdownRepository.ArchiveTemplateAsync(templateId, ct);
         if (errorCode is not null)
@@ -262,9 +262,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        var savedViewId = vector.IdOrHubId.Value;
 
         var (detail, getDbError, getDbMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
         if (getDbError is not null)
@@ -290,9 +290,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        var savedViewId = vector.IdOrHubId.Value;
 
         var (existing, refreshDbError, refreshDbMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
         if (refreshDbError is not null)
@@ -342,9 +342,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        var savedViewId = vector.IdOrHubId.Value;
 
         if (vector.Payload is null)
             return (null, new ValidationError("SAVED_VIEW_PAYLOAD_REQUIRED", "payload is required for team_markdown:saved_view:update"));
@@ -383,9 +383,9 @@ public partial class AdminRuntime
         if (_teamMarkdownRepository is null)
             return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
 
-        var idStr = vector.IdOrHubId;
-        if (string.IsNullOrWhiteSpace(idStr) || !Guid.TryParse(idStr, out var savedViewId))
+        if (vector.IdOrHubId is null)
             return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        var savedViewId = vector.IdOrHubId.Value;
 
         var (updated, errorCode) = await _teamMarkdownRepository.ArchiveSavedViewAsync(savedViewId, ct);
         if (errorCode is not null)
