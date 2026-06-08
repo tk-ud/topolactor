@@ -437,6 +437,40 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+
+  - work_type: mock_preset_intake_compiler_ui_builder_preset_registry
+    change_surfaces:
+      - mock preset intake compiler
+      - mock_preset_intake_compiler
+      - UIBuilder preset registry
+      - UIBuilder preset uploader
+      - UIBuilder saved preset load select
+      - SVG XML mock intake
+      - generic XML visual mock intake
+      - Figma-like visual mock intake
+      - preset registry
+      - preset loader
+      - reusable draft template
+      - component bucket mapping
+      - component catalog mapping
+      - structural_html mapping
+      - capability-gated wiring
+      - capabilityTags gate wiring
+      - preset bind to selected route package
+      - UIBuilder tmp canvas draft
+      - preview validate apply boundary
+      - topology.mock_preset_* planned schema surface
+      - docs/design/mock-preset-intake-compiler-ssot.yaml
+    required_docs:
+      - docs/design/mock-preset-intake-compiler-ssot.yaml
+    supporting_docs:
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+
   - work_type: cli_model_context_protocols_port
     change_surfaces:
       - cli_model_context_protocols_port

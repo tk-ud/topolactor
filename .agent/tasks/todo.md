@@ -10,6 +10,7 @@
 |-----------|------|--------|------|---------|
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `mock-preset-intake-compiler` | Mock Preset Intake Compiler / UIBuilder Preset Registry | not_started | 9 | `docs/design/mock-preset-intake-compiler-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `ui-builder-default-route-navigation` | UI Builder ルート遷移デフォルト配線 | implemented | 1 | `docs/design/admin-console-workflow-ssot.yaml` |
 
@@ -35,6 +36,24 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - [ ] Desktop AI / CLI / MCP Reader 向けに、plain business language と approval boundary のライティング方針を整理する
 
 ---
+
+
+## Bundle `mock-preset-intake-compiler`
+
+**Status:** not_started  
+**SSOT:** `docs/design/mock-preset-intake-compiler-ssot.yaml`
+
+External SVG/XML/Figma-like visual mock は runtime SSOT ではなく、AI inference なしで取り込む non-authoritative visual source snapshot。保存済み preset は reusable draft template であり、load 時は selected route package の tmp canvas draft に bind し、preview / validate / apply を経るまで active topology へ直接保存しない。
+
+- [ ] `topology.mock_preset_*` tables migration を作成する（registry / object_mapping / wiring_candidate / compile_snapshot）
+- [ ] backend admin runtime actions for preset create/list/get/compile/bind を実装する
+- [ ] UIBuilder preset uploader modal_or_drawer を実装する（SVG/XML/Figma-like visual mock intake、AI inference なし）
+- [ ] UIBuilder save current canvas as preset button を実装する
+- [ ] UIBuilder saved preset load select を実装する
+- [ ] loaded preset bind to selected route package tmp canvas draft を実装し、active topology への直接保存を禁止する
+- [ ] capabilityTags gate wiring / binding UI を配線する
+- [ ] preview / validate / apply boundary preservation を検証・実装する
+- [ ] unresolved object visibility を実装する
 
 ## Bundle `product-nocode-loop-acceptance`
 
