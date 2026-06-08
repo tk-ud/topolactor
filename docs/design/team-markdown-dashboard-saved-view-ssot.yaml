@@ -151,8 +151,8 @@ team_markdown_dashboard_saved_view_ssot:
       - saved_markdown_view_result_list
       - saved_markdown_view_cards
       - click_to_expand_drawer_or_panel
-      - template_registration_modal_or_drawer
-      - bind_template_to_record_modal_or_drawer
+      - md_translation_template_seed_registration_surface
+      - md_translation_binding_seed_authoring_surface
     result_card_fields:
       - saved_view_id
       - title
@@ -391,13 +391,13 @@ team_markdown_dashboard_saved_view_ssot:
         - field_binding
         - accepts_design
         - accepts_layout
-    markdown_template_registry_form:
+    md_translation_template_seed_registration_surface:
       role: template_registration_and_editing_surface
       capability_tags:
         - controlled_value
         - field_binding
         - emits_event
-    record_markdown_bind_form:
+    md_translation_binding_seed_authoring_surface:
       role: map_template_placeholders_to_record_fields
       capability_tags:
         - controlled_value
@@ -435,7 +435,7 @@ team_markdown_dashboard_saved_view_ssot:
       refs:
         - docs/framework-core.yaml#data_driven_topology_runtime_framework.philosophy.principles
         - docs/framework-core.yaml#data_driven_topology_runtime_framework.ssot_contract_axis.static_vocabulary_vs_seed_instance_boundary
-      interpretation: template_registration_modal_or_drawer and bind_template_to_record_modal_or_drawer are seed-driven authoring surfaces using existing component bucket parts; they are not requests to create bespoke Markdown-only modal/drawer components.
+      interpretation: md_translation_template_seed_registration_surface and md_translation_binding_seed_authoring_surface are seed-driven authoring surfaces using existing component bucket parts; they are not requests to create bespoke Markdown-only modal/drawer/form components.
     runtime_orchestration:
       ref: docs/design/runtime-orchestration-ssot.yaml
       role: backend action boundary and explicit failure behavior

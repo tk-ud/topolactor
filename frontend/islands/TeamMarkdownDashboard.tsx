@@ -7,7 +7,7 @@
  *   - Saved view result cards with click-to-expand drawer/panel
  *   - Display rendered Markdown in expanded view via MdViewer component
  *   - Show preset seed summary and binding summary in expanded view
- *   - Template registration modal/drawer entry point
+ *   - Seed-driven md translation authoring surface using existing component bucket parts
  *
  * Prohibited (per SSOT):
  *   - Direct DB write from frontend (all mutations via backend admin action)
@@ -21,10 +21,21 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   archiveSavedView,
+  archiveTemplate,
+  buildMdTranslationAuthoringSeedCandidate,
+  buildPlaceholderSchemaFromMarkdown,
+  createSavedView,
+  createTemplate,
+  extractMarkdownPlaceholders,
   getSavedView,
+  getTemplate,
+  listTemplates,
+  type PlaceholderBinding,
   type SavedViewCard,
   type SavedViewDetail,
   searchSavedViews,
+  type TemplateListItem,
+  updateTemplate,
 } from "../api/teamMarkdownApi.ts";
 import { MdViewer } from "../components/MdViewer.tsx";
 
@@ -71,6 +82,425 @@ type Props = {
 
 const FUTURE_BACKEND_ACTION_REASON =
   "Backend action is outside this completion bundle; no frontend call is made.";
+
+function splitCsv(value: string): string[] {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function MdTranslationAuthoringSeedSurface({
+  onCreated,
+}: {
+  onCreated: () => Promise<void>;
+}) {
+  const [templates, setTemplates] = useState<TemplateListItem[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [templateKey, setTemplateKey] = useState("daily_note_seed");
+  const [templateLabel, setTemplateLabel] = useState("Daily note seed");
+  const [templateMarkdown, setTemplateMarkdown] = useState(
+    "# {{title}}\n\nOwner: {{owner}}\n\n{{optional_note}}",
+  );
+  const [optionalKeys, setOptionalKeys] = useState("optional_note");
+  const [title, setTitle] = useState("Saved Markdown projection");
+  const [sourceTableRef, setSourceTableRef] = useState(
+    "topology.example_source",
+  );
+  const [sourceRecordRef, setSourceRecordRef] = useState("record-1");
+  const [bindingDraft, setBindingDraft] = useState<
+    Record<string, PlaceholderBinding>
+  >({});
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const placeholderSchema = buildPlaceholderSchemaFromMarkdown(
+    templateMarkdown,
+    splitCsv(optionalKeys),
+  );
+  const placeholders = extractMarkdownPlaceholders(
+    templateMarkdown,
+    placeholderSchema,
+  );
+
+  const reloadTemplates = useCallback(async () => {
+    try {
+      const response = await listTemplates("active");
+      if (!Array.isArray(response.templates)) {
+        throw new Error(
+          "[TEAM_MARKDOWN_TEMPLATE_LIST_RESPONSE_INVALID] templates array missing",
+        );
+      }
+      setTemplates(response.templates);
+      if (!templateId && response.templates[0]?.templateId) {
+        setTemplateId(response.templates[0].templateId);
+        setTemplateKey(response.templates[0].templateKey);
+        setTemplateLabel(response.templates[0].templateLabel);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Template list failed");
+    }
+  }, [templateId]);
+
+  useEffect(() => {
+    reloadTemplates();
+  }, []);
+
+  const upsertBinding = (
+    placeholderKey: string,
+    patch: Partial<PlaceholderBinding>,
+  ) => {
+    const required = placeholders.requiredPlaceholderKeys.includes(
+      placeholderKey,
+    );
+    setBindingDraft((current) => ({
+      ...current,
+      [placeholderKey]: {
+        bindingKind: "static_text",
+        ...current[placeholderKey],
+        ...patch,
+        placeholderKey,
+        required,
+      },
+    }));
+  };
+
+  const handleRegisterTemplate = async () => {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const created = templateId
+        ? await updateTemplate(
+          templateId,
+          templateLabel,
+          templateMarkdown,
+          "active",
+        )
+        : await createTemplate(
+          templateKey,
+          templateLabel,
+          templateMarkdown,
+          placeholderSchema,
+        );
+      if (templateId && created.ok) {
+        setStatus(`Template seed metadata updated: ${templateId}`);
+      } else if (created.ok && "templateId" in created && created.templateId) {
+        setTemplateId(created.templateId);
+        setStatus(`Template seed metadata registered: ${created.templateId}`);
+      } else {
+        throw new Error(
+          "[TEAM_MARKDOWN_TEMPLATE_RESPONSE_INVALID] template registration response invalid",
+        );
+      }
+      await reloadTemplates();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Template registration failed",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleArchiveTemplate = async () => {
+    if (!templateId) return;
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      await archiveTemplate(templateId);
+      setTemplateId("");
+      setStatus(`Template seed metadata archived: ${templateId}`);
+      await reloadTemplates();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Template archive failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSelectTemplate = async (selectedTemplateId: string) => {
+    setTemplateId(selectedTemplateId);
+    if (!selectedTemplateId) return;
+    setError(null);
+    try {
+      const response = await getTemplate(selectedTemplateId);
+      const selected = response.template;
+      setTemplateKey(selected.templateKey);
+      setTemplateLabel(selected.templateLabel);
+      setTemplateMarkdown(selected.templateMarkdown);
+      const optional = extractMarkdownPlaceholders(
+        selected.templateMarkdown,
+        selected.placeholderSchemaJson,
+      ).optionalPlaceholderKeys;
+      setOptionalKeys(optional.join(","));
+      setStatus(
+        `Selected template seed metadata ${selected.templateKey}. Edit fields and save to update metadata, or create a new key by clearing the selection.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Template get failed");
+    }
+  };
+
+  const buildCandidate = () =>
+    buildMdTranslationAuthoringSeedCandidate({
+      template: {
+        templateId: templateId || "00000000-0000-0000-0000-000000000000",
+        templateKey,
+        templateLabel,
+        templateMarkdown,
+        placeholderSchemaJson: placeholderSchema,
+      },
+      source: { sourceTableRef, sourceRecordRef },
+      bindings: placeholders.placeholderKeys.map((key) =>
+        bindingDraft[key] ?? {
+          placeholderKey: key,
+          required: placeholders.requiredPlaceholderKeys.includes(key),
+        }
+      ),
+      title,
+      dashboard: { tags: ["md_translation_authoring_seed_registration"] },
+    });
+
+  const handleCreateSavedView = async () => {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      if (!templateId) {
+        throw new Error(
+          "[TEMPLATE_SEED_REF_REQUIRED] register or select a template seed before saved view create",
+        );
+      }
+      const candidate = buildCandidate();
+      const created = await createSavedView({
+        templateId,
+        title,
+        sourceTableRef,
+        sourceRecordRef,
+        ...candidate,
+      });
+      setStatus(
+        `Saved Markdown projection created from seed candidate: ${created.savedViewId}`,
+      );
+      await onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Saved view create failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let candidatePreview = "";
+  try {
+    candidatePreview = JSON.stringify(
+      buildCandidate().completedPresetSeedJson,
+      null,
+      2,
+    );
+  } catch (err) {
+    candidatePreview = err instanceof Error
+      ? err.message
+      : "Seed candidate unavailable";
+  }
+
+  return (
+    <section
+      class="md-dashboard-authoring-surface"
+      aria-label="Seed-driven md translation authoring surface"
+      data-authoring-bundle="md_translation_authoring_seed_registration"
+      data-component-bucket-parts="panel input select textarea button existing_bucket_parts"
+    >
+      <h2>Seed-driven Markdown authoring</h2>
+      <p class="md-dashboard-authoring-note">
+        Uses existing component bucket parts as containers; this is not a
+        Markdown-only Modal/Drawer/Form component.
+        Template/source/binding/adjustment metadata drive the seed candidate,
+        and rendered Markdown remains a projection.
+      </p>
+
+      <div class="md-dashboard-authoring-grid">
+        <label>
+          Template seed registry
+          <select
+            value={templateId}
+            onInput={(e) =>
+              void handleSelectTemplate((e.target as HTMLSelectElement).value)}
+          >
+            <option value="">New template seed metadata</option>
+            {templates.map((template) => (
+              <option key={template.templateId} value={template.templateId}>
+                {template.templateKey}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Template key
+          <input
+            value={templateKey}
+            onInput={(e) =>
+              setTemplateKey((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label>
+          Template label
+          <input
+            value={templateLabel}
+            onInput={(e) =>
+              setTemplateLabel((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label>
+          Optional placeholders (comma-separated)
+          <input
+            value={optionalKeys}
+            onInput={(e) =>
+              setOptionalKeys((e.target as HTMLInputElement).value)}
+          />
+        </label>
+      </div>
+
+      <label class="md-dashboard-authoring-block">
+        Markdown template seed body (metadata input, not runtime SSOT)
+        <textarea
+          rows={5}
+          value={templateMarkdown}
+          onInput={(e) =>
+            setTemplateMarkdown((e.target as HTMLTextAreaElement).value)}
+        />
+      </label>
+
+      <div class="md-dashboard-authoring-actions">
+        <button type="button" onClick={handleRegisterTemplate} disabled={busy}>
+          {templateId
+            ? "Update template seed metadata"
+            : "Register template seed metadata"}
+        </button>
+        <button
+          type="button"
+          onClick={handleArchiveTemplate}
+          disabled={busy || !templateId}
+        >
+          Archive template seed metadata
+        </button>
+      </div>
+
+      <div class="md-dashboard-authoring-grid">
+        <label>
+          Saved view title
+          <input
+            value={title}
+            onInput={(e) => setTitle((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label>
+          Source table ref
+          <input
+            value={sourceTableRef}
+            onInput={(e) =>
+              setSourceTableRef((e.target as HTMLInputElement).value)}
+          />
+        </label>
+        <label>
+          Source record ref
+          <input
+            value={sourceRecordRef}
+            onInput={(e) =>
+              setSourceRecordRef((e.target as HTMLInputElement).value)}
+          />
+        </label>
+      </div>
+
+      <div
+        class="md-dashboard-placeholder-panel"
+        aria-label="Explicit placeholder bindings"
+      >
+        <h3>Explicit placeholder bindings</h3>
+        {placeholders.placeholderKeys.length === 0 && (
+          <p>No placeholders extracted.</p>
+        )}
+        {placeholders.placeholderKeys.map((key) => {
+          const current = bindingDraft[key] ??
+            {
+              placeholderKey: key,
+              required: placeholders.requiredPlaceholderKeys.includes(key),
+              bindingKind: "static_text" as const,
+            };
+          return (
+            <div
+              class="md-dashboard-binding-row"
+              key={key}
+              data-placeholder-key={key}
+            >
+              <strong>{key}</strong>
+              <span>{current.required ? "required" : "optional"}</span>
+              <select
+                value={current.bindingKind ?? ""}
+                onInput={(e) =>
+                  upsertBinding(key, {
+                    bindingKind: (e.target as HTMLSelectElement)
+                      .value as PlaceholderBinding["bindingKind"],
+                  })}
+              >
+                <option value="">Explicit empty/unbound</option>
+                <option value="static_text">Static text</option>
+                <option value="source_field">Source field</option>
+                <option value="jsonb_path">JSONB path</option>
+                <option value="saved_query_field">Saved query field</option>
+              </select>
+              <input
+                aria-label={`Binding ref for ${key}`}
+                placeholder="field/path/static text"
+                value={current.staticText ?? current.sourceFieldRef ??
+                  current.jsonbPath ?? current.savedQueryFieldRef ?? ""}
+                onInput={(e) => {
+                  const value = (e.target as HTMLInputElement).value;
+                  const bindingKind = current.bindingKind ?? "static_text";
+                  upsertBinding(key, {
+                    bindingKind,
+                    staticText: bindingKind === "static_text"
+                      ? value
+                      : undefined,
+                    sourceFieldRef: bindingKind === "source_field"
+                      ? value
+                      : undefined,
+                    jsonbPath: bindingKind === "jsonb_path" ? value : undefined,
+                    savedQueryFieldRef: bindingKind === "saved_query_field"
+                      ? value
+                      : undefined,
+                  });
+                }}
+              />
+              <input
+                aria-label={`Preview value for ${key}`}
+                placeholder="explicit preview value for projection"
+                value={current.previewValue ?? ""}
+                onInput={(e) =>
+                  upsertBinding(key, {
+                    previewValue: (e.target as HTMLInputElement).value,
+                  })}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      <div class="md-dashboard-authoring-actions">
+        <button type="button" onClick={handleCreateSavedView} disabled={busy}>
+          Create saved Markdown projection through team_markdown API
+        </button>
+      </div>
+      {status && (
+        <div class="md-dashboard-action-notice" role="status">{status}</div>
+      )}
+      {error && <div class="md-dashboard-error" role="alert">{error}</div>}
+      <details>
+        <summary>completed_preset_seed candidate preview</summary>
+        <pre>{candidatePreview}</pre>
+      </details>
+    </section>
+  );
+}
 
 export default function TeamMarkdownDashboard({
   defaultStatus = "active",
@@ -212,6 +642,8 @@ export default function TeamMarkdownDashboard({
           {loading ? "Searching…" : "Search"}
         </button>
       </form>
+
+      <MdTranslationAuthoringSeedSurface onCreated={() => doSearch(query)} />
 
       {searchError && (
         <div class="md-dashboard-error" role="alert" aria-live="assertive">

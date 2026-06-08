@@ -84,6 +84,55 @@ public class TeamMarkdownSavedViewTests
         Assert.Equal("COMPLETED_PRESET_SEED_RENDER_HASH_MISMATCH", error!.Code);
     }
 
+
+    [Fact]
+    public void SeedValidator_RejectsUnresolvedRequiredPlaceholderKeys()
+    {
+        var seed = JsonSerializer.SerializeToElement(new
+        {
+            seed_version = "md_translation_authoring_seed_registration.v1",
+            template_ref = new { template_key = "daily_note" },
+            source_ref = new { source_table_ref = "topology.source", source_record_ref = "record-1" },
+            binding_ref = new { unresolved_required_placeholder_keys = new[] { "owner" } },
+            render_ref = new
+            {
+                rendered_markdown_hash = "abc123",
+                unresolved_placeholder_keys = Array.Empty<string>()
+            },
+            adjustment_ref = new { },
+            dashboard_ref = new { title = "Daily" },
+            lineage_ref = new { created_from = "md_translation_authoring_seed_registration" }
+        });
+
+        var error = CompletedPresetSeedValidator.Validate(seed);
+        Assert.NotNull(error);
+        Assert.Equal("REQUIRED_PLACEHOLDER_UNBOUND", error!.Code);
+    }
+
+    [Fact]
+    public void SeedValidator_RejectsUnresolvedRenderPlaceholderKeys()
+    {
+        var seed = JsonSerializer.SerializeToElement(new
+        {
+            seed_version = "md_translation_authoring_seed_registration.v1",
+            template_ref = new { template_key = "daily_note" },
+            source_ref = new { source_table_ref = "topology.source", source_record_ref = "record-1" },
+            binding_ref = new { unresolved_required_placeholder_keys = Array.Empty<string>() },
+            render_ref = new
+            {
+                rendered_markdown_hash = "abc123",
+                unresolved_placeholder_keys = new[] { "owner" }
+            },
+            adjustment_ref = new { },
+            dashboard_ref = new { title = "Daily" },
+            lineage_ref = new { created_from = "md_translation_authoring_seed_registration" }
+        });
+
+        var error = CompletedPresetSeedValidator.Validate(seed);
+        Assert.NotNull(error);
+        Assert.Equal("REQUIRED_PLACEHOLDER_UNBOUND", error!.Code);
+    }
+
     [Fact]
     public void SeedValidator_AcceptsCompleteValidSeed()
     {

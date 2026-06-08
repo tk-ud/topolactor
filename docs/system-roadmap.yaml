@@ -621,7 +621,7 @@ system_roadmap_ssot:
       title: Component DB bind and Markdown saved-view authoring UI
       status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer and required placeholder blocking are not implemented; full binding authoring UI modal/drawer is pending.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer and required placeholder blocking are not implemented; seed-driven md translation authoring seed surfaces now provide a minimal template/source/binding/seed candidate/create flow; rendered_markdown/tags search, renderer completion, and deep validator coverage remain pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -659,9 +659,9 @@ system_roadmap_ssot:
         - frontend_does_not_write_DB_directly
         - markdown_body_is_not_runtime_SSOT
       known_gap_ref:
-        - template_bind_authoring_modal_or_drawer_UI_not_created
-        - record_markdown_bind_form_not_created
-        - template_registration_modal_not_created
+        - md_translation_template_seed_registration_surface_minimal_flow_needs_completion_hardening
+        - md_translation_binding_seed_authoring_surface_minimal_flow_needs_completion_hardening
+        - md_translation_saved_view_create_seed_flow_minimal_flow_needs_completion_hardening
         - search_scope_rendered_markdown_and_tags_not_searched
         - markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced
 
@@ -741,7 +741,7 @@ system_roadmap_ssot:
         - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
         - seed_invalid_state_disables_refresh_clone_in_frontend_MdViewer
       known_gap_ref:
-        - seed_builder_helper_for_client_side_construction_not_implemented
+        - seed_builder_helper_for_client_side_construction_minimal_entry_exists_deep_completion_pending
         - clone_action_backend_implementation_pending
         - rebind_action_not_designed_or_implemented
         - seed_validator_depth_nested_fields_not_validated_only_top_level_and_render_hash
