@@ -18,13 +18,13 @@
  *   - Search mutating saved views
  */
 
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import {
-  searchSavedViews,
-  getSavedView,
   archiveSavedView,
+  getSavedView,
   type SavedViewCard,
   type SavedViewDetail,
+  searchSavedViews,
 } from "../api/teamMarkdownApi.ts";
 import { MdViewer } from "../components/MdViewer.tsx";
 
@@ -37,12 +37,16 @@ function SavedViewResultCard({
   card: SavedViewCard;
   onExpand: (savedViewId: string) => void;
 }) {
-  const excerpt = String((card.cardMetadataJson as Record<string, unknown>).excerpt ?? "");
+  const excerpt = String(
+    (card.cardMetadataJson as Record<string, unknown>).excerpt ?? "",
+  );
   return (
     <article
       class="md-dashboard-card"
       onClick={() => onExpand(card.savedViewId)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onExpand(card.savedViewId); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onExpand(card.savedViewId);
+      }}
       role="button"
       tabIndex={0}
       aria-label={`Open saved view: ${card.title}`}
@@ -62,24 +66,41 @@ function SavedViewResultCard({
 
 type Props = {
   defaultStatus?: string;
+  placement?: "admin_route" | "ui_builder_child_surface";
 };
 
-export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Props) {
+const FUTURE_BACKEND_ACTION_REASON =
+  "Backend action is outside this completion bundle; no frontend call is made.";
+
+export default function TeamMarkdownDashboard({
+  defaultStatus = "active",
+  placement = "admin_route",
+}: Props) {
   const [query, setQuery] = useState("");
   const [status] = useState(defaultStatus);
   const [cards, setCards] = useState<SavedViewCard[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [expandedView, setExpandedView] = useState<{ detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null>(null);
+  const [expandedView, setExpandedView] = useState<
+    { detail: SavedViewDetail; seedValid: boolean; seedError?: string } | null
+  >(null);
   const [expandLoading, setExpandLoading] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
     setLoading(true);
     setSearchError(null);
+    setActionNotice(null);
     try {
       const result = await searchSavedViews({ query: q || undefined, status });
+      if (!Array.isArray(result.savedViews)) {
+        throw new Error(
+          "[TEAM_MARKDOWN_SEARCH_RESPONSE_INVALID] saved_view:search response missing savedViews array",
+        );
+      }
       setCards(result.savedViews);
     } catch (err) {
+      setCards([]);
       setSearchError(err instanceof Error ? err.message : "Search failed");
     } finally {
       setLoading(false);
@@ -96,13 +117,19 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
   };
 
   const handleExpand = async (savedViewId: string) => {
-    if (expandLoading) return;  // prevent concurrent expand requests
+    if (expandLoading) return; // prevent concurrent expand requests
     setExpandLoading(true);
     try {
       const result = await getSavedView(savedViewId);
-      setExpandedView({ detail: result.savedView, seedValid: result.seedValid, seedError: result.seedError });
+      setExpandedView({
+        detail: result.savedView,
+        seedValid: result.seedValid,
+        seedError: result.seedError,
+      });
     } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Failed to load saved view");
+      setSearchError(
+        err instanceof Error ? err.message : "Failed to load saved view",
+      );
     } finally {
       setExpandLoading(false);
     }
@@ -111,6 +138,7 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
   const handleClose = () => setExpandedView(null);
 
   const handleArchive = async (savedViewId: string) => {
+    setActionNotice(null);
     try {
       await archiveSavedView(savedViewId);
       setExpandedView(null);
@@ -120,14 +148,51 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
     }
   };
 
+  const handleOpenSourceRecord = (
+    sourceTableRef: string,
+    sourceRecordRef: string,
+  ) => {
+    setActionNotice(
+      `Source record candidate: ${sourceTableRef} / ${sourceRecordRef}. Opening a source-record editor is a UI-only boundary in this bundle.`,
+    );
+  };
+
+  const handleEditAdjustment = (savedViewId: string) => {
+    setActionNotice(
+      `Adjustment edit candidate for ${savedViewId}. Inline adjustment editor UI is not completed in this bundle.`,
+    );
+  };
+
+  const handleCreateTodoCandidate = (savedViewId: string) => {
+    setActionNotice(
+      `Follow-up todo candidate prepared for saved view ${savedViewId}. Canonical TODO persistence is intentionally not performed from this projection surface.`,
+    );
+  };
+
   return (
-    <div class="md-dashboard" aria-label="Team Markdown Dashboard">
+    <div
+      class="md-dashboard"
+      aria-label="Team Markdown Dashboard"
+      data-placement={placement}
+    >
       <header class="md-dashboard-header">
+        <p class="md-dashboard-placement-label">
+          {placement === "ui_builder_child_surface"
+            ? "UIBuilder preset_ecosystem child surface — projection only"
+            : "Admin route dashboard — projection only"}
+        </p>
         <h1 class="md-dashboard-heading">Markdown Dashboard</h1>
       </header>
 
-      <form class="md-dashboard-search-form" onSubmit={handleSearchSubmit} role="search">
-        <label for="md-dashboard-search-input" class="md-dashboard-search-label">
+      <form
+        class="md-dashboard-search-form"
+        onSubmit={handleSearchSubmit}
+        role="search"
+      >
+        <label
+          for="md-dashboard-search-input"
+          class="md-dashboard-search-label"
+        >
           Search saved views
         </label>
         <input
@@ -139,7 +204,11 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
           placeholder="Search by title, content, or source table..."
           aria-label="Search saved Markdown views"
         />
-        <button type="submit" class="md-dashboard-search-btn" disabled={loading}>
+        <button
+          type="submit"
+          class="md-dashboard-search-btn"
+          disabled={loading}
+        >
           {loading ? "Searching…" : "Search"}
         </button>
       </form>
@@ -147,6 +216,16 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
       {searchError && (
         <div class="md-dashboard-error" role="alert" aria-live="assertive">
           {searchError}
+        </div>
+      )}
+
+      {actionNotice && (
+        <div
+          class="md-dashboard-action-notice"
+          role="status"
+          aria-live="polite"
+        >
+          {actionNotice}
         </div>
       )}
 
@@ -162,7 +241,11 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
         </div>
       )}
 
-      <section class="md-dashboard-results" aria-label="Search results" aria-live="polite">
+      <section
+        class="md-dashboard-results"
+        aria-label="Search results"
+        aria-live="polite"
+      >
         {cards.map((card) => (
           <SavedViewResultCard
             key={card.savedViewId}
@@ -173,13 +256,25 @@ export default function TeamMarkdownDashboard({ defaultStatus = "active" }: Prop
       </section>
 
       {expandedView && (
-        <div class="md-dashboard-drawer-overlay" role="dialog" aria-modal="true">
+        <div
+          class="md-dashboard-drawer-overlay"
+          role="dialog"
+          aria-modal="true"
+        >
           <MdViewer
             savedView={expandedView.detail}
             seedValid={expandedView.seedValid}
             seedError={expandedView.seedError}
             onClose={handleClose}
             onArchive={handleArchive}
+            onOpenSourceRecord={handleOpenSourceRecord}
+            onEditAdjustment={handleEditAdjustment}
+            onCreateTodoCandidate={handleCreateTodoCandidate}
+            disabledActionReasons={{
+              refresh: FUTURE_BACKEND_ACTION_REASON,
+              clone: FUTURE_BACKEND_ACTION_REASON,
+              rebind: FUTURE_BACKEND_ACTION_REASON,
+            }}
           />
         </div>
       )}

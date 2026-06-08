@@ -103,6 +103,7 @@ runtime_orchestration_ssot:
       - /admin/manifests
       - /admin/contents
       - /admin/ui-builder
+      - /admin/team-dashboard
       - /admin/enums
       - /admin/users
 

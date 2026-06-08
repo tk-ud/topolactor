@@ -13,6 +13,7 @@ admin_console_workflow_ssot:
       - /admin/manifests
       - /admin/contents
       - /admin/ui-builder
+      - /admin/team-dashboard
 
   purpose:
     - keep the admin authoring routes aligned with runtime-orchestration route authority
@@ -365,8 +366,8 @@ admin_console_workflow_ssot:
                 role: preset_child_saved_markdown_view_seed_and_md_viewer
                 hard_gate: completed_preset_seed_json
             implementation_status:
-              current: not_started
-              scope: SSOT parent placement only; no implementation, DB migration, UI component, backend runtime action, or TODO bundle.
+              current: partial_ui_child_surface_mounted
+              scope: md_viewer child surface is mounted as a projection-only Team Markdown Dashboard placement inside /admin/ui-builder; seed builder, renderer, clone/rebind, and preset DB seed registration remain separate bundles.
       prohibited:
         - explicit packaging button, confirm-then-package dialog, or checkbox multi-select submit as primary path
         - two-step select-then-package phase framing

@@ -53,7 +53,10 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - `Program.cs` に `NpgsqlTeamMarkdownRepository` DI 登録追加
 - `frontend/api/teamMarkdownApi.ts` (全 API 関数)
 - `frontend/components/MdViewer.tsx` (hardcoded projection component)
-- `frontend/islands/TeamMarkdownDashboard.tsx` (search input, result cards, click expand drawer)
+- `frontend/islands/TeamMarkdownDashboard.tsx` (search input, result cards, click expand drawer, UI-only action boundary notices)
+- `frontend/routes/admin/team-dashboard/index.tsx` (`/admin/team-dashboard` AdminAuthGate routable placement)
+- `frontend/islands/UiBuilderAdmin.tsx` (UIBuilder preset_ecosystem `md_viewer` child projection surface placement)
+- `frontend/components/catalog.ts` (`md_viewer.projection` catalog visibility as projection child, not seed registration)
 - `backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs`
 - `frontend/tests/teamMarkdownSavedView.test.ts`
 - `check-bootstrap-validation.sh` に team_markdown テーブル検証追加
@@ -65,14 +68,14 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 - [ ] **seed_validator_depth_completion**: CompletedPresetSeedValidator を nested required fields (binding_ref.required_placeholder_keys, dashboard_ref.card_metadata_json, dashboard_ref.search_index_basis_json, adjustment_ref.user_adjustment_patch_json 等) まで検証するよう completion。SSOT completion_condition: `completed_preset_seed_validation_blocks_incomplete_seed`。Roadmap known_gap: `product.completed_preset_seed_projection_gate#seed_validator_depth_nested_fields_not_validated_only_top_level_and_render_hash`
 - [ ] **markdown_binding_renderer_completion**: explicit binding resolver (placeholder → record field value 解決)、required placeholder blocking (REQUIRED_PLACEHOLDER_UNBOUND)、optional placeholder empty-state handling の completion。SSOT completion_condition: `markdown_renderer_resolves_explicit_bindings_without_ai_inference`, `unresolved_required_placeholders_block_save`。Roadmap known_gap: `product.component_markdown_authoring_projection#markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced`
 - [ ] **refresh_rebind_clone_gate_completion**: clone backend action (AdminRuntime.TeamMarkdown.cs に saved_view:clone 追加)、rebind 設計または action、seed invalid block を backend/frontend 両方で完結。SSOT completion_condition: `result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed`。Roadmap known_gap: `product.completed_preset_seed_projection_gate#clone_action_backend_implementation_pending`, `rebind_action_not_designed_or_implemented`
-- [ ] **md_viewer_dashboard_action_wiring_completion**: TeamMarkdownDashboard から onRefresh / onEditAdjustment / onOpenSourceRecord / onCreateTodoCandidate / onClone を配線、または未配線の明示的理由を記述。Roadmap known_gap: `product.md_viewer_projection_component#md_viewer_dashboard_action_wiring_incomplete_only_onArchive_onClose_wired`
-- [ ] **dashboard_surface_mounting_completion**: /admin/team-dashboard route または UIBuilder/admin dashboard tab への routable placement。SSOT entry_surface.preferred: `/admin/team-dashboard`。Roadmap known_gap: `product.component_markdown_authoring_projection#dashboard_surface_not_mounted_no_route_for_admin_team_dashboard`
+- [x] **md_viewer_dashboard_action_wiring_completion (UI boundary scope)**: TeamMarkdownDashboard から open_source_record / edit_saved_view_adjustment / create_follow_up_todo_candidate を UI-only notice として配線し、refresh / clone / rebind は backend future boundary として明示 disabled。Roadmap known_gap removed from `product.md_viewer_projection_component`; backend refresh/clone/rebind completion remains in `refresh_rebind_clone_gate_completion`.
+- [x] **dashboard_surface_mounting_completion**: preferred `/admin/team-dashboard` route を AdminAuthGate 配下に作成し、UIBuilder child placement とは別に routable placement を完了。Roadmap known_gap removed from `product.component_markdown_authoring_projection`.
 - [ ] **preset_catalog_seed_registration_completion**: preset catalog seed rows / bootstrap registration / metadata DB registration。Roadmap known_gap: `product.preset_db_seed_registration#preset_catalog_seed_data_rows_not_yet_bootstrapped`
-- [ ] UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring — Roadmap known_gap: `product.md_viewer_projection_component#UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring_not_created`
+- [x] UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring — `/admin/ui-builder` 内に projection-only TeamMarkdownDashboard child surface を配置。Roadmap known_gap removed from `product.md_viewer_projection_component`.
 - [ ] template_registration_modal_or_drawer UI (frontend) — MarkdownTemplateRegistryForm — Roadmap known_gap: `product.component_markdown_authoring_projection#template_registration_modal_not_created`
 - [ ] record_markdown_bind_form UI (frontend) — RecordMarkdownBindForm — Roadmap known_gap: `product.component_markdown_authoring_projection#record_markdown_bind_form_not_created`
 - [ ] seed_builder helper for client-side construction — Roadmap known_gap: `product.completed_preset_seed_projection_gate#seed_builder_helper_for_client_side_construction_not_implemented`
-- [ ] full_drawer_placement_via_UIBuilder_canvas — Roadmap known_gap: `product.md_viewer_projection_component#full_drawer_placement_via_UIBuilder_canvas_not_wired`
+- [x] full_drawer_placement_via_UIBuilder_canvas — UIBuilder child surface 上の saved view card click から既存 MdViewer drawer/panel が開く配置を完了。Roadmap known_gap removed from `product.md_viewer_projection_component`.
 
 ---
 

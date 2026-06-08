@@ -18,9 +18,24 @@
  */
 
 import { useState } from "preact/hooks";
-import type { SavedViewDetail, CompletedPresetSeed } from "../api/teamMarkdownApi.ts";
+import type {
+  CompletedPresetSeed,
+  SavedViewDetail,
+} from "../api/teamMarkdownApi.ts";
 
 // ─── types ────────────────────────────────────────────────────────────────────
+
+export type MdViewerDisabledActionReasons = Partial<
+  Record<
+    | "refresh"
+    | "clone"
+    | "rebind"
+    | "editAdjustment"
+    | "openSourceRecord"
+    | "createTodoCandidate",
+    string
+  >
+>;
 
 export type MdViewerProps = {
   savedView: SavedViewDetail;
@@ -31,8 +46,12 @@ export type MdViewerProps = {
   onEditAdjustment?: (savedViewId: string) => void;
   onArchive?: (savedViewId: string) => void;
   onClone?: (savedViewId: string) => void;
-  onOpenSourceRecord?: (sourceTableRef: string, sourceRecordRef: string) => void;
+  onOpenSourceRecord?: (
+    sourceTableRef: string,
+    sourceRecordRef: string,
+  ) => void;
   onCreateTodoCandidate?: (savedViewId: string) => void;
+  disabledActionReasons?: MdViewerDisabledActionReasons;
 };
 
 // ─── seed summary ─────────────────────────────────────────────────────────────
@@ -42,10 +61,15 @@ function SeedSummary({ seed, seedValid, seedError }: {
   seedValid: boolean;
   seedError?: string;
 }) {
+  const unresolvedPlaceholderKeys =
+    seed.render_ref?.unresolved_placeholder_keys ?? [];
+
   if (!seedValid) {
     return (
       <div class="md-viewer-seed-error" role="alert" aria-live="assertive">
-        <strong>Preset seed invalid — refresh, rebind, and clone are disabled.</strong>
+        <strong>
+          Preset seed invalid — refresh, rebind, and clone are disabled.
+        </strong>
         {seedError && <p class="md-viewer-seed-error-detail">{seedError}</p>}
       </div>
     );
@@ -60,19 +84,23 @@ function SeedSummary({ seed, seedValid, seedError }: {
         <div class="md-viewer-seed-row">
           <span class="md-viewer-seed-label">Template:</span>
           <span class="md-viewer-seed-value">
-            {String((seed.template_ref as Record<string, unknown>).template_key ?? "")}
+            {String(
+              (seed.template_ref as Record<string, unknown>).template_key ?? "",
+            )}
           </span>
         </div>
       )}
       {seed.render_ref && (
         <div class="md-viewer-seed-row">
           <span class="md-viewer-seed-label">Rendered at:</span>
-          <span class="md-viewer-seed-value">{seed.render_ref.rendered_at}</span>
+          <span class="md-viewer-seed-value">
+            {seed.render_ref.rendered_at}
+          </span>
         </div>
       )}
-      {seed.render_ref?.unresolved_placeholder_keys?.length > 0 && (
+      {unresolvedPlaceholderKeys.length > 0 && (
         <div class="md-viewer-seed-unresolved" role="status">
-          Optional placeholders empty: {seed.render_ref.unresolved_placeholder_keys.join(", ")}
+          Optional placeholders empty: {unresolvedPlaceholderKeys.join(", ")}
         </div>
       )}
     </div>
@@ -81,7 +109,9 @@ function SeedSummary({ seed, seedValid, seedError }: {
 
 // ─── binding summary ──────────────────────────────────────────────────────────
 
-function BindingSummary({ bindingJson }: { bindingJson: Record<string, unknown> }) {
+function BindingSummary(
+  { bindingJson }: { bindingJson: Record<string, unknown> },
+) {
   const entries = Object.entries(bindingJson);
   if (entries.length === 0) return null;
   return (
@@ -102,11 +132,16 @@ function BindingSummary({ bindingJson }: { bindingJson: Record<string, unknown> 
 
 // ─── adjustment status ────────────────────────────────────────────────────────
 
-function AdjustmentStatus({ patchJson }: { patchJson: Record<string, unknown> }) {
+function AdjustmentStatus(
+  { patchJson }: { patchJson: Record<string, unknown> },
+) {
   const hasAdjustment = Object.keys(patchJson).length > 0;
   return (
     <div class="md-viewer-adjustment-status" aria-label="Adjustment status">
-      <span class="md-viewer-adjustment-badge" data-has-adjustment={String(hasAdjustment)}>
+      <span
+        class="md-viewer-adjustment-badge"
+        data-has-adjustment={String(hasAdjustment)}
+      >
         {hasAdjustment ? "Has user adjustment" : "No adjustment"}
       </span>
     </div>
@@ -126,6 +161,7 @@ function ActionToolbar({
   onCreateTodoCandidate,
   onCopyMarkdown,
   copyStatus,
+  disabledActionReasons = {},
 }: {
   savedView: SavedViewDetail;
   seedValid: boolean;
@@ -137,53 +173,80 @@ function ActionToolbar({
   onCreateTodoCandidate?: (id: string) => void;
   onCopyMarkdown: () => void;
   copyStatus: "idle" | "copied" | "error";
+  disabledActionReasons?: MdViewerDisabledActionReasons;
 }) {
+  const seedInvalidReason = !seedValid
+    ? "Seed invalid — action disabled"
+    : undefined;
+  const refreshDisabledReason = seedInvalidReason ??
+    disabledActionReasons.refresh;
+  const cloneDisabledReason = seedInvalidReason ?? disabledActionReasons.clone;
+  const openSourceDisabledReason = disabledActionReasons.openSourceRecord;
+  const editDisabledReason = disabledActionReasons.editAdjustment;
+  const createTodoDisabledReason = disabledActionReasons.createTodoCandidate;
+  const rebindDisabledReason = seedInvalidReason ??
+    disabledActionReasons.rebind ??
+    "Rebind backend action is not implemented in this bundle";
+
   return (
-    <div class="md-viewer-action-toolbar" role="toolbar" aria-label="Saved view actions">
-      {onOpenSourceRecord && (
-        <button
-          type="button"
-          class="md-viewer-action-btn"
-          onClick={() => onOpenSourceRecord(savedView.sourceTableRef, savedView.sourceRecordRef)}
-          aria-label="Open source record"
-        >
-          Open source record
-        </button>
-      )}
-      {onEditAdjustment && (
-        <button
-          type="button"
-          class="md-viewer-action-btn"
-          onClick={() => onEditAdjustment(savedView.savedViewId)}
-          aria-label="Edit saved view adjustment"
-        >
-          Edit adjustment
-        </button>
-      )}
-      {onRefresh && (
-        <button
-          type="button"
-          class="md-viewer-action-btn"
-          disabled={!seedValid}
-          onClick={() => onRefresh(savedView.savedViewId)}
-          aria-label="Refresh from source record"
-          title={seedValid ? "Refresh from source record" : "Seed invalid — refresh disabled"}
-        >
-          Refresh
-        </button>
-      )}
-      {onClone && (
-        <button
-          type="button"
-          class="md-viewer-action-btn"
-          disabled={!seedValid}
-          onClick={() => onClone(savedView.savedViewId)}
-          aria-label="Clone saved view to another record"
-          title={seedValid ? "Clone to another record" : "Seed invalid — clone disabled"}
-        >
-          Clone
-        </button>
-      )}
+    <div
+      class="md-viewer-action-toolbar"
+      role="toolbar"
+      aria-label="Saved view actions"
+    >
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled={!onOpenSourceRecord || Boolean(openSourceDisabledReason)}
+        onClick={() =>
+          onOpenSourceRecord?.(
+            savedView.sourceTableRef,
+            savedView.sourceRecordRef,
+          )}
+        aria-label="Open source record"
+        title={openSourceDisabledReason ?? "Open source record candidate"}
+      >
+        Open source record
+      </button>
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled={!onEditAdjustment || Boolean(editDisabledReason)}
+        onClick={() => onEditAdjustment?.(savedView.savedViewId)}
+        aria-label="Edit saved view adjustment"
+        title={editDisabledReason ?? "Edit saved view adjustment candidate"}
+      >
+        Edit adjustment
+      </button>
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled={!onRefresh || Boolean(refreshDisabledReason)}
+        onClick={() => onRefresh?.(savedView.savedViewId)}
+        aria-label="Refresh from source record"
+        title={refreshDisabledReason ?? "Refresh from source record"}
+      >
+        Refresh
+      </button>
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled={!onClone || Boolean(cloneDisabledReason)}
+        onClick={() => onClone?.(savedView.savedViewId)}
+        aria-label="Clone saved view to another record"
+        title={cloneDisabledReason ?? "Clone to another record"}
+      >
+        Clone
+      </button>
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled
+        aria-label="Rebind saved view to another source"
+        title={rebindDisabledReason}
+      >
+        Rebind
+      </button>
       <button
         type="button"
         class="md-viewer-action-btn"
@@ -191,18 +254,23 @@ function ActionToolbar({
         aria-label="Copy Markdown to clipboard"
         aria-live="polite"
       >
-        {copyStatus === "copied" ? "Copied!" : copyStatus === "error" ? "Copy failed" : "Copy Markdown"}
+        {copyStatus === "copied"
+          ? "Copied!"
+          : copyStatus === "error"
+          ? "Copy failed"
+          : "Copy Markdown"}
       </button>
-      {onCreateTodoCandidate && (
-        <button
-          type="button"
-          class="md-viewer-action-btn"
-          onClick={() => onCreateTodoCandidate(savedView.savedViewId)}
-          aria-label="Create follow-up todo candidate"
-        >
-          Create todo
-        </button>
-      )}
+      <button
+        type="button"
+        class="md-viewer-action-btn"
+        disabled={!onCreateTodoCandidate || Boolean(createTodoDisabledReason)}
+        onClick={() => onCreateTodoCandidate?.(savedView.savedViewId)}
+        aria-label="Create follow-up todo candidate"
+        title={createTodoDisabledReason ??
+          "Create local follow-up todo candidate"}
+      >
+        Create todo
+      </button>
       {onArchive && savedView.status !== "archived" && (
         <button
           type="button"
@@ -221,7 +289,10 @@ function ActionToolbar({
 
 function RenderedMarkdownPanel({ markdown }: { markdown: string }) {
   return (
-    <div class="md-viewer-rendered-markdown" aria-label="Rendered Markdown content">
+    <div
+      class="md-viewer-rendered-markdown"
+      aria-label="Rendered Markdown content"
+    >
       <pre class="md-viewer-markdown-pre">{markdown}</pre>
     </div>
   );
@@ -240,8 +311,11 @@ export function MdViewer({
   onClone,
   onOpenSourceRecord,
   onCreateTodoCandidate,
+  disabledActionReasons,
 }: MdViewerProps) {
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
 
   const handleCopyMarkdown = () => {
     if (typeof globalThis.navigator?.clipboard?.writeText === "function") {
@@ -261,7 +335,12 @@ export function MdViewer({
   };
 
   return (
-    <div class="md-viewer-panel" role="dialog" aria-modal="true" aria-label={`Saved view: ${savedView.title}`}>
+    <div
+      class="md-viewer-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Saved view: ${savedView.title}`}
+    >
       <div class="md-viewer-header">
         <h2 class="md-viewer-title">{savedView.title}</h2>
         <button
@@ -276,7 +355,8 @@ export function MdViewer({
 
       <div class="md-viewer-meta-row">
         <span class="md-viewer-source-ref" aria-label="Source record reference">
-          <strong>Source:</strong> {savedView.sourceTableRef} / {savedView.sourceRecordRef}
+          <strong>Source:</strong> {savedView.sourceTableRef} /{" "}
+          {savedView.sourceRecordRef}
         </span>
         <span class="md-viewer-template-ref">
           <strong>Template:</strong> {savedView.templateKey}
@@ -299,6 +379,7 @@ export function MdViewer({
         onCreateTodoCandidate={onCreateTodoCandidate}
         onCopyMarkdown={handleCopyMarkdown}
         copyStatus={copyStatus}
+        disabledActionReasons={disabledActionReasons}
       />
 
       <div class="md-viewer-body">
