@@ -1468,6 +1468,51 @@ system_roadmap_ssot:
         - docs/design/admin-console-workflow-ssot.yaml
         - docs/design/db-schema.yaml
 
+    frontend.preset_team_markdown_saved_view_seed:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      parent_surface: UIBuilder / Preset ecosystem / preset seed / saved view
+      child_surface: team shared saved markdown view / md_viewer
+      public_summary: >
+        Preset ecosystem child surface for team shared saved Markdown views (md_viewer).
+        This is a saved view / preset seed child under /admin/ui-builder preset_ecosystem,
+        not an independent large feature or Notion clone. Physical table / jsonb records
+        remain the canonical data authority, rendered Markdown is only a projection, and
+        completed_preset_seed_json is the hard gate for create / refresh / rebind / clone /
+        search card rehydrate behavior. Implementation, DB migration, backend runtime actions,
+        and frontend md_viewer UI are intentionally not started in this roadmap/TODO bundle.
+      completion_condition:
+        - db_migration_creates_topology_team_markdown_template_registry_team_markdown_saved_view_and_team_markdown_saved_view_event
+        - completed_preset_seed_json_jsonb_not_null_and_card_metadata_json_jsonb_not_null_exist_on_saved_view_schema
+        - migration_bootstrap_ci_schema_setup_and_docs_design_db_schema_yaml_are_consistent
+        - backend_template_create_list_get_update_archive_actions_exist_with_explicit_errors
+        - backend_saved_view_create_search_get_refresh_update_archive_clone_actions_exist_with_explicit_errors
+        - frontend_direct_db_write_is_prohibited_for_saved_view_mutation
+        - markdown_renderer_resolves_explicit_bindings_for_physical_table_column_jsonb_path_saved_query_field_and_static_text_without_ai_inference
+        - unresolved_required_placeholder_blocks_save_and_optional_placeholder_renders_empty_state
+        - refresh_and_rebind_use_completed_preset_seed_binding_json_not_rendered_markdown_body_parsing
+        - completed_preset_seed_builder_persists_seed_version_template_ref_source_ref_binding_ref_render_ref_adjustment_ref_dashboard_ref_lineage_ref_rendered_markdown_hash_card_metadata_json_and_search_index_basis_json_on_create
+        - missing_or_invalid_completed_preset_seed_json_blocks_refresh_rebind_and_clone_with_explicit_error
+        - frontend_md_viewer_search_cards_click_expand_drawer_or_panel_rendered_markdown_binding_summary_preset_seed_summary_source_record_ref_adjustment_status_and_actions_exist
+        - ui_builder_preset_ecosystem_references_md_viewer_child_surface_and_shows_completed_preset_seed_json_hard_gate
+        - preset_load_binds_to_selected_route_package_tmp_canvas_draft_and_does_not_write_active_topology_until_preview_validate_apply
+        - saved_view_search_covers_title_rendered_markdown_search_index_text_source_table_ref_tags_and_status_with_default_active_filter_and_no_mutation
+        - tests_cover_db_schema_backend_actions_completed_seed_required_incomplete_seed_blocks_renderer_binding_refresh_seed_not_body_adjustment_preserved_frontend_search_expand_seed_summary_preset_load_boundary_and_structure_db_schema_checks
+      known_gap_ref:
+        - db_migration_not_created
+        - backend_runtime_actions_not_created
+        - frontend_md_viewer_not_created
+        - completed_preset_seed_validator_not_created
+        - search_click_expand_not_created
+        - preview_validate_apply_boundary_not_verified
+      detail_ssot:
+        - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - docs/design/db-schema.yaml
+        - docs/design/runtime-orchestration-ssot.yaml
+
     seed_import_export_runtime:
       status: implemented
       production_ready: false
