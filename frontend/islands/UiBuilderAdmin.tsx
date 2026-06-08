@@ -2227,28 +2227,35 @@ function BucketPackageRouteFields({
 // ─── preset ecosystem child surface ──────────────────────────────────────────
 
 function UiBuilderPresetEcosystemPanel(): JSX.Element {
+  const [open, setOpen] = useState(false);
+
   return (
-    <section
+    <details
       class="mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm"
       aria-label="UIBuilder preset ecosystem md_viewer child surface"
       data-preset-child-surface="md_viewer"
+      open={open}
+      onToggle={(e: Event) => setOpen((e.target as HTMLDetailsElement).open)}
     >
-      <div class="mb-2 flex flex-wrap items-center gap-2">
-        <strong class="text-emerald-950">
+      <summary class="cursor-pointer text-emerald-950">
+        <span class="mr-2 font-semibold">
           Preset ecosystem — md_viewer child surface
-        </strong>
+        </span>
         <StatusBadge text="projection only" variant="info" />
-      </div>
-      <p class="mb-3 text-xs text-emerald-900">
+      </summary>
+      <p class="mb-3 mt-2 text-xs text-emerald-900">
         Team Markdown Dashboard is mounted here as the md_viewer child surface for
         saved Markdown view search and click-to-expand drawer placement. This
         panel does not change the selected package canvas, active topology, or
-        preview / validate / apply flow.
+        preview / validate / apply flow. Open this child surface to start the
+        team_markdown search projection.
       </p>
-      <div class="rounded border border-emerald-100 bg-white p-3">
-        <TeamMarkdownDashboard placement="ui_builder_child_surface" />
-      </div>
-    </section>
+      {open && (
+        <div class="rounded border border-emerald-100 bg-white p-3">
+          <TeamMarkdownDashboard placement="ui_builder_child_surface" />
+        </div>
+      )}
+    </details>
   );
 }
 

@@ -84,6 +84,18 @@ export type SavedViewDetail = SavedViewCard & {
   createdAt: string;
 };
 
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function validateSavedViewSearchResponse(data: unknown): { ok: boolean; savedViews: SavedViewCard[] } {
+  if (!isRecord(data) || !Array.isArray(data.savedViews)) {
+    throw new Error("[TEAM_MARKDOWN_SEARCH_RESPONSE_INVALID] saved_view:search response must be an object with savedViews array");
+  }
+  return data as { ok: boolean; savedViews: SavedViewCard[] };
+}
+
 export type CompletedPresetSeed = {
   seed_version: string;
   template_ref: Record<string, unknown>;
@@ -167,13 +179,14 @@ export async function searchSavedViews(params: {
   status?: string;
   limit?: number;
 } = {}): Promise<{ ok: boolean; savedViews: SavedViewCard[] }> {
-  return dispatchTeamMarkdown("saved_view:search", {
+  const data = await dispatchTeamMarkdown("saved_view:search", {
     payload: {
       query: params.query,
       status: params.status ?? "active",
       limit: params.limit ?? 50,
     },
-  }) as Promise<{ ok: boolean; savedViews: SavedViewCard[] }>;
+  });
+  return validateSavedViewSearchResponse(data);
 }
 
 export async function getSavedView(savedViewId: string): Promise<{

@@ -13,12 +13,15 @@
 
 import {
   assertEquals,
+  assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { searchSavedViews } from "../api/teamMarkdownApi.ts";
 import type {
   CompletedPresetSeed,
   SavedViewDetail,
 } from "../api/teamMarkdownApi.ts";
+import { __testOnly } from "../runtime/frontendScheduler.ts";
 
 // ─── seed validation contract tests ──────────────────────────────────────────
 
@@ -180,6 +183,29 @@ Deno.test("refresh payload does not include Markdown-body-parsing field", () => 
       false,
       `refresh payload must not contain: ${prohibited}`,
     );
+  }
+});
+
+Deno.test("searchSavedViews rejects malformed response shape explicitly", async () => {
+  const originalFetch = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ success: true, emission: { data: [] } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    await assertRejects(
+      () => searchSavedViews({ query: "broken-shape" }),
+      Error,
+      "TEAM_MARKDOWN_SEARCH_RESPONSE_INVALID",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
   }
 });
 
@@ -365,6 +391,7 @@ Deno.test("TeamMarkdownDashboard has routable admin route and UIBuilder child pl
   assertEquals(routeSource.includes("TeamMarkdownDashboard"), true);
   assertEquals(routeSource.includes('placement="admin_route"'), true);
   assertEquals(uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"), true);
+  assertEquals(uiBuilderSource.includes("{open &&"), true);
   assertEquals(
     uiBuilderSource.includes('data-preset-child-surface="md_viewer"'),
     true,

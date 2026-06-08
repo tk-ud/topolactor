@@ -65,6 +65,7 @@ import SeedAdmin from "../islands/SeedAdmin.tsx";
 import OperationPanel from "../islands/OperationPanel.tsx";
 import UserDemoStepper from "../islands/UserDemoStepper.tsx";
 import UiBuilderAdmin from "../islands/UiBuilderAdmin.tsx";
+import TeamMarkdownDashboard from "../islands/TeamMarkdownDashboard.tsx";
 import AdminImport from "../islands/AdminImport.tsx";
 import ManifestsAdmin from "../islands/ManifestsAdmin.tsx";
 import HubNavigationAdmin from "../islands/HubNavigationAdmin.tsx";
@@ -471,6 +472,33 @@ Deno.test("UserDemoStepper success surface: emission is reflected in component s
   } finally {
     globalThis.fetch = original;
     __testOnly.resetCommandQueue();
+  }
+});
+
+
+Deno.test("TeamMarkdownDashboard DOM: malformed search response shows explicit error without card-state crash", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, { success: true, emission: { data: [] } });
+    renderInto(TeamMarkdownDashboard, container);
+    await flushUpdates();
+    await flushUpdates();
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes("TEAM_MARKDOWN_SEARCH_RESPONSE_INVALID"),
+      "malformed saved_view:search response must be surfaced explicitly",
+    );
+    assert(
+      html.includes("No saved views found") || html.includes("md-dashboard-results"),
+      "dashboard must keep cards as a safe array after malformed search response",
+    );
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
   }
 });
 
@@ -1399,6 +1427,44 @@ Deno.test("UiBuilderAdmin DOM: accordion toggle click → DOM state changes (syn
     // deno-lint-ignore no-explicit-any
     const htmlAfter = (container as any).innerHTML as string;
     assert(htmlBefore !== htmlAfter, "accordion click must change DOM state");
+  } finally {
+    globalThis.fetch = original;
+    __testOnly.resetCommandQueue();
+    cleanup();
+  }
+});
+
+
+Deno.test("UiBuilderAdmin DOM: initial render does not trigger team_markdown search", async () => {
+  const { container, cleanup } = setupDom();
+  const original = globalThis.fetch;
+  const capturedBodies: unknown[] = [];
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = makeMockFetch(200, { success: true, emission: { data: { targets: [], items: [] } } }, (_url, init) => {
+      if (typeof init?.body === "string") {
+        capturedBodies.push(JSON.parse(init.body));
+      }
+    });
+    renderInto(UiBuilderAdmin, container);
+    await flushUpdates();
+    await flushUpdates();
+
+    const teamMarkdownSearch = capturedBodies.some((body) => {
+      if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+      const b = body as Record<string, unknown>;
+      return b.layer === "team_markdown" && b.action === "saved_view:search";
+    });
+    assertFalse(
+      teamMarkdownSearch,
+      "UiBuilder initial render must not mount md_viewer dashboard or run saved_view:search",
+    );
+    // deno-lint-ignore no-explicit-any
+    const html = (container as any).innerHTML as string;
+    assert(
+      html.includes('data-preset-child-surface="md_viewer"') || html.includes("Preset ecosystem"),
+      "UiBuilder must still expose the md_viewer child surface entry",
+    );
   } finally {
     globalThis.fetch = original;
     __testOnly.resetCommandQueue();

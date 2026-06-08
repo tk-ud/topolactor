@@ -93,8 +93,14 @@ export default function TeamMarkdownDashboard({
     setActionNotice(null);
     try {
       const result = await searchSavedViews({ query: q || undefined, status });
+      if (!Array.isArray(result.savedViews)) {
+        throw new Error(
+          "[TEAM_MARKDOWN_SEARCH_RESPONSE_INVALID] saved_view:search response missing savedViews array",
+        );
+      }
       setCards(result.savedViews);
     } catch (err) {
+      setCards([]);
       setSearchError(err instanceof Error ? err.message : "Search failed");
     } finally {
       setLoading(false);
