@@ -88,11 +88,16 @@ External SVG/XML/Figma-like visual mock は runtime SSOT ではなく、AI infer
   - `backend/Program.cs` に `MockPresetRepository` DI registration 追加
   - `AdminRuntime` constructor 呼び出しに `sp.GetRequiredService<MockPresetRepository>()` 渡し
 
-**未達（production 適用待ち）:**
+**完了（chpt6 session で完了）:**
 
-- [ ] docs/design/db-schema.yaml migration status: migration DDL が production 適用されたら canonical tables list に昇格する（status を `migration_ddl_available_not_production_applied` → canonical に変更）
-- [ ] E2E DB integration test（live DB 上での topology.mock_preset_* テーブル動作確認）
-- [ ] E2E object mapping round-trip test（save mapping → compile → bind → canvas confirm、live DB 必要）
+- [x] migration apply path を閉じる: db/init.sql (bootstrap) に `\i /db/migrations/mock_preset_registry_tables.sql` を追加。CI backend-tests.yml の schema setup ステップにも追加。既存 DB は手動適用。
+- [x] E2E DB integration test: `MockPresetLiveDbEndToEndTests` (5 tests: create / save_mappings / wiring_candidates / compile-bind round-trip / list) — live DB で全パス。
+- [x] E2E object mapping round-trip test: SaveMappings_UpsertsObjectMappingRows, SaveWiringCandidates_UpsertsWiringCandidateRows, CompileAndBind_RoundTrip 各テストで確認済み。bind が topology.ui_topology_tensor へ書かないことも検証済み。
+- [x] docs/design/db-schema.yaml: mock_preset テーブル status を `migration_ddl_available_not_production_applied` → `migration_ddl_available_bootstrap_included` に更新。migration_status も `ddl_available_not_applied` → `ddl_included_in_bootstrap_and_ci` に更新。
+
+**未達（外部 production 環境検証待ち）:**
+
+- [ ] docs/design/db-schema.yaml: 別途 external production deployment 環境での migration 適用確認後、canonical tables list に昇格する。現状は `migration_ddl_available_bootstrap_included` のまま。
 
 ## Bundle `product-nocode-loop-acceptance`
 

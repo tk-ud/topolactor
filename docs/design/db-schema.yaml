@@ -66,12 +66,14 @@ db_schema:
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
       migration_ddl_available_schema_surfaces:
-        status: migration_ddl_available_not_production_applied
+        status: migration_ddl_available_bootstrap_included
         note: >-
-          DDL file exists (db/migrations/mock_preset_registry_tables.sql) but has NOT been applied
-          to production. NpgsqlMockPresetRepository is not wired into production DI/startup.
-          Object mapping persistence path (UpsertObjectMappingAsync) is not implemented end-to-end.
-          Do not treat as active production schema.
+          DDL included in db/init.sql (bootstrap) and CI backend-tests.yml schema setup step.
+          Fresh deployments automatically create topology.mock_preset_* tables via bootstrap.
+          Existing DBs: apply db/migrations/mock_preset_registry_tables.sql manually.
+          NpgsqlMockPresetRepository wired in Program.cs (DI/startup).
+          E2E live DB integration tests (MockPresetLiveDbEndToEndTests) pass against local DB.
+          Not yet verified against a separate external production deployment.
         mock_preset_registry: topology.mock_preset_registry
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
@@ -134,14 +136,17 @@ db_schema:
         - topology.components_style_design
         - topology.components_package_design
       migration_ddl_available:
-        status: migration_ddl_available_not_production_applied
+        status: migration_ddl_available_bootstrap_included
         reference: docs/design/mock-preset-intake-compiler-ssot.yaml
         migration_ddl: db/migrations/mock_preset_registry_tables.sql
+        bootstrap_path: db/init.sql (includes mock_preset_registry_tables.sql after ui_topology_tables.sql)
+        ci_path: .github/workflows/backend-tests.yml "Apply DB schema" step
         note: >-
-          DDL idempotent migration written (CREATE TABLE IF NOT EXISTS). Not yet applied to
-          production. NpgsqlMockPresetRepository not wired into production DI/startup.
-          Backend object_mapping upsert action and UpsertObjectMappingAsync override are
-          not implemented. Do not list these tables as canonical active production schema.
+          DDL idempotent migration (CREATE TABLE IF NOT EXISTS) included in db/init.sql bootstrap
+          and CI backend-tests.yml schema setup. Fresh deployments create these tables automatically.
+          Existing DBs must apply db/migrations/mock_preset_registry_tables.sql manually.
+          NpgsqlMockPresetRepository wired in Program.cs. E2E live DB integration tests pass.
+          Not yet verified against a separate external production deployment environment.
         tables:
           - topology.mock_preset_registry
           - topology.mock_preset_object_mapping
@@ -1161,11 +1166,11 @@ db_schema:
 
     mock_preset_registry:
       category: ui_topology
-      status: migration_ddl_available_not_production_applied
+      status: migration_ddl_available_bootstrap_included
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: ddl_available_not_applied
+      migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: DDL available but NOT yet applied to production DB. NpgsqlMockPresetRepository DI wired in Program.cs.
+      note: Included in db/init.sql bootstrap and CI schema setup. NpgsqlMockPresetRepository DI wired in Program.cs. E2E live DB tests pass.
       role: reusable_ui_preset_header_and_non_authoritative_external_visual_source_snapshot
       boundary:
         - preset_is_reusable_draft_template_not_active_runtime_topology
@@ -1197,11 +1202,11 @@ db_schema:
 
     mock_preset_object_mapping:
       category: ui_topology
-      status: migration_ddl_available_not_production_applied
+      status: migration_ddl_available_bootstrap_included
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: ddl_available_not_applied
+      migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: UpsertObjectMappingAsync implemented. UNIQUE (preset_id, source_object_id) constraint added to DDL.
+      note: Included in db/init.sql bootstrap. UpsertObjectMappingAsync implemented. UNIQUE (preset_id, source_object_id). E2E live DB upsert and round-trip tests pass.
       role: human_confirmed_mapping_from_visual_source_objects_to_catalog_component_structural_html_or_ignored
       boundary:
         - component_identity_is_user_confirmed_not_inferred_from_external_mock
@@ -1209,11 +1214,11 @@ db_schema:
 
     mock_preset_wiring_candidate:
       category: ui_topology
-      status: migration_ddl_available_not_production_applied
+      status: migration_ddl_available_bootstrap_included
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: ddl_available_not_applied
+      migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: UpsertWiringCandidateAsync implemented. UNIQUE (preset_id, source_object_id, capability_tag) constraint added to DDL.
+      note: Included in db/init.sql bootstrap. UpsertWiringCandidateAsync implemented. UNIQUE (preset_id, source_object_id, capability_tag). E2E live DB upsert and persistence tests pass.
       role: pending_or_confirmed_capability_gated_wiring_and_data_binding_candidates
       boundary:
         - capability_tags_gate_wiring_and_binding_ui
@@ -1221,11 +1226,11 @@ db_schema:
 
     mock_preset_compile_snapshot:
       category: ui_topology
-      status: migration_ddl_available_not_production_applied
+      status: migration_ddl_available_bootstrap_included
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: ddl_available_not_applied
+      migration_status: ddl_included_in_bootstrap_and_ci
       migration_ddl: db/migrations/mock_preset_registry_tables.sql
-      note: SaveCompileSnapshotAsync and GetLatestCompileSnapshotAsync implemented.
+      note: Included in db/init.sql bootstrap. SaveCompileSnapshotAsync and GetLatestCompileSnapshotAsync implemented. E2E compile-bind round-trip test verifies no write to topology.ui_topology_tensor.
       role: deterministic_compile_output_for_fast_ui_builder_loading
       boundary:
         - compile_is_ai_free
