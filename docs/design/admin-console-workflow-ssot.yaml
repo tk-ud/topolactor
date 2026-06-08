@@ -318,6 +318,55 @@ admin_console_workflow_ssot:
         - layout_patch backend actions: preview → validate → apply for placement persistence
         - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
         - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
+        - preset_ecosystem:
+            role: ui_builder_authoring_support
+            status: planned_parent_surface
+            rule: >
+              Presets are reusable draft/seed/view structures under the UIBuilder ecosystem.
+              They are not active topology until explicitly bound to a selected route package
+              and applied through the existing preview / validate / apply boundary.
+            workspace_boundary:
+              - UIBuilder remains a package-only canvas workspace.
+              - preset load binds into the selected route package tmp canvas draft before human adjustment.
+              - human author adjusts layout / wiring / binding before preview / validate / apply.
+              - preview / validate / apply boundary is not skipped by preset save or preset load.
+              - preset seed completeness determines UX quality for rehydrate / refresh / clone / rebind.
+              - completed_preset_seed_json is the hard gate for saved view / md viewer surfaces.
+            capabilities:
+              preset_mock_save:
+                role: save external SVG/XML/Figma-like mock or current canvas state as a reusable preset
+                reference_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+              preset_load_into_selected_package_tmp_canvas_draft:
+                role: bind a selected saved preset to the selected route package tmp canvas draft
+                active_topology_write: prohibited_until_explicit_preview_validate_apply
+              preset_seed_rehydrate_refresh_clone_and_rebind:
+                role: preserve completed seed data for saved view UX and md viewer continuity
+                hard_gate: completed_preset_seed_json
+            provisional_presets:
+              aggregate_dashboard:
+                role: aggregation / grouped measure / dashboard card surface
+              hub_search:
+                role: hub relation / manifest relation / topology search surface
+              physical_search_crud_aggregate:
+                role: physical table / jsonb record search, CRUD, aggregation surface
+              physical_details_inline_editor_md_generator:
+                role: physical record detail view, inline edit, Markdown saved view generation surface
+              md_viewer:
+                role: saved Markdown view search card / click expand drawer_or_panel
+                child_surface: team-markdown-dashboard-saved-view
+                hard_gate: completed_preset_seed_json
+                reference_ssot: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+            child_ssots:
+              mock_preset_intake_compiler:
+                ref: docs/design/mock-preset-intake-compiler-ssot.yaml
+                role: external_mock_or_canvas_to_reusable_preset
+              team_markdown_dashboard_saved_view:
+                ref: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+                role: preset_child_saved_markdown_view_seed_and_md_viewer
+                hard_gate: completed_preset_seed_json
+            implementation_status:
+              current: not_started
+              scope: SSOT parent placement only; no implementation, DB migration, UI component, backend runtime action, or TODO bundle.
       prohibited:
         - explicit packaging button, confirm-then-package dialog, or checkbox multi-select submit as primary path
         - two-step select-then-package phase framing
@@ -540,8 +589,10 @@ admin_console_workflow_ssot:
             wiringKind:navigation via ui_topology:update_package_wiring; raw wiring fields
             remain in advanced details disclosure only
         - post-apply CI / guard handoff (does not change runtime semantics)
+        - preset_ecosystem parent surface: planned UIBuilder authoring support for reusable draft / seed / saved view children; presets bind to selected package tmp canvas draft and never bypass preview / validate / apply
       edit_target_contract_ref: ui_builder_canvas_workspace.edit_target_contract
       canvas_workspace_contract_ref: ui_builder_canvas_workspace.canvas_workspace_contract
+      preset_ecosystem_ref: ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem
       default_wiring_presets:
         route_navigation:
           normal_view_label: "クリック時に指定ルートへ移動"

@@ -471,6 +471,55 @@ mapping:
       - .agent/protocols/design-change.md
       - .agent/protocols/ssot-change-impact.md
 
+  - work_type: preset_team_markdown_saved_view_seed
+    change_surfaces:
+      - preset saved markdown view
+      - preset seed saved view
+      - completed preset seed
+      - completed_preset_seed_json
+      - preset child saved view surface
+      - team markdown dashboard
+      - saved markdown view
+      - markdown template registry
+      - physical table markdown binding
+      - jsonb path markdown binding
+      - saved query result markdown binding
+      - saved markdown view search
+      - search result click expand drawer
+      - markdown dashboard card
+      - record markdown viewer
+      - refresh from source record
+      - clone saved view to another record
+      - user adjustment patch
+      - topology.team_markdown_template_registry planned schema surface
+      - topology.team_markdown_saved_view planned schema surface
+      - topology.team_markdown_saved_view_event planned schema surface
+      - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+    required_docs:
+      - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+    supporting_docs:
+      - docs/design/mock-preset-intake-compiler-ssot.yaml
+      - docs/design/db-schema.yaml
+      - docs/design/admin-console-workflow-ssot.yaml
+      - docs/design/runtime-orchestration-ssot.yaml
+    protocols:
+      - .agent/protocols/design-change.md
+      - .agent/protocols/ssot-change-impact.md
+    parent_child_boundary:
+      parent: Preset / preset seed / saved view ecosystem
+      child_surface: team shared saved markdown view
+      not_peer_feature_with: mock-preset-intake-compiler
+      adjacent_projection_boundary: >-
+        mock-preset-intake-compiler owns visual mock intake projection; this surface owns
+        the saved Markdown view projection under the Preset ecosystem.
+    hard_gates:
+      ux_hard_gate: completed_preset_seed_json
+      center_contract: completed_preset_seed_json
+      data_authority: physical table / jsonb record
+      display_surface: team dashboard search card / click expand drawer_or_panel
+      projection: rendered markdown saved view
+      implementation_scope: SSOT wiring only; no implementation, DB migration, UI component, backend runtime action, or TODO bundle.
+
   - work_type: cli_model_context_protocols_port
     change_surfaces:
       - cli_model_context_protocols_port
