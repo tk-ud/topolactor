@@ -621,7 +621,7 @@ system_roadmap_ssot:
       title: Component DB bind and Markdown saved-view authoring UI
       status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer and required placeholder blocking are not implemented; seed-driven md translation authoring seed surfaces now provide a minimal template/source/binding/seed candidate/create flow; rendered_markdown/tags search, renderer completion, and deep validator coverage remain pending.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer is not implemented; client/backend unresolved required placeholder gates for seed candidate persistence are implemented; prompt-level template registration, binding authoring, saved-view create authoring flow, existing component bucket composition hardening, rendered_markdown/tags search, renderer completion, and deep validator coverage remain pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -659,11 +659,12 @@ system_roadmap_ssot:
         - frontend_does_not_write_DB_directly
         - markdown_body_is_not_runtime_SSOT
       known_gap_ref:
-        - md_translation_template_seed_registration_surface_minimal_flow_needs_completion_hardening
-        - md_translation_binding_seed_authoring_surface_minimal_flow_needs_completion_hardening
-        - md_translation_saved_view_create_seed_flow_minimal_flow_needs_completion_hardening
+        - md_translation_template_seed_registration_surface_completion_pending
+        - md_translation_binding_seed_authoring_surface_completion_pending
+        - md_translation_saved_view_create_seed_flow_completion_pending
+        - existing_component_bucket_composition_hardening_pending
         - search_scope_rendered_markdown_and_tags_not_searched
-        - markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced
+        - markdown_binding_renderer_not_implemented_required_placeholder_resolution_not_completed
 
     product.md_viewer_projection_component:
       bundle_id: md_viewer_projection_component
@@ -710,7 +711,7 @@ system_roadmap_ssot:
       title: Completed preset seed validation gate for saved-view projection
       status: partial
       production_ready: false
-      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; CompletedPresetSeedValidator enforces the gate for create/refresh/update/projection (top-level keys and render_ref hash only); saved view DB column is NOT NULL; seed validation failure is an explicit blocking error with no silent fallback; clone and rebind actions are not yet implemented.
+      public_summary: completed_preset_seed_json is the required structured rehydration gate for saved Markdown views; client-side seed candidate builder contract is implemented; CompletedPresetSeedValidator enforces the gate for create/refresh/update/projection (top-level keys, render_ref hash, and unresolved required placeholder arrays); saved view DB column is NOT NULL; seed validation failure is an explicit blocking error with no silent fallback; clone, rebind, and deep nested validator coverage are not yet implemented.
       scope:
         - completed_preset_seed_json_required_persistence
         - seed_builder_and_validator
@@ -733,15 +734,17 @@ system_roadmap_ssot:
         - backend/schema/TeamMarkdownContracts.cs
         - backend/runtime/AdminRuntime.TeamMarkdown.cs
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
+        - frontend/api/teamMarkdownApi.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
       completion_condition:
         - CompletedPresetSeedValidator_blocks_incomplete_seed_with_explicit_error
         - completed_preset_seed_json_column_is_NOT_NULL_in_saved_view_table
         - create_refresh_update_with_seed_validates_before_persist
+        - client_seed_candidate_builder_constructs_required_seed_refs
+        - unresolved_required_placeholder_arrays_block_seed_persistence
         - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
         - seed_invalid_state_disables_refresh_clone_in_frontend_MdViewer
       known_gap_ref:
-        - seed_builder_helper_for_client_side_construction_minimal_entry_exists_deep_completion_pending
         - clone_action_backend_implementation_pending
         - rebind_action_not_designed_or_implemented
         - seed_validator_depth_nested_fields_not_validated_only_top_level_and_render_hash

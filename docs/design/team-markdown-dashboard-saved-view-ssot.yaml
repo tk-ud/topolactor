@@ -445,9 +445,15 @@ team_markdown_dashboard_saved_view_ssot:
 
   implementation_status:
     current: partial
+    implemented_subscope:
+      - md_translation_seed_candidate_builder_contract
+      - unresolved_required_placeholder_backend_gate
     unresolved_completion_conditions:
       - markdown_renderer_resolves_explicit_bindings_without_ai_inference
-      - unresolved_required_placeholders_block_save
+      - prompt_level_template_seed_registration_surface_completion
+      - prompt_level_binding_seed_authoring_surface_completion
+      - prompt_level_saved_view_create_seed_flow_completion
+      - existing_component_bucket_composition_hardening
       - result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed
       - refresh_from_source_record_preserves_user_adjustment_patch
     planned_change_surfaces:
@@ -463,8 +469,10 @@ team_markdown_dashboard_saved_view_ssot:
       - frontend saved markdown view result cards
       - frontend click_to_expand drawer_or_panel
       - frontend preset seed summary in expanded view
-      - frontend template registration modal_or_drawer
-      - frontend record binding modal_or_drawer
+      - frontend md_translation_template_seed_registration_surface completion
+      - frontend md_translation_binding_seed_authoring_surface completion
+      - frontend md_translation_saved_view_create_seed_flow completion
+      - frontend existing_component_bucket_composition hardening
       - tests for markdown_not_runtime_ssot_boundary
       - tests for completed_preset_seed_required_on_save
       - tests for search_click_expand_behavior

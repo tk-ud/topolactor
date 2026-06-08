@@ -150,6 +150,59 @@ Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke f
     assertEquals(source.includes("RecordMarkdownBindForm"), false);
     assertEquals(source.includes("MarkdownTemplateRegistryForm"), false);
   }
+
+  assertEquals(
+    todo.includes("[x] **md_translation_seed_candidate_builder_contract**"),
+    true,
+  );
+  assertEquals(
+    todo.includes("[x] **unresolved_required_placeholder_backend_gate**"),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_template_seed_registration_surface_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_binding_seed_authoring_surface_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_saved_view_create_seed_flow_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes("[ ] **existing_component_bucket_composition_hardening**"),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_template_seed_registration_surface_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_binding_seed_authoring_surface_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_saved_view_create_seed_flow_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes("existing_component_bucket_composition_hardening_pending"),
+    true,
+  );
 });
 
 Deno.test("authoring surface uses existing bucket parts instead of Markdown-only modal/drawer creation", async () => {
