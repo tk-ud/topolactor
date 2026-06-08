@@ -78,6 +78,15 @@ else
   failf.call('frontend UX acceptance gate must prohibit frontend topology judgment') unless frontend_only.include?('frontend_must_not_decide_topology_promotion_persistence_or_SQL_attention_policy')
   failf.call('frontend UX acceptance gate must preserve backend preview validate apply route') unless frontend_only.include?('frontend_may_submit_intent_only_through_backend_preview_validate_apply_route')
 end
+detail_impl = {}
+Array(root.dig('related_surfaces', 'extracted_detail_report')).each do |rel|
+  path = File.join(repo, rel.to_s)
+  next unless File.exist?(path)
+  report_root = YAML.load_file(path) || {}
+  extracted = report_root.dig('system_roadmap_detail_extraction_report', 'extracted_sections', 'implementation_registry_detail_snapshot')
+  detail_impl.merge!(extracted) if extracted.is_a?(Hash)
+end
+
 file_statuses = Hash.new { |h, k| h[k] = [] }
 dir_statuses = Hash.new { |h, k| h[k] = [] }
 impl.each do |k,v|
@@ -92,7 +101,8 @@ impl.each do |k,v|
   failf.call("production_ready entry #{k} must not keep known_gap_ref") if ready && !kg.nil?
   failf.call("#{k} requires public_summary for implemented/production_ready") if (st=='implemented' || ready) && (ps.nil? || ps.to_s.strip.empty?)
   failf.call("#{k} status #{st} requires known_gap_ref or completion_condition") if ['skeleton','partial'].include?(st) && kg.nil? && cc.nil?
-  (v['files'] || []).each do |fp|
+  files = v['files'] || detail_impl.dig(k, 'files') || []
+  files.each do |fp|
     next if fp.nil? || fp.to_s.strip.empty?
     normalized = fp.to_s
     if normalized.end_with?('/')

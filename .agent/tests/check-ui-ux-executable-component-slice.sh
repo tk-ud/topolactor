@@ -4,6 +4,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ROADMAP="$REPO_ROOT/docs/system-roadmap.yaml"
 TODO_FILE="$REPO_ROOT/.agent/tasks/todo.md"
+PRIMITIVE_SSOT="$REPO_ROOT/docs/design/ui-ux-primitive-catalog-ssot.yaml"
 CATALOG="$REPO_ROOT/frontend/components/catalog.ts"
 FACTORY="$REPO_ROOT/frontend/runtime/runtimeComponentFactory.ts"
 FAIL=0
@@ -33,7 +34,9 @@ rg -n "frontend\.ui_ux_executable_component_slice:" "$ROADMAP" >/dev/null || fai
 rg -n "UI_UX_PRIMITIVE_CATALOG_IDENTITIES" "$CATALOG" >/dev/null || fail "catalog constant missing: UI_UX_PRIMITIVE_CATALOG_IDENTITIES"
 
 for name in AutoCompleteInput SearchCombobox CandidateConfidenceBadge InlineEditableField PatchPreviewPanel ApplyConfirmDialog FacetedFilterBar VirtualizedDataTable LayoutDropZone ComponentPlacementHandle SnapGridOverlay StyleTokenPicker ThemePreviewPanel DryRunResultPanel ValidationErrorPanel; do
-  rg -n "$name" "$ROADMAP" >/dev/null || fail "representative slice name missing in roadmap: $name"
+  if ! rg -n "$name" "$ROADMAP" "$PRIMITIVE_SSOT" >/dev/null; then
+    fail "representative slice name missing from roadmap/design SSOT references: $name"
+  fi
 done
 
 # registrationRequired:false must be alias_maintained only

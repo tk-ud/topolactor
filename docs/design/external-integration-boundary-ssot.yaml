@@ -1,0 +1,50 @@
+---
+external_integration_boundary_ssot:
+  version: 1
+  status: active
+  source_roadmap_policy: docs/system-roadmap.yaml#system_roadmap_ssot.external_integration_policy
+  roadmap_status_index: docs/system-roadmap.yaml
+  purpose: Design SSOT for external integration authority boundaries and required
+    preview/validate/apply flow.
+  summary: 'External tools are human editing and intake surfaces. They are not the
+    canonical runtime source of truth. The canonical source is topolactor DB topology,
+    manifest, registry, schema, relation, package, and diff/log surfaces. External
+    tools may propose, draft, import, preview, or trigger changes only through explicit
+    runtime boundaries.
+
+    '
+  canonical_authority:
+  - topolactor_db
+  - manifest
+  - registry
+  - schema
+  - relation_registry
+  - ui_topology_tensor
+  - diff_log
+  - runtime_event_log
+  external_surface_role:
+  - human_friendly_business_input
+  - draft_authoring
+  - intake_queue
+  - preview_surface
+  - notification_surface
+  - approval_surface
+  - external_trigger_source
+  prohibited:
+  - notion_as_system_SSOT
+  - spreadsheet_as_runtime_policy_SSOT
+  - external_tool_direct_DB_write
+  - silent_external_sync_fallback
+  - implicit_schema_creation_without_preview
+  - frontend_or_external_tool_SQL_attention_judgment
+  - webhook_direct_runtime_execution_without_scheduler
+  required_flow:
+  - external_source
+  - connector_adapter
+  - intake_snapshot
+  - topology_payload_candidate
+  - validate
+  - preview
+  - explicit_apply
+  - canonical_runtime_route
+  - diff_log_or_runtime_event_log

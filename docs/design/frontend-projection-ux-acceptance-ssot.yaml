@@ -1,0 +1,125 @@
+---
+frontend_projection_ux_acceptance_ssot:
+  version: 1
+  status: implemented
+  source_roadmap_gate: docs/system-roadmap.yaml#system_roadmap_ssot.ux_acceptance_gates.frontend_projection_surface_general_ux
+  roadmap_status_index: docs/system-roadmap.yaml
+  purpose: Design SSOT for the frontend projection surface general UX acceptance contract.
+  summary: 'This acceptance gate evaluates whether the DB-authoritative frontend projection
+    surface is understandable and operable by general users. It is intentionally separate
+    from runtime component implementation status and production_ready judgment: a
+    runtime lane may be production-ready while this UX gate remains partial. Frontend
+    remains an intent authoring, preview, validation-result, and projection surface;
+    it must not acquire topology, promotion, persistence, SQL Attention, or policy
+    judgment authority.
+
+    '
+  authority_boundary:
+    db_authority_preserved:
+    - design_layout_wiring_authority_remains_in_topology_DB_and_registry_surfaces
+    - topology_components_layout_design_and_ui_topology_tensor_remain_canonical_persistence_surfaces
+    - topology_components_style_design_and_ui_wiring_registry_remain_DB_authority_surfaces
+    - context_tables_remain_recommendation_learning_surfaces_not_frontend_topology_authority
+    - topology_namespace_and_hubs_namespace_canonical_schema_contracts_remain_unchanged
+    frontend_projection_surface_only:
+    - frontend_may_hold_local_draft_interaction_state_and_visual_preview
+    - frontend_may_submit_intent_only_through_backend_preview_validate_apply_route
+    - frontend_must_not_write_DB_directly
+    - frontend_must_not_bypass_backend_validation
+    - frontend_must_not_decide_topology_promotion_persistence_or_SQL_attention_policy
+  standards_basis:
+  - WCAG_2_2_SC_2_1_1_keyboard
+  - WCAG_2_2_SC_2_4_3_focus_order
+  - WCAG_2_2_SC_2_4_7_focus_visible
+  - WCAG_2_2_SC_2_5_7_dragging_movements
+  - WCAG_2_2_SC_2_5_8_target_size_minimum
+  - WCAG_2_2_SC_3_3_1_error_identification
+  - WCAG_2_2_SC_3_3_3_error_suggestion
+  - WCAG_2_2_SC_4_1_3_status_messages
+  acceptance_criteria:
+    lifecycle_state_visibility:
+      status: implemented
+      acceptance: draft_validated_applied_failed_and_persisted_are_visibly_distinguishable
+      implemented_surface:
+      - LifecycleStepIndicator_shows_draft_validated_applied_persisted_steps_with_aria_current
+      - failure_phases_scoped_to_action_preview_fail_stays_previewed_validate_fail_stays_validated_apply_fail_is_applied_fail
+      - draft_only_nodes_are_visibly_marked_and_apply_blocked
+      unresolved_scope: []
+    recovery_navigation:
+      status: implemented
+      acceptance: undo_redo_or_at_minimum_clear_cancel_reset_and_revert_paths_exist
+      implemented_surface:
+      - 50_step_undo_redo_history_stack_with_Ctrl_Z_Y_keyboard_shortcuts
+      - clear_canvas_button_in_layout_builder_section
+      - all_node_mutations_push_to_history_including_inspector_commits
+      unresolved_scope: []
+    actionable_validation_errors:
+      status: implemented
+      acceptance: validation_errors_show_cause_target_node_and_repair_suggestion_not_internal_code_only
+      implemented_surface:
+      - ActionableValidationErrorPanel_maps_error_code_to_plain_language_cause_and_repair_suggestion
+      - per_error_componentKey_and_nodeId_context_shown_for_node_targeted_errors
+      - raw_error_code_preserved_as_advanced_info_in_small_font
+      - role_alert_on_error_panel
+      unresolved_scope: []
+    progressive_disclosure_vocabulary:
+      status: implemented
+      acceptance: internal_slot_parent_and_grid_vocabulary_is_translated_for_normal_view_and_raw_terms_are_advanced_only
+      implemented_surface:
+      - CanvasInspector_uses_friendly_labels_for_x_y_width_height_parent_slot
+      - raw_componentKey_hidden_in_details_disclosure
+      - raw_SSOT_refs_and_UUIDs_in_AdvancedManualOverride_disclosures
+      unresolved_scope: []
+    non_pointer_operation:
+      status: implemented
+      acceptance: drag_move_resize_and_reorder_have_keyboard_or_button_alternatives
+      implemented_surface:
+      - arrow_key_move_for_selected_node_10px_step_50px_with_shift
+      - resize_handle_Enter_Space_keyboard_activate_calls_real_delta_resize_not_mouse_proxy
+      - handleKeyboardResizeNode_applies_SNAP_SIZE_delta_per_direction
+      - palette_add_button_per_entry_for_non_drag_add
+      - layer_tree_up_down_reorder_buttons
+      - Delete_Backspace_key_and_delete_button_for_node_removal
+      unresolved_scope: []
+    accessibility_observability:
+      status: implemented
+      acceptance: focus_order_focus_visible_target_size_and_status_messages_are_testable_and_user_observable
+      implemented_surface:
+      - canvas_role_application_nodes_role_button_tabIndex_0_aria_selected_aria_label
+      - resize_handles_24x24px_touch_target_WCAG_2_5_8_with_12px_visual_dot
+      - focus_visible_ring_on_nodes_resize_handles_palette_buttons_and_action_buttons
+      - aria_live_polite_announce_for_async_status_preview_validate_apply_add_delete
+      - repeatable_manual_check_documented_in_agent_tests_check-accessibility-manual.md
+      unresolved_scope:
+      - manual_check_execution_pending_first_run_before_marking_verified
+    first_run_guidance:
+      status: implemented
+      acceptance: empty_state_template_and_example_flow_make_the_first_action_clear
+      implemented_surface:
+      - empty_canvas_CTA_with_three_template_buttons_header_main_card_form
+      - palette_add_button_as_non_drag_first_action_alternative
+      unresolved_scope: []
+    css_token_visual_diff:
+      status: implemented
+      acceptance: css_token_selection_has_visual_preview_and_selection_diff
+      implemented_surface:
+      - CssTokenSwatch_derives_color_from_resolveCssTokenValue_using_SSOT_value_refs_not_hardcoded_role_map
+      - text_color_tokens_show_letter_A_on_gray_background_with_SSOT_foreground_value
+      - spacing_radius_typography_tokens_show_property_specific_preview
+      - selected_token_chip_list_shows_before_state_current_selection_diff
+      unresolved_scope: []
+  verification_policy:
+    executable_now:
+    - ".agent/tests/check-system-roadmap.sh verifies UX acceptance SSOT criterion
+      closure and authority-boundary declarations"
+    - ".agent/tests/check-css-dictionary.sh verifies CSS dictionary selector vocabulary
+      binding"
+    - ".agent/tests/check-ui-ux-executable-component-slice.sh verifies representative
+      primitive factory reachability"
+    - frontend/tests/visualLayoutBuilder.test.ts covers keyboard resize delta lifecycle
+      failure phases css token resolution inspector commit boundary and parent cycle
+      helpers (43 tests)
+    - ".agent/tests/check-accessibility-manual.md provides repeatable 6-check manual
+      procedure for focus order focus visible target size keyboard alternatives status
+      messages and error identification"
+    required_when_implemented: []
