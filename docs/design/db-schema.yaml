@@ -78,6 +78,25 @@ db_schema:
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
         mock_preset_compile_snapshot: topology.mock_preset_compile_snapshot
+      planned_schema_surfaces:
+        team_markdown_dashboard_saved_view:
+          status: planned_schema_surface
+          migration_status: not_created
+          reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+          parent_surface: Preset / preset seed / saved view ecosystem
+          child_surface: team shared saved markdown view
+          note: >-
+            Planned Preset child surface only. No DB migration, bootstrap DDL, repository,
+            backend runtime action, or UI component is created by this SSOT wiring. The saved
+            Markdown view is a rendered projection; physical table / jsonb records remain the
+            canonical data authority.
+          ux_hard_gate_columns:
+            - completed_preset_seed_json jsonb not null
+            - card_metadata_json jsonb not null
+          planned_topology_tables:
+            - topology.team_markdown_template_registry
+            - topology.team_markdown_saved_view
+            - topology.team_markdown_saved_view_event
     logs:
       role: SQL Attention signal, current, hub current, and attention evidence
       canonical_tables:
@@ -152,6 +171,22 @@ db_schema:
           - topology.mock_preset_object_mapping
           - topology.mock_preset_wiring_candidate
           - topology.mock_preset_compile_snapshot
+      planned_schema_surface:
+        status: planned_schema_surface
+        migration_status: not_created
+        reference: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+        parent_surface: Preset / preset seed / saved view ecosystem
+        child_surface: team shared saved markdown view
+        not_canonical_active: true
+        no_migration_created: true
+        note: >-
+          Topology placement is planned for the Preset child saved Markdown view surface only.
+          completed_preset_seed_json and card_metadata_json are UX hard-gate JSONB columns,
+          but no migration/DDL exists yet and this surface is not production ready.
+        tables:
+          - topology.team_markdown_template_registry
+          - topology.team_markdown_saved_view
+          - topology.team_markdown_saved_view_event
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:
@@ -1236,6 +1271,44 @@ db_schema:
         - compile_is_ai_free
         - compiled_layout_patch_binds_to_selected_route_package_tmp_canvas_draft
         - preview_validate_apply_boundary_is_preserved
+
+    # -- Team Markdown Dashboard Saved View (planned Preset child surface) --
+
+    team_markdown_template_registry:
+      category: ui_topology
+      status: planned_schema_surface
+      migration_status: not_created
+      source_ssot: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+      role: planned_markdown_template_registry_for_preset_child_saved_view_surface
+      boundary:
+        - child_surface_of_preset_seed_saved_view_ecosystem
+        - template_is_projection_template_not_runtime_ssot
+        - no_physical_table_schema_mutation_from_template_or_seed
+
+    team_markdown_saved_view:
+      category: ui_topology
+      status: planned_schema_surface
+      migration_status: not_created
+      source_ssot: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+      role: planned_team_dashboard_saved_markdown_view_projection
+      ux_hard_gate_columns:
+        - completed_preset_seed_json jsonb not null
+        - card_metadata_json jsonb not null
+      boundary:
+        - completed_preset_seed_json_is_required_ux_hard_gate
+        - rendered_markdown_is_projection_not_canonical_data_authority
+        - physical_table_or_jsonb_record_is_canonical_data_authority
+        - refresh_and_rebind_use_seed_binding_not_rendered_markdown_body_parsing
+
+    team_markdown_saved_view_event:
+      category: ui_topology
+      status: planned_schema_surface
+      migration_status: not_created
+      source_ssot: docs/design/team-markdown-dashboard-saved-view-ssot.yaml
+      role: planned_append_only_saved_view_activity_log
+      boundary:
+        - event_log_for_saved_view_create_update_refresh_archive_click_clone
+        - no_backend_runtime_action_or_migration_created_by_this_wiring
 
     # -------------------------------------------------------------------------
     # manifest — dispatcher / projection の配線定義
