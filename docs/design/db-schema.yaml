@@ -65,7 +65,13 @@ db_schema:
         components_package_design: topology.components_package_design
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
-      planned_schema_surfaces:
+      migration_ddl_available_schema_surfaces:
+        status: migration_ddl_available_not_production_applied
+        note: >-
+          DDL file exists (db/migrations/mock_preset_registry_tables.sql) but has NOT been applied
+          to production. NpgsqlMockPresetRepository is not wired into production DI/startup.
+          Object mapping persistence path (UpsertObjectMappingAsync) is not implemented end-to-end.
+          Do not treat as active production schema.
         mock_preset_registry: topology.mock_preset_registry
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
@@ -127,9 +133,15 @@ db_schema:
         - topology.ui_builder_components
         - topology.components_style_design
         - topology.components_package_design
-      planned_schema_surfaces:
-        status: planned_schema_surface
+      migration_ddl_available:
+        status: migration_ddl_available_not_production_applied
         reference: docs/design/mock-preset-intake-compiler-ssot.yaml
+        migration_ddl: db/migrations/mock_preset_registry_tables.sql
+        note: >-
+          DDL idempotent migration written (CREATE TABLE IF NOT EXISTS). Not yet applied to
+          production. NpgsqlMockPresetRepository not wired into production DI/startup.
+          Backend object_mapping upsert action and UpsertObjectMappingAsync override are
+          not implemented. Do not list these tables as canonical active production schema.
         tables:
           - topology.mock_preset_registry
           - topology.mock_preset_object_mapping

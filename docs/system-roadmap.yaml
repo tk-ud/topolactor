@@ -1417,12 +1417,15 @@ system_roadmap_ssot:
       production_ready: false
       milestone: M5_admin_and_ui_topology
       public_summary: >
-        Mock Preset Intake Compiler / UIBuilder Preset Registry — core implementation
-        delivered as partial. DB migration, backend admin runtime actions (create/list/get/compile/bind),
-        SVG/XML visual parser (no AI), frontend PresetUploaderDrawer, mockPresetApi, UiBuilderAdmin
-        save-as-preset and load-preset integration, capabilityTags vocabulary, and unresolved object
-        visibility are all implemented. Remaining gap: NpgsqlMockPresetRepository wiring into
-        DI/startup, E2E DB integration test, and full capability_tags_gate wiring/binding UI panel.
+        Mock Preset Intake Compiler / UIBuilder Preset Registry — partial skeleton delivered.
+        Implemented: DB migration DDL (not production-applied), backend admin runtime action skeleton
+        (create/list/get/compile/bind — DI unwired), SVG/XML pure-TS visual parser (no AI),
+        PresetUploaderDrawer (mapping UI only — mapping not persisted), mockPresetApi,
+        load-preset select, bind-to-tmp-canvas-draft, preview/validate/apply boundary,
+        capabilityTags vocabulary (type-level only), 24 frontend + 22 backend tests green.
+        NOT implemented: object mapping persistence end-to-end, save current canvas as preset
+        (drawer opens but canvas data not exported), full capability_tags_gate interactive UI,
+        production DI wiring, live DB integration.
       completion_condition:
         - topology_mock_preset_tables_exist_under_topology_schema
         - svg_xml_or_generic_xml_visual_tree_parser_exists_without_ai_dependency
@@ -1434,9 +1437,13 @@ system_roadmap_ssot:
         - preview_validate_apply_boundary_is_preserved
         - unresolved_objects_are_explicitly_visible
       known_gap_ref:
-        - NpgsqlMockPresetRepository not yet wired into production DI/startup (DB integration not active)
-        - capability_tags_gate wiring/binding UI panel is type-level only (no full interactive panel)
+        - object_mapping_persistence_not_closed (mappingArray not sent to backend; UpsertObjectMappingAsync not implemented)
+        - save_current_canvas_as_preset_not_implemented (handleSaveCanvasAsPreset opens drawer only; no canvas export)
+        - NpgsqlMockPresetRepository not wired into production DI/startup (DB integration not active)
+        - capability_tags_gate wiring/binding UI panel is type-level vocabulary only (no interactive panel)
+        - db-schema.yaml mock_preset tables must be promoted from migration_ddl_available to canonical once production-applied
         - E2E DB integration test for mock_preset_* tables not yet run against live DB
+        - E2E object mapping round-trip test not yet run
       files:
         - db/migrations/mock_preset_registry_tables.sql
         - backend/schema/MockPresetContracts.cs
