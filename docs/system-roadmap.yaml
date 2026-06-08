@@ -1411,6 +1411,34 @@ system_roadmap_ssot:
         - docs/design/runtime-orchestration-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
 
+
+    frontend.mock_preset_intake_compiler:
+      status: not_started
+      production_ready: false
+      milestone: M5_admin_and_ui_topology
+      public_summary: >
+        Mock Preset Intake Compiler / UIBuilder Preset Registry is planned as a no-AI
+        intake and reusable draft-template lane for SVG/XML/Figma-like visual mocks.
+        Presets are stored as reusable DB draft templates, loaded only into the selected
+        route package tmp canvas draft, and must still pass preview / validate / apply
+        before becoming canonical UI topology. No implementation or DB migration exists yet.
+      completion_condition:
+        - topology_mock_preset_tables_exist_under_topology_schema
+        - svg_xml_or_generic_xml_visual_tree_parser_exists_without_ai_dependency
+        - ui_builder_exposes_preset_uploader_modal_or_drawer
+        - ui_builder_can_save_current_canvas_as_reusable_preset
+        - ui_builder_exposes_saved_preset_load_select
+        - loaded_preset_binds_to_selected_route_package_tmp_canvas_draft_not_active_topology
+        - capability_tags_gate_wiring_and_binding_ui
+        - preview_validate_apply_boundary_is_preserved
+        - unresolved_objects_are_explicitly_visible
+      known_gap_ref:
+        - mock preset intake compiler implementation and topology.mock_preset_* migration are not started
+      detail_ssot:
+        - docs/design/mock-preset-intake-compiler-ssot.yaml
+        - docs/design/admin-console-workflow-ssot.yaml
+        - docs/design/db-schema.yaml
+
     seed_import_export_runtime:
       status: implemented
       production_ready: false

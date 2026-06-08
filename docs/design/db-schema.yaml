@@ -65,6 +65,11 @@ db_schema:
         components_package_design: topology.components_package_design
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
+      planned_schema_surfaces:
+        mock_preset_registry: topology.mock_preset_registry
+        mock_preset_object_mapping: topology.mock_preset_object_mapping
+        mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
+        mock_preset_compile_snapshot: topology.mock_preset_compile_snapshot
     logs:
       role: SQL Attention signal, current, hub current, and attention evidence
       canonical_tables:
@@ -122,6 +127,14 @@ db_schema:
         - topology.ui_builder_components
         - topology.components_style_design
         - topology.components_package_design
+      planned_schema_surfaces:
+        status: planned_schema_surface
+        reference: docs/design/mock-preset-intake-compiler-ssot.yaml
+        tables:
+          - topology.mock_preset_registry
+          - topology.mock_preset_object_mapping
+          - topology.mock_preset_wiring_candidate
+          - topology.mock_preset_compile_snapshot
     logs:
       role: sql_attention_parent_observation_plane_statistics_current_attention_evidence
       tables:
@@ -1130,6 +1143,78 @@ db_schema:
           shape: "[{componentId?: uuid, layoutNodeId?: string, designId: uuid}, ...]"
           note: same_component_can_appear_with_multiple_designs
       manifest_reference: manifest.topology[ui_projection].packageIds
+
+
+    # -- Mock Preset Intake Compiler (planned reusable draft template surface) --
+
+    mock_preset_registry:
+      category: ui_topology
+      status: planned_schema_surface
+      source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+      migration_status: not_created
+      planned_ddl_surface: future topology.mock_preset_* migration
+      role: reusable_ui_preset_header_and_non_authoritative_external_visual_source_snapshot
+      boundary:
+        - preset_is_reusable_draft_template_not_active_runtime_topology
+        - source_snapshot_is_visual_source_only_not_runtime_ssot
+        - load_binds_to_ui_builder_tmp_canvas_draft_before_preview_validate_apply
+      key_columns:
+        - name: preset_id
+          type: uuid
+          role: pk
+        - name: preset_key
+          type: text
+          role: unique_business_key
+        - name: preset_label
+          type: text
+        - name: source_kind
+          type: text
+          role: svg_xml_generic_xml_figma_json_or_ui_builder_canvas
+        - name: source_hash
+          type: text
+        - name: source_snapshot_json
+          type: jsonb
+          role: non_authoritative_visual_source_snapshot
+        - name: visual_tree_json
+          type: jsonb
+          role: parsed_visual_object_tree_without_ai_inference
+        - name: status
+          type: text
+          role: draft_active_or_archived
+
+    mock_preset_object_mapping:
+      category: ui_topology
+      status: planned_schema_surface
+      source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+      migration_status: not_created
+      planned_ddl_surface: future topology.mock_preset_* migration
+      role: human_confirmed_mapping_from_visual_source_objects_to_catalog_component_structural_html_or_ignored
+      boundary:
+        - component_identity_is_user_confirmed_not_inferred_from_external_mock
+        - unmapped_required_objects_remain_visible_and_block_compile
+
+    mock_preset_wiring_candidate:
+      category: ui_topology
+      status: planned_schema_surface
+      source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+      migration_status: not_created
+      planned_ddl_surface: future topology.mock_preset_* migration
+      role: pending_or_confirmed_capability_gated_wiring_and_data_binding_candidates
+      boundary:
+        - capability_tags_gate_wiring_and_binding_ui
+        - wiring_candidates_do_not_become_active_wiring_until_user_apply
+
+    mock_preset_compile_snapshot:
+      category: ui_topology
+      status: planned_schema_surface
+      source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
+      migration_status: not_created
+      planned_ddl_surface: future topology.mock_preset_* migration
+      role: deterministic_compile_output_for_fast_ui_builder_loading
+      boundary:
+        - compile_is_ai_free
+        - compiled_layout_patch_binds_to_selected_route_package_tmp_canvas_draft
+        - preview_validate_apply_boundary_is_preserved
 
     # -------------------------------------------------------------------------
     # manifest — dispatcher / projection の配線定義
