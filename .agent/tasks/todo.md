@@ -10,7 +10,7 @@
 |-----------|------|--------|------|---------|
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `mock-preset-intake-compiler` | Mock Preset Intake Compiler / UIBuilder Preset Registry | not_started | 9 | `docs/design/mock-preset-intake-compiler-ssot.yaml` |
+| `mock-preset-intake-compiler` | Mock Preset Intake Compiler / UIBuilder Preset Registry | partial | 3 | `docs/design/mock-preset-intake-compiler-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 | `ui-builder-default-route-navigation` | UI Builder ルート遷移デフォルト配線 | implemented | 1 | `docs/design/admin-console-workflow-ssot.yaml` |
 
@@ -40,20 +40,59 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ## Bundle `mock-preset-intake-compiler`
 
-**Status:** not_started  
+**Status:** partial  
 **SSOT:** `docs/design/mock-preset-intake-compiler-ssot.yaml`
 
 External SVG/XML/Figma-like visual mock は runtime SSOT ではなく、AI inference なしで取り込む non-authoritative visual source snapshot。保存済み preset は reusable draft template であり、load 時は selected route package の tmp canvas draft に bind し、preview / validate / apply を経るまで active topology へ直接保存しない。
 
-- [ ] `topology.mock_preset_*` tables migration を作成する（registry / object_mapping / wiring_candidate / compile_snapshot）
-- [ ] backend admin runtime actions for preset create/list/get/compile/bind を実装する
-- [ ] UIBuilder preset uploader modal_or_drawer を実装する（SVG/XML/Figma-like visual mock intake、AI inference なし）
-- [ ] UIBuilder save current canvas as preset button を実装する
-- [ ] UIBuilder saved preset load select を実装する
-- [ ] loaded preset bind to selected route package tmp canvas draft を実装し、active topology への直接保存を禁止する
-- [ ] capabilityTags gate wiring / binding UI を配線する
-- [ ] preview / validate / apply boundary preservation を検証・実装する
-- [ ] unresolved object visibility を実装する
+**実装済み（partial）:**
+
+- [x] `topology.mock_preset_*` tables migration DDL を作成する（registry / object_mapping / wiring_candidate / compile_snapshot）  
+  → `db/migrations/mock_preset_registry_tables.sql` (CREATE TABLE IF NOT EXISTS / idempotent)  
+  ⚠️ production DB 未適用・DI 未配線。active schema として扱わない。
+- [x] backend admin runtime actions skeleton (create/list/get/compile/bind) を実装する  
+  → `backend/runtime/AdminRuntime.MockPreset.cs` (partial class), `backend/schema/MockPresetContracts.cs`, `backend/repository/MockPresetRepository.cs`, `backend/repository/NpgsqlMockPresetRepository.cs`  
+  ⚠️ production DI/startup 未配線。NpgsqlMockPresetRepository.UpsertObjectMappingAsync 未実装。object_mapping upsert action も未実装。
+- [x] UIBuilder preset uploader modal_or_drawer を実装する（SVG/XML/Figma-like visual mock intake、AI inference なし）  
+  → `frontend/islands/PresetUploaderDrawer.tsx`, `frontend/runtime/visualMockParser.ts`  
+  ⚠️ mapping UI で作成した mappingArray が createMockPreset payload に含まれていない（mapping persistence 未達）。
+- [x] UIBuilder saved preset load select を実装する  
+  → `frontend/islands/UiBuilderAdmin.tsx` (loadPresetList / selectedPresetId select)
+- [x] loaded preset bind to selected route package tmp canvas draft を実装し、active topology への直接保存を禁止する  
+  → `frontend/islands/UiBuilderAdmin.tsx` (handleLoadPreset → bindMockPreset → applyCanvasFromTensorPatch)
+- [x] preview / validate / apply boundary preservation を検証する  
+  → bind は draftNodes (local state) のみ更新; canonical topology write は既存 `layout_patch:apply` ルート経由; `frontend/tests/mockPresetIntake.test.ts` bind result shape test
+
+**実装済み（session 3 で完了）:**
+
+- [x] object mapping persistence を完結させる（mapping persistence closed）
+  - `PresetUploaderDrawer.tsx` の mappingArray + wiring candidates を `saveMockPresetMappings` で送信
+  - `frontend/api/mockPresetApi.ts` に `saveMockPresetMappings` / `MockPresetObjectMapping` / `MockPresetWiringCandidate` 追加
+  - `backend/runtime/AdminRuntime.MockPreset.cs` に `mock_preset:save_mappings` action を実装（mappings + wiringCandidates 両対応）
+  - `NpgsqlMockPresetRepository.UpsertObjectMappingAsync` を override 実装
+  - `NpgsqlMockPresetRepository.UpsertWiringCandidateAsync` を追加実装
+  - `db/migrations/mock_preset_registry_tables.sql` に UNIQUE (preset_id, source_object_id) と UNIQUE (preset_id, source_object_id, capability_tag) 制約追加
+- [x] UIBuilder save current canvas as preset を実装する
+  - `handleSaveCanvasAsPreset` が canvas data を `CanvasPresetSeed` として export し、drawer に渡す
+  - `source_kind=ui_builder_canvas`, layout_patch_json, componentMappings, visualTreeJson, sourceHash を構築
+  - Drawer の canvas mode: pre-populated read-only mapping view で save
+- [x] capabilityTags gate の interactive wiring/binding UI panel を実装する
+  - `PresetUploaderDrawer.tsx` に `WiringSelection` state と `wiringSelections` Map
+  - `emits_event` → route_navigation / runtime_dispatch 選択 UI
+  - `controlled_value` → value_binding 選択 UI
+  - `field_binding` → db_jsonb_field_binding 選択 UI
+  - `requires_event_binding` → 配線未設定時に orange 警告 + 数カウント表示
+  - 配線確定チェックボックス (confirmed / pending)
+  - 保存時 wiringCandidates として save_mappings に送信
+- [x] NpgsqlMockPresetRepository を本番 DI/startup に配線する
+  - `backend/Program.cs` に `MockPresetRepository` DI registration 追加
+  - `AdminRuntime` constructor 呼び出しに `sp.GetRequiredService<MockPresetRepository>()` 渡し
+
+**未達（production 適用待ち）:**
+
+- [ ] docs/design/db-schema.yaml migration status: migration DDL が production 適用されたら canonical tables list に昇格する（status を `migration_ddl_available_not_production_applied` → canonical に変更）
+- [ ] E2E DB integration test（live DB 上での topology.mock_preset_* テーブル動作確認）
+- [ ] E2E object mapping round-trip test（save mapping → compile → bind → canvas confirm、live DB 必要）
 
 ## Bundle `product-nocode-loop-acceptance`
 

@@ -65,7 +65,13 @@ db_schema:
         components_package_design: topology.components_package_design
         physical_tables: topology.physical_tables
         wiring_physical_to_package: topology.wiring_physical_to_package
-      planned_schema_surfaces:
+      migration_ddl_available_schema_surfaces:
+        status: migration_ddl_available_not_production_applied
+        note: >-
+          DDL file exists (db/migrations/mock_preset_registry_tables.sql) but has NOT been applied
+          to production. NpgsqlMockPresetRepository is not wired into production DI/startup.
+          Object mapping persistence path (UpsertObjectMappingAsync) is not implemented end-to-end.
+          Do not treat as active production schema.
         mock_preset_registry: topology.mock_preset_registry
         mock_preset_object_mapping: topology.mock_preset_object_mapping
         mock_preset_wiring_candidate: topology.mock_preset_wiring_candidate
@@ -127,9 +133,15 @@ db_schema:
         - topology.ui_builder_components
         - topology.components_style_design
         - topology.components_package_design
-      planned_schema_surfaces:
-        status: planned_schema_surface
+      migration_ddl_available:
+        status: migration_ddl_available_not_production_applied
         reference: docs/design/mock-preset-intake-compiler-ssot.yaml
+        migration_ddl: db/migrations/mock_preset_registry_tables.sql
+        note: >-
+          DDL idempotent migration written (CREATE TABLE IF NOT EXISTS). Not yet applied to
+          production. NpgsqlMockPresetRepository not wired into production DI/startup.
+          Backend object_mapping upsert action and UpsertObjectMappingAsync override are
+          not implemented. Do not list these tables as canonical active production schema.
         tables:
           - topology.mock_preset_registry
           - topology.mock_preset_object_mapping
@@ -1149,10 +1161,11 @@ db_schema:
 
     mock_preset_registry:
       category: ui_topology
-      status: planned_schema_surface
+      status: migration_ddl_available_not_production_applied
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: not_created
-      planned_ddl_surface: future topology.mock_preset_* migration
+      migration_status: ddl_available_not_applied
+      migration_ddl: db/migrations/mock_preset_registry_tables.sql
+      note: DDL available but NOT yet applied to production DB. NpgsqlMockPresetRepository DI wired in Program.cs.
       role: reusable_ui_preset_header_and_non_authoritative_external_visual_source_snapshot
       boundary:
         - preset_is_reusable_draft_template_not_active_runtime_topology
@@ -1184,10 +1197,11 @@ db_schema:
 
     mock_preset_object_mapping:
       category: ui_topology
-      status: planned_schema_surface
+      status: migration_ddl_available_not_production_applied
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: not_created
-      planned_ddl_surface: future topology.mock_preset_* migration
+      migration_status: ddl_available_not_applied
+      migration_ddl: db/migrations/mock_preset_registry_tables.sql
+      note: UpsertObjectMappingAsync implemented. UNIQUE (preset_id, source_object_id) constraint added to DDL.
       role: human_confirmed_mapping_from_visual_source_objects_to_catalog_component_structural_html_or_ignored
       boundary:
         - component_identity_is_user_confirmed_not_inferred_from_external_mock
@@ -1195,10 +1209,11 @@ db_schema:
 
     mock_preset_wiring_candidate:
       category: ui_topology
-      status: planned_schema_surface
+      status: migration_ddl_available_not_production_applied
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: not_created
-      planned_ddl_surface: future topology.mock_preset_* migration
+      migration_status: ddl_available_not_applied
+      migration_ddl: db/migrations/mock_preset_registry_tables.sql
+      note: UpsertWiringCandidateAsync implemented. UNIQUE (preset_id, source_object_id, capability_tag) constraint added to DDL.
       role: pending_or_confirmed_capability_gated_wiring_and_data_binding_candidates
       boundary:
         - capability_tags_gate_wiring_and_binding_ui
@@ -1206,10 +1221,11 @@ db_schema:
 
     mock_preset_compile_snapshot:
       category: ui_topology
-      status: planned_schema_surface
+      status: migration_ddl_available_not_production_applied
       source_ssot: docs/design/mock-preset-intake-compiler-ssot.yaml
-      migration_status: not_created
-      planned_ddl_surface: future topology.mock_preset_* migration
+      migration_status: ddl_available_not_applied
+      migration_ddl: db/migrations/mock_preset_registry_tables.sql
+      note: SaveCompileSnapshotAsync and GetLatestCompileSnapshotAsync implemented.
       role: deterministic_compile_output_for_fast_ui_builder_loading
       boundary:
         - compile_is_ai_free
