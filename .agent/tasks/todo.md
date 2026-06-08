@@ -6,12 +6,12 @@
 
 ## 未処理 bundle 索引
 
-| Bundle ID | 名称 | Status | 件数 | 主 SSOT |
-|-----------|------|--------|------|---------|
-| `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
-| `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `preset_team_markdown_saved_view_seed` | Preset ecosystem child saved Markdown view / md_viewer | not_started | 1 | `docs/design/team-markdown-dashboard-saved-view-ssot.yaml` |
-| `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
+| Bundle ID | 名称 | Status | 件数 | Roadmap bundle | 主 SSOT |
+|-----------|------|--------|------|----------------|---------|
+| `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
+| `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `preset_team_markdown_saved_view_seed` | Preset ecosystem child saved Markdown view / md_viewer | not_started | 1 | `product.preset_team_markdown_saved_view_seed` | `docs/design/team-markdown-dashboard-saved-view-ssot.yaml` |
+| `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
 
