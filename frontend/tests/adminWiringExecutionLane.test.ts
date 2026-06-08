@@ -10,6 +10,7 @@ import {
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import { adaptComponentDataHub } from "../runtime/runtimeComponentAdapter.ts";
 import type { RuntimeDispatchSpec } from "../runtime/frontendScheduler.ts";
+import type { RuntimeComponentSpec } from "../runtime/runtimeComponentAdapter.ts";
 import { __testOnly as factoryTestOnly } from "../runtime/runtimeComponentFactory.ts";
 
 // ─── mapWiringKindToLayer ─────────────────────────────────────────────────────
@@ -562,6 +563,42 @@ Deno.test("parseEventBinding: non-route: routeNavigation targetRef is rejected (
   const parsed = factoryTestOnly.parseEventBinding(rawBinding);
   assertExists(parsed, "parseEventBinding must return non-null for valid eventType");
   assertEquals(parsed!.routeNavigation, undefined, "routeNavigation must be rejected for non-route: prefix");
+});
+
+
+Deno.test("emitBoundEvent: routeNavigation click executes frontend-local navigation", () => {
+  const originalLocation = globalThis.location;
+  const testLocation = { href: "http://localhost/admin/ui-builder" } as Location;
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: testLocation,
+  });
+  try {
+    const spec: RuntimeComponentSpec = {
+      componentId: "comp-nav-emit-001",
+      packageId: null,
+      layoutId: "layout-nav-emit-001",
+      wiringId: "wiring-nav-emit-001",
+      componentType: "action/button",
+      props: { data: { label: "Go to manifests" } },
+      eventBinding: {
+        click: {
+          eventType: "click",
+          routeNavigation: { targetRef: "route:/admin/manifests" },
+        },
+      },
+    };
+
+    const result = factoryTestOnly.emitBoundEvent(spec, "click", {});
+
+    assertEquals(result, { ok: true });
+    assertEquals(globalThis.location.href, "/admin/manifests");
+  } finally {
+    Object.defineProperty(globalThis, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  }
 });
 
 // ─── manifest wiring regression: unchanged by navigation changes ───────────────
