@@ -104,6 +104,7 @@ import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { LayoutPreviewNodeFrame } from "../components/LayoutPreviewNodeFrame.tsx";
+import TeamMarkdownDashboard from "./TeamMarkdownDashboard.tsx";
 import {
   enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
@@ -2220,6 +2221,34 @@ function BucketPackageRouteFields({
         </p>
       )}
     </div>
+  );
+}
+
+// ─── preset ecosystem child surface ──────────────────────────────────────────
+
+function UiBuilderPresetEcosystemPanel(): JSX.Element {
+  return (
+    <section
+      class="mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm"
+      aria-label="UIBuilder preset ecosystem md_viewer child surface"
+      data-preset-child-surface="md_viewer"
+    >
+      <div class="mb-2 flex flex-wrap items-center gap-2">
+        <strong class="text-emerald-950">
+          Preset ecosystem — md_viewer child surface
+        </strong>
+        <StatusBadge text="projection only" variant="info" />
+      </div>
+      <p class="mb-3 text-xs text-emerald-900">
+        Team Markdown Dashboard is mounted here as the md_viewer child surface for
+        saved Markdown view search and click-to-expand drawer placement. This
+        panel does not change the selected package canvas, active topology, or
+        preview / validate / apply flow.
+      </p>
+      <div class="rounded border border-emerald-100 bg-white p-3">
+        <TeamMarkdownDashboard placement="ui_builder_child_surface" />
+      </div>
+    </section>
   );
 }
 
@@ -7503,6 +7532,8 @@ export default function UiBuilderAdmin(): JSX.Element {
           paletteReloadToken={paletteReloadToken}
         />
       </div>
+
+      <UiBuilderPresetEcosystemPanel />
 
       <details
         class="mb-3 rounded border border-blue-200 bg-blue-50"

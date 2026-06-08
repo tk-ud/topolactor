@@ -621,7 +621,7 @@ system_roadmap_ssot:
       title: Component DB bind and Markdown saved-view authoring UI
       status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, and TeamMarkdownDashboard island are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); dashboard island is not yet mounted at a routable path; markdown binding renderer and required placeholder blocking are not implemented; full binding authoring UI modal/drawer is pending.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer and required placeholder blocking are not implemented; full binding authoring UI modal/drawer is pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -648,6 +648,8 @@ system_roadmap_ssot:
         - backend/repository/NpgsqlTeamMarkdownRepository.cs
         - frontend/api/teamMarkdownApi.ts
         - frontend/islands/TeamMarkdownDashboard.tsx
+        - frontend/routes/admin/team-dashboard/index.tsx
+        - frontend/islands/UiBuilderAdmin.tsx
         - frontend/tests/teamMarkdownSavedView.test.ts
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
       completion_condition:
@@ -662,14 +664,13 @@ system_roadmap_ssot:
         - template_registration_modal_not_created
         - search_scope_rendered_markdown_and_tags_not_searched
         - markdown_binding_renderer_not_implemented_required_placeholder_blocking_not_enforced
-        - dashboard_surface_not_mounted_no_route_for_admin_team_dashboard
 
     product.md_viewer_projection_component:
       bundle_id: md_viewer_projection_component
       title: md_viewer hardcoded Markdown projection component
       status: partial
       production_ready: false
-      public_summary: md_viewer is a hardcoded projection component that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, and action toolbar is implemented; UIBuilder preset_ecosystem integration and full drawer placement are pending.
+      public_summary: md_viewer is a hardcoded projection component that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, action toolbar, UIBuilder preset_ecosystem child placement, and dashboard drawer placement are implemented; refresh/clone/rebind backend completion remains outside this bundle and is surfaced as disabled/future UI where applicable.
       scope:
         - md_viewer_component_registration
         - rendered_markdown_display
@@ -692,6 +693,8 @@ system_roadmap_ssot:
       evidence_ref:
         - frontend/components/MdViewer.tsx
         - frontend/islands/TeamMarkdownDashboard.tsx
+        - frontend/routes/admin/team-dashboard/index.tsx
+        - frontend/islands/UiBuilderAdmin.tsx
         - frontend/tests/teamMarkdownSavedView.test.ts
       completion_condition:
         - MdViewer_component_renders_saved_markdown_projection
@@ -700,10 +703,7 @@ system_roadmap_ssot:
         - binding_summary_and_seed_summary_displayed_in_expanded_view
         - source_record_ref_displayed
         - adjustment_status_displayed
-      known_gap_ref:
-        - UIBuilder_preset_ecosystem_md_viewer_child_surface_wiring_not_created
-        - full_drawer_placement_via_UIBuilder_canvas_not_wired
-        - md_viewer_dashboard_action_wiring_incomplete_only_onArchive_onClose_wired
+      known_gap_ref: []
 
     product.completed_preset_seed_projection_gate:
       bundle_id: completed_preset_seed_projection_gate

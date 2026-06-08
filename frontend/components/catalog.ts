@@ -127,6 +127,11 @@ export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] =
       componentKind: "data_display/tree_node",
       sourcePath: "frontend/components/Tree.tsx",
     },
+    {
+      componentKey: "md_viewer.projection",
+      componentKind: "data_display/md_viewer",
+      sourcePath: "frontend/components/MdViewer.tsx",
+    },
   ];
 
 export const RUNTIME_ALIAS_CATALOG_IDENTITIES: ComponentCatalogIdentity[] = [
@@ -241,7 +246,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_children", "accepts_layout", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "neutral layout container — no semantic meaning; use instead of card/panel for structural placement",
+    notes:
+      "neutral layout container — no semantic meaning; use instead of card/panel for structural placement",
   },
   {
     componentKey: "card.primitive",
@@ -340,6 +346,25 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     runtimeConnected: true,
     registrationRequired: false,
     notes: "Table primitive adapter path",
+  },
+  {
+    componentKey: "md_viewer.projection",
+    componentKind: "data_display/md_viewer",
+    sourcePath: "frontend/components/MdViewer.tsx",
+    componentFamily: "composite",
+    semanticRole: "data_viewer",
+    visualRole: "panel",
+    lifecycleStatus: "registered",
+    capabilityTags: [
+      "displays_backend_result",
+      "error_display",
+      "preview_surface",
+      "admin_only",
+    ],
+    runtimeConnected: false,
+    registrationRequired: false,
+    notes:
+      "UIBuilder preset_ecosystem child projection surface; not a preset DB seed registration mechanism, runtime registry component, or package canvas edit root",
   },
   {
     componentKey: "form_field.template",
@@ -637,7 +662,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "relation_candidate_picker.primitive",
@@ -680,7 +706,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "candidate_confidence_badge.primitive",
@@ -736,7 +763,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
 
   // Category B: Inline Edit / Preview Update / Audit UI
@@ -851,7 +879,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["selectable", "displays_backend_result", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "conflict_resolution_panel.primitive",
@@ -1005,7 +1034,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_actions", "admin_only"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
 
   // Category D: Kanban / Tree / Drag-Drop / State Transition UI (#89 prerequisite)
@@ -1052,8 +1082,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "mutation_boundary:preview_validate_explicit_apply",
+    notes: "mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "relation_drop_zone.primitive",
@@ -1079,8 +1108,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_children", "emits_event", "accepts_layout"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "mutation_boundary:preview_validate_explicit_apply",
+    notes: "mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "layout_drop_zone.primitive",
@@ -1341,8 +1369,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "mutation_boundary:preview_validate_explicit_apply",
+    notes: "mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "computed_field_preview.primitive",
@@ -1489,8 +1516,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "candidateSurface:true | external_lookup:kana_assist",
+    notes: "candidateSurface:true | external_lookup:kana_assist",
   },
   {
     componentKey: "postal_address_lookup.primitive",
@@ -1545,8 +1571,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["displays_backend_result", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
-    notes:
-      "previewOnly:true | candidateSurface:true | not_canonical_SSOT",
+    notes: "previewOnly:true | candidateSurface:true | not_canonical_SSOT",
   },
   {
     componentKey: "lookup_candidate_confirm_panel.primitive",
@@ -1685,7 +1710,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     ],
     runtimeConnected: true,
     registrationRequired: true,
-    notes: "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
+    notes:
+      "candidateSurface:true | mutation_boundary:preview_validate_explicit_apply",
   },
   {
     componentKey: "operation_audit_log_panel.primitive",
