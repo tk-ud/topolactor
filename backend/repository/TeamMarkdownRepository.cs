@@ -82,6 +82,13 @@ public abstract class TeamMarkdownRepository
             CancellationToken ct = default)
         => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 
+
+    // ─── saved view clone ────────────────────────────────────────────────────
+
+    public virtual Task<(string? SavedViewId, string? ErrorCode, string? Message)>
+        CloneSavedViewAsync(TeamMarkdownSavedViewCreateRequest request, CancellationToken ct = default)
+        => CreateSavedViewAsync(request, ct);
+
     // ─── saved view archive ──────────────────────────────────────────────────
 
     public virtual Task<(bool Updated, string? ErrorCode)>

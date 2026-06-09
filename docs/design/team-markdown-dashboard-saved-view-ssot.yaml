@@ -345,7 +345,7 @@ team_markdown_dashboard_saved_view_ssot:
         fields:
           - event_id uuid primary key
           - saved_view_id uuid references topology.team_markdown_saved_view
-          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate | clone
+          - event_kind text not null # create | update | refresh | archive | click_expand | copy | todo_candidate | clone | rebind
           - actor_id uuid nullable
           - event_payload_json jsonb not null
           - created_at timestamptz
@@ -444,7 +444,7 @@ team_markdown_dashboard_saved_view_ssot:
       role: adjacent visual preset intake; not the same feature
 
   implementation_status:
-    current: partial
+    current: implemented
     implemented_subscope:
       - md_translation_seed_candidate_builder_contract
       - unresolved_required_placeholder_backend_gate
@@ -452,21 +452,13 @@ team_markdown_dashboard_saved_view_ssot:
       - prompt_level_binding_seed_authoring_surface_completion
       - prompt_level_saved_view_create_seed_flow_completion
       - existing_component_bucket_composition_hardening
-    unresolved_completion_conditions:
-      - markdown_renderer_resolves_explicit_bindings_without_ai_inference
       - saved_view_search_scope_covers_rendered_markdown_tags_and_status
-      - result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed
-      - refresh_from_source_record_preserves_user_adjustment_patch
-    planned_change_surfaces:
-      - backend markdown template renderer with explicit placeholder binding
-      - backend completed preset seed validator nested field hardening
-      - saved_view search scope completion for rendered_markdown tags and status
-      - backend saved_view clone action and rebind design_or_action
-      - refresh_from_source_record preserves user_adjustment_patch
-      - tests for completed_preset_seed_nested_validator_depth
-      - tests for search_scope_rendered_markdown_tags_and_status
-      - tests for refresh_uses_seed_not_markdown_parsing
-      - tests for binding_refresh_preserves_user_adjustment_patch
+      - completed_preset_seed_nested_validator_depth
+      - markdown_renderer_resolves_explicit_bindings_without_ai_inference
+      - refresh_clone_rebind_seed_gate_actions
+      - preset_catalog_seed_registration_bootstrap_row
+    unresolved_completion_conditions: []
+    planned_change_surfaces: []
 
   completion_condition:
     - markdown_template_registry_table_exists_under_topology_schema
@@ -475,7 +467,7 @@ team_markdown_dashboard_saved_view_ssot:
     - completed_preset_seed_json_exists_on_saved_view
     - completed_preset_seed_validation_blocks_incomplete_seed
     - markdown_template_create_list_get_update_archive_actions_exist
-    - saved_view_create_search_get_refresh_update_archive_actions_exist
+    - saved_view_create_search_get_refresh_clone_rebind_update_archive_actions_exist
     - markdown_renderer_resolves_explicit_bindings_without_ai_inference
     - unresolved_required_placeholders_block_save
     - saved_views_are_searchable_from_team_dashboard

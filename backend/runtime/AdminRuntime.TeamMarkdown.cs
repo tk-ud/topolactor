@@ -306,23 +306,42 @@ public partial class AdminRuntime
 
         if (vector.Payload is null)
             return (null, new ValidationError("REFRESH_PAYLOAD_REQUIRED",
-                "payload with refreshedRenderedMarkdown, updatedCompletedPresetSeedJson, and searchIndexText is required for refresh"));
+                "payload with templateMarkdown and sourceRecordJson is required for seed-driven refresh"));
 
         var p = vector.Payload.Value;
-        var refreshedMarkdown = p.TryGetProperty("refreshedRenderedMarkdown", out var rrm) ? rrm.GetString() ?? "" : "";
-        if (!p.TryGetProperty("updatedCompletedPresetSeedJson", out var updatedSeed) || updatedSeed.ValueKind == JsonValueKind.Null)
-            return (null, new ValidationError("COMPLETED_PRESET_SEED_MISSING",
-                "updatedCompletedPresetSeedJson is required for refresh; refresh uses seed binding_json not Markdown body parsing"));
+        JsonElement updatedSeed;
+        string refreshedMarkdown;
+        JsonElement? cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? (JsonElement?)cm : null;
+        var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? existing.SearchIndexText : existing.SearchIndexText;
+
+        if (p.TryGetProperty("templateMarkdown", out var tm) && p.TryGetProperty("sourceRecordJson", out var srj))
+        {
+            var render = MarkdownBindingRenderer.Render(tm.GetString() ?? "", existing.CompletedPresetSeedJson, srj);
+            if (!render.Ok)
+                return (null, new ValidationError(render.ErrorCode ?? "MARKDOWN_BINDING_RENDER_FAILED", render.Message ?? "Markdown binding render failed"));
+            refreshedMarkdown = render.RenderedMarkdown;
+            updatedSeed = MarkdownBindingRenderer.BuildUpdatedSeed(existing.CompletedPresetSeedJson,
+                render.RenderedMarkdownHash, render.UnresolvedRequiredPlaceholderKeys, render.ExplicitOptionalEmptyPlaceholderKeys);
+        }
+        else if (p.TryGetProperty("updatedCompletedPresetSeedJson", out var explicitSeed) &&
+                 p.TryGetProperty("refreshedRenderedMarkdown", out var rrm))
+        {
+            // Compatibility path for callers that pre-render via the same explicit seed contract.
+            refreshedMarkdown = rrm.GetString() ?? "";
+            updatedSeed = explicitSeed;
+        }
+        else
+        {
+            return (null, new ValidationError("REFRESH_PAYLOAD_REQUIRED",
+                "refresh requires templateMarkdown+sourceRecordJson or explicit updatedCompletedPresetSeedJson+refreshedRenderedMarkdown"));
+        }
 
         var updatedSeedError = CompletedPresetSeedValidator.Validate(updatedSeed);
         if (updatedSeedError is not null)
             return (null, updatedSeedError);
 
-        var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? "" : "";
-        var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? (JsonElement?)cm : null;
-
         var (updated, errorCode, message) = await _teamMarkdownRepository.UpdateSavedViewAsync(
-            savedViewId, null, refreshedMarkdown, null, updatedSeed, searchIndex, cardMeta, ct);
+            savedViewId, null, refreshedMarkdown, existing.UserAdjustmentPatchJson, updatedSeed, searchIndex, cardMeta, ct);
         if (errorCode is not null)
             return (null, new ValidationError(errorCode, message ?? errorCode));
 
@@ -332,6 +351,100 @@ public partial class AdminRuntime
 
         _logger.LogInformation("AdminRuntime.TeamMarkdown.SavedViewRefresh: savedViewId={SavedViewId}", savedViewId);
         return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString() }), null);
+    }
+
+    // ─── saved view clone ────────────────────────────────────────────────────
+
+    private async Task<(JsonElement? data, ValidationError? error)>
+        DataTeamMarkdownSavedViewCloneAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (_teamMarkdownRepository is null)
+            return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
+        if (vector.IdOrHubId is null)
+            return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        if (vector.Payload is null)
+            return (null, new ValidationError("CLONE_PAYLOAD_REQUIRED", "payload with targetSourceTableRef, targetSourceRecordRef, templateMarkdown, and sourceRecordJson is required"));
+
+        var sourceSavedViewId = vector.IdOrHubId.Value;
+        var (existing, getError, getMsg) = await _teamMarkdownRepository.GetSavedViewAsync(sourceSavedViewId, ct);
+        if (getError is not null) return (null, new ValidationError(getError, getMsg ?? getError));
+        if (existing is null) return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {sourceSavedViewId} not found"));
+        var seedError = CompletedPresetSeedValidator.Validate(existing.CompletedPresetSeedJson);
+        if (seedError is not null) return (null, seedError);
+
+        var p = vector.Payload.Value;
+        var targetTable = p.TryGetProperty("targetSourceTableRef", out var ts) ? ts.GetString() : null;
+        var targetRecord = p.TryGetProperty("targetSourceRecordRef", out var tr) ? tr.GetString() : null;
+        if (string.IsNullOrWhiteSpace(targetTable)) return (null, new ValidationError("PHYSICAL_TABLE_REF_NOT_REGISTERED", "targetSourceTableRef is required"));
+        if (string.IsNullOrWhiteSpace(targetRecord)) return (null, new ValidationError("SOURCE_RECORD_NOT_FOUND", "targetSourceRecordRef is required"));
+        if (!p.TryGetProperty("templateMarkdown", out var templateMarkdown) || !p.TryGetProperty("sourceRecordJson", out var sourceRecordJson))
+            return (null, new ValidationError("CLONE_PAYLOAD_REQUIRED", "clone requires templateMarkdown and sourceRecordJson for explicit binding render"));
+
+        var seedForTarget = MarkdownBindingRenderer.BuildUpdatedSeed(existing.CompletedPresetSeedJson,
+            existing.CompletedPresetSeedJson.GetProperty("render_ref").GetProperty("rendered_markdown_hash").GetString() ?? "",
+            Array.Empty<string>(), Array.Empty<string>(), targetTable, targetRecord, sourceSavedViewId.ToString(), "clone_from_saved_view");
+        var render = MarkdownBindingRenderer.Render(templateMarkdown.GetString() ?? "", seedForTarget, sourceRecordJson);
+        if (!render.Ok) return (null, new ValidationError(render.ErrorCode ?? "MARKDOWN_BINDING_RENDER_FAILED", render.Message ?? "Markdown binding render failed"));
+        var completedSeed = MarkdownBindingRenderer.BuildUpdatedSeed(seedForTarget, render.RenderedMarkdownHash,
+            render.UnresolvedRequiredPlaceholderKeys, render.ExplicitOptionalEmptyPlaceholderKeys, targetTable, targetRecord, sourceSavedViewId.ToString(), "clone_from_saved_view");
+        var completedSeedError = CompletedPresetSeedValidator.Validate(completedSeed);
+        if (completedSeedError is not null) return (null, completedSeedError);
+
+        var title = p.TryGetProperty("title", out var titleEl) ? titleEl.GetString() ?? existing.Title : existing.Title;
+        var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? "" : string.Join(" ", title, targetTable, targetRecord, render.RenderedMarkdown);
+        var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? cm : existing.CardMetadataJson;
+        var request = new TeamMarkdownSavedViewCreateRequest(existing.TemplateId, title, targetTable!, targetRecord!,
+            existing.BindingJson, completedSeed, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, searchIndex, cardMeta);
+        var (newId, createError, createMsg) = await _teamMarkdownRepository.CloneSavedViewAsync(request, ct);
+        if (createError is not null) return (null, new ValidationError(createError, createMsg ?? createError));
+        if (Guid.TryParse(newId, out var newGuid))
+            _ = await _teamMarkdownRepository.AppendEventAsync(newGuid, "clone", null,
+                JsonSerializer.SerializeToElement(new { sourceSavedViewId = sourceSavedViewId.ToString(), savedViewId = newId }), ct);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = newId, sourceSavedViewId = sourceSavedViewId.ToString() }), null);
+    }
+
+    // ─── saved view rebind ───────────────────────────────────────────────────
+
+    private async Task<(JsonElement? data, ValidationError? error)>
+        DataTeamMarkdownSavedViewRebindAsync(OperationVector vector, CancellationToken ct)
+    {
+        if (_teamMarkdownRepository is null)
+            return (null, new ValidationError("TEAM_MARKDOWN_NOT_CONFIGURED", "TeamMarkdownRepository is not registered"));
+        if (vector.IdOrHubId is null)
+            return (null, new ValidationError("SAVED_VIEW_ID_REQUIRED", "idOrHubId must be a valid saved view UUID"));
+        if (vector.Payload is null)
+            return (null, new ValidationError("REBIND_PAYLOAD_REQUIRED", "payload with bindingJson, templateMarkdown, and sourceRecordJson is required"));
+
+        var savedViewId = vector.IdOrHubId.Value;
+        var (existing, getError, getMsg) = await _teamMarkdownRepository.GetSavedViewAsync(savedViewId, ct);
+        if (getError is not null) return (null, new ValidationError(getError, getMsg ?? getError));
+        if (existing is null) return (null, new ValidationError("SAVED_VIEW_NOT_FOUND", $"Saved view {savedViewId} not found"));
+        var seedError = CompletedPresetSeedValidator.Validate(existing.CompletedPresetSeedJson);
+        if (seedError is not null) return (null, seedError);
+
+        var p = vector.Payload.Value;
+        if (!p.TryGetProperty("bindingJson", out var bindingJson) || !p.TryGetProperty("completedPresetSeedJson", out var proposedSeed))
+            return (null, new ValidationError("REBIND_PAYLOAD_REQUIRED", "rebind requires user-selected bindingJson and completedPresetSeedJson"));
+        var proposedSeedError = CompletedPresetSeedValidator.Validate(proposedSeed);
+        if (proposedSeedError is not null) return (null, proposedSeedError);
+        if (!p.TryGetProperty("templateMarkdown", out var templateMarkdown) || !p.TryGetProperty("sourceRecordJson", out var sourceRecordJson))
+            return (null, new ValidationError("REBIND_PAYLOAD_REQUIRED", "rebind requires templateMarkdown and sourceRecordJson for explicit binding render"));
+
+        var render = MarkdownBindingRenderer.Render(templateMarkdown.GetString() ?? "", proposedSeed, sourceRecordJson);
+        if (!render.Ok) return (null, new ValidationError(render.ErrorCode ?? "MARKDOWN_BINDING_RENDER_FAILED", render.Message ?? "Markdown binding render failed"));
+        var completedSeed = MarkdownBindingRenderer.BuildUpdatedSeed(proposedSeed, render.RenderedMarkdownHash,
+            render.UnresolvedRequiredPlaceholderKeys, render.ExplicitOptionalEmptyPlaceholderKeys, createdFrom: "rebind_saved_view");
+        var completedSeedError = CompletedPresetSeedValidator.Validate(completedSeed);
+        if (completedSeedError is not null) return (null, completedSeedError);
+
+        var searchIndex = p.TryGetProperty("searchIndexText", out var si) ? si.GetString() ?? existing.SearchIndexText : existing.SearchIndexText;
+        var cardMeta = p.TryGetProperty("cardMetadataJson", out var cm) ? (JsonElement?)cm : null;
+        var (updated, updateError, updateMsg) = await _teamMarkdownRepository.UpdateSavedViewAsync(savedViewId,
+            null, render.RenderedMarkdown, existing.UserAdjustmentPatchJson, completedSeed, searchIndex, cardMeta, ct);
+        if (updateError is not null) return (null, new ValidationError(updateError, updateMsg ?? updateError));
+        _ = await _teamMarkdownRepository.AppendEventAsync(savedViewId, "rebind", null,
+            JsonSerializer.SerializeToElement(new { savedViewId = savedViewId.ToString() }), ct);
+        return (JsonSerializer.SerializeToElement(new { ok = true, savedViewId = savedViewId.ToString(), updated }), null);
     }
 
     // ─── saved view update ───────────────────────────────────────────────────
@@ -415,10 +528,12 @@ public partial class AdminRuntime
             "saved_view:search"    => await DataTeamMarkdownSavedViewSearchAsync(vector, ct),
             "saved_view:get"       => await DataTeamMarkdownSavedViewGetAsync(vector, ct),
             "saved_view:refresh"   => await DataTeamMarkdownSavedViewRefreshAsync(vector, ct),
+            "saved_view:clone"     => await DataTeamMarkdownSavedViewCloneAsync(vector, ct),
+            "saved_view:rebind"    => await DataTeamMarkdownSavedViewRebindAsync(vector, ct),
             "saved_view:update"    => await DataTeamMarkdownSavedViewUpdateAsync(vector, ct),
             "saved_view:archive"   => await DataTeamMarkdownSavedViewArchiveAsync(vector, ct),
             _ => (null, new ValidationError("TEAM_MARKDOWN_ACTION_UNKNOWN",
-                    $"Unknown team_markdown action: {action}. Valid: template:create|list|get|update|archive, saved_view:create|search|get|refresh|update|archive"))
+                    $"Unknown team_markdown action: {action}. Valid: template:create|list|get|update|archive, saved_view:create|search|get|refresh|clone|rebind|update|archive"))
         };
     }
 }

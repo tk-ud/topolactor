@@ -46,6 +46,7 @@ export type MdViewerProps = {
   onEditAdjustment?: (savedViewId: string) => void;
   onArchive?: (savedViewId: string) => void;
   onClone?: (savedViewId: string) => void;
+  onRebind?: (savedViewId: string) => void;
   onOpenSourceRecord?: (
     sourceTableRef: string,
     sourceRecordRef: string,
@@ -157,6 +158,7 @@ function ActionToolbar({
   onEditAdjustment,
   onArchive,
   onClone,
+  onRebind,
   onOpenSourceRecord,
   onCreateTodoCandidate,
   onCopyMarkdown,
@@ -169,6 +171,7 @@ function ActionToolbar({
   onEditAdjustment?: (id: string) => void;
   onArchive?: (id: string) => void;
   onClone?: (id: string) => void;
+  onRebind?: (id: string) => void;
   onOpenSourceRecord?: (tableRef: string, recordRef: string) => void;
   onCreateTodoCandidate?: (id: string) => void;
   onCopyMarkdown: () => void;
@@ -184,9 +187,7 @@ function ActionToolbar({
   const openSourceDisabledReason = disabledActionReasons.openSourceRecord;
   const editDisabledReason = disabledActionReasons.editAdjustment;
   const createTodoDisabledReason = disabledActionReasons.createTodoCandidate;
-  const rebindDisabledReason = seedInvalidReason ??
-    disabledActionReasons.rebind ??
-    "Rebind backend action is not implemented in this bundle";
+  const rebindDisabledReason = seedInvalidReason ?? disabledActionReasons.rebind;
 
   return (
     <div
@@ -241,9 +242,10 @@ function ActionToolbar({
       <button
         type="button"
         class="md-viewer-action-btn"
-        disabled
+        disabled={!onRebind || Boolean(rebindDisabledReason)}
+        onClick={() => onRebind?.(savedView.savedViewId)}
         aria-label="Rebind saved view to another source"
-        title={rebindDisabledReason}
+        title={rebindDisabledReason ?? "Rebind saved view to another source"}
       >
         Rebind
       </button>
@@ -309,6 +311,7 @@ export function MdViewer({
   onEditAdjustment,
   onArchive,
   onClone,
+  onRebind,
   onOpenSourceRecord,
   onCreateTodoCandidate,
   disabledActionReasons,
@@ -375,6 +378,7 @@ export function MdViewer({
         onEditAdjustment={onEditAdjustment}
         onArchive={onArchive}
         onClone={onClone}
+        onRebind={onRebind}
         onOpenSourceRecord={onOpenSourceRecord}
         onCreateTodoCandidate={onCreateTodoCandidate}
         onCopyMarkdown={handleCopyMarkdown}

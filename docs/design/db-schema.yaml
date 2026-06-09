@@ -203,7 +203,9 @@ db_schema:
           and CI backend-tests.yml schema setup. completed_preset_seed_json and card_metadata_json
           are required (NOT NULL) as UX hard-gate JSONB columns. Saved Markdown view is a projection;
           physical table / jsonb records remain the canonical data authority.
-          NpgsqlTeamMarkdownRepository wired in Program.cs.
+          The migration also bootstraps the md_viewer Team Markdown completed-seed preset row
+          through topology.team_markdown_template_registry, using the existing preset ecosystem
+          registry path rather than a Markdown-only registry. NpgsqlTeamMarkdownRepository wired in Program.cs.
         ux_hard_gate_columns:
           - completed_preset_seed_json jsonb not null
           - card_metadata_json jsonb not null
