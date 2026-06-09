@@ -66,6 +66,9 @@ topology_layout_class_ssot:
     layout.root.grid:
       class_name: topolactor-topology-layout-root-grid
       category: layout
+      label: ルートグリッド
+      description: 12カラムグリッドのルートコンテナ
+      conflict_group: direction
       projection_scope:
         - topology_layout
       semantic_role: root_grid_container
@@ -75,6 +78,9 @@ topology_layout_class_ssot:
     layout.section.stack:
       class_name: topolactor-topology-layout-section-stack
       category: layout
+      label: 縦積みセクション
+      description: 子要素を縦に積むフレックスコンテナ
+      conflict_group: direction
       projection_scope:
         - topology_layout
       semantic_role: stacked_section
@@ -84,6 +90,9 @@ topology_layout_class_ssot:
     layout.row.flex:
       class_name: topolactor-topology-layout-row-flex
       category: layout
+      label: 横並び行
+      description: 子要素を横に並べるフレックスコンテナ
+      conflict_group: direction
       projection_scope:
         - topology_layout
       semantic_role: row_flex_container
@@ -93,6 +102,8 @@ topology_layout_class_ssot:
     layout.card.surface:
       class_name: topolactor-topology-layout-card-surface
       category: surface
+      label: カード面
+      description: 角丸・枠線・背景色のカード見た目
       projection_scope:
         - topology_component_wrapper
       semantic_role: projected_card_surface
@@ -102,6 +113,8 @@ topology_layout_class_ssot:
     layout.node.boundary:
       class_name: topolactor-topology-layout-node-boundary
       category: boundary
+      label: ノード境界
+      description: 選択可能なノードの外枠
       projection_scope:
         - topology_component_wrapper
       semantic_role: projected_node_boundary
@@ -111,6 +124,8 @@ topology_layout_class_ssot:
     layout.state.selected:
       class_name: topolactor-topology-layout-state-selected
       category: state
+      label: 選択中
+      description: 選択状態のハイライト
       projection_scope:
         - topology_layout_preview
       semantic_role: selected_projection_node
@@ -120,11 +135,508 @@ topology_layout_class_ssot:
     layout.state.blocked:
       class_name: topolactor-topology-layout-state-blocked
       category: state
+      label: ブロック中
+      description: ブロック状態の表示
       projection_scope:
         - topology_layout_preview
       semantic_role: blocked_projection_node
       allowed_for:
         - preview_state
+
+    layout.direction.stack:
+      class_name: topolactor-topology-layout-direction-stack
+      category: direction
+      label: 縦積み
+      description: 子要素を縦方向に並べる
+      conflict_group: direction
+      projection_scope:
+        - topology_layout
+      semantic_role: flex_column_container
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.direction.row:
+      class_name: topolactor-topology-layout-direction-row
+      category: direction
+      label: 横並び
+      description: 子要素を横方向に並べる
+      conflict_group: direction
+      projection_scope:
+        - topology_layout
+      semantic_role: flex_row_container
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.direction.wrap:
+      class_name: topolactor-topology-layout-direction-wrap
+      category: direction
+      label: 折り返し横並び
+      description: 子要素を横方向に並べて折り返す
+      conflict_group: direction
+      projection_scope:
+        - topology_layout
+      semantic_role: flex_row_wrap_container
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.align.start:
+      class_name: topolactor-topology-layout-align-start
+      category: alignment
+      label: 左揃え
+      conflict_group: align_h
+      projection_scope:
+        - topology_layout
+      semantic_role: justify_start
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.align.center:
+      class_name: topolactor-topology-layout-align-center
+      category: alignment
+      label: 中央揃え
+      conflict_group: align_h
+      projection_scope:
+        - topology_layout
+      semantic_role: justify_center
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.align.end:
+      class_name: topolactor-topology-layout-align-end
+      category: alignment
+      label: 右揃え
+      conflict_group: align_h
+      projection_scope:
+        - topology_layout
+      semantic_role: justify_end
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.align.between:
+      class_name: topolactor-topology-layout-align-between
+      category: alignment
+      label: 両端揃え
+      conflict_group: align_h
+      projection_scope:
+        - topology_layout
+      semantic_role: justify_between
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.valign.start:
+      class_name: topolactor-topology-layout-valign-start
+      category: alignment
+      label: 上揃え
+      conflict_group: align_v
+      projection_scope:
+        - topology_layout
+      semantic_role: items_start
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.valign.center:
+      class_name: topolactor-topology-layout-valign-center
+      category: alignment
+      label: 中央寄せ（縦）
+      conflict_group: align_v
+      projection_scope:
+        - topology_layout
+      semantic_role: items_center
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.valign.end:
+      class_name: topolactor-topology-layout-valign-end
+      category: alignment
+      label: 下揃え
+      conflict_group: align_v
+      projection_scope:
+        - topology_layout
+      semantic_role: items_end
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.width.full:
+      class_name: topolactor-topology-layout-width-full
+      category: sizing
+      label: 幅いっぱい
+      conflict_group: width
+      projection_scope:
+        - topology_layout
+      semantic_role: width_full
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.width.content:
+      class_name: topolactor-topology-layout-width-content
+      category: sizing
+      label: 内容幅
+      conflict_group: width
+      projection_scope:
+        - topology_layout
+      semantic_role: width_fit
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.width.sm:
+      class_name: topolactor-topology-layout-width-sm
+      category: sizing
+      label: 固定幅 小
+      conflict_group: width
+      projection_scope:
+        - topology_layout
+      semantic_role: width_fixed_sm
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.width.md:
+      class_name: topolactor-topology-layout-width-md
+      category: sizing
+      label: 固定幅 中
+      conflict_group: width
+      projection_scope:
+        - topology_layout
+      semantic_role: width_fixed_md
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.width.lg:
+      class_name: topolactor-topology-layout-width-lg
+      category: sizing
+      label: 固定幅 大
+      conflict_group: width
+      projection_scope:
+        - topology_layout
+      semantic_role: width_fixed_lg
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.gap.none:
+      class_name: topolactor-topology-layout-gap-none
+      category: spacing
+      label: 余白なし
+      conflict_group: gap
+      projection_scope:
+        - topology_layout
+      semantic_role: gap_none
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.gap.sm:
+      class_name: topolactor-topology-layout-gap-sm
+      category: spacing
+      label: 要素間隔 小
+      conflict_group: gap
+      projection_scope:
+        - topology_layout
+      semantic_role: gap_sm
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.gap.md:
+      class_name: topolactor-topology-layout-gap-md
+      category: spacing
+      label: 要素間隔 中
+      conflict_group: gap
+      projection_scope:
+        - topology_layout
+      semantic_role: gap_md
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.gap.lg:
+      class_name: topolactor-topology-layout-gap-lg
+      category: spacing
+      label: 要素間隔 大
+      conflict_group: gap
+      projection_scope:
+        - topology_layout
+      semantic_role: gap_lg
+      allowed_for:
+        - layout_root
+        - layout_section
+        - layout_row
+        - component_wrapper
+
+    layout.grid.col2:
+      class_name: topolactor-topology-layout-grid-col2
+      category: responsive
+      label: 2カラム
+      conflict_group: grid_cols
+      projection_scope:
+        - topology_layout
+      semantic_role: grid_cols_2
+      allowed_for:
+        - layout_root
+
+    layout.grid.col3:
+      class_name: topolactor-topology-layout-grid-col3
+      category: responsive
+      label: 3カラム
+      conflict_group: grid_cols
+      projection_scope:
+        - topology_layout
+      semantic_role: grid_cols_3
+      allowed_for:
+        - layout_root
+
+    layout.surface.border:
+      class_name: topolactor-topology-layout-surface-border
+      category: surface
+      label: 枠線あり
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: surface_border
+      allowed_for:
+        - component_wrapper
+        - layout_section
+
+    layout.surface.shadow:
+      class_name: topolactor-topology-layout-surface-shadow
+      category: surface
+      label: 影あり
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: surface_shadow
+      allowed_for:
+        - component_wrapper
+        - layout_section
+
+    layout.surface.subtle:
+      class_name: topolactor-topology-layout-surface-subtle
+      category: surface
+      label: 薄い背景
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: surface_subtle
+      allowed_for:
+        - component_wrapper
+        - layout_section
+
+    layout.surface.rounded:
+      class_name: topolactor-topology-layout-surface-rounded
+      category: surface
+      label: 角丸
+      projection_scope:
+        - topology_component_wrapper
+      semantic_role: surface_rounded
+      allowed_for:
+        - component_wrapper
+        - layout_section
+
+    layout.shell.modal:
+      class_name: topolactor-topology-layout-shell-modal
+      category: shell
+      label: モーダル面
+      projection_scope:
+        - topology_layout
+      semantic_role: shell_modal
+      allowed_for:
+        - layout_root
+
+    layout.shell.drawer:
+      class_name: topolactor-topology-layout-shell-drawer
+      category: shell
+      label: ドロワー面
+      projection_scope:
+        - topology_layout
+      semantic_role: shell_drawer
+      allowed_for:
+        - layout_root
+
+    layout.shell.sidebar:
+      class_name: topolactor-topology-layout-shell-sidebar
+      category: shell
+      label: サイドバー
+      projection_scope:
+        - topology_layout
+      semantic_role: shell_sidebar
+      allowed_for:
+        - layout_root
+
+    layout.shell.header:
+      class_name: topolactor-topology-layout-shell-header
+      category: shell
+      label: ヘッダー
+      projection_scope:
+        - topology_layout
+      semantic_role: shell_header
+      allowed_for:
+        - layout_root
+
+    layout.shell.footer:
+      class_name: topolactor-topology-layout-shell-footer
+      category: shell
+      label: フッター
+      projection_scope:
+        - topology_layout
+      semantic_role: shell_footer
+      allowed_for:
+        - layout_root
+
+    layout.container.page:
+      class_name: topolactor-topology-layout-container-page
+      category: container
+      label: ページ
+      projection_scope:
+        - topology_layout
+      semantic_role: container_page
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.section:
+      class_name: topolactor-topology-layout-container-section
+      category: container
+      label: セクション
+      projection_scope:
+        - topology_layout
+      semantic_role: container_section
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.card:
+      class_name: topolactor-topology-layout-container-card
+      category: container
+      label: カード
+      projection_scope:
+        - topology_layout
+      semantic_role: container_card
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.panel:
+      class_name: topolactor-topology-layout-container-panel
+      category: container
+      label: パネル
+      projection_scope:
+        - topology_layout
+      semantic_role: container_panel
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.form:
+      class_name: topolactor-topology-layout-container-form
+      category: container
+      label: フォーム
+      projection_scope:
+        - topology_layout
+      semantic_role: container_form
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.toolbar:
+      class_name: topolactor-topology-layout-container-toolbar
+      category: container
+      label: ツールバー
+      projection_scope:
+        - topology_layout
+      semantic_role: container_toolbar
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.container.list:
+      class_name: topolactor-topology-layout-container-list
+      category: container
+      label: リスト
+      projection_scope:
+        - topology_layout
+      semantic_role: container_list
+      allowed_for:
+        - layout_root
+        - layout_section
+
+    layout.form.row:
+      class_name: topolactor-topology-layout-form-row
+      category: form_layout
+      label: フォーム行（ラベル上）
+      projection_scope:
+        - topology_layout
+      semantic_role: form_row
+      allowed_for:
+        - layout_section
+        - layout_row
+
+    layout.form.inline:
+      class_name: topolactor-topology-layout-form-inline
+      category: form_layout
+      label: ラベル左（インライン）
+      projection_scope:
+        - topology_layout
+      semantic_role: form_inline
+      allowed_for:
+        - layout_section
+        - layout_row
+
+    layout.form.button_row:
+      class_name: topolactor-topology-layout-form-button-row
+      category: form_layout
+      label: ボタン行
+      projection_scope:
+        - topology_layout
+      semantic_role: form_button_row
+      allowed_for:
+        - layout_section
+        - layout_row
 
   generated_artifacts:
     - frontend/runtime/topologyLayoutClassDictionary.ts

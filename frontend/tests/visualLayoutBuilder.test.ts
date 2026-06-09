@@ -1595,3 +1595,50 @@ Deno.test("adminUxTerms: design save label is node-scoped, not tab-scoped", () =
   assertEquals(UX_DESIGN_NODE_SAVE_LABEL, "選択ノードのデザインを保存");
 });
 
+// ─── layoutClassDictionary: new vocabulary ────────────────────────────────────
+
+import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
+
+Deno.test("layoutClassDictionary: all entries have non-empty label", () => {
+  for (const e of TOPOLOGY_LAYOUT_CLASS_DICTIONARY) {
+    assert(e.label.length > 0, `entry ${e.classKey} must have non-empty label`);
+  }
+});
+
+Deno.test("layoutClassDictionary: direction entries have conflictGroup=direction", () => {
+  const directionEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "direction");
+  assert(directionEntries.length >= 3);
+  for (const e of directionEntries) {
+    assertEquals(e.conflictGroup, "direction", `${e.classKey} must have conflictGroup=direction`);
+  }
+});
+
+Deno.test("layoutClassDictionary: alignment entries have conflictGroup align_h or align_v", () => {
+  const alignEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "alignment");
+  assert(alignEntries.length >= 4);
+  for (const e of alignEntries) {
+    assert(
+      e.conflictGroup === "align_h" || e.conflictGroup === "align_v",
+      `alignment entry ${e.classKey} must have align_h or align_v conflictGroup`,
+    );
+  }
+});
+
+Deno.test("layoutClassDictionary: sizing entries have conflictGroup=width", () => {
+  const sizingEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "sizing");
+  assert(sizingEntries.length >= 2);
+  for (const e of sizingEntries) {
+    assertEquals(e.conflictGroup, "width");
+  }
+});
+
+Deno.test("layoutClassDictionary: layout.direction.stack resolves in canvas root preview", () => {
+  const className = resolveCanvasRootPreviewClassName(["layout.direction.stack"]);
+  assertEquals(className, "topolactor-topology-layout-direction-stack");
+});
+
+Deno.test("layoutClassDictionary: layout.align.center filtered for layout_section role", () => {
+  const filtered = filterLayoutClassRefsByAllowedFor(["layout.align.center"], "layout_section");
+  assertEquals(filtered, ["layout.align.center"]);
+});
+
