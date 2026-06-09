@@ -117,7 +117,9 @@ public class StructureMapResolver
                         WiringKey: row.WiringKey,
                         WiringKind: row.WiringKind,
                         TargetSurface: row.TargetSurface,
-                        TargetRef: row.TargetRef
+                        TargetRef: row.TargetRef,
+                        PropsJson: row.PropsJson,
+                        StateJson: row.StateJson
                     )).ToList();
                 }
             }

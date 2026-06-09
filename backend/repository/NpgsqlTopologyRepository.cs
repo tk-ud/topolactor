@@ -429,6 +429,11 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     if (refs.Count > 0) layoutClassRefs = refs;
                 }
 
+                var propsJson = node.TryGetProperty("propsJson", out var pj) && pj.ValueKind == JsonValueKind.String
+                    ? pj.GetString() : null;
+                var stateJson = node.TryGetProperty("stateJson", out var sj) && sj.ValueKind == JsonValueKind.String
+                    ? sj.GetString() : null;
+
                 result.Add(new LayoutNodeRecord(
                     NodeId: nodeId!,
                     NodeKind: nodeKind,
@@ -442,7 +447,9 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     Y: y,
                     Width: width,
                     Height: height,
-                    LayoutClassRefs: layoutClassRefs
+                    LayoutClassRefs: layoutClassRefs,
+                    PropsJson: propsJson,
+                    StateJson: stateJson
                 ));
             }
 

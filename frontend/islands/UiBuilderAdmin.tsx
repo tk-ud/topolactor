@@ -169,12 +169,10 @@ type DraftNode = {
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
-  /** Serialized component props override for runtime wiring (JSON string). SSOT: layout_patch_json */
+  /** Serialized component props override (JSON string). Flowed through layout_patch_json → backend → renderEmission. SSOT: layout_patch_json */
   propsJson?: string;
-  /** Serialized component state override (JSON string). Includes open:boolean for disclosure/drawer. SSOT: layout_patch_json */
+  /** Serialized component state override (JSON string). open:boolean for disclosure/drawer — merged into props.data at render time. SSOT: layout_patch_json */
   stateJson?: string;
-  /** Serialized event binding map for runtime wiring (JSON string). Holds runtimeDispatch for button click etc. SSOT: layout_patch_json */
-  eventBindingJson?: string;
 };
 
 type DesignDraft = FlowCanvasDesignDraft;
@@ -596,6 +594,7 @@ function LayoutRightDock({
             defaultOpen={true}
           >
             <CanvasInspector
+              key={selectedNode.nodeId}
               embedded
               node={selectedNode}
               draftNodes={draftNodes}
@@ -2298,15 +2297,8 @@ function CanvasInspector({
   const [propsError, setPropsError] = useState<string | null>(null);
   const [stateDraft, setStateDraft] = useState(node.stateJson ?? "");
   const [stateError, setStateError] = useState<string | null>(null);
-  const [bindingDraft, setBindingDraft] = useState(node.eventBindingJson ?? "");
-  const [bindingError, setBindingError] = useState<string | null>(null);
-  const [rdLayer, setRdLayer] = useState("");
-  const [rdAction, setRdAction] = useState("");
-  const [rdTarget, setRdTarget] = useState("");
-  const [rdOpType, setRdOpType] = useState("admin");
 
   const isDisclosure = isDisclosureKind(node.componentKind);
-  const isButton = node.componentKind === "action/button";
   const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
   const isContainer = isLayoutContainerNode(node, draftNodes);
 
@@ -2625,29 +2617,6 @@ function CanvasInspector({
     }
   };
 
-  const commitRuntimeDispatch = () => {
-    if (!rdLayer.trim() || !rdAction.trim() || !rdTarget.trim()) {
-      setBindingError("layer / action / target をすべて入力してください");
-      return;
-    }
-    const binding = {
-      click: {
-        eventType: "click",
-        payload: {},
-        runtimeDispatch: {
-          operationType: rdOpType.trim() || "admin",
-          layer: rdLayer.trim(),
-          action: rdAction.trim(),
-          target: rdTarget.trim(),
-        },
-      },
-    };
-    const next = JSON.stringify(binding, null, 2);
-    setBindingDraft(next);
-    setBindingError(null);
-    onCommit({ eventBindingJson: next }, "click runtimeDispatchを設定");
-  };
-
   const wiringTab = (
     <div class="space-y-3">
       <p class="text-[0.6rem] text-slate-500">
@@ -2729,72 +2698,6 @@ function CanvasInspector({
         {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
       </fieldset>
 
-      {/* Event Binding — runtimeDispatch builder for button */}
-      <fieldset class="flex flex-col gap-1">
-        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-          Event Binding JSON
-        </legend>
-        {isButton && (
-          <details class="mb-2 rounded border border-slate-200 bg-slate-50 p-2">
-            <summary class="cursor-pointer text-[0.6rem] font-semibold text-slate-700">クリックAPI接続ビルダー</summary>
-            <div class="mt-1 space-y-1">
-              <label class="flex flex-col gap-0.5 text-[0.6rem]">
-                operationType
-                <input value={rdOpType} onInput={(e) => setRdOpType((e.target as HTMLInputElement).value)}
-                  placeholder="admin" class="input-mono text-[0.6rem]" />
-              </label>
-              <label class="flex flex-col gap-0.5 text-[0.6rem]">
-                layer
-                <input value={rdLayer} onInput={(e) => setRdLayer((e.target as HTMLInputElement).value)}
-                  placeholder="ui_topology" class="input-mono text-[0.6rem]" />
-              </label>
-              <label class="flex flex-col gap-0.5 text-[0.6rem]">
-                action
-                <input value={rdAction} onInput={(e) => setRdAction((e.target as HTMLInputElement).value)}
-                  placeholder="list_packages" class="input-mono text-[0.6rem]" />
-              </label>
-              <label class="flex flex-col gap-0.5 text-[0.6rem]">
-                target
-                <input value={rdTarget} onInput={(e) => setRdTarget((e.target as HTMLInputElement).value)}
-                  placeholder="admin" class="input-mono text-[0.6rem]" />
-              </label>
-              <button type="button" class="btn-secondary text-xs mt-1" onClick={commitRuntimeDispatch}>
-                適用
-              </button>
-              {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
-            </div>
-          </details>
-        )}
-        {isDisclosure && (
-          <p class="text-[0.6rem] text-slate-500 mb-1">
-            開閉binding: プレビューでは不活性。接続済みの場合のみ閉じる操作が発火します。
-          </p>
-        )}
-        <textarea
-          value={bindingDraft}
-          onInput={(e) => setBindingDraft((e.target as HTMLTextAreaElement).value)}
-          onBlur={() => {
-            const v = bindingDraft.trim();
-            if (!v) {
-              setBindingError(null);
-              onCommit({ eventBindingJson: undefined }, "eventBindingJsonをクリア");
-              return;
-            }
-            try {
-              JSON.parse(v);
-              setBindingError(null);
-              onCommit({ eventBindingJson: v }, "eventBindingJsonを更新");
-            } catch {
-              setBindingError("JSON形式が不正です");
-            }
-          }}
-          rows={4}
-          placeholder='{"click": {"eventType": "click", "dispatch": {...}}}'
-          class="input-mono w-full text-[0.6rem]"
-          aria-label="eventBindingJson"
-        />
-        {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
-      </fieldset>
     </div>
   );
 
