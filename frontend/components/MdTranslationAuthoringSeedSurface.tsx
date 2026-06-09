@@ -20,6 +20,7 @@
  *   - Mutating UIBuilder canvas/package edit root
  */
 
+import type { JSX } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   createSavedView,

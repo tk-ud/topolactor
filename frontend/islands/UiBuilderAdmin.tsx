@@ -2269,7 +2269,7 @@ function UiBuilderPresetEcosystemPanel(): JSX.Element {
               <span class="mr-2 font-semibold">
                 md translation preset authoring
               </span>
-              <StatusBadge text="registry-driven" variant="warning" />
+              <StatusBadge text="registry-driven" variant="warn" />
             </summary>
             <p class="mb-2 mt-2 text-xs text-amber-800">
               Registry-driven md translation authoring surface. Creates saved
