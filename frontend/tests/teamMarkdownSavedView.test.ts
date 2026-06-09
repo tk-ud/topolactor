@@ -134,19 +134,8 @@ Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke f
   const todo = await Deno.readTextFile(".agent/tasks/todo.md");
   const roadmap = await Deno.readTextFile("docs/system-roadmap.yaml");
 
+  // Both files must reject old bespoke form terms (regression guard)
   for (const source of [todo, roadmap]) {
-    assertEquals(
-      source.includes("md_translation_template_seed_registration_surface"),
-      true,
-    );
-    assertEquals(
-      source.includes("md_translation_binding_seed_authoring_surface"),
-      true,
-    );
-    assertEquals(
-      source.includes("md_translation_saved_view_create_seed_flow"),
-      true,
-    );
     assertEquals(
       source.includes("template_registration_modal_or_drawer UI"),
       false,
@@ -154,6 +143,19 @@ Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke f
     assertEquals(source.includes("RecordMarkdownBindForm"), false);
     assertEquals(source.includes("MarkdownTemplateRegistryForm"), false);
   }
+  // Canonical task IDs must appear in todo (completed or pending)
+  assertEquals(
+    todo.includes("md_translation_template_seed_registration_surface"),
+    true,
+  );
+  assertEquals(
+    todo.includes("md_translation_binding_seed_authoring_surface"),
+    true,
+  );
+  assertEquals(
+    todo.includes("md_translation_saved_view_create_seed_flow"),
+    true,
+  );
 
   assertEquals(
     todo.includes("[x] **md_translation_seed_candidate_builder_contract**"),
@@ -165,47 +167,49 @@ Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke f
   );
   assertEquals(
     todo.includes(
-      "[ ] **md_translation_template_seed_registration_surface_completion**",
+      "[x] **md_translation_template_seed_registration_surface_completion**",
     ),
     true,
   );
   assertEquals(
     todo.includes(
-      "[ ] **md_translation_binding_seed_authoring_surface_completion**",
+      "[x] **md_translation_binding_seed_authoring_surface_completion**",
     ),
     true,
   );
   assertEquals(
     todo.includes(
-      "[ ] **md_translation_saved_view_create_seed_flow_completion**",
+      "[x] **md_translation_saved_view_create_seed_flow_completion**",
     ),
     true,
   );
   assertEquals(
-    todo.includes("[ ] **existing_component_bucket_composition_hardening**"),
+    todo.includes("[x] **existing_component_bucket_composition_hardening**"),
     true,
   );
+  // Bundle md_translation_registry_driven_authoring_surface_completion is closed —
+  // these four known_gap_ref items must no longer appear in roadmap as pending.
   assertEquals(
     roadmap.includes(
       "md_translation_template_seed_registration_surface_completion_pending",
     ),
-    true,
+    false,
   );
   assertEquals(
     roadmap.includes(
       "md_translation_binding_seed_authoring_surface_completion_pending",
     ),
-    true,
+    false,
   );
   assertEquals(
     roadmap.includes(
       "md_translation_saved_view_create_seed_flow_completion_pending",
     ),
-    true,
+    false,
   );
   assertEquals(
     roadmap.includes("existing_component_bucket_composition_hardening_pending"),
-    true,
+    false,
   );
 });
 
@@ -967,5 +971,100 @@ Deno.test("md_translation authoring surface catalog entry is registry-driven aut
   assertEquals(
     catalogSource.includes("registry-driven"),
     true,
+  );
+});
+
+// ─── registry-driven authoring surface bundle completion tests ────────────────
+
+Deno.test("authoring surface imports listRelationshipRemoteTargets from adminApi as primary source table source", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes("listRelationshipRemoteTargets"),
+    true,
+    "authoring surface must import and use listRelationshipRemoteTargets from adminApi for registry-driven table selection",
+  );
+  assertEquals(
+    surfaceSource.includes("../api/adminApi.ts"),
+    true,
+    "authoring surface must import from adminApi.ts for registry-driven source",
+  );
+});
+
+Deno.test("authoring surface provides column candidates from registry to binding rows", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes("availableColumns"),
+    true,
+    "authoring surface must pass availableColumns from registry to binding rows",
+  );
+  assertEquals(
+    surfaceSource.includes("datalist"),
+    true,
+    "authoring surface must include datalist element for column candidate selection",
+  );
+  assertEquals(
+    surfaceSource.includes("selectedTableColumns"),
+    true,
+    "authoring surface must derive selectedTableColumns from registry selection",
+  );
+});
+
+Deno.test("saved_query_result_field binding has explicit no-enumeration-API label", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes("no saved query enumeration API"),
+    true,
+    "saved_query_result_field must carry explicit label that there is no saved query enumeration API — no silent fallback",
+  );
+});
+
+Deno.test("source record ref is always explicit manual input — no record enumeration API", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes('data-source-record-ref-manual="true"'),
+    true,
+    "source record ref input must carry data-source-record-ref-manual attribute",
+  );
+  assertEquals(
+    surfaceSource.includes("no record enumeration API"),
+    true,
+    "source record ref must carry explicit label that there is no record enumeration API",
+  );
+});
+
+Deno.test("authoring surface data-component-bucket-parts attribute documents existing bucket composition", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes(
+      'data-component-bucket-parts="select input textarea button existing_bucket_parts"',
+    ),
+    true,
+    "main authoring surface div must declare select input textarea button existing_bucket_parts",
+  );
+});
+
+Deno.test("authoring surface registry state unavailable is explicit, not silent", () => {
+  const surfaceSource = Deno.readTextFileSync(
+    "frontend/components/MdTranslationAuthoringSeedSurface.tsx",
+  );
+  assertEquals(
+    surfaceSource.includes('data-registry-state="unavailable"'),
+    true,
+    "registry unavailable state must be marked with data-registry-state=unavailable attribute",
+  );
+  assertEquals(
+    surfaceSource.includes("registryAvailable"),
+    true,
+    "authoring surface must track registryAvailable state",
   );
 });
