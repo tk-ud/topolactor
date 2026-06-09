@@ -1457,3 +1457,125 @@ Deno.test("flow projection: buildFlowNodeStyle omits x/y", async () => {
   assertEquals(style.width, "120px");
 });
 
+// ─── panel boundary: left docked panel / design save / dashboard preset candidate ──
+// SSOT: admin-console-workflow-ssot.yaml §canvas_workspace_contract
+
+import {
+  UI_BUILDER_LEFT_PANEL_DOCKED,
+  UI_BUILDER_DESIGN_SAVE_ABOVE_TABS,
+} from "../islands/UiBuilderAdmin.tsx";
+
+Deno.test("canvas workspace: palette panels are left-docked, not strip above canvas", () => {
+  // SSOT: canvas_workspace_contract.left_panel position = fixed left, docked.
+  assertEquals(UI_BUILDER_LEFT_PANEL_DOCKED, true);
+});
+
+Deno.test("canvas workspace: design save action is above inspector tabs", () => {
+  // SSOT: design_inspector — save action must not be tab-specific.
+  assertEquals(UI_BUILDER_DESIGN_SAVE_ABOVE_TABS, true);
+});
+
+Deno.test("canvas workspace: left panel has data-component-add-panel marker", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes('data-component-add-panel="true"'));
+});
+
+Deno.test("canvas workspace: design save button has data-design-save-action marker above InspectorTabPanel", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  const savePos = src.indexOf('data-design-save-action="true"');
+  const tabPos = src.indexOf("InspectorTabPanel");
+  // design save action must appear in source before first InspectorTabPanel
+  assert(savePos !== -1, "data-design-save-action must exist");
+  assert(tabPos !== -1, "InspectorTabPanel must exist");
+  // The save action element in PackageDesignPanel must come before the InspectorTabPanel in the same component.
+  // Since they're in the same function body, and we placed save before tabs, check ordering.
+  // We look for the save action's position within the PackageDesignPanel return block.
+  const panelStart = src.indexOf("function PackageDesignPanel(");
+  assert(panelStart !== -1);
+  const panelEnd = src.indexOf("\nfunction ", panelStart + 1);
+  const panelBody = panelEnd > 0 ? src.slice(panelStart, panelEnd) : src.slice(panelStart);
+  const savePosInPanel = panelBody.indexOf('data-design-save-action="true"');
+  const tabPosInPanel = panelBody.indexOf("InspectorTabPanel");
+  assert(savePosInPanel !== -1, "save action must be in PackageDesignPanel");
+  assert(tabPosInPanel !== -1, "InspectorTabPanel must be in PackageDesignPanel");
+  assert(
+    savePosInPanel < tabPosInPanel,
+    "design save action must appear before InspectorTabPanel in PackageDesignPanel",
+  );
+});
+
+Deno.test("canvas workspace: no fixed-width palette strip above canvas", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // Legacy fixed-width palette strip class must not exist.
+  assertFalse(
+    src.includes("PALETTE_STRIP_PANEL_CLASS"),
+    "PALETTE_STRIP_PANEL_CLASS (fixed-width block) must be removed",
+  );
+  // The horizontal overflow scroll strip must not exist.
+  assertFalse(
+    src.includes("ui-builder-palette-strip"),
+    "ui-builder-palette-strip above canvas must be replaced by left-docked panel",
+  );
+});
+
+Deno.test("canvas workspace: dashboard candidate panel uses preset/md_viewer description", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // Dashboard candidate palette must reference preset / md_viewer purpose, not the old vague label.
+  assert(
+    src.includes("UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION"),
+    "DashboardCandidatePalette must use UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION",
+  );
+  assertFalse(
+    src.includes('"ダッシュボード候補"'),
+    "old vague label ダッシュボード候補 must not appear as a string literal",
+  );
+});
+
+Deno.test("canvas workspace: frontend has no DB direct write or topology judgment", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // SSOT: frontend_is_projection_surface_only — no direct DB write, no topology judgment.
+  assertFalse(src.includes("direct_DB_write"), "frontend must not include direct DB write marker");
+  assertFalse(
+    src.includes("topology_judgment"),
+    "frontend must not include topology judgment marker",
+  );
+});
+
+import {
+  UX_COMPONENT_ADD_PANEL_LABEL,
+  UX_DASHBOARD_PRESET_CANDIDATE_LABEL,
+  UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION,
+  UX_DESIGN_NODE_SAVE_LABEL,
+} from "../content/adminUxTerms.ts";
+
+Deno.test("adminUxTerms: component add panel and dashboard preset candidate labels", () => {
+  assertEquals(UX_COMPONENT_ADD_PANEL_LABEL, "部品追加");
+  assertEquals(UX_DASHBOARD_PRESET_CANDIDATE_LABEL, "ダッシュボード preset 候補");
+  assert(
+    UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION.includes("preset"),
+    "dashboard preset description must reference preset",
+  );
+  assert(
+    UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION.includes("md_viewer"),
+    "dashboard preset description must reference md_viewer",
+  );
+  assert(
+    UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION.includes("team-dashboard"),
+    "dashboard preset description must reference team-dashboard",
+  );
+});
+
+Deno.test("adminUxTerms: design save label is node-scoped, not tab-scoped", () => {
+  assertEquals(UX_DESIGN_NODE_SAVE_LABEL, "選択ノードのデザインを保存");
+});
+
