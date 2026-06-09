@@ -313,3 +313,20 @@ export const UX_ROUTE_NAVIGATION_PRESET_LABEL = "クリック時に指定ルー�
 export const UX_ROUTE_NAVIGATION_NONE_LABEL = "（移動しない）";
 export const UX_ROUTE_NAVIGATION_ROUTE_SELECT_LABEL = "移動先ルートを選択";
 export const UX_ROUTE_NAVIGATION_SAVE_LABEL = "ルート遷移の配線を保存";
+
+/** 左 docked panel — 部品追加パネル見出し（SSOT: canvas_workspace_contract.left_panel）。 */
+export const UX_COMPONENT_ADD_PANEL_LABEL = "部品追加";
+
+/** 左 docked panel — ダッシュボード preset 候補タブラベル。 */
+export const UX_DASHBOARD_PRESET_CANDIDATE_LABEL = "ダッシュボード preset 候補";
+
+/**
+ * ダッシュボード preset 候補の説明文。
+ * dashboard_placement_candidate タグを持つ部品（preset / md_viewer 候補）。
+ * DB バケット登録不要。主導線は /admin/team-dashboard。
+ */
+export const UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION =
+  "dashboard_placement_candidate — preset / md_viewer 候補。DB 登録不要。主導線: /admin/team-dashboard。";
+
+/** design_inspector 上部固定アクション — 選択ノードのデザイン設定を保存。 */
+export const UX_DESIGN_NODE_SAVE_LABEL = "選択ノードのデザインを保存";

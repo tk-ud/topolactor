@@ -23,9 +23,13 @@ import UiBuilderFlowStepper, {
   type UiBuilderFlowStepId,
 } from "../components/UiBuilderFlowStepper.tsx";
 import {
+  UX_COMPONENT_ADD_PANEL_LABEL,
   UX_COMPONENT_BUCKET_CARD_DRAG_HINT,
+  UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION,
+  UX_DASHBOARD_PRESET_CANDIDATE_LABEL,
   UX_DESIGN_EDITOR_SURFACE,
   UX_DESIGN_INSPECTOR_SECTION,
+  UX_DESIGN_NODE_SAVE_LABEL,
   UX_EMPTY_CANVAS_DRAG_GUIDANCE,
   UX_LAYOUT_EDITOR_SURFACE,
   UX_LAYOUT_INSPECTOR_SECTION,
@@ -112,6 +116,10 @@ import { queueAdminClientCommand } from "../runtime/frontendScheduler.ts";
 export const UI_BUILDER_WORKSPACE_MODE = "canvas_workspace_v2" as const;
 /** No separate layout/design/visual tabs — single unified workspace. */
 export const UI_BUILDER_HAS_SEPARATE_TABS = false as const;
+/** Palette panels are left docked inside the canvas workspace row, not a strip above. */
+export const UI_BUILDER_LEFT_PANEL_DOCKED = true as const;
+/** Design save action is positioned above the inspector tabs (not tab-specific). */
+export const UI_BUILDER_DESIGN_SAVE_ABOVE_TABS = true as const;
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -695,10 +703,8 @@ const SNAP_SIZE = 10;
 const DEFAULT_NODE_WIDTH = 140;
 const DEFAULT_NODE_HEIGHT = 60;
 const CANVAS_MIN_HEIGHT = 480;
-/** Canvas block height — palettes live in a separate strip above. */
-const CANVAS_WORKSPACE_HEIGHT = "calc(100dvh - 13rem)";
-const PALETTE_STRIP_PANEL_CLASS =
-  "component-bucket-panel-left flex h-44 w-[12rem] shrink-0 flex-col overflow-hidden rounded-lg border p-2";
+/** Canvas workspace height — palettes are left-docked inside the row, no strip overhead. */
+const CANVAS_WORKSPACE_HEIGHT = "calc(100dvh - 11rem)";
 const MAX_HISTORY = 50;
 
 // Gap 3: Error code → actionable cause + fix
@@ -2913,9 +2919,7 @@ function LayoutPalette({
     : scopeEntries;
 
   return (
-    <div class={`${PALETTE_STRIP_PANEL_CLASS} border-gray-200 bg-gray-50`}>
-      <h4 class="mb-1 text-sm font-semibold">配置可能部品</h4>
-
+    <div class="flex min-h-0 flex-1 flex-col">
       <input
         value={filter}
         onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
@@ -2923,16 +2927,13 @@ function LayoutPalette({
         class="mb-1 w-full rounded border border-gray-300 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
         aria-label="パレットの部品を絞り込み"
       />
-
       <p class="mb-1.5 text-[0.62rem] text-gray-500">
         {UX_COMPONENT_BUCKET_CARD_DRAG_HINT}
       </p>
       {status && <p class="text-[0.62rem] text-gray-400">{status}</p>}
-
       {filtered.length === 0 && (
         <p class="py-3 text-center text-[0.65rem] text-gray-400">該当なし</p>
       )}
-
       <div class="component-bucket-panel flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto" role="list">
         {filtered.map((c) => {
           const draftOnly = c.isDraftOnly;
@@ -2995,19 +2996,18 @@ function DashboardCandidatePalette({
 
   return (
     <div
-      class={`${PALETTE_STRIP_PANEL_CLASS} border-blue-200 bg-blue-50`}
+      class="flex min-h-0 flex-1 flex-col"
       data-dashboard-candidate-palette="true"
     >
-      <h4 class="mb-1 text-sm font-semibold text-blue-900">ダッシュボード候補</h4>
       <input
         value={filter}
         onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
         placeholder="絞り込み..."
         class="mb-1 w-full rounded border border-blue-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
-        aria-label="ダッシュボード候補を絞り込み"
+        aria-label={`${UX_DASHBOARD_PRESET_CANDIDATE_LABEL}を絞り込み`}
       />
       <p class="mb-1.5 text-[0.62rem] text-blue-700">
-        dashboard_placement_candidate — DB 登録不要。/admin/team-dashboard が主導線。
+        {UX_DASHBOARD_PRESET_CANDIDATE_DESCRIPTION}
       </p>
       {filtered.length === 0 && (
         <p class="py-3 text-center text-[0.65rem] text-blue-400">該当なし</p>
@@ -3023,11 +3023,11 @@ function DashboardCandidatePalette({
               componentKey={c.componentKey}
               componentKind={c.componentKind}
               sourcePath={catalogEntry?.sourcePath}
-              statusLabel="候補"
+              statusLabel="preset 候補"
               statusVariant="info"
               draggable={!disabled}
               placementReady
-              dragPayload={bucketCardDragPayloadFromEntry(c, "ダッシュボード候補")}
+              dragPayload={bucketCardDragPayloadFromEntry(c, UX_DASHBOARD_PRESET_CANDIDATE_LABEL)}
               onDragStart={(_e, payload) => onDragStart(c, payload)}
               onAddToCanvas={() => onAddToCanvas(c)}
             />
@@ -3053,8 +3053,7 @@ function StructuralHtmlPalette({
     : STRUCTURAL_HTML_TAG_ALLOWLIST;
 
   return (
-    <div class={`${PALETTE_STRIP_PANEL_CLASS} border-emerald-200 bg-emerald-50`}>
-      <h4 class="mb-1 text-sm font-semibold text-emerald-900">構造 HTML</h4>
+    <div class="flex min-h-0 flex-1 flex-col">
       <input
         value={filter}
         onInput={(e) => setFilter((e.target as HTMLInputElement).value)}
@@ -3091,6 +3090,96 @@ function StructuralHtmlPalette({
         ))}
       </div>
     </div>
+  );
+}
+
+// ─── 左 docked panel — 部品追加パネル（SSOT: canvas_workspace_contract.left_panel）──
+
+/** Left docked panel integrating component_bucket / dashboard preset candidate / structural HTML
+ * as tabs within a single unified 部品追加 area. */
+function LeftDockedPalettePanel({
+  onDragStart,
+  onAddToCanvas,
+  paletteEntries,
+  paletteStatus,
+  onAddStructuralHtmlTag,
+  selectorsDisabled,
+}: {
+  onDragStart: (entry: PaletteEntry, payload: BucketCardDragPayload) => void;
+  onAddToCanvas: (entry: PaletteEntry) => void;
+  paletteEntries: PaletteEntry[];
+  paletteStatus: string | null;
+  onAddStructuralHtmlTag: (tag: StructuralHtmlTag) => void;
+  selectorsDisabled: boolean;
+}): JSX.Element {
+  const [activeTab, setActiveTab] = useState<"bucket" | "dashboard" | "html">("bucket");
+  const tabs: Array<{ id: "bucket" | "dashboard" | "html"; label: string }> = [
+    { id: "bucket", label: "配置可能部品" },
+    { id: "dashboard", label: "preset 候補" },
+    { id: "html", label: "構造 HTML" },
+  ];
+
+  return (
+    <aside
+      class="left-docked-panel flex shrink-0 flex-col overflow-hidden rounded-lg border border-slate-200 bg-slate-50"
+      style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
+      aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
+      data-component-add-panel="true"
+    >
+      <div
+        class="flex shrink-0 border-b border-slate-200 bg-white"
+        role="tablist"
+        aria-label={`${UX_COMPONENT_ADD_PANEL_LABEL}タブ`}
+      >
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            aria-controls={`left-panel-tab-${id}`}
+            id={`left-panel-tabbutton-${id}`}
+            class={`flex-1 border-r border-slate-200 px-1 py-1.5 text-[0.58rem] font-semibold transition-colors last:border-r-0 ${
+              activeTab === id
+                ? "bg-white text-blue-700 shadow-[inset_0_-2px_0_#3b82f6]"
+                : "bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-800"
+            }`}
+            onClick={() => setActiveTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`left-panel-tab-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`left-panel-tabbutton-${activeTab}`}
+        class="min-h-0 flex-1 overflow-y-auto p-2"
+      >
+        {activeTab === "bucket" && (
+          <LayoutPalette
+            onDragStart={onDragStart}
+            onAddToCanvas={onAddToCanvas}
+            entries={paletteEntries}
+            status={paletteStatus}
+            packageOnly={true}
+          />
+        )}
+        {activeTab === "dashboard" && (
+          <DashboardCandidatePalette
+            onDragStart={onDragStart}
+            onAddToCanvas={onAddToCanvas}
+            disabled={selectorsDisabled}
+          />
+        )}
+        {activeTab === "html" && (
+          <StructuralHtmlPalette
+            onAddTag={onAddStructuralHtmlTag}
+            disabled={selectorsDisabled}
+          />
+        )}
+      </div>
+    </aside>
   );
 }
 
@@ -4396,45 +4485,14 @@ function LayoutBuilderSection({
             {UX_LAYOUT_EDITOR_SURFACE}
           </strong>
           <span class="text-[0.7rem] text-blue-700">
-            上の部品パネルからドラッグしてキャンバスに置き、ドラッグ・リサイズで x/y/width/height を調整します。
+            左パネルの部品カードをドラッグしてキャンバスへ配置します。
             parentNodeId・slotKey・orderIndex は右ドックの配置インスペクタで編集してください。
             layoutClassRefs は右ドックの配置インスペクタで編集し、プレビュー → 検証 → 保存反映します。
           </span>
         </div>
       )}
 
-      {/* Palette sources — separate compact strip (not inside canvas row) */}
-      {packageScopedLayout ? (
-        <section
-          class="ui-builder-palette-strip mb-3 rounded-xl border border-slate-200 bg-slate-50 p-2"
-          aria-label="配置ソースパネル"
-        >
-          <p class="mb-2 text-xs font-semibold text-slate-700">
-            部品・候補 — ドラッグまたは「キャンバスに追加」で下のキャンバスへ配置
-          </p>
-          <div class="flex min-h-0 gap-2 overflow-x-auto pb-1">
-            <LayoutPalette
-              onDragStart={handleDragStartPalette}
-              onAddToCanvas={handleAddFromPalette}
-              entries={paletteEntries}
-              status={paletteStatus}
-              packageOnly={true}
-            />
-            <DashboardCandidatePalette
-              onDragStart={handleDragStartPalette}
-              onAddToCanvas={handleAddFromPalette}
-              disabled={selectorsDisabled}
-            />
-            <StructuralHtmlPalette onAddTag={addStructuralHtmlNode} />
-          </div>
-        </section>
-      ) : (
-        <div class="ui-builder-palette-strip mb-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
-          {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
-        </div>
-      )}
-
-      {/* Canvas workspace — maximized viewport block (canvas + right dock only) */}
+      {/* Canvas workspace — maximized viewport block (left dock + canvas + right dock) */}
       <section
         class="ui-builder-canvas-workspace mb-4 flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
         style={{ height: CANVAS_WORKSPACE_HEIGHT, minHeight: CANVAS_WORKSPACE_HEIGHT }}
@@ -4597,8 +4655,27 @@ function LayoutBuilderSection({
         </div>
       )}
 
-      {/* layout draft プレビュー & 操作エリア: flow canvas + inspector */}
+      {/* layout draft プレビュー & 操作エリア: left dock + flow canvas + right inspector */}
       <div class={`flex min-h-0 flex-1 gap-2.5 p-2 ${canvasPreviewClass}`}>
+        {/* Left docked panel — 部品追加 (SSOT: canvas_workspace_contract.left_panel) */}
+        {packageScopedLayout ? (
+          <LeftDockedPalettePanel
+            onDragStart={handleDragStartPalette}
+            onAddToCanvas={handleAddFromPalette}
+            paletteEntries={paletteEntries}
+            paletteStatus={paletteStatus}
+            onAddStructuralHtmlTag={addStructuralHtmlNode}
+            selectorsDisabled={selectorsDisabled}
+          />
+        ) : (
+          <aside
+            class="left-docked-panel flex shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2 py-4 text-center text-[0.65rem] text-slate-400"
+            style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
+            aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
+          >
+            {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
+          </aside>
+        )}
         <div class="flex min-h-0 min-w-0 flex-1 flex-col">
           <FlowLayoutCanvas
             nodes={draftNodes}
@@ -5791,6 +5868,36 @@ function PackageDesignPanel({
         </div>
       </div>
 
+      {/* design_inspector 上部固定アクション — tab 外 (SSOT: design_inspector.responsibilities) */}
+      <div class="mb-3 flex items-center gap-2 border-b border-slate-100 pb-2">
+        <button
+          type="button"
+          class={`btn-primary text-xs ${
+            (!canSave || saving) ? "opacity-50 cursor-not-allowed" : ""
+          }`}
+          onClick={handleUpsertDesign}
+          disabled={!canSave || saving}
+          aria-disabled={!canSave || saving}
+          data-design-save-action="true"
+        >
+          {saving ? "保存中…" : UX_DESIGN_NODE_SAVE_LABEL}
+        </button>
+        {status && (
+          <span
+            class={`text-xs font-semibold ${
+              saveOk === true
+                ? "text-green-700"
+                : saveOk === false
+                ? "text-red-700"
+                : "text-slate-700"
+            }`}
+            role={saveOk === false ? "alert" : "status"}
+          >
+            {status}
+          </span>
+        )}
+      </div>
+
       <p class="text-muted-xs mb-2">
         タブごとに編集項目を分けています。変更は _tmp に自動保存され、明示保存で正本に反映されます。
       </p>
@@ -5988,37 +6095,6 @@ function PackageDesignPanel({
           },
         ]}
       />
-
-      {!canSave && (
-        <p class="mt-2 text-xs text-amber-800">ノードを選択してください。</p>
-      )}
-
-      <button
-        type="button"
-        class={`btn-primary mt-3 text-xs ${
-          (!canSave || saving) ? "opacity-50 cursor-not-allowed" : ""
-        }`}
-        onClick={handleUpsertDesign}
-        disabled={!canSave || saving}
-        aria-disabled={!canSave || saving}
-      >
-        {saving ? "保存中…" : "選択ノードのデザインを保存"}
-      </button>
-
-      {status && (
-        <p
-          class={`mt-2 text-xs font-semibold ${
-            saveOk === true
-              ? "text-green-700"
-              : saveOk === false
-              ? "text-red-700"
-              : "text-slate-700"
-          }`}
-          role={saveOk === false ? "alert" : "status"}
-        >
-          {status}
-        </p>
-      )}
 
       <ConfirmDialogHost />
     </section>
