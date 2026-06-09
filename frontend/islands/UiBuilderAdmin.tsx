@@ -2735,37 +2735,39 @@ function CanvasInspector({
           Event Binding JSON
         </legend>
         {isButton && (
-          <div class="mb-2 rounded border border-slate-200 bg-slate-50 p-2 space-y-1">
-            <p class="text-[0.6rem] font-semibold text-slate-700">click → runtimeDispatch ビルダー</p>
-            <label class="flex flex-col gap-0.5 text-[0.6rem]">
-              operationType
-              <input value={rdOpType} onInput={(e) => setRdOpType((e.target as HTMLInputElement).value)}
-                placeholder="admin" class="input-mono text-[0.6rem]" />
-            </label>
-            <label class="flex flex-col gap-0.5 text-[0.6rem]">
-              layer
-              <input value={rdLayer} onInput={(e) => setRdLayer((e.target as HTMLInputElement).value)}
-                placeholder="ui_topology" class="input-mono text-[0.6rem]" />
-            </label>
-            <label class="flex flex-col gap-0.5 text-[0.6rem]">
-              action
-              <input value={rdAction} onInput={(e) => setRdAction((e.target as HTMLInputElement).value)}
-                placeholder="list_packages" class="input-mono text-[0.6rem]" />
-            </label>
-            <label class="flex flex-col gap-0.5 text-[0.6rem]">
-              target
-              <input value={rdTarget} onInput={(e) => setRdTarget((e.target as HTMLInputElement).value)}
-                placeholder="admin" class="input-mono text-[0.6rem]" />
-            </label>
-            <button type="button" class="btn-secondary text-xs mt-1" onClick={commitRuntimeDispatch}>
-              適用
-            </button>
-            {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
-          </div>
+          <details class="mb-2 rounded border border-slate-200 bg-slate-50 p-2">
+            <summary class="cursor-pointer text-[0.6rem] font-semibold text-slate-700">クリックAPI接続ビルダー</summary>
+            <div class="mt-1 space-y-1">
+              <label class="flex flex-col gap-0.5 text-[0.6rem]">
+                operationType
+                <input value={rdOpType} onInput={(e) => setRdOpType((e.target as HTMLInputElement).value)}
+                  placeholder="admin" class="input-mono text-[0.6rem]" />
+              </label>
+              <label class="flex flex-col gap-0.5 text-[0.6rem]">
+                layer
+                <input value={rdLayer} onInput={(e) => setRdLayer((e.target as HTMLInputElement).value)}
+                  placeholder="ui_topology" class="input-mono text-[0.6rem]" />
+              </label>
+              <label class="flex flex-col gap-0.5 text-[0.6rem]">
+                action
+                <input value={rdAction} onInput={(e) => setRdAction((e.target as HTMLInputElement).value)}
+                  placeholder="list_packages" class="input-mono text-[0.6rem]" />
+              </label>
+              <label class="flex flex-col gap-0.5 text-[0.6rem]">
+                target
+                <input value={rdTarget} onInput={(e) => setRdTarget((e.target as HTMLInputElement).value)}
+                  placeholder="admin" class="input-mono text-[0.6rem]" />
+              </label>
+              <button type="button" class="btn-secondary text-xs mt-1" onClick={commitRuntimeDispatch}>
+                適用
+              </button>
+              {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
+            </div>
+          </details>
         )}
         {isDisclosure && (
           <p class="text-[0.6rem] text-slate-500 mb-1">
-            toggle binding: previewではinert。runtime配線済みの場合のみ onClose が dispatch を発火します。
+            開閉binding: プレビューでは不活性。接続済みの場合のみ閉じる操作が発火します。
           </p>
         )}
         <textarea
@@ -2787,7 +2789,7 @@ function CanvasInspector({
             }
           }}
           rows={4}
-          placeholder='{"click": {"eventType": "click", "runtimeDispatch": {...}}}'
+          placeholder='{"click": {"eventType": "click", "dispatch": {...}}}'
           class="input-mono w-full text-[0.6rem]"
           aria-label="eventBindingJson"
         />
@@ -6036,15 +6038,17 @@ function PackageDesignPanel({
                     routeCandidates={routeCandidates ?? []}
                   />
                 )}
-                <div class="rounded border border-slate-200 p-2">
-                  <p class="mb-2 text-xs font-semibold text-slate-700">
+                <details class="mb-4 rounded border border-slate-200 p-3">
+                  <summary class="cursor-pointer text-xs font-semibold text-slate-700">
                     パッケージ配線（イベント接続）
-                  </p>
-                  <PackageWiringEditor
-                    selectedPackageId={selectedPackageId}
-                    packageComponents={packageComponents}
-                  />
-                </div>
+                  </summary>
+                  <div class="mt-2">
+                    <PackageWiringEditor
+                      selectedPackageId={selectedPackageId}
+                      packageComponents={packageComponents}
+                    />
+                  </div>
+                </details>
               </div>
             ),
           },
