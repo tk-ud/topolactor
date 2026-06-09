@@ -448,34 +448,23 @@ team_markdown_dashboard_saved_view_ssot:
     implemented_subscope:
       - md_translation_seed_candidate_builder_contract
       - unresolved_required_placeholder_backend_gate
-    unresolved_completion_conditions:
-      - markdown_renderer_resolves_explicit_bindings_without_ai_inference
       - prompt_level_template_seed_registration_surface_completion
       - prompt_level_binding_seed_authoring_surface_completion
       - prompt_level_saved_view_create_seed_flow_completion
       - existing_component_bucket_composition_hardening
+    unresolved_completion_conditions:
+      - markdown_renderer_resolves_explicit_bindings_without_ai_inference
+      - saved_view_search_scope_covers_rendered_markdown_tags_and_status
       - result_card_and_expanded_view_can_be_rehydrated_from_completed_preset_seed
       - refresh_from_source_record_preserves_user_adjustment_patch
     planned_change_surfaces:
-      - db migration for topology.team_markdown_template_registry
-      - db migration for topology.team_markdown_saved_view
-      - db migration for topology.team_markdown_saved_view_event
-      - completed_preset_seed_json schema and validation
-      - backend admin runtime actions for template create_list_get_update_archive
-      - backend admin runtime actions for saved_view create_search_get_refresh_update_archive
       - backend markdown template renderer with explicit placeholder binding
-      - backend completed preset seed builder and validator
-      - frontend team dashboard search surface
-      - frontend saved markdown view result cards
-      - frontend click_to_expand drawer_or_panel
-      - frontend preset seed summary in expanded view
-      - frontend md_translation_template_seed_registration_surface completion
-      - frontend md_translation_binding_seed_authoring_surface completion
-      - frontend md_translation_saved_view_create_seed_flow completion
-      - frontend existing_component_bucket_composition hardening
-      - tests for markdown_not_runtime_ssot_boundary
-      - tests for completed_preset_seed_required_on_save
-      - tests for search_click_expand_behavior
+      - backend completed preset seed validator nested field hardening
+      - saved_view search scope completion for rendered_markdown tags and status
+      - backend saved_view clone action and rebind design_or_action
+      - refresh_from_source_record preserves user_adjustment_patch
+      - tests for completed_preset_seed_nested_validator_depth
+      - tests for search_scope_rendered_markdown_tags_and_status
       - tests for refresh_uses_seed_not_markdown_parsing
       - tests for binding_refresh_preserves_user_adjustment_patch
 
