@@ -1205,22 +1205,18 @@ Deno.test("UiBuilderAdmin: bucket card shows source_path on card face", async ()
   assert(src.includes("component-bucket-card__source-path"));
 });
 
-Deno.test("UiBuilderAdmin: canvas is separate maximized block; palettes in strip above", async () => {
+Deno.test("UiBuilderAdmin: canvas workspace has left docked panel; no separate palette strip above", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  assert(src.includes("ui-builder-palette-strip"), "palettes must live in a separate strip section");
+  // canvas workspace section must exist
   assert(src.includes("ui-builder-canvas-workspace"), "canvas must be a dedicated workspace section");
   assert(src.includes("CANVAS_WORKSPACE_HEIGHT"), "canvas block must use viewport-height sizing");
-  const paletteStrip = src.indexOf("ui-builder-palette-strip");
-  const canvasWorkspace = src.indexOf("ui-builder-canvas-workspace");
-  assert(paletteStrip > 0 && canvasWorkspace > paletteStrip, "palette strip must precede canvas workspace");
-  const canvasRow = src.slice(canvasWorkspace, canvasWorkspace + 3500);
-  assertEquals(
-    canvasRow.includes("function LayoutPalette"),
-    false,
-    "LayoutPalette must not render inside the canvas workspace row",
-  );
+  // left docked panel must exist inside source (SSOT: canvas_workspace_contract.left_panel)
+  assert(src.includes("left-docked-panel"), "palettes must live in a left docked panel inside the canvas workspace");
+  assert(src.includes("data-component-add-panel"), "left panel must carry data-component-add-panel marker");
+  // legacy separate palette strip above canvas must not exist
+  assertEquals(src.includes("ui-builder-palette-strip"), false, "legacy palette strip above canvas must be removed");
 });
 
 Deno.test("UiBuilderAdmin: empty canvas does not auto-seed all palette components", async () => {
