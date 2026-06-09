@@ -266,5 +266,9 @@ public record LayoutNodeRecord(
     string? WiringKey = null,
     string? WiringKind = null,
     string? TargetSurface = null,
-    string? TargetRef = null
+    string? TargetRef = null,
+    /// <summary>Node-local props override JSON string from layout_patch_json. Null when not authored.</summary>
+    string? PropsJson = null,
+    /// <summary>Node-local state JSON string from layout_patch_json (e.g. open:bool for modal/drawer). Null when not authored.</summary>
+    string? StateJson = null
 );

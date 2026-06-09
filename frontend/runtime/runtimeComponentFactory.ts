@@ -1,4 +1,5 @@
 import { h, type JSX, type VNode } from "preact";
+import { Modal } from "../components/Modal.tsx";
 import { Button } from "../components/Button.tsx";
 import { Card } from "../components/Card.tsx";
 import { Input } from "../components/Input.tsx";
@@ -1930,6 +1931,30 @@ function documentCanvasTemplateEditorFactory(spec: RuntimeComponentSpec): Render
   };
 }
 
+function modalFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const bindingCheck = requireBinding(spec, "toggle");
+  if (!bindingCheck.ok) return bindingCheck;
+  return {
+    ok: true,
+    node: h(Modal, {
+      open: typeof data.open === "boolean" ? data.open : false,
+      title: data.title as string | undefined,
+      description: data.description as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onClose: () => {
+        const r = emitBoundEvent(spec, "toggle", { open: false });
+        if (!r.ok) throw new Error(r.error);
+      },
+      children: h("div", null, (data.body as string | undefined) ?? ""),
+    }),
+  };
+}
+
 function boxFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
   const style = (typeof props.style === "object" && props.style !== null && !Array.isArray(props.style))
@@ -2115,6 +2140,7 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["calc_topology/calculation_preview_panel"], render: calculationPreviewPanelFactory },
   { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
   { componentKinds: ["layout/box"], render: boxFactory },
+  { componentKinds: ["disclosure/modal"], render: modalFactory },
 ];
 
 export {

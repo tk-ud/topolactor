@@ -7,6 +7,7 @@ import {
 } from "../runtime/layoutComponentPreview.ts";
 import Box from "../components/Box.tsx";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
+import { __testOnly } from "../runtime/runtimeComponentFactory.ts";
 
 Deno.test("resolveComponentKindForLayoutPreview: catalog maps box.primitive to layout/box", () => {
   assertEquals(
@@ -76,4 +77,51 @@ Deno.test("renderLayoutComponentPreview: unknown kind fails explicitly", () => {
   assertEquals(result.ok, false);
   if (result.ok) return;
   assertEquals(result.code, "KIND_UNRESOLVED");
+});
+
+Deno.test("button click event binding: previewMode suppresses runtimeDispatch", () => {
+  const binding = {
+    eventType: "click",
+    payload: {},
+    runtimeDispatch: {
+      operationType: "admin",
+      layer: "ui_topology",
+      action: "list_packages",
+      target: "admin",
+    },
+  };
+  const parsed = __testOnly.parseEventBinding(binding);
+  assertExists(parsed);
+  assertEquals(parsed?.eventType, "click");
+  assertExists(parsed?.runtimeDispatch);
+  assertEquals(parsed?.runtimeDispatch?.action, "list_packages");
+  const spec = {
+    componentId: "test-button",
+    componentType: "action/button",
+    props: { data: { label: "Click" } },
+    eventBinding: { click: binding },
+    previewMode: true,
+  };
+  const emitResult = __testOnly.emitBoundEvent(spec, "click", {});
+  assertEquals(emitResult.ok, true);
+});
+
+Deno.test("row_detail_drawer.primitive renders in preview mode with inert toggle", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const result = renderLayoutComponentPreview({
+    componentKey: "row_detail_drawer.primitive",
+    componentKind: "table_op/row_detail_drawer",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+  assertExists(result.node);
+});
+
+Deno.test("modal.template renders in preview mode via disclosure/modal factory", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const result = renderLayoutComponentPreview({
+    componentKey: "modal.template",
+    componentKind: "disclosure/modal",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+  assertExists(result.node);
 });

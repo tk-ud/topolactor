@@ -115,6 +115,54 @@ function buildDefaultCatalogComponentProps(node: EmissionLayoutNode): Record<str
 }
 
 /**
+ * Merges node-local propsJson/stateJson over the default props.
+ * propsJson (when present and valid) is shallow-merged over the default props top-level.
+ * stateJson (when present and valid) is merged into props.data when data is an object, else top-level.
+ * Invalid JSON returns explicit error — no silent fallback.
+ */
+export function mergeNodeLocalProps(
+  baseProps: Record<string, unknown>,
+  propsJson: string | null | undefined,
+  stateJson: string | null | undefined,
+): { ok: true; props: Record<string, unknown> } | { ok: false; error: string } {
+  let props = { ...baseProps };
+
+  if (propsJson && propsJson.trim()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(propsJson.trim());
+    } catch {
+      return { ok: false, error: "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson が JSON として解析できません" };
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { ok: false, error: "LAYOUT_NODE_PROPS_JSON_INVALID: propsJson はオブジェクトである必要があります" };
+    }
+    props = { ...props, ...(parsed as Record<string, unknown>) };
+  }
+
+  if (stateJson && stateJson.trim()) {
+    let parsedState: unknown;
+    try {
+      parsedState = JSON.parse(stateJson.trim());
+    } catch {
+      return { ok: false, error: "LAYOUT_NODE_STATE_JSON_INVALID: stateJson が JSON として解析できません" };
+    }
+    if (typeof parsedState !== "object" || parsedState === null || Array.isArray(parsedState)) {
+      return { ok: false, error: "LAYOUT_NODE_STATE_JSON_INVALID: stateJson はオブジェクトである必要があります" };
+    }
+    const stateObj = parsedState as Record<string, unknown>;
+    const existingData = props.data;
+    if (typeof existingData === "object" && existingData !== null && !Array.isArray(existingData)) {
+      props = { ...props, data: { ...(existingData as Record<string, unknown>), ...stateObj } };
+    } else {
+      props = { ...props, ...stateObj };
+    }
+  }
+
+  return { ok: true, props };
+}
+
+/**
  * Builds an eventBinding for a catalog_component node from its RuntimeDispatchSpec.
  * Populates standard triggers (click, change, select, submit, toggle) each carrying
  * the full runtimeDispatch spec so emitBoundEvent fires both log and dispatch lanes.
@@ -285,13 +333,23 @@ export function renderEmission(
           : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
 
         ensureRuntimeComponentRegistryInitialized();
+        const defaultProps = buildDefaultCatalogComponentProps(node);
+        const mergedProps = mergeNodeLocalProps(defaultProps, node.propsJson, node.stateJson);
+        if (!mergedProps.ok) {
+          return {
+            componentId: node.componentId,
+            componentType: "error",
+            def: { error: mergedProps.error, componentId: node.componentId },
+            ...layoutFields,
+          };
+        }
         const hub: ComponentDataHub = {
           componentId: node.componentId,
           componentKind: node.componentKind,
           packageId: emission.packageId ?? null,
           layoutId: emission.layoutId ?? null,
           wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
-          props: buildDefaultCatalogComponentProps(node),
+          props: mergedProps.props,
           eventBinding: componentEventBinding,
           design: undefined,
         };

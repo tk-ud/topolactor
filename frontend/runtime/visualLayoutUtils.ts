@@ -172,6 +172,10 @@ export interface VisualNodePayload {
   wiringId?: string;
   tensorId?: string;
   componentKind?: string;
+  /** Serialized component props override for runtime wiring (JSON string). Flowed through layout_patch_json → backend → renderEmission. */
+  propsJson?: string;
+  /** Serialized component state override for runtime wiring (JSON string). Merged into props.data at render time (e.g. open:bool for modal/drawer). */
+  stateJson?: string;
 }
 
 export function isStructuralHtmlNode(node: Pick<VisualNodePayload, "nodeKind">): boolean {
@@ -321,6 +325,8 @@ function readPatchNode(
     componentKind: nodeKind === "structural_html"
       ? "layout/structural_html"
       : palette?.componentKind,
+    propsJson: typeof raw.propsJson === "string" ? raw.propsJson : undefined,
+    stateJson: typeof raw.stateJson === "string" ? raw.stateJson : undefined,
   };
 }
 
@@ -427,6 +433,8 @@ export function buildVisualLayoutPatchJson(
         ...(n.layoutClassRefs && n.layoutClassRefs.length > 0
           ? { layoutClassRefs: n.layoutClassRefs }
           : {}),
+        ...(n.propsJson ? { propsJson: n.propsJson } : {}),
+        ...(n.stateJson ? { stateJson: n.stateJson } : {}),
         slotKey: n.slotKey || null,
         orderIndex: n.orderIndex,
         parentNodeId: n.parentNodeId || null,

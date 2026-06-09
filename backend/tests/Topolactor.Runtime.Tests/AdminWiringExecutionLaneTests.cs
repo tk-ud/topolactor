@@ -192,6 +192,86 @@ public class AdminWiringExecutionLaneTests
         }
     }
 
+    // ─── LayoutNode: PropsJson / StateJson contract shape ───────────────────
+
+    [Fact]
+    public void LayoutNode_HasPropsJson_AndStateJson_Fields()
+    {
+        var node = new LayoutNode(
+            NodeId: "n-pj", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pj-001", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 100, Height: 50,
+            LayoutClassRefs: null,
+            ComponentKind: "action/button",
+            PropsJson: "{\"data\":{\"label\":\"カスタム\"}}",
+            StateJson: "{\"open\":true}");
+
+        Assert.Equal("{\"data\":{\"label\":\"カスタム\"}}", node.PropsJson);
+        Assert.Equal("{\"open\":true}", node.StateJson);
+    }
+
+    [Fact]
+    public void LayoutNode_PropsJson_DefaultsToNull()
+    {
+        var node = new LayoutNode(
+            NodeId: "n-pj-null", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pj-null", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null);
+
+        Assert.Null(node.PropsJson);
+        Assert.Null(node.StateJson);
+    }
+
+    [Fact]
+    public void LayoutNodeRecord_HasPropsJson_AndStateJson_Fields()
+    {
+        var record = new LayoutNodeRecord(
+            NodeId: "r-pj", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pj-r1", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null,
+            ComponentKind: "disclosure/modal",
+            PropsJson: "{\"data\":{\"title\":\"モーダル\"}}",
+            StateJson: "{\"open\":false}");
+
+        Assert.Equal("{\"data\":{\"title\":\"モーダル\"}}", record.PropsJson);
+        Assert.Equal("{\"open\":false}", record.StateJson);
+    }
+
+    [Fact]
+    public void LayoutNodeRecord_PropsJson_DefaultsToNull()
+    {
+        var record = new LayoutNodeRecord(
+            NodeId: "r-pj-null", NodeKind: "catalog_component", HtmlTag: null,
+            ComponentKey: null, ComponentId: "comp-pj-r-null", ParentNodeId: null,
+            SlotKey: null, OrderIndex: 0, X: 0, Y: 0, Width: 0, Height: 0,
+            LayoutClassRefs: null);
+
+        Assert.Null(record.PropsJson);
+        Assert.Null(record.StateJson);
+    }
+
+    [Fact]
+    public async Task StructureMapResolver_Resolve_ForwardsPropsJson_AndStateJson()
+    {
+        var repo = new EnrichedLayoutNodeWithPropsStubRepository();
+        var resolver = new StructureMapResolver(repo);
+
+        var attractor = new AttractorResult(
+            AttractorKey: "layout-props-test:entity:search",
+            StructureMapId: EnrichedLayoutNodeWithPropsStubRepository.LayoutStructureMapId,
+            PackageId: Guid.NewGuid(),
+            SchemaId: Guid.NewGuid());
+
+        var shape = await resolver.Resolve(attractor);
+
+        Assert.NotNull(shape.LayoutNodes);
+        var node = shape.LayoutNodes!.First(n => n.NodeKind == "catalog_component");
+        Assert.Equal("{\"data\":{\"label\":\"カスタムボタン\"}}", node.PropsJson);
+        Assert.Equal("{\"open\":true}", node.StateJson);
+    }
+
     // ─── Base TopologyRepository.LoadComponentKindsByIdsAsync ────────────────
 
     [Fact]
@@ -256,6 +336,56 @@ file class EnrichedLayoutNodeStubRepository : TopologyRepository
                 WiringKind: "search",
                 TargetSurface: "screen",
                 TargetRef: "manifest-stub-001"),
+        ];
+        return Task.FromResult(rows);
+    }
+}
+
+file class EnrichedLayoutNodeWithPropsStubRepository : TopologyRepository
+{
+    public const string LayoutStructureMapId = "00000000-0000-0000-0002-000000000001";
+    private static readonly Guid LayoutId = new("00000000-0000-0000-0002-000000000002");
+
+    public EnrichedLayoutNodeWithPropsStubRepository()
+        : base(NullLogger<TopologyRepository>.Instance, "dummy") { }
+
+    public override Task<StructureMapRecord?> LoadStructureMapAsync(
+        string key, CancellationToken ct = default)
+    {
+        if (key == LayoutStructureMapId)
+        {
+            return Task.FromResult<StructureMapRecord?>(new StructureMapRecord(
+                StructureMapId: LayoutStructureMapId,
+                AttractorKey: "layout-props-test:entity:search",
+                PackageId: Guid.NewGuid(),
+                SchemaId: Guid.NewGuid(),
+                ComponentIds: [],
+                StatePolicyJson: null,
+                LayoutId: LayoutId));
+        }
+        return Task.FromResult<StructureMapRecord?>(null);
+    }
+
+    public override Task<IReadOnlyList<LayoutNodeRecord>> LoadLayoutNodesAsync(
+        Guid layoutId, CancellationToken ct = default)
+    {
+        IReadOnlyList<LayoutNodeRecord> rows =
+        [
+            new LayoutNodeRecord(
+                NodeId: "node-modal",
+                NodeKind: "catalog_component",
+                HtmlTag: null,
+                ComponentKey: "modal.template",
+                ComponentId: "comp-modal-001",
+                ParentNodeId: null,
+                SlotKey: null,
+                OrderIndex: 0,
+                X: 0, Y: 0, Width: 320, Height: 200,
+                LayoutClassRefs: null,
+                ComponentKind: "disclosure/modal",
+                RuntimeDispatchAction: null,
+                PropsJson: "{\"data\":{\"label\":\"カスタムボタン\"}}",
+                StateJson: "{\"open\":true}"),
         ];
         return Task.FromResult(rows);
     }

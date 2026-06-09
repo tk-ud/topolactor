@@ -117,6 +117,10 @@ export type LayoutNode = {
   wiringKind?: string | null;
   targetSurface?: string | null;
   targetRef?: string | null;
+  /** Node-local props override authored in UI Builder. When present, renderEmission merges over default props; invalid JSON → explicit error spec. */
+  propsJson?: string | null;
+  /** Node-local state JSON (e.g. open:bool for modal/drawer). When present, renderEmission merges into props.data; invalid JSON → explicit error spec. */
+  stateJson?: string | null;
 };
 
 export type Emission = {

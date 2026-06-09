@@ -52,6 +52,7 @@ const LAYOUT_PREVIEW_DEFAULT_SIZES: Record<string, LayoutPreviewDefaultSize> = {
   "layout/box": { width: 180, height: 96 },
   "disclosure_structure/panel": { width: 240, height: 140 },
   "disclosure_structure/section": { width: 280, height: 160 },
+  "disclosure/modal": { width: 320, height: 200 },
 };
 
 /** Map bare catalog keys (e.g. button) to catalog SSOT entries (button.primitive). */
@@ -149,6 +150,14 @@ export function buildLayoutPreviewPlaceholderProps(
           body: inlineText ? "" : "プレビュー本文",
         },
       };
+    case "disclosure/modal":
+      return {
+        data: {
+          open: true,
+          title: inlineText || shortLabel || "Modal",
+          body: "プレビュー",
+        },
+      };
     case "data_display/table":
     case "data_display/data_grid":
     case "data_display/list":
@@ -224,6 +233,7 @@ export function buildLayoutPreviewRuntimeSpec(input: {
         submit: { eventType: "submit", payload: {} },
         focus: { eventType: "focus", payload: {} },
         blur: { eventType: "blur", payload: {} },
+        toggle: { eventType: "toggle", payload: {} },
       },
       previewMode: true,
     },

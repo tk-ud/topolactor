@@ -649,3 +649,154 @@ Deno.test("renderEmission: catalog_component with navigation wiringKind uses rou
   assertEquals(rn.targetRef, "route:/admin/manifests");
   assertEquals(clickBinding.runtimeDispatch, undefined, "runtimeDispatch must NOT be present for navigation wiring");
 });
+
+// ─── mergeNodeLocalProps / propsJson / stateJson pipeline ────────────────────
+
+import { mergeNodeLocalProps } from "../runtime/renderEmission.ts";
+
+Deno.test("mergeNodeLocalProps: no overrides returns base props unchanged", () => {
+  const base = { data: { label: "Base" } };
+  const result = mergeNodeLocalProps(base, undefined, undefined);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.props, { data: { label: "Base" } });
+});
+
+Deno.test("mergeNodeLocalProps: valid propsJson is shallow-merged over base", () => {
+  const base = { data: { label: "Default" } };
+  const result = mergeNodeLocalProps(base, '{"data": {"label": "Custom", "variant": "primary"}}', undefined);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  const data = result.props.data as Record<string, unknown>;
+  assertEquals(data.label, "Custom");
+  assertEquals(data.variant, "primary");
+});
+
+Deno.test("mergeNodeLocalProps: valid stateJson is merged into props.data", () => {
+  const base = { data: { label: "Modal", title: "Test" } };
+  const result = mergeNodeLocalProps(base, undefined, '{"open": true}');
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  const data = result.props.data as Record<string, unknown>;
+  assertEquals(data.open, true);
+  assertEquals(data.label, "Modal");
+});
+
+Deno.test("mergeNodeLocalProps: invalid propsJson returns explicit LAYOUT_NODE_PROPS_JSON_INVALID error", () => {
+  const base = { data: { label: "Default" } };
+  const result = mergeNodeLocalProps(base, "{not valid json}", undefined);
+  assertEquals(result.ok, false);
+  if (result.ok) return;
+  assertStringIncludes(result.error, "LAYOUT_NODE_PROPS_JSON_INVALID");
+});
+
+Deno.test("mergeNodeLocalProps: invalid stateJson returns explicit LAYOUT_NODE_STATE_JSON_INVALID error", () => {
+  const base = { data: { label: "Default" } };
+  const result = mergeNodeLocalProps(base, undefined, "{bad json}");
+  assertEquals(result.ok, false);
+  if (result.ok) return;
+  assertStringIncludes(result.error, "LAYOUT_NODE_STATE_JSON_INVALID");
+});
+
+Deno.test("mergeNodeLocalProps: propsJson that is not an object returns explicit error", () => {
+  const base = { data: { label: "Default" } };
+  const result = mergeNodeLocalProps(base, '"just a string"', undefined);
+  assertEquals(result.ok, false);
+  if (result.ok) return;
+  assertStringIncludes(result.error, "LAYOUT_NODE_PROPS_JSON_INVALID");
+});
+
+Deno.test("renderEmission: node with propsJson overrides default label in runtimeSpec", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-props-001",
+    layoutNodes: [
+      {
+        nodeId: "node-props-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-props-001",
+        componentKind: "action/button",
+        componentKey: "btn.primitive",
+        wiringKind: "search",
+        targetSurface: "screen",
+        orderIndex: 0,
+        propsJson: '{"data": {"label": "カスタムボタン", "variant": "primary"}}',
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry);
+  assertEquals(specs.length, 1);
+  assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
+  const props = specs[0].runtimeSpec!.props as Record<string, unknown>;
+  const data = props.data as Record<string, unknown>;
+  assertEquals(data.label, "カスタムボタン");
+  assertEquals(data.variant, "primary");
+});
+
+Deno.test("renderEmission: node with stateJson merges open state into modal props", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-state-001",
+    layoutNodes: [
+      {
+        nodeId: "node-state-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-state-001",
+        componentKind: "disclosure/modal",
+        componentKey: "modal.template",
+        orderIndex: 0,
+        stateJson: '{"open": true}',
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry);
+  assertEquals(specs.length, 1);
+  assertExists(specs[0].runtimeSpec, "runtimeSpec must be present");
+  const props = specs[0].runtimeSpec!.props as Record<string, unknown>;
+  const data = props.data as Record<string, unknown>;
+  assertEquals(data.open, true);
+});
+
+Deno.test("renderEmission: node with invalid propsJson returns error spec not silent fallback", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-invalid-props-001",
+    layoutNodes: [
+      {
+        nodeId: "node-invalid-1",
+        nodeKind: "catalog_component",
+        componentId: "comp-invalid-001",
+        componentKind: "action/button",
+        componentKey: "btn.primitive",
+        orderIndex: 0,
+        propsJson: '{invalid json}',
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry);
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].componentType, "error");
+  assertStringIncludes(JSON.stringify(specs[0].def), "LAYOUT_NODE_PROPS_JSON_INVALID");
+});
+
+Deno.test("renderEmission: node with invalid stateJson returns error spec not silent fallback", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const emission: Emission = {
+    layoutId: "layout-invalid-state-001",
+    layoutNodes: [
+      {
+        nodeId: "node-invalid-2",
+        nodeKind: "catalog_component",
+        componentId: "comp-invalid-002",
+        componentKind: "disclosure/modal",
+        componentKey: "modal.template",
+        orderIndex: 0,
+        stateJson: 'not-json-at-all',
+      },
+    ],
+  };
+  const specs = renderEmission(emission, emptyRegistry);
+  assertEquals(specs.length, 1);
+  assertEquals(specs[0].componentType, "error");
+  assertStringIncludes(JSON.stringify(specs[0].def), "LAYOUT_NODE_STATE_JSON_INVALID");
+});

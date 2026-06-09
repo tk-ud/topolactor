@@ -6,9 +6,12 @@ import {
   resolveNodeWrapperPreviewClassName,
 } from "./layoutClassPreviewUtils.ts";
 import { formatLayoutDimensionCss } from "./visualLayoutUtils.ts";
+import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "./topologyLayoutClassDictionary.ts";
 
 /** Default root flow container when no layoutClassRefs are set. */
-export const DEFAULT_FLOW_ROOT_CLASS = "topolactor-topology-layout-section-stack";
+export const DEFAULT_FLOW_ROOT_CLASS = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find(
+  (e) => e.classKey === "layout.section.stack",
+)!.className;
 
 export type FlowLayoutNodeLike = {
   nodeId?: string;

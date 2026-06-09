@@ -169,6 +169,10 @@ type DraftNode = {
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
+  /** Serialized component props override (JSON string). Flowed through layout_patch_json → backend → renderEmission. SSOT: layout_patch_json */
+  propsJson?: string;
+  /** Serialized component state override (JSON string). open:boolean for disclosure/drawer — merged into props.data at render time. SSOT: layout_patch_json */
+  stateJson?: string;
 };
 
 type DesignDraft = FlowCanvasDesignDraft;
@@ -590,6 +594,7 @@ function LayoutRightDock({
             defaultOpen={true}
           >
             <CanvasInspector
+              key={selectedNode.nodeId}
               embedded
               node={selectedNode}
               draftNodes={draftNodes}
@@ -2249,6 +2254,20 @@ const FIELD_LABELS: Record<string, string> = {
   height: "高さ (px / % / auto)",
 };
 
+const DISCLOSURE_COMPONENT_KINDS = new Set([
+  "disclosure/modal",
+  "table_op/row_detail_drawer",
+  "inline_edit/audit_diff_drawer",
+  "safety_guard/apply_confirm_dialog",
+  "safety_guard/command_palette",
+  "search_suggest/select_import_dialog",
+]);
+
+function isDisclosureKind(componentKind?: string): boolean {
+  if (!componentKind) return false;
+  return DISCLOSURE_COMPONENT_KINDS.has(componentKind);
+}
+
 function CanvasInspector({
   node,
   draftNodes,
@@ -2274,6 +2293,12 @@ function CanvasInspector({
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
+  const [propsDraft, setPropsDraft] = useState(node.propsJson ?? "");
+  const [propsError, setPropsError] = useState<string | null>(null);
+  const [stateDraft, setStateDraft] = useState(node.stateJson ?? "");
+  const [stateError, setStateError] = useState<string | null>(null);
+
+  const isDisclosure = isDisclosureKind(node.componentKind);
   const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
   const isContainer = isLayoutContainerNode(node, draftNodes);
 
@@ -2580,6 +2605,102 @@ function CanvasInspector({
     </fieldset>
   );
 
+  const commitOpenState = (checked: boolean) => {
+    try {
+      const existing = stateDraft.trim() ? JSON.parse(stateDraft) : {};
+      const next = JSON.stringify({ ...existing, open: checked });
+      setStateDraft(next);
+      setStateError(null);
+      onCommit({ stateJson: next }, "open状態を変更");
+    } catch {
+      setStateError("stateJson のパースに失敗しました");
+    }
+  };
+
+  const wiringTab = (
+    <div class="space-y-3">
+      <p class="text-[0.6rem] text-slate-500">
+        保存対象はlayout_patch_json経由。previewモードでは inert binding を使用しランタイムdispatchは行いません。
+      </p>
+
+      {/* Props JSON */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          Props JSON
+        </legend>
+        <textarea
+          value={propsDraft}
+          onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            const v = propsDraft.trim();
+            if (!v) {
+              setPropsError(null);
+              onCommit({ propsJson: undefined }, "propsJsonをクリア");
+              return;
+            }
+            try {
+              JSON.parse(v);
+              setPropsError(null);
+              onCommit({ propsJson: v }, "propsJsonを更新");
+            } catch {
+              setPropsError("JSON形式が不正です");
+            }
+          }}
+          rows={3}
+          placeholder='{"label": "送信", "variant": "primary"}'
+          class="input-mono w-full text-[0.6rem]"
+          aria-label="propsJson"
+        />
+        {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+      </fieldset>
+
+      {/* State JSON — open toggle for disclosure components */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          State JSON{isDisclosure ? " (open state)" : ""}
+        </legend>
+        {isDisclosure && (
+          <label class="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={(() => {
+                try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
+              })()}
+              onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
+              aria-label="open state"
+            />
+            open (preview で開いた状態で表示)
+          </label>
+        )}
+        <textarea
+          value={stateDraft}
+          onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            const v = stateDraft.trim();
+            if (!v) {
+              setStateError(null);
+              onCommit({ stateJson: undefined }, "stateJsonをクリア");
+              return;
+            }
+            try {
+              JSON.parse(v);
+              setStateError(null);
+              onCommit({ stateJson: v }, "stateJsonを更新");
+            } catch {
+              setStateError("JSON形式が不正です");
+            }
+          }}
+          rows={2}
+          placeholder='{"open": false}'
+          class="input-mono w-full text-[0.6rem]"
+          aria-label="stateJson"
+        />
+        {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
+      </fieldset>
+
+    </div>
+  );
+
   return (
     <div
       role="complementary"
@@ -2606,6 +2727,7 @@ function CanvasInspector({
           { id: "tree", label: "ツリー", content: treeTab },
           { id: "class", label: "クラス", content: classTab },
           { id: "grid", label: "グリッド", content: gridTab },
+          { id: "wiring", label: "配線", content: wiringTab },
         ]}
       />
     </div>
@@ -5819,15 +5941,17 @@ function PackageDesignPanel({
                     routeCandidates={routeCandidates ?? []}
                   />
                 )}
-                <div class="rounded border border-slate-200 p-2">
-                  <p class="mb-2 text-xs font-semibold text-slate-700">
+                <details class="mb-4 rounded border border-slate-200 p-3">
+                  <summary class="cursor-pointer text-xs font-semibold text-slate-700">
                     パッケージ配線（イベント接続）
-                  </p>
-                  <PackageWiringEditor
-                    selectedPackageId={selectedPackageId}
-                    packageComponents={packageComponents}
-                  />
-                </div>
+                  </summary>
+                  <div class="mt-2">
+                    <PackageWiringEditor
+                      selectedPackageId={selectedPackageId}
+                      packageComponents={packageComponents}
+                    />
+                  </div>
+                </details>
               </div>
             ),
           },
