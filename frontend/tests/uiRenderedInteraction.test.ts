@@ -1435,7 +1435,7 @@ Deno.test("UiBuilderAdmin DOM: accordion toggle click → DOM state changes (syn
 });
 
 
-Deno.test("UiBuilderAdmin DOM: initial render does not trigger team_markdown search", async () => {
+Deno.test("UiBuilderAdmin DOM: initial render does not trigger team_markdown search and does not mount preset ecosystem panel", async () => {
   const { container, cleanup } = setupDom();
   const original = globalThis.fetch;
   const capturedBodies: unknown[] = [];
@@ -1461,9 +1461,14 @@ Deno.test("UiBuilderAdmin DOM: initial render does not trigger team_markdown sea
     );
     // deno-lint-ignore no-explicit-any
     const html = (container as any).innerHTML as string;
-    assert(
-      html.includes('data-preset-child-surface="md_viewer"') || html.includes("Preset ecosystem"),
-      "UiBuilder must still expose the md_viewer child surface entry",
+    // Preset ecosystem panel must NOT be permanently rendered (responsibility mixing resolved)
+    assertFalse(
+      html.includes('data-preset-child-surface="md_viewer"'),
+      "UIBuilder must not permanently render md_viewer child surface (use /admin/team-dashboard instead)",
+    );
+    assertFalse(
+      html.includes("Preset ecosystem — md_viewer child surface"),
+      "UIBuilder must not display 'Preset ecosystem — md_viewer child surface' label",
     );
   } finally {
     globalThis.fetch = original;

@@ -366,8 +366,15 @@ admin_console_workflow_ssot:
                 role: preset_child_saved_markdown_view_seed_and_md_viewer
                 hard_gate: completed_preset_seed_json
             implementation_status:
-              current: partial_ui_child_surface_mounted
-              scope: md_viewer child surface is mounted as a projection-only Team Markdown Dashboard placement inside /admin/ui-builder; seed builder, renderer, clone/rebind, and preset DB seed registration remain separate bundles.
+              current: planned_parent_surface
+              scope: >-
+                preset_ecosystem parent surface is planned for UIBuilder authoring support for reusable
+                draft/seed/view children. md_viewer is now a dashboard/read-work component candidate
+                placed on /admin/team-dashboard; the permanent UIBuilder child surface placement of
+                Team Markdown Dashboard has been removed to resolve responsibility mixing.
+                Provisional preset surfaces (aggregate_dashboard, hub_search,
+                physical_search_crud_aggregate, physical_details_inline_editor_md_generator) remain
+                planned until each has its own SSOT and implementation.
       prohibited:
         - explicit packaging button, confirm-then-package dialog, or checkbox multi-select submit as primary path
         - two-step select-then-package phase framing
