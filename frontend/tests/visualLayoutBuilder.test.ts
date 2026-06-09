@@ -1126,7 +1126,9 @@ Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch b
   assertEquals(parsed.nodes[0].nodeKind, "structural_html");
   assertEquals(parsed.nodes[0].x, undefined);
   assertEquals(parsed.nodes[0].y, undefined);
-  assertEquals(typeof parsed.nodes[0].width, "number");
+  // widthMode defaults to "auto" → width is NOT serialized as inline style
+  assertEquals(parsed.nodes[0].width, undefined);
+  assertEquals(parsed.nodes[0].widthMode, "auto");
   assertEquals(typeof parsed.nodes[0].orderIndex, "number");
 });
 
