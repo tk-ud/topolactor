@@ -42,13 +42,17 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 **Roadmap bundle:** `product.admin_topology_authoring`
 **SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem`)
 
-UIBuilder preset ecosystem parent surface is partial. Provisional preset surfaces remain tracked at bundle level until implemented or explicitly completed/descoped by SSOT. Completed md_viewer / completed preset seed evidence remains closed and must not be reclassified as unfinished work without contradicting SSOT/evidence.
+UIBuilder preset ecosystem parent surface is partial. Provisional preset surfaces remain tracked at bundle level until implemented or explicitly completed/descoped by SSOT.
+
+**Resolved (design_change 2026-06-09):** `UiBuilderPresetEcosystemPanel` permanent child surface has been removed from `/admin/ui-builder` to resolve responsibility mixing. `md_viewer.projection` is now a dashboard/read-work component candidate (not a UIBuilder preset_ecosystem permanent child). Team Markdown Dashboard primary route remains `/admin/team-dashboard`. SSOT/roadmap/tests updated accordingly.
+
+**Resolved (existing_pr_update 2026-06-09):** `md_viewer.projection` は `DashboardCandidatePalette` として UIBuilder canvas に追加 — `dashboard_placement_candidate` タグでフィルタ、`registrationRequired:false` なので DB bucket 登録不要。`ComponentCapabilityTag` 型に `dashboard_placement_candidate` を追加。`registrationRequired` と palette 表示可否の責務分離完了。SSOT/roadmap/tests 更新済み。
 
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
-Note: md_viewer remains completed child surface evidence and must not be reopened as unresolved unless SSOT/evidence contradicts it.
+Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route.
 
 ---
 
@@ -71,7 +75,7 @@ Note: md_viewer remains completed child surface evidence and must not be reopene
 - `frontend/components/MdViewer.tsx` (hardcoded projection component)
 - `frontend/islands/TeamMarkdownDashboard.tsx` (search input, result cards, click expand drawer, UI-only action boundary notices)
 - `frontend/routes/admin/team-dashboard/index.tsx` (`/admin/team-dashboard` AdminAuthGate routable placement)
-- `frontend/islands/UiBuilderAdmin.tsx` (UIBuilder preset_ecosystem `md_viewer` child projection surface placement)
+- `frontend/islands/UiBuilderAdmin.tsx` (UIBuilder preset_ecosystem `md_viewer` child projection surface placement — later removed: permanent placement resolved as responsibility mixing; /admin/team-dashboard is primary route)
 - `frontend/components/catalog.ts` (`md_viewer.projection` catalog visibility as projection child, not seed registration)
 - `backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs`
 - `frontend/tests/teamMarkdownSavedView.test.ts`

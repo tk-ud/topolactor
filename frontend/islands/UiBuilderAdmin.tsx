@@ -104,8 +104,6 @@ import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import { LayoutPreviewNodeFrame } from "../components/LayoutPreviewNodeFrame.tsx";
-import TeamMarkdownDashboard from "./TeamMarkdownDashboard.tsx";
-import { MdTranslationAuthoringSeedSurface } from "../components/MdTranslationAuthoringSeedSurface.tsx";
 import {
   enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
@@ -2225,82 +2223,6 @@ function BucketPackageRouteFields({
   );
 }
 
-// ─── preset ecosystem child surface ──────────────────────────────────────────
-
-function UiBuilderPresetEcosystemPanel(): JSX.Element {
-  const [open, setOpen] = useState(false);
-  const [authoringOpen, setAuthoringOpen] = useState(false);
-  const [authoringNotice, setAuthoringNotice] = useState<string | null>(null);
-
-  return (
-    <details
-      class="mb-4 rounded border border-emerald-200 bg-emerald-50 p-3 text-sm"
-      aria-label="UIBuilder preset ecosystem md_viewer child surface"
-      data-preset-child-surface="md_viewer"
-      open={open}
-      onToggle={(e: Event) => setOpen((e.target as HTMLDetailsElement).open)}
-    >
-      <summary class="cursor-pointer text-emerald-950">
-        <span class="mr-2 font-semibold">
-          Preset ecosystem — md_viewer child surface
-        </span>
-        <StatusBadge text="projection only" variant="info" />
-      </summary>
-      <p class="mb-3 mt-2 text-xs text-emerald-900">
-        Team Markdown Dashboard is mounted here as the md_viewer child surface for
-        saved Markdown view search and click-to-expand drawer placement. This
-        panel does not change the selected package canvas, active topology, or
-        preview / validate / apply flow. Open this child surface to start the
-        team_markdown search projection.
-      </p>
-      {open && (
-        <div class="space-y-3">
-          <div class="rounded border border-emerald-100 bg-white p-3">
-            <TeamMarkdownDashboard placement="ui_builder_child_surface" />
-          </div>
-          <details
-            class="rounded border border-amber-200 bg-amber-50 p-3 text-sm"
-            data-preset-authoring-surface="md_translation"
-            open={authoringOpen}
-            onToggle={(e: Event) =>
-              setAuthoringOpen((e.target as HTMLDetailsElement).open)}
-          >
-            <summary class="cursor-pointer text-amber-900">
-              <span class="mr-2 font-semibold">
-                md translation preset authoring
-              </span>
-              <StatusBadge text="registry-driven" variant="warn" />
-            </summary>
-            <p class="mb-2 mt-2 text-xs text-amber-800">
-              Registry-driven md translation authoring surface. Creates saved
-              Markdown views via team_markdown API — does NOT mutate UIBuilder
-              canvas, package edit root, preview/validate/apply flow, or active
-              topology. Binding is user-selected only; no AI inference.
-            </p>
-            {authoringOpen && (
-              <div class="rounded border border-amber-100 bg-white p-3">
-                {authoringNotice && (
-                  <p class="mb-2 text-xs text-emerald-700">{authoringNotice}</p>
-                )}
-                <MdTranslationAuthoringSeedSurface
-                  placement="ui_builder_child_surface"
-                  onSaved={(savedViewId) => {
-                    setAuthoringNotice(
-                      `Saved view created: ${savedViewId}. Open projection view to search and display.`,
-                    );
-                    setAuthoringOpen(false);
-                  }}
-                  onCancel={() => setAuthoringOpen(false)}
-                />
-              </div>
-            )}
-          </details>
-        </div>
-      )}
-    </details>
-  );
-}
-
 // ─── バケット管理セクション ───────────────────────────────────────────────────
 
 function BucketSection({
@@ -4261,6 +4183,64 @@ function LayoutPalette({
   );
 }
 
+// Dashboard component candidates — catalog entries tagged dashboard_placement_candidate.
+// These are implemented components (registrationRequired:false) that can be placed on dashboard
+// layouts without going through the DB bucket registration flow.
+// NOT a UIBuilder preset_ecosystem permanent child surface.
+function DashboardCandidatePalette({
+  onDragStart,
+  onAddToCanvas,
+  disabled = false,
+}: {
+  onDragStart: (entry: PaletteEntry, payload: BucketCardDragPayload) => void;
+  onAddToCanvas: (entry: PaletteEntry) => void;
+  disabled?: boolean;
+}): JSX.Element {
+  const entries: PaletteEntry[] = COMPONENT_CATALOG_ENTRIES
+    .filter((c) => c.capabilityTags.includes("dashboard_placement_candidate"))
+    .map((c) => ({
+      componentKey: c.componentKey,
+      componentKind: c.componentKind,
+      isDraftOnly: false,
+    }));
+
+  if (entries.length === 0) return <></>;
+
+  return (
+    <div
+      class="component-bucket-panel-left w-[11.5rem] shrink-0 overflow-y-auto rounded-lg border border-blue-200 bg-blue-50 p-2 max-h-[480px]"
+      data-dashboard-candidate-palette="true"
+    >
+      <h4 class="mb-1 text-sm font-semibold text-blue-900">ダッシュボード候補</h4>
+      <p class="mb-1.5 text-[0.62rem] text-blue-700">
+        dashboard_placement_candidate — DB 登録不要。/admin/team-dashboard が主導線。
+      </p>
+      <div class="component-bucket-panel flex flex-col gap-1.5" role="list">
+        {entries.map((c) => {
+          const catalogEntry = COMPONENT_CATALOG_ENTRIES.find(
+            (e) => e.componentKey === c.componentKey,
+          );
+          return (
+            <ComponentBucketCard
+              key={c.componentKey}
+              componentKey={c.componentKey}
+              componentKind={c.componentKind}
+              sourcePath={catalogEntry?.sourcePath}
+              statusLabel="候補"
+              statusVariant="info"
+              draggable={!disabled}
+              placementReady
+              dragPayload={bucketCardDragPayloadFromEntry(c, "ダッシュボード候補")}
+              onDragStart={(_e, payload) => onDragStart(c, payload)}
+              onAddToCanvas={() => onAddToCanvas(c)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function StructuralHtmlPalette({
   onAddTag,
   disabled = false,
@@ -5410,7 +5390,13 @@ function LayoutBuilderSection({
     dragSrc.current = null;
     if (!entry) return;
     if (rejectDraftPaletteEntry(entry)) return;
-    if (entry.componentKey && onRegisterComponentBeforePlace) {
+    const dropCatalogEntry = COMPONENT_CATALOG_ENTRIES.find((c) =>
+      c.componentKey === entry.componentKey
+    );
+    if (
+      dropCatalogEntry?.registrationRequired !== false && entry.componentKey &&
+      onRegisterComponentBeforePlace
+    ) {
       const registered = await onRegisterComponentBeforePlace(entry.componentKey);
       if (!registered) return;
     }
@@ -5425,7 +5411,13 @@ function LayoutBuilderSection({
   // Gap 5: Non-drag add from palette button
   const handleAddFromPalette = async (entry: PaletteEntry) => {
     if (rejectDraftPaletteEntry(entry)) return;
-    if (entry.componentKey && onRegisterComponentBeforePlace) {
+    const addCatalogEntry = COMPONENT_CATALOG_ENTRIES.find((c) =>
+      c.componentKey === entry.componentKey
+    );
+    if (
+      addCatalogEntry?.registrationRequired !== false && entry.componentKey &&
+      onRegisterComponentBeforePlace
+    ) {
       const registered = await onRegisterComponentBeforePlace(entry.componentKey);
       if (!registered) return;
     }
@@ -5961,6 +5953,11 @@ function LayoutBuilderSection({
               entries={paletteEntries}
               status={paletteStatus}
               packageOnly={true}
+            />
+            <DashboardCandidatePalette
+              onDragStart={handleDragStartPalette}
+              onAddToCanvas={handleAddFromPalette}
+              disabled={selectorsDisabled}
             />
             <StructuralHtmlPalette onAddTag={addStructuralHtmlNode} />
           </>
@@ -7581,8 +7578,6 @@ export default function UiBuilderAdmin(): JSX.Element {
           paletteReloadToken={paletteReloadToken}
         />
       </div>
-
-      <UiBuilderPresetEcosystemPanel />
 
       <details
         class="mb-3 rounded border border-blue-200 bg-blue-50"

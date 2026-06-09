@@ -13,9 +13,11 @@
 
 import {
   assertEquals,
+  assertExists,
   assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
   buildMdTranslationAuthoringSeedCandidate,
   buildPlaceholderSchemaFromMarkdown,
@@ -480,10 +482,16 @@ Deno.test("Team Markdown frontend does not call direct DB writes or mutate UIBui
     dashboardSource.includes("buildMdTranslationAuthoringSeedCandidate"),
     true,
   );
+  // UIBuilder owns preview/validate/apply for canvas package mutations
   assertEquals(uiBuilderSource.includes("preview"), true);
   assertEquals(uiBuilderSource.includes("validate"), true);
   assertEquals(uiBuilderSource.includes("apply"), true);
-  assertEquals(uiBuilderSource.includes("TeamMarkdownDashboard"), true);
+  // UIBuilder must NOT import TeamMarkdownDashboard (not a permanent child surface)
+  assertEquals(
+    uiBuilderSource.includes("TeamMarkdownDashboard"),
+    false,
+    "UIBuilder must not import TeamMarkdownDashboard — team dashboard is /admin/team-dashboard only",
+  );
 });
 
 // ─── search action contract tests ─────────────────────────────────────────────
@@ -748,7 +756,7 @@ Deno.test("md_viewer is a projection component, not a preset DB seed registratio
 
 // ─── UIBuilder / route placement bundle ─────────────────────────────────────
 
-Deno.test("TeamMarkdownDashboard has routable admin route and UIBuilder child placement", async () => {
+Deno.test("TeamMarkdownDashboard primary route is /admin/team-dashboard (not UIBuilder permanent child surface)", async () => {
   const routeSource = await Deno.readTextFile(
     "frontend/routes/admin/team-dashboard/index.tsx",
   );
@@ -756,18 +764,26 @@ Deno.test("TeamMarkdownDashboard has routable admin route and UIBuilder child pl
     "frontend/islands/UiBuilderAdmin.tsx",
   );
 
+  // /admin/team-dashboard is the canonical primary route
   assertEquals(routeSource.includes("<AdminAuthGate>"), true);
   assertEquals(routeSource.includes("TeamMarkdownDashboard"), true);
   assertEquals(routeSource.includes('placement="admin_route"'), true);
-  assertEquals(uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"), true);
-  assertEquals(uiBuilderSource.includes("{open &&"), true);
+
+  // UiBuilder must NOT permanently mount Team Markdown Dashboard as a child surface
   assertEquals(
-    uiBuilderSource.includes('data-preset-child-surface="md_viewer"'),
-    true,
+    uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"),
+    false,
+    "UiBuilderAdmin must not permanently mount UiBuilderPresetEcosystemPanel (responsibility mixing resolved)",
   );
   assertEquals(
-    uiBuilderSource.includes('placement="ui_builder_child_surface"'),
-    true,
+    uiBuilderSource.includes('data-preset-child-surface="md_viewer"'),
+    false,
+    "UIBuilder must not have data-preset-child-surface=md_viewer permanently rendered",
+  );
+  assertEquals(
+    uiBuilderSource.includes("Preset ecosystem — md_viewer child surface"),
+    false,
+    "UIBuilder must not display 'Preset ecosystem — md_viewer child surface' label",
   );
 });
 
@@ -790,7 +806,7 @@ Deno.test("MdViewer action boundary exposes registered seed-gated actions", asyn
   assertEquals(mdViewerSource.includes("Seed invalid — action disabled"), true);
 });
 
-Deno.test("md_viewer catalog entry is a projection child, not a package canvas seed registration", async () => {
+Deno.test("md_viewer catalog entry is a dashboard/read-work component candidate, not a package canvas seed registration", async () => {
   const catalogSource = await Deno.readTextFile(
     "frontend/components/catalog.ts",
   );
@@ -808,6 +824,178 @@ Deno.test("md_viewer catalog entry is a projection child, not a package canvas s
     true,
   );
   assertEquals(catalogSource.includes("package canvas edit root"), true);
+  // md_viewer must be described as a dashboard/read-work component candidate
+  assertEquals(
+    catalogSource.includes("dashboard/read-work component candidate"),
+    true,
+    "md_viewer.projection notes must describe it as a dashboard/read-work component candidate",
+  );
+  // md_viewer must not be described as a UIBuilder preset_ecosystem child surface
+  assertEquals(
+    catalogSource.includes("UIBuilder preset_ecosystem child projection surface"),
+    false,
+    "md_viewer.projection must not be described as a UIBuilder preset_ecosystem child projection surface",
+  );
+});
+
+Deno.test("md_viewer does not hold active topology / physical record / saved view authority", async () => {
+  const catalogSource = await Deno.readTextFile(
+    "frontend/components/catalog.ts",
+  );
+  // Catalog notes must explicitly state md_viewer does not hold these authorities (text check on notes field)
+  assertEquals(
+    catalogSource.includes("active topology authority"),
+    true,
+    "catalog notes must explicitly deny active topology authority for md_viewer",
+  );
+  assertEquals(
+    catalogSource.includes("physical record authority"),
+    true,
+    "catalog notes must explicitly deny physical record authority for md_viewer",
+  );
+  assertEquals(
+    catalogSource.includes("saved view authority"),
+    true,
+    "catalog notes must explicitly deny saved view authority for md_viewer",
+  );
+  // Object-level check: md_viewer.projection must have runtimeConnected:false.
+  // Source regex is avoided because COMPONENT_TEMPLATE_CATALOG_IDENTITIES also contains
+  // componentKey:"md_viewer.projection" without runtimeConnected, causing regex to hit
+  // the next runtimeConnected in the file (button.primitive:true).
+  const mdViewerEntry = COMPONENT_CATALOG_ENTRIES.find(
+    (c) => c.componentKey === "md_viewer.projection",
+  );
+  assertExists(mdViewerEntry, "md_viewer.projection must exist in COMPONENT_CATALOG_ENTRIES");
+  assertEquals(
+    mdViewerEntry.runtimeConnected,
+    false,
+    "md_viewer.projection must have runtimeConnected:false (no runtime topology authority)",
+  );
+});
+
+Deno.test("/admin/team-dashboard is the primary placement for saved markdown view search and seed rehydration", async () => {
+  const routeSource = await Deno.readTextFile(
+    "frontend/routes/admin/team-dashboard/index.tsx",
+  );
+  const ssotSource = await Deno.readTextFile(
+    "docs/design/team-markdown-dashboard-saved-view-ssot.yaml",
+  );
+
+  // Route must be guarded and mount TeamMarkdownDashboard as admin_route
+  assertEquals(routeSource.includes("<AdminAuthGate>"), true);
+  assertEquals(routeSource.includes("TeamMarkdownDashboard"), true);
+  assertEquals(routeSource.includes('placement="admin_route"'), true);
+  // SSOT must have /admin/team-dashboard as the preferred entry surface
+  assertEquals(
+    ssotSource.includes("preferred: /admin/team-dashboard"),
+    true,
+    "SSOT must declare /admin/team-dashboard as the preferred entry surface",
+  );
+  // SSOT implemented: block must NOT list UIBuilder as an entry surface.
+  // Check only the implemented: block to avoid false-positive on the removed: history entry.
+  const implementedBlock = ssotSource.match(
+    /implemented:\s*([\s\S]*?)(?=\s{6}removed:|\s{6}primary_ui:|$)/,
+  )?.[1] ?? "";
+  assertEquals(
+    implementedBlock.includes("ui-builder"),
+    false,
+    "SSOT implemented entry surface block must not list UIBuilder (removed entry belongs in removed: block)",
+  );
+});
+
+Deno.test("md_viewer.projection has dashboard_placement_candidate tag and is NOT in registrationRequired bucket catalog", () => {
+  // Object-level check: source regex is avoided because COMPONENT_TEMPLATE_CATALOG_IDENTITIES
+  // also has componentKey:"md_viewer.projection" without capabilityTags/registrationRequired,
+  // causing block-regex to capture only the identity entry (no tags).
+  const mdViewerEntry = COMPONENT_CATALOG_ENTRIES.find(
+    (c) => c.componentKey === "md_viewer.projection",
+  );
+  assertExists(mdViewerEntry, "md_viewer.projection must exist in COMPONENT_CATALOG_ENTRIES");
+
+  assertEquals(
+    mdViewerEntry.capabilityTags.includes("dashboard_placement_candidate"),
+    true,
+    "md_viewer.projection capabilityTags must include dashboard_placement_candidate",
+  );
+  assertEquals(
+    mdViewerEntry.registrationRequired,
+    false,
+    "md_viewer.projection must have registrationRequired:false — not a DB bucket registration candidate",
+  );
+
+  // Must NOT appear in the registrationRequired:true bucket catalog
+  const bucketCatalog = COMPONENT_CATALOG_ENTRIES.filter((c) => c.registrationRequired);
+  assertEquals(
+    bucketCatalog.some((c) => c.componentKey === "md_viewer.projection"),
+    false,
+    "md_viewer.projection must not be in registrationRequired:true bucket catalog",
+  );
+
+  // Must appear in the dashboard_placement_candidate set
+  const dashboardCandidates = COMPONENT_CATALOG_ENTRIES.filter((c) =>
+    c.capabilityTags.includes("dashboard_placement_candidate")
+  );
+  assertEquals(
+    dashboardCandidates.some((c) => c.componentKey === "md_viewer.projection"),
+    true,
+    "md_viewer.projection must appear in dashboard_placement_candidate filtered entries",
+  );
+});
+
+Deno.test("DashboardCandidatePalette is in UiBuilderAdmin and uses dashboard_placement_candidate filter", async () => {
+  const uiBuilderSource = await Deno.readTextFile(
+    "frontend/islands/UiBuilderAdmin.tsx",
+  );
+
+  // DashboardCandidatePalette component must exist in UIBuilder
+  assertEquals(
+    uiBuilderSource.includes("DashboardCandidatePalette"),
+    true,
+    "UiBuilderAdmin must contain DashboardCandidatePalette component for dashboard candidate placement",
+  );
+  // Must use dashboard_placement_candidate as the filter key (not registrationRequired)
+  assertEquals(
+    uiBuilderSource.includes('"dashboard_placement_candidate"'),
+    true,
+    "DashboardCandidatePalette must filter by dashboard_placement_candidate tag",
+  );
+  // Must render with data-dashboard-candidate-palette attribute
+  assertEquals(
+    uiBuilderSource.includes('data-dashboard-candidate-palette="true"'),
+    true,
+    "DashboardCandidatePalette must render with data-dashboard-candidate-palette attribute",
+  );
+  // UiBuilder must still NOT mount the old UiBuilderPresetEcosystemPanel
+  assertEquals(
+    uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"),
+    false,
+    "UiBuilderAdmin must not permanently mount UiBuilderPresetEcosystemPanel",
+  );
+});
+
+Deno.test("registrationRequired and dashboard placement visibility are not conflated in UIBuilder", async () => {
+  const uiBuilderSource = await Deno.readTextFile(
+    "frontend/islands/UiBuilderAdmin.tsx",
+  );
+
+  // The bucket registration catalog filter uses registrationRequired
+  assertEquals(
+    uiBuilderSource.includes("c.registrationRequired"),
+    true,
+    "bucket catalog must filter by registrationRequired for DB registration flow",
+  );
+  // The dashboard candidate palette uses dashboard_placement_candidate tag — separate gate
+  assertEquals(
+    uiBuilderSource.includes('"dashboard_placement_candidate"'),
+    true,
+    "dashboard candidate palette must use dashboard_placement_candidate tag, not registrationRequired",
+  );
+  // registrationRequired check must be skipped for dashboard_placement_candidate entries
+  assertEquals(
+    uiBuilderSource.includes("registrationRequired !== false"),
+    true,
+    "placement handlers must skip DB registration for registrationRequired:false entries",
+  );
 });
 
 // ─── seed builder contract tests ─────────────────────────────────────────────
@@ -967,32 +1155,33 @@ Deno.test("authoring surface does not write DB directly", () => {
   );
 });
 
-Deno.test("UIBuilder preset ecosystem exposes md translation authoring entry", async () => {
+Deno.test("UIBuilder does not permanently mount md translation authoring surface (responsibility boundary resolved)", async () => {
   const uiBuilderSource = await Deno.readTextFile(
     "frontend/islands/UiBuilderAdmin.tsx",
   );
+  // MdTranslationAuthoringSeedSurface must not be permanently mounted in UIBuilder
   assertEquals(
     uiBuilderSource.includes('data-preset-authoring-surface="md_translation"'),
-    true,
-    "UIBuilder preset ecosystem panel must expose md translation authoring entry",
+    false,
+    "UIBuilder must not permanently mount md translation authoring surface — it belongs to /admin/team-dashboard",
   );
   assertEquals(
     uiBuilderSource.includes("MdTranslationAuthoringSeedSurface"),
-    true,
-    "UIBuilder must import and use MdTranslationAuthoringSeedSurface",
+    false,
+    "UIBuilder must not import MdTranslationAuthoringSeedSurface — authoring surface belongs to /admin/team-dashboard",
   );
 });
 
-Deno.test("UiBuilderPresetEcosystemPanel authoring entry does not mutate canvas", async () => {
-  const uiBuilderSource = await Deno.readTextFile(
-    "frontend/islands/UiBuilderAdmin.tsx",
+Deno.test("MdTranslationAuthoringSeedSurface is present in TeamMarkdownDashboard (not UIBuilder)", async () => {
+  const dashboardSource = await Deno.readTextFile(
+    "frontend/islands/TeamMarkdownDashboard.tsx",
   );
-  // The authoring panel description must say it does not mutate canvas/package
+  // The authoring surface belongs to the team dashboard island, not UIBuilder
   assertEquals(
-    uiBuilderSource.includes("does NOT mutate UIBuilder") ||
-      uiBuilderSource.includes("does not mutate"),
+    dashboardSource.includes("MdTranslationAuthoringSeedSurface") ||
+      dashboardSource.includes("data-authoring-bundle"),
     true,
-    "authoring entry description must explicitly state it does not mutate UIBuilder canvas",
+    "MdTranslationAuthoringSeedSurface or authoring bundle marker must be in TeamMarkdownDashboard",
   );
 });
 

@@ -26,7 +26,7 @@ component_family: [primitive, template, composite, packaged, alias]
 semantic_role: [input, action, display, feedback, validation, diagnostic, layout_shell, navigation, data_viewer, admin_operation]
 visual_role: [field, button, badge, alert, panel, table, card, modal, tabs, tree, page_shell, json_viewer, canvas, box]
 lifecycle_status: [code_only_drift, alias_maintained, bucketed, packaging, promoted, registered, deprecated]
-capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display, field_binding, preview_surface, export_snapshot]
+capability_tags: [accepts_children, accepts_actions, emits_event, requires_event_binding, accepts_design, accepts_layout, displays_backend_result, displays_json, admin_only, recursive, selectable, controlled_value, error_display, loading_display, field_binding, preview_surface, export_snapshot, dashboard_placement_candidate]
 
 catalog_vocabulary_contract:
   source_of_truth: this_ssot_defines_component_catalog_classification_values
@@ -52,6 +52,19 @@ persistence:
     - ui_component_registry.visual_role text
     - ui_component_registry.capability_tags text[]
 
+placement_visibility_rule:
+  dashboard_placement_candidate:
+    definition: >
+      Components tagged dashboard_placement_candidate can be placed on dashboard
+      layouts from a dedicated DashboardCandidatePalette in UIBuilder without going
+      through the DB bucket registration flow. This is independent of registrationRequired.
+    rule:
+      - dashboard_placement_candidate components have registrationRequired:false
+      - they appear in DashboardCandidatePalette, NOT in the bucket registration catalog
+      - they are NOT UIBuilder preset_ecosystem permanent child surfaces
+      - their primary placement surface is /admin/team-dashboard or dashboard layouts
+      - simple all-registrationRequired:false to palette expansion is prohibited
+
 prohibitions:
   - using_component_kind_as_only_catalog_classification
   - treating_code_only_template_as_topology_entity
@@ -60,6 +73,7 @@ prohibitions:
   - classification_tags_mutating_runtime_route
   - classification_tags_mutating_sql_attention
   - classification_tags_bypassing_component_registration
+  - showing_all_registrationRequired_false_in_palette_without_tag_filter
 
 seed_boundary:
   db_seed_surface:

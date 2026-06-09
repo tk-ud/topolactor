@@ -363,13 +363,14 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: [
       "displays_backend_result",
       "error_display",
-      "preview_surface",
-      "admin_only",
+      "accepts_design",
+      "accepts_layout",
+      "dashboard_placement_candidate",
     ],
     runtimeConnected: false,
     registrationRequired: false,
     notes:
-      "UIBuilder preset_ecosystem child projection surface; not a preset DB seed registration mechanism, runtime registry component, or package canvas edit root",
+      "dashboard/read-work component candidate for saved Markdown view display; not a preset DB seed registration mechanism, runtime registry component, or package canvas edit root; not a UIBuilder preset_ecosystem child surface, active topology authority, physical record authority, or saved view authority",
   },
   {
     componentKey: "md_translation_authoring_surface.authoring",

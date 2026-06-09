@@ -145,7 +145,8 @@ team_markdown_dashboard_saved_view_ssot:
       alternative: /admin/ui-builder_or_admin_dashboard_tab
       implemented:
         - /admin/team-dashboard
-        - /admin/ui-builder preset_ecosystem md_viewer child surface
+      removed:
+        - former_UIBuilder_preset_ecosystem_md_viewer_child_surface (removed 2026-06-09 — responsibility mixing resolved; /admin/team-dashboard is primary route)
     primary_ui:
       - search_input
       - saved_markdown_view_result_list

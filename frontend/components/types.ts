@@ -143,7 +143,8 @@ export type ComponentCapabilityTag =
   | "loading_display"
   | "field_binding"
   | "preview_surface"
-  | "export_snapshot";
+  | "export_snapshot"
+  | "dashboard_placement_candidate";
 
 // runtimeConnected means runtime factory/constructor is reachable via runtime registry.
 // It does NOT mean DB-registered topology entity.
