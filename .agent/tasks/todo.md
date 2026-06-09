@@ -10,7 +10,7 @@
 |-----------|------|--------|------|----------------|---------|
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
-| `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 5 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
+| `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
@@ -48,7 +48,7 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
-- [ ] md_viewer remains completed child surface evidence and must not be reopened as unresolved unless SSOT/evidence contradicts it
+Note: md_viewer remains completed child surface evidence and must not be reopened as unresolved unless SSOT/evidence contradicts it.
 
 ---
 
