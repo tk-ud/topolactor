@@ -378,7 +378,33 @@ admin_console_workflow_ssot:
             effect: component removed from package membership; canvas/layout draft already updated locally
         - layout_patch backend actions: preview → validate → apply for placement persistence
         - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
-        - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
+        - per_component_wiring:
+            user_optional_operation: true
+            note: >
+              "user_optional_operation" is user-operational optionality — the author may or may not
+              configure wiring for a given node. It is NOT implementation optionality.
+              Per-component wiring is structured as three lanes:
+              required_event_log_lane (required, implemented for all nodes),
+              conditional_routeNavigation_binding (user-optional, implemented, frontend-local),
+              conditional_runtimeDispatch_binding (user-optional, implemented, advanced path).
+            required_event_log_lane: implemented
+            conditional_routeNavigation_binding:
+              status: implemented
+              surface: RouteNavigationWiringPreset
+              binding: >
+                frontend-local; click → navigate to route_key;
+                targetSurface:route / targetRef:route:<routeKey> / wiringKind:navigation;
+                saved via ui_topology:update_package_wiring
+              helpers:
+                - frontend/lib/packageWiringPicker.ts encodeRouteNavigationTargetRef
+                - frontend/lib/packageWiringPicker.ts parseRouteNavigationTargetRef
+            conditional_runtimeDispatch_binding:
+              status: implemented
+              surface: PackageWiringEditor (advanced_details_disclosure only)
+              binding: component/action-based conditional dispatching via raw dispatcher fields
+              note: >
+                raw dispatcher fields (wiringKind / targetSurface / targetRef) are advanced path only;
+                not the normal-view completion path
         - preset_ecosystem:
             role: ui_builder_authoring_support
             status: planned_parent_surface

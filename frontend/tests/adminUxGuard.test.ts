@@ -2049,6 +2049,16 @@ Deno.test("UiBuilderAdmin: route navigation preset exists in normal view without
   );
 });
 
+Deno.test("SSOT: optional per-component wiring phrase must not exist — use user_optional_operation vocabulary", async () => {
+  const ssot = await Deno.readTextFile(
+    new URL("../../docs/design/admin-console-workflow-ssot.yaml", import.meta.url),
+  );
+  assertFalse(
+    ssot.includes("optional per-component wiring"),
+    "admin-console-workflow-ssot.yaml must not use 'optional per-component wiring' — use user_optional_operation vocabulary to distinguish user-optional from implementation-required",
+  );
+});
+
 Deno.test("UiBuilderAdmin: raw dispatcher fields remain inside details disclosure not in normal path", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
