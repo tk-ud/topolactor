@@ -52,8 +52,10 @@ import {
   type PaletteDraftSeedEntry,
   parseVisualLayoutPatchJson,
   reorderLayoutNodeStack,
+  resolveSizingModeAfterToggle,
   RESPONSIVE_BREAKPOINTS,
   type ResponsiveTokenRules,
+  type SizingMode,
   isPaletteAutoSeedCanvas,
   seedDraftNodesFromPalette,
   snapToGrid,
@@ -172,6 +174,8 @@ type DraftNode = {
   y: number;
   width: LayoutDimension;
   height: LayoutDimension;
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
   componentId?: string;
   packageId?: string;
   layoutId?: string;
@@ -2379,36 +2383,55 @@ function CanvasInspector({
         <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
           サイズ
         </legend>
+        {node.widthMode === "preset" && (
+          <p class="mb-1 rounded bg-blue-50 px-1.5 py-0.5 text-[0.6rem] text-blue-700">
+            幅は sizing classRef が制御しています（preset モード）。カスタム幅入力は無効です。
+          </p>
+        )}
         <div class="grid grid-cols-2 gap-1">
-          {(["width", "height"] as const).map((f) => (
-            <label key={f} class="flex flex-col gap-0.5">
-              <span class="text-[0.65rem] text-gray-600">
-                {FIELD_LABELS[f]}
-              </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={layoutDimensionLabel(node[f])}
-                placeholder={f === "width" ? "140 / 50% / auto" : "60 / 100% / auto"}
-                onInput={(e) =>
-                  handleDimension(
-                    f,
-                    (e.target as HTMLInputElement).value,
-                    true,
-                    false,
+          {(["width", "height"] as const).map((f) => {
+            const modeField = f === "width" ? node.widthMode : node.heightMode;
+            const isPreset = modeField === "preset";
+            return (
+              <label key={f} class="flex flex-col gap-0.5">
+                <span class="text-[0.65rem] text-gray-600">
+                  {FIELD_LABELS[f]}
+                  {modeField && modeField !== "custom" && (
+                    <span class="ml-1 font-mono text-[0.55rem] text-gray-400">
+                      [{modeField}]
+                    </span>
                   )}
-                onChange={(e) =>
-                  handleDimension(
-                    f,
-                    (e.target as HTMLInputElement).value,
-                    true,
-                    true,
-                  )}
-                class="input px-1 py-0.5"
-                aria-label={FIELD_LABELS[f]}
-              />
-            </label>
-          ))}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={isPreset ? "" : layoutDimensionLabel(node[f])}
+                  placeholder={
+                    isPreset
+                      ? "sizing classRef が制御"
+                      : f === "width" ? "140 / 50% / auto" : "60 / 100% / auto"
+                  }
+                  disabled={isPreset}
+                  onInput={(e) =>
+                    handleDimension(
+                      f,
+                      (e.target as HTMLInputElement).value,
+                      true,
+                      false,
+                    )}
+                  onChange={(e) =>
+                    handleDimension(
+                      f,
+                      (e.target as HTMLInputElement).value,
+                      true,
+                      true,
+                    )}
+                  class={`input px-1 py-0.5 ${isPreset ? "cursor-not-allowed opacity-50" : ""}`}
+                  aria-label={FIELD_LABELS[f]}
+                />
+              </label>
+            );
+          })}
         </div>
       </fieldset>
       <div class="flex flex-wrap gap-1">
@@ -4057,6 +4080,8 @@ function LayoutBuilderSection({
       y: 0,
       width: defaults.width,
       height: defaults.height,
+      widthMode: "auto" as SizingMode,
+      heightMode: "auto" as SizingMode,
     };
   };
 
@@ -4242,7 +4267,8 @@ function LayoutBuilderSection({
         const layoutClassRefs = current.includes(classKey)
           ? current.filter((k) => k !== classKey)
           : [...current, classKey];
-        return { ...n, layoutClassRefs };
+        const widthMode = resolveSizingModeAfterToggle(layoutClassRefs, n.widthMode);
+        return { ...n, layoutClassRefs, widthMode };
       });
       pushHistory(next, "ノード layoutClassRefs を変更");
       return next;

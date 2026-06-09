@@ -37,6 +37,10 @@ export type ComponentSpec = {
   width?: number | string;
   /** Flow height — px number, percent string, or auto. */
   height?: number | string;
+  /** Controls inline width style projection. See SizingMode in visualLayoutUtils.ts. */
+  widthMode?: "auto" | "preset" | "custom";
+  /** Controls inline height style projection. See SizingMode in visualLayoutUtils.ts. */
+  heightMode?: "auto" | "preset" | "custom";
   /** SSOT topology-layout-class vocabulary refs for className resolution. */
   layoutClassRefs?: string[];
 };
