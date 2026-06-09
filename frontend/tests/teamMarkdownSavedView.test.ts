@@ -16,7 +16,12 @@ import {
   assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
-import { searchSavedViews } from "../api/teamMarkdownApi.ts";
+import {
+  buildMdTranslationAuthoringSeedCandidate,
+  buildPlaceholderSchemaFromMarkdown,
+  extractMarkdownPlaceholders,
+  searchSavedViews,
+} from "../api/teamMarkdownApi.ts";
 import type {
   CompletedPresetSeed,
   SavedViewDetail,
@@ -117,6 +122,321 @@ Deno.test("validateCompletedPresetSeed — rejects empty render hash", () => {
 
 Deno.test("validateCompletedPresetSeed — accepts valid complete seed", () => {
   assertEquals(validateCompletedPresetSeed(buildValidSeed()), null);
+});
+
+// ─── md translation authoring seed registration tests ───────────────────────
+
+Deno.test("todo/roadmap use seed-driven authoring surface wording, not bespoke form terms", async () => {
+  const todo = await Deno.readTextFile(".agent/tasks/todo.md");
+  const roadmap = await Deno.readTextFile("docs/system-roadmap.yaml");
+
+  for (const source of [todo, roadmap]) {
+    assertEquals(
+      source.includes("md_translation_template_seed_registration_surface"),
+      true,
+    );
+    assertEquals(
+      source.includes("md_translation_binding_seed_authoring_surface"),
+      true,
+    );
+    assertEquals(
+      source.includes("md_translation_saved_view_create_seed_flow"),
+      true,
+    );
+    assertEquals(
+      source.includes("template_registration_modal_or_drawer UI"),
+      false,
+    );
+    assertEquals(source.includes("RecordMarkdownBindForm"), false);
+    assertEquals(source.includes("MarkdownTemplateRegistryForm"), false);
+  }
+
+  assertEquals(
+    todo.includes("[x] **md_translation_seed_candidate_builder_contract**"),
+    true,
+  );
+  assertEquals(
+    todo.includes("[x] **unresolved_required_placeholder_backend_gate**"),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_template_seed_registration_surface_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_binding_seed_authoring_surface_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes(
+      "[ ] **md_translation_saved_view_create_seed_flow_completion**",
+    ),
+    true,
+  );
+  assertEquals(
+    todo.includes("[ ] **existing_component_bucket_composition_hardening**"),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_template_seed_registration_surface_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_binding_seed_authoring_surface_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes(
+      "md_translation_saved_view_create_seed_flow_completion_pending",
+    ),
+    true,
+  );
+  assertEquals(
+    roadmap.includes("existing_component_bucket_composition_hardening_pending"),
+    true,
+  );
+});
+
+Deno.test("authoring surface uses existing bucket parts instead of Markdown-only modal/drawer creation", async () => {
+  const source = await Deno.readTextFile(
+    "frontend/islands/TeamMarkdownDashboard.tsx",
+  );
+  const ssot = await Deno.readTextFile(
+    "docs/design/team-markdown-dashboard-saved-view-ssot.yaml",
+  );
+
+  assertEquals(
+    source.includes(
+      'data-authoring-bundle="md_translation_authoring_seed_registration"',
+    ),
+    true,
+  );
+  assertEquals(
+    source.includes(
+      'data-component-bucket-parts="panel input select textarea button existing_bucket_parts"',
+    ),
+    true,
+  );
+  assertEquals(
+    source.includes("Markdown-only Modal/Drawer/Form component"),
+    true,
+  );
+  assertEquals(source.includes("new MarkdownTemplateRegistryForm"), false);
+  assertEquals(source.includes("new RecordMarkdownBindForm"), false);
+  assertEquals(
+    ssot.includes("bespoke Markdown-only modal/drawer/form components"),
+    true,
+  );
+});
+
+Deno.test("template authoring extracts placeholders and required/optional schema explicitly", () => {
+  const schema = buildPlaceholderSchemaFromMarkdown(
+    "# {{title}} {{owner}} {{optional_note}} {{owner}}",
+    ["optional_note"],
+  );
+  const extracted = extractMarkdownPlaceholders(
+    "# {{title}} {{owner}} {{optional_note}} {{owner}}",
+    schema,
+  );
+
+  assertEquals(extracted.placeholderKeys, ["optional_note", "owner", "title"]);
+  assertEquals(extracted.requiredPlaceholderKeys, ["owner", "title"]);
+  assertEquals(extracted.optionalPlaceholderKeys, ["optional_note"]);
+  assertEquals(
+    schema["binding_resolution"],
+    "user_explicit_selection_only_no_ai_inference",
+  );
+});
+
+Deno.test("explicit binding builds seed candidate and saved_view:create payload without markdown reverse engineering", () => {
+  const schema = buildPlaceholderSchemaFromMarkdown(
+    "# {{title}}\n{{owner}}\n{{optional_note}}",
+    ["optional_note"],
+  );
+  const candidate = buildMdTranslationAuthoringSeedCandidate({
+    template: {
+      templateId: "00000000-0000-0000-0000-000000000001",
+      templateKey: "daily_note",
+      templateMarkdown: "# {{title}}\n{{owner}}\n{{optional_note}}",
+      placeholderSchemaJson: schema,
+    },
+    source: {
+      sourceTableRef: "topology.physical_table",
+      sourceRecordRef: "record-42",
+    },
+    bindings: [
+      {
+        placeholderKey: "title",
+        required: true,
+        bindingKind: "static_text",
+        staticText: "Daily",
+        previewValue: "Daily",
+      },
+      {
+        placeholderKey: "owner",
+        required: true,
+        bindingKind: "jsonb_path",
+        jsonbPath: "$.owner",
+        previewValue: "Ada",
+      },
+    ],
+    title: "Daily saved view",
+  });
+
+  assertEquals(candidate.renderedMarkdown, "# Daily\nAda\n");
+  assertEquals(
+    candidate.completedPresetSeedJson.template_ref["template_key"],
+    "daily_note",
+  );
+  assertEquals(
+    candidate.completedPresetSeedJson.source_ref["source_record_ref"],
+    "record-42",
+  );
+  assertEquals(
+    candidate.completedPresetSeedJson
+      .lineage_ref["markdown_body_reverse_engineered"],
+    false,
+  );
+  assertEquals(
+    candidate.completedPresetSeedJson.binding_ref["resolution_mode"],
+    "user_explicit_selection_only_no_ai_inference",
+  );
+  assertEquals(candidate.bindingJson["optional_empty_placeholder_keys"], [
+    "optional_note",
+  ]);
+  assertEquals(
+    candidate.cardMetadataJson["seed_authoring_bundle"],
+    "md_translation_authoring_seed_registration",
+  );
+});
+
+Deno.test("unresolved required placeholder blocks saved view create candidate explicitly", () => {
+  const schema = buildPlaceholderSchemaFromMarkdown(
+    "# {{title}} {{owner}}",
+    [],
+  );
+  assertThrows(
+    () =>
+      buildMdTranslationAuthoringSeedCandidate({
+        template: {
+          templateId: "00000000-0000-0000-0000-000000000001",
+          templateKey: "daily_note",
+          templateMarkdown: "# {{title}} {{owner}}",
+          placeholderSchemaJson: schema,
+        },
+        source: {
+          sourceTableRef: "topology.physical_table",
+          sourceRecordRef: "record-42",
+        },
+        bindings: [{
+          placeholderKey: "title",
+          required: true,
+          bindingKind: "static_text",
+          staticText: "Daily",
+        }],
+        title: "Daily saved view",
+      }),
+    Error,
+    "REQUIRED_PLACEHOLDER_UNBOUND",
+  );
+});
+
+Deno.test("optional placeholder empty state is explicit and not silent coercion", () => {
+  const schema = buildPlaceholderSchemaFromMarkdown(
+    "{{required_key}} {{optional_key}}",
+    ["optional_key"],
+  );
+  const candidate = buildMdTranslationAuthoringSeedCandidate({
+    template: {
+      templateId: "00000000-0000-0000-0000-000000000001",
+      templateKey: "optional_test",
+      templateMarkdown: "{{required_key}} {{optional_key}}",
+      placeholderSchemaJson: schema,
+    },
+    source: { sourceTableRef: "topology.source", sourceRecordRef: "record-1" },
+    bindings: [{
+      placeholderKey: "required_key",
+      required: true,
+      bindingKind: "static_text",
+      staticText: "value",
+    }],
+    title: "Optional test",
+  });
+
+  const bindings = candidate.bindingJson["placeholder_bindings"] as Record<
+    string,
+    unknown
+  >[];
+  const optionalBinding = bindings.find((binding) =>
+    binding["placeholder_key"] === "optional_key"
+  );
+  assertEquals(optionalBinding?.["empty_state"], "explicit_optional_empty");
+  assertEquals(candidate.bindingJson["optional_empty_placeholder_keys"], [
+    "optional_key",
+  ]);
+});
+
+Deno.test("createSavedView rejects malformed create response explicitly", async () => {
+  const originalFetch = globalThis.fetch;
+  __testOnly.resetCommandQueue();
+  try {
+    globalThis.fetch = () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ success: true, emission: { data: { ok: true } } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+    const mod = await import("../api/teamMarkdownApi.ts");
+    await assertRejects(
+      () =>
+        mod.createSavedView({
+          templateId: "00000000-0000-0000-0000-000000000001",
+          title: "Broken create",
+          sourceTableRef: "topology.source",
+          sourceRecordRef: "record-1",
+          bindingJson: {},
+          completedPresetSeedJson: buildValidSeed(),
+          renderedMarkdown: "projection",
+        }),
+      Error,
+      "TEAM_MARKDOWN_CREATE_RESPONSE_INVALID",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    __testOnly.resetCommandQueue();
+  }
+});
+
+Deno.test("Team Markdown frontend does not call direct DB writes or mutate UIBuilder canvas", async () => {
+  const apiSource = await Deno.readTextFile("frontend/api/teamMarkdownApi.ts");
+  const dashboardSource = await Deno.readTextFile(
+    "frontend/islands/TeamMarkdownDashboard.tsx",
+  );
+  const uiBuilderSource = await Deno.readTextFile(
+    "frontend/islands/UiBuilderAdmin.tsx",
+  );
+
+  assertEquals(apiSource.includes('layer: "team_markdown"'), true);
+  assertEquals(apiSource.includes("queueAdminClientCommand"), true);
+  assertEquals(apiSource.includes('fetch("postgres'), false);
+  assertEquals(dashboardSource.includes("createSavedView"), true);
+  assertEquals(
+    dashboardSource.includes("buildMdTranslationAuthoringSeedCandidate"),
+    true,
+  );
+  assertEquals(uiBuilderSource.includes("preview"), true);
+  assertEquals(uiBuilderSource.includes("validate"), true);
+  assertEquals(uiBuilderSource.includes("apply"), true);
+  assertEquals(uiBuilderSource.includes("TeamMarkdownDashboard"), true);
 });
 
 // ─── search action contract tests ─────────────────────────────────────────────

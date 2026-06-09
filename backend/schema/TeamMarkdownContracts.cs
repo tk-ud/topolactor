@@ -143,6 +143,22 @@ public static class CompletedPresetSeedValidator
                 "completed_preset_seed_json.render_ref.rendered_markdown_hash is required and must not be empty");
         }
 
+        if (renderRef.TryGetProperty("unresolved_placeholder_keys", out var unresolvedRenderKeys) &&
+            unresolvedRenderKeys.ValueKind == JsonValueKind.Array && unresolvedRenderKeys.GetArrayLength() > 0)
+        {
+            return new ValidationError("REQUIRED_PLACEHOLDER_UNBOUND",
+                "completed_preset_seed_json.render_ref.unresolved_placeholder_keys must be empty before saved view persistence");
+        }
+
+        if (seed.TryGetProperty("binding_ref", out var bindingRef) &&
+            bindingRef.ValueKind == JsonValueKind.Object &&
+            bindingRef.TryGetProperty("unresolved_required_placeholder_keys", out var unresolvedBindingKeys) &&
+            unresolvedBindingKeys.ValueKind == JsonValueKind.Array && unresolvedBindingKeys.GetArrayLength() > 0)
+        {
+            return new ValidationError("REQUIRED_PLACEHOLDER_UNBOUND",
+                "completed_preset_seed_json.binding_ref.unresolved_required_placeholder_keys must be empty before saved view persistence");
+        }
+
         return null;
     }
 }
