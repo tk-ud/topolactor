@@ -36,6 +36,23 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 ---
 
+## Bundle `ui-builder-per-component-wiring-responsibility`
+
+**Status:** partial
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace.authoring_flow.responsibilities.per_component_wiring`)
+
+Route navigation wiring (`RouteNavigationWiringPreset`) is implemented as `user_optional_operation`.
+Raw dispatcher fields (`PackageWiringEditor`) are `advanced_only_not_completion`.
+The following partial items require completion or explicit out_of_scope decision:
+
+- [ ] **manifest_binding_wiring**: manifest binding wiring beyond route_navigation has no dedicated normal-view surface; currently accessible via `PackageWiringEditor` raw path only. Determine whether a normal-view surface is `implementation_required` or `out_of_scope` and update SSOT accordingly.
+- [ ] **component_state_authoring**: `propsJson` / `stateJson` are pass-through fields in `DraftNode` / `VisualNodePayload` / `layout_patch_json` → `renderEmission`; `stateJson.open` used for modal/drawer initial state. A typed per-component-kind editor is not implemented. Determine: `implementation_required` (requires typed editor per component capability) or `out_of_scope` (pass-through is sufficient); update SSOT with explicit status and rationale.
+
+Note: Do NOT mix with PR #402 panel boundary fixes (separate bundle).
+
+---
+
 ## Bundle `ui-builder-preset-ecosystem`
 
 **Status:** partial

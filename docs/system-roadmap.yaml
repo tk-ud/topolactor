@@ -385,6 +385,8 @@ system_roadmap_ssot:
         - mock_preset_intake_and_visual_builder_complete_their_declared_acceptance_scope
       known_gap_ref:
         - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
+        - per_component_wiring_beyond_route_navigation_has_no_normal_view_surface (partial; PackageWiringEditor raw path only)
+        - component_state_authoring_propsJson_stateJson_typed_editor_not_implemented (component_capability_dependent; partial_planned)
       files:
         - backend/
         - frontend/

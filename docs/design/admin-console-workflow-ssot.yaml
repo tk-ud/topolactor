@@ -378,7 +378,48 @@ admin_console_workflow_ssot:
             effect: component removed from package membership; canvas/layout draft already updated locally
         - layout_patch backend actions: preview → validate → apply for placement persistence
         - component_style_design:upsert for design token persistence (separate backend action from layout_patch)
-        - optional per-component wiring under package scope; raw dispatcher fields in advanced disclosure only
+        - per_component_wiring:
+            user_optional_operation: true
+            note: >
+              "user_optional_operation" means the author may or may not configure wiring for a given
+              component node. It does NOT mean the implementation responsibility can be deferred.
+              The normal-view wiring surface is implementation_required; raw dispatcher fields in
+              advanced disclosure alone do not satisfy per-component wiring completion.
+            implemented:
+              route_navigation_wiring:
+                surface: RouteNavigationWiringPreset
+                description: >
+                  click → navigate to route_key; normal-view preset in business vocabulary without
+                  exposing raw dispatcher fields; targetSurface:route / targetRef:route:<routeKey> /
+                  wiringKind:navigation; saved via ui_topology:update_package_wiring
+                helpers:
+                  - frontend/lib/packageWiringPicker.ts encodeRouteNavigationTargetRef
+                  - frontend/lib/packageWiringPicker.ts parseRouteNavigationTargetRef
+            advanced_only_not_completion:
+              raw_dispatcher_fields:
+                surface: PackageWiringEditor
+                placement: details_disclosure_only
+                fields: [wiringKind, targetSurface, targetRef, wiringId]
+                note: >
+                  Raw dispatcher fields are in <details> advanced disclosure only.
+                  This is NOT the normal-view completion path for per-component wiring.
+            partial_planned:
+              manifest_binding_wiring:
+                status: partial
+                note: >
+                  Manifest binding wiring beyond route_navigation has no dedicated normal-view surface;
+                  accessible only via PackageWiringEditor raw path
+              component_state_authoring:
+                status: partial
+                fields: [DraftNode.propsJson, DraftNode.stateJson, VisualNodePayload.propsJson, VisualNodePayload.stateJson]
+                current: >
+                  Pass-through fields in layout_patch_json → renderEmission; stateJson.open:boolean
+                  used for modal/drawer initial state only
+                typed_editor: not_implemented
+                dependency: >
+                  component_capability_dependent — whether a typed per-kind editor is
+                  implementation_required or out_of_scope is tracked as partial_planned_bundle in
+                  docs/system-roadmap.yaml product.admin_topology_authoring
         - preset_ecosystem:
             role: ui_builder_authoring_support
             status: planned_parent_surface
