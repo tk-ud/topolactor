@@ -3115,7 +3115,7 @@ function LeftDockedPalettePanel({
   const [activeTab, setActiveTab] = useState<"bucket" | "dashboard" | "html">("bucket");
   const tabs: Array<{ id: "bucket" | "dashboard" | "html"; label: string }> = [
     { id: "bucket", label: "配置可能部品" },
-    { id: "dashboard", label: "DB 候補" },
+    { id: "dashboard", label: "preset 候補" },
     { id: "html", label: "構造 HTML" },
   ];
 
@@ -4492,7 +4492,7 @@ function LayoutBuilderSection({
         </div>
       )}
 
-      {/* Canvas workspace — maximized viewport block (canvas + right dock only) */}
+      {/* Canvas workspace — maximized viewport block (left dock + canvas + right dock) */}
       <section
         class="ui-builder-canvas-workspace mb-4 flex flex-col overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
         style={{ height: CANVAS_WORKSPACE_HEIGHT, minHeight: CANVAS_WORKSPACE_HEIGHT }}

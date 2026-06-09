@@ -1539,6 +1539,22 @@ Deno.test("canvas workspace: dashboard candidate panel uses preset/md_viewer des
   );
 });
 
+Deno.test("canvas workspace: left panel dashboard tab visible label is not DB 候補", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // Tab visible label must convey preset/md_viewer meaning, not the opaque "DB 候補" label.
+  assertFalse(
+    src.includes('"DB 候補"'),
+    'tab label "DB 候補" must be replaced with a preset/md_viewer-meaningful label',
+  );
+  // "preset 候補" is the agreed short form for the dashboard tab label.
+  assert(
+    src.includes('"preset 候補"'),
+    'dashboard tab visible label must be "preset 候補" (or similar preset/md_viewer label)',
+  );
+});
+
 Deno.test("canvas workspace: frontend has no DB direct write or topology judgment", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
