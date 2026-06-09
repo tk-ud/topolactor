@@ -10,6 +10,7 @@
 |-----------|------|--------|------|----------------|---------|
 | `future-external-bundle-gate` | 外部 surface bundle 実装ゲート | not_started | 1 | `product.external_optional_surface_bundle_gate` | `docs/design/extended-runtime-bundle-registry-ssot.yaml` |
 | `helper-manual` | ユーザー向けヘルプ / マニュアル方針 | not_started | 2 | `product.helper_manual_policy` | `docs/design/user-facing-helper-manual-ssot.yaml` |
+| `ui-builder-preset-ecosystem` | UIBuilder preset ecosystem / provisional presets | partial | 4 | `product.admin_topology_authoring` | `docs/design/admin-console-workflow-ssot.yaml` |
 | `product-nocode-loop-acceptance` | 製品手動受入 | acceptance_pending | 1 | `product.dynamic_support_nocode_loop` | `docs/system-roadmap.yaml`（roadmap/status SSOT。実装完了判定は実コード・テスト確認が必要） |
 
 ---
@@ -32,6 +33,22 @@ SSOT 上、helper/manual category candidates は実装ではなく方針整理�
 
 - [ ] helper/manual category candidates を user promise / safety boundary / onboarding policy として整理する（ページ・コンポーネント実装はしない）
 - [ ] Desktop AI / CLI / MCP Reader 向けに、plain business language と approval boundary のライティング方針を整理する
+
+---
+
+## Bundle `ui-builder-preset-ecosystem`
+
+**Status:** partial
+**Roadmap bundle:** `product.admin_topology_authoring`
+**SSOT:** `docs/design/admin-console-workflow-ssot.yaml` (`ui_builder_canvas_workspace.authoring_flow.responsibilities.preset_ecosystem`)
+
+UIBuilder preset ecosystem parent surface is partial. Provisional preset surfaces remain tracked at bundle level until implemented or explicitly completed/descoped by SSOT. Completed md_viewer / completed preset seed evidence remains closed and must not be reclassified as unfinished work without contradicting SSOT/evidence.
+
+- [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
+- [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
+- [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
+- [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
+Note: md_viewer remains completed child surface evidence and must not be reopened as unresolved unless SSOT/evidence contradicts it.
 
 ---
 
