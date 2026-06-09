@@ -79,6 +79,7 @@ public abstract class TeamMarkdownRepository
             System.Text.Json.JsonElement? completedPresetSeedJson,
             string? searchIndexText,
             System.Text.Json.JsonElement? cardMetadataJson,
+            System.Text.Json.JsonElement? bindingJson,
             CancellationToken ct = default)
         => Task.FromResult<(bool, string?, string?)>((false, "TEAM_MARKDOWN_REPO_NOT_CONFIGURED", "TeamMarkdownRepository not configured"));
 

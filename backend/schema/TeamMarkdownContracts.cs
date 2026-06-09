@@ -180,6 +180,46 @@ public static class CompletedPresetSeedValidator
         return null;
     }
 
+    public static ValidationError? ValidateRenderedMarkdownHash(JsonElement seed, string renderedMarkdown)
+    {
+        var structuralError = Validate(seed);
+        if (structuralError is not null) return structuralError;
+        var expectedHash = seed.GetProperty("render_ref").GetProperty("rendered_markdown_hash").GetString();
+        var actualHash = MarkdownBindingRenderer.ComputeRenderedMarkdownHash(renderedMarkdown ?? string.Empty);
+        if (!string.Equals(expectedHash, actualHash, StringComparison.Ordinal))
+        {
+            return new ValidationError("COMPLETED_PRESET_SEED_RENDER_HASH_MISMATCH",
+                "completed_preset_seed_json.render_ref.rendered_markdown_hash must match the renderedMarkdown payload at save time");
+        }
+        return null;
+    }
+
+    public static ValidationError? ValidateAdjustmentPatch(JsonElement seed, JsonElement userAdjustmentPatchJson)
+    {
+        var structuralError = Validate(seed);
+        if (structuralError is not null) return structuralError;
+        var seedPatch = seed.GetProperty("adjustment_ref").GetProperty("user_adjustment_patch_json");
+        if (!MarkdownBindingRenderer.JsonSemanticallyEquals(seedPatch, userAdjustmentPatchJson))
+        {
+            return new ValidationError("COMPLETED_PRESET_SEED_INVALID",
+                "completed_preset_seed_json.adjustment_ref.user_adjustment_patch_json must match userAdjustmentPatchJson at save time");
+        }
+        return null;
+    }
+
+    public static ValidationError? ValidateBindingJson(JsonElement seed, JsonElement bindingJson)
+    {
+        var structuralError = Validate(seed);
+        if (structuralError is not null) return structuralError;
+        var seedBindingJson = seed.GetProperty("binding_ref").GetProperty("binding_json");
+        if (!MarkdownBindingRenderer.JsonSemanticallyEquals(seedBindingJson, bindingJson))
+        {
+            return new ValidationError("COMPLETED_PRESET_SEED_INVALID",
+                "completed_preset_seed_json.binding_ref.binding_json must match bindingJson at save time");
+        }
+        return null;
+    }
+
     private static bool TryGetObject(JsonElement parent, string key, out JsonElement obj)
     {
         if (parent.TryGetProperty(key, out obj) && obj.ValueKind == JsonValueKind.Object) return true;
@@ -291,11 +331,11 @@ public static class MarkdownBindingRenderer
         }
 
         if (unresolvedRequired.Count > 0)
-            return new MarkdownBindingRenderResult(false, rendered, Hash(rendered), RendererVersion,
+            return new MarkdownBindingRenderResult(false, rendered, ComputeRenderedMarkdownHash(rendered), RendererVersion,
                 unresolvedRequired.Distinct().ToArray(), explicitOptionalEmpty.Distinct().ToArray(),
                 "REQUIRED_PLACEHOLDER_UNBOUND", $"Unresolved required placeholders: {string.Join(", ", unresolvedRequired.Distinct())}");
 
-        return new MarkdownBindingRenderResult(true, rendered, Hash(rendered), RendererVersion,
+        return new MarkdownBindingRenderResult(true, rendered, ComputeRenderedMarkdownHash(rendered), RendererVersion,
             Array.Empty<string>(), explicitOptionalEmpty.Distinct().ToArray(), null, null);
     }
 
@@ -330,6 +370,29 @@ public static class MarkdownBindingRenderer
         }
         return JsonSerializer.SerializeToElement(doc);
     }
+
+    public static string ComputeRenderedMarkdownHash(string markdown)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(markdown ?? string.Empty));
+        return "sha256:" + Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    public static bool JsonSemanticallyEquals(JsonElement left, JsonElement right) =>
+        NormalizeJson(left) == NormalizeJson(right);
+
+    private static string NormalizeJson(JsonElement element) => element.ValueKind switch
+    {
+        JsonValueKind.Object => "{" + string.Join(",", element.EnumerateObject()
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .Select(p => JsonSerializer.Serialize(p.Name) + ":" + NormalizeJson(p.Value))) + "}",
+        JsonValueKind.Array => "[" + string.Join(",", element.EnumerateArray().Select(NormalizeJson)) + "]",
+        JsonValueKind.String => JsonSerializer.Serialize(element.GetString()),
+        JsonValueKind.Number => element.GetRawText(),
+        JsonValueKind.True => "true",
+        JsonValueKind.False => "false",
+        JsonValueKind.Null or JsonValueKind.Undefined => "null",
+        _ => element.GetRawText()
+    };
 
     private static MarkdownBindingRenderResult Error(string code, string message) =>
         new(false, "", "", RendererVersion, Array.Empty<string>(), Array.Empty<string>(), code, message);
@@ -401,12 +464,6 @@ public static class MarkdownBindingRenderer
         JsonValueKind.Null or JsonValueKind.Undefined => "",
         _ => value.GetRawText()
     };
-
-    private static string Hash(string markdown)
-    {
-        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(markdown));
-        return "sha256:" + Convert.ToHexString(bytes).ToLowerInvariant();
-    }
 
     private sealed class MarkdownBindingRenderException : Exception
     {

@@ -612,7 +612,6 @@ system_roadmap_ssot:
         - team_markdown_template_registry_table_exists_as_data_driven_preset_catalog
         - bootstrap_ddl_included_in_init_sql
         - NpgsqlTeamMarkdownRepository_wired_in_Program_cs
-      known_gap_ref: []
 
     product.component_markdown_authoring_projection:
       bundle_id: component_markdown_authoring_projection
@@ -659,7 +658,6 @@ system_roadmap_ssot:
         - frontend_does_not_write_DB_directly
         - markdown_body_is_not_runtime_SSOT
         - registry_driven_authoring_surface_template_and_binding_selection
-      known_gap_ref: []
 
     product.md_viewer_projection_component:
       bundle_id: md_viewer_projection_component
@@ -699,7 +697,6 @@ system_roadmap_ssot:
         - binding_summary_and_seed_summary_displayed_in_expanded_view
         - source_record_ref_displayed
         - adjustment_status_displayed
-      known_gap_ref: []
 
     product.completed_preset_seed_projection_gate:
       bundle_id: completed_preset_seed_projection_gate
@@ -741,7 +738,6 @@ system_roadmap_ssot:
         - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
         - seed_invalid_state_disables_refresh_clone_rebind_in_frontend_MdViewer
         - client_side_seed_builder_assembled_without_markdown_body_parsing
-      known_gap_ref: []
 
     backend.sql_attention_logs_current:
       bundle_id: product.sql_attention_observation_runtime

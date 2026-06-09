@@ -333,6 +333,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
             JsonElement? completedPresetSeedJson,
             string? searchIndexText,
             JsonElement? cardMetadataJson,
+            JsonElement? bindingJson,
             CancellationToken ct = default)
     {
         try
@@ -344,6 +345,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 "UPDATE topology.team_markdown_saved_view SET " +
                 "title = COALESCE(@title, title), " +
                 "rendered_markdown = COALESCE(@rendered, rendered_markdown), " +
+                "binding_json = COALESCE(@binding::jsonb, binding_json), " +
                 "user_adjustment_patch_json = COALESCE(@adjustment::jsonb, user_adjustment_patch_json), " +
                 "completed_preset_seed_json = COALESCE(@seed::jsonb, completed_preset_seed_json), " +
                 "search_index_text = COALESCE(@search_index, search_index_text), " +
@@ -353,6 +355,8 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
             cmd.Parameters.AddWithValue("id", savedViewId);
             cmd.Parameters.AddWithValue("title", (object?)title ?? DBNull.Value);
             cmd.Parameters.AddWithValue("rendered", (object?)renderedMarkdown ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("binding",
+                bindingJson.HasValue ? (object)bindingJson.Value.GetRawText() : DBNull.Value);
             cmd.Parameters.AddWithValue("adjustment",
                 userAdjustmentPatchJson.HasValue ? (object)userAdjustmentPatchJson.Value.GetRawText() : DBNull.Value);
             cmd.Parameters.AddWithValue("seed",
