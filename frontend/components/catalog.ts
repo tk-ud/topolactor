@@ -588,8 +588,8 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     semanticRole: "display",
     visualRole: "modal",
     lifecycleStatus: "code_only_drift",
-    capabilityTags: ["accepts_children", "accepts_actions", "accepts_design"],
-    runtimeConnected: false,
+    capabilityTags: ["accepts_children", "accepts_actions", "accepts_design", "requires_event_binding"],
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {

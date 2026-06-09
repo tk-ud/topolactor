@@ -169,6 +169,12 @@ type DraftNode = {
   layoutId?: string;
   wiringId?: string;
   tensorId?: string;
+  /** Serialized component props override for runtime wiring (JSON string). SSOT: layout_patch_json */
+  propsJson?: string;
+  /** Serialized component state override (JSON string). Includes open:boolean for disclosure/drawer. SSOT: layout_patch_json */
+  stateJson?: string;
+  /** Serialized event binding map for runtime wiring (JSON string). Holds runtimeDispatch for button click etc. SSOT: layout_patch_json */
+  eventBindingJson?: string;
 };
 
 type DesignDraft = FlowCanvasDesignDraft;
@@ -2249,6 +2255,20 @@ const FIELD_LABELS: Record<string, string> = {
   height: "高さ (px / % / auto)",
 };
 
+const DISCLOSURE_COMPONENT_KINDS = new Set([
+  "disclosure/modal",
+  "table_op/row_detail_drawer",
+  "inline_edit/audit_diff_drawer",
+  "safety_guard/apply_confirm_dialog",
+  "safety_guard/command_palette",
+  "search_suggest/select_import_dialog",
+]);
+
+function isDisclosureKind(componentKind?: string): boolean {
+  if (!componentKind) return false;
+  return DISCLOSURE_COMPONENT_KINDS.has(componentKind);
+}
+
 function CanvasInspector({
   node,
   draftNodes,
@@ -2274,6 +2294,19 @@ function CanvasInspector({
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
+  const [propsDraft, setPropsDraft] = useState(node.propsJson ?? "");
+  const [propsError, setPropsError] = useState<string | null>(null);
+  const [stateDraft, setStateDraft] = useState(node.stateJson ?? "");
+  const [stateError, setStateError] = useState<string | null>(null);
+  const [bindingDraft, setBindingDraft] = useState(node.eventBindingJson ?? "");
+  const [bindingError, setBindingError] = useState<string | null>(null);
+  const [rdLayer, setRdLayer] = useState("");
+  const [rdAction, setRdAction] = useState("");
+  const [rdTarget, setRdTarget] = useState("");
+  const [rdOpType, setRdOpType] = useState("admin");
+
+  const isDisclosure = isDisclosureKind(node.componentKind);
+  const isButton = node.componentKind === "action/button";
   const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
   const isContainer = isLayoutContainerNode(node, draftNodes);
 
@@ -2580,6 +2613,189 @@ function CanvasInspector({
     </fieldset>
   );
 
+  const commitOpenState = (checked: boolean) => {
+    try {
+      const existing = stateDraft.trim() ? JSON.parse(stateDraft) : {};
+      const next = JSON.stringify({ ...existing, open: checked });
+      setStateDraft(next);
+      setStateError(null);
+      onCommit({ stateJson: next }, "open状態を変更");
+    } catch {
+      setStateError("stateJson のパースに失敗しました");
+    }
+  };
+
+  const commitRuntimeDispatch = () => {
+    if (!rdLayer.trim() || !rdAction.trim() || !rdTarget.trim()) {
+      setBindingError("layer / action / target をすべて入力してください");
+      return;
+    }
+    const binding = {
+      click: {
+        eventType: "click",
+        payload: {},
+        runtimeDispatch: {
+          operationType: rdOpType.trim() || "admin",
+          layer: rdLayer.trim(),
+          action: rdAction.trim(),
+          target: rdTarget.trim(),
+        },
+      },
+    };
+    const next = JSON.stringify(binding, null, 2);
+    setBindingDraft(next);
+    setBindingError(null);
+    onCommit({ eventBindingJson: next }, "click runtimeDispatchを設定");
+  };
+
+  const wiringTab = (
+    <div class="space-y-3">
+      <p class="text-[0.6rem] text-slate-500">
+        保存対象はlayout_patch_json経由。previewモードでは inert binding を使用しランタイムdispatchは行いません。
+      </p>
+
+      {/* Props JSON */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          Props JSON
+        </legend>
+        <textarea
+          value={propsDraft}
+          onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            const v = propsDraft.trim();
+            if (!v) {
+              setPropsError(null);
+              onCommit({ propsJson: undefined }, "propsJsonをクリア");
+              return;
+            }
+            try {
+              JSON.parse(v);
+              setPropsError(null);
+              onCommit({ propsJson: v }, "propsJsonを更新");
+            } catch {
+              setPropsError("JSON形式が不正です");
+            }
+          }}
+          rows={3}
+          placeholder='{"label": "送信", "variant": "primary"}'
+          class="input-mono w-full text-[0.6rem]"
+          aria-label="propsJson"
+        />
+        {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+      </fieldset>
+
+      {/* State JSON — open toggle for disclosure components */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          State JSON{isDisclosure ? " (open state)" : ""}
+        </legend>
+        {isDisclosure && (
+          <label class="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={(() => {
+                try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
+              })()}
+              onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
+              aria-label="open state"
+            />
+            open (preview で開いた状態で表示)
+          </label>
+        )}
+        <textarea
+          value={stateDraft}
+          onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            const v = stateDraft.trim();
+            if (!v) {
+              setStateError(null);
+              onCommit({ stateJson: undefined }, "stateJsonをクリア");
+              return;
+            }
+            try {
+              JSON.parse(v);
+              setStateError(null);
+              onCommit({ stateJson: v }, "stateJsonを更新");
+            } catch {
+              setStateError("JSON形式が不正です");
+            }
+          }}
+          rows={2}
+          placeholder='{"open": false}'
+          class="input-mono w-full text-[0.6rem]"
+          aria-label="stateJson"
+        />
+        {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
+      </fieldset>
+
+      {/* Event Binding — runtimeDispatch builder for button */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          Event Binding JSON
+        </legend>
+        {isButton && (
+          <div class="mb-2 rounded border border-slate-200 bg-slate-50 p-2 space-y-1">
+            <p class="text-[0.6rem] font-semibold text-slate-700">click → runtimeDispatch ビルダー</p>
+            <label class="flex flex-col gap-0.5 text-[0.6rem]">
+              operationType
+              <input value={rdOpType} onInput={(e) => setRdOpType((e.target as HTMLInputElement).value)}
+                placeholder="admin" class="input-mono text-[0.6rem]" />
+            </label>
+            <label class="flex flex-col gap-0.5 text-[0.6rem]">
+              layer
+              <input value={rdLayer} onInput={(e) => setRdLayer((e.target as HTMLInputElement).value)}
+                placeholder="ui_topology" class="input-mono text-[0.6rem]" />
+            </label>
+            <label class="flex flex-col gap-0.5 text-[0.6rem]">
+              action
+              <input value={rdAction} onInput={(e) => setRdAction((e.target as HTMLInputElement).value)}
+                placeholder="list_packages" class="input-mono text-[0.6rem]" />
+            </label>
+            <label class="flex flex-col gap-0.5 text-[0.6rem]">
+              target
+              <input value={rdTarget} onInput={(e) => setRdTarget((e.target as HTMLInputElement).value)}
+                placeholder="admin" class="input-mono text-[0.6rem]" />
+            </label>
+            <button type="button" class="btn-secondary text-xs mt-1" onClick={commitRuntimeDispatch}>
+              適用
+            </button>
+            {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
+          </div>
+        )}
+        {isDisclosure && (
+          <p class="text-[0.6rem] text-slate-500 mb-1">
+            toggle binding: previewではinert。runtime配線済みの場合のみ onClose が dispatch を発火します。
+          </p>
+        )}
+        <textarea
+          value={bindingDraft}
+          onInput={(e) => setBindingDraft((e.target as HTMLTextAreaElement).value)}
+          onBlur={() => {
+            const v = bindingDraft.trim();
+            if (!v) {
+              setBindingError(null);
+              onCommit({ eventBindingJson: undefined }, "eventBindingJsonをクリア");
+              return;
+            }
+            try {
+              JSON.parse(v);
+              setBindingError(null);
+              onCommit({ eventBindingJson: v }, "eventBindingJsonを更新");
+            } catch {
+              setBindingError("JSON形式が不正です");
+            }
+          }}
+          rows={4}
+          placeholder='{"click": {"eventType": "click", "runtimeDispatch": {...}}}'
+          class="input-mono w-full text-[0.6rem]"
+          aria-label="eventBindingJson"
+        />
+        {bindingError && <p class="text-red-600 text-[0.6rem]">{bindingError}</p>}
+      </fieldset>
+    </div>
+  );
+
   return (
     <div
       role="complementary"
@@ -2606,6 +2822,7 @@ function CanvasInspector({
           { id: "tree", label: "ツリー", content: treeTab },
           { id: "class", label: "クラス", content: classTab },
           { id: "grid", label: "グリッド", content: gridTab },
+          { id: "wiring", label: "配線", content: wiringTab },
         ]}
       />
     </div>
