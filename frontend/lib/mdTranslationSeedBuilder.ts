@@ -15,6 +15,7 @@ export type BindingSourceKind =
   | "physical_table_jsonb_path"
   | "saved_query_result_field"
   | "static_text"
+  | "explicit_optional_empty"
   | "";
 
 export type PlaceholderBindingEntry = {
@@ -104,6 +105,11 @@ export function buildMdTranslationAuthoringSeedCandidate(
       placeholder_to_field_map: placeholderToFieldMap,
       required_placeholder_keys: requiredKeys,
       optional_placeholder_keys: optionalKeys,
+      explicit_optional_empty_placeholder_keys: optionalKeys.filter((key) =>
+        (bindingJson[key] as { source_kind?: string } | undefined)?.source_kind ===
+          "explicit_optional_empty"
+      ),
+      unresolved_required_placeholder_keys: unresolvedRequiredKeys,
     },
     render_ref: {
       rendered_markdown_hash: params.renderedMarkdownHash,

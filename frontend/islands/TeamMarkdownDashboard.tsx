@@ -30,6 +30,9 @@ import {
   getSavedView,
   getTemplate,
   listTemplates,
+  refreshSavedView,
+  cloneSavedView,
+  rebindSavedView,
   type PlaceholderBinding,
   type SavedViewCard,
   type SavedViewDetail,
@@ -48,9 +51,11 @@ function SavedViewResultCard({
   card: SavedViewCard;
   onExpand: (savedViewId: string) => void;
 }) {
-  const excerpt = String(
-    (card.cardMetadataJson as Record<string, unknown>).excerpt ?? "",
-  );
+  const metadata = card.cardMetadataJson as Record<string, unknown>;
+  const excerpt = String(metadata.excerpt ?? "");
+  const tags = Array.isArray(metadata.tags)
+    ? metadata.tags.filter((tag): tag is string => typeof tag === "string")
+    : [];
   return (
     <article
       class="md-dashboard-card"
@@ -66,9 +71,15 @@ function SavedViewResultCard({
       <div class="md-dashboard-card-meta">
         <span class="md-dashboard-card-template">{card.templateKey}</span>
         <span class="md-dashboard-card-source">{card.sourceTableRef}</span>
+        <span class="md-dashboard-card-status">{card.status}</span>
         <span class="md-dashboard-card-updated">{card.updatedAt}</span>
       </div>
       {excerpt && <p class="md-dashboard-card-excerpt">{excerpt}</p>}
+      {tags.length > 0 && (
+        <div class="md-dashboard-card-tags" aria-label="Saved view tags">
+          {tags.map((tag) => <span key={tag} class="md-dashboard-card-tag">#{tag}</span>)}
+        </div>
+      )}
     </article>
   );
 }
@@ -80,8 +91,8 @@ type Props = {
   placement?: "admin_route" | "ui_builder_child_surface";
 };
 
-const FUTURE_BACKEND_ACTION_REASON =
-  "Backend action is outside this completion bundle; no frontend call is made.";
+const EXPLICIT_PAYLOAD_REQUIRED_REASON =
+  "Action requires explicit user-selected template/source payload; Markdown body is not used as binding authority.";
 
 function splitCsv(value: string): string[] {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
@@ -599,6 +610,27 @@ export default function TeamMarkdownDashboard({
     );
   };
 
+  const handleRefresh = (_savedViewId: string) => {
+    void refreshSavedView;
+    setActionNotice(
+      `Refresh backend action is registered, but this dashboard requires explicit templateMarkdown and sourceRecordJson payload before dispatch. ${EXPLICIT_PAYLOAD_REQUIRED_REASON}`,
+    );
+  };
+
+  const handleClone = (_savedViewId: string) => {
+    void cloneSavedView;
+    setActionNotice(
+      `Clone backend action is registered, but this dashboard requires explicit targetSourceTableRef, targetSourceRecordRef, templateMarkdown, and sourceRecordJson before dispatch. ${EXPLICIT_PAYLOAD_REQUIRED_REASON}`,
+    );
+  };
+
+  const handleRebind = (_savedViewId: string) => {
+    void rebindSavedView;
+    setActionNotice(
+      `Rebind backend action is registered, but this dashboard requires a user-selected bindingJson/completedPresetSeedJson plus templateMarkdown and sourceRecordJson before dispatch. ${EXPLICIT_PAYLOAD_REQUIRED_REASON}`,
+    );
+  };
+
   return (
     <div
       class="md-dashboard"
@@ -702,10 +734,13 @@ export default function TeamMarkdownDashboard({
             onOpenSourceRecord={handleOpenSourceRecord}
             onEditAdjustment={handleEditAdjustment}
             onCreateTodoCandidate={handleCreateTodoCandidate}
+            onRefresh={handleRefresh}
+            onClone={handleClone}
+            onRebind={handleRebind}
             disabledActionReasons={{
-              refresh: FUTURE_BACKEND_ACTION_REASON,
-              clone: FUTURE_BACKEND_ACTION_REASON,
-              rebind: FUTURE_BACKEND_ACTION_REASON,
+              refresh: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
+              clone: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
+              rebind: expandedView.seedValid ? undefined : EXPLICIT_PAYLOAD_REQUIRED_REASON,
             }}
           />
         </div>

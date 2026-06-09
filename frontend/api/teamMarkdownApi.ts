@@ -325,6 +325,14 @@ export function buildMdTranslationAuthoringSeedCandidate(
     };
   });
 
+  const placeholderToFieldMap = Object.fromEntries(
+    bindingEntries.map((entry) => [
+      entry.placeholder_key,
+      entry.source_field_ref ?? entry.jsonb_path ?? entry.saved_query_field_ref ??
+        entry.static_text ?? "",
+    ]),
+  );
+
   const bindingJson = {
     binding_version: "md_translation_authoring_seed_registration.v1",
     resolution_mode: "user_explicit_selection_only_no_ai_inference",
@@ -358,7 +366,14 @@ export function buildMdTranslationAuthoringSeedCandidate(
       source_table_ref: input.source.sourceTableRef,
       source_record_ref: input.source.sourceRecordRef,
     },
-    binding_ref: bindingJson,
+    binding_ref: {
+      binding_json: bindingJson,
+      placeholder_to_field_map: placeholderToFieldMap,
+      required_placeholder_keys: extracted.requiredPlaceholderKeys,
+      optional_placeholder_keys: extracted.optionalPlaceholderKeys,
+      explicit_optional_empty_placeholder_keys: optionalEmptyKeys,
+      unresolved_required_placeholder_keys: unresolvedRequired,
+    },
     render_ref: {
       rendered_markdown_hash: renderedHash,
       rendered_at: new Date().toISOString(),
@@ -371,6 +386,8 @@ export function buildMdTranslationAuthoringSeedCandidate(
     },
     dashboard_ref: {
       title: input.title,
+      excerpt: String(cardMetadataJson.excerpt ?? ""),
+      tags: input.dashboard?.tags ?? [],
       card_metadata_json: cardMetadataJson,
       search_index_basis_json: {
         fields: [
@@ -383,6 +400,7 @@ export function buildMdTranslationAuthoringSeedCandidate(
     },
     lineage_ref: {
       created_from: "md_translation_authoring_seed_registration",
+      parent_saved_view_id: null,
       markdown_body_reverse_engineered: false,
       ...(input.lineage ?? {}),
     },
@@ -575,5 +593,41 @@ export async function archiveSavedView(
 ): Promise<{ ok: boolean; savedViewId: string }> {
   return dispatchTeamMarkdown("saved_view:archive", {
     idOrHubId: savedViewId,
+  }) as Promise<{ ok: boolean; savedViewId: string }>;
+}
+
+
+export async function cloneSavedView(
+  savedViewId: string,
+  params: {
+    targetSourceTableRef: string;
+    targetSourceRecordRef: string;
+    templateMarkdown: string;
+    sourceRecordJson: Record<string, unknown>;
+    title?: string;
+    searchIndexText?: string;
+    cardMetadataJson?: Record<string, unknown>;
+  },
+): Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }> {
+  return dispatchTeamMarkdown("saved_view:clone", {
+    idOrHubId: savedViewId,
+    payload: params,
+  }) as Promise<{ ok: boolean; savedViewId: string; sourceSavedViewId: string }>;
+}
+
+export async function rebindSavedView(
+  savedViewId: string,
+  params: {
+    bindingJson: Record<string, unknown>;
+    completedPresetSeedJson: CompletedPresetSeed;
+    templateMarkdown: string;
+    sourceRecordJson: Record<string, unknown>;
+    searchIndexText?: string;
+    cardMetadataJson?: Record<string, unknown>;
+  },
+): Promise<{ ok: boolean; savedViewId: string }> {
+  return dispatchTeamMarkdown("saved_view:rebind", {
+    idOrHubId: savedViewId,
+    payload: params,
   }) as Promise<{ ok: boolean; savedViewId: string }>;
 }

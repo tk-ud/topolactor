@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view (
 -- ---------------------------------------------------------------------------
 -- topology.team_markdown_saved_view_event
 -- Append-only saved view activity log.
--- event_kind: create | update | refresh | archive | click_expand | copy | todo_candidate | clone
+-- event_kind: create | update | refresh | archive | click_expand | copy | todo_candidate | clone | rebind
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view_event (
     event_id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS topology.team_markdown_saved_view_event (
     event_payload_json  JSONB       NOT NULL DEFAULT '{}'::jsonb,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT ck_team_markdown_saved_view_event_kind
-        CHECK (event_kind IN ('create', 'update', 'refresh', 'archive', 'click_expand', 'copy', 'todo_candidate', 'clone'))
+        CHECK (event_kind IN ('create', 'update', 'refresh', 'archive', 'click_expand', 'copy', 'todo_candidate', 'clone', 'rebind'))
 );
 
 -- ---------------------------------------------------------------------------
@@ -108,5 +108,41 @@ CREATE INDEX IF NOT EXISTS idx_team_markdown_saved_view_updated
 
 CREATE INDEX IF NOT EXISTS idx_team_markdown_saved_view_event_saved_view
     ON topology.team_markdown_saved_view_event (saved_view_id, created_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Preset catalog seed registration rows (existing preset ecosystem registry)
+-- ---------------------------------------------------------------------------
+INSERT INTO topology.team_markdown_template_registry
+    (template_key, template_label, template_markdown, placeholder_schema_json, status)
+VALUES
+    (
+        'md_viewer.team_markdown.saved_view.completed_seed.v1',
+        'Team Markdown saved-view completed seed preset',
+        '# {{title}}
+
+**Owner:** {{owner}}
+
+{{summary}}
+
+{{optional_note}}',
+        '{
+          "preset_ecosystem_ref": "UIBuilder.preset_ecosystem",
+          "component_key": "md_viewer.projection",
+          "seed_registration_bundle": "preset_team_markdown_saved_view_seed",
+          "placeholderKeys": ["title", "owner", "summary", "optional_note"],
+          "requiredPlaceholderKeys": ["title", "owner", "summary"],
+          "optionalPlaceholderKeys": ["optional_note"],
+          "binding_resolution": "user_explicit_selection_only_no_ai_inference",
+          "completed_preset_seed_json_required": true,
+          "markdown_body_role": "template_seed_metadata_not_runtime_ssot"
+        }'::jsonb,
+        'active'
+    )
+ON CONFLICT (template_key) DO UPDATE
+SET template_label = EXCLUDED.template_label,
+    template_markdown = EXCLUDED.template_markdown,
+    placeholder_schema_json = EXCLUDED.placeholder_schema_json,
+    status = 'active',
+    updated_at = now();
 
 COMMIT;

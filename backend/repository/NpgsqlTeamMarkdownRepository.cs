@@ -238,7 +238,9 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
             if (!string.IsNullOrWhiteSpace(query))
             {
                 searchFilter =
-                    "AND (title ILIKE @q OR search_index_text ILIKE @q OR source_table_ref ILIKE @q) ";
+                    "AND (sv.title ILIKE @q OR sv.search_index_text ILIKE @q OR sv.source_table_ref ILIKE @q " +
+                    "OR sv.rendered_markdown ILIKE @q OR sv.card_metadata_json->>'tags' ILIKE @q " +
+                    "OR sv.completed_preset_seed_json->'dashboard_ref'->>'tags' ILIKE @q) ";
                 cmd.Parameters.AddWithValue("q", $"%{query}%");
             }
 
@@ -247,7 +249,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 "sv.source_record_ref, sv.status, sv.updated_at, sv.card_metadata_json " +
                 "FROM topology.team_markdown_saved_view sv " +
                 "JOIN topology.team_markdown_template_registry t ON t.template_id = sv.template_id " +
-                $"WHERE sv.status = @status {searchFilter}" +
+                $"WHERE (@status = 'all' OR sv.status = @status) {searchFilter}" +
                 "ORDER BY sv.updated_at DESC " +
                 "LIMIT @limit";
             cmd.Parameters.AddWithValue("status", status);
@@ -331,6 +333,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
             JsonElement? completedPresetSeedJson,
             string? searchIndexText,
             JsonElement? cardMetadataJson,
+            JsonElement? bindingJson,
             CancellationToken ct = default)
     {
         try
@@ -342,6 +345,7 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
                 "UPDATE topology.team_markdown_saved_view SET " +
                 "title = COALESCE(@title, title), " +
                 "rendered_markdown = COALESCE(@rendered, rendered_markdown), " +
+                "binding_json = COALESCE(@binding::jsonb, binding_json), " +
                 "user_adjustment_patch_json = COALESCE(@adjustment::jsonb, user_adjustment_patch_json), " +
                 "completed_preset_seed_json = COALESCE(@seed::jsonb, completed_preset_seed_json), " +
                 "search_index_text = COALESCE(@search_index, search_index_text), " +
@@ -351,6 +355,8 @@ public class NpgsqlTeamMarkdownRepository : TeamMarkdownRepository
             cmd.Parameters.AddWithValue("id", savedViewId);
             cmd.Parameters.AddWithValue("title", (object?)title ?? DBNull.Value);
             cmd.Parameters.AddWithValue("rendered", (object?)renderedMarkdown ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("binding",
+                bindingJson.HasValue ? (object)bindingJson.Value.GetRawText() : DBNull.Value);
             cmd.Parameters.AddWithValue("adjustment",
                 userAdjustmentPatchJson.HasValue ? (object)userAdjustmentPatchJson.Value.GetRawText() : DBNull.Value);
             cmd.Parameters.AddWithValue("seed",

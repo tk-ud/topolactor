@@ -52,6 +52,18 @@ function validateCompletedPresetSeed(seed: unknown): string | null {
   for (const key of required) {
     if (!(key in s)) return `COMPLETED_PRESET_SEED_MISSING:${key}`;
   }
+  const templateRef = s.template_ref as Record<string, unknown>;
+  if (typeof templateRef.template_id !== "string" || !templateRef.template_id) return "COMPLETED_PRESET_SEED_INVALID";
+  if (typeof templateRef.template_key !== "string" || !templateRef.template_key) return "COMPLETED_PRESET_SEED_INVALID";
+  const sourceRef = s.source_ref as Record<string, unknown>;
+  if (typeof sourceRef.source_table_ref !== "string" || !sourceRef.source_table_ref) return "COMPLETED_PRESET_SEED_INVALID";
+  if (typeof sourceRef.source_record_ref !== "string" || !sourceRef.source_record_ref) return "COMPLETED_PRESET_SEED_INVALID";
+  const bindingRef = s.binding_ref as Record<string, unknown>;
+  if (!bindingRef.binding_json || typeof bindingRef.binding_json !== "object") return "COMPLETED_PRESET_SEED_INVALID";
+  if (!bindingRef.placeholder_to_field_map || typeof bindingRef.placeholder_to_field_map !== "object") return "COMPLETED_PRESET_SEED_INVALID";
+  if (!Array.isArray(bindingRef.required_placeholder_keys)) return "COMPLETED_PRESET_SEED_MISSING:binding_ref.required_placeholder_keys";
+  if (!Array.isArray(bindingRef.optional_placeholder_keys)) return "COMPLETED_PRESET_SEED_MISSING:binding_ref.optional_placeholder_keys";
+  if (Array.isArray(bindingRef.unresolved_required_placeholder_keys) && bindingRef.unresolved_required_placeholder_keys.length > 0) return "REQUIRED_PLACEHOLDER_UNBOUND";
   const renderRef = s.render_ref as Record<string, unknown>;
   if (
     !renderRef || typeof renderRef.rendered_markdown_hash !== "string" ||
@@ -59,6 +71,20 @@ function validateCompletedPresetSeed(seed: unknown): string | null {
   ) {
     return "COMPLETED_PRESET_SEED_RENDER_HASH_MISMATCH";
   }
+  if (typeof renderRef.rendered_at !== "string" || !renderRef.rendered_at) return "COMPLETED_PRESET_SEED_INVALID";
+  if (typeof renderRef.renderer_version !== "string" || !renderRef.renderer_version) return "COMPLETED_PRESET_SEED_INVALID";
+  if (!Array.isArray(renderRef.unresolved_placeholder_keys)) return "COMPLETED_PRESET_SEED_MISSING:render_ref.unresolved_placeholder_keys";
+  if (renderRef.unresolved_placeholder_keys.length > 0) return "REQUIRED_PLACEHOLDER_UNBOUND";
+  const adjustmentRef = s.adjustment_ref as Record<string, unknown>;
+  if (!adjustmentRef.user_adjustment_patch_json || typeof adjustmentRef.user_adjustment_patch_json !== "object") return "COMPLETED_PRESET_SEED_INVALID";
+  if (typeof adjustmentRef.adjustment_mode !== "string") return "COMPLETED_PRESET_SEED_INVALID";
+  const dashboardRef = s.dashboard_ref as Record<string, unknown>;
+  if (typeof dashboardRef.title !== "string" || typeof dashboardRef.excerpt !== "string") return "COMPLETED_PRESET_SEED_INVALID";
+  if (!Array.isArray(dashboardRef.tags)) return "COMPLETED_PRESET_SEED_INVALID";
+  if (!dashboardRef.card_metadata_json || typeof dashboardRef.card_metadata_json !== "object") return "COMPLETED_PRESET_SEED_INVALID";
+  if (!dashboardRef.search_index_basis_json || typeof dashboardRef.search_index_basis_json !== "object") return "COMPLETED_PRESET_SEED_INVALID";
+  const lineageRef = s.lineage_ref as Record<string, unknown>;
+  if (typeof lineageRef.created_from !== "string" || !("parent_saved_view_id" in lineageRef)) return "COMPLETED_PRESET_SEED_INVALID";
   return null;
 }
 
@@ -73,15 +99,28 @@ function buildValidSeed(renderHash = "abc123hash"): CompletedPresetSeed {
       source_table_ref: "topology.physical_tables",
       source_record_ref: "test_record",
     },
-    binding_ref: { binding_json: {}, placeholder_to_field_map: {} },
+    binding_ref: {
+      binding_json: {},
+      placeholder_to_field_map: {},
+      required_placeholder_keys: [],
+      optional_placeholder_keys: [],
+      unresolved_required_placeholder_keys: [],
+    },
     render_ref: {
       rendered_markdown_hash: renderHash,
       rendered_at: "2026-06-08T00:00:00Z",
       renderer_version: "1.0",
+      unresolved_placeholder_keys: [],
     },
-    adjustment_ref: { adjustment_mode: "none" },
-    dashboard_ref: { title: "Test View", excerpt: "excerpt", tags: [] },
-    lineage_ref: { created_from: "template_record" },
+    adjustment_ref: { adjustment_mode: "none", user_adjustment_patch_json: {} },
+    dashboard_ref: {
+      title: "Test View",
+      excerpt: "excerpt",
+      tags: [],
+      card_metadata_json: {},
+      search_index_basis_json: {},
+    },
+    lineage_ref: { created_from: "template_record", parent_saved_view_id: null },
   };
 }
 
@@ -314,7 +353,7 @@ Deno.test("explicit binding builds seed candidate and saved_view:create payload 
     false,
   );
   assertEquals(
-    candidate.completedPresetSeedJson.binding_ref["resolution_mode"],
+    (candidate.completedPresetSeedJson.binding_ref["binding_json"] as Record<string, unknown>)["resolution_mode"],
     "user_explicit_selection_only_no_ai_inference",
   );
   assertEquals(candidate.bindingJson["optional_empty_placeholder_keys"], [
@@ -476,7 +515,8 @@ Deno.test("search does not include mutation fields", () => {
 
 Deno.test("refresh requires updatedCompletedPresetSeedJson — not markdown body parsing", () => {
   const refreshRequiredFields = [
-    "refreshedRenderedMarkdown",
+    "templateMarkdown",
+    "sourceRecordJson",
     "updatedCompletedPresetSeedJson",
     "searchIndexText",
   ];
@@ -485,7 +525,7 @@ Deno.test("refresh requires updatedCompletedPresetSeedJson — not markdown body
     true,
   );
   assertEquals(
-    refreshRequiredFields.includes("refreshedRenderedMarkdown"),
+    refreshRequiredFields.includes("sourceRecordJson"),
     true,
   );
 
@@ -500,7 +540,8 @@ Deno.test("refresh payload does not include Markdown-body-parsing field", () => 
     "parseMarkdown",
   ];
   const refreshPayloadKeys = [
-    "refreshedRenderedMarkdown",
+    "templateMarkdown",
+    "sourceRecordJson",
     "updatedCompletedPresetSeedJson",
     "searchIndexText",
     "cardMetadataJson",
@@ -566,7 +607,7 @@ Deno.test("incomplete seed blocks create — explicit error not silent fallback"
 
 Deno.test("MdViewer seed-gated actions are disabled when seedValid=false", () => {
   // Models the ActionToolbar gate: disabled={!seedValid} applies to seed-gated actions only.
-  const seedGatedActions = new Set(["refresh", "clone"]);
+  const seedGatedActions = new Set(["refresh", "clone", "rebind"]);
   const alwaysAvailableActions = new Set([
     "copy_markdown",
     "archive",
@@ -730,7 +771,7 @@ Deno.test("TeamMarkdownDashboard has routable admin route and UIBuilder child pl
   );
 });
 
-Deno.test("MdViewer action boundary exposes implemented and disabled future actions", async () => {
+Deno.test("MdViewer action boundary exposes registered seed-gated actions", async () => {
   const dashboardSource = await Deno.readTextFile(
     "frontend/islands/TeamMarkdownDashboard.tsx",
   );
@@ -738,13 +779,14 @@ Deno.test("MdViewer action boundary exposes implemented and disabled future acti
     "frontend/components/MdViewer.tsx",
   );
 
-  assertEquals(dashboardSource.includes("FUTURE_BACKEND_ACTION_REASON"), true);
+  assertEquals(dashboardSource.includes("EXPLICIT_PAYLOAD_REQUIRED_REASON"), true);
   assertEquals(dashboardSource.includes("handleOpenSourceRecord"), true);
   assertEquals(dashboardSource.includes("handleEditAdjustment"), true);
   assertEquals(dashboardSource.includes("handleCreateTodoCandidate"), true);
   assertEquals(mdViewerSource.includes("Refresh"), true);
   assertEquals(mdViewerSource.includes("Clone"), true);
   assertEquals(mdViewerSource.includes("Rebind"), true);
+  assertEquals(mdViewerSource.includes("onRebind"), true);
   assertEquals(mdViewerSource.includes("Seed invalid — action disabled"), true);
 });
 
