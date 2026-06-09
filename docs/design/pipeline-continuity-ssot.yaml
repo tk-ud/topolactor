@@ -564,8 +564,9 @@ pipeline_continuity_ssot:
         - layoutClassRefs
 
       deprecated_legacy_absolute_geometry:
-        - x
-        - y
+        fields:
+          - x
+          - y
         migration: explicit_conversion_required; silent_reinterpretation_prohibited
 
       nodes:
