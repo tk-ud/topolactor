@@ -43,6 +43,7 @@ const LAYOUT_PREVIEW_DEFAULT_SIZES: Record<string, LayoutPreviewDefaultSize> = {
   "data_display/table": { width: 320, height: 180 },
   "data_display/data_grid": { width: 320, height: 180 },
   "data_display/list": { width: 260, height: 140 },
+  "data_display/md_viewer": { width: 320, height: 200 },
   "form_input/input": { width: 220, height: 44 },
   "form_input/textarea": { width: 260, height: 96 },
   "form_input/search_input": { width: 240, height: 44 },

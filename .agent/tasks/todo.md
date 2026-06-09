@@ -46,11 +46,13 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 
 **Resolved (design_change 2026-06-09):** `UiBuilderPresetEcosystemPanel` permanent child surface has been removed from `/admin/ui-builder` to resolve responsibility mixing. `md_viewer.projection` is now a dashboard/read-work component candidate (not a UIBuilder preset_ecosystem permanent child). Team Markdown Dashboard primary route remains `/admin/team-dashboard`. SSOT/roadmap/tests updated accordingly.
 
+**Resolved (existing_pr_update 2026-06-09):** `md_viewer.projection` は `DashboardCandidatePalette` として UIBuilder canvas に追加 — `dashboard_placement_candidate` タグでフィルタ、`registrationRequired:false` なので DB bucket 登録不要。`ComponentCapabilityTag` 型に `dashboard_placement_candidate` を追加。`registrationRequired` と palette 表示可否の責務分離完了。SSOT/roadmap/tests 更新済み。
+
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_details_inline_editor_md_generator provisional preset surface is not yet implemented or explicitly completed
-Note: md_viewer is now a dashboard/read-work component candidate; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route.
+Note: md_viewer is now a dashboard/read-work component candidate shown in DashboardCandidatePalette; its completed preset seed / saved view flow evidence remains closed under `/admin/team-dashboard` primary route.
 
 ---
 

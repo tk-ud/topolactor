@@ -1477,6 +1477,30 @@ Deno.test("UiBuilderAdmin DOM: initial render does not trigger team_markdown sea
   }
 });
 
+Deno.test("UiBuilderAdmin source: DashboardCandidatePalette present, preset ecosystem panel absent", async () => {
+  const uiBuilderSource = await Deno.readTextFile("frontend/islands/UiBuilderAdmin.tsx");
+
+  // DashboardCandidatePalette must be defined in UIBuilder source
+  assert(
+    uiBuilderSource.includes("DashboardCandidatePalette"),
+    "UIBuilder must define DashboardCandidatePalette for dashboard_placement_candidate components",
+  );
+  // DashboardCandidatePalette must be rendered in the canvas area
+  assert(
+    uiBuilderSource.includes('data-dashboard-candidate-palette="true"'),
+    "UIBuilder must render data-dashboard-candidate-palette attribute for the dashboard candidate section",
+  );
+  // Preset ecosystem panel must remain absent (responsibility mixing resolved in PR#400)
+  assertFalse(
+    uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"),
+    "UIBuilder must not contain UiBuilderPresetEcosystemPanel — responsibility mixing resolved",
+  );
+  assertFalse(
+    uiBuilderSource.includes('data-preset-child-surface="md_viewer"'),
+    "UIBuilder must not contain data-preset-child-surface=md_viewer",
+  );
+});
+
 // ─── Section 12: AdminImport — DOM event simulation ──────────────────────────
 
 Deno.test("AdminImport DOM: after useEffect loads selectors → loading state gone, content visible", async () => {

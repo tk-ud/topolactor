@@ -664,7 +664,7 @@ system_roadmap_ssot:
       title: md_viewer hardcoded Markdown projection component
       status: implemented
       production_ready: true
-      public_summary: md_viewer is a dashboard/read-work component candidate that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, action toolbar, dashboard drawer placement, and seed-gated refresh/clone/rebind UI boundary notices are implemented. md_viewer is not a UIBuilder preset_ecosystem permanent child surface; its primary placement surface is /admin/team-dashboard.
+      public_summary: md_viewer is a dashboard/read-work component candidate that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, action toolbar, dashboard drawer placement, and seed-gated refresh/clone/rebind UI boundary notices are implemented. md_viewer is not a UIBuilder preset_ecosystem permanent child surface; its primary placement surface is /admin/team-dashboard. md_viewer.projection appears in UIBuilder DashboardCandidatePalette via dashboard_placement_candidate tag without requiring DB bucket registration.
       scope:
         - md_viewer_component_registration
         - rendered_markdown_display

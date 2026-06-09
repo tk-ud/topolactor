@@ -893,6 +893,84 @@ Deno.test("/admin/team-dashboard is the primary placement for saved markdown vie
   );
 });
 
+Deno.test("md_viewer.projection has dashboard_placement_candidate tag and is NOT in registrationRequired bucket catalog", async () => {
+  const catalogSource = await Deno.readTextFile("frontend/components/catalog.ts");
+
+  // md_viewer.projection must have dashboard_placement_candidate in its capabilityTags
+  const mdViewerBlock = catalogSource.match(
+    /componentKey: "md_viewer\.projection"[\s\S]*?(?=componentKey:|$)/,
+  )?.[0] ?? "";
+  assertEquals(
+    mdViewerBlock.includes("dashboard_placement_candidate"),
+    true,
+    "md_viewer.projection capabilityTags must include dashboard_placement_candidate",
+  );
+
+  // md_viewer.projection must have registrationRequired: false (not a DB bucket candidate)
+  const mdViewerRegRequired = mdViewerBlock.match(/registrationRequired: (true|false)/)?.[1];
+  assertEquals(
+    mdViewerRegRequired,
+    "false",
+    "md_viewer.projection must have registrationRequired:false — not a DB bucket registration candidate",
+  );
+});
+
+Deno.test("DashboardCandidatePalette is in UiBuilderAdmin and uses dashboard_placement_candidate filter", async () => {
+  const uiBuilderSource = await Deno.readTextFile(
+    "frontend/islands/UiBuilderAdmin.tsx",
+  );
+
+  // DashboardCandidatePalette component must exist in UIBuilder
+  assertEquals(
+    uiBuilderSource.includes("DashboardCandidatePalette"),
+    true,
+    "UiBuilderAdmin must contain DashboardCandidatePalette component for dashboard candidate placement",
+  );
+  // Must use dashboard_placement_candidate as the filter key (not registrationRequired)
+  assertEquals(
+    uiBuilderSource.includes('"dashboard_placement_candidate"'),
+    true,
+    "DashboardCandidatePalette must filter by dashboard_placement_candidate tag",
+  );
+  // Must render with data-dashboard-candidate-palette attribute
+  assertEquals(
+    uiBuilderSource.includes('data-dashboard-candidate-palette="true"'),
+    true,
+    "DashboardCandidatePalette must render with data-dashboard-candidate-palette attribute",
+  );
+  // UiBuilder must still NOT mount the old UiBuilderPresetEcosystemPanel
+  assertEquals(
+    uiBuilderSource.includes("UiBuilderPresetEcosystemPanel"),
+    false,
+    "UiBuilderAdmin must not permanently mount UiBuilderPresetEcosystemPanel",
+  );
+});
+
+Deno.test("registrationRequired and dashboard placement visibility are not conflated in UIBuilder", async () => {
+  const uiBuilderSource = await Deno.readTextFile(
+    "frontend/islands/UiBuilderAdmin.tsx",
+  );
+
+  // The bucket registration catalog filter uses registrationRequired
+  assertEquals(
+    uiBuilderSource.includes("c.registrationRequired"),
+    true,
+    "bucket catalog must filter by registrationRequired for DB registration flow",
+  );
+  // The dashboard candidate palette uses dashboard_placement_candidate tag — separate gate
+  assertEquals(
+    uiBuilderSource.includes('"dashboard_placement_candidate"'),
+    true,
+    "dashboard candidate palette must use dashboard_placement_candidate tag, not registrationRequired",
+  );
+  // registrationRequired check must be skipped for dashboard_placement_candidate entries
+  assertEquals(
+    uiBuilderSource.includes("registrationRequired !== false"),
+    true,
+    "placement handlers must skip DB registration for registrationRequired:false entries",
+  );
+});
+
 // ─── seed builder contract tests ─────────────────────────────────────────────
 
 Deno.test("buildMdTranslationAuthoringSeedCandidate assembles seed from template/source/binding", () => {

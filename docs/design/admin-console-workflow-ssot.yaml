@@ -372,7 +372,9 @@ admin_console_workflow_ssot:
                 draft/seed/view children. md_viewer is now a dashboard/read-work component candidate
                 placed on /admin/team-dashboard; the permanent UIBuilder child surface placement of
                 Team Markdown Dashboard has been removed to resolve responsibility mixing.
-                Provisional preset surfaces (aggregate_dashboard, hub_search,
+                md_viewer.projection is shown in DashboardCandidatePalette in UIBuilder canvas
+                (dashboard_placement_candidate tag; registrationRequired:false; DB bucket registration
+                not required). Provisional preset surfaces (aggregate_dashboard, hub_search,
                 physical_search_crud_aggregate, physical_details_inline_editor_md_generator) remain
                 planned until each has its own SSOT and implementation.
       prohibited:

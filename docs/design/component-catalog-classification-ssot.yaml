@@ -52,6 +52,19 @@ persistence:
     - ui_component_registry.visual_role text
     - ui_component_registry.capability_tags text[]
 
+placement_visibility_rule:
+  dashboard_placement_candidate:
+    definition: >
+      Components tagged dashboard_placement_candidate can be placed on dashboard
+      layouts from a dedicated DashboardCandidatePalette in UIBuilder without going
+      through the DB bucket registration flow. This is independent of registrationRequired.
+    rule:
+      - dashboard_placement_candidate components have registrationRequired:false
+      - they appear in DashboardCandidatePalette, NOT in the bucket registration catalog
+      - they are NOT UIBuilder preset_ecosystem permanent child surfaces
+      - their primary placement surface is /admin/team-dashboard or dashboard layouts
+      - simple all-registrationRequired:false to palette expansion is prohibited
+
 prohibitions:
   - using_component_kind_as_only_catalog_classification
   - treating_code_only_template_as_topology_entity
@@ -60,6 +73,7 @@ prohibitions:
   - classification_tags_mutating_runtime_route
   - classification_tags_mutating_sql_attention
   - classification_tags_bypassing_component_registration
+  - showing_all_registrationRequired_false_in_palette_without_tag_filter
 
 seed_boundary:
   db_seed_surface:
