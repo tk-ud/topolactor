@@ -621,7 +621,7 @@ system_roadmap_ssot:
       title: Component DB bind and Markdown saved-view authoring UI
       status: partial
       production_ready: false
-      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, and UIBuilder preset_ecosystem child placement are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer is not implemented; client/backend unresolved required placeholder gates for seed candidate persistence are implemented; prompt-level template registration, binding authoring, saved-view create authoring flow, existing component bucket composition hardening, rendered_markdown/tags search, renderer completion, and deep validator coverage remain pending.
+      public_summary: Component authoring lets users bind Markdown template slots to physical-table columns, jsonb paths, saved-query fields, or static text and save/edit rendered Markdown projections without turning Markdown into runtime SSOT. Backend runtime actions, DB migration, TeamMarkdown API, TeamMarkdownDashboard island, /admin/team-dashboard route, UIBuilder preset_ecosystem child placement, registry-driven template registration authoring surface, registry-driven source table and binding selection via listRelationshipRemoteTargets (with explicit manual fallback), saved-view create flow using seed builder and createSavedView API, and existing component bucket composition hardening are implemented; search scope covers title/search_index_text/source_table_ref only (rendered_markdown and tags pending); markdown binding renderer is not implemented; client/backend unresolved required placeholder gates are implemented; rendered_markdown/tags search and renderer completion remain pending.
       scope:
         - markdown_template_registration_UI
         - component_DB_bind_authoring
@@ -650,6 +650,8 @@ system_roadmap_ssot:
         - frontend/islands/TeamMarkdownDashboard.tsx
         - frontend/routes/admin/team-dashboard/index.tsx
         - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/components/MdTranslationAuthoringSeedSurface.tsx
+        - frontend/lib/mdTranslationSeedBuilder.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
       completion_condition:
@@ -658,11 +660,8 @@ system_roadmap_ssot:
         - frontend_search_and_card_projection_from_persisted_data
         - frontend_does_not_write_DB_directly
         - markdown_body_is_not_runtime_SSOT
+        - registry_driven_authoring_surface_template_and_binding_selection
       known_gap_ref:
-        - md_translation_template_seed_registration_surface_completion_pending
-        - md_translation_binding_seed_authoring_surface_completion_pending
-        - md_translation_saved_view_create_seed_flow_completion_pending
-        - existing_component_bucket_composition_hardening_pending
         - search_scope_rendered_markdown_and_tags_not_searched
         - markdown_binding_renderer_not_implemented_required_placeholder_resolution_not_completed
 
@@ -735,6 +734,7 @@ system_roadmap_ssot:
         - backend/runtime/AdminRuntime.TeamMarkdown.cs
         - backend/tests/Topolactor.Runtime.Tests/TeamMarkdownSavedViewTests.cs
         - frontend/api/teamMarkdownApi.ts
+        - frontend/lib/mdTranslationSeedBuilder.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
       completion_condition:
         - CompletedPresetSeedValidator_blocks_incomplete_seed_with_explicit_error
@@ -744,6 +744,7 @@ system_roadmap_ssot:
         - unresolved_required_placeholder_arrays_block_seed_persistence
         - seed_invalid_state_blocks_refresh_rebind_clone_in_backend_runtime
         - seed_invalid_state_disables_refresh_clone_in_frontend_MdViewer
+        - client_side_seed_builder_assembled_without_markdown_body_parsing
       known_gap_ref:
         - clone_action_backend_implementation_pending
         - rebind_action_not_designed_or_implemented
