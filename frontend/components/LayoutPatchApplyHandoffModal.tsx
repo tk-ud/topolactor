@@ -2,7 +2,7 @@ import { JSX } from "preact";
 import { Modal } from "./Modal.tsx";
 import { LayoutVisualAuditCanvas } from "./LayoutVisualAuditCanvas.tsx";
 import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
-import { UX_HUB_MANIFESTS, UX_UI_BUILDER_TAB_LABELS } from "../content/adminUxTerms.ts";
+import { UX_UI_BUILDER_TAB_LABELS } from "../content/adminUxTerms.ts";
 
 export type LayoutPatchApplyHandoffProps = {
   open: boolean;
@@ -16,7 +16,7 @@ export type LayoutPatchApplyHandoffProps = {
 };
 
 /**
- * Post-apply handoff — SSOT step 4.2 layout child saved; guide to design / demo / manifests.
+ * Post-apply handoff — SSOT step 4.2 layout child saved; guide to design / demo.
  */
 export function LayoutPatchApplyHandoffModal({
   open,
@@ -89,17 +89,6 @@ export function LayoutPatchApplyHandoffModal({
                 <span class="block font-semibold">2. デモで表示を確認</span>
                 <span class="block text-xs font-normal text-slate-600 mt-0.5">
                   保存した配置が runtime 投影でどう見えるか確認します
-                </span>
-              </a>
-            </li>
-            <li>
-              <a
-                href="/admin/manifests"
-                class="btn-secondary block w-full text-left px-4 py-3 no-underline"
-              >
-                <span class="block font-semibold">3. {UX_HUB_MANIFESTS}へ</span>
-                <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                  ページ間のつながり・表示順を管理（step 4 完了後の post-pipeline）
                 </span>
               </a>
             </li>

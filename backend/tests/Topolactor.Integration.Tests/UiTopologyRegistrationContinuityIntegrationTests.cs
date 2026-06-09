@@ -225,6 +225,49 @@ public class UiTopologyRegistrationContinuityIntegrationTests
         // (In normal UI flow, promoted items are never re-submitted to the backend.)
     }
 
+    [Fact]
+    public async Task PromotePackageFromBucketItemsAsync_EmptyBucketItemIds_CreatesShellPackage()
+    {
+        var connectionString = Environment.GetEnvironmentVariable("TOPOLACTOR_TEST_DB_CONNECTION");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            if (Environment.GetEnvironmentVariable("TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY") == "1")
+                throw new InvalidOperationException(
+                    "TOPOLACTOR_TEST_DB_CONNECTION is required when TOPOLACTOR_CI_REQUIRE_DB_CONTINUITY=1.");
+            return;
+        }
+
+        var suffix = Guid.NewGuid().ToString("N");
+        var routeKey = $"employees:{suffix}";
+        var repo = new NpgsqlUiTopologyRepository(
+            NullLogger<NpgsqlUiTopologyRepository>.Instance, connectionString);
+        var pkg = new PackageGeneratorRuntime(NullLogger<PackageGeneratorRuntime>.Instance, repo);
+
+        var result = await pkg.PromotePackageAsync(routeKey, [], CancellationToken.None);
+
+        Assert.Equal(PackageGenerateCode.Success, result.Code);
+        Assert.NotNull(result.PackageId);
+        Assert.NotNull(result.LayoutId);
+        Assert.NotNull(result.WiringId);
+        Assert.NotNull(result.TensorId);
+        Assert.Empty(result.ComponentIds);
+        Assert.Empty(result.BucketItemIds);
+
+        await using var conn = new NpgsqlConnection(connectionString);
+        await conn.OpenAsync();
+
+        Assert.Equal(result.PackageId, await ScalarAsync<Guid>(
+            conn,
+            "SELECT package_id FROM topology.ui_component_package WHERE package_key = @key",
+            ("key", $"{routeKey}:pkg")));
+
+        var tensorCount = await ScalarAsync<long>(
+            conn,
+            "SELECT COUNT(*) FROM topology.ui_topology_tensor WHERE route_key = @route",
+            ("route", routeKey));
+        Assert.Equal(1, tensorCount);
+    }
+
     private static async Task<(Guid PackageId, Guid LayoutId, Guid WiringId)> QueryTensorAsync(NpgsqlConnection conn, string routeKey)
     {
         await using var cmd = conn.CreateCommand();

@@ -90,7 +90,7 @@ export type RecommendNavigationProjectionSpec = {
  * structural_html nodes render as actual HTML elements (htmlTag); catalog_component nodes
  * render via the component registry (componentId).
  * parentNodeId establishes the DOM nesting tree. orderIndex drives sibling render order.
- * x/y/width/height are canvas geometry for DOM style projection (position:absolute).
+ * width/height are flow box dimensions (px, %, auto). x/y are legacy and not projected in flow mode.
  * layoutClassRefs are SSOT topology-layout-class vocabulary refs for className resolution.
  */
 export type LayoutNode = {
@@ -104,8 +104,8 @@ export type LayoutNode = {
   orderIndex: number;
   x?: number;
   y?: number;
-  width?: number;
-  height?: number;
+  width?: number | string;
+  height?: number | string;
   layoutClassRefs?: string[];
   /** Component kind from ui_component_registry — present on catalog_component nodes when wiring is configured. */
   componentKind?: string;

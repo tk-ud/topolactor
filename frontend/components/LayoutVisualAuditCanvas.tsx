@@ -1,7 +1,7 @@
 import { JSX } from "preact";
-import { resolveCanvasRootPreviewClassName } from "../runtime/layoutClassPreviewUtils.ts";
 import type { LayoutPreviewNodeInput } from "../runtime/layoutComponentPreview.ts";
-import { LayoutPreviewNodeFrame } from "./LayoutPreviewNodeFrame.tsx";
+import { FlowLayoutCanvas, type FlowCanvasNode } from "./FlowLayoutCanvas.tsx";
+import type { StructuralHtmlTag } from "../runtime/visualLayoutUtils.ts";
 
 export type LayoutVisualAuditCanvasProps = {
   nodes: LayoutPreviewNodeInput[];
@@ -10,21 +10,30 @@ export type LayoutVisualAuditCanvasProps = {
   minHeight?: number;
 };
 
-function computeCanvasBounds(nodes: LayoutPreviewNodeInput[]): {
-  width: number;
-  height: number;
-} {
-  if (nodes.length === 0) {
-    return { width: 640, height: 360 };
-  }
-  const width = Math.max(...nodes.map((node) => node.x + node.width), 480) + 32;
-  const height = Math.max(...nodes.map((node) => node.y + node.height), 280) + 32;
-  return { width, height };
+function toFlowAuditNodes(nodes: LayoutPreviewNodeInput[]): FlowCanvasNode[] {
+  const sorted = [...nodes].sort((a, b) => {
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.x !== b.x) return a.x - b.x;
+    return 0;
+  });
+  return sorted.map((node, index) => ({
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    componentKind: node.componentKind,
+    nodeKind: node.nodeKind,
+    htmlTag: node.htmlTag as StructuralHtmlTag | undefined,
+    isDraftOnly: node.isDraftOnly ?? false,
+    slotKey: "",
+    orderIndex: index,
+    parentNodeId: null,
+    width: node.width,
+    height: node.height,
+    componentId: node.componentId,
+  }));
 }
 
 /**
- * Read-only visual audit surface — renders placed nodes with runtime primitive preview.
- * SSOT: registrar visual preview + ui-ux-primitive-catalog preview_only surfaces.
+ * Read-only visual audit surface — flow tree projection (SSOT v0.9.0).
  */
 export function LayoutVisualAuditCanvas({
   nodes,
@@ -32,8 +41,7 @@ export function LayoutVisualAuditCanvas({
   title = "配置プレビュー",
   minHeight = 320,
 }: LayoutVisualAuditCanvasProps): JSX.Element {
-  const bounds = computeCanvasBounds(nodes);
-  const canvasClassName = resolveCanvasRootPreviewClassName(layoutClassRefs);
+  const flowNodes = toFlowAuditNodes(nodes);
 
   return (
     <section
@@ -49,65 +57,15 @@ export function LayoutVisualAuditCanvas({
         </div>
         <span class="text-xs text-slate-500">{nodes.length} ノード</span>
       </div>
-      <div
-        class={`relative overflow-auto rounded-md border-2 border-slate-300 bg-white ${canvasClassName}`}
-        style={{ minHeight: `${minHeight}px`, height: `${Math.min(bounds.height, 520)}px` }}
-      >
-        {nodes.length === 0
-          ? (
-            <div class="flex h-full min-h-[280px] items-center justify-center text-sm text-slate-400">
-              配置ノードがありません
-            </div>
-          )
-          : (
-            <div
-              class="relative"
-              style={{ width: `${bounds.width}px`, height: `${bounds.height}px` }}
-            >
-              {nodes.map((node) => (
-                <div
-                  key={node.nodeId}
-                  class={`absolute overflow-hidden rounded border shadow-sm ${
-                    node.isDraftOnly
-                      ? "border-yellow-300 bg-yellow-50"
-                      : "border-slate-200 bg-white"
-                  }`}
-                  style={{
-                    left: `${node.x}px`,
-                    top: `${node.y}px`,
-                    width: `${node.width}px`,
-                    height: `${node.height}px`,
-                  }}
-                  aria-label={`${node.componentKey} preview`}
-                >
-                  {node.nodeKind === "structural_html" && node.htmlTag
-                    ? (
-                      <div class="flex h-full flex-col justify-center p-2 text-xs text-slate-800">
-                        <div class="font-mono text-[0.6rem] text-slate-400">&lt;{node.htmlTag}&gt;</div>
-                        {node.htmlTag === "a" && node.linkHref
-                          ? (
-                            <a href={node.linkHref} class="truncate text-blue-700 underline">
-                              {node.inlineText || node.linkHref}
-                            </a>
-                          )
-                          : (
-                            <span class="truncate">{node.inlineText || `(${node.htmlTag})`}</span>
-                          )}
-                      </div>
-                    )
-                    : (
-                      <LayoutPreviewNodeFrame
-                        componentKey={node.componentKey}
-                        componentKind={node.componentKind}
-                        componentId={node.componentId}
-                        isDraftOnly={node.isDraftOnly}
-                      />
-                    )}
-                </div>
-              ))}
-            </div>
-          )}
-      </div>
+      <FlowLayoutCanvas
+        nodes={flowNodes}
+        selectedNodeId={null}
+        rootLayoutClassRefs={layoutClassRefs}
+        minHeight={minHeight}
+        onSelectNode={() => {}}
+        allowEmptyStateTemplates={false}
+        emptyGuidance="配置ノードがありません"
+      />
     </section>
   );
 }

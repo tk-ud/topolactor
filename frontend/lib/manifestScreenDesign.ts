@@ -12,6 +12,7 @@ import {
   type AggregationBlock,
   type AggregationMeasure,
 } from "./aggregationMeasures.ts";
+import { formatAggregationSpecFromBlocks, formatSearchTargetsRaw } from "./screenDataShapeRawBinding.ts";
 import {
   logicalTablesFromLegacyColumns,
   normalizeLogicalTables,
@@ -532,11 +533,17 @@ export function screenDesignFromBackendShape(
     operationKinds: kinds,
     tableRef: shape.tableRef ?? "",
     importSchemaName: shape.importSchemaName ?? "",
-    searchTargets: shape.searchTargets.join(", "),
     searchKeyColumns: Array.isArray(shape.searchKeyColumns)
       ? shape.searchKeyColumns
       : shape.searchTargets,
-    aggregationSpec: shape.aggregationSpec ?? "",
+    searchTargets: formatSearchTargetsRaw(
+      Array.isArray(shape.searchKeyColumns) && shape.searchKeyColumns.length > 0
+        ? shape.searchKeyColumns
+        : shape.searchTargets,
+    ),
+    aggregationSpec: aggregationFields.aggregationBlocks.length > 0
+      ? formatAggregationSpecFromBlocks(aggregationFields.aggregationBlocks)
+      : (shape.aggregationSpec ?? ""),
     displayColumns: Array.isArray(shape.displayColumns)
       ? shape.displayColumns
       : [],

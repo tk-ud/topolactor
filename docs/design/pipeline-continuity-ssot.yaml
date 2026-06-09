@@ -1,6 +1,6 @@
 pipeline_continuity_ssot:
   name: topolactor_pipeline_continuity_ssot
-  version: 0.2.3
+  version: 0.2.4
   status: ssot_design_document
 
   purpose:
@@ -538,13 +538,18 @@ pipeline_continuity_ssot:
       description: >
         layout_patch_json.nodes[] authored in the UI builder canvas flows from the real DB
         through backend runtime emission to frontend DOM projection. Each node carries the
-        full structural and positional spec: nodeId, nodeKind, htmlTag, componentKey, componentId,
-        parentNodeId, slotKey, orderIndex, x, y, width, height, layoutClassRefs.
+        structural and flow-layout spec: nodeId, nodeKind, htmlTag, componentKey, componentId,
+        parentNodeId, slotKey, orderIndex, width, height, layoutClassRefs.
         structural_html nodes render as real HTML elements; catalog_component nodes render via
-        the component registry. parentNodeId establishes the DOM nesting tree.
-        x/y/width/height project as position:absolute CSS. layoutClassRefs project as className.
+        the component registry. parentNodeId + orderIndex establish DOM nesting and sibling order.
+        layoutClassRefs on container nodes resolve to flex/stack/grid flow CSS via
+        topology-layout-class-ssot. width/height project as normal flow CSS (px, %, auto).
+        Spacing (margin, padding, gap) projects from component_style_design cssTokenRefs —
+        NOT from x/y. x/y are deprecated legacy absolute-geometry fields; they MUST NOT project
+        to position:absolute left/top in flow mode. layoutClassRefs also project as className.
         No silent fallback: layoutId present without nodes → LAYOUT_NODES_NOT_FOUND error.
       direction: db_to_frontend_dom
+      authority_ref: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.layout_projection_model
 
       required_identity:
         - nodeId
@@ -554,11 +559,14 @@ pipeline_continuity_ssot:
         - parentNodeId
         - slotKey
         - orderIndex
-        - x
-        - y
         - width
         - height
         - layoutClassRefs
+
+      deprecated_legacy_absolute_geometry:
+        - x
+        - y
+        migration: explicit_conversion_required; silent_reinterpretation_prohibited
 
       nodes:
         - node: backend.tensor_row
@@ -599,20 +607,26 @@ pipeline_continuity_ssot:
             renderEmission maps layoutNodes to ComponentSpec[] (flat, sorted by orderIndex).
             structural_html nodes produce componentType="structural_html" with htmlTag.
             catalog_component nodes resolve componentId through ComponentRegistry.
-            All layout projection fields (nodeId, nodeKind, htmlTag, parentNodeId, x, y,
-            width, height, layoutClassRefs) are preserved in ComponentSpec.
+            Layout projection fields (nodeId, nodeKind, htmlTag, parentNodeId, width, height,
+            layoutClassRefs) are preserved in ComponentSpec. Legacy x/y may be present in stored
+            JSON but MUST NOT drive flow-mode DOM projection.
 
         - node: frontend.projection_shell
           files:
             - frontend/islands/ProjectionShell.tsx
           implementation_note: >
             Builds DOM tree from parentNodeId using buildChildrenMap. Renders structural_html
-            nodes as actual HTML elements with style (position/left/top/width/height) and
-            class (from layoutClassRefs). catalog_component nodes render within the tree.
+            nodes as actual HTML elements in document flow with layoutClassRefs class names and
+            flow width/height. catalog_component nodes render within the tree. Design tokens
+            (inlineText, cssTokenRefs, responsiveTokenRefs) apply to the live preview surface.
+            position:absolute left/top from x/y is prohibited as the default projection path.
 
       prohibited:
         - silent_fallback_to_flat_componentIds_when_layoutId_present
         - positional_componentId_assignment_from_structure_map_component_ids
+        - default_position_absolute_projection_for_layout_patch_nodes
+        - mapping_legacy_x_y_to_left_top_px_in_flow_mode
+        - treating_x_y_as_padding_or_margin_substitute
         - c_sharp_building_react_or_dom
         - frontend_direct_db_write
         - layout_nodes_not_validated_at_runtime

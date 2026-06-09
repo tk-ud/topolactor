@@ -1,17 +1,19 @@
 topology_layout_class_ssot:
   name: topolactor_topology_layout_class_dictionary
-  version: 0.1.0
+  version: 0.2.0
   status: draft_ssot
   canonical_path: docs/design/topology-layout-class-ssot.yaml
 
   purpose:
     summary: >-
       Define class vocabulary for topology layout projection only.
+      Container layoutClassRefs drive flow arrangement (stack, flex, grid) — not canvas x/y coordinates.
       This SSOT does not style the admin UI itself.
     goals:
       - provide_bounded_class_refs_for_topology_layout_projection
+      - bind_container_layout_class_refs_to_flow_dom_projection
       - prevent_raw_tailwind_or_arbitrary_class_strings_from_becoming_topology_authority
-      - allow_ui_builder_to_select_topology_layout_class_refs
+      - allow_ui_builder_layer_inspector_to_assign_container_layout_class_refs
       - allow_runtime_projection_to_resolve_class_refs_to_current_environment_css
       - make_class_ref_to_css_drift_ci_checkable
     non_goals:
@@ -42,6 +44,15 @@ topology_layout_class_ssot:
       - silent_fallback_to_unknown_class_ref
       - arbitrary_className_from_db_without_ssot_ref
       - raw_inline_style_as_normal_topology_layout_path
+
+  flow_layout_projection:
+    authority_ref: docs/design/admin-console-workflow-ssot.yaml ui_builder_canvas_workspace.layout_projection_model
+    rule: >
+      layout.* class refs on container nodes define how children are arranged in normal document
+      flow (stack, flex row, grid). Sibling order follows orderIndex within parentNodeId.
+      Placement authority is parentNodeId + orderIndex + layoutClassRefs — not deprecated x/y fields.
+    spacing_authority_ref: docs/design/css-dictionary-ssot.yaml
+    note: margin, padding, and gap are design tokens — not x/y geometry fields.
 
   class_key_rule:
     format: dot_separated_lower_snake_case

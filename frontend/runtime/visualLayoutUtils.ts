@@ -80,6 +80,75 @@ export type StructuralHtmlTag = (typeof STRUCTURAL_HTML_TAG_ALLOWLIST)[number];
 export const STRUCTURAL_HTML_COMPONENT_KEY = "layout/structural_html";
 export type LayoutNodeKind = "catalog_component" | "structural_html";
 
+/** Canvas width/height: px number, CSS percent (e.g. "50%"), or "auto". */
+export type LayoutDimension = number | string;
+
+export function isPercentDimension(dim: LayoutDimension): boolean {
+  return typeof dim === "string" && dim.trim().endsWith("%");
+}
+
+export function isAutoDimension(dim: LayoutDimension): boolean {
+  return typeof dim === "string" && dim.trim().toLowerCase() === "auto";
+}
+
+export function formatLayoutDimensionCss(
+  dim: LayoutDimension | undefined,
+): string | undefined {
+  if (dim === undefined) return undefined;
+  if (typeof dim === "number") return `${dim}px`;
+  const s = dim.trim();
+  if (!s) return undefined;
+  if (s.endsWith("%") || s.endsWith("px") || s.toLowerCase() === "auto") return s;
+  const n = parseFloat(s);
+  if (!Number.isNaN(n)) return `${n}px`;
+  return s;
+}
+
+/** Parse inspector input: "120", "50%", "auto", etc. Returns null when invalid. */
+export function parseLayoutDimensionInput(raw: string): LayoutDimension | null {
+  const s = raw.trim();
+  if (!s) return null;
+  if (s.toLowerCase() === "auto") return "auto";
+  if (s.endsWith("%")) {
+    const pct = parseFloat(s.slice(0, -1));
+    if (Number.isNaN(pct) || pct < 0) return null;
+    return `${pct}%`;
+  }
+  const v = parseInt(s, 10);
+  if (Number.isNaN(v)) return null;
+  return v;
+}
+
+export function resolveLayoutDimensionPx(
+  dim: LayoutDimension,
+  canvasSize: number,
+  fallback: number,
+): number {
+  if (typeof dim === "number") return dim;
+  const s = dim.trim();
+  if (s.toLowerCase() === "auto") return fallback;
+  if (s.endsWith("%")) {
+    const pct = parseFloat(s.slice(0, -1));
+    if (Number.isNaN(pct)) return fallback;
+    return Math.round((canvasSize * pct) / 100);
+  }
+  const n = parseFloat(s);
+  return Number.isNaN(n) ? fallback : Math.round(n);
+}
+
+export function readLayoutDimension(
+  raw: unknown,
+  fallback: number,
+): LayoutDimension {
+  if (typeof raw === "number") return raw;
+  if (typeof raw === "string" && raw.trim()) return raw.trim();
+  return fallback;
+}
+
+export function layoutDimensionLabel(dim: LayoutDimension): string {
+  return typeof dim === "number" ? String(dim) : dim;
+}
+
 // Minimal node shape for patch builder — compatible with DraftNode in UiBuilderAdmin.tsx.
 export interface VisualNodePayload {
   nodeId: string;
@@ -92,8 +161,8 @@ export interface VisualNodePayload {
   gridRow: number;
   x: number;
   y: number;
-  width: number;
-  height: number;
+  width: LayoutDimension;
+  height: LayoutDimension;
   nodeKind?: LayoutNodeKind;
   htmlTag?: StructuralHtmlTag;
   layoutClassRefs?: string[];
@@ -237,12 +306,8 @@ function readPatchNode(
     gridRow: typeof raw.gridRow === "number" ? raw.gridRow : 1,
     x: typeof raw.x === "number" ? raw.x : 0,
     y: typeof raw.y === "number" ? raw.y : 0,
-    width: typeof raw.width === "number"
-      ? raw.width
-      : DEFAULT_VISUAL_NODE_WIDTH,
-    height: typeof raw.height === "number"
-      ? raw.height
-      : DEFAULT_VISUAL_NODE_HEIGHT,
+    width: readLayoutDimension(raw.width, DEFAULT_VISUAL_NODE_WIDTH),
+    height: readLayoutDimension(raw.height, DEFAULT_VISUAL_NODE_HEIGHT),
     ...(layoutClassRefs.length > 0 ? { layoutClassRefs } : {}),
     componentId: typeof raw.componentId === "string"
       ? raw.componentId
@@ -299,7 +364,17 @@ export function parseVisualLayoutPatchJson(
   return { ok: true, value: { nodes, layoutClassRefs } };
 }
 
-/** Seed stacked nodes from package palette when persisted patch has no nodes yet. */
+/** Legacy bulk auto-place canvas: every nodeId is seed_{componentKey}_{index}. */
+export function isPaletteAutoSeedCanvas(
+  nodes: Array<{ nodeId?: string }>,
+): boolean {
+  return nodes.length >= 2 &&
+    nodes.every((n) =>
+      typeof n.nodeId === "string" && /^seed_.+_\d+$/.test(n.nodeId)
+    );
+}
+
+/** @deprecated Authoring must start from an empty canvas; opt-in seed only for tests/tools. */
 export function seedDraftNodesFromPalette(
   entries: PaletteDraftSeedEntry[],
   options: { startX?: number; startY?: number; rowGap?: number } = {},
@@ -357,8 +432,6 @@ export function buildVisualLayoutPatchJson(
         parentNodeId: n.parentNodeId || null,
         gridCol: n.gridCol,
         gridRow: n.gridRow,
-        x: n.x,
-        y: n.y,
         width: n.width,
         height: n.height,
       })),
@@ -369,6 +442,41 @@ export function buildVisualLayoutPatchJson(
 }
 
 /** Returns nodes that are draft-only and would block apply. */
+/**
+ * True when patch nodes look like legacy absolute/seed flat placement (not flow tree).
+ * SSOT: do not silently reinterpret — require explicit migration in UI.
+ */
+export function isLegacyAbsoluteLayoutPatch(nodes: VisualNodePayload[]): boolean {
+  if (nodes.length === 0) return false;
+  if (nodes.every((n) => n.nodeId.startsWith("seed_"))) return true;
+  const allRoot = nodes.every((n) => !n.parentNodeId);
+  if (!allRoot) return false;
+  const hasDistinctCoords = nodes.some((n) => n.x !== 0 || n.y !== 0);
+  if (!hasDistinctCoords) return false;
+  const distinctY = new Set(nodes.map((n) => n.y));
+  return distinctY.size > 1 || nodes.length > 1;
+}
+
+/** User-confirmed migration: y-sorted flat stack under root, strip x/y. */
+export function migrateAbsolutePatchToFlowStack(
+  nodes: VisualNodePayload[],
+): VisualNodePayload[] {
+  const sorted = [...nodes].sort((a, b) => {
+    if (a.y !== b.y) return a.y - b.y;
+    if (a.x !== b.x) return a.x - b.x;
+    return a.orderIndex - b.orderIndex;
+  });
+  return sorted.map((n, i) => ({
+    ...n,
+    parentNodeId: null,
+    orderIndex: i,
+    x: 0,
+    y: 0,
+    gridCol: 1,
+    gridRow: i + 1,
+  }));
+}
+
 export function getDraftOnlyNodes(nodes: VisualNodePayload[]): VisualNodePayload[] {
   return nodes.filter((n) => n.isDraftOnly);
 }

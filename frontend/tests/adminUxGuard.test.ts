@@ -417,21 +417,25 @@ Deno.test("UiBuilderAdmin: layout_patch preview updates canvas without separate 
   );
 });
 
-Deno.test("UiBuilderAdmin: canvas node drag uses hold threshold to avoid click conflict", async () => {
+Deno.test("UiBuilderAdmin: flow canvas uses tree-centric layout not coordinate drag", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assert(
-    src.includes("CANVAS_DRAG_HOLD_MS"),
-    "canvas drag must use hold delay",
+    src.includes("FlowLayoutCanvas"),
+    "authoring canvas must use flow tree projection",
   );
-  assert(
-    src.includes("pendingDragState"),
-    "canvas drag must defer until hold or move threshold",
+  assertFalse(
+    src.includes("CANVAS_DRAG_HOLD_MS"),
+    "coordinate drag hold must be removed in flow layout mode",
   );
   assert(
     src.includes("reorderLayoutNodeStack"),
     "layer stack reorder must use shared util",
+  );
+  assert(
+    src.includes("migrateAbsolutePatchToFlowStack"),
+    "legacy absolute layout must require explicit migration",
   );
 });
 
@@ -450,6 +454,14 @@ Deno.test("UiBuilderAdmin: design inspector is selected canvas node driven and a
   assert(
     src.includes('"component_style_design",') && src.includes('"save_tmp",'),
     "design token edits must auto-save to backend _tmp",
+  );
+  assert(
+    src.includes("designDraftByNodeId"),
+    "design draft must lift for canvas live preview",
+  );
+  assert(
+    src.includes("onDesignPreviewChange"),
+    "design inspector must notify canvas preview on change",
   );
   assert(
     src.includes('"component_style_design",') && src.includes('"upsert",'),
@@ -1048,6 +1060,22 @@ Deno.test("normal view source guard: scanned default-path copy excludes extracte
   }
 });
 
+Deno.test("ContentsAdmin: legacy promote path is not mounted on the page", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/ContentsAdmin.tsx", import.meta.url),
+  );
+  assertEquals(
+    src.includes("ContentsPromotionPanel"),
+    false,
+    "legacy ContentsPromotionPanel must not be mounted on /admin/contents",
+  );
+  assertEquals(
+    src.includes("旧経路"),
+    false,
+    "legacy promote accordion must not appear on contents page",
+  );
+});
+
 Deno.test("v0.7.2: ContentsPipelineStepper uses pipeline step labels not legacy ⑧ promote", async () => {
   const source = await Deno.readTextFile(
     new URL("../components/ContentsPipelineStepper.tsx", import.meta.url),
@@ -1100,9 +1128,9 @@ Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette a
   assertEquals(source.includes("UI_BUILDER_HAS_SEPARATE_TABS"), true);
   // Structural HTML palette still exposed in canvas workspace
   assertEquals(source.includes("StructuralHtmlPalette"), true);
-  // Copy / clone operations remain
+  // Copy operations remain (flow tree sibling copy, not coordinate offset clone)
   assertEquals(source.includes("copyNode"), true);
-  assertEquals(source.includes("cloneVisualNode"), true);
+  assertEquals(source.includes("nextOrderIndexForParent"), true);
   // LayoutBuilderSection is the main canvas
   assertEquals(source.includes("LayoutBuilderSection"), true);
   // Design inspector panel is docked in the LayoutBuilderSection right panel and selected-node driven.
@@ -1128,25 +1156,26 @@ Deno.test("v0.8.0: UiBuilderAdmin canvas workspace has structural HTML palette a
 
 // ─── PR#364 follow-up: canvas_workspace_contract bucket cards / drag / right dock ─
 
-Deno.test("UiBuilderAdmin: BucketSection normal path uses icon-style bucket cards not table", async () => {
+Deno.test("UiBuilderAdmin: canvas palette uses icon-style bucket cards not table", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
   assert(src.includes("component-bucket-card"), "icon-style card class must exist");
   assert(src.includes("component-bucket-panel"), "bucket panel vocabulary must exist");
   assert(src.includes("ComponentBucketCard"), "shared bucket card component must exist");
-  const bucketSection = src.slice(
-    src.indexOf("function BucketSection"),
-    src.indexOf("function ManualBucketCreateForm"),
-  );
-  const mainCatalogUi = bucketSection.slice(
-    0,
-    bucketSection.indexOf("技術詳細 — 表形式一覧"),
+  const paletteSection = src.slice(
+    src.indexOf("function LayoutPalette"),
+    src.indexOf("function DashboardCandidatePalette"),
   );
   assertEquals(
-    mainCatalogUi.includes('<table class="table'),
+    paletteSection.includes('<table class="table'),
     false,
-    "BucketSection primary catalog UI must not use table",
+    "LayoutPalette primary catalog UI must not use table",
+  );
+  assertEquals(
+    src.includes("function BucketSection"),
+    false,
+    "standalone BucketSection removed from ui-builder surface",
   );
 });
 
@@ -1176,17 +1205,55 @@ Deno.test("UiBuilderAdmin: bucket card shows source_path on card face", async ()
   assert(src.includes("component-bucket-card__source-path"));
 });
 
-Deno.test("UiBuilderAdmin: legacy bucket accordion uses cards not table as primary UI", async () => {
+Deno.test("UiBuilderAdmin: canvas is separate maximized block; palettes in strip above", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  const legacyStart = src.indexOf("詳細 — 登録済み部品の個別操作");
-  const legacyBlock = src.slice(legacyStart, src.indexOf("BucketPackageRouteFields", legacyStart + 1));
-  assert(legacyBlock.includes("ComponentBucketCard"));
+  assert(src.includes("ui-builder-palette-strip"), "palettes must live in a separate strip section");
+  assert(src.includes("ui-builder-canvas-workspace"), "canvas must be a dedicated workspace section");
+  assert(src.includes("CANVAS_WORKSPACE_HEIGHT"), "canvas block must use viewport-height sizing");
+  const paletteStrip = src.indexOf("ui-builder-palette-strip");
+  const canvasWorkspace = src.indexOf("ui-builder-canvas-workspace");
+  assert(paletteStrip > 0 && canvasWorkspace > paletteStrip, "palette strip must precede canvas workspace");
+  const canvasRow = src.slice(canvasWorkspace, canvasWorkspace + 3500);
   assertEquals(
-    legacyBlock.indexOf("ComponentBucketCard") < legacyBlock.indexOf("技術詳細 — 表形式一覧"),
-    true,
-    "legacy accordion primary UI must be cards before table disclosure",
+    canvasRow.includes("function LayoutPalette"),
+    false,
+    "LayoutPalette must not render inside the canvas workspace row",
+  );
+});
+
+Deno.test("UiBuilderAdmin: empty canvas does not auto-seed all palette components", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(
+    src.includes("seedWhenEmpty === true"),
+    "palette seeding must be opt-in only",
+  );
+  assert(
+    src.includes("空のキャンバスから開始"),
+    "hydrate without draft must start empty canvas",
+  );
+});
+
+Deno.test("UiBuilderAdmin: manual route commits on Enter not on every keystroke", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(src.includes("committedRouteKey"), "committed route key must drive package auto-gen");
+  assert(src.includes("manualRouteDraft"), "manual input must be draft-only while typing");
+  assert(src.includes("onManualRouteCommit"), "manual route must require explicit commit");
+  assert(src.includes('e.key === "Enter"'), "Enter must commit manual route");
+  const mainExport = src.slice(src.indexOf("export default function UiBuilderAdmin"));
+  assert(
+    mainExport.includes("}, [committedRouteKey]);"),
+    "package auto-gen effect must depend on committedRouteKey only",
+  );
+  assertEquals(
+    mainExport.includes("}, [manualRouteDraft]);"),
+    false,
+    "package auto-gen must not run on every manual route keystroke",
   );
 });
 
@@ -1214,16 +1281,13 @@ Deno.test("UiBuilderAdmin: empty canvas guidance promotes drag-to-canvas", async
   assert(terms.includes("左パネルのカードをドラッグしてキャンバスへ配置"));
 });
 
-Deno.test("UiBuilderAdmin: empty canvas allows drop through guidance overlay", async () => {
+Deno.test("UiBuilderAdmin: flow canvas accepts palette drop on root stack", async () => {
   const src = await Deno.readTextFile(
     new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
   );
-  const canvasBlock = src.slice(
-    src.indexOf("function VisualLayoutCanvas"),
-    src.indexOf("function LayerTree"),
-  );
-  assert(canvasBlock.includes("pointer-events-none absolute inset-0"));
-  assert(canvasBlock.includes("onDrop={onDrop}"));
+  assert(src.includes("FlowLayoutCanvas"));
+  assert(src.includes("onDrop={handleDropOnCanvas}"));
+  assert(src.includes("makeNewNode(entry, null)"));
 });
 
 Deno.test("v0.7.2: UiBuilderFlowStepper does not expose raw phase id in default path", async () => {
@@ -1793,24 +1857,37 @@ Deno.test("Step3 sample viewing: operation kind select drives preview projection
   );
 });
 
-Deno.test("Step3 progressive disclosure: raw inputs remain disclosed", async () => {
-  const source = await Deno.readTextFile(
+Deno.test("Step3 progressive disclosure: raw inputs remain disclosed with SQL clause mapping", async () => {
+  const panel = await Deno.readTextFile(
     new URL("../islands/ContentsScreenDesignPanel.tsx", import.meta.url),
   );
-  assert(
-    source.includes("プロ向け / raw 入力（検索・集計）") &&
-      source.includes("value={design.searchTargets}"),
-    "raw searchTargets must stay behind a pro-facing disclosure",
+  const hints = await Deno.readTextFile(
+    new URL("../components/ProRawScreenDataShapeHints.tsx", import.meta.url),
   );
   assert(
-    source.includes("プロ向け / raw 集計仕様") &&
-      source.includes("value={design.aggregationSpec}"),
-    "raw aggregationSpec must stay behind a pro-facing disclosure",
+    panel.includes("ProRawScreenDataShapeHints"),
+    "ContentsScreenDesignPanel must mount pro raw hints component",
   );
   assert(
-    source.includes("employees.name, employees.status") &&
-      source.includes("sum(employees.salary) group by employees.dept"),
-    "pro-facing searchTargets and aggregationSpec must show format samples",
+    hints.includes("プロ向け / raw 入力（検索・集計 — UI と双方向同期）"),
+    "raw inputs must stay behind a pro-facing disclosure",
+  );
+  assert(
+    hints.includes("searchTargets") && hints.includes("aggregationSpec"),
+    "pro hints must document both raw fields",
+  );
+  assert(
+    hints.includes("GROUP BY") && hints.includes("WHERE") &&
+      hints.includes("HAVING") && hints.includes("FROM"),
+    "pro hints must map structured UI to SQL clauses",
+  );
+  assert(
+    hints.includes("双方向同期") || hints.includes("双方向"),
+    "raw fields must document bidirectional sync with structured UI",
+  );
+  assert(
+    hints.includes("searchKeyColumns") || hints.includes("集計ブロック"),
+    "raw hints must reference structured bind targets",
   );
 });
 

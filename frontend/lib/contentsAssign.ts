@@ -2,6 +2,7 @@ import type { AdminManifestScreenDataShapeInput } from "../api/adminApi.ts";
 import type { ManifestScreenDesignDraft } from "./manifestScreenDesign.ts";
 import { serializeContentDataRowsForShape } from "./manifestScreenDesign.ts";
 import { parseSearchTargets } from "./manifestScreenDesign.ts";
+import { formatAggregationSpecFromBlocks } from "./screenDataShapeRawBinding.ts";
 import { normalizeRelationKeyColumn } from "./manifestLogicalTables.ts";
 import type { ScreenDataShapeSummary } from "./manifestTopologyExtensions.ts";
 import type { ContentsPipelineStep } from "../components/ContentsPipelineStepper.tsx";
@@ -172,7 +173,9 @@ export function buildAssignPayloadForStep(
       ? parseSearchTargets(design.searchTargets)
       : base.searchTargets,
     searchKeyColumns: design.searchKeyColumns,
-    aggregationSpec: design.aggregationSpec || base.aggregationSpec,
+    aggregationSpec: (design.aggregationBlocks?.length ?? 0) > 0
+      ? formatAggregationSpecFromBlocks(design.aggregationBlocks)
+      : design.aggregationSpec || base.aggregationSpec,
     aggregationKey: design.aggregationKey,
     aggregationMeasures: design.aggregationMeasures.filter((m) =>
       m.column.trim() && m.function.trim()

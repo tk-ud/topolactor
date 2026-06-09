@@ -80,8 +80,8 @@ public record LayoutNode(
     int OrderIndex,
     double X,
     double Y,
-    double Width,
-    double Height,
+    object? Width,
+    object? Height,
     IReadOnlyList<string>? LayoutClassRefs = null,
     /// <summary>Component kind from ui_component_registry — required for runtime rendering of catalog_component nodes.</summary>
     string? ComponentKind = null,

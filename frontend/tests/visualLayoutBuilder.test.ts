@@ -1,9 +1,9 @@
 /**
  * visualLayoutBuilder.test.ts
  *
- * VisualLayoutCanvas は layout draft のリアルタイムプレビュー &amp; 直感操作 surface として通常導線に残る。
- * drag / resize は draft node の x/y/width/height を更新するだけ。
- * parentNodeId / slotKey / orderIndex / layoutClassRefs はインスペクタ（CanvasInspector）で編集する。
+ * FlowLayoutCanvas は layout draft のフローツリープレビュー surface として通常導線に残る。
+ * 配置は parentNodeId / orderIndex / layoutClassRefs（レイヤーツリー + インスペクタ）が主導線。
+ * width/height はインスペクタで編集。x/y はパッチ出力に含めない（SSOT v0.9.0 flow）。
  * cssTokenRefs / classname / tailwind は canvas / layout_patch には含まれない（選択ノード design_inspector の責務）。
  *
  * このテストファイルは以下を対象とする:
@@ -23,9 +23,14 @@ import {
   buildVisualLayoutPatchJson,
   cloneVisualNode,
   filterEmptyResponsiveRules,
+  formatLayoutDimensionCss,
+  parseLayoutDimensionInput,
+  resolveLayoutDimensionPx,
   getDraftOnlyNodes,
   isDraftOnlyApplyBlocked,
+  isLegacyAbsoluteLayoutPatch,
   makeStructuralHtmlNode,
+  migrateAbsolutePatchToFlowStack,
   parseVisualLayoutPatchJson,
   reorderLayoutNodeStack,
   RESPONSIVE_BREAKPOINTS,
@@ -96,12 +101,12 @@ const sampleNode: VisualNodePayload = {
   tensorId: "tensor-1",
 };
 
-Deno.test("buildVisualLayoutPatchJson: includes x/y/width/height in node payload", () => {
+Deno.test("buildVisualLayoutPatchJson: flow mode omits x/y but keeps width/height", () => {
   const json = buildVisualLayoutPatchJson([sampleNode]);
   const parsed = JSON.parse(json);
   const node = parsed.nodes[0];
-  assertEquals(node.x, 10);
-  assertEquals(node.y, 20);
+  assertEquals(node.x, undefined);
+  assertEquals(node.y, undefined);
   assertEquals(node.width, 140);
   assertEquals(node.height, 60);
 });
@@ -128,17 +133,18 @@ Deno.test("buildVisualLayoutPatchJson: includes standard topology fields", () =>
 /** Fields required in preview / validate / apply tensorPatchJson (shared builder path). */
 function assertLayoutPatchNodePayload(node: Record<string, unknown>): void {
   assertObjectMatch(node, {
-    x: 10,
-    y: 20,
     width: 140,
     height: 60,
     parentNodeId: null,
+    orderIndex: 0,
     componentId: "comp-1",
     packageId: "pkg-1",
     layoutId: "layout-1",
     wiringId: "wiring-1",
     tensorId: "tensor-1",
   });
+  assertEquals(node.x, undefined, "flow patch must not serialize x");
+  assertEquals(node.y, undefined, "flow patch must not serialize y");
   assertEquals(typeof node.nodeId, "string");
   assertEquals(typeof node.componentKey, "string");
 }
@@ -268,8 +274,8 @@ Deno.test("structural HTML workflow: add, copy, move, save preserves layout/stru
   assertEquals(node.nodeKind, "structural_html");
   assertEquals(node.htmlTag, "section");
   assertEquals(node.componentKey, STRUCTURAL_HTML_COMPONENT_KEY);
-  assertEquals(node.x, 120);
-  assertEquals(node.y, 80);
+  assertEquals(node.x, 0);
+  assertEquals(node.y, 0);
 });
 
 Deno.test("cloneVisualNode: structural_html copy retains nodeKind and htmlTag", () => {
@@ -408,8 +414,8 @@ Deno.test("snapToGrid: large step (Shift) 50px snaps to nearest 10", () => {
 // ─── UX helper: buildVisualLayoutPatchJson — undo/redo state integrity ────────
 
 Deno.test("buildVisualLayoutPatchJson: after simulated undo — reverted state serializes correctly", () => {
-  const original = { ...sampleNode, x: 100, y: 200 };
-  const moved = { ...sampleNode, x: 150, y: 250 };
+  const original = { ...sampleNode, orderIndex: 0, parentNodeId: null };
+  const moved = { ...sampleNode, orderIndex: 2, parentNodeId: "parent-1" };
 
   const beforeJson = buildVisualLayoutPatchJson([original]);
   const afterJson = buildVisualLayoutPatchJson([moved]);
@@ -419,10 +425,11 @@ Deno.test("buildVisualLayoutPatchJson: after simulated undo — reverted state s
   const after = JSON.parse(afterJson).nodes[0];
   const undone = JSON.parse(undoneJson).nodes[0];
 
-  assertEquals(before.x, 100);
-  assertEquals(after.x, 150);
-  assertEquals(undone.x, before.x, "Undo should restore original x");
-  assertEquals(undone.y, before.y, "Undo should restore original y");
+  assertEquals(before.orderIndex, 0);
+  assertEquals(after.orderIndex, 2);
+  assertEquals(after.parentNodeId, "parent-1");
+  assertEquals(undone.orderIndex, before.orderIndex, "Undo should restore original orderIndex");
+  assertEquals(undone.parentNodeId, before.parentNodeId, "Undo should restore original parentNodeId");
 });
 
 // ─── UX helper: draft node actionable guard ───────────────────────────────────
@@ -646,28 +653,28 @@ Deno.test("resolveCssTokenValue: unknown token returns undefined", () => {
 
 // ─── Fix 2: Inspector commit produces distinct state (history boundary) ───────
 
-Deno.test("inspector commit: same node at two positions produces distinguishable snapshots", () => {
-  const base: VisualNodePayload = { ...sampleNode, x: 50, y: 50 };
-  const after: VisualNodePayload = { ...sampleNode, x: 100, y: 100 };
+Deno.test("inspector commit: same node at two tree placements produces distinguishable snapshots", () => {
+  const base: VisualNodePayload = { ...sampleNode, orderIndex: 0, parentNodeId: null };
+  const after: VisualNodePayload = { ...sampleNode, orderIndex: 1, parentNodeId: "section-1" };
   const snap1 = buildVisualLayoutPatchJson([base]);
   const snap2 = buildVisualLayoutPatchJson([after]);
   assertNotEquals(
     snap1,
     snap2,
-    "committed position change must produce different serialized state",
+    "committed tree placement change must produce different serialized state",
   );
-  assertEquals(JSON.parse(snap1).nodes[0].x, 50);
-  assertEquals(JSON.parse(snap2).nodes[0].x, 100);
+  assertEquals(JSON.parse(snap1).nodes[0].orderIndex, 0);
+  assertEquals(JSON.parse(snap2).nodes[0].orderIndex, 1);
+  assertEquals(JSON.parse(snap2).nodes[0].parentNodeId, "section-1");
 });
 
 Deno.test("inspector commit: live update then commit — final state matches committed value", () => {
-  // Simulate: live update to 80 (no history entry), then commit to 90
-  const live: VisualNodePayload = { ...sampleNode, x: 80 };
-  const committed: VisualNodePayload = { ...sampleNode, x: 90 };
+  const live: VisualNodePayload = { ...sampleNode, orderIndex: 0 };
+  const committed: VisualNodePayload = { ...sampleNode, orderIndex: 3 };
   const liveSnap = buildVisualLayoutPatchJson([live]);
   const commitSnap = buildVisualLayoutPatchJson([committed]);
   assertNotEquals(liveSnap, commitSnap);
-  assertEquals(JSON.parse(commitSnap).nodes[0].x, 90);
+  assertEquals(JSON.parse(commitSnap).nodes[0].orderIndex, 3);
 });
 
 // ─── layoutId round-trip from DB ─────────────────────────────────────────────
@@ -901,6 +908,51 @@ Deno.test("validateResponsiveTokenRulesJson: empty arrays per breakpoint are val
 
 // ─── parseVisualLayoutPatchJson / seedDraftNodesFromPalette ───────────────────
 
+Deno.test("layout dimensions: percent and auto strings round-trip in patch JSON", () => {
+  assertEquals(formatLayoutDimensionCss(120), "120px");
+  assertEquals(formatLayoutDimensionCss("50%"), "50%");
+  assertEquals(formatLayoutDimensionCss("auto"), "auto");
+  assertEquals(parseLayoutDimensionInput("50%"), "50%");
+  assertEquals(parseLayoutDimensionInput("auto"), "auto");
+  assertEquals(parseLayoutDimensionInput("Auto"), "auto");
+  assertEquals(parseLayoutDimensionInput("140"), 140);
+  assertEquals(resolveLayoutDimensionPx("auto", 800, 140), 140);
+  const raw = JSON.stringify({
+    nodes: [{
+      nodeId: "n-pct",
+      componentKey: "display/card",
+      width: "50%",
+      height: "100%",
+    }],
+  });
+  const result = parseVisualLayoutPatchJson(raw, []);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.nodes[0].width, "50%");
+  assertEquals(result.value.nodes[0].height, "100%");
+  const rebuilt = parseVisualLayoutPatchJson(
+    buildVisualLayoutPatchJson(result.value.nodes),
+    [],
+  );
+  assertEquals(rebuilt.ok, true);
+  if (!rebuilt.ok) return;
+  assertEquals(rebuilt.value.nodes[0].width, "50%");
+
+  const autoRaw = JSON.stringify({
+    nodes: [{
+      nodeId: "n-auto",
+      componentKey: "display/card",
+      width: "auto",
+      height: "auto",
+    }],
+  });
+  const autoResult = parseVisualLayoutPatchJson(autoRaw, []);
+  assertEquals(autoResult.ok, true);
+  if (!autoResult.ok) return;
+  assertEquals(autoResult.value.nodes[0].width, "auto");
+  assertEquals(autoResult.value.nodes[0].height, "auto");
+});
+
 Deno.test("parseVisualLayoutPatchJson: hydrates nodes and layoutClassRefs", () => {
   const raw = JSON.stringify({
     layoutClassRefs: ["layout.root.grid"],
@@ -1062,9 +1114,7 @@ Deno.test("canvas workspace: preview remains inline canvas route, not modal", as
 });
 
 Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch builder", () => {
-  // The visual patch builder (includes x/y/width/height, nodeKind, htmlTag) must remain.
-  // It is imported and used by LayoutBuilderSection in the canvas workspace.
-  // If this import fails TypeScript compilation, the workspace is broken.
+  // Flow patch builder: tree fields + width/height + nodeKind/htmlTag; x/y omitted.
   const n = makeStructuralHtmlNode("div", {
     nodeId: "x",
     x: 0,
@@ -1074,8 +1124,10 @@ Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch b
   const json = buildVisualLayoutPatchJson([n]);
   const parsed = JSON.parse(json);
   assertEquals(parsed.nodes[0].nodeKind, "structural_html");
-  assertEquals(typeof parsed.nodes[0].x, "number");
+  assertEquals(parsed.nodes[0].x, undefined);
+  assertEquals(parsed.nodes[0].y, undefined);
   assertEquals(typeof parsed.nodes[0].width, "number");
+  assertEquals(typeof parsed.nodes[0].orderIndex, "number");
 });
 
 // ─── STRUCTURAL_HTML_TAG_ALLOWLIST: full SSOT set ────────────────────────────
@@ -1367,5 +1419,41 @@ Deno.test("canvas workspace: drop reads bucket card payload and adds draft node"
   assert(src.includes("readBucketCardDragPayload"));
   assert(src.includes("paletteEntryFromDragPayload"));
   assert(src.includes("addNode(makeNewNode"));
+});
+
+Deno.test("isLegacyAbsoluteLayoutPatch: detects flat coordinate placement", () => {
+  const legacy = [
+    { ...sampleNode, nodeId: "a", x: 10, y: 20, orderIndex: 0 },
+    { ...sampleNode, nodeId: "b", x: 10, y: 100, orderIndex: 1 },
+  ];
+  assertEquals(isLegacyAbsoluteLayoutPatch(legacy), true);
+  const flow = [
+    { ...sampleNode, nodeId: "a", x: 0, y: 0, orderIndex: 0 },
+    { ...sampleNode, nodeId: "b", x: 0, y: 0, orderIndex: 1, parentNodeId: "a" },
+  ];
+  assertEquals(isLegacyAbsoluteLayoutPatch(flow), false);
+});
+
+Deno.test("migrateAbsolutePatchToFlowStack: sorts by y and strips coordinates", () => {
+  const nodes = [
+    { ...sampleNode, nodeId: "b", x: 0, y: 100, orderIndex: 1 },
+    { ...sampleNode, nodeId: "a", x: 0, y: 10, orderIndex: 0 },
+  ];
+  const migrated = migrateAbsolutePatchToFlowStack(nodes);
+  assertEquals(migrated[0].nodeId, "a");
+  assertEquals(migrated[1].nodeId, "b");
+  assertEquals(migrated[0].x, 0);
+  assertEquals(migrated[0].y, 0);
+  assertEquals(migrated[0].orderIndex, 0);
+  assertEquals(migrated[1].orderIndex, 1);
+});
+
+Deno.test("flow projection: buildFlowNodeStyle omits x/y", async () => {
+  const { buildFlowNodeStyle } = await import("../runtime/layoutNodeFlowProjection.ts");
+  const style = buildFlowNodeStyle({ width: 120, height: "auto" });
+  assertEquals(style.left, undefined);
+  assertEquals(style.top, undefined);
+  assertEquals(style.position, undefined);
+  assertEquals(style.width, "120px");
 });
 

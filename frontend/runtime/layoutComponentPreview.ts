@@ -1,6 +1,7 @@
 import type { VNode } from "preact";
 import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import type { RuntimeComponentSpec } from "./runtimeComponentAdapter.ts";
+import type { LayoutDimension } from "./visualLayoutUtils.ts";
 import {
   ensureRuntimeComponentRegistryInitialized,
   hasRuntimeComponentFactory,
@@ -104,17 +105,29 @@ function layoutPreviewDisplayLabel(componentKey: string): string {
     ?.replace(/\.(primitive|template)$/, "") ?? componentKey;
 }
 
+export type LayoutPreviewDesignOverrides = {
+  inlineText?: string;
+  linkHref?: string;
+  linkTarget?: string;
+};
+
 /** Safe placeholder props for UI Builder canvas preview (no runtime wiring). */
 export function buildLayoutPreviewPlaceholderProps(
   componentKind: string,
   componentKey: string,
+  overrides: LayoutPreviewDesignOverrides = {},
 ): Record<string, unknown> {
   const shortLabel = layoutPreviewDisplayLabel(componentKey);
+  const inlineText = overrides.inlineText?.trim();
 
   switch (componentKind) {
     case "action/button":
       return {
-        data: { label: shortLabel || "Button", variant: "primary", disabled: true },
+        data: {
+          label: inlineText || shortLabel || "Button",
+          variant: "primary",
+          disabled: true,
+        },
       };
     case "form_input/input":
     case "form_input/textarea":
@@ -123,7 +136,7 @@ export function buildLayoutPreviewPlaceholderProps(
         data: {
           label: shortLabel,
           placeholder: "プレビュー",
-          value: "",
+          value: inlineText ?? "",
           disabled: false,
         },
       };
@@ -131,7 +144,10 @@ export function buildLayoutPreviewPlaceholderProps(
     case "disclosure_structure/panel":
     case "disclosure_structure/section":
       return {
-        data: { title: shortLabel, body: "プレビュー本文" },
+        data: {
+          title: inlineText || shortLabel,
+          body: inlineText ? "" : "プレビュー本文",
+        },
       };
     case "data_display/table":
     case "data_display/data_grid":
@@ -167,6 +183,7 @@ export function buildLayoutPreviewRuntimeSpec(input: {
   componentKey: string;
   componentKind?: string;
   componentId?: string;
+  design?: LayoutPreviewDesignOverrides;
 }):
   | { ok: true; spec: RuntimeComponentSpec }
   | { ok: false; code: string; reason: string } {
@@ -195,7 +212,11 @@ export function buildLayoutPreviewRuntimeSpec(input: {
     spec: {
       componentId: input.componentId ?? `preview:${normalizedKey}`,
       componentType: componentKind,
-      props: buildLayoutPreviewPlaceholderProps(componentKind, normalizedKey),
+      props: buildLayoutPreviewPlaceholderProps(
+        componentKind,
+        normalizedKey,
+        input.design,
+      ),
       eventBinding: {
         click: PREVIEW_INERT_CLICK_BINDING,
         change: { eventType: "change", payload: {} },
@@ -215,6 +236,9 @@ export function renderLayoutComponentPreview(input: {
   componentKind?: string;
   componentId?: string;
   isDraftOnly?: boolean;
+  inlineText?: string;
+  linkHref?: string;
+  linkTarget?: string;
 }): LayoutPreviewRenderResult {
   if (input.isDraftOnly) {
     return {
@@ -223,7 +247,16 @@ export function renderLayoutComponentPreview(input: {
       reason: "部品が未接続 — 部品登録タブで配置可能化してください",
     };
   }
-  const built = buildLayoutPreviewRuntimeSpec(input);
+  const built = buildLayoutPreviewRuntimeSpec({
+    componentKey: input.componentKey,
+    componentKind: input.componentKind,
+    componentId: input.componentId,
+    design: {
+      inlineText: input.inlineText,
+      linkHref: input.linkHref,
+      linkTarget: input.linkTarget,
+    },
+  });
   if (!built.ok) return built;
   const factory = resolveRuntimeComponentFactory(built.spec.componentType);
   if (!factory) {
@@ -251,12 +284,12 @@ export function enrichLayoutPreviewNodes<T extends {
   componentKey: string;
   componentKind?: string;
   isDraftOnly?: boolean;
-  width?: number;
-  height?: number;
+  width?: LayoutDimension;
+  height?: LayoutDimension;
 }>(
   nodes: T[],
   paletteEntries: Array<{ componentKey: string; componentKind: string; isDraftOnly: boolean }> = [],
-): Array<T & { componentKind?: string; width: number; height: number }> {
+): Array<T & { componentKind?: string; width: LayoutDimension; height: LayoutDimension }> {
   const paletteByKey = new Map(paletteEntries.map((entry) => [entry.componentKey, entry]));
   return nodes.map((node) => {
     const palette = paletteByKey.get(node.componentKey);
@@ -267,12 +300,19 @@ export function enrichLayoutPreviewNodes<T extends {
     const defaults = componentKind ? getLayoutPreviewDefaultSize(componentKind) : { width: 160, height: 72 };
     const legacyDefaultSize = node.width === LEGACY_CANVAS_NODE_WIDTH &&
       node.height === LEGACY_CANVAS_NODE_HEIGHT;
-    const width = typeof node.width === "number" && node.width > 0
-      ? (legacyDefaultSize && defaults.width > node.width ? defaults.width : node.width)
-      : defaults.width;
-    const height = typeof node.height === "number" && node.height > 0
-      ? (legacyDefaultSize && defaults.height > node.height ? defaults.height : node.height)
-      : defaults.height;
+    const resolveDimension = (
+      dim: LayoutDimension | undefined,
+      fallback: number,
+      defaultPx: number,
+    ): LayoutDimension => {
+      if (typeof dim === "string" && dim.trim()) return dim;
+      if (typeof dim === "number" && dim > 0) {
+        return legacyDefaultSize && defaultPx > dim ? defaultPx : dim;
+      }
+      return fallback;
+    };
+    const width = resolveDimension(node.width, defaults.width, defaults.width);
+    const height = resolveDimension(node.height, defaults.height, defaults.height);
     return {
       ...node,
       componentKind,

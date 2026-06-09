@@ -15,6 +15,8 @@ import {
 } from "../api/adminApi.ts";
 import { AdminSubmitStatus } from "../components/AdminSubmitStatus.tsx";
 import ContentsAggregationMeasuresEditor from "../components/ContentsAggregationMeasuresEditor.tsx";
+import ProRawScreenDataShapeHints from "../components/ProRawScreenDataShapeHints.tsx";
+import { syncRawFieldsFromStructured } from "../lib/screenDataShapeRawBinding.ts";
 import ContentsStepCompletionBanner from "../components/ContentsStepCompletionBanner.tsx";
 import ContentsPipelineStepper, {
   type ContentsPipelineStep,
@@ -73,7 +75,6 @@ import {
   flattenInitialDataRowsForSample,
   patchAggregationBlocks,
   type ManifestScreenDesignDraft,
-  parseSearchTargets,
   type RelationIntentDraft,
   saveManifestScreenDesignLocal,
   screenDesignFromBackendShape,
@@ -544,7 +545,8 @@ export default function ContentsScreenDesignPanel({
 
   const patchDesign = (patch: Partial<ManifestScreenDesignDraft>) => {
     setDesign((prev) => {
-      const next = { ...prev, ...patch };
+      const merged = { ...prev, ...patch };
+      const next = syncRawFieldsFromStructured(merged, patch);
       if (selectedId) {
         saveManifestScreenDesignLocal(selectedId, next);
         setDraftSource((s) => (s === "backend" ? "merged" : "local"));
@@ -1636,53 +1638,15 @@ export default function ContentsScreenDesignPanel({
         />
       </div>
 
-      <details class="mt-2">
-        <summary class="cursor-pointer text-xs text-slate-500">
-          プロ向け / raw 入力（検索・集計）
-        </summary>
-        <p class="mt-2 text-xs text-muted-xs">
-          通常ビューの「検索キー」や操作ごとの対象項目とは独立した raw 入力です。
-          区切りはカンマ・セミコロン・改行のいずれか。qualified 列名を列挙してください。
-        </p>
-        <p class="mt-1 font-mono text-xs text-slate-500">
-          例: employees.name, employees.status
-        </p>
-        <label class="mt-1 block text-xs text-slate-500">
-          検索対象（searchTargets）
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-            value={design.searchTargets}
-            onInput={(e) =>
-              patchDesign({
-                searchTargets: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      </details>
-      {/* Advanced: raw aggregationSpec in disclosure */}
-      <details class="mt-2">
-        <summary class="cursor-pointer text-xs text-slate-500">
-          プロ向け / raw 集計仕様
-        </summary>
-        <p class="mt-2 text-xs text-muted-xs">
-          上の「集計キー」「集計式」と独立した raw 文字列です。サンプル表示では未使用で、
-          ランタイム拡張や高度な集計 wiring 向けに保持されます。
-        </p>
-        <p class="mt-1 font-mono text-xs text-slate-500">
-          例: sum(employees.salary) group by employees.dept
-        </p>
-        <label class="mt-1 block text-xs text-slate-500">
-          集計仕様（aggregationSpec — raw）
-          <input
-            class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-            value={design.aggregationSpec}
-            onInput={(e) =>
-              patchDesign({
-                aggregationSpec: (e.target as HTMLInputElement).value,
-              })}
-          />
-        </label>
-      </details>
+      <ProRawScreenDataShapeHints
+        exampleQualifiedColumn={qualifiedColumns[0]?.key ?? "employees.name"}
+        searchKeyColumns={design.searchKeyColumns}
+        aggregationBlocks={design.aggregationBlocks ?? []}
+        defaultSourceRef={primaryLogicalTableRef(design.logicalTables)}
+        onSearchKeyColumnsChange={(searchKeyColumns) => patchDesign({ searchKeyColumns })}
+        onAggregationBlocksChange={(blocks) =>
+          patchDesign(patchAggregationBlocks(blocks))}
+      />
 
       {showStep3Completion && submitStatus.outcome === "success" && (
         <div class="mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">

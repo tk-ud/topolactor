@@ -6,7 +6,6 @@ import { ADMIN_CONTENTS_GUIDE } from "../content/adminGuides.ts";
 import { UX_CONTENTS, UX_HUB_MANIFESTS_PAGE } from "../content/adminUxTerms.ts";
 import type { AdminManifestListItem } from "../api/adminApi.ts";
 import ContentsScreenDesignPanel from "./ContentsScreenDesignPanel.tsx";
-import ContentsPromotionPanel from "./ContentsPromotionPanel.tsx";
 
 /** Canonical single-page manifest authoring surface (SSOT pipeline steps 1–3). */
 export default function ContentsAdmin(): JSX.Element {
@@ -48,20 +47,6 @@ export default function ContentsAdmin(): JSX.Element {
         manifestsVersion={manifestsVersion}
         onManifestsReload={bumpManifests}
       />
-
-      <details class="mb-8 rounded border border-slate-200 p-4">
-        <summary class="cursor-pointer text-sm font-semibold text-slate-700">
-          詳細 — 旧経路（内容確認 → 有効化）
-        </summary>
-        <p class="mb-3 mt-2 text-xs text-muted-xs">
-          正規フローは step 3 の保存後に画面づくりへ進みます。以下はレガシー promote 経路です。
-        </p>
-        <ContentsPromotionPanel
-          sharedManifestId={sharedManifestId}
-          onSharedManifestIdChange={setSharedManifestId}
-          manifestsVersion={manifestsVersion}
-        />
-      </details>
     </main>
   );
 }

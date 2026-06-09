@@ -4,6 +4,7 @@ import { probeSessionToken, refreshUserSession } from "../api/authApi.ts";
 import { clearSessionToken, persistSessionToken, readClientSessionToken } from "../lib/demoSession.ts";
 import { queueClientCommand, startComponentEventRuntime } from "../runtime/frontendScheduler.ts";
 import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import { flowNodePresentation, flowRootClassName } from "../runtime/layoutNodeFlowProjection.ts";
 import { renderRuntimeComponent } from "../runtime/runtimePrimitiveRenderer.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { createSseReceiver, type SseReceiver } from "../runtime/sseReceiver.ts";
@@ -15,17 +16,7 @@ function LayoutNode(
   { spec, childrenMap }: { spec: ComponentSpec; childrenMap: Map<string | undefined, ComponentSpec[]> },
 ): JSX.Element {
   const children = childrenMap.get(spec.nodeId) ?? [];
-
-  const style: Record<string, string> = {};
-  if (spec.x !== undefined || spec.y !== undefined || spec.width !== undefined || spec.height !== undefined) {
-    style.position = "absolute";
-    if (spec.x !== undefined) style.left = `${spec.x}px`;
-    if (spec.y !== undefined) style.top = `${spec.y}px`;
-    if (spec.width !== undefined) style.width = `${spec.width}px`;
-    if (spec.height !== undefined) style.height = `${spec.height}px`;
-  }
-
-  const className = spec.layoutClassRefs?.join(" ") || undefined;
+  const { style, className } = flowNodePresentation(spec);
 
   const childElements = children.map((child) => (
     <LayoutNode key={child.nodeId ?? child.slotKey ?? child.componentId} spec={child} childrenMap={childrenMap} />
@@ -283,7 +274,10 @@ export default function ProjectionShell(): JSX.Element {
         <p class="mb-3 text-xs font-mono text-blue-500">
           layout: {emission!.layoutId}
         </p>
-        <div class="relative" data-primary-dom-projection="true">
+        <div
+          class={flowRootClassName()}
+          data-primary-dom-projection="true"
+        >
           {rootSpecs.map((spec) => (
             <LayoutNode
               key={spec.nodeId ?? spec.slotKey ?? spec.componentId}

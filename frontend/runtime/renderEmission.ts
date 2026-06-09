@@ -29,14 +29,14 @@ export type ComponentSpec = {
   slotKey?: string;
   /** Render order from layout node — present only when rendered from layoutNodes. */
   orderIndex?: number;
-  /** Canvas x position in px — for position:absolute style projection. */
+  /** @deprecated Legacy absolute canvas geometry — not projected in flow layout mode. */
   x?: number;
-  /** Canvas y position in px — for position:absolute style projection. */
+  /** @deprecated Legacy absolute canvas geometry — not projected in flow layout mode. */
   y?: number;
-  /** Canvas width in px — for position:absolute style projection. */
-  width?: number;
-  /** Canvas height in px — for position:absolute style projection. */
-  height?: number;
+  /** Flow width — px number, percent string, or auto. */
+  width?: number | string;
+  /** Flow height — px number, percent string, or auto. */
+  height?: number | string;
   /** SSOT topology-layout-class vocabulary refs for className resolution. */
   layoutClassRefs?: string[];
 };

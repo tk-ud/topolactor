@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS topology.ui_topology_tensor (
     order_index            INTEGER     NOT NULL DEFAULT 0,
     visibility_rule_json   JSONB       NOT NULL DEFAULT '{}'::jsonb,
     layout_patch_json      JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    layout_draft_tmp_json  JSONB,
     css_token_refs         JSONB       NOT NULL DEFAULT '[]'::jsonb,
     responsive_token_refs  JSONB       NOT NULL DEFAULT '{}'::jsonb,
     state_policy_json      JSONB       NOT NULL DEFAULT '{}'::jsonb,

@@ -928,6 +928,26 @@ VALUES
             '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
         ]::jsonb[],
         'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000ba',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"layout_patch","action":"save_tmp"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000bb',
+        NULL,
+        ARRAY[
+            '{"type":"dispatcher_mapping","role":"admin","target":"admin","layer":"component_style_design","action":"save_tmp"}'::jsonb,
+            '{"type":"db_notify_projection_mapping","runtime_destination":"sse_projection_runtime"}'::jsonb,
+            '{"type":"runtime_mapping","runtime_destination":"admin_runtime"}'::jsonb
+        ]::jsonb[],
+        'active'
     )
 ON CONFLICT (manifest_id) DO NOTHING;
 
@@ -1297,6 +1317,24 @@ VALUES
         '00000000-0000-0000-0000-0000000000c0',
         'admin_ui_topology_get_layout_patch_draft',
         'admin:ui_topology:get_layout_patch_draft',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c1',
+        'admin_layout_patch_save_tmp',
+        'admin:layout_patch:save_tmp',
+        '00000000-0000-0000-0000-000000000020',
+        '00000000-0000-0000-0000-000000000021',
+        ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],
+        true
+    ),
+    (
+        '00000000-0000-0000-0000-0000000000c2',
+        'admin_component_style_design_save_tmp',
+        'admin:component_style_design:save_tmp',
         '00000000-0000-0000-0000-000000000020',
         '00000000-0000-0000-0000-000000000021',
         ARRAY['00000000-0000-0000-0000-000000000022']::uuid[],

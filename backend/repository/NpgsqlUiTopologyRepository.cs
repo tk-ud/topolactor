@@ -1447,16 +1447,19 @@ public class NpgsqlUiTopologyRepository : UiTopologyRepository
             tensorSel.Parameters.AddWithValue("wiring", wiringId);
             var tensorId = (Guid)(await tensorSel.ExecuteScalarAsync(ct))!;
 
-            // 8. UPDATE components_bucket status = 'promoted' for all items
-            var bucketIdParams = bucketItemIds.Select((_, i) => $"@bid{i}").ToArray();
-            await using var promoteCmd = conn.CreateCommand();
-            promoteCmd.Transaction = tx;
-            promoteCmd.CommandText =
-                $"UPDATE topology.components_bucket SET status = 'promoted', updated_at = now() " +
-                $"WHERE bucket_item_id IN ({string.Join(",", bucketIdParams)}) AND status = 'packaging'";
-            for (var i = 0; i < bucketItemIds.Count; i++)
-                promoteCmd.Parameters.AddWithValue($"bid{i}", bucketItemIds[i]);
-            await promoteCmd.ExecuteNonQueryAsync(ct);
+            // 8. UPDATE components_bucket status = 'promoted' for all items (shell promote may pass none).
+            if (bucketItemIds.Count > 0)
+            {
+                var bucketIdParams = bucketItemIds.Select((_, i) => $"@bid{i}").ToArray();
+                await using var promoteCmd = conn.CreateCommand();
+                promoteCmd.Transaction = tx;
+                promoteCmd.CommandText =
+                    $"UPDATE topology.components_bucket SET status = 'promoted', updated_at = now() " +
+                    $"WHERE bucket_item_id IN ({string.Join(",", bucketIdParams)}) AND status = 'packaging'";
+                for (var i = 0; i < bucketItemIds.Count; i++)
+                    promoteCmd.Parameters.AddWithValue($"bid{i}", bucketItemIds[i]);
+                await promoteCmd.ExecuteNonQueryAsync(ct);
+            }
 
             await tx.CommitAsync(ct);
 

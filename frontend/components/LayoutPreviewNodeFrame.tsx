@@ -11,6 +11,9 @@ export type LayoutPreviewNodeFrameProps = {
   componentId?: string;
   isDraftOnly?: boolean;
   className?: string;
+  inlineText?: string;
+  linkHref?: string;
+  linkTarget?: string;
 };
 
 /** Shared read-only runtime primitive preview frame for canvas and visual audit modal. */
@@ -20,6 +23,9 @@ export function LayoutPreviewNodeFrame({
   componentId,
   isDraftOnly = false,
   className = "",
+  inlineText,
+  linkHref,
+  linkTarget,
 }: LayoutPreviewNodeFrameProps): JSX.Element {
   const resolvedKind = componentKind ??
     resolveComponentKindForLayoutPreview(componentKey) ??
@@ -29,6 +35,9 @@ export function LayoutPreviewNodeFrame({
     componentKind,
     componentId,
     isDraftOnly,
+    inlineText,
+    linkHref,
+    linkTarget,
   });
   if (!result.ok) {
     return (

@@ -6,6 +6,7 @@ import { queueClientCommand } from "../runtime/frontendScheduler.ts";
 import { defaultComponentRegistry } from "../registry/componentRegistry.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "../runtime/runtimeComponentRegistry.ts";
 import { buildChildrenMap, renderEmission, type ComponentSpec } from "../runtime/renderEmission.ts";
+import { flowNodePresentation, flowRootClassName } from "../runtime/layoutNodeFlowProjection.ts";
 import type { Emission, LayoutNode } from "../api/dispatch.ts";
 
 // ─── SSE projection lane — dispatcher skeleton ────────────────────────────────
@@ -314,7 +315,7 @@ Deno.test("layout DOM: DB-equivalent emission with full node fields projects cor
 // preact-render-to-string to verify actual HTML output matches the SSOT contract:
 //   - structural_html → real HTML tag
 //   - parentNodeId → DOM nesting
-//   - x/y/width/height → style with position:absolute
+//   - width/height → flow CSS (x/y not projected in flow mode)
 //   - layoutClassRefs → class attribute
 //
 // A test-local LayoutNodeToHtml function mirrors the SSOT DOM projection contract
@@ -326,15 +327,7 @@ function layoutNodeToElement(
 ): JSX.Element {
   const children = childrenMap.get(spec.nodeId) ?? [];
 
-  const style: Record<string, string> = {};
-  if (spec.x !== undefined || spec.y !== undefined || spec.width !== undefined || spec.height !== undefined) {
-    style.position = "absolute";
-    if (spec.x !== undefined) style.left = `${spec.x}px`;
-    if (spec.y !== undefined) style.top = `${spec.y}px`;
-    if (spec.width !== undefined) style.width = `${spec.width}px`;
-    if (spec.height !== undefined) style.height = `${spec.height}px`;
-  }
-  const className = spec.layoutClassRefs?.join(" ") || undefined;
+  const { style, className } = flowNodePresentation(spec);
 
   const childElements = children.map((c) => layoutNodeToElement(c, childrenMap));
 
@@ -365,7 +358,11 @@ function renderLayoutTree(emission: Emission, registry: typeof twoCompRegistry):
   const specs = renderEmission(emission, registry);
   const childrenMap = buildChildrenMap(specs);
   const roots = childrenMap.get(undefined) ?? [];
-  return renderToString(h("div", { id: "layout-root" }, ...roots.map((r) => layoutNodeToElement(r, childrenMap))));
+  return renderToString(h(
+    "div",
+    { id: "layout-root", class: flowRootClassName() },
+    ...roots.map((r) => layoutNodeToElement(r, childrenMap)),
+  ));
 }
 
 Deno.test("DOM render: structural_html node produces real HTML tag in rendered output", () => {
@@ -393,7 +390,7 @@ Deno.test("DOM render: structural_html node produces real HTML tag in rendered o
   assertStringIncludes(html, 'data-node-id="node-section"');
 });
 
-Deno.test("DOM render: x/y/width/height project as position:absolute CSS style", () => {
+Deno.test("DOM render: width/height project as flow CSS without position:absolute", () => {
   const emission: Emission = {
     structureMapId: "00000000-0000-0000-0000-000000000004",
     packageId: "00000000-0000-0000-0000-000000000001",
@@ -406,19 +403,18 @@ Deno.test("DOM render: x/y/width/height project as position:absolute CSS style",
         componentId: compAId,
         slotKey: "slot_a",
         orderIndex: 0,
-        x: 10, y: 20, width: 300, height: 150,
+        width: 300,
+        height: 150,
       },
     ],
   };
 
   const html = renderLayoutTree(emission, twoCompRegistry);
 
-  // SSOT: x/y/width/height → position:absolute CSS (not relative)
-  assertStringIncludes(html, "position:absolute");
-  assertStringIncludes(html, "left:10px");
-  assertStringIncludes(html, "top:20px");
+  assertEquals(html.includes("position:absolute"), false);
   assertStringIncludes(html, "width:300px");
   assertStringIncludes(html, "height:150px");
+  assertStringIncludes(html, flowRootClassName());
 });
 
 Deno.test("DOM render: layoutClassRefs project as class attribute", () => {
@@ -435,15 +431,14 @@ Deno.test("DOM render: layoutClassRefs project as class attribute", () => {
         slotKey: "slot_a",
         orderIndex: 0,
         x: 0, y: 0, width: 100, height: 50,
-        layoutClassRefs: ["card-primary", "elevated"],
+        layoutClassRefs: ["layout.card.surface"],
       },
     ],
   };
 
   const html = renderLayoutTree(emission, twoCompRegistry);
 
-  assertStringIncludes(html, "card-primary");
-  assertStringIncludes(html, "elevated");
+  assertStringIncludes(html, "topolactor-topology-layout-card-surface");
 });
 
 Deno.test("DOM render: parentNodeId nesting renders child inside parent element", () => {

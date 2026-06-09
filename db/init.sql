@@ -24,6 +24,9 @@
 \echo '[init.sql] applying ui_topology_tables.sql'
 \i /db/ui_topology_tables.sql
 
+\echo '[init.sql] applying ui_topology_tensor_layout_draft_tmp.sql'
+\i /db/migrations/ui_topology_tensor_layout_draft_tmp.sql
+
 \echo '[init.sql] applying mock_preset_registry_tables.sql'
 \i /db/migrations/mock_preset_registry_tables.sql
 

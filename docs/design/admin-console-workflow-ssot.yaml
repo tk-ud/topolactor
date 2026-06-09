@@ -1,6 +1,6 @@
 admin_console_workflow_ssot:
   name: topolactor_admin_console_workflow_ssot
-  version: 0.8.0
+  version: 0.9.0
   status: subordinate_design_document
 
   authority:
@@ -20,7 +20,7 @@ admin_console_workflow_ssot:
     - define the canonical sequential authoring pipeline (single submit per numbered step, sequential DB persistence) for /admin/contents steps 1–3
     - define /admin/contents as steps 1–3 of that pipeline (manifest shell through physical page binding)
     - define /admin/ui-builder as a canvas workspace route (NOT a pipeline step): full-width canvas with docked panels; no separate surfaces, no sequential step framing
-    - define canvas_workspace_contract: panel layout, _tmp auto-save, layer_inspector, design_inspector, html_tag allowlist
+    - define canvas_workspace_contract: panel layout, flow layout projection, tree-centric layout authoring, live design preview, _tmp auto-save, layer_inspector, design_inspector, html_tag allowlist
     - define /admin/manifests as post-contents hub / relation / navigation management
     - record removed legacy or debug wrapper routes so implementation can converge on canonical surfaces
 
@@ -282,12 +282,72 @@ admin_console_workflow_ssot:
       配置・デザインを統合編集する。パッケージ化は暗黙（route_key 確定時の自動生成 + drop 時の自動追加）。
       canvas が主対象であり、画面遷移・タブ切り替えなしで操作が完結する。
     design_rationale: >
-      Canvas renders actual catalog component previews — not wireframe rectangles or abstract boxes.
-      Because the canvas IS the preview, a separate read-only preview surface is unnecessary.
+      Canvas renders actual catalog component previews in a flow-based layout tree — not wireframe
+      rectangles or abstract boxes. Layout structure is authored primarily via layer_inspector
+      (tree reparent/reorder + container layoutClassRefs). Design properties (inlineText, tokens,
+      spacing, responsive overrides) apply live on the selected node so the canvas stays as close
+      to production rendering as the component registry allows.
+      Because the canvas IS the live preview, a separate read-only preview surface is unnecessary.
       Because design is applied to the selected canvas object via a docked inspector panel,
       a separate design editor surface is unnecessary.
       Implementation MUST NOT introduce tabs, separate routes, or pipeline-step framing
       for placement vs design vs preview within this workspace.
+    layout_projection_model:
+      status: adopted
+      adopted_policy: flow_layout_default
+      default_placement: flow
+      placement_authority:
+        primary_fields:
+          - parentNodeId
+          - orderIndex
+          - layoutClassRefs
+          - slotKey
+        container_semantics_ref: docs/design/topology-layout-class-ssot.yaml
+        note: >
+          Sibling order and parent nesting define DOM structure. Container nodes use layoutClassRefs
+          (stack, flex row, grid) to arrange children in normal document flow.
+      spacing_authority:
+        - cssTokenRefs spacing vocabulary (margin, padding, gap) per css-dictionary-ssot
+        - responsiveTokenRefs per breakpoint for spacing and presentation tokens
+        note: x/y are NOT padding. Spacing is edited via design_inspector tokens only.
+      sizing_authority:
+        fields: [width, height]
+        allowed_units: [px, percent, auto]
+        projection: flow_css_width_height
+        note: width/height apply as normal CSS box sizing within the parent flow container.
+      deprecated_absolute_geometry:
+        fields: [x, y]
+        former_semantics: position_absolute_left_top_px
+        migration_rule: >
+          Legacy layout_patch_json rows that only carry x/y absolute coordinates MUST be migrated
+          to flow tree placement explicitly. Silent reinterpretation of x/y as padding or flow offset
+          is prohibited.
+      prohibited_dom_projection:
+        - position_absolute_as_default_for_layout_patch_nodes
+        - mapping_x_y_to_left_top_px_in_flow_mode
+        - canvas_drag_as_primary_layout_authoring_for_coordinates
+      layout_vs_design_split:
+        layout_authoring_surface: layer_inspector
+        layout_responsibilities:
+          - parentNodeId nesting
+          - orderIndex sibling order
+          - layoutClassRefs on container nodes
+          - slotKey assignment
+        design_authoring_surface: design_inspector
+        design_responsibilities:
+          - inlineText and link fields with live canvas reflection
+          - cssTokenRefs and responsiveTokenRefs
+          - typography and spacing tokens
+          - reactionIntent presentation
+        canvas_role: >
+          Live flow-layout preview plus selection target. Layout structure changes are driven from
+          layer_inspector tree operations, not free-floating coordinate drag on the canvas.
+      optional_future:
+        overlay_placement_mode:
+          status: deferred
+          note: >
+            Explicit placementMode overlay (position absolute for modals, badges, tooltips only)
+            may be added later. It is not the default and must not restore absolute canvas authoring.
     edit_target_contract:
       sole_authoring_target: package
       rule: >
@@ -403,40 +463,52 @@ admin_console_workflow_ssot:
             center_canvas:
               position: "full remaining width (width: 100% of viewport minus docked panels)"
               rendering: >
-                Renders actual catalog component previews and structural HTML nodes
-                in their placed positions. NOT wireframe rectangles or placeholder boxes.
-                Canvas state always reflects the current draft (including _tmp auto-saved state).
-              snap_grid: 10px
+                Renders the package layout as a flow-based DOM tree with actual catalog component
+                previews and structural HTML nodes. NOT wireframe rectangles or placeholder boxes.
+                design_inspector edits (inlineText, tokens, spacing, responsive overrides) MUST
+                reflect on the canvas immediately with production-faithful rendering where the
+                component registry and css-dictionary allow. Canvas state always reflects the
+                current draft (including _tmp auto-saved state).
+              layout_authoring_surface: layer_inspector
               node_interaction:
                 - click to select; selection drives both inspector panels
-                - drag to move; resize via handles
+                - layout structure via layer_inspector tree drag (reparent, reorder) — primary layout UX
+                - design_inspector edits apply live to the selected node preview (WYSIWYG)
                 - delete key or panel button to remove node
+              prohibited_as_primary_layout_affordance:
+                - free-drag x/y coordinate placement on canvas
+                - resize handles that persist absolute geometry as the sole layout model
               design_rationale_for_no_separate_preview: >
-                Canvas renders actual components, so the canvas itself IS the preview.
-                A separate visual_view tab or route adds no information and is prohibited.
+                Canvas renders actual components in flow layout, so the canvas itself IS the live
+                preview. A separate visual_view tab or route adds no information and is prohibited.
             right_panel:
               position: fixed right, docked
               panels:
                 layer_inspector:
-                  purpose: manage parentNodeId nesting, slotKey assignment, and orderIndex
+                  purpose: primary layout authoring — tree structure, container layout class, slot assignment
                   responsibilities:
                     - display full node tree (parentNodeId hierarchy) for the selected package
                     - click any tree node to select it (drives center canvas + design_inspector)
                     - drag tree nodes to reparent (change parentNodeId) or reorder (change orderIndex)
+                    - assign layoutClassRefs on container nodes (stack / flex / grid per topology-layout-class-ssot)
                     - show slotKey and orderIndex per node; allow inline edit
                     - no free-floating move-up/down arrow buttons; tree drag IS the reorder affordance
-                  required_fields_shown: [nodeId, nodeKind, componentKey or htmlTag, parentNodeId, slotKey, orderIndex]
+                    - flow layout is the default; this panel IS the normal layout editing surface
+                  required_fields_shown: [nodeId, nodeKind, componentKey or htmlTag, parentNodeId, slotKey, orderIndex, layoutClassRefs]
                 design_inspector:
-                  purpose: edit all presentation properties of the selected canvas node
+                  purpose: edit presentation properties of the selected canvas node with live canvas preview
                   responsibilities:
                     - cssTokenRefs: color, background, border, radius, shadow via css-dictionary-ssot vocabulary
                     - responsiveTokenRefs: responsive breakpoint token overrides
                     - typography tokens: font family, size, weight, line-height from css-dictionary-ssot
-                    - spacing tokens: margin, padding from css-dictionary-ssot
-                    - layoutClassRefs: assign topology-layout-class-ssot vocabulary refs per node
-                    - inlineText: editable text content for display text and child text nodes
-                    - linkHref and linkTarget: for anchor (a) nodes and link-bearing components
+                    - spacing tokens: margin, padding, gap from css-dictionary-ssot
+                    - inlineText: editable text content — MUST reflect on center canvas immediately
+                    - linkHref and linkTarget: for anchor (a) nodes — MUST reflect on center canvas immediately
                     - reactionIntent: interaction presentation intent (hover, active, focus behaviors)
+                    - live_preview_contract: >
+                        design _tmp auto-save and center canvas rendering MUST stay in sync so authors
+                        see production-faithful output while typing or toggling tokens (within registry limits).
+                    - layoutClassRefs on containers: may be surfaced here as read-only or delegated to layer_inspector; container layout class assignment authority is layer_inspector
                     - no-selection state: shows placeholder "ノードを選択してください" — no empty panel
                   style_vocabulary_authority_ref: docs/design/css-dictionary-ssot.yaml
                   layout_class_authority_ref: docs/design/topology-layout-class-ssot.yaml
@@ -496,6 +568,9 @@ admin_console_workflow_ssot:
             - wireframe rectangles or abstract placeholder boxes as the canvas rendering primitive
             - visual_view as a separate surface (canvas IS the preview)
             - component_design_editor as a separate surface (design_inspector IS the design surface)
+            - position_absolute_as_default_dom_projection_for_layout_patch_nodes
+            - canvas_free_drag_coordinate_placement_as_primary_layout_authoring
+            - treating_x_y_as_padding_or_flow_offset
             - raw className, raw tailwind, or inline style as the normal authoring path
             - frontend direct DB write
             - non-package roots for layout or design authoring

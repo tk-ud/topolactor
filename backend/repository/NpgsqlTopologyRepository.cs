@@ -398,10 +398,26 @@ public class NpgsqlTopologyRepository : TopologyRepository
                     ? xv.GetDouble() : 0.0;
                 var y = node.TryGetProperty("y", out var yv) && yv.ValueKind == JsonValueKind.Number
                     ? yv.GetDouble() : 0.0;
-                var width = node.TryGetProperty("width", out var wv) && wv.ValueKind == JsonValueKind.Number
-                    ? wv.GetDouble() : 0.0;
-                var height = node.TryGetProperty("height", out var hv) && hv.ValueKind == JsonValueKind.Number
-                    ? hv.GetDouble() : 0.0;
+                object? width = null;
+                if (node.TryGetProperty("width", out var wv))
+                {
+                    width = wv.ValueKind switch
+                    {
+                        JsonValueKind.Number => wv.GetDouble(),
+                        JsonValueKind.String => wv.GetString(),
+                        _ => null
+                    };
+                }
+                object? height = null;
+                if (node.TryGetProperty("height", out var hv))
+                {
+                    height = hv.ValueKind switch
+                    {
+                        JsonValueKind.Number => hv.GetDouble(),
+                        JsonValueKind.String => hv.GetString(),
+                        _ => null
+                    };
+                }
 
                 IReadOnlyList<string>? layoutClassRefs = null;
                 if (node.TryGetProperty("layoutClassRefs", out var lcrEl) && lcrEl.ValueKind == JsonValueKind.Array)
