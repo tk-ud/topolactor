@@ -13,9 +13,11 @@
 
 import {
   assertEquals,
+  assertExists,
   assertRejects,
   assertThrows,
 } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { COMPONENT_CATALOG_ENTRIES } from "../components/catalog.ts";
 import {
   buildMdTranslationAuthoringSeedCandidate,
   buildPlaceholderSchemaFromMarkdown,
@@ -840,7 +842,7 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
   const catalogSource = await Deno.readTextFile(
     "frontend/components/catalog.ts",
   );
-  // Catalog notes must explicitly state md_viewer does not hold these authorities
+  // Catalog notes must explicitly state md_viewer does not hold these authorities (text check on notes field)
   assertEquals(
     catalogSource.includes("active topology authority"),
     true,
@@ -856,13 +858,17 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
     true,
     "catalog notes must explicitly deny saved view authority for md_viewer",
   );
-  // md_viewer must not be marked as runtimeConnected:true (no topology authority)
-  const mdViewerEntryMatch = catalogSource.match(
-    /componentKey: "md_viewer\.projection"[\s\S]*?runtimeConnected: (true|false)/,
+  // Object-level check: md_viewer.projection must have runtimeConnected:false.
+  // Source regex is avoided because COMPONENT_TEMPLATE_CATALOG_IDENTITIES also contains
+  // componentKey:"md_viewer.projection" without runtimeConnected, causing regex to hit
+  // the next runtimeConnected in the file (button.primitive:true).
+  const mdViewerEntry = COMPONENT_CATALOG_ENTRIES.find(
+    (c) => c.componentKey === "md_viewer.projection",
   );
+  assertExists(mdViewerEntry, "md_viewer.projection must exist in COMPONENT_CATALOG_ENTRIES");
   assertEquals(
-    mdViewerEntryMatch?.[1],
-    "false",
+    mdViewerEntry.runtimeConnected,
+    false,
     "md_viewer.projection must have runtimeConnected:false (no runtime topology authority)",
   );
 });
@@ -885,33 +891,54 @@ Deno.test("/admin/team-dashboard is the primary placement for saved markdown vie
     true,
     "SSOT must declare /admin/team-dashboard as the preferred entry surface",
   );
-  // SSOT must NOT list UIBuilder preset_ecosystem as a current implemented surface
+  // SSOT implemented: block must NOT list UIBuilder as an entry surface.
+  // Check only the implemented: block to avoid false-positive on the removed: history entry.
+  const implementedBlock = ssotSource.match(
+    /implemented:\s*([\s\S]*?)(?=\s{6}removed:|\s{6}primary_ui:|$)/,
+  )?.[1] ?? "";
   assertEquals(
-    ssotSource.includes("/admin/ui-builder preset_ecosystem md_viewer child surface"),
+    implementedBlock.includes("ui-builder"),
     false,
-    "SSOT must not list UIBuilder preset_ecosystem as an implemented entry surface",
+    "SSOT implemented entry surface block must not list UIBuilder (removed entry belongs in removed: block)",
   );
 });
 
-Deno.test("md_viewer.projection has dashboard_placement_candidate tag and is NOT in registrationRequired bucket catalog", async () => {
-  const catalogSource = await Deno.readTextFile("frontend/components/catalog.ts");
+Deno.test("md_viewer.projection has dashboard_placement_candidate tag and is NOT in registrationRequired bucket catalog", () => {
+  // Object-level check: source regex is avoided because COMPONENT_TEMPLATE_CATALOG_IDENTITIES
+  // also has componentKey:"md_viewer.projection" without capabilityTags/registrationRequired,
+  // causing block-regex to capture only the identity entry (no tags).
+  const mdViewerEntry = COMPONENT_CATALOG_ENTRIES.find(
+    (c) => c.componentKey === "md_viewer.projection",
+  );
+  assertExists(mdViewerEntry, "md_viewer.projection must exist in COMPONENT_CATALOG_ENTRIES");
 
-  // md_viewer.projection must have dashboard_placement_candidate in its capabilityTags
-  const mdViewerBlock = catalogSource.match(
-    /componentKey: "md_viewer\.projection"[\s\S]*?(?=componentKey:|$)/,
-  )?.[0] ?? "";
   assertEquals(
-    mdViewerBlock.includes("dashboard_placement_candidate"),
+    mdViewerEntry.capabilityTags.includes("dashboard_placement_candidate"),
     true,
     "md_viewer.projection capabilityTags must include dashboard_placement_candidate",
   );
-
-  // md_viewer.projection must have registrationRequired: false (not a DB bucket candidate)
-  const mdViewerRegRequired = mdViewerBlock.match(/registrationRequired: (true|false)/)?.[1];
   assertEquals(
-    mdViewerRegRequired,
-    "false",
+    mdViewerEntry.registrationRequired,
+    false,
     "md_viewer.projection must have registrationRequired:false — not a DB bucket registration candidate",
+  );
+
+  // Must NOT appear in the registrationRequired:true bucket catalog
+  const bucketCatalog = COMPONENT_CATALOG_ENTRIES.filter((c) => c.registrationRequired);
+  assertEquals(
+    bucketCatalog.some((c) => c.componentKey === "md_viewer.projection"),
+    false,
+    "md_viewer.projection must not be in registrationRequired:true bucket catalog",
+  );
+
+  // Must appear in the dashboard_placement_candidate set
+  const dashboardCandidates = COMPONENT_CATALOG_ENTRIES.filter((c) =>
+    c.capabilityTags.includes("dashboard_placement_candidate")
+  );
+  assertEquals(
+    dashboardCandidates.some((c) => c.componentKey === "md_viewer.projection"),
+    true,
+    "md_viewer.projection must appear in dashboard_placement_candidate filtered entries",
   );
 });
 
