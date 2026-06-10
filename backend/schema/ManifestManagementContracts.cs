@@ -177,6 +177,7 @@ public record AdminManifestAssignScreenDataShapeRequestDto(
     [property: JsonPropertyName("columns")] IReadOnlyList<AdminManifestScreenColumnDto>? Columns,
     [property: JsonPropertyName("screenOperationKind")] string? ScreenOperationKind,
     [property: JsonPropertyName("screenOperationKinds")] IReadOnlyList<string>? ScreenOperationKinds,
+    [property: JsonPropertyName("topologySystemName")] string? TopologySystemName,
     [property: JsonPropertyName("userFacingTopologyLabel")] string? UserFacingTopologyLabel,
     [property: JsonPropertyName("relationIntents")] IReadOnlyList<AdminManifestRelationIntentDto>? RelationIntents,
     [property: JsonPropertyName("operationEntityBindings")] IReadOnlyList<AdminManifestOperationEntityBindingDto>? OperationEntityBindings,

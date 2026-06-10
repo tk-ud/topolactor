@@ -2537,6 +2537,14 @@ public partial class AdminRuntime
                 return (null, relationErrors[0]);
         }
 
+        var topologySystemName = request.TopologySystemName?.Trim();
+        if (!string.IsNullOrWhiteSpace(topologySystemName))
+        {
+            if (!System.Text.RegularExpressions.Regex.IsMatch(topologySystemName, @"^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+                return (null, new ValidationError("INVALID_TOPOLOGY_SYSTEM_NAME",
+                    "topologySystemName は英小文字・数字・ハイフンのみで、先頭・末尾・連続ハイフン禁止です。"));
+        }
+
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
             ? request.TableRef.Trim()
             : request.DbTableName?.Trim();
@@ -2571,6 +2579,7 @@ public partial class AdminRuntime
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
             screenOperationKind = primaryOp,
             screenOperationKinds = operationKinds,
+            topologySystemName = topologySystemName,
             userFacingTopologyLabel = request.UserFacingTopologyLabel,
             relationIntents,
             operationEntityBindings = request.OperationEntityBindings ??

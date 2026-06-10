@@ -562,6 +562,60 @@ public class AdminRuntimeManifestManagementTests
     }
 
     [Fact]
+    public async Task AssignScreenDataShape_Persists_TopologySystemName()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            topologySystemName = "customer-management",
+            userFacingTopologyLabel = "顧客管理",
+        });
+
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+        var rawJson = data.Value.GetProperty("topologyRawJson").GetString() ?? "[]";
+        var entries = System.Text.Json.JsonSerializer.Deserialize<JsonElement[]>(rawJson)!;
+        var shapeEntry = entries.First(e =>
+            e.TryGetProperty("type", out var t) && t.GetString() == "screen_data_shape");
+        Assert.Equal("customer-management", shapeEntry.GetProperty("topologySystemName").GetString());
+        Assert.Equal("顧客管理", shapeEntry.GetProperty("userFacingTopologyLabel").GetString());
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Rejects_Invalid_TopologySystemName()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        foreach (var invalid in new[] { "顧客管理", "-foo", "foo-", "foo--bar", "Foo Bar", "FOO" })
+        {
+            var payload = JsonSerializer.SerializeToElement(new
+            {
+                manifestId = manifestId.ToString(),
+                topologySystemName = invalid,
+            });
+            var (_, error) = await runtime.ExecuteDataAsync(
+                new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+            Assert.NotNull(error);
+            Assert.Equal("INVALID_TOPOLOGY_SYSTEM_NAME", error!.Code);
+        }
+    }
+
+    [Fact]
     public async Task EnumDictionary_ListGroups_Returns_Seeded_Group()
     {
         var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();

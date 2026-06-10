@@ -411,7 +411,9 @@ export type AdminManifestScreenDataShapeInput = {
   screenOperationKind?: string;
   /** Multi-select operation kinds (SSOT step 3). */
   screenOperationKinds?: string[];
-  /** User-facing topology label (SSOT step 1 minimum). */
+  /** Topology system name: kebab-case identifier, SSOT for route/table/UI Builder key derivation. Required at step 1. */
+  topologySystemName?: string;
+  /** User-facing topology label (optional display name; not used for route/table/key generation). */
   userFacingTopologyLabel?: string;
   /** Structured relation/join intents for draft data-shape only (not created-manifest relations). */
   relationIntents?: RelationIntentInput[];
