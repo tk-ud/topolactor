@@ -7,6 +7,15 @@ import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentReg
 import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
 import { resolvePropBindings } from "./propBindingResolver.ts";
 import { mergeCatalogPropsWithComponentDesign } from "./mergeComponentDesignProps.ts";
+import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
+
+export type RenderEmissionOptions = {
+  /**
+   * Read-only projection (/demo draft preview). Uses inert event bindings and
+   * relaxed factory checks — same contract as UI Builder canvas preview.
+   */
+  previewMode?: boolean;
+};
 
 export type ComponentSpec = {
   componentId?: string;
@@ -264,7 +273,9 @@ export function projectionFromEmission(
 export function renderEmission(
   emission: Emission,
   registry: ComponentRegistry,
+  options?: RenderEmissionOptions,
 ): ComponentSpec[] {
+  const previewMode = options?.previewMode === true;
   // Layout-aware path: when layoutId is set, layoutNodes must be present.
   // Absent layoutNodes with a present layoutId is an explicit broken-layout failure —
   // no silent fallback to flat componentIds rendering.
@@ -340,9 +351,11 @@ export function renderEmission(
           };
         }
 
-        // navigation wiring: frontend-local route navigation binding; other wiring kinds: backend dispatch spec.
+        // Preview surfaces: inert bindings (no wiring required). Product: wiring-backed dispatch.
         const nodeWiringKind = node.wiringKind ?? "";
-        const componentEventBinding = isNavigationWiringKind(nodeWiringKind)
+        const componentEventBinding = previewMode
+          ? buildPreviewInertEventBinding()
+          : isNavigationWiringKind(nodeWiringKind)
           ? buildRouteNavigationEventBinding(node.targetRef)
           : buildCatalogComponentEventBinding(buildRuntimeDispatchSpec(node));
 
@@ -412,7 +425,9 @@ export function renderEmission(
           componentId: node.componentId,
           componentType: node.componentKind,
           def: {},
-          runtimeSpec: adapted.value,
+          runtimeSpec: previewMode
+            ? { ...adapted.value, previewMode: true }
+            : adapted.value,
           cssTokenRefs: design?.cssTokenRefs,
           ...layoutFields,
         };

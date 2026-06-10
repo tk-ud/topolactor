@@ -7,6 +7,7 @@ import {
   hasRuntimeComponentFactory,
   resolveRuntimeComponentFactory,
 } from "./runtimeComponentRegistry.ts";
+import { buildPreviewInertEventBinding } from "./previewInertEventBinding.ts";
 
 export type LayoutPreviewNodeInput = {
   nodeId: string;
@@ -83,9 +84,6 @@ export function normalizeLayoutPreviewComponentKey(componentKey: string): string
 export function getLayoutPreviewDefaultSize(componentKind: string): LayoutPreviewDefaultSize {
   return LAYOUT_PREVIEW_DEFAULT_SIZES[componentKind] ?? { width: 160, height: 72 };
 }
-
-/** Inert binding shape for previewMode factory render (no runtime dispatch). */
-const PREVIEW_INERT_CLICK_BINDING = { eventType: "click" as const, payload: {} };
 
 /** Resolve componentKind from catalog entry or registry key. */
 export function resolveComponentKindForLayoutPreview(
@@ -233,15 +231,7 @@ export function buildLayoutPreviewRuntimeSpec(input: {
         normalizedKey,
         input.design,
       ),
-      eventBinding: {
-        click: PREVIEW_INERT_CLICK_BINDING,
-        change: { eventType: "change", payload: {} },
-        select: { eventType: "select", payload: {} },
-        submit: { eventType: "submit", payload: {} },
-        focus: { eventType: "focus", payload: {} },
-        blur: { eventType: "blur", payload: {} },
-        toggle: { eventType: "toggle", payload: {} },
-      },
+      eventBinding: buildPreviewInertEventBinding(),
       previewMode: true,
     },
   };

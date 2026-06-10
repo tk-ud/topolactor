@@ -222,7 +222,7 @@ export default function DraftPreviewShell(): JSX.Element {
           initialDataRows: preview.initialDataRows,
         });
         const specs = emission
-          ? renderEmission(emission, defaultComponentRegistry)
+          ? renderEmission(emission, defaultComponentRegistry, { previewMode: true })
           : [];
         const sampleRow = preview.initialDataRows[0];
         const showTopologyIntent = preview.previewMode === "layout_and_topology_intent" && sampleRow;

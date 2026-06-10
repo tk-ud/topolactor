@@ -32,7 +32,7 @@ Deno.test("draftPreviewResultToEmission: maps design → componentDesign for ren
   assertEquals(emission?.layoutNodes?.[0]?.componentDesign?.inlineText, "従業員管理");
   assertEquals(emission?.layoutNodes?.[0]?.componentDesign?.cssTokenRefs, ["color.primary"]);
 
-  const specs = renderEmission(emission!, defaultComponentRegistry);
+  const specs = renderEmission(emission!, defaultComponentRegistry, { previewMode: true });
   const h1 = specs.find((s) => s.nodeId === "n-h1");
   assertEquals(h1?.inlineText, "従業員管理");
   assertEquals(h1?.cssTokenRefs, ["color.primary"]);
@@ -48,6 +48,34 @@ Deno.test("draftPreviewResultToEmission: maps first initialDataRows entry to emi
     initialDataRows: [{ name: "Alice" }, { name: "Bob" }],
   });
   assertEquals(emission?.data, { name: "Alice" });
+});
+
+Deno.test("draftPreview renderEmission previewMode: input/button without wiring render without binding errors", () => {
+  const emission = draftPreviewResultToEmission({
+    success: true,
+    layoutId: "layout-1",
+    layoutNodes: [
+      {
+        nodeId: "n-input",
+        nodeKind: "catalog_component",
+        componentKey: "input.primitive",
+        componentKind: "form_input/input",
+        componentId: "comp-input",
+        orderIndex: 0,
+      },
+      {
+        nodeId: "n-btn",
+        nodeKind: "catalog_component",
+        componentKey: "button.primitive",
+        componentKind: "action/button",
+        componentId: "comp-btn",
+        orderIndex: 1,
+        design: { inlineText: "検索" },
+      },
+    ],
+  });
+  const specs = renderEmission(emission!, defaultComponentRegistry, { previewMode: true });
+  assertEquals(specs.every((s) => s.componentType !== "error"), true);
 });
 
 Deno.test("draftPreviewResultToEmission: returns null when no nodes", () => {
