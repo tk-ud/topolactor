@@ -1061,7 +1061,9 @@ Deno.test("resolveNodeWrapperPreviewClassName: adds preview_state when selected"
 
 import {
   UX_DESIGN_EDITOR_SURFACE,
+  UX_DESIGN_INSPECTOR_SECTION,
   UX_LAYOUT_EDITOR_SURFACE,
+  UX_LAYOUT_INSPECTOR_SECTION,
   UX_UI_BUILDER_TAB_LABELS,
 } from "../content/adminUxTerms.ts";
 
@@ -1086,6 +1088,8 @@ Deno.test("UX_UI_BUILDER_TAB_LABELS: exposes canvas workspace docked panels, not
 // ─── canvas workspace: separate layout/design/visual tab が存在しないこと ─────
 
 import {
+  UI_BUILDER_DRAWER_SHELL_KIND,
+  UI_BUILDER_DRAWER_STATE_BOUNDARY,
   UI_BUILDER_HAS_SEPARATE_TABS,
   UI_BUILDER_WORKSPACE_MODE,
 } from "../islands/UiBuilderAdmin.tsx";
@@ -1100,6 +1104,69 @@ Deno.test("canvas workspace: separate layout/design/visual tabs do NOT exist", (
   // The old separate tabs (layout, design, visual) have been replaced with a unified workspace.
   assertEquals(UI_BUILDER_HAS_SEPARATE_TABS, false);
 });
+
+Deno.test("canvas workspace drawer shell: same workspace display-density chrome, not separate surface", async () => {
+  assertEquals(UI_BUILDER_DRAWER_SHELL_KIND, "same_workspace_display_shell");
+  assertEquals(UI_BUILDER_WORKSPACE_MODE, "canvas_workspace_v2");
+  assertFalse(UI_BUILDER_HAS_SEPARATE_TABS);
+
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(source.includes('data-ui-builder-drawer-shell="left"'));
+  assert(source.includes('data-ui-builder-drawer-shell="right"'));
+  assertFalse(source.includes("/admin/ui-builder/drawer"));
+});
+
+Deno.test("canvas workspace drawer state: frontend-local only and excluded from persistence payloads", () => {
+  assertEquals(UI_BUILDER_DRAWER_STATE_BOUNDARY, "frontend_local_state_only");
+
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([sampleNode]));
+  assertEquals(parsed.leftDrawerOpen, undefined);
+  assertEquals(parsed.rightDrawerOpen, undefined);
+  assertEquals(parsed.drawerState, undefined);
+
+  const componentStyleDesign = { cssTokenRefs: ["color.action.primary.background"] };
+  const packageWiring = { targetSurface: "route_navigation" };
+  assertEquals("drawerState" in componentStyleDesign, false);
+  assertEquals("drawerState" in packageWiring, false);
+});
+
+Deno.test("canvas workspace drawer shell: inspector and wiring responsibility names remain unchanged", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(source.includes("<CanvasInspector"));
+  assert(source.includes("<PackageDesignPanel"));
+  assert(source.includes(UX_LAYOUT_INSPECTOR_SECTION));
+  assert(source.includes(UX_DESIGN_INSPECTOR_SECTION));
+  assert(source.includes("パッケージ配線"));
+});
+
+Deno.test("canvas workspace drawer shell: canvas-first default keeps drawers closed", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(source.includes("const [leftDrawerOpen, setLeftDrawerOpen] = useState(false)"));
+  assert(source.includes("const [rightDrawerOpen, setRightDrawerOpen] = useState(false)"));
+  assert(source.includes("leftDrawerOpen"));
+  assert(source.includes("rightDrawerOpen"));
+  assert(source.includes("左Drawerを開く"));
+  assert(source.includes("右Drawerを開く"));
+  assert(source.includes("左Drawerを閉じる"));
+  assert(source.includes("右Drawerを閉じる"));
+});
+Deno.test("canvas workspace drawer shell: selecting a canvas node opens right inspector drawer", async () => {
+  const source = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  assert(source.includes("setRightDrawerOpen(true)"));
+  assert(source.includes("title={`${UX_LAYOUT_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}"));
+  assert(source.includes("defaultOpen={true}"));
+  assert(source.includes("title={`${UX_DESIGN_INSPECTOR_SECTION} — ${friendlyNodeLabel(selectedNode)}`}"));
+  assert(source.includes("defaultOpen={false}"));
+});
+
 
 Deno.test("canvas workspace: preview remains inline canvas route, not modal", async () => {
   const source = await Deno.readTextFile(
