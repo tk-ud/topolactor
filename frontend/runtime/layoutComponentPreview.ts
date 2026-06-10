@@ -53,11 +53,26 @@ const LAYOUT_PREVIEW_DEFAULT_SIZES: Record<string, LayoutPreviewDefaultSize> = {
   "data_display/table": { width: 320, height: 180 },
   "data_display/data_grid": { width: 320, height: 180 },
   "data_display/list": { width: 260, height: 140 },
-  "data_display/md_viewer": { width: 320, height: 200 },
+  "data_display/md_viewer": { width: 320, height: 120 },
   "form_input/input": { width: 220, height: 44 },
   "form_input/textarea": { width: 260, height: 96 },
+  "form_input/textarea_template": { width: 260, height: 96 },
   "form_input/search_input": { width: 240, height: 44 },
+  "form_input/select": { width: 220, height: 56 },
+  "form_input/checkbox": { width: 180, height: 36 },
   "form_input/form_field": { width: 240, height: 72 },
+  "display/badge": { width: 100, height: 32 },
+  "display/status_badge": { width: 120, height: 32 },
+  "display/alert": { width: 300, height: 72 },
+  "feedback/loading": { width: 200, height: 56 },
+  "feedback/empty": { width: 240, height: 100 },
+  "feedback/error": { width: 240, height: 100 },
+  "data_display/json": { width: 280, height: 160 },
+  "shell/admin_page": { width: 360, height: 220 },
+  "shell/admin_section": { width: 300, height: 140 },
+  "validation/result": { width: 300, height: 160 },
+  "disclosure/tabs": { width: 320, height: 120 },
+  "data_display/tree": { width: 220, height: 160 },
   "layout/box": { width: 180, height: 96 },
   "disclosure_structure/panel": { width: 240, height: 140 },
   "disclosure_structure/section": { width: 280, height: 160 },
@@ -192,6 +207,62 @@ export function buildLayoutPreviewPlaceholderProps(
       return { "aria-label": `${shortLabel} container` };
     case "form_input/form_field":
       return { data: { label: "フィールド", help: "プレビュー" } };
+    case "form_input/select":
+      return {
+        data: {
+          value: "",
+          options: [
+            { value: "a", label: inlineText || "選択肢 A" },
+            { value: "b", label: "選択肢 B" },
+          ],
+          placeholder: "選択してください",
+        },
+      };
+    case "form_input/checkbox":
+      return { data: { checked: false, label: inlineText || "チェックボックス" } };
+    case "form_input/textarea_template":
+      return { data: { value: "", placeholder: inlineText || "プレビュー" } };
+    case "display/badge":
+      return { data: { label: inlineText || shortLabel || "Badge", tone: "info" } };
+    case "display/status_badge":
+      return { data: { label: inlineText || shortLabel || "Status", tone: "neutral" } };
+    case "display/alert":
+      return { data: { message: inlineText || "アラートメッセージ", tone: "info" } };
+    case "feedback/loading":
+      return { data: { message: inlineText || "Loading..." } };
+    case "feedback/empty":
+      return { data: { message: inlineText || "データがありません", description: "プレビュー" } };
+    case "feedback/error":
+      return { data: { message: inlineText || "エラーが発生しました", description: "プレビュー" } };
+    case "data_display/json":
+      return { data: { value: { key: "value", number: 42, flag: true } } };
+    case "shell/admin_page":
+      return { data: { title: inlineText || shortLabel || "Admin Page", description: "プレビュー" } };
+    case "shell/admin_section":
+      return { data: { title: inlineText || shortLabel || "Section", description: "プレビュー" } };
+    case "validation/result":
+      return { data: { title: inlineText || "検証結果", result: null } };
+    case "disclosure/tabs":
+      return {
+        data: {
+          items: [
+            { key: "tab1", label: inlineText || "タブ 1" },
+            { key: "tab2", label: "タブ 2" },
+          ],
+          activeKey: "tab1",
+        },
+      };
+    case "data_display/tree":
+      return {
+        data: {
+          nodes: [
+            { key: "n1", label: inlineText || "ノード 1", children: [{ key: "n1-1", label: "子ノード" }] },
+            { key: "n2", label: "ノード 2" },
+          ],
+        },
+      };
+    case "data_display/md_viewer":
+      return { title: inlineText || shortLabel || "Markdown View" };
     default:
       return {
         title: shortLabel,

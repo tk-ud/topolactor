@@ -89,6 +89,20 @@ import { NormalizeAddressCandidate } from "../components/NormalizeAddressCandida
 import { LookupCandidateConfirmPanel } from "../components/LookupCandidateConfirmPanel.tsx";
 import { BulkImportCandidatePanel } from "../components/BulkImportCandidatePanel.tsx";
 import { DocumentCanvasTemplateEditor } from "../components/DocumentCanvasTemplateEditor.tsx";
+import { Select } from "../components/Select.tsx";
+import { Checkbox } from "../components/Checkbox.tsx";
+import { Badge, StatusBadge } from "../components/Badge.tsx";
+import { Alert } from "../components/Alert.tsx";
+import { LoadingState } from "../components/LoadingState.tsx";
+import { EmptyState } from "../components/EmptyState.tsx";
+import { ErrorState } from "../components/ErrorState.tsx";
+import { JsonViewer } from "../components/JsonViewer.tsx";
+import { AdminPageShell } from "../components/AdminPageShell.tsx";
+import { AdminSection } from "../components/AdminSection.tsx";
+import { ValidationResultPanel } from "../components/ValidationResultPanel.tsx";
+import { Textarea } from "../components/Textarea.tsx";
+import { Tabs } from "../components/Tabs.tsx";
+import { Tree } from "../components/Tree.tsx";
 import Box from "../components/Box.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
@@ -1962,6 +1976,377 @@ function documentCanvasTemplateEditorFactory(spec: RuntimeComponentSpec): Render
   };
 }
 
+function selectFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  const rawOptions = Array.isArray(data.options) ? data.options : [];
+  const options = rawOptions
+    .filter((o): o is { label: string; value: string } =>
+      typeof o === "object" && o !== null &&
+      typeof (o as Record<string, unknown>).value === "string"
+    )
+    .map((o) => ({
+      label: typeof o.label === "string" ? o.label : o.value,
+      value: o.value,
+      disabled: (o as Record<string, unknown>).disabled === true,
+    }));
+  return {
+    ok: true,
+    node: h(Select, {
+      value: typeof data.value === "string" ? data.value : "",
+      options,
+      placeholder: data.placeholder as string | undefined,
+      label: data.label as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      required: data.required as boolean | undefined,
+      error: data.error as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (value: string) => {
+        const r = emitBoundEvent(spec, "change", { value });
+        if (!r.ok) throw new Error(r.error);
+      },
+      onFocus: spec.eventBinding.focus
+        ? () => { const r = emitBoundEvent(spec, "focus", {}); if (!r.ok) throw new Error(r.error); }
+        : undefined,
+      onBlur: spec.eventBinding.blur
+        ? () => { const r = emitBoundEvent(spec, "blur", {}); if (!r.ok) throw new Error(r.error); }
+        : undefined,
+    }),
+  };
+}
+
+function checkboxFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  return {
+    ok: true,
+    node: h(Checkbox, {
+      checked: typeof data.checked === "boolean" ? data.checked : false,
+      label: data.label as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      required: data.required as boolean | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (checked: boolean) => {
+        const r = emitBoundEvent(spec, "change", { checked });
+        if (!r.ok) throw new Error(r.error);
+      },
+    }),
+  };
+}
+
+function badgeFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const label = typeof data.label === "string" ? data.label : "badge";
+  const rawTone = data.tone;
+  const tone = (rawTone === "neutral" || rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "neutral";
+  return {
+    ok: true,
+    node: h(Badge, {
+      label,
+      tone,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function statusBadgeFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const label = typeof data.label === "string" ? data.label : "";
+  const rawTone = data.tone;
+  const tone = (rawTone === "neutral" || rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "neutral";
+  return {
+    ok: true,
+    node: h(StatusBadge, {
+      label,
+      tone,
+      status: data.status as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function alertFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const message = typeof data.message === "string" ? data.message : "Alert";
+  const rawTone = data.tone;
+  const tone = (rawTone === "info" || rawTone === "success" || rawTone === "warning" || rawTone === "error")
+    ? rawTone : "info";
+  return {
+    ok: true,
+    node: h(Alert, {
+      message,
+      tone,
+      title: data.title as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function loadingStateFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(LoadingState, {
+      message: data.message as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function emptyStateFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(EmptyState, {
+      message: data.message as string | undefined,
+      description: data.description as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function errorStateFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(ErrorState, {
+      errorCode: data.errorCode as string | undefined,
+      message: data.message as string | undefined,
+      description: data.description as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function jsonViewerFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const value = "value" in data ? data.value : data;
+  return {
+    ok: true,
+    node: h(JsonViewer, {
+      value,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function adminPageShellFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(AdminPageShell, {
+      title: typeof data.title === "string" ? data.title : "Admin Page",
+      description: data.description as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      children: h("div", { style: "color:#888;font-size:0.85rem;padding:8px" }, "（コンテンツ）"),
+    }),
+  };
+}
+
+function adminSectionFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(AdminSection, {
+      title: data.title as string | undefined,
+      description: data.description as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      children: h("div", { style: "color:#888;font-size:0.85rem;padding:4px" }, "（コンテンツ）"),
+    }),
+  };
+}
+
+function validationResultPanelFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  return {
+    ok: true,
+    node: h(ValidationResultPanel, {
+      title: data.title as string | undefined,
+      result: data.result as Parameters<typeof ValidationResultPanel>[0]["result"] ?? null,
+      className: spec.className,
+      design: spec.design ?? {},
+    }),
+  };
+}
+
+function textareaTemplateFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const bindingCheck = requireBinding(spec, "change");
+  if (!bindingCheck.ok) return bindingCheck;
+  return {
+    ok: true,
+    node: h(Textarea, {
+      value: typeof data.value === "string" ? data.value : "",
+      placeholder: data.placeholder as string | undefined,
+      label: data.label as string | undefined,
+      disabled: data.disabled as boolean | undefined,
+      required: data.required as boolean | undefined,
+      rows: typeof data.rows === "number" ? data.rows : undefined,
+      error: data.error as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onChange: (value: string) => {
+        const r = emitBoundEvent(spec, "change", { value });
+        if (!r.ok) throw new Error(r.error);
+      },
+      onFocus: spec.eventBinding.focus
+        ? () => { const r = emitBoundEvent(spec, "focus", {}); if (!r.ok) throw new Error(r.error); }
+        : undefined,
+      onBlur: spec.eventBinding.blur
+        ? () => { const r = emitBoundEvent(spec, "blur", {}); if (!r.ok) throw new Error(r.error); }
+        : undefined,
+    }),
+  };
+}
+
+function tabsFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  const rawItems = Array.isArray(data.items) ? data.items : [];
+  const items = rawItems
+    .filter((it): it is { key: string; label: string } =>
+      typeof it === "object" && it !== null &&
+      typeof (it as Record<string, unknown>).key === "string" &&
+      typeof (it as Record<string, unknown>).label === "string"
+    )
+    .map((it) => ({
+      key: it.key,
+      label: it.label,
+      disabled: (it as Record<string, unknown>).disabled === true,
+      children: h("div", null, ""),
+    }));
+  const previewItems = items.length > 0 ? items : [
+    { key: "tab1", label: "タブ 1", children: h("div", null, "") },
+    { key: "tab2", label: "タブ 2", children: h("div", null, "") },
+  ];
+  const activeKey = typeof data.activeKey === "string" && previewItems.some((it) => it.key === data.activeKey)
+    ? (data.activeKey as string)
+    : previewItems[0].key;
+  return {
+    ok: true,
+    node: h(Tabs, {
+      items: previewItems,
+      activeKey,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: spec.eventBinding.select
+        ? (key: string) => {
+          const r = emitBoundEvent(spec, "select", { key });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : () => {},
+    }),
+  };
+}
+
+function treeFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
+    ? props.data as Record<string, unknown>
+    : props;
+  type TreeNodeInput = { key: string; label: string; children?: unknown[]; disabled?: boolean };
+  function parseNode(n: unknown): TreeNodeInput | null {
+    if (typeof n !== "object" || n === null) return null;
+    const obj = n as Record<string, unknown>;
+    if (typeof obj.key !== "string" || typeof obj.label !== "string") return null;
+    return { key: obj.key, label: obj.label, children: Array.isArray(obj.children) ? obj.children : undefined, disabled: obj.disabled === true };
+  }
+  const rawNodes = Array.isArray(data.nodes) ? data.nodes : [];
+  const nodes = rawNodes.map(parseNode).filter((n): n is TreeNodeInput => n !== null);
+  const previewNodes = nodes.length > 0 ? nodes : [
+    { key: "node1", label: "ノード 1", children: [{ key: "node1-1", label: "子ノード 1-1" }] },
+    { key: "node2", label: "ノード 2" },
+  ];
+  return {
+    ok: true,
+    node: h(Tree, {
+      nodes: previewNodes as Parameters<typeof Tree>[0]["nodes"],
+      selectedKey: data.selectedKey as string | undefined,
+      className: spec.className,
+      design: spec.design ?? {},
+      onSelect: spec.eventBinding.select
+        ? (key: string) => {
+          const r = emitBoundEvent(spec, "select", { key });
+          if (!r.ok) throw new Error(r.error);
+        }
+        : undefined,
+    }),
+  };
+}
+
+function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
+  const props = spec.props;
+  const title = typeof props.title === "string" ? props.title
+    : (typeof (props.data as Record<string, unknown>)?.title === "string" ? (props.data as Record<string, unknown>).title as string : undefined);
+  return {
+    ok: true,
+    node: h("div", {
+      className: spec.className,
+      style: "border:1px solid #e0e0e0;border-radius:6px;padding:16px;font-family:monospace;background:#f8f8f8",
+      "data-component-kind": "data_display/md_viewer",
+    },
+      h("div", { style: "font-weight:600;color:#333;font-size:0.9rem;margin-bottom:6px" }, title ?? "Markdown View"),
+      h("div", { style: "color:#888;font-size:0.8rem" }, "（保存済み Markdown ビュープレビュー）"),
+    ),
+  };
+}
+
 function modalFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
   const data = (typeof props.data === "object" && props.data !== null && !Array.isArray(props.data))
@@ -2173,6 +2558,22 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["document_canvas/document_canvas_template_editor"], render: documentCanvasTemplateEditorFactory },
   { componentKinds: ["layout/box"], render: boxFactory },
   { componentKinds: ["disclosure/modal"], render: modalFactory },
+  { componentKinds: ["form_input/select"], render: selectFactory },
+  { componentKinds: ["form_input/checkbox"], render: checkboxFactory },
+  { componentKinds: ["display/badge"], render: badgeFactory },
+  { componentKinds: ["display/status_badge"], render: statusBadgeFactory },
+  { componentKinds: ["display/alert"], render: alertFactory },
+  { componentKinds: ["feedback/loading"], render: loadingStateFactory },
+  { componentKinds: ["feedback/empty"], render: emptyStateFactory },
+  { componentKinds: ["feedback/error"], render: errorStateFactory },
+  { componentKinds: ["data_display/json"], render: jsonViewerFactory },
+  { componentKinds: ["shell/admin_page"], render: adminPageShellFactory },
+  { componentKinds: ["shell/admin_section"], render: adminSectionFactory },
+  { componentKinds: ["validation/result"], render: validationResultPanelFactory },
+  { componentKinds: ["form_input/textarea_template"], render: textareaTemplateFactory },
+  { componentKinds: ["disclosure/tabs"], render: tabsFactory },
+  { componentKinds: ["data_display/tree"], render: treeFactory },
+  { componentKinds: ["data_display/md_viewer"], render: mdViewerPreviewFactory },
 ];
 
 export {
