@@ -47,12 +47,15 @@ import {
   resolveCanvasRootPreviewClassName,
   resolveNodeWrapperPreviewClassName,
 } from "../runtime/layoutClassPreviewUtils.ts";
-import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
+import { resolveCssTokenValue, resolveUnknownCssTokenRefs } from "../runtime/cssDictionary.ts";
 import {
+  enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
   renderLayoutComponentPreview,
   resolveComponentKindForLayoutPreview,
+  type LayoutPreviewNodeInput,
 } from "../runtime/layoutComponentPreview.ts";
+import { buildInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
 
@@ -1990,4 +1993,270 @@ Deno.test("layout inspector tabs: 3 tabs only (概要/ツリー/クラス) — n
   for (const removed of removedTabs) {
     assertFalse(expectedTabs.includes(removed), `${removed} must not be in layout inspector tabs`);
   }
+});
+
+// ─── LayoutPreviewNodeInput: tree structure fields ────────────────────────────
+// Defect 12 fix: parentNodeId / orderIndex / slotKey preserved from DraftNode
+// so LayoutVisualAuditCanvas.toFlowAuditNodes can reconstruct the flow tree.
+
+Deno.test("LayoutPreviewNodeInput: accepts parentNodeId, orderIndex, slotKey fields", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_001",
+    componentKey: "button.primitive",
+    x: 0,
+    y: 0,
+    width: 148,
+    height: 44,
+    parentNodeId: "node_parent",
+    orderIndex: 2,
+    slotKey: "header",
+  };
+  assertEquals(node.parentNodeId, "node_parent");
+  assertEquals(node.orderIndex, 2);
+  assertEquals(node.slotKey, "header");
+});
+
+Deno.test("LayoutPreviewNodeInput: parentNodeId=null is valid (root node)", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_root",
+    componentKey: "box.primitive",
+    x: 0,
+    y: 0,
+    width: 180,
+    height: 96,
+    parentNodeId: null,
+    orderIndex: 0,
+    slotKey: "",
+  };
+  assertEquals(node.parentNodeId, null);
+  assertEquals(node.orderIndex, 0);
+});
+
+Deno.test("LayoutPreviewNodeInput: tree fields are optional (backward-compat)", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_legacy",
+    componentKey: "card.primitive",
+    x: 10,
+    y: 20,
+    width: 240,
+    height: 152,
+  };
+  assertEquals(node.parentNodeId, undefined);
+  assertEquals(node.orderIndex, undefined);
+  assertEquals(node.slotKey, undefined);
+});
+
+Deno.test("enrichLayoutPreviewNodes: preserves parentNodeId, orderIndex, slotKey via spread", () => {
+  const input: LayoutPreviewNodeInput[] = [
+    {
+      nodeId: "node_child",
+      componentKey: "button.primitive",
+      x: 0,
+      y: 0,
+      width: 148,
+      height: 44,
+      parentNodeId: "node_parent",
+      orderIndex: 1,
+      slotKey: "footer",
+    },
+    {
+      nodeId: "node_parent",
+      componentKey: "box.primitive",
+      x: 0,
+      y: 0,
+      width: 180,
+      height: 96,
+      parentNodeId: null,
+      orderIndex: 0,
+      slotKey: "root",
+    },
+  ];
+  const enriched = enrichLayoutPreviewNodes(input, []);
+  const child = enriched.find((n) => n.nodeId === "node_child")!;
+  const parent = enriched.find((n) => n.nodeId === "node_parent")!;
+  assertEquals((child as LayoutPreviewNodeInput).parentNodeId, "node_parent");
+  assertEquals((child as LayoutPreviewNodeInput).orderIndex, 1);
+  assertEquals((child as LayoutPreviewNodeInput).slotKey, "footer");
+  assertEquals((parent as LayoutPreviewNodeInput).parentNodeId, null);
+  assertEquals((parent as LayoutPreviewNodeInput).orderIndex, 0);
+  assertEquals((parent as LayoutPreviewNodeInput).slotKey, "root");
+});
+
+// ─── cssTokenRefs canvas preview — Defect 3 & 10 ────────────────────────────
+
+Deno.test("buildInlineStyleFromCssTokenRefs: primary background token applied correctly", () => {
+  const style = buildInlineStyleFromCssTokenRefs(["color.action.primary.background"]);
+  assertEquals(style.background, "#0070f3");
+});
+
+Deno.test("buildInlineStyleFromCssTokenRefs: empty array produces empty style", () => {
+  const style = buildInlineStyleFromCssTokenRefs([]);
+  assertEquals(Object.keys(style).length, 0);
+});
+
+Deno.test("buildInlineStyleFromCssTokenRefs: multiple tokens produce merged style", () => {
+  const style = buildInlineStyleFromCssTokenRefs([
+    "color.action.primary.background",
+    "color.action.primary.text",
+    "radius.control.sm",
+  ]);
+  assertEquals(style.background, "#0070f3");
+  assertEquals(style.color, "#fff");
+  assertEquals(style["border-radius"], "4px");
+});
+
+// SSOT: silent_fallback_to_unknown_css_token is prohibited (css-dictionary-ssot.yaml).
+// Unknown tokens must be observable — not silently discarded.
+// resolveUnknownCssTokenRefs surfaces them so callers can warn/validate.
+Deno.test("resolveUnknownCssTokenRefs: unknown key is returned for explicit handling", () => {
+  const unknown = resolveUnknownCssTokenRefs([
+    "unknown.token.xyz",
+    "color.action.primary.background",
+  ]);
+  assertEquals(unknown, ["unknown.token.xyz"]);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: all-known refs returns empty array", () => {
+  const unknown = resolveUnknownCssTokenRefs([
+    "color.action.primary.background",
+    "radius.control.sm",
+  ]);
+  assertEquals(unknown.length, 0);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: empty input returns empty array", () => {
+  const unknown = resolveUnknownCssTokenRefs([]);
+  assertEquals(unknown.length, 0);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: all-unknown refs are all returned", () => {
+  const unknown = resolveUnknownCssTokenRefs(["no.such.token", "also.unknown"]);
+  assertEquals(unknown, ["no.such.token", "also.unknown"]);
+});
+
+// buildInlineStyleFromCssTokenRefs still applies known tokens even when unknowns are present.
+// The caller is responsible for surfacing the unknown refs via resolveUnknownCssTokenRefs.
+Deno.test("buildInlineStyleFromCssTokenRefs: known tokens applied even when mixed with unknowns", () => {
+  const style = buildInlineStyleFromCssTokenRefs([
+    "unknown.token.xyz",
+    "color.action.primary.background",
+  ]);
+  assertEquals(style.background, "#0070f3");
+  assertFalse("unknown" in style);
+});
+
+// ─── D3/D10 regression: cssTokenRefs preserved across inlineText/link edits ─
+
+import { buildInlineStyleFromCssTokenRefs as _buildStyle } from "../runtime/cssDictionary.ts";
+import type { FlowCanvasDesignDraft } from "../components/FlowLayoutCanvas.tsx";
+
+// Simulates the designDraftByNodeId merge logic in handleDesignDraftChange.
+// Simple spread: absent key preserves existing value; present key (even []) overwrites.
+function mergeDesignDraft(
+  current: FlowCanvasDesignDraft,
+  partial: FlowCanvasDesignDraft,
+): FlowCanvasDesignDraft {
+  return { ...current, ...partial };
+}
+
+Deno.test("designDraft merge: inlineText update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    inlineText: "old text",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { inlineText: "new text" };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.inlineText, "new text");
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
+});
+
+Deno.test("designDraft merge: linkHref update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    linkHref: "https://old.example.com",
+    cssTokenRefs: ["radius.control.sm", "border.control.default"],
+  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { linkHref: "https://new.example.com" };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.linkHref, "https://new.example.com");
+  assertEquals(merged.cssTokenRefs, ["radius.control.sm", "border.control.default"]);
+});
+
+Deno.test("designDraft merge: linkTarget update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    linkTarget: "_self",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { linkTarget: "_blank" };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.linkTarget, "_blank");
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
+});
+
+Deno.test("designDraft merge: explicit empty cssTokenRefs clears tokens", () => {
+  // If partial explicitly passes [], tokens are cleared (intentional reset).
+  const current: FlowCanvasDesignDraft = {
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    cssTokenRefs: [],
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.cssTokenRefs, []);
+});
+
+Deno.test("designDraft merge: cssTokenRefs update replaces tokens and keeps other fields", () => {
+  const current: FlowCanvasDesignDraft = {
+    inlineText: "button label",
+    linkHref: "https://example.com",
+    cssTokenRefs: ["color.action.secondary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    cssTokenRefs: ["color.action.primary.background", "radius.control.sm"],
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background", "radius.control.sm"]);
+  assertEquals(merged.inlineText, "button label");
+  assertEquals(merged.linkHref, "https://example.com");
+});
+
+Deno.test("designDraft: node reselect with no saved design clears stale cssTokenRefs", () => {
+  // Simulates: node B had a previous canvas preview with tokens, then is reselected
+  // without a saved design. Default init sends a complete state (cssTokenRefs: []) so
+  // the stale tokens are cleared — absent key from pushCanvasPreview would leave them.
+  const staleDraft: FlowCanvasDesignDraft = {
+    inlineText: "old label",
+    linkHref: "https://old.example.com",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  // Default init: complete state push (same contract as applySavedDesign)
+  const defaultInit: FlowCanvasDesignDraft = {
+    inlineText: undefined,
+    linkHref: undefined,
+    linkTarget: undefined,
+    cssTokenRefs: [],
+  };
+  const result = mergeDesignDraft(staleDraft, defaultInit);
+  assertEquals(result.cssTokenRefs, []);
+  assertEquals(result.inlineText, undefined);
+  assertEquals(result.linkHref, undefined);
+});
+
+Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + text edit", () => {
+  // Simulates: token selected → text edited → canvas style must include token effect.
+  const afterTokenToggle: FlowCanvasDesignDraft = {
+    inlineText: "btn",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  // Text edit partial has no cssTokenRefs key — absent key preserves existing tokens.
+  const afterTextEdit: FlowCanvasDesignDraft = mergeDesignDraft(
+    afterTokenToggle,
+    { inlineText: "click me" },
+  );
+  assertEquals(afterTextEdit.inlineText, "click me");
+  assertEquals(afterTextEdit.cssTokenRefs, ["color.action.primary.background"]);
+  const style = _buildStyle(afterTextEdit.cssTokenRefs!);
+  assertEquals(style.background, "#0070f3");
 });

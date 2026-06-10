@@ -48,6 +48,19 @@ export function buildInlineStyleFromCssTokenRefs(
   return style;
 }
 
+/**
+ * Returns token keys that have no matching entry in the CSS dictionary.
+ * SSOT: silent_fallback_to_unknown_css_token is prohibited (css-dictionary-ssot.yaml).
+ * Callers must not silently ignore this result — warn or surface as validation error.
+ */
+export function resolveUnknownCssTokenRefs(tokenRefs: string[]): string[] {
+  return tokenRefs.filter((key) => {
+    const token = CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
+    const value = resolveCssTokenValue(key);
+    return !token || !value;
+  });
+}
+
 export const CSS_DICTIONARY_TOKENS: CssDictionaryToken[] = [
   { tokenKey: "color.action.primary.background", category: "color", property: "background", componentScope: ["Button"], semanticRole: "primary_action", userLabel: "メインボタン背景" },
   { tokenKey: "color.action.primary.text", category: "color", property: "color", componentScope: ["Button"], semanticRole: "primary_action", userLabel: "メインボタン文字色" },

@@ -4215,10 +4215,14 @@ function LayoutBuilderSection({
     setDesignDraftByNodeId((prev) => {
       const current = prev.get(nodeId) ?? {};
       const merged: DesignDraft = { ...current, ...partial };
+      const cssUnchanged =
+        JSON.stringify(current.cssTokenRefs ?? []) ===
+        JSON.stringify(merged.cssTokenRefs ?? []);
       if (
         current.inlineText === merged.inlineText &&
         current.linkHref === merged.linkHref &&
-        current.linkTarget === merged.linkTarget
+        current.linkTarget === merged.linkTarget &&
+        cssUnchanged
       ) {
         return prev;
       }
@@ -5651,6 +5655,7 @@ function designPreviewDraft(
     inlineText: inlineText.trim() || undefined,
     linkHref: linkHref.trim() || undefined,
     linkTarget: linkTarget.trim() || undefined,
+    // cssTokenRefs intentionally excluded — token updates go via direct onDesignPreviewChange
   };
 }
 
@@ -5727,14 +5732,17 @@ function PackageDesignPanel({
     );
   };
 
-  const pushCanvasPreview = (
-    nodeId: string,
-    text: string,
-    href: string,
-    target: string,
-  ) => {
+  const pushCanvasPreview = (nodeId: string, text: string, href: string, target: string) => {
     onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target));
   };
+
+  // Push only cssTokenRefs change: key present with actual value ([] included) so the
+  // simple spread in handleDesignDraftChange correctly overwrites or clears tokens.
+  useEffect(() => {
+    if (layoutNodeId) {
+      onDesignPreviewChange?.(layoutNodeId, { cssTokenRefs });
+    }
+  }, [cssTokenRefs]);
 
   const applySavedDesign = (design: SavedComponentDesignRow) => {
     setDesignName(design.name);
@@ -5748,12 +5756,14 @@ function PackageDesignPanel({
     setTailwind(design.tailwind);
     setDesignTmpStatus(design.hasDesignTmpDraft ? "saved" : "idle");
     if (layoutNodeId) {
-      pushCanvasPreview(
-        layoutNodeId,
-        design.inlineText,
-        design.linkHref,
-        design.linkTarget,
-      );
+      // Push complete design state in one shot so canvas reflects the loaded design
+      // without an intermediate render showing stale tokens.
+      onDesignPreviewChange?.(layoutNodeId, {
+        inlineText: design.inlineText.trim() || undefined,
+        linkHref: design.linkHref.trim() || undefined,
+        linkTarget: design.linkTarget.trim() || undefined,
+        cssTokenRefs: design.cssTokenRefs,
+      });
     }
   };
 
@@ -5860,7 +5870,15 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
-      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
+      // Push complete state (including cssTokenRefs: []) so stale tokens from a previous
+      // visit to this node are cleared. text/link inline edits omit cssTokenRefs intentionally;
+      // node selection init must be an explicit full reset, same as applySavedDesign.
+      onDesignPreviewChange?.(selectedCanvasNode.nodeId, {
+        inlineText: defaultText.trim() || undefined,
+        linkHref: undefined,
+        linkTarget: undefined,
+        cssTokenRefs: [],
+      });
     }
     setPropsDraft(selectedCanvasNode.propsJson ?? "");
     setPropsError(null);

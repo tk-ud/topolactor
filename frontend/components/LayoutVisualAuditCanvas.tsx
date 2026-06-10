@@ -11,21 +11,16 @@ export type LayoutVisualAuditCanvasProps = {
 };
 
 function toFlowAuditNodes(nodes: LayoutPreviewNodeInput[]): FlowCanvasNode[] {
-  const sorted = [...nodes].sort((a, b) => {
-    if (a.y !== b.y) return a.y - b.y;
-    if (a.x !== b.x) return a.x - b.x;
-    return 0;
-  });
-  return sorted.map((node, index) => ({
+  return nodes.map((node, index) => ({
     nodeId: node.nodeId,
     componentKey: node.componentKey,
     componentKind: node.componentKind,
     nodeKind: node.nodeKind,
     htmlTag: node.htmlTag as StructuralHtmlTag | undefined,
     isDraftOnly: node.isDraftOnly ?? false,
-    slotKey: "",
-    orderIndex: index,
-    parentNodeId: null,
+    slotKey: node.slotKey ?? "",
+    orderIndex: node.orderIndex ?? index,
+    parentNodeId: node.parentNodeId ?? null,
     width: node.width,
     height: node.height,
     componentId: node.componentId,
