@@ -75,13 +75,17 @@ Deno.test("Fresh /admin route registry matches runtime-orchestration SSOT exactl
     [...generatedManifest.matchAll(/"\.\/routes\/admin\/([^"]+)"/g)]
       .map((match) => match[1])
       .filter((route) => route !== "_middleware.ts")
-      .map((route) => route === "index.tsx" ? "/admin" : `/admin/${route.replace(/\.tsx$/, "")}`),
+      .map((route) => {
+        if (route === "index.tsx") return "/admin";
+        return `/admin/${route.replace(/(?:\/index)?\.tsx$/, "")}`;
+      }),
   )].sort();
   assertEquals(adminRoutes, [
     "/admin",
     "/admin/contents",
     "/admin/enums",
     "/admin/manifests",
+    "/admin/team-dashboard",
     "/admin/ui-builder",
     "/admin/users",
   ]);
