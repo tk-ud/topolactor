@@ -422,6 +422,69 @@ const COMPONENT_BUCKET_KIND_ICONS: Record<string, string> = {
   data_display: "▤",
 };
 
+/**
+ * User-facing labels for topology layout class keys (normal view — excludes preview_state).
+ * Values are aligned with TOPOLOGY_LAYOUT_CLASS_DICTIONARY[].label.
+ * The UI now reads labels from the dictionary directly; this map is exported for testing.
+ */
+export const LAYOUT_CLASS_USER_LABELS: Record<string, string> = {
+  "layout.root.grid": "ルートグリッド",
+  "layout.section.stack": "縦積みセクション",
+  "layout.row.flex": "横並び行",
+  "layout.card.surface": "カード面",
+  "layout.node.boundary": "ノード境界",
+};
+
+/** User-facing labels for CSS token keys. */
+export const CSS_TOKEN_USER_LABELS: Record<string, string> = {
+  "color.action.primary.background": "メインボタン背景",
+  "color.action.primary.text": "メインボタン文字色",
+  "color.action.secondary.background": "セカンダリボタン背景",
+  "color.action.secondary.text": "セカンダリボタン文字色",
+  "color.action.danger.background": "危険操作ボタン背景",
+  "color.action.danger.text": "危険操作ボタン文字色",
+  "border.control.default": "コントロール枠線",
+  "radius.control.sm": "コントロール角丸（小）",
+  "spacing.control.padding_md": "コントロール余白（中）",
+  "spacing.field.padding_sm": "入力フィールド余白（小）",
+  "typography.control.monospace": "管理UIテキスト",
+  "interaction.control.pointer": "クリック可能",
+  "interaction.control.disabled_opacity": "無効状態",
+  "layout.stack.flex_column": "縦積みレイアウト",
+  "layout.table.full_width": "テーブル全幅",
+};
+
+/** Component event wiring entry (saved to propsJson.eventWirings — layout_patch_json boundary). */
+export type ComponentEventWiring = {
+  eventType: string;
+  actionType: string;
+  targetStateKey?: string;
+};
+
+export const COMPONENT_EVENT_TYPES = [
+  "onClick",
+  "onChange",
+  "onSubmit",
+  "onOpen",
+  "onClose",
+  "onSelect",
+  "onInput",
+  "onFocus",
+  "onBlur",
+] as const;
+
+export const COMPONENT_ACTION_TYPES = [
+  "setState",
+  "navigate",
+  "openModal",
+  "closeModal",
+  "openDrawer",
+  "closeDrawer",
+  "submitForm",
+  "clearForm",
+  "triggerAction",
+] as const;
+
 function bucketKindIcon(componentKind: string): string {
   const base = componentKind.split("/")[0]?.split(".")[0] ?? componentKind;
   return COMPONENT_BUCKET_KIND_ICONS[base] ?? "◈";
@@ -627,6 +690,7 @@ function LayoutRightDock({
               selectedCanvasNode={selectedNode}
               routeCandidates={routeCandidates}
               onDesignPreviewChange={onDesignChange}
+              onCommitNode={onCommitNode}
             />
           </Accordion>
         </>
@@ -1636,10 +1700,12 @@ function CssTokenPicker({
     .sort();
 
   const filtered = CSS_DICTIONARY_TOKENS.filter((t) => {
-    if (
-      tokenFilter &&
-      !t.tokenKey.toLowerCase().includes(tokenFilter.toLowerCase())
-    ) return false;
+    if (tokenFilter) {
+      const label = CSS_TOKEN_USER_LABELS[t.tokenKey] ?? "";
+      const matchesKey = t.tokenKey.toLowerCase().includes(tokenFilter.toLowerCase());
+      const matchesLabel = label.toLowerCase().includes(tokenFilter.toLowerCase());
+      if (!matchesKey && !matchesLabel) return false;
+    }
     if (categoryFilter && t.category !== categoryFilter) return false;
     if (scopeFilter && !t.componentScope.includes(scopeFilter)) return false;
     if (roleFilter && t.semanticRole !== roleFilter) return false;
@@ -1698,17 +1764,18 @@ function CssTokenPicker({
               const token = CSS_DICTIONARY_TOKENS.find((t) =>
                 t.tokenKey === key
               );
+              const label = CSS_TOKEN_USER_LABELS[key] ?? key;
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => onToggle(key)}
-                  class="flex items-center gap-1.5 rounded border border-blue-400 bg-white px-2 py-1 font-mono text-xs hover:border-red-400 hover:bg-red-50"
+                  class="flex items-center gap-1.5 rounded border border-blue-400 bg-white px-2 py-1 text-xs hover:border-red-400 hover:bg-red-50"
                   title={`${key} — クリックで選択解除`}
                   aria-label={`${key}を選択解除`}
                 >
                   {token && <CssTokenSwatch token={token} />}
-                  <span>{key}</span>
+                  <span>{label}</span>
                   <span class="text-gray-400">✕</span>
                 </button>
               );
@@ -1722,13 +1789,13 @@ function CssTokenPicker({
         role="region"
         aria-label="CSSトークン一覧"
       >
-        <table class="table font-mono text-xs">
+        <table class="table text-xs">
           <thead>
             <tr>
               {[
                 "",
                 "プレビュー",
-                "トークンキー",
+                "スタイル名",
                 "カテゴリ",
                 "対象",
                 "CSSプロパティ",
@@ -1738,6 +1805,7 @@ function CssTokenPicker({
           <tbody>
             {filtered.map((t) => {
               const isSelected = selectedTokenRefs.includes(t.tokenKey);
+              const label = CSS_TOKEN_USER_LABELS[t.tokenKey] ?? t.tokenKey;
               return (
                 <tr
                   key={t.tokenKey}
@@ -1750,14 +1818,14 @@ function CssTokenPicker({
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => onToggle(t.tokenKey)}
-                      aria-label={`${t.tokenKey}を選択`}
+                      aria-label={`${label}を選択`}
                     />
                   </td>
                   <td>
                     <CssTokenSwatch token={t} />
                   </td>
-                  <td>
-                    <code>{t.tokenKey}</code>
+                  <td title={t.tokenKey}>
+                    {label}
                   </td>
                   <td>{t.category}</td>
                   <td>{t.componentScope.join(", ")}</td>
@@ -1813,6 +1881,8 @@ function TopologyLayoutClassPicker({
   ].sort();
 
   const filtered = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => {
+    // preview_state classes are for runtime preview only — not shown in normal inspector view
+    if (e.category === "state") return false;
     if (
       keyFilter && !e.classKey.toLowerCase().includes(keyFilter.toLowerCase()) &&
       !e.label.toLowerCase().includes(keyFilter.toLowerCase())
@@ -1878,6 +1948,7 @@ function TopologyLayoutClassPicker({
                   type="button"
                   onClick={() => onToggle(key)}
                   class="rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs hover:bg-red-50"
+                  title={key}
                 >
                   {entry?.label ?? key} ✕
                 </button>
@@ -2297,12 +2368,7 @@ function CanvasInspector({
 }): JSX.Element {
   const [manualSlotKey, setManualSlotKey] = useState("");
   const [parentCycleError, setParentCycleError] = useState<string | null>(null);
-  const [propsDraft, setPropsDraft] = useState(node.propsJson ?? "");
-  const [propsError, setPropsError] = useState<string | null>(null);
-  const [stateDraft, setStateDraft] = useState(node.stateJson ?? "");
-  const [stateError, setStateError] = useState<string | null>(null);
 
-  const isDisclosure = isDisclosureKind(node.componentKind);
   const parentOptions = draftNodes.filter((n) => n.nodeId !== node.nodeId);
   const isContainer = isLayoutContainerNode(node, draftNodes);
 
@@ -2549,6 +2615,58 @@ function CanvasInspector({
           aria-label="orderIndex (表示順)"
         />
       </label>
+      <AdvancedManualOverride title="グリッド位置（フロープレビューに影響しません）">
+        <p class="text-muted-xs mb-1">
+          gridCol / gridRow はフローレイアウトのプレビューには反映されません。レガシー補助項目です。
+        </p>
+        <div class="grid grid-cols-2 gap-1">
+          <label class="flex flex-col gap-0.5">
+            <span class="text-[0.65rem] text-gray-600">列 (1〜12)</span>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={node.gridCol}
+              onInput={(e) =>
+                handleNum(
+                  "gridCol",
+                  (e.target as HTMLInputElement).value,
+                  false,
+                )}
+              onChange={(e) =>
+                handleNum(
+                  "gridCol",
+                  (e.target as HTMLInputElement).value,
+                  true,
+                )}
+              class="input px-1 py-0.5"
+              aria-label="グリッド列 (1〜12)"
+            />
+          </label>
+          <label class="flex flex-col gap-0.5">
+            <span class="text-[0.65rem] text-gray-600">行</span>
+            <input
+              type="number"
+              min={1}
+              value={node.gridRow}
+              onInput={(e) =>
+                handleNum(
+                  "gridRow",
+                  (e.target as HTMLInputElement).value,
+                  false,
+                )}
+              onChange={(e) =>
+                handleNum(
+                  "gridRow",
+                  (e.target as HTMLInputElement).value,
+                  true,
+                )}
+              class="input px-1 py-0.5"
+              aria-label="グリッド行"
+            />
+          </label>
+        </div>
+      </AdvancedManualOverride>
     </fieldset>
   );
 
@@ -2573,155 +2691,6 @@ function CanvasInspector({
         />
       )}
     </fieldset>
-  );
-
-  const gridTab = (
-    <fieldset class="flex flex-col gap-1">
-      <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-        グリッド位置（レガシー補助）
-      </legend>
-      <label class="flex flex-col gap-0.5">
-        <span class="text-[0.65rem] text-gray-600">列 (1〜12)</span>
-        <input
-          type="number"
-          min={1}
-          max={12}
-          value={node.gridCol}
-          onInput={(e) =>
-            handleNum(
-              "gridCol",
-              (e.target as HTMLInputElement).value,
-              false,
-            )}
-          onChange={(e) =>
-            handleNum(
-              "gridCol",
-              (e.target as HTMLInputElement).value,
-              true,
-            )}
-          class="input px-1 py-0.5"
-          aria-label="グリッド列 (1〜12)"
-        />
-      </label>
-      <label class="flex flex-col gap-0.5">
-        <span class="text-[0.65rem] text-gray-600">行</span>
-        <input
-          type="number"
-          min={1}
-          value={node.gridRow}
-          onInput={(e) =>
-            handleNum(
-              "gridRow",
-              (e.target as HTMLInputElement).value,
-              false,
-            )}
-          onChange={(e) =>
-            handleNum(
-              "gridRow",
-              (e.target as HTMLInputElement).value,
-              true,
-            )}
-          class="input px-1 py-0.5"
-          aria-label="グリッド行"
-        />
-      </label>
-    </fieldset>
-  );
-
-  const commitOpenState = (checked: boolean) => {
-    try {
-      const existing = stateDraft.trim() ? JSON.parse(stateDraft) : {};
-      const next = JSON.stringify({ ...existing, open: checked });
-      setStateDraft(next);
-      setStateError(null);
-      onCommit({ stateJson: next }, "open状態を変更");
-    } catch {
-      setStateError("stateJson のパースに失敗しました");
-    }
-  };
-
-  const wiringTab = (
-    <div class="space-y-3">
-      <p class="text-[0.6rem] text-slate-500">
-        保存対象はlayout_patch_json経由。previewモードでは inert binding を使用しランタイムdispatchは行いません。
-      </p>
-
-      {/* Props JSON */}
-      <fieldset class="flex flex-col gap-1">
-        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-          Props JSON
-        </legend>
-        <textarea
-          value={propsDraft}
-          onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
-          onBlur={() => {
-            const v = propsDraft.trim();
-            if (!v) {
-              setPropsError(null);
-              onCommit({ propsJson: undefined }, "propsJsonをクリア");
-              return;
-            }
-            try {
-              JSON.parse(v);
-              setPropsError(null);
-              onCommit({ propsJson: v }, "propsJsonを更新");
-            } catch {
-              setPropsError("JSON形式が不正です");
-            }
-          }}
-          rows={3}
-          placeholder='{"label": "送信", "variant": "primary"}'
-          class="input-mono w-full text-[0.6rem]"
-          aria-label="propsJson"
-        />
-        {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
-      </fieldset>
-
-      {/* State JSON — open toggle for disclosure components */}
-      <fieldset class="flex flex-col gap-1">
-        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-          State JSON{isDisclosure ? " (open state)" : ""}
-        </legend>
-        {isDisclosure && (
-          <label class="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={(() => {
-                try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
-              })()}
-              onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
-              aria-label="open state"
-            />
-            open (preview で開いた状態で表示)
-          </label>
-        )}
-        <textarea
-          value={stateDraft}
-          onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
-          onBlur={() => {
-            const v = stateDraft.trim();
-            if (!v) {
-              setStateError(null);
-              onCommit({ stateJson: undefined }, "stateJsonをクリア");
-              return;
-            }
-            try {
-              JSON.parse(v);
-              setStateError(null);
-              onCommit({ stateJson: v }, "stateJsonを更新");
-            } catch {
-              setStateError("JSON形式が不正です");
-            }
-          }}
-          rows={2}
-          placeholder='{"open": false}'
-          class="input-mono w-full text-[0.6rem]"
-          aria-label="stateJson"
-        />
-        {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
-      </fieldset>
-
-    </div>
   );
 
   return (
@@ -2749,8 +2718,6 @@ function CanvasInspector({
           { id: "overview", label: "概要", content: overviewTab },
           { id: "tree", label: "ツリー", content: treeTab },
           { id: "class", label: "クラス", content: classTab },
-          { id: "grid", label: "グリッド", content: gridTab },
-          { id: "wiring", label: "配線", content: wiringTab },
         ]}
       />
     </div>
@@ -5544,11 +5511,13 @@ function PackageDesignPanel({
   selectedCanvasNode,
   routeCandidates,
   onDesignPreviewChange,
+  onCommitNode,
 }: {
   selectedPackageId: string;
   selectedCanvasNode: DraftNode | null;
   routeCandidates?: string[];
   onDesignPreviewChange?: (nodeId: string, partial: DesignDraft) => void;
+  onCommitNode?: (updates: Partial<DraftNode>, label: string) => void;
 }): JSX.Element {
   const { confirm, ConfirmDialogHost } = useConfirm();
   const [designName, setDesignName] = useState("");
@@ -5581,6 +5550,12 @@ function PackageDesignPanel({
     null,
   );
   const designTmpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [propsDraft, setPropsDraft] = useState(selectedCanvasNode?.propsJson ?? "");
+  const [propsError, setPropsError] = useState<string | null>(null);
+  const [stateDraft, setStateDraft] = useState(selectedCanvasNode?.stateJson ?? "");
+  const [stateError, setStateError] = useState<string | null>(null);
+
+  const isDisclosure = isDisclosureKind(selectedCanvasNode?.componentKind);
 
   const layoutNodeId = selectedCanvasNode?.nodeId ?? "";
   const selectedNodeLabel = selectedCanvasNode
@@ -5714,6 +5689,10 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
+      setPropsDraft("");
+      setPropsError(null);
+      setStateDraft("");
+      setStateError(null);
       return;
     }
     const saved = savedDesigns.find((d) =>
@@ -5721,20 +5700,24 @@ function PackageDesignPanel({
     );
     if (saved) {
       applySavedDesign(saved);
-      return;
+    } else {
+      const defaultText = selectedCanvasNode.htmlTag === "a" ? "リンクテキスト" : "";
+      setDesignName(`${selectedCanvasNode.nodeId}_design`);
+      setCssTokenRefs([]);
+      setResponsiveTokenRefs({});
+      setInlineText(defaultText);
+      setLinkHref("");
+      setLinkTarget("");
+      setReactionIntent("");
+      setClassname("");
+      setTailwind("");
+      setDesignTmpStatus("idle");
+      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
     }
-    const defaultText = selectedCanvasNode.htmlTag === "a" ? "リンクテキスト" : "";
-    setDesignName(`${selectedCanvasNode.nodeId}_design`);
-    setCssTokenRefs([]);
-    setResponsiveTokenRefs({});
-    setInlineText(defaultText);
-    setLinkHref("");
-    setLinkTarget("");
-    setReactionIntent("");
-    setClassname("");
-    setTailwind("");
-    setDesignTmpStatus("idle");
-    pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
+    setPropsDraft(selectedCanvasNode.propsJson ?? "");
+    setPropsError(null);
+    setStateDraft(selectedCanvasNode.stateJson ?? "");
+    setStateError(null);
   }, [selectedCanvasNode?.nodeId, savedDesigns]);
 
   useEffect(() => {
@@ -5822,6 +5805,229 @@ function PackageDesignPanel({
       setSaving(false);
     }
   };
+
+  const commitOpenState = (checked: boolean) => {
+    try {
+      const existing = stateDraft.trim() ? JSON.parse(stateDraft) : {};
+      const next = JSON.stringify({ ...existing, open: checked });
+      setStateDraft(next);
+      setStateError(null);
+      onCommitNode?.({ stateJson: next }, "open状態を変更");
+    } catch {
+      setStateError("stateJson のパースに失敗しました");
+    }
+  };
+
+  const eventWiringTab = (
+    <div class="space-y-3">
+      <p class="text-[0.6rem] text-slate-500">
+        保存対象はlayout_patch_json経由（propsJson.eventWirings / stateJson）。previewモードではinert bindingを使用します。
+      </p>
+
+      {/* Open state toggle for disclosure components */}
+      {isDisclosure && (
+        <fieldset class="flex flex-col gap-1">
+          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+            表示状態（open state）
+          </legend>
+          <label class="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={(() => {
+                try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
+              })()}
+              onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
+              aria-label="open state"
+            />
+            open（previewで開いた状態で表示）
+          </label>
+        </fieldset>
+      )}
+
+      {/* Event wirings builder */}
+      <fieldset class="flex flex-col gap-1">
+        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+          イベント配線（propsJson.eventWirings）
+        </legend>
+        <p class="text-[0.6rem] text-slate-400 mb-1">
+          追加したイベント配線はpropsJsonのeventWiringsに保存されます。
+        </p>
+        {(() => {
+          let wirings: ComponentEventWiring[] = [];
+          try {
+            const parsed = JSON.parse(propsDraft || "{}");
+            if (Array.isArray(parsed.eventWirings)) wirings = parsed.eventWirings;
+          } catch { /* ignore */ }
+
+          const removeWiring = (idx: number) => {
+            const next = wirings.filter((_, i) => i !== idx);
+            try {
+              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+              setPropsDraft(nextJson);
+              setPropsError(null);
+              onCommitNode?.({ propsJson: nextJson }, "イベント配線を削除");
+            } catch {
+              setPropsError("propsJsonの更新に失敗しました");
+            }
+          };
+
+          const addWiring = () => {
+            const next: ComponentEventWiring[] = [...wirings, { eventType: "onClick", actionType: "setState", targetStateKey: "" }];
+            try {
+              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+              setPropsDraft(nextJson);
+              setPropsError(null);
+              onCommitNode?.({ propsJson: nextJson }, "イベント配線を追加");
+            } catch {
+              setPropsError("propsJsonの更新に失敗しました");
+            }
+          };
+
+          const updateWiring = (idx: number, updates: Partial<ComponentEventWiring>) => {
+            const next = wirings.map((w, i) => i === idx ? { ...w, ...updates } : w);
+            try {
+              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+              setPropsDraft(nextJson);
+              setPropsError(null);
+              onCommitNode?.({ propsJson: nextJson }, "イベント配線を更新");
+            } catch {
+              setPropsError("propsJsonの更新に失敗しました");
+            }
+          };
+
+          return (
+            <div class="space-y-2">
+              {wirings.map((w, i) => (
+                <div key={i} class="flex flex-col gap-1 rounded border border-slate-200 p-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[0.65rem] font-semibold text-slate-600">配線 #{i + 1}</span>
+                    <button
+                      type="button"
+                      class="text-[0.6rem] text-red-500 hover:text-red-700"
+                      onClick={() => removeWiring(i)}
+                      aria-label={`配線 ${i + 1} を削除`}
+                    >
+                      削除
+                    </button>
+                  </div>
+                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                    イベント
+                    <select
+                      value={w.eventType}
+                      onChange={(e) => updateWiring(i, { eventType: (e.target as HTMLSelectElement).value })}
+                      class="input px-1 py-0.5 text-xs"
+                      aria-label={`配線 ${i + 1} イベントタイプ`}
+                    >
+                      {COMPONENT_EVENT_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                    アクション
+                    <select
+                      value={w.actionType}
+                      onChange={(e) => updateWiring(i, { actionType: (e.target as HTMLSelectElement).value })}
+                      class="input px-1 py-0.5 text-xs"
+                      aria-label={`配線 ${i + 1} アクションタイプ`}
+                    >
+                      {COMPONENT_ACTION_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                    対象ステートキー（任意）
+                    <input
+                      value={w.targetStateKey ?? ""}
+                      onInput={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
+                      onBlur={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
+                      class="input-mono px-1 py-0.5 text-xs"
+                      placeholder="例: modalOpen"
+                      aria-label={`配線 ${i + 1} ターゲットステートキー`}
+                    />
+                  </label>
+                </div>
+              ))}
+              <button
+                type="button"
+                class="btn-secondary text-xs"
+                onClick={addWiring}
+              >
+                + イベント配線を追加
+              </button>
+              {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+            </div>
+          );
+        })()}
+      </fieldset>
+
+      {/* Raw JSON overrides in advanced */}
+      <AdvancedManualOverride title="生JSON（上級者向け）">
+        <fieldset class="flex flex-col gap-1 mb-2">
+          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+            Props JSON（全体）
+          </legend>
+          <textarea
+            value={propsDraft}
+            onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
+            onBlur={() => {
+              const v = propsDraft.trim();
+              if (!v) {
+                setPropsError(null);
+                onCommitNode?.({ propsJson: undefined }, "propsJsonをクリア");
+                return;
+              }
+              try {
+                JSON.parse(v);
+                setPropsError(null);
+                onCommitNode?.({ propsJson: v }, "propsJsonを更新");
+              } catch {
+                setPropsError("JSON形式が不正です");
+              }
+            }}
+            rows={3}
+            placeholder='{"label": "送信", "variant": "primary", "eventWirings": []}'
+            class="input-mono w-full text-[0.6rem]"
+            aria-label="propsJson（生JSON）"
+          />
+          {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+        </fieldset>
+        <fieldset class="flex flex-col gap-1">
+          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+            State JSON{isDisclosure ? "（open state）" : ""}
+          </legend>
+          <textarea
+            value={stateDraft}
+            onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
+            onBlur={() => {
+              const v = stateDraft.trim();
+              if (!v) {
+                setStateError(null);
+                onCommitNode?.({ stateJson: undefined }, "stateJsonをクリア");
+                return;
+              }
+              try {
+                JSON.parse(v);
+                setStateError(null);
+                onCommitNode?.({ stateJson: v }, "stateJsonを更新");
+              } catch {
+                setStateError("JSON形式が不正です");
+              }
+            }}
+            rows={2}
+            placeholder='{"open": false}'
+            class="input-mono w-full text-[0.6rem]"
+            aria-label="stateJson（生JSON）"
+          />
+          {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
+        </fieldset>
+      </AdvancedManualOverride>
+    </div>
+  );
 
   if (!selectedPackageId) {
     return (
@@ -6059,7 +6265,7 @@ function PackageDesignPanel({
           },
           {
             id: "wiring",
-            label: "配線",
+            label: "パッケージ配線",
             content: (
               <div class="space-y-3">
                 {selectedPackageId && (
@@ -6081,6 +6287,11 @@ function PackageDesignPanel({
                 </details>
               </div>
             ),
+          },
+          {
+            id: "event_wiring",
+            label: "イベント配線",
+            content: eventWiringTab,
           },
           {
             id: "advanced",

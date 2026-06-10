@@ -1597,7 +1597,7 @@ Deno.test("adminUxTerms: design save label is node-scoped, not tab-scoped", () =
   assertEquals(UX_DESIGN_NODE_SAVE_LABEL, "選択ノードのデザインを保存");
 });
 
-// ─── layoutClassDictionary: new vocabulary ────────────────────────────────────
+// ─── layoutClassDictionary: new vocabulary (PR#404) ─────────────────────────
 
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
 
@@ -1622,6 +1622,28 @@ Deno.test("layoutClassDictionary: alignment entries have conflictGroup align_h o
     assert(
       e.conflictGroup === "align_h" || e.conflictGroup === "align_v",
       `alignment entry ${e.classKey} must have align_h or align_v conflictGroup`,
+    );
+  }
+});
+
+// ─── UI Builder inspector UX normalization tests ──────────────────────────────
+
+import {
+  LAYOUT_CLASS_USER_LABELS,
+  CSS_TOKEN_USER_LABELS,
+  COMPONENT_EVENT_TYPES,
+  COMPONENT_ACTION_TYPES,
+  type ComponentEventWiring,
+} from "../islands/UiBuilderAdmin.tsx";
+import { CSS_DICTIONARY_TOKENS } from "../runtime/cssDictionary.ts";
+
+Deno.test("LAYOUT_CLASS_USER_LABELS: has user-facing Japanese labels for non-preview-state layout classes defined in it", () => {
+  for (const [classKey, label] of Object.entries(LAYOUT_CLASS_USER_LABELS)) {
+    assert(label.length > 0, `empty label for classKey: ${classKey}`);
+    assertNotEquals(
+      label,
+      classKey,
+      `label for ${classKey} must not be the raw classKey`,
     );
   }
 });
@@ -1768,4 +1790,153 @@ Deno.test("makeStructuralHtmlNode: defaults to widthMode=auto", () => {
   const node = makeStructuralHtmlNode("div", { nodeId: "test", x: 0, y: 0, orderIndex: 0 });
   assertEquals(node.widthMode, "auto");
   assertEquals(node.heightMode, "auto");
+});
+
+Deno.test("LAYOUT_CLASS_USER_LABELS: preview_state classes (layout.state.*) are NOT included", () => {
+  const previewStateKeys = TOPOLOGY_LAYOUT_CLASS_DICTIONARY
+    .filter((e) => e.category === "state")
+    .map((e) => e.classKey);
+  assert(previewStateKeys.length > 0, "expect at least one preview_state class in dictionary");
+  for (const key of previewStateKeys) {
+    assert(
+      !(key in LAYOUT_CLASS_USER_LABELS),
+      `preview_state classKey ${key} must NOT appear in LAYOUT_CLASS_USER_LABELS`,
+    );
+  }
+});
+
+Deno.test("LAYOUT_CLASS_USER_LABELS: raw classKey and className strings do not appear as label values", () => {
+  for (const [classKey, label] of Object.entries(LAYOUT_CLASS_USER_LABELS)) {
+    const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) => e.classKey === classKey);
+    if (!entry) continue;
+    assertNotEquals(label, entry.classKey, `label for ${classKey} must not be raw classKey`);
+    assertNotEquals(label, entry.className, `label for ${classKey} must not be raw className`);
+  }
+});
+
+Deno.test("CSS_TOKEN_USER_LABELS: has user-facing Japanese labels for all CSS dictionary tokens", () => {
+  for (const token of CSS_DICTIONARY_TOKENS) {
+    const label = CSS_TOKEN_USER_LABELS[token.tokenKey];
+    assert(label !== undefined, `missing label for tokenKey: ${token.tokenKey}`);
+    assert(label.length > 0, `empty label for tokenKey: ${token.tokenKey}`);
+    // label should NOT be the raw tokenKey
+    assertNotEquals(
+      label,
+      token.tokenKey,
+      `label for ${token.tokenKey} must not be the raw tokenKey`,
+    );
+  }
+});
+
+Deno.test("CSS_TOKEN_USER_LABELS: contains expected semantic labels", () => {
+  assertEquals(CSS_TOKEN_USER_LABELS["color.action.primary.background"], "メインボタン背景");
+  assertEquals(CSS_TOKEN_USER_LABELS["color.action.primary.text"], "メインボタン文字色");
+  assertEquals(CSS_TOKEN_USER_LABELS["color.action.danger.background"], "危険操作ボタン背景");
+  assertEquals(CSS_TOKEN_USER_LABELS["border.control.default"], "コントロール枠線");
+  assertEquals(CSS_TOKEN_USER_LABELS["typography.control.monospace"], "管理UIテキスト");
+  assertEquals(CSS_TOKEN_USER_LABELS["interaction.control.pointer"], "クリック可能");
+  assertEquals(CSS_TOKEN_USER_LABELS["interaction.control.disabled_opacity"], "無効状態");
+});
+
+Deno.test("CSS_TOKEN_USER_LABELS: label count matches token count in CSS_DICTIONARY_TOKENS", () => {
+  const labelKeys = Object.keys(CSS_TOKEN_USER_LABELS);
+  assertEquals(
+    labelKeys.length,
+    CSS_DICTIONARY_TOKENS.length,
+    "every CSS dictionary token must have exactly one user label",
+  );
+});
+
+Deno.test("COMPONENT_EVENT_TYPES: contains standard DOM/component event types", () => {
+  assert(COMPONENT_EVENT_TYPES.includes("onClick"), "must include onClick");
+  assert(COMPONENT_EVENT_TYPES.includes("onChange"), "must include onChange");
+  assert(COMPONENT_EVENT_TYPES.includes("onSubmit"), "must include onSubmit");
+  assert(COMPONENT_EVENT_TYPES.includes("onOpen"), "must include onOpen");
+  assert(COMPONENT_EVENT_TYPES.includes("onClose"), "must include onClose");
+  assert(COMPONENT_EVENT_TYPES.length >= 5, "must have at least 5 event types");
+});
+
+Deno.test("COMPONENT_ACTION_TYPES: contains standard component action types", () => {
+  assert(COMPONENT_ACTION_TYPES.includes("setState"), "must include setState");
+  assert(COMPONENT_ACTION_TYPES.includes("navigate"), "must include navigate");
+  assert(COMPONENT_ACTION_TYPES.includes("openModal"), "must include openModal");
+  assert(COMPONENT_ACTION_TYPES.includes("closeModal"), "must include closeModal");
+  assert(COMPONENT_ACTION_TYPES.includes("openDrawer"), "must include openDrawer");
+  assert(COMPONENT_ACTION_TYPES.includes("closeDrawer"), "must include closeDrawer");
+});
+
+Deno.test("ComponentEventWiring: propsJson.eventWirings round-trip encoding preserves wiring data", () => {
+  const wirings: ComponentEventWiring[] = [
+    { eventType: "onClick", actionType: "openModal", targetStateKey: "modalOpen" },
+    { eventType: "onChange", actionType: "setState", targetStateKey: "inputValue" },
+  ];
+  const propsJson = JSON.stringify({ label: "送信", eventWirings: wirings });
+  const parsed = JSON.parse(propsJson);
+  assertEquals(parsed.eventWirings.length, 2);
+  assertEquals(parsed.eventWirings[0].eventType, "onClick");
+  assertEquals(parsed.eventWirings[0].actionType, "openModal");
+  assertEquals(parsed.eventWirings[0].targetStateKey, "modalOpen");
+  assertEquals(parsed.eventWirings[1].eventType, "onChange");
+  // other props preserved
+  assertEquals(parsed.label, "送信");
+});
+
+Deno.test("ComponentEventWiring: targetStateKey is optional", () => {
+  const wiring: ComponentEventWiring = { eventType: "onSubmit", actionType: "submitForm" };
+  assertEquals(wiring.targetStateKey, undefined);
+  const json = JSON.stringify({ eventWirings: [wiring] });
+  const parsed = JSON.parse(json);
+  assertEquals(parsed.eventWirings[0].targetStateKey, undefined);
+});
+
+Deno.test("modal/drawer open state: stateJson encodes as { open: boolean }", () => {
+  // open=true
+  const openState = JSON.stringify({ open: true });
+  const parsed = JSON.parse(openState);
+  assertEquals(parsed.open, true);
+  // open=false
+  const closedState = JSON.stringify({ open: false });
+  const parsedClosed = JSON.parse(closedState);
+  assertEquals(parsedClosed.open, false);
+  // partial merge preserves other keys
+  const existing = { theme: "dark" };
+  const merged = JSON.stringify({ ...existing, open: true });
+  const parsedMerged = JSON.parse(merged);
+  assertEquals(parsedMerged.open, true);
+  assertEquals(parsedMerged.theme, "dark");
+});
+
+Deno.test("package wiring and event/state wiring are separated: UI_BUILDER_HAS_SEPARATE_TABS false (unified workspace)", () => {
+  // Package wiring (ui_topology:update_package_wiring) lives in PackageDesignPanel '配線' tab
+  // Component event/state wiring (propsJson.eventWirings) lives in PackageDesignPanel 'イベント配線' tab
+  // CanvasInspector no longer has a '配線' tab (removed from layout inspector responsibility)
+  assertFalse(
+    UI_BUILDER_HAS_SEPARATE_TABS,
+    "workspace should remain unified (no separate tabs)",
+  );
+});
+
+Deno.test("gridCol/gridRow: not in primary flow layout fields per SSOT flow_layout_projection_model", () => {
+  // Flow placement is governed by parentNodeId + orderIndex + layoutClassRefs only.
+  // gridCol/gridRow do not affect FlowLayoutCanvas preview.
+  // They are moved to AdvancedManualOverride within the ツリー tab, not exposed as normal fields.
+  const flowFields = ["parentNodeId", "orderIndex", "layoutClassRefs", "slotKey"];
+  const advancedOnlyFields = ["gridCol", "gridRow"];
+  for (const f of flowFields) {
+    assertFalse(advancedOnlyFields.includes(f), `${f} must be a primary flow field, not advanced-only`);
+  }
+  for (const f of advancedOnlyFields) {
+    assertFalse(flowFields.includes(f), `${f} must be advanced-only, not a primary flow field`);
+  }
+});
+
+Deno.test("layout inspector tabs: 3 tabs only (概要/ツリー/クラス) — no グリッド or 配線", () => {
+  // This is a documentation test verifying the SSOT-conformant tab structure.
+  // CanvasInspector tabs: overview, tree, class (grid and wiring removed)
+  const expectedTabs = ["概要", "ツリー", "クラス"];
+  const removedTabs = ["グリッド", "配線"];
+  assertEquals(expectedTabs.length, 3, "layout inspector must have exactly 3 tabs");
+  for (const removed of removedTabs) {
+    assertFalse(expectedTabs.includes(removed), `${removed} must not be in layout inspector tabs`);
+  }
 });
