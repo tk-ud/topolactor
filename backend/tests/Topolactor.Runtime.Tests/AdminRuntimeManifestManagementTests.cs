@@ -202,6 +202,7 @@ public class AdminRuntimeManifestManagementTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
+            topologySystemName = "my-table",
             tableRef = "my_table",
             searchKeyColumns = new[] { "col_a", "col_b" },
             aggregationKey = "col_a",
@@ -264,6 +265,7 @@ public class AdminRuntimeManifestManagementTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
+            topologySystemName = "test-screen",
             searchConditions = new object[]
             {
                 new { column = "col_a", @operator = "=", value = "test", logicalConnector = "and" },
@@ -372,6 +374,7 @@ public class AdminRuntimeManifestManagementTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = draftId.ToString(),
+            topologySystemName = "my-table",
             relationIntents = new[]
             {
                 new
@@ -458,6 +461,7 @@ public class AdminRuntimeManifestManagementTests
         var payload = JsonSerializer.SerializeToElement(new
         {
             manifestId = manifestId.ToString(),
+            topologySystemName = "my-table",
             logicalTables = new[]
             {
                 new
