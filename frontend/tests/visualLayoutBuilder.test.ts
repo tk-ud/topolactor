@@ -2222,6 +2222,28 @@ Deno.test("designDraft merge: cssTokenRefs update replaces tokens and keeps othe
   assertEquals(merged.linkHref, "https://example.com");
 });
 
+Deno.test("designDraft: node reselect with no saved design clears stale cssTokenRefs", () => {
+  // Simulates: node B had a previous canvas preview with tokens, then is reselected
+  // without a saved design. Default init sends a complete state (cssTokenRefs: []) so
+  // the stale tokens are cleared — absent key from pushCanvasPreview would leave them.
+  const staleDraft: FlowCanvasDesignDraft = {
+    inlineText: "old label",
+    linkHref: "https://old.example.com",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  // Default init: complete state push (same contract as applySavedDesign)
+  const defaultInit: FlowCanvasDesignDraft = {
+    inlineText: undefined,
+    linkHref: undefined,
+    linkTarget: undefined,
+    cssTokenRefs: [],
+  };
+  const result = mergeDesignDraft(staleDraft, defaultInit);
+  assertEquals(result.cssTokenRefs, []);
+  assertEquals(result.inlineText, undefined);
+  assertEquals(result.linkHref, undefined);
+});
+
 Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + text edit", () => {
   // Simulates: token selected → text edited → canvas style must include token effect.
   const afterTokenToggle: FlowCanvasDesignDraft = {

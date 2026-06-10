@@ -5870,7 +5870,15 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
-      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
+      // Push complete state (including cssTokenRefs: []) so stale tokens from a previous
+      // visit to this node are cleared. text/link inline edits omit cssTokenRefs intentionally;
+      // node selection init must be an explicit full reset, same as applySavedDesign.
+      onDesignPreviewChange?.(selectedCanvasNode.nodeId, {
+        inlineText: defaultText.trim() || undefined,
+        linkHref: undefined,
+        linkTarget: undefined,
+        cssTokenRefs: [],
+      });
     }
     setPropsDraft(selectedCanvasNode.propsJson ?? "");
     setPropsError(null);
