@@ -2330,22 +2330,6 @@ function treeFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
-function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
-  const props = spec.props;
-  const title = typeof props.title === "string" ? props.title
-    : (typeof (props.data as Record<string, unknown>)?.title === "string" ? (props.data as Record<string, unknown>).title as string : undefined);
-  return {
-    ok: true,
-    node: h("div", {
-      className: spec.className,
-      style: "border:1px solid #e0e0e0;border-radius:6px;padding:16px;font-family:monospace;background:#f8f8f8",
-      "data-component-kind": "data_display/md_viewer",
-    },
-      h("div", { style: "font-weight:600;color:#333;font-size:0.9rem;margin-bottom:6px" }, title ?? "Markdown View"),
-      h("div", { style: "color:#888;font-size:0.8rem" }, "（保存済み Markdown ビュープレビュー）"),
-    ),
-  };
-}
 
 function modalFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
@@ -2573,7 +2557,6 @@ export const RUNTIME_COMPONENT_FACTORIES: RuntimeComponentFactory[] = [
   { componentKinds: ["form_input/textarea_template"], render: textareaTemplateFactory },
   { componentKinds: ["disclosure/tabs"], render: tabsFactory },
   { componentKinds: ["data_display/tree"], render: treeFactory },
-  { componentKinds: ["data_display/md_viewer"], render: mdViewerPreviewFactory },
 ];
 
 export {
