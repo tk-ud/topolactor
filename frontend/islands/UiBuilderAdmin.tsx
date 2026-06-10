@@ -92,6 +92,7 @@ import {
 import { getAdminManifest, listAdminManifests } from "../api/adminApi.ts";
 import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
+import { resolveVisibleTopologyName } from "../lib/topologySystemName.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   enrichLayoutPreviewNodes,
@@ -2035,8 +2036,9 @@ function BucketPackageRouteFields({
       </label>
       {routeOptions.length === 0 && candidateErrors.length === 0 && (
         <p class="mb-2 text-xs text-amber-900">
-          初回は下の直接入力にルート名を入れてください（例:{" "}
-          <code>admin_demo_screen_list</code>）。
+          初回は下の直接入力にルートキーを入れてください（例:{" "}
+          <code>customer-management</code>）。
+          ルートキーは topology.name（ケバブケース）と同じ値にしてください。
           Enter または「確定」でパッケージを自動生成します（入力中は登録されません）。
         </p>
       )}
@@ -2053,7 +2055,7 @@ function BucketPackageRouteFields({
                 commitManualRoute();
               }
             }}
-            placeholder="例: employees"
+            placeholder="例: customer-management"
             class="input-mono min-w-0 flex-1 text-xs"
           />
           <button
@@ -5462,7 +5464,7 @@ async function buildManifestPickerOptions(
     const shape = detail
       ? extractScreenDataShapeFromTopology(detail.topologyRawJson)
       : null;
-    const label = shape?.userFacingTopologyLabel?.trim() ??
+    const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, shape?.topologySystemName) ||
       `${item.status} ${item.manifestId.slice(0, 8)}…`;
     return { manifestId: item.manifestId, label, status: item.status };
   }));

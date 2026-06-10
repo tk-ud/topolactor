@@ -146,3 +146,39 @@ Deno.test("buildAssignPayloadForStep step 3: tableRef from primary logical table
   assertEquals(payload.columns, existing.columns);
   assertEquals(payload.relationIntents, existing.relationIntents);
 });
+
+Deno.test("buildAssignPayloadForStep step 2: primary table derived from topologySystemName, additional tables from design", () => {
+  const design = emptyManifestScreenDesign();
+  design.topologySystemName = "customer-management";
+  design.logicalTables = [
+    {
+      tableName: "manual-primary-name",
+      columns: [{ name: "id", dataType: "uuid", nullable: false }],
+    },
+    {
+      tableName: "customer-contacts",
+      columns: [{ name: "phone", dataType: "text", nullable: true }],
+    },
+  ];
+
+  const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  // Primary table (index 0) MUST be derived from topologySystemName, not from design.logicalTables[0].tableName
+  assertEquals(payload.logicalTables?.[0].tableName, "customer_management");
+  // Additional table (index 1) uses tableName as entered in design
+  assertEquals(payload.logicalTables?.[1].tableName, "customer-contacts");
+});
+
+Deno.test("buildAssignPayloadForStep step 2: without topologySystemName, primary table uses design tableName", () => {
+  const design = emptyManifestScreenDesign();
+  design.topologySystemName = "";
+  design.logicalTables = [
+    {
+      tableName: "fallback_primary",
+      columns: [{ name: "id", dataType: "uuid", nullable: false }],
+    },
+  ];
+
+  const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
+  // When topologySystemName is empty/invalid, primary table uses design tableName as-is
+  assertEquals(payload.logicalTables?.[0].tableName, "fallback_primary");
+});

@@ -22,6 +22,13 @@ export type DispatcherAxes = {
   runtimeDestination: string;
 };
 
+/**
+ * Context for dispatcher axis resolution only.
+ * manifestKey: identifier for dispatcher target (hub_grouping key), NOT topology.name / admin route / physical table.
+ * manifestId: persistent manifest UUID.
+ * topology.name (topologySystemName) is the SSOT for admin route, primary physical table, and UI Builder key —
+ * kept in ManifestScreenDesignDraft and AdminManifestAssignScreenDataShapeRequestDto, not here.
+ */
 export type ScreenAxisContext = {
   manifestKey?: string | null;
   manifestId?: string | null;

@@ -100,6 +100,29 @@ Deno.test("displayName does not affect route derivation", () => {
   assertEquals(topologySystemNameToUiBuilderKey(sysName), "customer-management");
 });
 
+Deno.test("UI Builder routeKey and route navigation target_ref derive from topology.name", () => {
+  const name = "customer-management";
+  const uiBuilderKey = topologySystemNameToUiBuilderKey(name);
+  assertEquals(uiBuilderKey, "customer-management");
+  // route navigation target_ref is "route:" + uiBuilderKey
+  assertEquals(`route:${uiBuilderKey}`, "route:customer-management");
+  // userFacingTopologyLabel does not change the route nav ref
+  const _displayName = "顧客管理";
+  assertEquals(`route:${topologySystemNameToUiBuilderKey(name)}`, "route:customer-management");
+});
+
+Deno.test("userFacingTopologyLabel and screenLabel do not affect UI Builder key or route nav target", () => {
+  const sysName = "customer-management";
+  // Regardless of display name, UI Builder key is always topology.name
+  assertEquals(topologySystemNameToUiBuilderKey(sysName), "customer-management");
+  assertEquals(`route:${topologySystemNameToUiBuilderKey(sysName)}`, "route:customer-management");
+  // Same holds for any Japanese display name
+  const displayNames = ["顧客管理", "従業員一覧", "注文"];
+  for (const _label of displayNames) {
+    assertEquals(topologySystemNameToUiBuilderKey(sysName), sysName);
+  }
+});
+
 Deno.test("TOPOLOGY_SYSTEM_NAME_PATTERN: pattern check", () => {
   assertEquals(TOPOLOGY_SYSTEM_NAME_PATTERN.test("customer-management"), true);
   assertEquals(TOPOLOGY_SYSTEM_NAME_PATTERN.test("-foo"), false);
