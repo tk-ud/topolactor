@@ -668,6 +668,24 @@ export default function ContentsScreenDesignPanel({
         return;
       }
     }
+    if (step === 2) {
+      // Additional tables (index > 0) must also be valid topology system names
+      // because their physical table names are derived via replaceAll("-", "_").
+      const additionalTableErrors = design.logicalTables.slice(1)
+        .map((t, i) => {
+          const name = t.tableName.trim();
+          if (!name) return `追加テーブル ${i + 2}: テーブル名を入力してください。`;
+          if (!isValidTopologySystemName(name)) {
+            return `追加テーブル ${i + 2} (${name}): 英小文字・数字・ハイフンのみで指定してください（先頭・末尾・連続ハイフン不可）。`;
+          }
+          return null;
+        })
+        .filter((e): e is string => e !== null);
+      if (additionalTableErrors.length > 0) {
+        setErrors(additionalTableErrors.map((message) => ({ message })));
+        return;
+      }
+    }
     if (step === 3 && step3FieldSourceErrors.length > 0) {
       setErrors(step3FieldSourceErrors.map((message) => ({ message })));
       return;

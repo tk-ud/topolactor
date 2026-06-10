@@ -54,7 +54,8 @@ admin_console_workflow_ssot:
   # ---------------------------------------------------------------------------
   topology_naming_ssot:
     topology_system_name:
-      field: topologySystemName
+      field: topologySystemName                   # implementation field name (DTO / ManifestScreenDesignDraft / screen_data_shape JSONB)
+      also_called_in_docs_and_ui: topology.name   # shorthand used in design docs and UI hints; refers to this same field — NOT a separate concept
       required: true
       format: kebab-case (^[a-z0-9]+(?:-[a-z0-9]+)*$)
       meaning: system identifier; SSOT for route/primary-table/UI-Builder-key derivation
@@ -754,7 +755,7 @@ admin_console_workflow_ssot:
         format: kebab-case (matches topology_system_name)
         derivation: "routeKey = topologySystemName; routeNavigationTargetRef = route:<topologySystemName>"
         new_package_authoring:
-          guidance: "Enter the same value as topology.name (e.g. customer-management)"
+          guidance: "Enter the same value as topologySystemName (a.k.a. topology.name in docs; e.g. customer-management)"
           prohibited: Japanese display names, snake_case, free-form text
         existing_packages: routeKey already stored in DB; read as-is for backward compat
         responsibility_boundaries:

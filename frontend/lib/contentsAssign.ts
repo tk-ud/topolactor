@@ -102,6 +102,9 @@ export function buildAssignPayloadForStep(
     const derivedPrimaryName = sysName && isValidTopologySystemName(sysName)
       ? topologySystemNameToPhysicalTable(sysName)
       : undefined;
+    // logicalTables.tableName stores the PHYSICAL table name (underscores).
+    // Primary (i=0): derived from topologySystemName via replaceAll("-","_").
+    // Additional (i>0): user enters a kebab-case system name; converted here to physical name.
     const logicalTables = design.logicalTables.map((t, i) => ({
       tableName: i === 0 && derivedPrimaryName
         ? derivedPrimaryName
