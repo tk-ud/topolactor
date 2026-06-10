@@ -47,7 +47,7 @@ import {
   resolveCanvasRootPreviewClassName,
   resolveNodeWrapperPreviewClassName,
 } from "../runtime/layoutClassPreviewUtils.ts";
-import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
+import { resolveCssTokenValue, resolveUnknownCssTokenRefs } from "../runtime/cssDictionary.ts";
 import {
   enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
@@ -2105,11 +2105,147 @@ Deno.test("buildInlineStyleFromCssTokenRefs: multiple tokens produce merged styl
   assertEquals(style["border-radius"], "4px");
 });
 
-Deno.test("buildInlineStyleFromCssTokenRefs: unknown token silently omitted (no crash)", () => {
+// SSOT: silent_fallback_to_unknown_css_token is prohibited (css-dictionary-ssot.yaml).
+// Unknown tokens must be observable — not silently discarded.
+// resolveUnknownCssTokenRefs surfaces them so callers can warn/validate.
+Deno.test("resolveUnknownCssTokenRefs: unknown key is returned for explicit handling", () => {
+  const unknown = resolveUnknownCssTokenRefs([
+    "unknown.token.xyz",
+    "color.action.primary.background",
+  ]);
+  assertEquals(unknown, ["unknown.token.xyz"]);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: all-known refs returns empty array", () => {
+  const unknown = resolveUnknownCssTokenRefs([
+    "color.action.primary.background",
+    "radius.control.sm",
+  ]);
+  assertEquals(unknown.length, 0);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: empty input returns empty array", () => {
+  const unknown = resolveUnknownCssTokenRefs([]);
+  assertEquals(unknown.length, 0);
+});
+
+Deno.test("resolveUnknownCssTokenRefs: all-unknown refs are all returned", () => {
+  const unknown = resolveUnknownCssTokenRefs(["no.such.token", "also.unknown"]);
+  assertEquals(unknown, ["no.such.token", "also.unknown"]);
+});
+
+// buildInlineStyleFromCssTokenRefs still applies known tokens even when unknowns are present.
+// The caller is responsible for surfacing the unknown refs via resolveUnknownCssTokenRefs.
+Deno.test("buildInlineStyleFromCssTokenRefs: known tokens applied even when mixed with unknowns", () => {
   const style = buildInlineStyleFromCssTokenRefs([
     "unknown.token.xyz",
     "color.action.primary.background",
   ]);
   assertEquals(style.background, "#0070f3");
   assertFalse("unknown" in style);
+});
+
+// ─── D3/D10 regression: cssTokenRefs preserved across inlineText/link edits ─
+
+import { buildInlineStyleFromCssTokenRefs as _buildStyle } from "../runtime/cssDictionary.ts";
+import type { FlowCanvasDesignDraft } from "../components/FlowLayoutCanvas.tsx";
+
+// Simulates the designDraftByNodeId merge logic in handleDesignDraftChange.
+// partial.cssTokenRefs === undefined must NOT wipe current.cssTokenRefs.
+function mergeDesignDraft(
+  current: FlowCanvasDesignDraft,
+  partial: FlowCanvasDesignDraft,
+): FlowCanvasDesignDraft {
+  return {
+    ...current,
+    ...partial,
+    cssTokenRefs: partial.cssTokenRefs !== undefined
+      ? partial.cssTokenRefs
+      : current.cssTokenRefs,
+  };
+}
+
+Deno.test("designDraft merge: inlineText update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    inlineText: "old text",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    inlineText: "new text",
+    cssTokenRefs: undefined,
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.inlineText, "new text");
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
+});
+
+Deno.test("designDraft merge: linkHref update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    linkHref: "https://old.example.com",
+    cssTokenRefs: ["radius.control.sm", "border.control.default"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    linkHref: "https://new.example.com",
+    cssTokenRefs: undefined,
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.linkHref, "https://new.example.com");
+  assertEquals(merged.cssTokenRefs, ["radius.control.sm", "border.control.default"]);
+});
+
+Deno.test("designDraft merge: linkTarget update preserves cssTokenRefs", () => {
+  const current: FlowCanvasDesignDraft = {
+    linkTarget: "_self",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    linkTarget: "_blank",
+    cssTokenRefs: undefined,
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.linkTarget, "_blank");
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
+});
+
+Deno.test("designDraft merge: explicit empty cssTokenRefs clears tokens", () => {
+  // If partial explicitly passes [], tokens are cleared (intentional reset).
+  const current: FlowCanvasDesignDraft = {
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    cssTokenRefs: [],
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.cssTokenRefs, []);
+});
+
+Deno.test("designDraft merge: cssTokenRefs update replaces tokens and keeps other fields", () => {
+  const current: FlowCanvasDesignDraft = {
+    inlineText: "button label",
+    linkHref: "https://example.com",
+    cssTokenRefs: ["color.action.secondary.background"],
+  };
+  const partial: FlowCanvasDesignDraft = {
+    cssTokenRefs: ["color.action.primary.background", "radius.control.sm"],
+  };
+  const merged = mergeDesignDraft(current, partial);
+  assertEquals(merged.cssTokenRefs, ["color.action.primary.background", "radius.control.sm"]);
+  assertEquals(merged.inlineText, "button label");
+  assertEquals(merged.linkHref, "https://example.com");
+});
+
+Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + text edit", () => {
+  // Simulates: token selected → text edited → canvas style must include token effect.
+  const afterTokenToggle: FlowCanvasDesignDraft = {
+    inlineText: "btn",
+    cssTokenRefs: ["color.action.primary.background"],
+  };
+  const afterTextEdit: FlowCanvasDesignDraft = mergeDesignDraft(
+    afterTokenToggle,
+    { inlineText: "click me", cssTokenRefs: undefined },
+  );
+  assertEquals(afterTextEdit.inlineText, "click me");
+  assertEquals(afterTextEdit.cssTokenRefs, ["color.action.primary.background"]);
+  const style = _buildStyle(afterTextEdit.cssTokenRefs!);
+  assertEquals(style.background, "#0070f3");
 });

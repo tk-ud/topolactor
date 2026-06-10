@@ -8,7 +8,7 @@ import type { LayoutNodeKind, SizingMode, StructuralHtmlTag } from "../runtime/v
 import { layoutDimensionLabel } from "../runtime/visualLayoutUtils.ts";
 import { LayoutPreviewNodeFrame } from "./LayoutPreviewNodeFrame.tsx";
 import { UX_EMPTY_CANVAS_DRAG_GUIDANCE, UX_ROUTE_KEY_REQUIRED_FOR_CANVAS } from "../content/adminUxTerms.ts";
-import { buildInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
+import { buildInlineStyleFromCssTokenRefs, resolveUnknownCssTokenRefs } from "../runtime/cssDictionary.ts";
 
 export type FlowCanvasNode = {
   nodeId: string;
@@ -98,6 +98,15 @@ function FlowCanvasNodeView({
   const tokenStyle = design?.cssTokenRefs?.length
     ? buildInlineStyleFromCssTokenRefs(design.cssTokenRefs)
     : {};
+  if (design?.cssTokenRefs?.length) {
+    const unknown = resolveUnknownCssTokenRefs(design.cssTokenRefs);
+    if (unknown.length > 0) {
+      console.warn(
+        `[FlowLayoutCanvas] unknown cssTokenRefs on node ${node.nodeId}:`,
+        unknown,
+      );
+    }
+  }
   const style = { ...flowStyle, ...tokenStyle };
   const sizeLabel = `${layoutDimensionLabel(node.width ?? "auto")}×${
     layoutDimensionLabel(node.height ?? "auto")

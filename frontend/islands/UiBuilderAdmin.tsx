@@ -4214,7 +4214,15 @@ function LayoutBuilderSection({
   ) => {
     setDesignDraftByNodeId((prev) => {
       const current = prev.get(nodeId) ?? {};
-      const merged: DesignDraft = { ...current, ...partial };
+      const merged: DesignDraft = {
+        ...current,
+        ...partial,
+        // Preserve existing cssTokenRefs if the partial update doesn't include them.
+        // Spread alone would overwrite with undefined when partial.cssTokenRefs is absent.
+        cssTokenRefs: partial.cssTokenRefs !== undefined
+          ? partial.cssTokenRefs
+          : current.cssTokenRefs,
+      };
       const cssUnchanged =
         JSON.stringify(current.cssTokenRefs ?? []) ===
         JSON.stringify(merged.cssTokenRefs ?? []);
@@ -5874,7 +5882,7 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
-      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
+      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "", []);
     }
     setPropsDraft(selectedCanvasNode.propsJson ?? "");
     setPropsError(null);
@@ -6159,7 +6167,7 @@ function PackageDesignPanel({
                     onInput={(e) => {
                       const v = (e.target as HTMLInputElement).value;
                       setInlineText(v);
-                      pushCanvasPreview(layoutNodeId, v, linkHref, linkTarget);
+                      pushCanvasPreview(layoutNodeId, v, linkHref, linkTarget, cssTokenRefs);
                     }}
                     placeholder="表示テキスト / 子テキストノード"
                   />
@@ -6173,7 +6181,7 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkHref(v);
-                        pushCanvasPreview(layoutNodeId, inlineText, v, linkTarget);
+                        pushCanvasPreview(layoutNodeId, inlineText, v, linkTarget, cssTokenRefs);
                       }}
                       placeholder="https://..."
                     />
@@ -6186,7 +6194,7 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkTarget(v);
-                        pushCanvasPreview(layoutNodeId, inlineText, linkHref, v);
+                        pushCanvasPreview(layoutNodeId, inlineText, linkHref, v, cssTokenRefs);
                       }}
                       placeholder="_blank 等"
                     />
