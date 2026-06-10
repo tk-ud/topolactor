@@ -2539,11 +2539,11 @@ public partial class AdminRuntime
 
         // Extract existing topologySystemName from persisted screen_data_shape topology entry.
         string? existingTopologySystemName = null;
-        foreach (var entry in draftDetail.Topology)
+        foreach (var topologyEntry in draftDetail.Topology)
         {
-            if (entry.TryGetProperty("type", out var typeProp) &&
+            if (topologyEntry.TryGetProperty("type", out var typeProp) &&
                 typeProp.GetString() == ManifestCanonicalProjection.ScreenDataShapeEntryType &&
-                entry.TryGetProperty("topologySystemName", out var tsnProp) &&
+                topologyEntry.TryGetProperty("topologySystemName", out var tsnProp) &&
                 tsnProp.ValueKind == JsonValueKind.String &&
                 !string.IsNullOrWhiteSpace(tsnProp.GetString()))
             {
