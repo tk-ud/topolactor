@@ -9,6 +9,12 @@
  * Resolved value overwrites the target prop key (propBindings wins over propsJson/stateJson for the same key).
  * When source path resolves to undefined, the prop key is left absent (no error — data may be missing).
  * When resolved value is not an array, returns explicit error.
+ *
+ * Path fields (labelPath / valuePath / keyPath / childrenPath):
+ *   - rowsToOptions:              uses labelPath → output.label, valuePath → output.value
+ *   - activeColumnsToTableColumns: uses labelPath → output.header for object columns
+ *   - keyPath:                    component-informational; no automatic element mutation
+ *   - childrenPath:               component-informational; no automatic element mutation
  */
 
 import type { PropBinding } from "../api/dispatch.ts";
@@ -16,6 +22,7 @@ import type { PropBinding } from "../api/dispatch.ts";
 /**
  * Component kinds that accept array props, and which prop names they accept as arrays.
  * Only props listed here may be the target of a propBinding.
+ * SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.component_array_prop_capabilities
  */
 export const COMPONENT_ARRAY_PROP_CAPABILITIES: Record<string, string[]> = {
   "data_display/table": ["rows", "columns"],
@@ -67,20 +74,22 @@ export function resolveRuntimeDataPath(
 
 /**
  * Applies a named transform from the allowlist to the resolved array.
+ * Receives the full binding descriptor so transforms can use path fields.
  * Returns { ok: false, error } when transform is not in the allowlist.
  */
 export function applyPropBindingTransform(
   value: unknown[],
   transform: string,
+  binding: PropBinding,
 ): { ok: true; value: unknown[] } | { ok: false; error: string } {
   if (!ALLOWED_PROP_BINDING_TRANSFORMS.has(transform)) {
     return { ok: false, error: `LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM: transform "${transform}" is not in the allowlist` };
   }
   switch (transform) {
     case "activeColumnsToTableColumns":
-      return { ok: true, value: activeColumnsToTableColumns(value) };
+      return { ok: true, value: activeColumnsToTableColumns(value, binding) };
     case "rowsToOptions":
-      return { ok: true, value: value };
+      return { ok: true, value: rowsToOptions(value, binding) };
     default:
       return { ok: false, error: `LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM: transform "${transform}" is not implemented` };
   }
@@ -88,12 +97,45 @@ export function applyPropBindingTransform(
 
 /**
  * Converts activeColumns (string[] or object[]) to table column descriptors.
- * Strings become { key, header }; objects are passed through.
+ * Strings become { key, header }.
+ * Objects: when labelPath is specified, uses element[labelPath] as header; otherwise passes through.
  */
-function activeColumnsToTableColumns(value: unknown[]): unknown[] {
+function activeColumnsToTableColumns(
+  value: unknown[],
+  binding: PropBinding,
+): unknown[] {
   return value.map((col) => {
     if (typeof col === "string") return { key: col, header: col };
+    if (typeof col === "object" && col !== null && !Array.isArray(col)) {
+      const c = col as Record<string, unknown>;
+      if (binding.labelPath) {
+        return { ...c, header: c[binding.labelPath] ?? c.header ?? c.key };
+      }
+      return c;
+    }
     return col;
+  });
+}
+
+/**
+ * Maps rows to option objects using labelPath and valuePath.
+ * When labelPath or valuePath is specified, each element is mapped to
+ * { ...element, value: element[valuePath], label: element[labelPath] }.
+ * When neither is specified, rows are passed through as-is (identity).
+ */
+function rowsToOptions(
+  value: unknown[],
+  binding: PropBinding,
+): unknown[] {
+  const { labelPath, valuePath } = binding;
+  if (!labelPath && !valuePath) return value;
+  return value.map((row) => {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) return row;
+    const r = row as Record<string, unknown>;
+    const result: Record<string, unknown> = { ...r };
+    if (valuePath) result.value = r[valuePath];
+    if (labelPath) result.label = r[labelPath];
+    return result;
   });
 }
 
@@ -127,7 +169,7 @@ export type PropBindingResult =
  *   3. resolve path against emissionData
  *   4. skip if resolved value is undefined (data absent)
  *   5. error if resolved value is not an array
- *   6. apply transform if specified
+ *   6. apply transform (with full binding descriptor for path fields) if specified
  *   7. merge into props
  *
  * Returns { ok: false, error } on first validation or transform error.
@@ -163,7 +205,7 @@ export function resolvePropBindings(
 
     let finalValue: unknown[] = resolved;
     if (transform) {
-      const transformResult = applyPropBindingTransform(resolved, transform);
+      const transformResult = applyPropBindingTransform(resolved, transform, binding);
       if (!transformResult.ok) return { ok: false, error: transformResult.error };
       finalValue = transformResult.value;
     }

@@ -57,24 +57,57 @@ Deno.test("resolveRuntimeDataPath: resolves activeColumns", () => {
 // ── applyPropBindingTransform ────────────────────────────────────────────────
 
 Deno.test("applyPropBindingTransform: activeColumnsToTableColumns converts strings", () => {
-  const result = applyPropBindingTransform(["name", "age"], "activeColumnsToTableColumns");
+  const result = applyPropBindingTransform(["name", "age"], "activeColumnsToTableColumns", { source: "emission.data.activeColumns" });
   assertEquals(result, { ok: true, value: [{ key: "name", header: "name" }, { key: "age", header: "age" }] });
 });
 
 Deno.test("applyPropBindingTransform: activeColumnsToTableColumns passes objects through", () => {
   const cols = [{ key: "name", header: "Name" }];
-  const result = applyPropBindingTransform(cols, "activeColumnsToTableColumns");
+  const result = applyPropBindingTransform(cols, "activeColumnsToTableColumns", { source: "emission.data.activeColumns" });
   assertEquals(result, { ok: true, value: cols });
 });
 
-Deno.test("applyPropBindingTransform: rowsToOptions passes through", () => {
+Deno.test("applyPropBindingTransform: activeColumnsToTableColumns uses labelPath on objects", () => {
+  const cols = [{ key: "name", displayLabel: "名前" }];
+  const result = applyPropBindingTransform(cols, "activeColumnsToTableColumns", { source: "emission.data.activeColumns", labelPath: "displayLabel" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals((result.value[0] as Record<string, unknown>).header, "名前");
+  }
+});
+
+Deno.test("applyPropBindingTransform: rowsToOptions without paths passes through", () => {
   const rows = [{ id: 1, label: "A" }];
-  const result = applyPropBindingTransform(rows, "rowsToOptions");
+  const result = applyPropBindingTransform(rows, "rowsToOptions", { source: "emission.data.rows" });
   assertEquals(result, { ok: true, value: rows });
 });
 
+Deno.test("applyPropBindingTransform: rowsToOptions with labelPath and valuePath maps fields", () => {
+  const rows = [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }];
+  const result = applyPropBindingTransform(rows, "rowsToOptions", { source: "emission.data.rows", labelPath: "name", valuePath: "id" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const opts = result.value as Array<Record<string, unknown>>;
+    assertEquals(opts[0].value, 1);
+    assertEquals(opts[0].label, "Alice");
+    assertEquals(opts[1].value, 2);
+    assertEquals(opts[1].label, "Bob");
+  }
+});
+
+Deno.test("applyPropBindingTransform: rowsToOptions with only labelPath sets label only", () => {
+  const rows = [{ id: 1, name: "Alice" }];
+  const result = applyPropBindingTransform(rows, "rowsToOptions", { source: "emission.data.rows", labelPath: "name" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const opt = result.value[0] as Record<string, unknown>;
+    assertEquals(opt.label, "Alice");
+    assertEquals("value" in opt, false);
+  }
+});
+
 Deno.test("applyPropBindingTransform: unknown transform returns error", () => {
-  const result = applyPropBindingTransform([], "eval()");
+  const result = applyPropBindingTransform([], "eval()", { source: "emission.data.rows" });
   assertEquals(result.ok, false);
   if (!result.ok) {
     assertEquals(result.error.includes("LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM"), true);
