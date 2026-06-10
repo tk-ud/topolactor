@@ -83,6 +83,37 @@ export type LayoutNodeKind = "catalog_component" | "structural_html";
 /** Canvas width/height: px number, CSS percent (e.g. "50%"), or "auto". */
 export type LayoutDimension = number | string;
 
+/**
+ * Controls whether width/height is applied as inline style.
+ *   auto   — component default size for display-only; not saved as inline style.
+ *   preset — sizing layoutClassRef drives width; inline style suppressed.
+ *   custom — explicit user value; saved and projected as inline style.
+ * Absent (undefined) → backward-compat: behaves like "custom" (always projected).
+ */
+export type SizingMode = "auto" | "preset" | "custom";
+
+/** layout.width.* classKey prefix — all sizing class refs use this namespace. */
+const SIZING_WIDTH_KEY_PREFIX = "layout.width.";
+
+/** Returns true when any classRef is a sizing width class (layout.width.*). */
+export function hasSizingWidthClassRef(classRefs: readonly string[]): boolean {
+  return classRefs.some((k) => k.trim().startsWith(SIZING_WIDTH_KEY_PREFIX));
+}
+
+/**
+ * Derive widthMode after a layoutClassRefs toggle.
+ * - sizing classRef present → "preset"
+ * - no sizing classRef and current mode was "custom" → keep "custom"
+ * - otherwise → "auto"
+ */
+export function resolveSizingModeAfterToggle(
+  classRefsAfterToggle: readonly string[],
+  currentMode: SizingMode | undefined,
+): SizingMode {
+  if (hasSizingWidthClassRef(classRefsAfterToggle)) return "preset";
+  return currentMode === "custom" ? "custom" : "auto";
+}
+
 export function isPercentDimension(dim: LayoutDimension): boolean {
   return typeof dim === "string" && dim.trim().endsWith("%");
 }
@@ -163,6 +194,15 @@ export interface VisualNodePayload {
   y: number;
   width: LayoutDimension;
   height: LayoutDimension;
+  /**
+   * Controls inline width style projection.
+   * undefined = backward-compat (always project, as before).
+   * "auto"   = display-only default; not saved or projected as inline style.
+   * "preset" = sizing layoutClassRef active; inline style suppressed.
+   * "custom" = explicit user value; saved and projected as inline style.
+   */
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
   nodeKind?: LayoutNodeKind;
   htmlTag?: StructuralHtmlTag;
   layoutClassRefs?: string[];
@@ -243,6 +283,8 @@ export function makeStructuralHtmlNode(
     y: options.y,
     width: options.width ?? DEFAULT_VISUAL_NODE_WIDTH,
     height: options.height ?? DEFAULT_VISUAL_NODE_HEIGHT,
+    widthMode: "auto" as SizingMode,
+    heightMode: "auto" as SizingMode,
   };
 }
 
@@ -327,6 +369,12 @@ function readPatchNode(
       : palette?.componentKind,
     propsJson: typeof raw.propsJson === "string" ? raw.propsJson : undefined,
     stateJson: typeof raw.stateJson === "string" ? raw.stateJson : undefined,
+    widthMode: (raw.widthMode === "auto" || raw.widthMode === "preset" || raw.widthMode === "custom")
+      ? raw.widthMode as SizingMode
+      : undefined,
+    heightMode: (raw.heightMode === "auto" || raw.heightMode === "preset" || raw.heightMode === "custom")
+      ? raw.heightMode as SizingMode
+      : undefined,
   };
 }
 
@@ -403,6 +451,8 @@ export function seedDraftNodesFromPalette(
     y: startY + index * rowGap,
     width: DEFAULT_VISUAL_NODE_WIDTH,
     height: DEFAULT_VISUAL_NODE_HEIGHT,
+    widthMode: "auto" as SizingMode,
+    heightMode: "auto" as SizingMode,
     componentId: entry.componentId,
     packageId: entry.packageId,
     layoutId: entry.layoutId,
@@ -440,8 +490,12 @@ export function buildVisualLayoutPatchJson(
         parentNodeId: n.parentNodeId || null,
         gridCol: n.gridCol,
         gridRow: n.gridRow,
-        width: n.width,
-        height: n.height,
+        // width/height are only serialized when mode is "custom" or absent (backward-compat).
+        // "auto" and "preset" modes suppress inline dimensions; sizing classRef or CSS drives size.
+        ...(!n.widthMode || n.widthMode === "custom" ? { width: n.width } : {}),
+        ...(!n.heightMode || n.heightMode === "custom" ? { height: n.height } : {}),
+        ...(n.widthMode ? { widthMode: n.widthMode } : {}),
+        ...(n.heightMode ? { heightMode: n.heightMode } : {}),
       })),
     },
     null,

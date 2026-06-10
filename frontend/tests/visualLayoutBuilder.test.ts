@@ -1126,7 +1126,9 @@ Deno.test("canvas workspace: buildVisualLayoutPatchJson is the canonical patch b
   assertEquals(parsed.nodes[0].nodeKind, "structural_html");
   assertEquals(parsed.nodes[0].x, undefined);
   assertEquals(parsed.nodes[0].y, undefined);
-  assertEquals(typeof parsed.nodes[0].width, "number");
+  // widthMode defaults to "auto" → width is NOT serialized as inline style
+  assertEquals(parsed.nodes[0].width, undefined);
+  assertEquals(parsed.nodes[0].widthMode, "auto");
   assertEquals(typeof parsed.nodes[0].orderIndex, "number");
 });
 
@@ -1595,3 +1597,175 @@ Deno.test("adminUxTerms: design save label is node-scoped, not tab-scoped", () =
   assertEquals(UX_DESIGN_NODE_SAVE_LABEL, "選択ノードのデザインを保存");
 });
 
+// ─── layoutClassDictionary: new vocabulary ────────────────────────────────────
+
+import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "../runtime/topologyLayoutClassDictionary.ts";
+
+Deno.test("layoutClassDictionary: all entries have non-empty label", () => {
+  for (const e of TOPOLOGY_LAYOUT_CLASS_DICTIONARY) {
+    assert(e.label.length > 0, `entry ${e.classKey} must have non-empty label`);
+  }
+});
+
+Deno.test("layoutClassDictionary: direction entries have conflictGroup=direction", () => {
+  const directionEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "direction");
+  assert(directionEntries.length >= 3);
+  for (const e of directionEntries) {
+    assertEquals(e.conflictGroup, "direction", `${e.classKey} must have conflictGroup=direction`);
+  }
+});
+
+Deno.test("layoutClassDictionary: alignment entries have conflictGroup align_h or align_v", () => {
+  const alignEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "alignment");
+  assert(alignEntries.length >= 4);
+  for (const e of alignEntries) {
+    assert(
+      e.conflictGroup === "align_h" || e.conflictGroup === "align_v",
+      `alignment entry ${e.classKey} must have align_h or align_v conflictGroup`,
+    );
+  }
+});
+
+Deno.test("layoutClassDictionary: sizing entries have conflictGroup=width", () => {
+  const sizingEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "sizing");
+  assert(sizingEntries.length >= 2);
+  for (const e of sizingEntries) {
+    assertEquals(e.conflictGroup, "width");
+  }
+});
+
+Deno.test("layoutClassDictionary: layout.direction.stack resolves in canvas root preview", () => {
+  const className = resolveCanvasRootPreviewClassName(["layout.direction.stack"]);
+  assertEquals(className, "topolactor-topology-layout-direction-stack");
+});
+
+Deno.test("layoutClassDictionary: layout.align.center filtered for layout_section role", () => {
+  const filtered = filterLayoutClassRefsByAllowedFor(["layout.align.center"], "layout_section");
+  assertEquals(filtered, ["layout.align.center"]);
+});
+
+
+// ─── SizingMode: widthMode/heightMode inline style suppression ────────────────
+
+import {
+  hasSizingWidthClassRef,
+  resolveSizingModeAfterToggle,
+} from "../runtime/visualLayoutUtils.ts";
+import { buildFlowNodeStyle } from "../runtime/layoutNodeFlowProjection.ts";
+
+Deno.test("hasSizingWidthClassRef: detects layout.width.* keys", () => {
+  assertEquals(hasSizingWidthClassRef(["layout.width.full"]), true);
+  assertEquals(hasSizingWidthClassRef(["layout.width.sm"]), true);
+  assertEquals(hasSizingWidthClassRef(["layout.direction.stack"]), false);
+  assertEquals(hasSizingWidthClassRef(["layout.align.center"]), false);
+  assertEquals(hasSizingWidthClassRef([]), false);
+});
+
+Deno.test("hasSizingWidthClassRef: mixed refs — returns true when any is sizing", () => {
+  assertEquals(
+    hasSizingWidthClassRef(["layout.direction.row", "layout.width.full"]),
+    true,
+  );
+});
+
+Deno.test("resolveSizingModeAfterToggle: sizing classRef added → preset", () => {
+  const mode = resolveSizingModeAfterToggle(["layout.width.full"], undefined);
+  assertEquals(mode, "preset");
+});
+
+Deno.test("resolveSizingModeAfterToggle: sizing classRef removed, no remaining → auto", () => {
+  const mode = resolveSizingModeAfterToggle(["layout.direction.row"], undefined);
+  assertEquals(mode, "auto");
+});
+
+Deno.test("resolveSizingModeAfterToggle: sizing classRef removed, was custom → keep custom", () => {
+  const mode = resolveSizingModeAfterToggle(["layout.direction.row"], "custom");
+  assertEquals(mode, "custom");
+});
+
+Deno.test("buildFlowNodeStyle: widthMode=auto suppresses width", () => {
+  const style = buildFlowNodeStyle({ width: 140, height: 60, widthMode: "auto" });
+  assertEquals(style.width, undefined);
+  assertEquals(style.height, "60px");
+});
+
+Deno.test("buildFlowNodeStyle: widthMode=preset suppresses width", () => {
+  const style = buildFlowNodeStyle({ width: 140, height: 60, widthMode: "preset" });
+  assertEquals(style.width, undefined);
+  assertEquals(style.height, "60px");
+});
+
+Deno.test("buildFlowNodeStyle: widthMode=custom preserves width", () => {
+  const style = buildFlowNodeStyle({ width: 200, height: 80, widthMode: "custom" });
+  assertEquals(style.width, "200px");
+  assertEquals(style.height, "80px");
+});
+
+Deno.test("buildFlowNodeStyle: widthMode=undefined preserves width (backward-compat)", () => {
+  const style = buildFlowNodeStyle({ width: 140, height: 60 });
+  assertEquals(style.width, "140px");
+  assertEquals(style.height, "60px");
+});
+
+Deno.test("buildFlowNodeStyle: heightMode=preset suppresses height only", () => {
+  const style = buildFlowNodeStyle({ width: 140, height: 60, heightMode: "preset" });
+  assertEquals(style.width, "140px");
+  assertEquals(style.height, undefined);
+});
+
+Deno.test("buildVisualLayoutPatchJson: widthMode=preset omits width from output", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    widthMode: "preset",
+    layoutClassRefs: ["layout.width.full"],
+  };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].width, undefined);
+  assertEquals(parsed.nodes[0].height, 60);
+  assertEquals(parsed.nodes[0].widthMode, "preset");
+});
+
+Deno.test("buildVisualLayoutPatchJson: widthMode=auto omits width and height", () => {
+  const node: VisualNodePayload = { ...sampleNode, widthMode: "auto", heightMode: "auto" };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].width, undefined);
+  assertEquals(parsed.nodes[0].height, undefined);
+  assertEquals(parsed.nodes[0].widthMode, "auto");
+  assertEquals(parsed.nodes[0].heightMode, "auto");
+});
+
+Deno.test("buildVisualLayoutPatchJson: widthMode=custom preserves width", () => {
+  const node: VisualNodePayload = { ...sampleNode, widthMode: "custom", heightMode: "custom" };
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([node]));
+  assertEquals(parsed.nodes[0].width, 140);
+  assertEquals(parsed.nodes[0].height, 60);
+});
+
+Deno.test("buildVisualLayoutPatchJson: widthMode=undefined preserves width (backward-compat)", () => {
+  const parsed = JSON.parse(buildVisualLayoutPatchJson([sampleNode]));
+  assertEquals(parsed.nodes[0].width, 140);
+  assertEquals(parsed.nodes[0].height, 60);
+  assertEquals(parsed.nodes[0].widthMode, undefined);
+});
+
+Deno.test("parseVisualLayoutPatchJson: widthMode round-trips through patch", () => {
+  const node: VisualNodePayload = {
+    ...sampleNode,
+    widthMode: "preset",
+    heightMode: "auto",
+    layoutClassRefs: ["layout.width.full"],
+  };
+  const json = buildVisualLayoutPatchJson([node]);
+  const result = parseVisualLayoutPatchJson(json, []);
+  assertEquals(result.ok, true);
+  if (!result.ok) return;
+  assertEquals(result.value.nodes[0].widthMode, "preset");
+  assertEquals(result.value.nodes[0].heightMode, "auto");
+  assertEquals(result.value.nodes[0].width, 140);
+});
+
+Deno.test("makeStructuralHtmlNode: defaults to widthMode=auto", () => {
+  const node = makeStructuralHtmlNode("div", { nodeId: "test", x: 0, y: 0, orderIndex: 0 });
+  assertEquals(node.widthMode, "auto");
+  assertEquals(node.heightMode, "auto");
+});

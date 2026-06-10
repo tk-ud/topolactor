@@ -5,7 +5,7 @@ import {
   resolveLayoutClassPreviewClassName,
   resolveNodeWrapperPreviewClassName,
 } from "./layoutClassPreviewUtils.ts";
-import { formatLayoutDimensionCss } from "./visualLayoutUtils.ts";
+import { formatLayoutDimensionCss, type SizingMode } from "./visualLayoutUtils.ts";
 import { TOPOLOGY_LAYOUT_CLASS_DICTIONARY } from "./topologyLayoutClassDictionary.ts";
 
 /** Default root flow container when no layoutClassRefs are set. */
@@ -19,19 +19,31 @@ export type FlowLayoutNodeLike = {
   orderIndex?: number;
   width?: number | string;
   height?: number | string;
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
   layoutClassRefs?: string[];
 };
 
-/** Flow projection: width/height only — x/y are not projected (SSOT flow mode). */
+/**
+ * Flow projection: width/height as inline style — x/y are not projected (SSOT flow mode).
+ * Inline dimension is suppressed when widthMode/heightMode is "auto" or "preset";
+ * undefined is backward-compat (always project, pre-mode behavior).
+ */
 export function buildFlowNodeStyle(spec: {
   width?: number | string;
   height?: number | string;
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
 }): Record<string, string> {
   const style: Record<string, string> = {};
-  const widthCss = formatLayoutDimensionCss(spec.width);
-  const heightCss = formatLayoutDimensionCss(spec.height);
-  if (widthCss !== undefined) style.width = widthCss;
-  if (heightCss !== undefined) style.height = heightCss;
+  if (!spec.widthMode || spec.widthMode === "custom") {
+    const widthCss = formatLayoutDimensionCss(spec.width);
+    if (widthCss !== undefined) style.width = widthCss;
+  }
+  if (!spec.heightMode || spec.heightMode === "custom") {
+    const heightCss = formatLayoutDimensionCss(spec.height);
+    if (heightCss !== undefined) style.height = heightCss;
+  }
   return style;
 }
 
@@ -71,7 +83,10 @@ export function flowRootClassName(
 
 /** Merge inline style object with className for flow nodes. */
 export function flowNodePresentation(
-  spec: Pick<ComponentSpec, "width" | "height" | "layoutClassRefs">,
+  spec: Pick<ComponentSpec, "width" | "height" | "layoutClassRefs"> & {
+    widthMode?: SizingMode;
+    heightMode?: SizingMode;
+  },
   options: {
     isSelected?: boolean;
     allowedFor?: string | readonly string[];

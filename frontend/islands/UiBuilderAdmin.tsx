@@ -52,8 +52,10 @@ import {
   type PaletteDraftSeedEntry,
   parseVisualLayoutPatchJson,
   reorderLayoutNodeStack,
+  resolveSizingModeAfterToggle,
   RESPONSIVE_BREAKPOINTS,
   type ResponsiveTokenRules,
+  type SizingMode,
   isPaletteAutoSeedCanvas,
   seedDraftNodesFromPalette,
   snapToGrid,
@@ -172,6 +174,8 @@ type DraftNode = {
   y: number;
   width: LayoutDimension;
   height: LayoutDimension;
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
   componentId?: string;
   packageId?: string;
   layoutId?: string;
@@ -1773,6 +1777,21 @@ function CssTokenPicker({
   );
 }
 
+const CATEGORY_LABEL_MAP: Record<string, string> = {
+  layout: "レイアウト",
+  direction: "方向",
+  alignment: "揃え",
+  sizing: "サイズ",
+  spacing: "余白・間隔",
+  responsive: "レスポンシブ",
+  surface: "面・見た目",
+  shell: "シェル",
+  container: "コンテナ種別",
+  form_layout: "フォームレイアウト",
+  boundary: "境界",
+  state: "状態",
+};
+
 function TopologyLayoutClassPicker({
   selectedClassRefs,
   onToggle,
@@ -1788,30 +1807,17 @@ function TopologyLayoutClassPicker({
 }): JSX.Element {
   const [keyFilter, setKeyFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [scopeFilterState, setScopeFilterState] = useState(scopeFilter);
-  const [roleFilter, setRoleFilter] = useState("");
 
   const categories = [
     ...new Set(TOPOLOGY_LAYOUT_CLASS_DICTIONARY.map((e) => e.category)),
   ].sort();
-  const scopes = [
-    ...new Set(
-      TOPOLOGY_LAYOUT_CLASS_DICTIONARY.flatMap((e) => e.projectionScope),
-    ),
-  ].sort();
-  const roles = [
-    ...new Set(TOPOLOGY_LAYOUT_CLASS_DICTIONARY.map((e) => e.semanticRole)),
-  ].sort();
 
   const filtered = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => {
     if (
-      keyFilter && !e.classKey.toLowerCase().includes(keyFilter.toLowerCase())
+      keyFilter && !e.classKey.toLowerCase().includes(keyFilter.toLowerCase()) &&
+      !e.label.toLowerCase().includes(keyFilter.toLowerCase())
     ) return false;
     if (categoryFilter && e.category !== categoryFilter) return false;
-    if (scopeFilterState && !e.projectionScope.includes(scopeFilterState)) {
-      return false;
-    }
-    if (roleFilter && e.semanticRole !== roleFilter) return false;
     if (allowedForFilter && !e.allowedFor.includes(allowedForFilter)) {
       return false;
     }
@@ -1827,6 +1833,11 @@ function TopologyLayoutClassPicker({
   const preview = selectedClassRefs.length > 0
     ? resolveTopologyLayoutClassRefs(selectedClassRefs)
     : null;
+
+  const grouped = filtered.reduce<Record<string, typeof filtered>>((acc, e) => {
+    (acc[e.category] = acc[e.category] ?? []).push(e);
+    return acc;
+  }, {});
 
   return (
     <div>
@@ -1847,24 +1858,9 @@ function TopologyLayoutClassPicker({
           class="input w-auto text-xs"
         >
           <option value="">カテゴリ（すべて）</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select
-          value={scopeFilterState}
-          onChange={(e) =>
-            setScopeFilterState((e.target as HTMLSelectElement).value)}
-          class="input w-auto text-xs"
-        >
-          <option value="">適用範囲（すべて）</option>
-          {scopes.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select
-          value={roleFilter}
-          onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)}
-          class="input w-auto text-xs"
-        >
-          <option value="">役割（すべて）</option>
-          {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+          {categories.map((c) => (
+            <option key={c} value={c}>{CATEGORY_LABEL_MAP[c] ?? c}</option>
+          ))}
         </select>
       </div>
 
@@ -1874,16 +1870,19 @@ function TopologyLayoutClassPicker({
             選択済みスタイルクラス ({selectedClassRefs.length})
           </strong>
           <div class="mt-1 flex flex-wrap gap-1">
-            {selectedClassRefs.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onToggle(key)}
-                class="rounded border border-blue-400 bg-white px-1.5 py-0.5 font-mono text-xs hover:bg-red-50"
-              >
-                {key} ✕
-              </button>
-            ))}
+            {selectedClassRefs.map((key) => {
+              const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) => e.classKey === key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onToggle(key)}
+                  class="rounded border border-blue-400 bg-white px-1.5 py-0.5 text-xs hover:bg-red-50"
+                >
+                  {entry?.label ?? key} ✕
+                </button>
+              );
+            })}
           </div>
           {preview?.ok && (
             <p class="text-muted-xs mt-1 mb-0">
@@ -1896,49 +1895,48 @@ function TopologyLayoutClassPicker({
         </div>
       )}
 
-      <div class="table-wrap max-h-64 overflow-y-auto">
-        <table class="table font-mono text-xs">
-          <thead>
-            <tr>
-              {[
-                "選択",
-                "クラスキー",
-                "クラス名",
-                "カテゴリ",
-                "適用範囲",
-                "対象",
-              ].map((h) => <th key={h}>{h}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((e) => (
-              <tr
-                key={e.classKey}
-                class={selectedClassRefs.includes(e.classKey)
-                  ? "bg-blue-50"
-                  : ""}
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedClassRefs.includes(e.classKey)}
-                    onChange={() => onToggle(e.classKey)}
-                  />
-                </td>
-                <td>
-                  <code>{e.classKey}</code>
-                </td>
-                <td>
-                  <code>{e.className}</code>
-                </td>
-                <td>{e.category}</td>
-                <td>{e.projectionScope.join(",")}</td>
-                <td>{e.allowedFor.join(",")}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div class="max-h-72 overflow-y-auto">
+        {Object.entries(grouped).map(([cat, entries]) => (
+          <div key={cat} class="mb-2">
+            <div class="mb-1 text-[0.6rem] font-semibold uppercase tracking-wide text-gray-400">
+              {CATEGORY_LABEL_MAP[cat] ?? cat}
+            </div>
+            <div class="flex flex-wrap gap-1">
+              {entries.map((e) => {
+                const isSelected = selectedClassRefs.includes(e.classKey);
+                return (
+                  <button
+                    key={e.classKey}
+                    type="button"
+                    onClick={() => onToggle(e.classKey)}
+                    title={`${e.classKey}${e.description ? "\n" + e.description : ""}`}
+                    class={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+                      isSelected
+                        ? "border-blue-500 bg-blue-100 font-semibold"
+                        : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                  >
+                    <span>{e.label}</span>
+                    {e.conflictGroup && (
+                      <span class="text-[0.5rem] text-gray-400 font-mono">[{e.conflictGroup}]</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </div>
+      <details class="mt-2">
+        <summary class="cursor-pointer text-[0.6rem] text-gray-400">raw keys (advanced)</summary>
+        <div class="mt-1 flex flex-wrap gap-1">
+          {filtered.map((e) => (
+            <span key={e.classKey} class="font-mono text-[0.6rem] text-gray-500">
+              {e.classKey}
+            </span>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
@@ -2385,36 +2383,55 @@ function CanvasInspector({
         <legend class="mb-1 text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
           サイズ
         </legend>
+        {node.widthMode === "preset" && (
+          <p class="mb-1 rounded bg-blue-50 px-1.5 py-0.5 text-[0.6rem] text-blue-700">
+            幅は sizing classRef が制御しています（preset モード）。カスタム幅入力は無効です。
+          </p>
+        )}
         <div class="grid grid-cols-2 gap-1">
-          {(["width", "height"] as const).map((f) => (
-            <label key={f} class="flex flex-col gap-0.5">
-              <span class="text-[0.65rem] text-gray-600">
-                {FIELD_LABELS[f]}
-              </span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={layoutDimensionLabel(node[f])}
-                placeholder={f === "width" ? "140 / 50% / auto" : "60 / 100% / auto"}
-                onInput={(e) =>
-                  handleDimension(
-                    f,
-                    (e.target as HTMLInputElement).value,
-                    true,
-                    false,
+          {(["width", "height"] as const).map((f) => {
+            const modeField = f === "width" ? node.widthMode : node.heightMode;
+            const isPreset = modeField === "preset";
+            return (
+              <label key={f} class="flex flex-col gap-0.5">
+                <span class="text-[0.65rem] text-gray-600">
+                  {FIELD_LABELS[f]}
+                  {modeField && modeField !== "custom" && (
+                    <span class="ml-1 font-mono text-[0.55rem] text-gray-400">
+                      [{modeField}]
+                    </span>
                   )}
-                onChange={(e) =>
-                  handleDimension(
-                    f,
-                    (e.target as HTMLInputElement).value,
-                    true,
-                    true,
-                  )}
-                class="input px-1 py-0.5"
-                aria-label={FIELD_LABELS[f]}
-              />
-            </label>
-          ))}
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={isPreset ? "" : layoutDimensionLabel(node[f])}
+                  placeholder={
+                    isPreset
+                      ? "sizing classRef が制御"
+                      : f === "width" ? "140 / 50% / auto" : "60 / 100% / auto"
+                  }
+                  disabled={isPreset}
+                  onInput={(e) =>
+                    handleDimension(
+                      f,
+                      (e.target as HTMLInputElement).value,
+                      true,
+                      false,
+                    )}
+                  onChange={(e) =>
+                    handleDimension(
+                      f,
+                      (e.target as HTMLInputElement).value,
+                      true,
+                      true,
+                    )}
+                  class={`input px-1 py-0.5 ${isPreset ? "cursor-not-allowed opacity-50" : ""}`}
+                  aria-label={FIELD_LABELS[f]}
+                />
+              </label>
+            );
+          })}
         </div>
       </fieldset>
       <div class="flex flex-wrap gap-1">
@@ -4063,6 +4080,8 @@ function LayoutBuilderSection({
       y: 0,
       width: defaults.width,
       height: defaults.height,
+      widthMode: "auto" as SizingMode,
+      heightMode: "auto" as SizingMode,
     };
   };
 
@@ -4248,7 +4267,8 @@ function LayoutBuilderSection({
         const layoutClassRefs = current.includes(classKey)
           ? current.filter((k) => k !== classKey)
           : [...current, classKey];
-        return { ...n, layoutClassRefs };
+        const widthMode = resolveSizingModeAfterToggle(layoutClassRefs, n.widthMode);
+        return { ...n, layoutClassRefs, widthMode };
       });
       pushHistory(next, "ノード layoutClassRefs を変更");
       return next;

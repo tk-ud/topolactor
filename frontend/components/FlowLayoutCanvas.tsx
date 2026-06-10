@@ -4,7 +4,7 @@ import {
   flowRootClassName,
 } from "../runtime/layoutNodeFlowProjection.ts";
 import { lookupTopologyLayoutClassKey } from "../runtime/topologyLayoutClassResolver.ts";
-import type { LayoutNodeKind, StructuralHtmlTag } from "../runtime/visualLayoutUtils.ts";
+import type { LayoutNodeKind, SizingMode, StructuralHtmlTag } from "../runtime/visualLayoutUtils.ts";
 import { layoutDimensionLabel } from "../runtime/visualLayoutUtils.ts";
 import { LayoutPreviewNodeFrame } from "./LayoutPreviewNodeFrame.tsx";
 import { UX_EMPTY_CANVAS_DRAG_GUIDANCE, UX_ROUTE_KEY_REQUIRED_FOR_CANVAS } from "../content/adminUxTerms.ts";
@@ -22,6 +22,8 @@ export type FlowCanvasNode = {
   parentNodeId: string | null;
   width?: number | string;
   height?: number | string;
+  widthMode?: SizingMode;
+  heightMode?: SizingMode;
   componentId?: string;
 };
 
