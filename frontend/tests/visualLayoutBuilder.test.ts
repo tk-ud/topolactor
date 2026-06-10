@@ -49,10 +49,13 @@ import {
 } from "../runtime/layoutClassPreviewUtils.ts";
 import { resolveCssTokenValue } from "../runtime/cssDictionary.ts";
 import {
+  enrichLayoutPreviewNodes,
   getLayoutPreviewDefaultSize,
   renderLayoutComponentPreview,
   resolveComponentKindForLayoutPreview,
+  type LayoutPreviewNodeInput,
 } from "../runtime/layoutComponentPreview.ts";
+import { buildInlineStyleFromCssTokenRefs } from "../runtime/cssDictionary.ts";
 
 // ─── canvas utility: snapToGrid ───────────────────────────────────────────────
 
@@ -1990,4 +1993,123 @@ Deno.test("layout inspector tabs: 3 tabs only (概要/ツリー/クラス) — n
   for (const removed of removedTabs) {
     assertFalse(expectedTabs.includes(removed), `${removed} must not be in layout inspector tabs`);
   }
+});
+
+// ─── LayoutPreviewNodeInput: tree structure fields ────────────────────────────
+// Defect 12 fix: parentNodeId / orderIndex / slotKey preserved from DraftNode
+// so LayoutVisualAuditCanvas.toFlowAuditNodes can reconstruct the flow tree.
+
+Deno.test("LayoutPreviewNodeInput: accepts parentNodeId, orderIndex, slotKey fields", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_001",
+    componentKey: "button.primitive",
+    x: 0,
+    y: 0,
+    width: 148,
+    height: 44,
+    parentNodeId: "node_parent",
+    orderIndex: 2,
+    slotKey: "header",
+  };
+  assertEquals(node.parentNodeId, "node_parent");
+  assertEquals(node.orderIndex, 2);
+  assertEquals(node.slotKey, "header");
+});
+
+Deno.test("LayoutPreviewNodeInput: parentNodeId=null is valid (root node)", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_root",
+    componentKey: "box.primitive",
+    x: 0,
+    y: 0,
+    width: 180,
+    height: 96,
+    parentNodeId: null,
+    orderIndex: 0,
+    slotKey: "",
+  };
+  assertEquals(node.parentNodeId, null);
+  assertEquals(node.orderIndex, 0);
+});
+
+Deno.test("LayoutPreviewNodeInput: tree fields are optional (backward-compat)", () => {
+  const node: LayoutPreviewNodeInput = {
+    nodeId: "node_legacy",
+    componentKey: "card.primitive",
+    x: 10,
+    y: 20,
+    width: 240,
+    height: 152,
+  };
+  assertEquals(node.parentNodeId, undefined);
+  assertEquals(node.orderIndex, undefined);
+  assertEquals(node.slotKey, undefined);
+});
+
+Deno.test("enrichLayoutPreviewNodes: preserves parentNodeId, orderIndex, slotKey via spread", () => {
+  const input: LayoutPreviewNodeInput[] = [
+    {
+      nodeId: "node_child",
+      componentKey: "button.primitive",
+      x: 0,
+      y: 0,
+      width: 148,
+      height: 44,
+      parentNodeId: "node_parent",
+      orderIndex: 1,
+      slotKey: "footer",
+    },
+    {
+      nodeId: "node_parent",
+      componentKey: "box.primitive",
+      x: 0,
+      y: 0,
+      width: 180,
+      height: 96,
+      parentNodeId: null,
+      orderIndex: 0,
+      slotKey: "root",
+    },
+  ];
+  const enriched = enrichLayoutPreviewNodes(input, []);
+  const child = enriched.find((n) => n.nodeId === "node_child")!;
+  const parent = enriched.find((n) => n.nodeId === "node_parent")!;
+  assertEquals((child as LayoutPreviewNodeInput).parentNodeId, "node_parent");
+  assertEquals((child as LayoutPreviewNodeInput).orderIndex, 1);
+  assertEquals((child as LayoutPreviewNodeInput).slotKey, "footer");
+  assertEquals((parent as LayoutPreviewNodeInput).parentNodeId, null);
+  assertEquals((parent as LayoutPreviewNodeInput).orderIndex, 0);
+  assertEquals((parent as LayoutPreviewNodeInput).slotKey, "root");
+});
+
+// ─── cssTokenRefs canvas preview — Defect 3 & 10 ────────────────────────────
+
+Deno.test("buildInlineStyleFromCssTokenRefs: primary background token applied correctly", () => {
+  const style = buildInlineStyleFromCssTokenRefs(["color.action.primary.background"]);
+  assertEquals(style.background, "#0070f3");
+});
+
+Deno.test("buildInlineStyleFromCssTokenRefs: empty array produces empty style", () => {
+  const style = buildInlineStyleFromCssTokenRefs([]);
+  assertEquals(Object.keys(style).length, 0);
+});
+
+Deno.test("buildInlineStyleFromCssTokenRefs: multiple tokens produce merged style", () => {
+  const style = buildInlineStyleFromCssTokenRefs([
+    "color.action.primary.background",
+    "color.action.primary.text",
+    "radius.control.sm",
+  ]);
+  assertEquals(style.background, "#0070f3");
+  assertEquals(style.color, "#fff");
+  assertEquals(style["border-radius"], "4px");
+});
+
+Deno.test("buildInlineStyleFromCssTokenRefs: unknown token silently omitted (no crash)", () => {
+  const style = buildInlineStyleFromCssTokenRefs([
+    "unknown.token.xyz",
+    "color.action.primary.background",
+  ]);
+  assertEquals(style.background, "#0070f3");
+  assertFalse("unknown" in style);
 });

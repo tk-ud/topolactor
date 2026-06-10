@@ -88,7 +88,8 @@ export function LayoutPatchApplyHandoffModal({
               >
                 <span class="block font-semibold">2. デモで表示を確認</span>
                 <span class="block text-xs font-normal text-slate-600 mt-0.5">
-                  保存した配置が runtime 投影でどう見えるか確認します
+                  保存した配置が runtime 投影でどう見えるか確認します。
+                  ドラフトコンテンツが未登録の場合は管理画面で先に作成してください。
                 </span>
               </a>
             </li>

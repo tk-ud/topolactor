@@ -22,6 +22,10 @@ export type LayoutPreviewNodeInput = {
   y: number;
   width: number;
   height: number;
+  /** Flow tree structure — preserved from DraftNode for visual audit hierarchy. */
+  parentNodeId?: string | null;
+  orderIndex?: number;
+  slotKey?: string;
 };
 
 export type LayoutPreviewDefaultSize = { width: number; height: number };

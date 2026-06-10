@@ -8,6 +8,7 @@ import {
   type DraftPreviewLayout,
   type DraftPreviewLayoutNode,
 } from "../api/draftPreview.ts";
+import { resolvePreviewErrorMessage } from "../runtime/draftPreviewErrors.ts";
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -134,12 +135,14 @@ export default function DraftPreviewShell(): JSX.Element {
     const result = await fetchDraftPreview(selectedLayoutId, selectedDraftId, token);
 
     if (!result.success) {
+      const code = result.errors?.[0]?.code;
+      const apiMessage = result.errors?.[0]?.message;
+      const specificMessage = code
+        ? resolvePreviewErrorMessage(code, apiMessage)
+        : (apiMessage ?? "プレビューの取得に失敗しました");
       setPreview({
         status: "error",
-        message:
-          result.errors?.[0]?.message ??
-          result.errors?.[0]?.code ??
-          "プレビューの取得に失敗しました",
+        message: specificMessage,
       });
       return;
     }
@@ -265,7 +268,10 @@ export default function DraftPreviewShell(): JSX.Element {
             </p>
 
             {sortedNodes.length === 0 ? (
-              <p class="text-sm text-gray-400">スロットなし</p>
+              <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                このレイアウトにはノードが定義されていません。
+                <a href="/admin/ui-builder" class="link ml-1">UIビルダー</a>で部品を配置してApplyしてください。
+              </div>
             ) : (
               <div class="space-y-2">
                 {sortedNodes.map((node, i) => (

@@ -4215,10 +4215,14 @@ function LayoutBuilderSection({
     setDesignDraftByNodeId((prev) => {
       const current = prev.get(nodeId) ?? {};
       const merged: DesignDraft = { ...current, ...partial };
+      const cssUnchanged =
+        JSON.stringify(current.cssTokenRefs ?? []) ===
+        JSON.stringify(merged.cssTokenRefs ?? []);
       if (
         current.inlineText === merged.inlineText &&
         current.linkHref === merged.linkHref &&
-        current.linkTarget === merged.linkTarget
+        current.linkTarget === merged.linkTarget &&
+        cssUnchanged
       ) {
         return prev;
       }
@@ -5646,11 +5650,13 @@ function designPreviewDraft(
   inlineText: string,
   linkHref: string,
   linkTarget: string,
+  cssTokenRefs?: string[],
 ): DesignDraft {
   return {
     inlineText: inlineText.trim() || undefined,
     linkHref: linkHref.trim() || undefined,
     linkTarget: linkTarget.trim() || undefined,
+    cssTokenRefs: cssTokenRefs?.length ? cssTokenRefs : undefined,
   };
 }
 
@@ -5732,9 +5738,16 @@ function PackageDesignPanel({
     text: string,
     href: string,
     target: string,
+    tokens?: string[],
   ) => {
-    onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target));
+    onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target, tokens));
   };
+
+  useEffect(() => {
+    if (layoutNodeId) {
+      pushCanvasPreview(layoutNodeId, inlineText, linkHref, linkTarget, cssTokenRefs);
+    }
+  }, [cssTokenRefs]);
 
   const applySavedDesign = (design: SavedComponentDesignRow) => {
     setDesignName(design.name);
@@ -5753,6 +5766,7 @@ function PackageDesignPanel({
         design.inlineText,
         design.linkHref,
         design.linkTarget,
+        design.cssTokenRefs,
       );
     }
   };
