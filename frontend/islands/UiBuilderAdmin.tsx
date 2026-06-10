@@ -122,6 +122,10 @@ export const UI_BUILDER_HAS_SEPARATE_TABS = false as const;
 export const UI_BUILDER_LEFT_PANEL_DOCKED = true as const;
 /** Design save action is positioned above the inspector tabs (not tab-specific). */
 export const UI_BUILDER_DESIGN_SAVE_ABOVE_TABS = true as const;
+/** Drawer shells are display-density chrome inside the same canvas workspace. */
+export const UI_BUILDER_DRAWER_SHELL_KIND = "same_workspace_display_shell" as const;
+/** Drawer open/closed flags are frontend-local UI state only, never persisted. */
+export const UI_BUILDER_DRAWER_STATE_BOUNDARY = "frontend_local_state_only" as const;
 
 const SESSION_TOKEN_KEY = "demo_jwt_token";
 
@@ -3165,6 +3169,8 @@ function LayoutBuilderSection({
   // ── canvas draft state ───────────────────────────────────────────────────
   const [draftNodes, setDraftNodes] = useState<DraftNode[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
 
   // Gap 1: Lifecycle state machine
   const [lifecyclePhase, setLifecyclePhase] = useState<LifecyclePhase>("idle");
@@ -4613,26 +4619,65 @@ function LayoutBuilderSection({
 
       {/* layout draft プレビュー & 操作エリア: left dock + flow canvas + right inspector */}
       <div class={`flex min-h-0 flex-1 gap-2.5 p-2 ${canvasPreviewClass}`}>
-        {/* Left docked panel — 部品追加 (SSOT: canvas_workspace_contract.left_panel) */}
-        {packageScopedLayout ? (
-          <LeftDockedPalettePanel
-            onDragStart={handleDragStartPalette}
-            onAddToCanvas={handleAddFromPalette}
-            paletteEntries={paletteEntries}
-            paletteStatus={paletteStatus}
-            onAddStructuralHtmlTag={addStructuralHtmlNode}
-            selectorsDisabled={selectorsDisabled}
-          />
-        ) : (
-          <aside
-            class="left-docked-panel flex shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2 py-4 text-center text-[0.65rem] text-slate-400"
-            style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
-            aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
+        {/* Left Drawer shell — display-density chrome only; bucket semantics stay inside existing panel. */}
+        {leftDrawerOpen && (
+          <div
+            class="ui-builder-left-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 shadow-sm"
+            data-ui-builder-drawer-shell="left"
+            data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
           >
-            {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
-          </aside>
+            <div class="flex items-center justify-between border-b border-blue-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-blue-900">
+              <span>部品パネル</span>
+              <button
+                type="button"
+                class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[0.62rem] text-blue-800 hover:bg-blue-100"
+                aria-label="左パネルを閉じる"
+                onClick={() => setLeftDrawerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            {packageScopedLayout ? (
+              <LeftDockedPalettePanel
+                onDragStart={handleDragStartPalette}
+                onAddToCanvas={handleAddFromPalette}
+                paletteEntries={paletteEntries}
+                paletteStatus={paletteStatus}
+                onAddStructuralHtmlTag={addStructuralHtmlNode}
+                selectorsDisabled={selectorsDisabled}
+              />
+            ) : (
+              <aside
+                class="left-docked-panel flex shrink-0 flex-col items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 px-2 py-4 text-center text-[0.65rem] text-slate-400"
+                style={{ width: "clamp(180px, 15vw, 240px)", minWidth: "180px", maxWidth: "240px" }}
+                aria-label={UX_COMPONENT_ADD_PANEL_LABEL}
+              >
+                {UX_ROUTE_KEY_REQUIRED_FOR_CANVAS}
+              </aside>
+            )}
+          </div>
         )}
-        <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
+          <div class="pointer-events-none absolute inset-x-2 top-2 z-20 flex items-start justify-between">
+            <button
+              type="button"
+              class="pointer-events-auto rounded-full border border-blue-200 bg-white/90 px-2 py-1 text-xs font-semibold text-blue-800 shadow-sm hover:bg-blue-50"
+              aria-label={leftDrawerOpen ? "左パネルを閉じる" : "左パネルを開く"}
+              aria-pressed={leftDrawerOpen}
+              onClick={() => setLeftDrawerOpen((open) => !open)}
+            >
+              ◧
+            </button>
+            <button
+              type="button"
+              class="pointer-events-auto rounded-full border border-indigo-200 bg-white/90 px-2 py-1 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50"
+              aria-label={rightDrawerOpen ? "右パネルを閉じる" : "右パネルを開く"}
+              aria-pressed={rightDrawerOpen}
+              onClick={() => setRightDrawerOpen((open) => !open)}
+            >
+              ◨
+            </button>
+          </div>
           <FlowLayoutCanvas
             nodes={draftNodes}
             selectedNodeId={selectedNodeId}
@@ -4640,7 +4685,10 @@ function LayoutBuilderSection({
             designDraftByNodeId={designDraftByNodeId}
             canvasRef={canvasRef}
             minHeight={CANVAS_MIN_HEIGHT}
-            onSelectNode={(id) => setSelectedNodeId(id)}
+            onSelectNode={(id) => {
+              setSelectedNodeId(id);
+              setRightDrawerOpen(true);
+            }}
             onDeselectAll={() => {
               if (selectedNodeId) {
                 setDesignDraftByNodeId((prev) => {
@@ -4661,32 +4709,51 @@ function LayoutBuilderSection({
           />
         </div>
 
-        <LayoutRightDock
-          draftNodes={draftNodes}
-          selectedNodeId={selectedNodeId}
-          selectedNode={selectedNode}
-          packageId={scopedPackageId ?? ""}
-          onSelectNode={(id) => {
-            if (selectedNodeId && selectedNodeId !== id) {
-              setDesignDraftByNodeId((prev) => {
-                const next = new Map(prev);
-                next.delete(selectedNodeId);
-                return next;
-              });
-            }
-            setSelectedNodeId(id);
-          }}
-          onReparent={reparentNode}
-          onCopy={copyNode}
-          onDelete={removeNode}
-          slotKeyCandidates={slotKeyCandidates}
-          onUpdateNode={(updates) => selectedNode && updateNode(selectedNode.nodeId, updates)}
-          onCommitNode={(updates, label) => selectedNode && commitNodeUpdate(selectedNode.nodeId, updates, label)}
-          onToggleLayoutClassRef={(classKey) =>
-            selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
-          onDesignChange={handleDesignDraftChange}
-          routeCandidates={routeOptions}
-        />
+        {rightDrawerOpen && (
+          <div
+            class="ui-builder-right-drawer-shell flex shrink-0 flex-col overflow-hidden rounded-lg border border-indigo-100 bg-indigo-50/50 shadow-sm"
+            data-ui-builder-drawer-shell="right"
+            data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
+          >
+            <div class="flex items-center justify-between border-b border-indigo-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-indigo-900">
+              <span>インスペクターパネル</span>
+              <button
+                type="button"
+                class="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[0.62rem] text-indigo-800 hover:bg-indigo-100"
+                aria-label="右パネルを閉じる"
+                onClick={() => setRightDrawerOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <LayoutRightDock
+              draftNodes={draftNodes}
+              selectedNodeId={selectedNodeId}
+              selectedNode={selectedNode}
+              packageId={scopedPackageId ?? ""}
+              onSelectNode={(id) => {
+                if (selectedNodeId && selectedNodeId !== id) {
+                  setDesignDraftByNodeId((prev) => {
+                    const next = new Map(prev);
+                    next.delete(selectedNodeId);
+                    return next;
+                  });
+                }
+                setSelectedNodeId(id);
+              }}
+              onReparent={reparentNode}
+              onCopy={copyNode}
+              onDelete={removeNode}
+              slotKeyCandidates={slotKeyCandidates}
+              onUpdateNode={(updates) => selectedNode && updateNode(selectedNode.nodeId, updates)}
+              onCommitNode={(updates, label) => selectedNode && commitNodeUpdate(selectedNode.nodeId, updates, label)}
+              onToggleLayoutClassRef={(classKey) =>
+                selectedNode && toggleNodeLayoutClassRef(selectedNode.nodeId, classKey)}
+              onDesignChange={handleDesignDraftChange}
+              routeCandidates={routeOptions}
+            />
+          </div>
+        )}
       </div>
       </section>
 
