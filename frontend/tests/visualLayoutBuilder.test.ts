@@ -1630,7 +1630,6 @@ Deno.test("layoutClassDictionary: alignment entries have conflictGroup align_h o
 
 import {
   LAYOUT_CLASS_USER_LABELS,
-  CSS_TOKEN_USER_LABELS,
   COMPONENT_EVENT_TYPES,
   COMPONENT_ACTION_TYPES,
   type ComponentEventWiring,
@@ -1814,37 +1813,29 @@ Deno.test("LAYOUT_CLASS_USER_LABELS: raw classKey and className strings do not a
   }
 });
 
-Deno.test("CSS_TOKEN_USER_LABELS: has user-facing Japanese labels for all CSS dictionary tokens", () => {
+Deno.test("CSS_DICTIONARY_TOKENS: all entries have non-empty userLabel (SSOT: css-dictionary-ssot.yaml)", () => {
   for (const token of CSS_DICTIONARY_TOKENS) {
-    const label = CSS_TOKEN_USER_LABELS[token.tokenKey];
-    assert(label !== undefined, `missing label for tokenKey: ${token.tokenKey}`);
-    assert(label.length > 0, `empty label for tokenKey: ${token.tokenKey}`);
-    // label should NOT be the raw tokenKey
+    assert(
+      token.userLabel !== undefined && token.userLabel.length > 0,
+      `missing or empty userLabel for tokenKey: ${token.tokenKey}`,
+    );
     assertNotEquals(
-      label,
+      token.userLabel,
       token.tokenKey,
-      `label for ${token.tokenKey} must not be the raw tokenKey`,
+      `userLabel for ${token.tokenKey} must not be the raw tokenKey`,
     );
   }
 });
 
-Deno.test("CSS_TOKEN_USER_LABELS: contains expected semantic labels", () => {
-  assertEquals(CSS_TOKEN_USER_LABELS["color.action.primary.background"], "メインボタン背景");
-  assertEquals(CSS_TOKEN_USER_LABELS["color.action.primary.text"], "メインボタン文字色");
-  assertEquals(CSS_TOKEN_USER_LABELS["color.action.danger.background"], "危険操作ボタン背景");
-  assertEquals(CSS_TOKEN_USER_LABELS["border.control.default"], "コントロール枠線");
-  assertEquals(CSS_TOKEN_USER_LABELS["typography.control.monospace"], "管理UIテキスト");
-  assertEquals(CSS_TOKEN_USER_LABELS["interaction.control.pointer"], "クリック可能");
-  assertEquals(CSS_TOKEN_USER_LABELS["interaction.control.disabled_opacity"], "無効状態");
-});
-
-Deno.test("CSS_TOKEN_USER_LABELS: label count matches token count in CSS_DICTIONARY_TOKENS", () => {
-  const labelKeys = Object.keys(CSS_TOKEN_USER_LABELS);
-  assertEquals(
-    labelKeys.length,
-    CSS_DICTIONARY_TOKENS.length,
-    "every CSS dictionary token must have exactly one user label",
-  );
+Deno.test("CSS_DICTIONARY_TOKENS: userLabel matches expected semantic labels from SSOT", () => {
+  const find = (key: string) => CSS_DICTIONARY_TOKENS.find((t) => t.tokenKey === key);
+  assertEquals(find("color.action.primary.background")?.userLabel, "メインボタン背景");
+  assertEquals(find("color.action.primary.text")?.userLabel, "メインボタン文字色");
+  assertEquals(find("color.action.danger.background")?.userLabel, "危険操作ボタン背景");
+  assertEquals(find("border.control.default")?.userLabel, "コントロール枠線");
+  assertEquals(find("typography.control.monospace")?.userLabel, "管理UIテキスト");
+  assertEquals(find("interaction.control.pointer")?.userLabel, "クリック可能");
+  assertEquals(find("interaction.control.disabled_opacity")?.userLabel, "無効状態");
 });
 
 Deno.test("COMPONENT_EVENT_TYPES: contains standard DOM/component event types", () => {
@@ -1907,8 +1898,8 @@ Deno.test("modal/drawer open state: stateJson encodes as { open: boolean }", () 
 });
 
 Deno.test("package wiring and event/state wiring are separated: UI_BUILDER_HAS_SEPARATE_TABS false (unified workspace)", () => {
-  // Package wiring (ui_topology:update_package_wiring) lives in PackageDesignPanel '配線' tab
-  // Component event/state wiring (propsJson.eventWirings) lives in PackageDesignPanel 'イベント配線' tab
+  // Package wiring (ui_topology:update_package_wiring) lives in PackageDesignPanel 'パッケージ配線' tab
+  // Component event/state wiring (propsJson.eventWirings) lives in PackageDesignPanel '上級' tab (AdvancedManualOverride, SSOT未定義)
   // CanvasInspector no longer has a '配線' tab (removed from layout inspector responsibility)
   assertFalse(
     UI_BUILDER_HAS_SEPARATE_TABS,

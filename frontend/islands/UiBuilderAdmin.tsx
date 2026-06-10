@@ -435,24 +435,6 @@ export const LAYOUT_CLASS_USER_LABELS: Record<string, string> = {
   "layout.node.boundary": "ノード境界",
 };
 
-/** User-facing labels for CSS token keys. */
-export const CSS_TOKEN_USER_LABELS: Record<string, string> = {
-  "color.action.primary.background": "メインボタン背景",
-  "color.action.primary.text": "メインボタン文字色",
-  "color.action.secondary.background": "セカンダリボタン背景",
-  "color.action.secondary.text": "セカンダリボタン文字色",
-  "color.action.danger.background": "危険操作ボタン背景",
-  "color.action.danger.text": "危険操作ボタン文字色",
-  "border.control.default": "コントロール枠線",
-  "radius.control.sm": "コントロール角丸（小）",
-  "spacing.control.padding_md": "コントロール余白（中）",
-  "spacing.field.padding_sm": "入力フィールド余白（小）",
-  "typography.control.monospace": "管理UIテキスト",
-  "interaction.control.pointer": "クリック可能",
-  "interaction.control.disabled_opacity": "無効状態",
-  "layout.stack.flex_column": "縦積みレイアウト",
-  "layout.table.full_width": "テーブル全幅",
-};
 
 /** Component event wiring entry (saved to propsJson.eventWirings — layout_patch_json boundary). */
 export type ComponentEventWiring = {
@@ -1701,7 +1683,7 @@ function CssTokenPicker({
 
   const filtered = CSS_DICTIONARY_TOKENS.filter((t) => {
     if (tokenFilter) {
-      const label = CSS_TOKEN_USER_LABELS[t.tokenKey] ?? "";
+      const label = t.userLabel ?? "";
       const matchesKey = t.tokenKey.toLowerCase().includes(tokenFilter.toLowerCase());
       const matchesLabel = label.toLowerCase().includes(tokenFilter.toLowerCase());
       if (!matchesKey && !matchesLabel) return false;
@@ -1764,7 +1746,7 @@ function CssTokenPicker({
               const token = CSS_DICTIONARY_TOKENS.find((t) =>
                 t.tokenKey === key
               );
-              const label = CSS_TOKEN_USER_LABELS[key] ?? key;
+              const label = token?.userLabel ?? key;
               return (
                 <button
                   key={key}
@@ -1805,7 +1787,7 @@ function CssTokenPicker({
           <tbody>
             {filtered.map((t) => {
               const isSelected = selectedTokenRefs.includes(t.tokenKey);
-              const label = CSS_TOKEN_USER_LABELS[t.tokenKey] ?? t.tokenKey;
+              const label = t.userLabel;
               return (
                 <tr
                   key={t.tokenKey}
@@ -1813,7 +1795,7 @@ function CssTokenPicker({
                   onClick={() => onToggle(t.tokenKey)}
                   style={{ cursor: "pointer" }}
                 >
-                  <td>
+                  <td onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isSelected}
@@ -5818,216 +5800,6 @@ function PackageDesignPanel({
     }
   };
 
-  const eventWiringTab = (
-    <div class="space-y-3">
-      <p class="text-[0.6rem] text-slate-500">
-        保存対象はlayout_patch_json経由（propsJson.eventWirings / stateJson）。previewモードではinert bindingを使用します。
-      </p>
-
-      {/* Open state toggle for disclosure components */}
-      {isDisclosure && (
-        <fieldset class="flex flex-col gap-1">
-          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-            表示状態（open state）
-          </legend>
-          <label class="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
-              checked={(() => {
-                try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
-              })()}
-              onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
-              aria-label="open state"
-            />
-            open（previewで開いた状態で表示）
-          </label>
-        </fieldset>
-      )}
-
-      {/* Event wirings builder */}
-      <fieldset class="flex flex-col gap-1">
-        <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-          イベント配線（propsJson.eventWirings）
-        </legend>
-        <p class="text-[0.6rem] text-slate-400 mb-1">
-          追加したイベント配線はpropsJsonのeventWiringsに保存されます。
-        </p>
-        {(() => {
-          let wirings: ComponentEventWiring[] = [];
-          try {
-            const parsed = JSON.parse(propsDraft || "{}");
-            if (Array.isArray(parsed.eventWirings)) wirings = parsed.eventWirings;
-          } catch { /* ignore */ }
-
-          const removeWiring = (idx: number) => {
-            const next = wirings.filter((_, i) => i !== idx);
-            try {
-              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-              setPropsDraft(nextJson);
-              setPropsError(null);
-              onCommitNode?.({ propsJson: nextJson }, "イベント配線を削除");
-            } catch {
-              setPropsError("propsJsonの更新に失敗しました");
-            }
-          };
-
-          const addWiring = () => {
-            const next: ComponentEventWiring[] = [...wirings, { eventType: "onClick", actionType: "setState", targetStateKey: "" }];
-            try {
-              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-              setPropsDraft(nextJson);
-              setPropsError(null);
-              onCommitNode?.({ propsJson: nextJson }, "イベント配線を追加");
-            } catch {
-              setPropsError("propsJsonの更新に失敗しました");
-            }
-          };
-
-          const updateWiring = (idx: number, updates: Partial<ComponentEventWiring>) => {
-            const next = wirings.map((w, i) => i === idx ? { ...w, ...updates } : w);
-            try {
-              const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
-              const nextJson = JSON.stringify({ ...existing, eventWirings: next });
-              setPropsDraft(nextJson);
-              setPropsError(null);
-              onCommitNode?.({ propsJson: nextJson }, "イベント配線を更新");
-            } catch {
-              setPropsError("propsJsonの更新に失敗しました");
-            }
-          };
-
-          return (
-            <div class="space-y-2">
-              {wirings.map((w, i) => (
-                <div key={i} class="flex flex-col gap-1 rounded border border-slate-200 p-2">
-                  <div class="flex items-center justify-between">
-                    <span class="text-[0.65rem] font-semibold text-slate-600">配線 #{i + 1}</span>
-                    <button
-                      type="button"
-                      class="text-[0.6rem] text-red-500 hover:text-red-700"
-                      onClick={() => removeWiring(i)}
-                      aria-label={`配線 ${i + 1} を削除`}
-                    >
-                      削除
-                    </button>
-                  </div>
-                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                    イベント
-                    <select
-                      value={w.eventType}
-                      onChange={(e) => updateWiring(i, { eventType: (e.target as HTMLSelectElement).value })}
-                      class="input px-1 py-0.5 text-xs"
-                      aria-label={`配線 ${i + 1} イベントタイプ`}
-                    >
-                      {COMPONENT_EVENT_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                    アクション
-                    <select
-                      value={w.actionType}
-                      onChange={(e) => updateWiring(i, { actionType: (e.target as HTMLSelectElement).value })}
-                      class="input px-1 py-0.5 text-xs"
-                      aria-label={`配線 ${i + 1} アクションタイプ`}
-                    >
-                      {COMPONENT_ACTION_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label class="flex flex-col gap-0.5 text-[0.65rem]">
-                    対象ステートキー（任意）
-                    <input
-                      value={w.targetStateKey ?? ""}
-                      onInput={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
-                      onBlur={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
-                      class="input-mono px-1 py-0.5 text-xs"
-                      placeholder="例: modalOpen"
-                      aria-label={`配線 ${i + 1} ターゲットステートキー`}
-                    />
-                  </label>
-                </div>
-              ))}
-              <button
-                type="button"
-                class="btn-secondary text-xs"
-                onClick={addWiring}
-              >
-                + イベント配線を追加
-              </button>
-              {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
-            </div>
-          );
-        })()}
-      </fieldset>
-
-      {/* Raw JSON overrides in advanced */}
-      <AdvancedManualOverride title="生JSON（上級者向け）">
-        <fieldset class="flex flex-col gap-1 mb-2">
-          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-            Props JSON（全体）
-          </legend>
-          <textarea
-            value={propsDraft}
-            onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
-            onBlur={() => {
-              const v = propsDraft.trim();
-              if (!v) {
-                setPropsError(null);
-                onCommitNode?.({ propsJson: undefined }, "propsJsonをクリア");
-                return;
-              }
-              try {
-                JSON.parse(v);
-                setPropsError(null);
-                onCommitNode?.({ propsJson: v }, "propsJsonを更新");
-              } catch {
-                setPropsError("JSON形式が不正です");
-              }
-            }}
-            rows={3}
-            placeholder='{"label": "送信", "variant": "primary", "eventWirings": []}'
-            class="input-mono w-full text-[0.6rem]"
-            aria-label="propsJson（生JSON）"
-          />
-          {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
-        </fieldset>
-        <fieldset class="flex flex-col gap-1">
-          <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
-            State JSON{isDisclosure ? "（open state）" : ""}
-          </legend>
-          <textarea
-            value={stateDraft}
-            onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
-            onBlur={() => {
-              const v = stateDraft.trim();
-              if (!v) {
-                setStateError(null);
-                onCommitNode?.({ stateJson: undefined }, "stateJsonをクリア");
-                return;
-              }
-              try {
-                JSON.parse(v);
-                setStateError(null);
-                onCommitNode?.({ stateJson: v }, "stateJsonを更新");
-              } catch {
-                setStateError("JSON形式が不正です");
-              }
-            }}
-            rows={2}
-            placeholder='{"open": false}'
-            class="input-mono w-full text-[0.6rem]"
-            aria-label="stateJson（生JSON）"
-          />
-          {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
-        </fieldset>
-      </AdvancedManualOverride>
-    </div>
-  );
 
   if (!selectedPackageId) {
     return (
@@ -6145,6 +5917,24 @@ function PackageDesignPanel({
             label: "表示",
             content: (
               <div class="space-y-3">
+                {isDisclosure && (
+                  <fieldset class="flex flex-col gap-1">
+                    <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+                      表示状態（open state）
+                    </legend>
+                    <label class="flex items-center gap-2 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={(() => {
+                          try { return Boolean(JSON.parse(stateDraft || "{}").open); } catch { return false; }
+                        })()}
+                        onChange={(e) => commitOpenState((e.target as HTMLInputElement).checked)}
+                        aria-label="open state"
+                      />
+                      open（previewで開いた状態で表示）
+                    </label>
+                  </fieldset>
+                )}
                 <div class="grid gap-2 sm:grid-cols-2">
                   <label class="text-xs">
                     デザイン名（保存キー）
@@ -6289,39 +6079,217 @@ function PackageDesignPanel({
             ),
           },
           {
-            id: "event_wiring",
-            label: "イベント配線",
-            content: eventWiringTab,
-          },
-          {
             id: "advanced",
             label: "上級",
             content: (
-              <AdvancedManualOverride title="classname / tailwind 手入力（補助メモのみ）">
-                <p class="text-muted-xs mb-2">
-                  通常は cssTokenRefs を使ってください。補助メモとしてのみ保存されます。
-                </p>
-                <label class="mb-2 block text-xs">
-                  classname（補助メモ）
-                  <input
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                    value={classname}
-                    onInput={(e) =>
-                      setClassname((e.target as HTMLInputElement).value)}
-                    placeholder="例: btn-primary（cssTokenRefs を優先）"
-                  />
-                </label>
-                <label class="block text-xs">
-                  tailwind（非正本・補助メモ）
-                  <input
-                    class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
-                    value={tailwind}
-                    onInput={(e) =>
-                      setTailwind((e.target as HTMLInputElement).value)}
-                    placeholder="辞書トークンを優先してください"
-                  />
-                </label>
-              </AdvancedManualOverride>
+              <div class="space-y-3">
+                <AdvancedManualOverride title="classname / tailwind 手入力（補助メモのみ）">
+                  <p class="text-muted-xs mb-2">
+                    通常は cssTokenRefs を使ってください。補助メモとしてのみ保存されます。
+                  </p>
+                  <label class="mb-2 block text-xs">
+                    classname（補助メモ）
+                    <input
+                      class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                      value={classname}
+                      onInput={(e) =>
+                        setClassname((e.target as HTMLInputElement).value)}
+                      placeholder="例: btn-primary（cssTokenRefs を優先）"
+                    />
+                  </label>
+                  <label class="block text-xs">
+                    tailwind（非正本・補助メモ）
+                    <input
+                      class="mt-1 w-full rounded border px-2 py-1 font-mono text-xs"
+                      value={tailwind}
+                      onInput={(e) =>
+                        setTailwind((e.target as HTMLInputElement).value)}
+                      placeholder="辞書トークンを優先してください"
+                    />
+                  </label>
+                </AdvancedManualOverride>
+                <AdvancedManualOverride title="イベント配線（実験的・SSOT未定義）">
+                  <p class="text-[0.6rem] text-slate-500 mb-2">
+                    SSOT未定義 — 実験的。保存対象はlayout_patch_json経由（propsJson.eventWirings）。previewモードではinert bindingを使用します。
+                  </p>
+                  <fieldset class="flex flex-col gap-1">
+                    <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+                      イベント配線（propsJson.eventWirings）
+                    </legend>
+                    {(() => {
+                      let wirings: ComponentEventWiring[] = [];
+                      try {
+                        const parsed = JSON.parse(propsDraft || "{}");
+                        if (Array.isArray(parsed.eventWirings)) wirings = parsed.eventWirings;
+                      } catch { /* ignore */ }
+
+                      const removeWiring = (idx: number) => {
+                        const next = wirings.filter((_, i) => i !== idx);
+                        try {
+                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+                          setPropsDraft(nextJson);
+                          setPropsError(null);
+                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を削除");
+                        } catch {
+                          setPropsError("propsJsonの更新に失敗しました");
+                        }
+                      };
+
+                      const addWiring = () => {
+                        const next: ComponentEventWiring[] = [...wirings, { eventType: "onClick", actionType: "setState", targetStateKey: "" }];
+                        try {
+                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+                          setPropsDraft(nextJson);
+                          setPropsError(null);
+                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を追加");
+                        } catch {
+                          setPropsError("propsJsonの更新に失敗しました");
+                        }
+                      };
+
+                      const updateWiring = (idx: number, updates: Partial<ComponentEventWiring>) => {
+                        const next = wirings.map((w, i) => i === idx ? { ...w, ...updates } : w);
+                        try {
+                          const existing = propsDraft.trim() ? JSON.parse(propsDraft) : {};
+                          const nextJson = JSON.stringify({ ...existing, eventWirings: next });
+                          setPropsDraft(nextJson);
+                          setPropsError(null);
+                          onCommitNode?.({ propsJson: nextJson }, "イベント配線を更新");
+                        } catch {
+                          setPropsError("propsJsonの更新に失敗しました");
+                        }
+                      };
+
+                      return (
+                        <div class="space-y-2 mt-1">
+                          {wirings.map((w, i) => (
+                            <div key={i} class="flex flex-col gap-1 rounded border border-slate-200 p-2">
+                              <div class="flex items-center justify-between">
+                                <span class="text-[0.65rem] font-semibold text-slate-600">配線 #{i + 1}</span>
+                                <button
+                                  type="button"
+                                  class="text-[0.6rem] text-red-500 hover:text-red-700"
+                                  onClick={() => removeWiring(i)}
+                                  aria-label={`配線 ${i + 1} を削除`}
+                                >
+                                  削除
+                                </button>
+                              </div>
+                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                                イベント
+                                <select
+                                  value={w.eventType}
+                                  onChange={(e) => updateWiring(i, { eventType: (e.target as HTMLSelectElement).value })}
+                                  class="input px-1 py-0.5 text-xs"
+                                  aria-label={`配線 ${i + 1} イベントタイプ`}
+                                >
+                                  {COMPONENT_EVENT_TYPES.map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                                アクション
+                                <select
+                                  value={w.actionType}
+                                  onChange={(e) => updateWiring(i, { actionType: (e.target as HTMLSelectElement).value })}
+                                  class="input px-1 py-0.5 text-xs"
+                                  aria-label={`配線 ${i + 1} アクションタイプ`}
+                                >
+                                  {COMPONENT_ACTION_TYPES.map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label class="flex flex-col gap-0.5 text-[0.65rem]">
+                                対象ステートキー（任意）
+                                <input
+                                  value={w.targetStateKey ?? ""}
+                                  onInput={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
+                                  onBlur={(e) => updateWiring(i, { targetStateKey: (e.target as HTMLInputElement).value })}
+                                  class="input-mono px-1 py-0.5 text-xs"
+                                  placeholder="例: modalOpen"
+                                  aria-label={`配線 ${i + 1} ターゲットステートキー`}
+                                />
+                              </label>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            class="btn-secondary text-xs"
+                            onClick={addWiring}
+                          >
+                            + イベント配線を追加
+                          </button>
+                          {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+                        </div>
+                      );
+                    })()}
+                  </fieldset>
+                </AdvancedManualOverride>
+                <AdvancedManualOverride title="生JSON（上級者向け）">
+                  <fieldset class="flex flex-col gap-1 mb-2">
+                    <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+                      Props JSON（全体）
+                    </legend>
+                    <textarea
+                      value={propsDraft}
+                      onInput={(e) => setPropsDraft((e.target as HTMLTextAreaElement).value)}
+                      onBlur={() => {
+                        const v = propsDraft.trim();
+                        if (!v) {
+                          setPropsError(null);
+                          onCommitNode?.({ propsJson: undefined }, "propsJsonをクリア");
+                          return;
+                        }
+                        try {
+                          JSON.parse(v);
+                          setPropsError(null);
+                          onCommitNode?.({ propsJson: v }, "propsJsonを更新");
+                        } catch {
+                          setPropsError("JSON形式が不正です");
+                        }
+                      }}
+                      rows={3}
+                      placeholder='{"label": "送信", "variant": "primary", "eventWirings": []}'
+                      class="input-mono w-full text-[0.6rem]"
+                      aria-label="propsJson（生JSON）"
+                    />
+                    {propsError && <p class="text-red-600 text-[0.6rem]">{propsError}</p>}
+                  </fieldset>
+                  <fieldset class="flex flex-col gap-1">
+                    <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+                      State JSON{isDisclosure ? "（open state）" : ""}
+                    </legend>
+                    <textarea
+                      value={stateDraft}
+                      onInput={(e) => setStateDraft((e.target as HTMLTextAreaElement).value)}
+                      onBlur={() => {
+                        const v = stateDraft.trim();
+                        if (!v) {
+                          setStateError(null);
+                          onCommitNode?.({ stateJson: undefined }, "stateJsonをクリア");
+                          return;
+                        }
+                        try {
+                          JSON.parse(v);
+                          setStateError(null);
+                          onCommitNode?.({ stateJson: v }, "stateJsonを更新");
+                        } catch {
+                          setStateError("JSON形式が不正です");
+                        }
+                      }}
+                      rows={2}
+                      placeholder='{"open": false}'
+                      class="input-mono w-full text-[0.6rem]"
+                      aria-label="stateJson（生JSON）"
+                    />
+                    {stateError && <p class="text-red-600 text-[0.6rem]">{stateError}</p>}
+                  </fieldset>
+                </AdvancedManualOverride>
+              </div>
             ),
           },
         ]}
