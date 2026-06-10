@@ -4214,15 +4214,7 @@ function LayoutBuilderSection({
   ) => {
     setDesignDraftByNodeId((prev) => {
       const current = prev.get(nodeId) ?? {};
-      const merged: DesignDraft = {
-        ...current,
-        ...partial,
-        // Preserve existing cssTokenRefs if the partial update doesn't include them.
-        // Spread alone would overwrite with undefined when partial.cssTokenRefs is absent.
-        cssTokenRefs: partial.cssTokenRefs !== undefined
-          ? partial.cssTokenRefs
-          : current.cssTokenRefs,
-      };
+      const merged: DesignDraft = { ...current, ...partial };
       const cssUnchanged =
         JSON.stringify(current.cssTokenRefs ?? []) ===
         JSON.stringify(merged.cssTokenRefs ?? []);
@@ -5658,13 +5650,12 @@ function designPreviewDraft(
   inlineText: string,
   linkHref: string,
   linkTarget: string,
-  cssTokenRefs?: string[],
 ): DesignDraft {
   return {
     inlineText: inlineText.trim() || undefined,
     linkHref: linkHref.trim() || undefined,
     linkTarget: linkTarget.trim() || undefined,
-    cssTokenRefs: cssTokenRefs?.length ? cssTokenRefs : undefined,
+    // cssTokenRefs intentionally excluded — token updates go via direct onDesignPreviewChange
   };
 }
 
@@ -5741,19 +5732,15 @@ function PackageDesignPanel({
     );
   };
 
-  const pushCanvasPreview = (
-    nodeId: string,
-    text: string,
-    href: string,
-    target: string,
-    tokens?: string[],
-  ) => {
-    onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target, tokens));
+  const pushCanvasPreview = (nodeId: string, text: string, href: string, target: string) => {
+    onDesignPreviewChange?.(nodeId, designPreviewDraft(text, href, target));
   };
 
+  // Push only cssTokenRefs change: key present with actual value ([] included) so the
+  // simple spread in handleDesignDraftChange correctly overwrites or clears tokens.
   useEffect(() => {
     if (layoutNodeId) {
-      pushCanvasPreview(layoutNodeId, inlineText, linkHref, linkTarget, cssTokenRefs);
+      onDesignPreviewChange?.(layoutNodeId, { cssTokenRefs });
     }
   }, [cssTokenRefs]);
 
@@ -5769,13 +5756,14 @@ function PackageDesignPanel({
     setTailwind(design.tailwind);
     setDesignTmpStatus(design.hasDesignTmpDraft ? "saved" : "idle");
     if (layoutNodeId) {
-      pushCanvasPreview(
-        layoutNodeId,
-        design.inlineText,
-        design.linkHref,
-        design.linkTarget,
-        design.cssTokenRefs,
-      );
+      // Push complete design state in one shot so canvas reflects the loaded design
+      // without an intermediate render showing stale tokens.
+      onDesignPreviewChange?.(layoutNodeId, {
+        inlineText: design.inlineText.trim() || undefined,
+        linkHref: design.linkHref.trim() || undefined,
+        linkTarget: design.linkTarget.trim() || undefined,
+        cssTokenRefs: design.cssTokenRefs,
+      });
     }
   };
 
@@ -5882,7 +5870,7 @@ function PackageDesignPanel({
       setClassname("");
       setTailwind("");
       setDesignTmpStatus("idle");
-      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "", []);
+      pushCanvasPreview(selectedCanvasNode.nodeId, defaultText, "", "");
     }
     setPropsDraft(selectedCanvasNode.propsJson ?? "");
     setPropsError(null);
@@ -6167,7 +6155,7 @@ function PackageDesignPanel({
                     onInput={(e) => {
                       const v = (e.target as HTMLInputElement).value;
                       setInlineText(v);
-                      pushCanvasPreview(layoutNodeId, v, linkHref, linkTarget, cssTokenRefs);
+                      pushCanvasPreview(layoutNodeId, v, linkHref, linkTarget);
                     }}
                     placeholder="表示テキスト / 子テキストノード"
                   />
@@ -6181,7 +6169,7 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkHref(v);
-                        pushCanvasPreview(layoutNodeId, inlineText, v, linkTarget, cssTokenRefs);
+                        pushCanvasPreview(layoutNodeId, inlineText, v, linkTarget);
                       }}
                       placeholder="https://..."
                     />
@@ -6194,7 +6182,7 @@ function PackageDesignPanel({
                       onInput={(e) => {
                         const v = (e.target as HTMLInputElement).value;
                         setLinkTarget(v);
-                        pushCanvasPreview(layoutNodeId, inlineText, linkHref, v, cssTokenRefs);
+                        pushCanvasPreview(layoutNodeId, inlineText, linkHref, v);
                       }}
                       placeholder="_blank 等"
                     />

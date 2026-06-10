@@ -2151,18 +2151,12 @@ import { buildInlineStyleFromCssTokenRefs as _buildStyle } from "../runtime/cssD
 import type { FlowCanvasDesignDraft } from "../components/FlowLayoutCanvas.tsx";
 
 // Simulates the designDraftByNodeId merge logic in handleDesignDraftChange.
-// partial.cssTokenRefs === undefined must NOT wipe current.cssTokenRefs.
+// Simple spread: absent key preserves existing value; present key (even []) overwrites.
 function mergeDesignDraft(
   current: FlowCanvasDesignDraft,
   partial: FlowCanvasDesignDraft,
 ): FlowCanvasDesignDraft {
-  return {
-    ...current,
-    ...partial,
-    cssTokenRefs: partial.cssTokenRefs !== undefined
-      ? partial.cssTokenRefs
-      : current.cssTokenRefs,
-  };
+  return { ...current, ...partial };
 }
 
 Deno.test("designDraft merge: inlineText update preserves cssTokenRefs", () => {
@@ -2170,10 +2164,8 @@ Deno.test("designDraft merge: inlineText update preserves cssTokenRefs", () => {
     inlineText: "old text",
     cssTokenRefs: ["color.action.primary.background"],
   };
-  const partial: FlowCanvasDesignDraft = {
-    inlineText: "new text",
-    cssTokenRefs: undefined,
-  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { inlineText: "new text" };
   const merged = mergeDesignDraft(current, partial);
   assertEquals(merged.inlineText, "new text");
   assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
@@ -2184,10 +2176,8 @@ Deno.test("designDraft merge: linkHref update preserves cssTokenRefs", () => {
     linkHref: "https://old.example.com",
     cssTokenRefs: ["radius.control.sm", "border.control.default"],
   };
-  const partial: FlowCanvasDesignDraft = {
-    linkHref: "https://new.example.com",
-    cssTokenRefs: undefined,
-  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { linkHref: "https://new.example.com" };
   const merged = mergeDesignDraft(current, partial);
   assertEquals(merged.linkHref, "https://new.example.com");
   assertEquals(merged.cssTokenRefs, ["radius.control.sm", "border.control.default"]);
@@ -2198,10 +2188,8 @@ Deno.test("designDraft merge: linkTarget update preserves cssTokenRefs", () => {
     linkTarget: "_self",
     cssTokenRefs: ["color.action.primary.background"],
   };
-  const partial: FlowCanvasDesignDraft = {
-    linkTarget: "_blank",
-    cssTokenRefs: undefined,
-  };
+  // designPreviewDraft() omits cssTokenRefs key entirely — absent key preserves existing value.
+  const partial: FlowCanvasDesignDraft = { linkTarget: "_blank" };
   const merged = mergeDesignDraft(current, partial);
   assertEquals(merged.linkTarget, "_blank");
   assertEquals(merged.cssTokenRefs, ["color.action.primary.background"]);
@@ -2240,9 +2228,10 @@ Deno.test("designDraft: cssTokenRefs inline styles applied after token toggle + 
     inlineText: "btn",
     cssTokenRefs: ["color.action.primary.background"],
   };
+  // Text edit partial has no cssTokenRefs key — absent key preserves existing tokens.
   const afterTextEdit: FlowCanvasDesignDraft = mergeDesignDraft(
     afterTokenToggle,
-    { inlineText: "click me", cssTokenRefs: undefined },
+    { inlineText: "click me" },
   );
   assertEquals(afterTextEdit.inlineText, "click me");
   assertEquals(afterTextEdit.cssTokenRefs, ["color.action.primary.background"]);
