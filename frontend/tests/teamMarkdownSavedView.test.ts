@@ -858,7 +858,10 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
     true,
     "catalog notes must explicitly deny saved view authority for md_viewer",
   );
-  // Object-level check: md_viewer.projection must have runtimeConnected:false.
+  // Object-level check: md_viewer.projection must have runtimeConnected:true (factory required for
+  // DashboardCandidatePalette placement) but must NOT hold topology/record/saved-view authority
+  // (enforced via catalog notes above). runtimeConnected:true means preview factory exists;
+  // it does not confer topology, record, or saved-view authority — those are denied by design.
   // Source regex is avoided because COMPONENT_TEMPLATE_CATALOG_IDENTITIES also contains
   // componentKey:"md_viewer.projection" without runtimeConnected, causing regex to hit
   // the next runtimeConnected in the file (button.primitive:true).
@@ -868,8 +871,8 @@ Deno.test("md_viewer does not hold active topology / physical record / saved vie
   assertExists(mdViewerEntry, "md_viewer.projection must exist in COMPONENT_CATALOG_ENTRIES");
   assertEquals(
     mdViewerEntry.runtimeConnected,
-    false,
-    "md_viewer.projection must have runtimeConnected:false (no runtime topology authority)",
+    true,
+    "md_viewer.projection must have runtimeConnected:true (preview factory required for DashboardCandidatePalette placement)",
   );
 });
 

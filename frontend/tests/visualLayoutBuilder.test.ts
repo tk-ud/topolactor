@@ -494,8 +494,10 @@ Deno.test("layout canvas preview: table.primitive renders with placeholder rows"
 });
 
 Deno.test("layout canvas preview: unsupported component fails with explicit code", () => {
+  // tree_node.template is a non-runtime sub-component (registrationRequired:false, runtimeConnected:false).
+  // It has a catalog entry (kind resolves) but intentionally no factory — FACTORY_MISSING is expected.
   const result = renderLayoutComponentPreview({
-    componentKey: "admin_page_shell.template",
+    componentKey: "tree_node.template",
   });
   assertEquals(result.ok, false);
   if (result.ok) return;

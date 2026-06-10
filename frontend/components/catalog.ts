@@ -386,10 +386,10 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "accepts_layout",
       "dashboard_placement_candidate",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: false,
     notes:
-      "dashboard/read-work component candidate for saved Markdown view display; not a preset DB seed registration mechanism, runtime registry component, or package canvas edit root; not a UIBuilder preset_ecosystem child surface, active topology authority, physical record authority, or saved view authority",
+      "dashboard/read-work component candidate for saved Markdown view display; runtime factory renders read-only preview placeholder (not full MdViewer island); does not hold active topology authority, physical record authority, or saved view authority; primary route is /admin/team-dashboard; not a preset DB seed registration mechanism or package canvas edit root; not a UIBuilder preset_ecosystem child surface",
   },
   {
     componentKey: "md_translation_authoring_surface.authoring",
@@ -407,7 +407,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     runtimeConnected: false,
     registrationRequired: false,
     notes:
-      "registry-driven md translation authoring surface; UIBuilder preset_ecosystem child authoring entry; not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference",
+      "registry-driven md translation authoring surface; UIBuilder preset_ecosystem child authoring entry; not a package canvas edit root; not a preset DB seed registration mechanism; binding is user-selected only — no AI inference; non_runtime: admin-only authoring surface, not a UI Builder canvas placement component, excluded from all placement palettes via registrationRequired:false + no dashboard_placement_candidate tag",
   },
   {
     componentKey: "form_field.template",
@@ -430,7 +430,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -442,7 +442,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -454,7 +454,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "badge",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -466,7 +466,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "badge",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -478,7 +478,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "alert",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design", "error_display"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -490,7 +490,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["loading_display", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -502,7 +502,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -514,7 +514,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["error_display", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -526,7 +526,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "json_viewer",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_json", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -543,7 +543,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "admin_only",
       "accepts_layout",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -560,7 +560,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "admin_only",
       "accepts_layout",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -572,7 +572,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "panel",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["displays_backend_result", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -584,7 +584,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "field",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["controlled_value", "emits_event", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -596,7 +596,7 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "tabs",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["selectable", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
@@ -620,20 +620,21 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     visualRole: "tree",
     lifecycleStatus: "code_only_drift",
     capabilityTags: ["recursive", "selectable", "accepts_design"],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: true,
   },
   {
     componentKey: "tree_node.template",
     componentKind: "data_display/tree_node",
     sourcePath: "frontend/components/Tree.tsx",
-    componentFamily: "template",
+    componentFamily: "composite",
     semanticRole: "data_viewer",
     visualRole: "tree",
-    lifecycleStatus: "code_only_drift",
+    lifecycleStatus: "registered",
     capabilityTags: ["recursive", "selectable", "accepts_design"],
     runtimeConnected: false,
-    registrationRequired: true,
+    registrationRequired: false,
+    notes: "non_runtime: tree sub-component, not for standalone UI Builder placement; use data_display/tree (tree.template) for tree rendering; excluded from placement palette via registrationRequired:false",
   },
 
   // =========================================================================

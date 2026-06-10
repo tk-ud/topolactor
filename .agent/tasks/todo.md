@@ -57,8 +57,8 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 - [x] frontend tests に CardList rows binding の end-to-end-ish ケースを追加する — `renderEmissionPropBindings.test.ts` に 3 ケース追加
 - [x] docs/system-roadmap.yaml と .agent/tasks/todo.md を completion bundle 単位で更新する
 
-**Remaining known gaps:**
-- `data_display/tree` runtime factory は未実装。`runtimeConnected: false` でありプロパティバインド capability は存在するが canvas preview 不可。データ接続タブで明示的にステータス表示済み。
+**Resolved (runtime-catalog-full-connection-rk9ije 2026-06-10):**
+- [x] `runtime_component_catalog_full_connection_bundle` — COMPONENT_CATALOG_ENTRIES の runtimeConnected:false エントリを全量接続。select / checkbox / badge / status_badge / alert / loading / empty / error / json_viewer / admin_page_shell / admin_section / validation_result / textarea_template / tabs / tree / md_viewer の 16 component に runtime factory 追加。tree_node は sub-component として registrationRequired:false / non-runtime 明示。双方向整合テスト (runtimeComponentCatalogFullConnection.test.ts) 追加。registrationRequired:true + runtimeConnected:false 違反ゼロ確認済み。
 
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed

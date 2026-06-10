@@ -389,9 +389,9 @@ system_roadmap_ssot:
         - display_card_list_catalog_runtime_factory_preview_and_propbindings_complete
         - ui_builder_data_binding_tab_separates_array_prop_wiring_from_advanced_experimental
         - display_card_single_record_only_enforced_by_tests
+        - runtime_catalog_full_connection_all_placement_candidates_have_factory
       known_gap_ref:
         - visual_builder_production_ready_manual_accessibility_and_responsive_token_acceptance_pending
-        - data_display_tree_runtime_factory_not_yet_implemented_propbindings_capability_exists
       files:
         - backend/
         - frontend/
