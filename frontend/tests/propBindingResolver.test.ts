@@ -162,6 +162,16 @@ Deno.test("validatePropBindingTarget: display/card_list accepts items", () => {
   assertEquals(validatePropBindingTarget("display/card_list", "items"), undefined);
 });
 
+Deno.test("validatePropBindingTarget: display/card rejects items (single-record only)", () => {
+  const err = validatePropBindingTarget("display/card", "items");
+  assertExists(err);
+  assertEquals(
+    err!.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT") ||
+    err!.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_PROP"),
+    true,
+  );
+});
+
 // ── resolvePropBindings ──────────────────────────────────────────────────────
 
 Deno.test("resolvePropBindings: emission.data.rows → items prop", () => {

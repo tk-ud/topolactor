@@ -141,3 +141,29 @@ Deno.test("modal.template renders in preview mode via disclosure/modal factory",
   if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
   assertExists(result.node);
 });
+
+Deno.test("renderLayoutComponentPreview: card_list.primitive renders preview vnode", () => {
+  ensureRuntimeComponentRegistryInitialized();
+  const result = renderLayoutComponentPreview({
+    componentKey: "card_list.primitive",
+    componentKind: "display/card_list",
+  });
+  if (!result.ok) throw new Error(`${result.code}: ${result.reason}`);
+  assertExists(result.node);
+});
+
+Deno.test("buildLayoutPreviewPlaceholderProps: card_list returns items array with two sample cards", () => {
+  const props = buildLayoutPreviewPlaceholderProps("display/card_list", "card_list.primitive");
+  const items = props.items as unknown[];
+  assertExists(items);
+  assertEquals(Array.isArray(items), true);
+  assertEquals(items.length, 2);
+});
+
+Deno.test("buildLayoutPreviewPlaceholderProps: card does NOT include items array (single-record only)", () => {
+  const props = buildLayoutPreviewPlaceholderProps("display/card", "card.primitive");
+  assertEquals("items" in props, false);
+  const data = props.data as Record<string, unknown> | undefined;
+  assertExists(data);
+  assertExists(data.title);
+});

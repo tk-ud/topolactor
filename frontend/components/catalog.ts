@@ -38,6 +38,11 @@ export const COMPONENT_TEMPLATE_CATALOG_IDENTITIES: ComponentCatalogIdentity[] =
       sourcePath: "frontend/components/Card.tsx",
     },
     {
+      componentKey: "card_list.primitive",
+      componentKind: "display/card_list",
+      sourcePath: "frontend/components/CardList.tsx",
+    },
+    {
       componentKey: "form_field.template",
       componentKind: "form_input/form_field",
       sourcePath: "frontend/components/FormField.tsx",
@@ -265,6 +270,20 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
     capabilityTags: ["accepts_children", "accepts_design"],
     runtimeConnected: true,
     registrationRequired: true,
+    notes: "single-record display only — does not accept items/rows array; use card_list.primitive for DB rows array display",
+  },
+  {
+    componentKey: "card_list.primitive",
+    componentKind: "display/card_list",
+    sourcePath: "frontend/components/CardList.tsx",
+    componentFamily: "primitive",
+    semanticRole: "data_viewer",
+    visualRole: "card",
+    lifecycleStatus: "code_only_drift",
+    capabilityTags: ["displays_backend_result", "selectable", "accepts_design"],
+    runtimeConnected: true,
+    registrationRequired: true,
+    notes: "array-display component — use propBindings.items with source emission.data.rows; display/card is single-record only and does not accept items",
   },
   {
     componentKey: "textarea.alias",

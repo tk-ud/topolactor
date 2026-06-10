@@ -48,6 +48,18 @@ UIBuilder preset ecosystem parent surface is partial. Provisional preset surface
 
 **Resolved (existing_pr_update 2026-06-09):** `md_viewer.projection` は `DashboardCandidatePalette` として UIBuilder canvas に追加 — `dashboard_placement_candidate` タグでフィルタ、`registrationRequired:false` なので DB bucket 登録不要。`ComponentCapabilityTag` 型に `dashboard_placement_candidate` を追加。`registrationRequired` と palette 表示可否の責務分離完了。SSOT/roadmap/tests 更新済み。
 
+**Resolved (cardlist-array-binding-completion 2026-06-10):**
+- [x] `display/card_list` の catalog / runtime factory / preview / tests を閉じる — `CardList.tsx` コンポーネント実装、`catalog.ts` に `card_list.primitive` 追加、`runtimeComponentFactory.ts` に `cardListFactory` 追加、`layoutComponentPreview.ts` に preview サイズ・placeholder props 追加
+- [x] `display/card` は単体表示専用として items/rows を受けないことをテストで固定する — `propBindingResolver.test.ts` と `renderEmissionPropBindings.test.ts` に rejection テスト追加
+- [x] UI Builder に「データ接続（API受信 / emission.data）」セクションを通常導線として追加する — `data_binding` タブ追加（全 path フィールド: keyPath/labelPath/valuePath/childrenPath、非配列コンポーネント向け誘導、tree 未接続ステータス説明）
+- [x] API送信配線、UIローカルイベント、API受信データ投影、生JSON override を同じ advanced ブロックに混在させない — 旧 `配列 Prop バインド` AdvancedManualOverride を advanced タブから削除
+- [x] propBindings の labelPath/valuePath/childrenPath も UI から編集できるようにする — データ接続タブで全 path フィールド編集可能
+- [x] frontend tests に CardList rows binding の end-to-end-ish ケースを追加する — `renderEmissionPropBindings.test.ts` に 3 ケース追加
+- [x] docs/system-roadmap.yaml と .agent/tasks/todo.md を completion bundle 単位で更新する
+
+**Remaining known gaps:**
+- `data_display/tree` runtime factory は未実装。`runtimeConnected: false` でありプロパティバインド capability は存在するが canvas preview 不可。データ接続タブで明示的にステータス表示済み。
+
 - [ ] aggregate_dashboard provisional preset surface is not yet implemented or explicitly completed
 - [ ] hub_search provisional preset surface is not yet implemented or explicitly completed
 - [ ] physical_search_crud_aggregate provisional preset surface is not yet implemented or explicitly completed

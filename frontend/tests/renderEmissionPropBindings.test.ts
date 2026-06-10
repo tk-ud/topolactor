@@ -182,6 +182,54 @@ Deno.test("parseVisualLayoutPatchJson: propBindings deserialized from layout_pat
   }
 });
 
+// ── CardList factory end-to-end-ish ─────────────────────────────────────────
+
+Deno.test("CardList: emission.data.rows bound via propBindings resolves to CardListItem shape", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "emission.data.rows", keyPath: "id" } };
+  const emissionData = {
+    rows: [
+      { id: "a1", title: "記事 A", body: "本文 A", variant: "info" },
+      { id: "a2", title: "記事 B", body: "本文 B" },
+    ],
+  };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const items = result.props.items as Array<Record<string, unknown>>;
+    assertEquals(items.length, 2);
+    assertEquals(items[0].id, "a1");
+    assertEquals(items[0].title, "記事 A");
+    assertEquals(items[1].body, "本文 B");
+  }
+});
+
+Deno.test("CardList: empty rows array resolves to empty items (no error)", () => {
+  const baseProps = { items: [{ id: "stale" }] };
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData = { rows: [] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card_list", emissionData);
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    assertEquals(result.props.items, []);
+  }
+});
+
+Deno.test("display/card does NOT accept items prop binding (single-record guard)", () => {
+  const baseProps = {};
+  const bindings = { items: { source: "emission.data.rows" } };
+  const emissionData = { rows: [{ id: 1 }] };
+  const result = resolvePropBindings(baseProps, bindings, "display/card", emissionData);
+  assertEquals(result.ok, false);
+  if (!result.ok) {
+    assertEquals(
+      result.error.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT") ||
+      result.error.includes("LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_PROP"),
+      true,
+    );
+  }
+});
+
 Deno.test("buildVisualLayoutPatchJson: node without propBindings omits the field", () => {
   const nodes = [{
     nodeId: "n1",
