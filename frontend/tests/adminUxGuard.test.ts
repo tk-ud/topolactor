@@ -67,6 +67,10 @@ import {
   applySearchConditions,
 } from "../lib/searchConditionEval.ts";
 import { buildAssignPayloadForStep } from "../lib/contentsAssign.ts";
+import {
+  topologySystemNameToUiBuilderKey,
+  isValidTopologySystemName,
+} from "../lib/topologySystemName.ts";
 
 // ─── Banned terms guard ───────────────────────────────────────────────────────
 // These technical terms must not appear in primary-visible guide text.
@@ -2083,4 +2087,43 @@ Deno.test("UiBuilderAdmin: raw dispatcher fields remain inside details disclosur
     presetBody.includes("接続先サーフェス"),
     "preset must not show raw target surface select",
   );
+});
+
+Deno.test("UiBuilderAdmin: ManifestRouteEntry exists and derives routeKey from topologySystemNameToUiBuilderKey", async () => {
+  const src = await Deno.readTextFile(
+    new URL("../islands/UiBuilderAdmin.tsx", import.meta.url),
+  );
+  // ManifestRouteEntry component must be defined in UiBuilderAdmin
+  assert(src.includes("function ManifestRouteEntry("), "ManifestRouteEntry component must be defined");
+  // Must use topologySystemNameToUiBuilderKey for routeKey derivation (SSOT contract)
+  assert(src.includes("topologySystemNameToUiBuilderKey"), "Must call topologySystemNameToUiBuilderKey for routeKey derivation");
+  // Must use isValidTopologySystemName to gate valid entries
+  assert(src.includes("isValidTopologySystemName"), "Must validate topologySystemName before deriving routeKey");
+  // Must NOT derive from userFacingTopologyLabel alone
+  const manifestRouteEntryStart = src.indexOf("function ManifestRouteEntry(");
+  const manifestRouteEntryEnd = src.indexOf("\nfunction BucketPackageRouteFields(");
+  assert(manifestRouteEntryStart >= 0, "ManifestRouteEntry must exist");
+  assert(manifestRouteEntryEnd > manifestRouteEntryStart, "BucketPackageRouteFields must follow");
+  const entryBody = src.slice(manifestRouteEntryStart, manifestRouteEntryEnd);
+  // Confirm derivedRouteKey comes from topologySystemNameToUiBuilderKey not displayName
+  assert(entryBody.includes("topologySystemNameToUiBuilderKey(sysName)"), "routeKey must be derived from topologySystemNameToUiBuilderKey(sysName)");
+  // Confirm userFacingTopologyLabel is used only for display label, not for routeKey
+  assert(entryBody.includes("resolveVisibleTopologyName"), "display label uses resolveVisibleTopologyName");
+  assertFalse(entryBody.includes("userFacingTopologyLabel)"), "userFacingTopologyLabel must NOT be passed to routeKey derivation");
+});
+
+Deno.test("ManifestRouteEntry SSOT: topologySystemNameToUiBuilderKey roundtrip matches encodeRouteNavigationTargetRef expectation", () => {
+  // Verify the SSOT derivation chain: topology.name → uiBuilderKey → route nav target_ref
+  const name = "customer-management";
+  assert(isValidTopologySystemName(name), "test topology name must be valid");
+  const uiBuilderKey = topologySystemNameToUiBuilderKey(name);
+  assertEquals(uiBuilderKey, "customer-management");
+  // route navigation target_ref = encodeRouteNavigationTargetRef(uiBuilderKey) = "route:customer-management"
+  assertEquals(encodeRouteNavigationTargetRef(uiBuilderKey), "route:customer-management");
+  // screenLabel / userFacingTopologyLabel must not affect routeKey
+  const screenLabel = "顧客管理";
+  const userFacingLabel = "顧客管理";
+  const _ = screenLabel + userFacingLabel; // referenced but not passed to derivation
+  assertEquals(topologySystemNameToUiBuilderKey(name), "customer-management");
+  assertEquals(encodeRouteNavigationTargetRef(topologySystemNameToUiBuilderKey(name)), "route:customer-management");
 });

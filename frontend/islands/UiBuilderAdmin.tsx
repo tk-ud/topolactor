@@ -92,7 +92,7 @@ import {
 import { getAdminManifest, listAdminManifests } from "../api/adminApi.ts";
 import { getStoredScreenLabel } from "../runtime/screenAuthoringIntent.ts";
 import { extractScreenDataShapeFromTopology } from "../lib/manifestTopologyExtensions.ts";
-import { resolveVisibleTopologyName } from "../lib/topologySystemName.ts";
+import { resolveVisibleTopologyName, topologySystemNameToUiBuilderKey, isValidTopologySystemName } from "../lib/topologySystemName.ts";
 import { useConfirm } from "../hooks/useConfirm.tsx";
 import {
   enrichLayoutPreviewNodes,
@@ -1982,6 +1982,116 @@ function TopologyLayoutClassPicker({
           ))}
         </div>
       </details>
+    </div>
+  );
+}
+
+type ManifestRouteOption = {
+  manifestId: string;
+  topologySystemName: string;
+  label: string;
+  derivedRouteKey: string;
+};
+
+/**
+ * Normal-flow route entry: loads active manifests and derives routeKey from topologySystemName.
+ * SSOT: routeKey = topologySystemNameToUiBuilderKey(topologySystemName).
+ * Prevents display names / arbitrary text from becoming routeKey.
+ */
+function ManifestRouteEntry({
+  onConfirm,
+}: {
+  onConfirm: (routeKey: string) => void;
+}): JSX.Element {
+  const [options, setOptions] = useState<ManifestRouteOption[]>([]);
+  const [selected, setSelected] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const items = await listAdminManifests();
+        if (cancelled || !items) return;
+        const resolved: ManifestRouteOption[] = [];
+        for (const item of items) {
+          const detail = await getAdminManifest(item.manifestId);
+          if (cancelled) return;
+          const shape = detail
+            ? extractScreenDataShapeFromTopology(detail.topologyRawJson)
+            : null;
+          const sysName = shape?.topologySystemName?.trim() ?? "";
+          if (!sysName || !isValidTopologySystemName(sysName)) continue;
+          const derivedRouteKey = topologySystemNameToUiBuilderKey(sysName);
+          const label = resolveVisibleTopologyName(shape?.userFacingTopologyLabel, sysName);
+          resolved.push({ manifestId: item.manifestId, topologySystemName: sysName, label, derivedRouteKey });
+        }
+        if (!cancelled) {
+          setOptions(resolved);
+          if (resolved.length > 0) setSelected(resolved[0].derivedRouteKey);
+        }
+      } catch (e) {
+        if (!cancelled) setLoadError(String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedOption = options.find((o) => o.derivedRouteKey === selected);
+
+  return (
+    <div class="mb-3 rounded border border-blue-200 bg-blue-50/40 p-3 text-xs">
+      <p class="mb-1.5 font-semibold text-blue-900">
+        通常導線: topology.name からルートキーを派生
+      </p>
+      {loading && <p class="text-slate-600">マニフェストを読み込み中…</p>}
+      {loadError && <p class="text-red-700">読み込みエラー: {loadError}</p>}
+      {!loading && options.length === 0 && !loadError && (
+        <p class="text-slate-600">
+          topology.name が登録済みのマニフェストが見つかりません。
+          先に /admin/contents で Step 1 を完了させてください。
+        </p>
+      )}
+      {options.length > 0 && (
+        <>
+          <label class="block">
+            マニフェストを選択
+            <select
+              class="mt-1 w-full rounded border bg-white px-2 py-1 font-mono text-xs"
+              value={selected}
+              onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
+            >
+              {options.map((o) => (
+                <option key={o.derivedRouteKey} value={o.derivedRouteKey}>
+                  {o.label} → {o.derivedRouteKey}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedOption && (
+            <p class="mt-1 text-[0.7rem] text-blue-800">
+              topology.name: <span class="font-mono">{selectedOption.topologySystemName}</span>
+              {" "}→ routeKey: <span class="font-mono">{selectedOption.derivedRouteKey}</span>
+            </p>
+          )}
+          <button
+            type="button"
+            class="btn-primary mt-2 text-xs"
+            disabled={!selected}
+            onClick={() => {
+              if (selected) onConfirm(selected);
+            }}
+          >
+            このルートキーで確定
+          </button>
+        </>
+      )}
     </div>
   );
 }
@@ -6512,7 +6622,19 @@ export default function UiBuilderAdmin(): JSX.Element {
         workspace が使えます。入力のたびに登録はされません。
       </div>
 
-      <div class="mb-3 rounded border border-slate-200 bg-white p-3">
+      <ManifestRouteEntry
+        onConfirm={(key) => {
+          setCommittedManualRouteKey(key);
+          setRouteKey("");
+          setManualRouteDraft("");
+        }}
+      />
+
+      <details class="mb-3">
+        <summary class="cursor-pointer rounded border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700 hover:bg-slate-100">
+          既存ルート候補 / 直接入力（上級者・移行用）
+        </summary>
+      <div class="mt-2 rounded border border-slate-200 bg-white p-3">
         <BucketPackageRouteFields
           routeKey={routeKey}
           manualRouteDraft={manualRouteDraft}
@@ -6552,6 +6674,7 @@ export default function UiBuilderAdmin(): JSX.Element {
           </p>
         )}
       </div>
+      </details>
 
       <div class="mb-4">
         <div class="mb-2 flex flex-wrap items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2">
