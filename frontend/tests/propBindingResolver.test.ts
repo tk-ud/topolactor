@@ -106,6 +106,31 @@ Deno.test("applyPropBindingTransform: rowsToOptions with only labelPath sets lab
   }
 });
 
+Deno.test("applyPropBindingTransform: rowsToOptions with keyPath sets key", () => {
+  const rows = [{ id: 1, name: "Alice" }, { id: 2, name: "Bob" }];
+  const result = applyPropBindingTransform(rows, "rowsToOptions", { source: "emission.data.rows", keyPath: "id", labelPath: "name", valuePath: "id" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const opt = result.value[0] as Record<string, unknown>;
+    assertEquals(opt.key, 1);
+    assertEquals(opt.label, "Alice");
+    assertEquals(opt.value, 1);
+  }
+});
+
+Deno.test("applyPropBindingTransform: rowsToOptions with only keyPath sets key without label/value", () => {
+  const rows = [{ id: 1, name: "Alice" }];
+  const result = applyPropBindingTransform(rows, "rowsToOptions", { source: "emission.data.rows", keyPath: "id" });
+  assertEquals(result.ok, true);
+  if (result.ok) {
+    const opt = result.value[0] as Record<string, unknown>;
+    assertEquals(opt.key, 1);
+    assertEquals("label" in opt, false);
+    assertEquals("value" in opt, false);
+    assertEquals(opt.name, "Alice");
+  }
+});
+
 Deno.test("applyPropBindingTransform: unknown transform returns error", () => {
   const result = applyPropBindingTransform([], "eval()", { source: "emission.data.rows" });
   assertEquals(result.ok, false);

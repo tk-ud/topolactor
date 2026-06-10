@@ -11,10 +11,10 @@
  * When resolved value is not an array, returns explicit error.
  *
  * Path fields (labelPath / valuePath / keyPath / childrenPath):
- *   - rowsToOptions:              uses labelPath → output.label, valuePath → output.value
+ *   - rowsToOptions:              uses labelPath → output.label, valuePath → output.value, keyPath → output.key
  *   - activeColumnsToTableColumns: uses labelPath → output.header for object columns
- *   - keyPath:                    component-informational; no automatic element mutation
- *   - childrenPath:               component-informational; no automatic element mutation
+ *   - keyPath (activeColumnsToTableColumns): not applied — string columns already produce key; objects pass through
+ *   - childrenPath:               component-informational; no automatic element mutation (tree component handles recursion)
  */
 
 import type { PropBinding } from "../api/dispatch.ts";
@@ -127,14 +127,15 @@ function rowsToOptions(
   value: unknown[],
   binding: PropBinding,
 ): unknown[] {
-  const { labelPath, valuePath } = binding;
-  if (!labelPath && !valuePath) return value;
+  const { labelPath, valuePath, keyPath } = binding;
+  if (!labelPath && !valuePath && !keyPath) return value;
   return value.map((row) => {
     if (typeof row !== "object" || row === null || Array.isArray(row)) return row;
     const r = row as Record<string, unknown>;
     const result: Record<string, unknown> = { ...r };
     if (valuePath) result.value = r[valuePath];
     if (labelPath) result.label = r[labelPath];
+    if (keyPath) result.key = r[keyPath];
     return result;
   });
 }
