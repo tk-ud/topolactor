@@ -4627,11 +4627,11 @@ function LayoutBuilderSection({
             data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
           >
             <div class="flex items-center justify-between border-b border-blue-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-blue-900">
-              <span>Component Drawer</span>
+              <span>部品パネル</span>
               <button
                 type="button"
                 class="rounded border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[0.62rem] text-blue-800 hover:bg-blue-100"
-                aria-label="左Drawerを閉じる"
+                aria-label="左パネルを閉じる"
                 onClick={() => setLeftDrawerOpen(false)}
               >
                 ×
@@ -4662,7 +4662,7 @@ function LayoutBuilderSection({
             <button
               type="button"
               class="pointer-events-auto rounded-full border border-blue-200 bg-white/90 px-2 py-1 text-xs font-semibold text-blue-800 shadow-sm hover:bg-blue-50"
-              aria-label={leftDrawerOpen ? "左Drawerを閉じる" : "左Drawerを開く"}
+              aria-label={leftDrawerOpen ? "左パネルを閉じる" : "左パネルを開く"}
               aria-pressed={leftDrawerOpen}
               onClick={() => setLeftDrawerOpen((open) => !open)}
             >
@@ -4671,7 +4671,7 @@ function LayoutBuilderSection({
             <button
               type="button"
               class="pointer-events-auto rounded-full border border-indigo-200 bg-white/90 px-2 py-1 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-50"
-              aria-label={rightDrawerOpen ? "右Drawerを閉じる" : "右Drawerを開く"}
+              aria-label={rightDrawerOpen ? "右パネルを閉じる" : "右パネルを開く"}
               aria-pressed={rightDrawerOpen}
               onClick={() => setRightDrawerOpen((open) => !open)}
             >
@@ -4716,11 +4716,11 @@ function LayoutBuilderSection({
             data-drawer-state-boundary={UI_BUILDER_DRAWER_STATE_BOUNDARY}
           >
             <div class="flex items-center justify-between border-b border-indigo-100 bg-white px-2 py-1 text-[0.62rem] font-semibold text-indigo-900">
-              <span>Inspector Drawer</span>
+              <span>インスペクターパネル</span>
               <button
                 type="button"
                 class="rounded border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[0.62rem] text-indigo-800 hover:bg-indigo-100"
-                aria-label="右Drawerを閉じる"
+                aria-label="右パネルを閉じる"
                 onClick={() => setRightDrawerOpen(false)}
               >
                 ×

@@ -1151,10 +1151,10 @@ Deno.test("canvas workspace drawer shell: canvas-first default keeps drawers clo
   assert(source.includes("const [rightDrawerOpen, setRightDrawerOpen] = useState(false)"));
   assert(source.includes("leftDrawerOpen"));
   assert(source.includes("rightDrawerOpen"));
-  assert(source.includes("左Drawerを開く"));
-  assert(source.includes("右Drawerを開く"));
-  assert(source.includes("左Drawerを閉じる"));
-  assert(source.includes("右Drawerを閉じる"));
+  assert(source.includes("左パネルを開く"));
+  assert(source.includes("右パネルを開く"));
+  assert(source.includes("左パネルを閉じる"));
+  assert(source.includes("右パネルを閉じる"));
 });
 Deno.test("canvas workspace drawer shell: selecting a canvas node opens right inspector drawer", async () => {
   const source = await Deno.readTextFile(
