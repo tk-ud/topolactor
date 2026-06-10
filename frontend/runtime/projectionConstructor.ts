@@ -127,6 +127,20 @@ function normalizeComponentProps(componentKind: string, props: JsonObject): Resu
       if (!Array.isArray(props.columns)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_COLUMNS: columns(array) is required" };
       if (!Array.isArray(props.rows)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TABLE_ROWS: rows(array) is required" };
       return { ok: true, value: { ...props, table: props.table ?? { columns: props.columns, rows: props.rows } } };
+    case "data_display/tree":
+      if (props.items !== undefined && !Array.isArray(props.items)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TREE_ITEMS: items must be array" };
+      if (props.nodes !== undefined && !Array.isArray(props.nodes)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_TREE_NODES: nodes must be array" };
+      return { ok: true, value: { ...props, data: props.data ?? props } };
+    case "display/card_list":
+      if (props.items !== undefined && !Array.isArray(props.items)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_CARD_LIST_ITEMS: items must be array" };
+      return { ok: true, value: { ...props, data: props.data ?? props } };
+    case "disclosure/accordion":
+      if (props.items !== undefined && !Array.isArray(props.items)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_ACCORDION_ITEMS: items must be array" };
+      return { ok: true, value: { ...props, data: props.data ?? props } };
+    case "form_input/radio_group":
+    case "form_input/checkbox_group":
+      if (props.options !== undefined && !Array.isArray(props.options)) return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_OPTIONS: options must be array" };
+      return { ok: true, value: { ...props, data: props.data ?? props } };
     case "document_canvas/document_canvas_template_editor": {
       if (props.backgroundImageUrl !== undefined && typeof props.backgroundImageUrl !== "string") {
         return { ok: false, error: "PROJECTION_CONSTRUCTOR_INVALID_DOCUMENT_CANVAS_BACKGROUND_URL: backgroundImageUrl must be string" };

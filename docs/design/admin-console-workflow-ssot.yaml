@@ -634,6 +634,71 @@ admin_console_workflow_ssot:
                 list: [ul, ol, li, dl, dt, dd]
                 table: [table, thead, tbody, tfoot, tr, th, td, caption]
               extension_policy: allowlist changes require SSOT amendment only; no unilateral implementation additions
+          layout_node_props_contract:
+            fields:
+              propsJson:
+                type: string (JSON object)
+                meaning: node-local static props override; merged over default props; must be JSON object (not array)
+                priority: 2 (after default props)
+              stateJson:
+                type: string (JSON object)
+                meaning: node-local state override; merged into props.data when data is object; must be JSON object
+                priority: 3 (after propsJson)
+              propBindings:
+                type: object (Record<string, PropBinding>)
+                meaning: >
+                  Array prop bindings from runtime emission.data to component array props.
+                  Resolved after propsJson/stateJson; wins over static props for the same key.
+                  Only permitted on components whose componentKind is in COMPONENT_ARRAY_PROP_CAPABILITIES.
+                priority: 4 (after stateJson; highest precedence for array prop targets)
+                implementation_ref: frontend/runtime/propBindingResolver.ts
+                binding_descriptor:
+                  source:
+                    required: true
+                    format: "emission.data.<path>" (must start with "emission.data.")
+                    examples: ["emission.data.rows", "emission.data.activeColumns", "emission.data.aggregationResults"]
+                  keyPath: optional string — field name for item key within each element
+                  labelPath: optional string — field name for display label within each element
+                  valuePath: optional string — field name for value within each element
+                  childrenPath: optional string — field name for nested children within each element
+                  transform:
+                    optional: true
+                    allowlist: [activeColumnsToTableColumns, rowsToOptions]
+                    prohibited: arbitrary expression eval, eval(), arbitrary JS
+            prop_resolution_order:
+              1: default props (buildDefaultCatalogComponentProps)
+              2: propsJson (shallow merge over default)
+              3: stateJson (merge into props.data or top-level)
+              4: propBindings (resolved from emission.data; overwrites same-key static props)
+            component_array_prop_capabilities:
+              meaning: >
+                Only component kinds listed here may receive array prop bindings.
+                Non-capability components must produce a validation error on propBindings presence.
+              implementation_ref: frontend/runtime/propBindingResolver.ts COMPONENT_ARRAY_PROP_CAPABILITIES
+              entries:
+                data_display/table: [rows, columns]
+                data_display/data_grid: [rows, columns]
+                data_display/list: [rows, items]
+                data_display/tree: [nodes, items]
+                display/card_list: [items]
+                disclosure/accordion: [items]
+                form_input/select: [options]
+                form_input/checkbox: [options]
+                form_input/radio_group: [options]
+                form_input/checkbox_group: [options]
+                table_op/faceted_filter_bar: [filters]
+                table_op/column_filter: [options]
+                table_op/column_visibility_editor: [columns]
+                table_op/sort_control: [columns]
+                table_op/group_by_control: [columns]
+                table_op/bulk_action_panel: [actions]
+                table_op/virtualized_data_table: [rows, columns]
+            validate_contract:
+              - propBindings must be object
+              - each binding target prop must be in component's acceptsArrayProps
+              - source must start with "emission.data."
+              - transform must be in allowlist when present
+              - non-capability components must error on propBindings
           accessibility_ref: docs/system-roadmap.yaml admin_visual_layout_builder keyboard_or_button_alternatives_for_drag_move_resize_and_reorder
           prohibited:
             - separate tab, route, or modal for layout editing vs design editing vs preview

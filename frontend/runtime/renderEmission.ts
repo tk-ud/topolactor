@@ -5,6 +5,7 @@ import { renderRuntimeComponent } from "./runtimePrimitiveRenderer.ts";
 import { constructProjection, type ComponentDataHub, type ProjectionDefinition, type UiProjection } from "./projectionConstructor.ts";
 import { ensureRuntimeComponentRegistryInitialized } from "./runtimeComponentRegistry.ts";
 import type { RuntimeDispatchSpec } from "./frontendScheduler.ts";
+import { resolvePropBindings } from "./propBindingResolver.ts";
 
 export type ComponentSpec = {
   componentId?: string;
@@ -347,13 +348,35 @@ export function renderEmission(
             ...layoutFields,
           };
         }
+
+        // Resolve propBindings from emission.data after propsJson/stateJson merge.
+        let finalProps = mergedProps.props;
+        if (node.propBindings && Object.keys(node.propBindings).length > 0) {
+          const emissionData = emission.data ?? {};
+          const bindingResult = resolvePropBindings(
+            mergedProps.props,
+            node.propBindings,
+            node.componentKind,
+            emissionData,
+          );
+          if (!bindingResult.ok) {
+            return {
+              componentId: node.componentId,
+              componentType: "error",
+              def: { error: bindingResult.error, componentId: node.componentId },
+              ...layoutFields,
+            };
+          }
+          finalProps = bindingResult.props;
+        }
+
         const hub: ComponentDataHub = {
           componentId: node.componentId,
           componentKind: node.componentKind,
           packageId: emission.packageId ?? null,
           layoutId: emission.layoutId ?? null,
           wiringId: (node.wiringId && node.wiringId.trim()) ? node.wiringId.trim() : null,
-          props: mergedProps.props,
+          props: finalProps,
           eventBinding: componentEventBinding,
           design: undefined,
         };

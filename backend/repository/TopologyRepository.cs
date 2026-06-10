@@ -270,5 +270,7 @@ public record LayoutNodeRecord(
     /// <summary>Node-local props override JSON string from layout_patch_json. Null when not authored.</summary>
     string? PropsJson = null,
     /// <summary>Node-local state JSON string from layout_patch_json (e.g. open:bool for modal/drawer). Null when not authored.</summary>
-    string? StateJson = null
+    string? StateJson = null,
+    /// <summary>Array prop bindings JSON string from layout_patch_json. Null when not authored.</summary>
+    string? PropBindingsJson = null
 );

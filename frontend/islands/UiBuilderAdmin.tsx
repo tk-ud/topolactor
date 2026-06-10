@@ -99,6 +99,11 @@ import {
   getLayoutPreviewDefaultSize,
   resolveComponentKindForLayoutPreview,
 } from "../runtime/layoutComponentPreview.ts";
+import {
+  COMPONENT_ARRAY_PROP_CAPABILITIES,
+  ALLOWED_PROP_BINDING_TRANSFORMS,
+  validatePropBindingsStructure,
+} from "../runtime/propBindingResolver.ts";
 
 /**
  * /admin/ui-builder — UI コンポーネントシステム & レイアウトビルダー v2。
@@ -190,6 +195,23 @@ type DraftNode = {
   propsJson?: string;
   /** Serialized component state override (JSON string). open:boolean for disclosure/drawer — merged into props.data at render time. SSOT: layout_patch_json */
   stateJson?: string;
+  /**
+   * Array prop bindings: maps component prop name → runtime data path binding.
+   * Resolved from emission.data.* after propsJson/stateJson at render time.
+   * Only valid for components with COMPONENT_ARRAY_PROP_CAPABILITIES entries.
+   * SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings
+   */
+  propBindings?: Record<string, PropBindingDraft>;
+};
+
+/** Draft-time prop binding descriptor stored in DraftNode. */
+type PropBindingDraft = {
+  source: string;
+  keyPath?: string;
+  labelPath?: string;
+  valuePath?: string;
+  childrenPath?: string;
+  transform?: string;
 };
 
 type DesignDraft = FlowCanvasDesignDraft;
@@ -5707,7 +5729,13 @@ function PackageDesignPanel({
   const [propsError, setPropsError] = useState<string | null>(null);
   const [stateDraft, setStateDraft] = useState(selectedCanvasNode?.stateJson ?? "");
   const [stateError, setStateError] = useState<string | null>(null);
+  const [propBindingsDraft, setPropBindingsDraft] = useState<Record<string, PropBindingDraft>>(
+    selectedCanvasNode?.propBindings ?? {},
+  );
+  const [propBindingsError, setPropBindingsError] = useState<string | null>(null);
 
+  const componentKind = selectedCanvasNode?.componentKind ?? "";
+  const acceptsArrayProps = COMPONENT_ARRAY_PROP_CAPABILITIES[componentKind] ?? [];
   const isDisclosure = isDisclosureKind(selectedCanvasNode?.componentKind);
 
   const layoutNodeId = selectedCanvasNode?.nodeId ?? "";
@@ -5884,6 +5912,8 @@ function PackageDesignPanel({
     setPropsError(null);
     setStateDraft(selectedCanvasNode.stateJson ?? "");
     setStateError(null);
+    setPropBindingsDraft(selectedCanvasNode.propBindings ?? {});
+    setPropBindingsError(null);
   }, [selectedCanvasNode?.nodeId, savedDesigns]);
 
   useEffect(() => {
@@ -6413,6 +6443,127 @@ function PackageDesignPanel({
                     })()}
                   </fieldset>
                 </AdvancedManualOverride>
+                {acceptsArrayProps.length > 0 && (
+                  <AdvancedManualOverride title="配列 Prop バインド（emission.data）">
+                    <p class="text-[0.6rem] text-slate-500 mb-2">
+                      runtime data（emission.data.*）を component の配列 props に割り当てます。
+                      対象: {acceptsArrayProps.join(", ")}
+                    </p>
+                    <fieldset class="flex flex-col gap-2">
+                      <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">
+                        Prop バインド
+                      </legend>
+                      {acceptsArrayProps.map((propName) => {
+                        const binding = propBindingsDraft[propName];
+                        return (
+                          <div key={propName} class="border border-slate-200 rounded p-2 text-[0.65rem]">
+                            <div class="flex items-center justify-between mb-1">
+                              <span class="font-semibold text-slate-700">{propName}</span>
+                              {binding ? (
+                                <button
+                                  type="button"
+                                  class="text-red-500 text-[0.6rem] hover:underline"
+                                  onClick={() => {
+                                    const next = { ...propBindingsDraft };
+                                    delete next[propName];
+                                    setPropBindingsDraft(next);
+                                    setPropBindingsError(null);
+                                    onCommitNode?.({ propBindings: Object.keys(next).length > 0 ? next : undefined }, `propBindings.${propName}を削除`);
+                                  }}
+                                >
+                                  削除
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  class="text-blue-500 text-[0.6rem] hover:underline"
+                                  onClick={() => {
+                                    const next = { ...propBindingsDraft, [propName]: { source: "emission.data.rows" } };
+                                    setPropBindingsDraft(next);
+                                  }}
+                                >
+                                  + バインドを追加
+                                </button>
+                              )}
+                            </div>
+                            {binding && (
+                              <div class="flex flex-col gap-1">
+                                <label class="block">
+                                  source
+                                  <input
+                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                    value={binding.source}
+                                    placeholder="emission.data.rows"
+                                    onInput={(e) => {
+                                      const v = (e.target as HTMLInputElement).value;
+                                      const next = { ...propBindingsDraft, [propName]: { ...binding, source: v } };
+                                      setPropBindingsDraft(next);
+                                    }}
+                                    onBlur={() => {
+                                      const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                      if (errs.length > 0) {
+                                        setPropBindingsError(errs[0]);
+                                        return;
+                                      }
+                                      setPropBindingsError(null);
+                                      onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.sourceを更新`);
+                                    }}
+                                  />
+                                </label>
+                                <label class="block">
+                                  transform（任意）
+                                  <select
+                                    class="mt-0.5 w-full rounded border px-1 py-0.5 text-[0.6rem]"
+                                    value={binding.transform ?? ""}
+                                    onChange={(e) => {
+                                      const v = (e.target as HTMLSelectElement).value;
+                                      const next = { ...propBindingsDraft, [propName]: { ...binding, transform: v || undefined } };
+                                      setPropBindingsDraft(next);
+                                      const errs = validatePropBindingsStructure(next, componentKind);
+                                      if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                      setPropBindingsError(null);
+                                      onCommitNode?.({ propBindings: next }, `propBindings.${propName}.transformを更新`);
+                                    }}
+                                  >
+                                    <option value="">（なし）</option>
+                                    {[...ALLOWED_PROP_BINDING_TRANSFORMS].map((t) => (
+                                      <option key={t} value={t}>{t}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label class="block">
+                                  keyPath（任意）
+                                  <input
+                                    class="mt-0.5 w-full rounded border px-1 py-0.5 font-mono text-[0.6rem]"
+                                    value={binding.keyPath ?? ""}
+                                    placeholder="id"
+                                    onInput={(e) => {
+                                      const v = (e.target as HTMLInputElement).value;
+                                      const next = { ...propBindingsDraft, [propName]: { ...binding, keyPath: v || undefined } };
+                                      setPropBindingsDraft(next);
+                                    }}
+                                    onBlur={() => {
+                                      const errs = validatePropBindingsStructure(propBindingsDraft, componentKind);
+                                      if (errs.length > 0) { setPropBindingsError(errs[0]); return; }
+                                      setPropBindingsError(null);
+                                      onCommitNode?.({ propBindings: propBindingsDraft }, `propBindings.${propName}.keyPathを更新`);
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {propBindingsError && <p class="text-red-600 text-[0.6rem]">{propBindingsError}</p>}
+                    </fieldset>
+                  </AdvancedManualOverride>
+                )}
+                {acceptsArrayProps.length === 0 && componentKind && (
+                  <div class="text-[0.6rem] text-slate-400 px-1">
+                    このコンポーネント（{componentKind}）は配列 prop バインドに対応していません。
+                  </div>
+                )}
                 <AdvancedManualOverride title="生JSON（上級者向け）">
                   <fieldset class="flex flex-col gap-1 mb-2">
                     <legend class="text-[0.65rem] font-semibold uppercase tracking-wide text-gray-500">

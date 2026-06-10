@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Topolactor.Repository;
 using Topolactor.Schema;
 
@@ -32,6 +33,39 @@ public class StructureMapResolver
         // table
         "table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption",
     };
+
+    // SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.component_array_prop_capabilities
+    // Must stay in sync with frontend/runtime/propBindingResolver.ts COMPONENT_ARRAY_PROP_CAPABILITIES.
+    internal static readonly IReadOnlyDictionary<string, IReadOnlySet<string>> ComponentArrayPropCapabilities =
+        new Dictionary<string, IReadOnlySet<string>>(StringComparer.Ordinal)
+        {
+            ["data_display/table"]              = new HashSet<string>(StringComparer.Ordinal) { "rows", "columns" },
+            ["data_display/data_grid"]          = new HashSet<string>(StringComparer.Ordinal) { "rows", "columns" },
+            ["data_display/list"]               = new HashSet<string>(StringComparer.Ordinal) { "rows", "items" },
+            ["data_display/tree"]               = new HashSet<string>(StringComparer.Ordinal) { "nodes", "items" },
+            ["display/card_list"]               = new HashSet<string>(StringComparer.Ordinal) { "items" },
+            ["disclosure/accordion"]            = new HashSet<string>(StringComparer.Ordinal) { "items" },
+            ["form_input/select"]               = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            ["form_input/checkbox"]             = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            ["form_input/radio_group"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            ["form_input/checkbox_group"]       = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            ["table_op/faceted_filter_bar"]     = new HashSet<string>(StringComparer.Ordinal) { "filters" },
+            ["table_op/column_filter"]          = new HashSet<string>(StringComparer.Ordinal) { "options" },
+            ["table_op/column_visibility_editor"] = new HashSet<string>(StringComparer.Ordinal) { "columns" },
+            ["table_op/sort_control"]           = new HashSet<string>(StringComparer.Ordinal) { "columns" },
+            ["table_op/group_by_control"]       = new HashSet<string>(StringComparer.Ordinal) { "columns" },
+            ["table_op/bulk_action_panel"]      = new HashSet<string>(StringComparer.Ordinal) { "actions" },
+            ["table_op/virtualized_data_table"] = new HashSet<string>(StringComparer.Ordinal) { "rows", "columns" },
+        };
+
+    // SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract.propBindings.transform.allowlist
+    // Must stay in sync with frontend/runtime/propBindingResolver.ts ALLOWED_PROP_BINDING_TRANSFORMS.
+    internal static readonly IReadOnlySet<string> AllowedPropBindingTransforms =
+        new HashSet<string>(StringComparer.Ordinal)
+        {
+            "activeColumnsToTableColumns",
+            "rowsToOptions",
+        };
 
     private readonly TopologyRepository _topologyRepository;
 
@@ -119,7 +153,10 @@ public class StructureMapResolver
                         TargetSurface: row.TargetSurface,
                         TargetRef: row.TargetRef,
                         PropsJson: row.PropsJson,
-                        StateJson: row.StateJson
+                        StateJson: row.StateJson,
+                        PropBindings: row.PropBindingsJson != null
+                            ? JsonSerializer.Deserialize<JsonElement>(row.PropBindingsJson)
+                            : null
                     )).ToList();
                 }
             }
@@ -229,6 +266,145 @@ public class StructureMapResolver
                             "LAYOUT_PATCH_STRUCTURAL_HTML_TAG_UNKNOWN",
                             $"Node '{node.NodeId}' has htmlTag '{node.HtmlTag}' which is not in the SSOT structural HTML tag allowlist.")
                     ];
+                }
+            }
+        }
+
+        // propBindings validate_contract (SSOT: admin-console-workflow-ssot.yaml layout_node_props_contract)
+        foreach (var node in nodes)
+        {
+            if (node.PropBindingsJson is null) continue;
+
+            JsonElement pb;
+            try
+            {
+                pb = JsonSerializer.Deserialize<JsonElement>(node.PropBindingsJson);
+            }
+            catch (JsonException)
+            {
+                return
+                [
+                    new ValidationError(
+                        "LAYOUT_NODE_PROP_BINDING_INVALID",
+                        $"Node '{node.NodeId}': propBindings is not valid JSON.")
+                ];
+            }
+
+            if (pb.ValueKind != JsonValueKind.Object)
+            {
+                return
+                [
+                    new ValidationError(
+                        "LAYOUT_NODE_PROP_BINDING_INVALID",
+                        $"Node '{node.NodeId}': propBindings must be a JSON object.")
+                ];
+            }
+
+            // component kind required for capability check when propBindings present
+            var componentKind = node.ComponentKind;
+            if (string.IsNullOrWhiteSpace(componentKind))
+            {
+                return
+                [
+                    new ValidationError(
+                        "LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT",
+                        $"Node '{node.NodeId}': propBindings present but componentKind is missing.")
+                ];
+            }
+
+            if (!ComponentArrayPropCapabilities.TryGetValue(componentKind, out var acceptedProps))
+            {
+                return
+                [
+                    new ValidationError(
+                        "LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_COMPONENT",
+                        $"Node '{node.NodeId}': component kind '{componentKind}' does not accept array prop bindings.")
+                ];
+            }
+
+            foreach (var bindingProp in pb.EnumerateObject())
+            {
+                var propName = bindingProp.Name;
+
+                if (!acceptedProps.Contains(propName))
+                {
+                    return
+                    [
+                        new ValidationError(
+                            "LAYOUT_NODE_PROP_BINDING_UNSUPPORTED_PROP",
+                            $"Node '{node.NodeId}': prop '{propName}' is not in acceptsArrayProps for '{componentKind}'.")
+                    ];
+                }
+
+                if (bindingProp.Value.ValueKind != JsonValueKind.Object)
+                {
+                    return
+                    [
+                        new ValidationError(
+                            "LAYOUT_NODE_PROP_BINDING_INVALID_ENTRY",
+                            $"Node '{node.NodeId}': binding for prop '{propName}' must be an object.")
+                    ];
+                }
+
+                // source: required, must start with "emission.data."
+                if (!bindingProp.Value.TryGetProperty("source", out var sourceProp) ||
+                    sourceProp.ValueKind != JsonValueKind.String)
+                {
+                    return
+                    [
+                        new ValidationError(
+                            "LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE",
+                            $"Node '{node.NodeId}', prop '{propName}': source must be a string.")
+                    ];
+                }
+                var source = sourceProp.GetString()!;
+                if (!source.StartsWith("emission.data.", StringComparison.Ordinal))
+                {
+                    return
+                    [
+                        new ValidationError(
+                            "LAYOUT_NODE_PROP_BINDING_INVALID_SOURCE",
+                            $"Node '{node.NodeId}', prop '{propName}': source \"{source}\" must start with \"emission.data.\".")
+                    ];
+                }
+
+                // transform: optional, must be in allowlist when present
+                if (bindingProp.Value.TryGetProperty("transform", out var transformProp))
+                {
+                    if (transformProp.ValueKind != JsonValueKind.String)
+                    {
+                        return
+                        [
+                            new ValidationError(
+                                "LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM",
+                                $"Node '{node.NodeId}', prop '{propName}': transform must be a string.")
+                        ];
+                    }
+                    var transform = transformProp.GetString()!;
+                    if (!AllowedPropBindingTransforms.Contains(transform))
+                    {
+                        return
+                        [
+                            new ValidationError(
+                                "LAYOUT_NODE_PROP_BINDING_INVALID_TRANSFORM",
+                                $"Node '{node.NodeId}', prop '{propName}': transform \"{transform}\" is not in the allowlist.")
+                        ];
+                    }
+                }
+
+                // path fields: keyPath, labelPath, valuePath, childrenPath — must be string when present
+                foreach (var pathField in new[] { "keyPath", "labelPath", "valuePath", "childrenPath" })
+                {
+                    if (bindingProp.Value.TryGetProperty(pathField, out var pathProp) &&
+                        pathProp.ValueKind != JsonValueKind.String)
+                    {
+                        return
+                        [
+                            new ValidationError(
+                                "LAYOUT_NODE_PROP_BINDING_INVALID_PATH",
+                                $"Node '{node.NodeId}', prop '{propName}': {pathField} must be a string.")
+                        ];
+                    }
                 }
             }
         }
