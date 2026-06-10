@@ -386,10 +386,10 @@ export const COMPONENT_CATALOG_ENTRIES: ComponentCatalogEntry[] = [
       "accepts_layout",
       "dashboard_placement_candidate",
     ],
-    runtimeConnected: false,
+    runtimeConnected: true,
     registrationRequired: false,
     notes:
-      "dashboard/read-work component candidate for saved Markdown view display; intentionally non-runtime (no active topology authority, no physical record authority, no saved view authority); primary route is /admin/team-dashboard; not a preset DB seed registration mechanism or package canvas edit root; not a UIBuilder preset_ecosystem child surface",
+      "dashboard/read-work component candidate for saved Markdown view display; runtime factory renders read-only preview placeholder (not full MdViewer island); does not hold active topology authority, physical record authority, or saved view authority; primary route is /admin/team-dashboard; not a preset DB seed registration mechanism or package canvas edit root; not a UIBuilder preset_ecosystem child surface",
   },
   {
     componentKey: "md_translation_authoring_surface.authoring",

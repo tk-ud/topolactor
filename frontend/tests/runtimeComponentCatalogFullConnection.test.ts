@@ -61,19 +61,15 @@ Deno.test("catalog invariant: no registrationRequired:true entry is runtimeConne
   );
 });
 
-Deno.test("catalog invariant: md_viewer.projection is intentional non-runtime dashboard_placement_candidate (no topology authority)", () => {
-  const entry = COMPONENT_CATALOG_ENTRIES.find((e) => e.componentKey === "md_viewer.projection");
-  assertExists(entry, "md_viewer.projection must exist in catalog");
-  assert(
-    entry!.capabilityTags.includes("dashboard_placement_candidate"),
-    "md_viewer.projection must have dashboard_placement_candidate tag",
+Deno.test("catalog invariant: no dashboard_placement_candidate is runtimeConnected:false", () => {
+  const violations = COMPONENT_CATALOG_ENTRIES.filter(
+    (e) => e.capabilityTags.includes("dashboard_placement_candidate") && !e.runtimeConnected,
   );
   assertEquals(
-    entry!.runtimeConnected,
-    false,
-    "md_viewer.projection intentionally stays runtimeConnected:false — no active topology/record/saved-view authority",
+    violations.map((e) => `${e.componentKey}(${e.componentKind})`),
+    [],
+    "dashboard_placement_candidate + runtimeConnected:false means DashboardCandidatePalette placement will fail with FACTORY_MISSING",
   );
-  assertEquals(entry!.registrationRequired, false, "md_viewer.projection must not be in placement palette");
 });
 
 // ─── Preview render tests for newly connected components ────────────────────
@@ -94,6 +90,7 @@ const NEW_CONNECTED_KINDS: Array<[string, string]> = [
   ["textarea.template", "form_input/textarea_template"],
   ["tabs.template", "disclosure/tabs"],
   ["tree.template", "data_display/tree"],
+  ["md_viewer.projection", "data_display/md_viewer"],
 ];
 
 for (const [componentKey, componentKind] of NEW_CONNECTED_KINDS) {
