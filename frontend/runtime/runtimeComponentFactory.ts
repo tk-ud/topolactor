@@ -103,6 +103,9 @@ import { ValidationResultPanel } from "../components/ValidationResultPanel.tsx";
 import { Textarea } from "../components/Textarea.tsx";
 import { Tabs } from "../components/Tabs.tsx";
 import { Tree } from "../components/Tree.tsx";
+import { MdViewer } from "../components/MdViewer.tsx";
+import type { MdViewerDisabledActionReasons } from "../components/MdViewer.tsx";
+import type { CompletedPresetSeed, SavedViewDetail } from "../api/teamMarkdownApi.ts";
 import Box from "../components/Box.tsx";
 import type { RuntimeComponentFactory } from "../components/runtimeContract.ts";
 import {
@@ -2330,22 +2333,74 @@ function treeFactory(spec: RuntimeComponentSpec): RenderResult {
   };
 }
 
+function normalizeMdViewerSavedView(raw: Record<string, unknown>): SavedViewDetail | null {
+  if (typeof raw.savedViewId !== "string" || !raw.savedViewId) return null;
+  if (typeof raw.title !== "string") return null;
+  if (typeof raw.renderedMarkdown !== "string") return null;
+  const completedPresetSeedJson = raw.completedPresetSeedJson;
+  if (!completedPresetSeedJson || typeof completedPresetSeedJson !== "object" || Array.isArray(completedPresetSeedJson)) return null;
+  return {
+    savedViewId: raw.savedViewId,
+    title: raw.title,
+    templateKey: typeof raw.templateKey === "string" ? raw.templateKey : "",
+    templateId: typeof raw.templateId === "string" ? raw.templateId : "",
+    sourceTableRef: typeof raw.sourceTableRef === "string" ? raw.sourceTableRef : "",
+    sourceRecordRef: typeof raw.sourceRecordRef === "string" ? raw.sourceRecordRef : "",
+    status: typeof raw.status === "string" ? raw.status : "active",
+    updatedAt: typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+    createdAt: typeof raw.createdAt === "string" ? raw.createdAt : "",
+    cardMetadataJson: (typeof raw.cardMetadataJson === "object" && raw.cardMetadataJson !== null && !Array.isArray(raw.cardMetadataJson))
+      ? raw.cardMetadataJson as Record<string, unknown>
+      : {},
+    bindingJson: (typeof raw.bindingJson === "object" && raw.bindingJson !== null && !Array.isArray(raw.bindingJson))
+      ? raw.bindingJson as Record<string, unknown>
+      : {},
+    renderedMarkdown: raw.renderedMarkdown,
+    userAdjustmentPatchJson: (typeof raw.userAdjustmentPatchJson === "object" && raw.userAdjustmentPatchJson !== null && !Array.isArray(raw.userAdjustmentPatchJson))
+      ? raw.userAdjustmentPatchJson as Record<string, unknown>
+      : {},
+    searchIndexText: typeof raw.searchIndexText === "string" ? raw.searchIndexText : "",
+    completedPresetSeedJson: completedPresetSeedJson as CompletedPresetSeed,
+  };
+}
+
 function mdViewerPreviewFactory(spec: RuntimeComponentSpec): RenderResult {
   const props = spec.props;
-  const title = typeof props.title === "string" ? props.title
-    : (typeof (props.data as Record<string, unknown>)?.title === "string"
-      ? (props.data as Record<string, unknown>).title as string
-      : undefined);
+  const savedViewRaw = (typeof props.savedView === "object" && props.savedView !== null && !Array.isArray(props.savedView))
+    ? props.savedView as Record<string, unknown>
+    : null;
+  if (!savedViewRaw) {
+    return { ok: false, error: "RUNTIME_MD_VIEWER_MISSING_SAVED_VIEW_PROPS" };
+  }
+  const savedView = normalizeMdViewerSavedView(savedViewRaw);
+  if (!savedView) {
+    return { ok: false, error: "RUNTIME_MD_VIEWER_INVALID_SAVED_VIEW_PROPS" };
+  }
+  const seedValid = typeof props.seedValid === "boolean" ? props.seedValid : true;
+  const seedError = typeof props.seedError === "string" ? props.seedError : undefined;
+  // Mutation action callbacks are intentionally not provided.
+  // Saved view refresh/clone/rebind/editAdjustment authority stays at /admin/team-dashboard.
+  // In preview mode, explicit disabled reasons are shown; in runtime canvas, MdViewer
+  // renders unbound action buttons as disabled naturally (no callback → disabled).
+  const disabledActionReasons: MdViewerDisabledActionReasons | undefined = spec.previewMode
+    ? {
+      refresh: "canvas preview — refresh は /admin/team-dashboard で操作してください",
+      clone: "canvas preview — clone は /admin/team-dashboard で操作してください",
+      rebind: "canvas preview — rebind は /admin/team-dashboard で操作してください",
+      editAdjustment: "canvas preview — 調整編集は /admin/team-dashboard で操作してください",
+      openSourceRecord: "canvas preview — ソースレコードナビゲーションは canvas では利用不可",
+      createTodoCandidate: "canvas preview — todo 候補作成は canvas では利用不可",
+    }
+    : undefined;
   return {
     ok: true,
-    node: h("div", {
-      className: spec.className,
-      style: "border:1px solid #e0e0e0;border-radius:6px;padding:16px;font-family:monospace;background:#f8f8f8",
-      "data-component-kind": "data_display/md_viewer",
-    },
-      h("div", { style: "font-weight:600;color:#333;font-size:0.9rem;margin-bottom:6px" }, title ?? "Markdown View"),
-      h("div", { style: "color:#888;font-size:0.8rem" }, "（保存済み Markdown ビュープレビュー）"),
-    ),
+    node: h(MdViewer, {
+      savedView,
+      seedValid,
+      seedError,
+      onClose: () => {},
+      disabledActionReasons,
+    }),
   };
 }
 

@@ -671,22 +671,27 @@ system_roadmap_ssot:
       title: md_viewer hardcoded Markdown projection component
       status: implemented
       production_ready: true
-      public_summary: md_viewer is a dashboard/read-work component candidate that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, action toolbar, dashboard drawer placement, and seed-gated refresh/clone/rebind UI boundary notices are implemented. md_viewer is not a UIBuilder preset_ecosystem permanent child surface; its primary placement surface is /admin/team-dashboard. md_viewer.projection appears in UIBuilder DashboardCandidatePalette via dashboard_placement_candidate tag without requiring DB bucket registration.
+      public_summary: md_viewer is a dashboard/read-work component candidate that displays persisted rendered Markdown and related saved-view context; it is not a DB seed registration mechanism and does not infer bindings from Markdown text. MdViewer component with rendered Markdown, seed summary, binding summary, source ref, adjustment status, action toolbar, dashboard drawer placement, and seed-gated refresh/clone/rebind UI boundary notices are implemented. md_viewer is not a UIBuilder preset_ecosystem permanent child surface; its primary placement surface is /admin/team-dashboard. md_viewer.projection appears in UIBuilder DashboardCandidatePalette via dashboard_placement_candidate tag without requiring DB bucket registration. Runtime factory uses actual MdViewer component (not placeholder div); preview props include full savedView/completedPresetSeedJson sample projection; explicit errors for missing/invalid savedView props; mutation action authority maintained at /admin/team-dashboard.
       scope:
         - md_viewer_component_registration
         - rendered_markdown_display
         - saved_view_drawer_or_panel_projection
         - seed_summary_and_source_ref_display
+        - runtime_factory_uses_MdViewer_component_not_placeholder_div
+        - preview_props_include_savedView_completedPresetSeedJson_sample
+        - explicit_error_for_missing_or_invalid_savedView_props
       boundary:
         owns:
           - hardcoded_component_for_rendering_saved_markdown_projection
           - read_only_display_of_completed_seed_summary_and_source_reference
           - explicit_error_display_when_required_projection_data_is_missing
+          - runtime_renderer_supported_as_dashboard_read_work_projection
         does_not_own:
           - preset_DB_seed_bootstrap
           - Markdown_template_binding_decisions
           - completed_preset_seed_json_authoritative_validation
           - physical_record_or_topology_mutation
+          - saved_view_refresh_clone_rebind_authority
       detail_ref:
         - docs/design/team-markdown-dashboard-saved-view-ssot.yaml
         - docs/design/admin-console-workflow-ssot.yaml
@@ -696,7 +701,11 @@ system_roadmap_ssot:
         - frontend/islands/TeamMarkdownDashboard.tsx
         - frontend/routes/admin/team-dashboard/index.tsx
         - frontend/islands/UiBuilderAdmin.tsx
+        - frontend/runtime/runtimeComponentFactory.ts
+        - frontend/runtime/layoutComponentPreview.ts
         - frontend/tests/teamMarkdownSavedView.test.ts
+        - frontend/tests/mdViewerRuntimeCompletion.test.ts
+        - frontend/tests/runtimeComponentCatalogFullConnection.test.ts
       completion_condition:
         - MdViewer_component_renders_saved_markdown_projection
         - seed_invalid_state_shows_explicit_error_not_silent_fallback
@@ -704,6 +713,10 @@ system_roadmap_ssot:
         - binding_summary_and_seed_summary_displayed_in_expanded_view
         - source_record_ref_displayed
         - adjustment_status_displayed
+        - runtime_factory_renders_MdViewer_component_not_placeholder_div
+        - preview_props_include_savedView_with_completedPresetSeedJson
+        - explicit_error_for_missing_savedView_RUNTIME_MD_VIEWER_MISSING_SAVED_VIEW_PROPS
+        - mutation_action_authority_stays_at_admin_team_dashboard
 
     product.completed_preset_seed_projection_gate:
       bundle_id: completed_preset_seed_projection_gate

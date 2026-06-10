@@ -261,8 +261,61 @@ export function buildLayoutPreviewPlaceholderProps(
           ],
         },
       };
-    case "data_display/md_viewer":
-      return { title: inlineText || shortLabel || "Markdown View" };
+    case "data_display/md_viewer": {
+      const viewTitle = inlineText || shortLabel || "Markdown View (Preview)";
+      return {
+        savedView: {
+          savedViewId: "preview-saved-view-001",
+          title: viewTitle,
+          templateKey: "preview_template",
+          templateId: "00000000-0000-0000-0000-000000000001",
+          sourceTableRef: "preview.sample_table",
+          sourceRecordRef: "preview_record_001",
+          status: "active",
+          updatedAt: "2026-06-10T00:00:00Z",
+          createdAt: "2026-06-10T00:00:00Z",
+          cardMetadataJson: {},
+          bindingJson: { "{{record.summary}}": "summary_field" },
+          renderedMarkdown: "## プレビュー\n\nこれは保存済み Markdown ビューのプレビューです。\n\n- サンプル項目 1\n- サンプル項目 2",
+          userAdjustmentPatchJson: {},
+          searchIndexText: "プレビュー サンプルビュー",
+          completedPresetSeedJson: {
+            seed_version: "preview.v1",
+            template_ref: {
+              template_id: "00000000-0000-0000-0000-000000000001",
+              template_key: "preview_template",
+            },
+            source_ref: {
+              source_table_ref: "preview.sample_table",
+              source_record_ref: "preview_record_001",
+            },
+            binding_ref: {
+              binding_json: { resolution_mode: "preview" },
+              placeholder_to_field_map: { "{{record.summary}}": "summary_field" },
+              required_placeholder_keys: ["{{record.summary}}"],
+              optional_placeholder_keys: [],
+              unresolved_required_placeholder_keys: [],
+            },
+            render_ref: {
+              rendered_markdown_hash: "preview_hash_canvas_001",
+              rendered_at: "2026-06-10T00:00:00Z",
+              renderer_version: "1.0",
+              unresolved_placeholder_keys: [],
+            },
+            adjustment_ref: { adjustment_mode: "none", user_adjustment_patch_json: {} },
+            dashboard_ref: {
+              title: viewTitle,
+              excerpt: "これはプレビューサンプルです。",
+              tags: ["preview"],
+              card_metadata_json: { preview: true },
+              search_index_basis_json: { text: "preview" },
+            },
+            lineage_ref: { created_from: "template_record", parent_saved_view_id: null },
+          },
+        },
+        seedValid: true,
+      };
+    }
     default:
       return {
         title: shortLabel,
