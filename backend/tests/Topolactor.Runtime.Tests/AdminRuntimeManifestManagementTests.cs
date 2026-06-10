@@ -616,6 +616,99 @@ public class AdminRuntimeManifestManagementTests
     }
 
     [Fact]
+    public async Task AssignScreenDataShape_Rejects_Missing_TopologySystemName()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, ValidTopology("admin", "tgt", "screen_list", "Read", "topology_transform_runtime"), "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            // topologySystemName omitted
+        });
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+        Assert.NotNull(error);
+        Assert.Equal("TOPOLOGY_SYSTEM_NAME_REQUIRED", error!.Code);
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Rejects_Changed_TopologySystemName()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        // Seed a manifest that already has topologySystemName set via a prior topology entry.
+        var topologyWithSysName = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "dispatcher_mapping",
+                role = "admin", target = "customer-management", layer = "screen_list", action = "Read",
+                runtime_destination = "topology_transform_runtime",
+            }),
+            JsonSerializer.SerializeToElement(new
+            {
+                type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
+                topologySystemName = "customer-management",
+            }),
+        };
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, topologyWithSysName, "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            topologySystemName = "different-name",
+        });
+        var (_, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+        Assert.NotNull(error);
+        Assert.Equal("TOPOLOGY_SYSTEM_NAME_IMMUTABLE", error!.Code);
+    }
+
+    [Fact]
+    public async Task AssignScreenDataShape_Allows_Reassign_With_Same_TopologySystemName()
+    {
+        var repo = new InMemoryManifestAdminRepository();
+        var manifestId = Guid.NewGuid();
+        var topologyWithSysName = new List<JsonElement>
+        {
+            JsonSerializer.SerializeToElement(new
+            {
+                type = "dispatcher_mapping",
+                role = "admin", target = "customer-management", layer = "screen_list", action = "Read",
+                runtime_destination = "topology_transform_runtime",
+            }),
+            JsonSerializer.SerializeToElement(new
+            {
+                type = ManifestCanonicalProjection.ScreenDataShapeEntryType,
+                topologySystemName = "customer-management",
+            }),
+        };
+        repo.Seed(new ManifestDetailRecord(
+            manifestId, null, topologyWithSysName, "draft",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+
+        var runtime = CreateRuntime(repo);
+        var payload = JsonSerializer.SerializeToElement(new
+        {
+            manifestId = manifestId.ToString(),
+            topologySystemName = "customer-management",
+            screenOperationKind = "list",
+        });
+        var (data, error) = await runtime.ExecuteDataAsync(
+            new OperationVector("admin", "manifest", "assign_screen_data_shape", null, "admin", payload, null), default);
+        Assert.Null(error);
+        Assert.True(data.HasValue);
+    }
+
+    [Fact]
     public async Task EnumDictionary_ListGroups_Returns_Seeded_Group()
     {
         var enumRepo = InMemoryEnumDictionaryRepository.WithDemoSeed();

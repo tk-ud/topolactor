@@ -2537,13 +2537,44 @@ public partial class AdminRuntime
                 return (null, relationErrors[0]);
         }
 
+        // Extract existing topologySystemName from persisted screen_data_shape topology entry.
+        string? existingTopologySystemName = null;
+        foreach (var entry in draftDetail.Topology)
+        {
+            if (entry.TryGetProperty("type", out var typeProp) &&
+                typeProp.GetString() == ManifestCanonicalProjection.ScreenDataShapeEntryType &&
+                entry.TryGetProperty("topologySystemName", out var tsnProp) &&
+                tsnProp.ValueKind == JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(tsnProp.GetString()))
+            {
+                existingTopologySystemName = tsnProp.GetString()!.Trim();
+                break;
+            }
+        }
+
         var topologySystemName = request.TopologySystemName?.Trim();
+
         if (!string.IsNullOrWhiteSpace(topologySystemName))
         {
             if (!System.Text.RegularExpressions.Regex.IsMatch(topologySystemName, @"^[a-z0-9]+(?:-[a-z0-9]+)*$"))
                 return (null, new ValidationError("INVALID_TOPOLOGY_SYSTEM_NAME",
                     "topologySystemName は英小文字・数字・ハイフンのみで、先頭・末尾・連続ハイフン禁止です。"));
+
+            if (existingTopologySystemName is not null &&
+                !string.Equals(existingTopologySystemName, topologySystemName, StringComparison.Ordinal))
+                return (null, new ValidationError("TOPOLOGY_SYSTEM_NAME_IMMUTABLE",
+                    $"topologySystemName は設定後に変更できません。既存値: {existingTopologySystemName}"));
         }
+        else if (existingTopologySystemName is null)
+        {
+            return (null, new ValidationError("TOPOLOGY_SYSTEM_NAME_REQUIRED",
+                "topologySystemName は必須です。英小文字・数字・ハイフンで指定してください。"));
+        }
+
+        // Use existing value if not provided in this request (re-assign without step 1 fields).
+        var effectiveTopologySystemName = !string.IsNullOrWhiteSpace(topologySystemName)
+            ? topologySystemName
+            : existingTopologySystemName;
 
         var tableRef = !string.IsNullOrWhiteSpace(request.TableRef)
             ? request.TableRef.Trim()
@@ -2579,7 +2610,7 @@ public partial class AdminRuntime
             columns = request.Columns ?? Array.Empty<AdminManifestScreenColumnDto>(),
             screenOperationKind = primaryOp,
             screenOperationKinds = operationKinds,
-            topologySystemName = topologySystemName,
+            topologySystemName = effectiveTopologySystemName,
             userFacingTopologyLabel = request.UserFacingTopologyLabel,
             relationIntents,
             operationEntityBindings = request.OperationEntityBindings ??

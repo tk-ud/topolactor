@@ -103,7 +103,9 @@ export function buildAssignPayloadForStep(
       ? topologySystemNameToPhysicalTable(sysName)
       : undefined;
     const logicalTables = design.logicalTables.map((t, i) => ({
-      tableName: i === 0 && derivedPrimaryName ? derivedPrimaryName : t.tableName.trim(),
+      tableName: i === 0 && derivedPrimaryName
+        ? derivedPrimaryName
+        : topologySystemNameToPhysicalTable(t.tableName.trim()),
       columns: t.columns.filter((c) => c.name.trim()).map((c) => ({
         name: c.name.trim(),
         dataType: c.dataType,

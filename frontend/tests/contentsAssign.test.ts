@@ -164,8 +164,8 @@ Deno.test("buildAssignPayloadForStep step 2: primary table derived from topology
   const payload = buildAssignPayloadForStep(2, manifestId, design, existing);
   // Primary table (index 0) MUST be derived from topologySystemName, not from design.logicalTables[0].tableName
   assertEquals(payload.logicalTables?.[0].tableName, "customer_management");
-  // Additional table (index 1) uses tableName as entered in design
-  assertEquals(payload.logicalTables?.[1].tableName, "customer-contacts");
+  // Additional table (index 1) has physical name derived via replaceAll("-","_")
+  assertEquals(payload.logicalTables?.[1].tableName, "customer_contacts");
 });
 
 Deno.test("buildAssignPayloadForStep step 2: without topologySystemName, primary table uses design tableName", () => {
