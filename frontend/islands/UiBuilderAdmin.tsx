@@ -422,19 +422,6 @@ const COMPONENT_BUCKET_KIND_ICONS: Record<string, string> = {
   data_display: "▤",
 };
 
-/**
- * User-facing labels for topology layout class keys (normal view — excludes preview_state).
- * Values are aligned with TOPOLOGY_LAYOUT_CLASS_DICTIONARY[].label.
- * The UI now reads labels from the dictionary directly; this map is exported for testing.
- */
-export const LAYOUT_CLASS_USER_LABELS: Record<string, string> = {
-  "layout.root.grid": "ルートグリッド",
-  "layout.section.stack": "縦積みセクション",
-  "layout.row.flex": "横並び行",
-  "layout.card.surface": "カード面",
-  "layout.node.boundary": "ノード境界",
-};
-
 
 /** Component event wiring entry (saved to propsJson.eventWirings — layout_patch_json boundary). */
 export type ComponentEventWiring = {

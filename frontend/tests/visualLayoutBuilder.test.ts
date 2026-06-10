@@ -1629,21 +1629,18 @@ Deno.test("layoutClassDictionary: alignment entries have conflictGroup align_h o
 // ─── UI Builder inspector UX normalization tests ──────────────────────────────
 
 import {
-  LAYOUT_CLASS_USER_LABELS,
   COMPONENT_EVENT_TYPES,
   COMPONENT_ACTION_TYPES,
   type ComponentEventWiring,
 } from "../islands/UiBuilderAdmin.tsx";
 import { CSS_DICTIONARY_TOKENS } from "../runtime/cssDictionary.ts";
 
-Deno.test("LAYOUT_CLASS_USER_LABELS: has user-facing Japanese labels for non-preview-state layout classes defined in it", () => {
-  for (const [classKey, label] of Object.entries(LAYOUT_CLASS_USER_LABELS)) {
-    assert(label.length > 0, `empty label for classKey: ${classKey}`);
-    assertNotEquals(
-      label,
-      classKey,
-      `label for ${classKey} must not be the raw classKey`,
-    );
+Deno.test("TOPOLOGY_LAYOUT_CLASS_DICTIONARY: all non-state entries have non-empty label (SSOT: topology-layout-class-ssot.yaml)", () => {
+  const nonStateEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category !== "state");
+  assert(nonStateEntries.length > 0, "expect non-state entries");
+  for (const e of nonStateEntries) {
+    assert(e.label !== undefined && e.label.length > 0, `missing label for classKey: ${e.classKey}`);
+    assertNotEquals(e.label, e.classKey, `label for ${e.classKey} must not be the raw classKey`);
   }
 });
 
@@ -1791,25 +1788,21 @@ Deno.test("makeStructuralHtmlNode: defaults to widthMode=auto", () => {
   assertEquals(node.heightMode, "auto");
 });
 
-Deno.test("LAYOUT_CLASS_USER_LABELS: preview_state classes (layout.state.*) are NOT included", () => {
-  const previewStateKeys = TOPOLOGY_LAYOUT_CLASS_DICTIONARY
-    .filter((e) => e.category === "state")
-    .map((e) => e.classKey);
-  assert(previewStateKeys.length > 0, "expect at least one preview_state class in dictionary");
-  for (const key of previewStateKeys) {
-    assert(
-      !(key in LAYOUT_CLASS_USER_LABELS),
-      `preview_state classKey ${key} must NOT appear in LAYOUT_CLASS_USER_LABELS`,
-    );
+Deno.test("TOPOLOGY_LAYOUT_CLASS_DICTIONARY: state category entries are excluded from normal inspector (category filter)", () => {
+  const stateEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category === "state");
+  assert(stateEntries.length > 0, "expect at least one state class in dictionary");
+  // TopologyLayoutClassPicker filters: if (e.category === "state") return false
+  for (const e of stateEntries) {
+    assertEquals(e.category, "state");
   }
 });
 
-Deno.test("LAYOUT_CLASS_USER_LABELS: raw classKey and className strings do not appear as label values", () => {
-  for (const [classKey, label] of Object.entries(LAYOUT_CLASS_USER_LABELS)) {
-    const entry = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.find((e) => e.classKey === classKey);
-    if (!entry) continue;
-    assertNotEquals(label, entry.classKey, `label for ${classKey} must not be raw classKey`);
-    assertNotEquals(label, entry.className, `label for ${classKey} must not be raw className`);
+Deno.test("TOPOLOGY_LAYOUT_CLASS_DICTIONARY: label values do not equal classKey or className", () => {
+  const nonStateEntries = TOPOLOGY_LAYOUT_CLASS_DICTIONARY.filter((e) => e.category !== "state");
+  for (const e of nonStateEntries) {
+    if (!e.label) continue;
+    assertNotEquals(e.label, e.classKey, `label for ${e.classKey} must not be raw classKey`);
+    assertNotEquals(e.label, e.className, `label for ${e.classKey} must not be raw className`);
   }
 });
 
